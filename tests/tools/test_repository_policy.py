@@ -20,9 +20,10 @@ class PolicyTests(unittest.TestCase):
         for f in POLICY.SHARED:
             self.write(f, (ROOT / f).read_text())
         self.write('README.md', '# Package\n')
+        self.write('package.el', ";;; Commentary:\n;; Function: package-open ()\n;; Return the package value.\n;;; Code:\n(defun package-open () t)\n(provide 'package)\n")
         self.write('tests/public-tests.el', '(ert-deftest public-roundtrip () (should t))\n')
         self.write('tests/acceptance.json', '{"cases": [{"name": "public-roundtrip", "file": "tests/public-tests.el", "purpose": "roundtrip"}]}')
-        self.write('Makefile', 'compile:\ntest:\ncheck: structure-check acceptance\nclean:\nstructure-check:\nsetup-hooks:\n')
+        self.write('Makefile', 'compile:\ntest:\ncheck: structure-check acceptance api-check\nclean:\nstructure-check:\nsetup-hooks:\n')
 
     def write(self, path, text):
         target = self.root / path
@@ -45,17 +46,14 @@ class PolicyTests(unittest.TestCase):
         self.write('scripts/test_runner.py', '# assertions')
         self.assertIn('tests/tools/', self.errors())
 
-    def test_multi_file_lisp_has_one_source_directory(self):
-        self.write('package.el', '; main')
-        self.write('package-core.el', '; implementation')
-        self.assertIn('multi-file packages', self.errors())
-        (self.root / 'package-core.el').unlink()
-        self.assertEqual('', self.errors())
+    def test_root_entry_and_internal_modules_have_distinct_roles(self):
         self.write('lisp/package-core.el', '; implementation')
-        self.assertIn('multi-file packages', self.errors())
-        (self.root / 'package.el').unlink()
-        self.write('lisp/package.el', '; main')
         self.assertEqual('', self.errors())
+        self.write('package-extra.el', '; extra root source')
+        self.assertIn('exactly one root entry', self.errors())
+        (self.root / 'package-extra.el').unlink()
+        self.write('lisp/package.el', '; duplicate facade')
+        self.assertIn('duplicated', self.errors())
 
     def test_new_plan_document_is_rejected(self):
         self.write('docs/proposals/phase-two.md', '# Plan\n')

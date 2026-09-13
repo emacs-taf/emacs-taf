@@ -39,8 +39,9 @@ require an appropriate Emacs executable (`make check EMACS=/path/to/emacs`).
 - `make sync-policy`: distribute the canonical policy, checker, hook and CI workflow.
 
 Read [AGENTS.md](AGENTS.md) for the complete development contract. Update shared files
-here and run `make sync-policy`; do not customize individual copies. Multi-file packages keep runtime source in `lisp/`; single-file packages may
-keep their entry at the root. Tests, examples, benchmarks, tools and native sources live in
+here and run `make sync-policy`; do not customize individual copies. Packages expose one root entry with the supported API in its Commentary.
+Checkout users add repository roots to `load-path`; multi-file implementations
+live in `lisp/`. Small single-file packages may keep implementation in the entry. Tests, examples, benchmarks, tools and native sources live in
 `tests/`, `examples/`, `benchmarks/`, `scripts/` and `native/` respectively.
 Organize by responsibility: correctness tests and their helpers go in `tests/`,
 including development-tool tests in `tests/tools/` and data in `tests/fixtures/`.
@@ -51,7 +52,8 @@ Create directories only when needed; native subprojects retain ecosystem convent
 
 ## Documentation
 
-Keep a short README. Put complete usage and public integration contracts in
+Keep a short README. The root entry Commentary owns the supported API inventory,
+calling signatures and usage notes. Put integration workflows and examples in
 `docs/manual.md`, current internal ownership in `docs/architecture.md`, and notable
 version changes in `CHANGELOG.md`. The latter three are created only when needed.
 Translations consistently use `.zh-CN.md`. Do not duplicate the same contract in

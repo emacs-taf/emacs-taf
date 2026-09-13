@@ -8,7 +8,7 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-SHARED = ('AGENTS.md', '.editorconfig', 'scripts/check-repository.py', 'scripts/run-acceptance.py', '.githooks/pre-commit', '.githooks/commit-msg', 'scripts/check-commit-message.py',
+SHARED = ('scripts/check-api.py', 'scripts/check-api.el', 'scripts/api-workspace.json', 'AGENTS.md', '.editorconfig', 'scripts/check-repository.py', 'scripts/run-acceptance.py', '.githooks/pre-commit', '.githooks/commit-msg', 'scripts/check-commit-message.py',
           '.github/workflows/structure.yml')
 
 
@@ -17,7 +17,18 @@ def main():
     parser.add_argument('action', choices=['sync', 'check', 'setup-hooks', 'status'])
     args = parser.parse_args()
     repos = json.loads((ROOT / 'workspace.json').read_text())['repositories']
+    api_registry = {}
+    for name, entry in repos.items():
+        entries = list((ROOT/name).glob('*.el'))
+        if len(entries) == 1:
+            api_registry[name] = {'entry': entries[0].stem, 'url': entry['url']}
+    registry_path = ROOT/'scripts/api-workspace.json'
+    if args.action == 'sync' and len(api_registry) == len(repos):
+        registry_path.write_text(json.dumps(api_registry, indent=2, sort_keys=True) + '\n')
     failed = False
+    if args.action == 'check' and json.loads(registry_path.read_text()) != api_registry:
+        print('API provider registry drift; run workspace.py sync', file=sys.stderr)
+        failed = True
     for name, entry in repos.items():
         repo = ROOT / name
         if not (repo / '.git').exists():

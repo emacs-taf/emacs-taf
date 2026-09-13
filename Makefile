@@ -20,3 +20,7 @@ check: structure-check
 	@set -e; for repo in $(MODULE_DIRS); do $(MAKE) -C "$$repo" check EMACS="$(EMACS)"; done
 clean:
 	@set -e; for repo in $(MODULE_DIRS); do $(MAKE) -C "$$repo" clean; done
+
+.PHONY: api-check
+api-check:
+	@set -e; for repo in $(MODULE_DIRS); do $(MAKE) -C "$$repo" api-check EMACS="$(EMACS)"; done
