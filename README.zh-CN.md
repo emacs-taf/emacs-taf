@@ -33,7 +33,7 @@
 - `make sync-policy`：同步规范、检查器、提交钩子和 CI 配置。
 
 完整规则见 [AGENTS.md](AGENTS.md)。修改规范时改工作区源文件，再同步到所有仓库。
-源码放在包根目录；测试、示例、基准、工具和原生实现分别放在
+多文件包的源码放 `lisp/`，单文件包可保留根目录入口；测试、示例、基准、工具和原生实现分别放在
 `tests/`、`examples/`、`benchmarks/`、`scripts/` 和 `native/`。
 按职责组织：正确性测试及辅助代码放 `tests/`，工具测试放 `tests/tools/`，
 数据放 `tests/fixtures/`，验收清单放 `tests/acceptance.json`。

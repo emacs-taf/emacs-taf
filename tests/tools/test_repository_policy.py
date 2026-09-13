@@ -45,6 +45,18 @@ class PolicyTests(unittest.TestCase):
         self.write('scripts/test_runner.py', '# assertions')
         self.assertIn('tests/tools/', self.errors())
 
+    def test_multi_file_lisp_has_one_source_directory(self):
+        self.write('package.el', '; main')
+        self.write('package-core.el', '; implementation')
+        self.assertIn('multi-file packages', self.errors())
+        (self.root / 'package-core.el').unlink()
+        self.assertEqual('', self.errors())
+        self.write('lisp/package-core.el', '; implementation')
+        self.assertIn('multi-file packages', self.errors())
+        (self.root / 'package.el').unlink()
+        self.write('lisp/package.el', '; main')
+        self.assertEqual('', self.errors())
+
     def test_new_plan_document_is_rejected(self):
         self.write('docs/proposals/phase-two.md', '# Plan\n')
         self.assertIn('fixed document names', self.errors())

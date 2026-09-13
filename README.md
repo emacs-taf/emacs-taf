@@ -39,8 +39,8 @@ require an appropriate Emacs executable (`make check EMACS=/path/to/emacs`).
 - `make sync-policy`: distribute the canonical policy, checker, hook and CI workflow.
 
 Read [AGENTS.md](AGENTS.md) for the complete development contract. Update shared files
-here and run `make sync-policy`; do not customize individual copies. Runtime source
-stays at package roots. Tests, examples, benchmarks, tools and native sources live in
+here and run `make sync-policy`; do not customize individual copies. Multi-file packages keep runtime source in `lisp/`; single-file packages may
+keep their entry at the root. Tests, examples, benchmarks, tools and native sources live in
 `tests/`, `examples/`, `benchmarks/`, `scripts/` and `native/` respectively.
 Organize by responsibility: correctness tests and their helpers go in `tests/`,
 including development-tool tests in `tests/tools/` and data in `tests/fixtures/`.
