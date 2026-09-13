@@ -41,6 +41,9 @@ Read [AGENTS.md](AGENTS.md) for the complete development contract. Update shared
 here and run `make sync-policy`; do not customize individual copies. Runtime source
 stays at package roots. Tests, examples, benchmarks, tools and native sources live in
 `tests/`, `examples/`, `benchmarks/`, `scripts/` and `native/` respectively.
+`tests/` holds plugin ERT Lisp and fixture data; Python/Shell runners live in
+`scripts/`, their tests in `scripts/tests/`, and acceptance selection in
+`scripts/acceptance.json`. `benchmarks/` holds Lisp performance workloads only.
 
 ## Documentation
 

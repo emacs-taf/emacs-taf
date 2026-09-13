@@ -13,10 +13,10 @@ setup-hooks:
 compile:
 	@set -e; for repo in $(MODULE_DIRS); do $(MAKE) -C "$$repo" compile EMACS="$(EMACS)"; done
 test:
-	python3 -m unittest discover -s tests -p 'test_*.py'
+	python3 -m unittest discover -s scripts/tests -p 'test_*.py'
 	@set -e; for repo in $(MODULE_DIRS); do $(MAKE) -C "$$repo" test EMACS="$(EMACS)"; done
 check: structure-check
-	python3 -m unittest discover -s tests -p 'test_*.py'
+	python3 -m unittest discover -s scripts/tests -p 'test_*.py'
 	@set -e; for repo in $(MODULE_DIRS); do $(MAKE) -C "$$repo" check EMACS="$(EMACS)"; done
 clean:
 	@set -e; for repo in $(MODULE_DIRS); do $(MAKE) -C "$$repo" clean; done
