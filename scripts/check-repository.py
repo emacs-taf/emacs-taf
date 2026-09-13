@@ -12,7 +12,7 @@ import sys
 import tempfile
 from urllib.parse import unquote
 
-POLICY_VERSION = 7
+POLICY_VERSION = 8
 DOC_NAMES = {'README.md', 'README.zh-CN.md', 'CHANGELOG.md', 'CHANGELOG.zh-CN.md',
              'AGENTS.md', 'docs/manual.md', 'docs/manual.zh-CN.md',
              'docs/architecture.md', 'docs/architecture.zh-CN.md'}
@@ -49,6 +49,8 @@ def check(root, files=None):
                      '.githooks/pre-commit', '.githooks/commit-msg', 'scripts/check-commit-message.py', '.github/workflows/structure.yml',
                      'scripts/check-api.py', 'scripts/check-api.el', 'scripts/api-workspace.json']:
         if required not in files: fail(required, 'required maintained file is missing')
+    if workspace and 'docs/architecture.zh-CN.md' not in files:
+        fail('docs/architecture.zh-CN.md', 'workspace requires the accepted ecosystem architecture contract')
     root_lisp = [f for f in files if '/' not in f and f.endswith('.el')]
     if not workspace and len(root_lisp) != 1:
         fail('entry', 'packages require exactly one root entry; implementations belong in lisp/')

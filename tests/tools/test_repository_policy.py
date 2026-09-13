@@ -35,6 +35,26 @@ class PolicyTests(unittest.TestCase):
     def test_minimal_package_does_not_need_empty_documents(self):
         self.assertEqual('', self.errors())
 
+    def test_workspace_cli_requires_its_ecosystem_contract(self):
+        self.write('workspace.json', '{"schema": 1, "repositories": {}}')
+        self.write('scripts/api-workspace.json', '{}')
+        (self.root / 'package.el').unlink()
+        # Exercise both worktree and exact-index CLI behavior. An untracked or
+        # unstaged replacement must not conceal deletion from the next commit.
+        subprocess.run(['git', 'init', '-q', str(self.root)], check=True)
+        self.write('docs/architecture.zh-CN.md', '# Accepted ecosystem contract\n')
+        subprocess.run(['git', '-C', str(self.root), 'add', '.'], check=True)
+        command = [sys.executable, str(self.root / 'scripts/check-repository.py'),
+                   '--root', str(self.root)]
+        accepted = subprocess.run(command, capture_output=True, text=True)
+        self.assertEqual(0, accepted.returncode, accepted.stderr)
+        subprocess.run(['git', '-C', str(self.root), 'rm', '--cached',
+                        'docs/architecture.zh-CN.md'], check=True, capture_output=True)
+        rejected = subprocess.run(command + ['--staged'], capture_output=True, text=True)
+        self.assertEqual(1, rejected.returncode)
+        self.assertIn('workspace requires the accepted ecosystem architecture contract',
+                      rejected.stderr)
+
     def test_responsibilities_allow_mixed_languages_and_test_data(self):
         for path in ['tests/tools/test_runner.py', 'tests/public.erts',
                      'benchmarks/measure.py', 'benchmarks/run.sh',

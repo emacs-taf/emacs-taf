@@ -42,7 +42,10 @@ contracts belong in the package manual, architecture document and executable tes
 - `docs/manual.md`: task-oriented usage, integration workflows, lifecycle, errors
   and runnable examples. Link to the entry Commentary for the supported API list.
 - `docs/architecture.md`: current ownership, dependency direction and invariants.
-  Describe implemented behavior, not unaccepted proposals.
+  Describe implemented behavior, not unaccepted proposals. The workspace additionally
+  maintains `docs/architecture.zh-CN.md` as the accepted ecosystem development
+  contract: distinguish current implementation, required target behavior and remaining
+  work explicitly. Update it in place; do not create separate plans or decision logs.
 - English uses the default name; Chinese translations use `.zh-CN.md` consistently.
   Keep existing translations aligned when their contract changes. Do not create empty
   translations or documents merely to fill a template. Legal notices are exempt.
@@ -60,6 +63,53 @@ contracts belong in the package manual, architecture document and executable tes
 - Every package with integration APIs documents supported callers, inputs/outputs,
   ownership, lifecycle, failure semantics and a runnable example in its manual.
   Keep private implementation symbols out of consumer code.
+
+## Ecosystem architecture
+
+These are accepted constraints for subsequent development, not a claim that all
+existing implementations already comply. Before changing cross-package boundaries,
+read the workspace root's `docs/architecture.zh-CN.md` and the affected package
+contracts. The rules below also apply in independent package checkouts.
+
+- Keep ECSS, TP and EKP independent of Ebox and ETAF. Ebox owns reusable text/box
+  presentation and host interaction; ETAF owns Components, application state,
+  effects and lifecycle. UI components, data adapters and Playgrounds consume these
+  layers. Core packages must not acquire dependencies on applications or demos.
+- ECSS is Ebox's required style engine, including for inline-only use. ECSS owns
+  selector matching, specificity, cascade and inheritance; Ebox owns its property
+  schema and display projection. ETAF supplies component scope and theme context
+  through public interfaces. Do not add a second matcher or precedence algorithm.
+- The target stylesheet representation is an ordered list of selector/declaration
+  rules. Do not require a redundant `styles` head. A static `.ecss` file is one
+  unevaluated rule list; ordinary Elisp expressions follow ordinary quoting rules.
+  Stylesheet context belongs to the mounted surface or component owner, with no
+  implicit mutable global context shared by unrelated applications.
+- ETAF lowers resolved Hosts to canonical Ebox input through public interfaces;
+  it must not serialize and reparse an intermediate `.ebox` program. Preserve
+  structural, style-scope and identity semantics across lowering.
+- Ebox is the authority for host input targeting, focus, disabled boundaries and
+  gesture lifecycle. ETAF adapts its declarations and invokes application callbacks
+  within its state batch; it must converge on the Ebox interaction path instead of
+  retaining a separate target search, focus authority or physical input dispatcher.
+  Native editor adapters retain Emacs editing semantics and explicit ownership.
+- ETAF computes application invalidation, Ebox computes rendering impact, and TP
+  publishes managed surface changes. Keep application refs and display bindings in
+  their owning layers; do not mirror authoritative state or create a second buffer
+  writer. Matching interaction bindings and rendered state publish together;
+  discarded candidates must not become live event targets.
+- Ebox must remain independently usable. For supported host capabilities, direct
+  Ebox plus ordinary Elisp state/callbacks and ETAF must express equivalent visible
+  behavior. This does not eliminate ETAF's runtime or promise zero overhead.
+- Extend shared host capabilities from actual application needs. Inline editing,
+  input methods, undo, selection and complex gestures require explicit lifecycle
+  contracts and native acceptance evidence; arbitrary callbacks alone do not prove
+  those capabilities. Do not introduce a speculative browser event system or a new
+  generic package merely to share names.
+- Migrate providers and consumers together, then delete the superseded route,
+  grammar, examples and private tests. Keep package manuals and architecture aligned
+  with implemented behavior and record remaining migration gaps only in the workspace
+  architecture contract. Public behavior checks and review enforce semantic rules;
+  the structure checker cannot certify architectural convergence or GUI performance.
 
 ## Development and validation
 

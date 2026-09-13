@@ -35,6 +35,11 @@ require an appropriate Emacs executable (`make check EMACS=/path/to/emacs`).
 
 ## Development
 
+Read the [accepted ecosystem architecture and development contract](docs/architecture.zh-CN.md)
+before cross-package work. It records package ownership, shared style and interaction
+semantics, implementation gaps, migration order and observable acceptance criteria.
+Its target behavior is explicitly distinguished from the current implementation.
+
 - `make structure-check`: validate every package and detect shared-policy drift.
 - `make check`: run policy regression tests and public package acceptance checks in dependency order.
 - `make compile`, `make test`, `make clean`: delegate to package-owned entry points.
@@ -59,6 +64,8 @@ Keep a short README. The root entry Commentary owns the supported API inventory,
 calling signatures and usage notes. Put integration workflows and examples in
 `docs/manual.md`, current internal ownership in `docs/architecture.md`, and notable
 version changes in `CHANGELOG.md`. The latter three are created only when needed.
+The workspace architecture document also owns accepted cross-package target behavior
+and migration boundaries; maintain it in place instead of adding separate plans.
 Translations consistently use `.zh-CN.md`. Do not duplicate the same contract in
 several files; callers link to the provider's manual. Preserve legal notices.
 
