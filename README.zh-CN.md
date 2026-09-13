@@ -35,9 +35,10 @@
 完整规则见 [AGENTS.md](AGENTS.md)。修改规范时改工作区源文件，再同步到所有仓库。
 源码放在包根目录；测试、示例、基准、工具和原生实现分别放在
 `tests/`、`examples/`、`benchmarks/`、`scripts/` 和 `native/`。
-`tests/` 只放插件 ERT Lisp 与夹具数据；Python/Shell 运行脚本放 `scripts/`，
-脚本自身的测试放 `scripts/tests/`，验收清单放 `scripts/acceptance.json`。
-`benchmarks/` 只放仍在维护的 Lisp 性能工作负载，启动脚本仍归 `scripts/`。
+按职责组织：正确性测试及辅助代码放 `tests/`，工具测试放 `tests/tools/`，
+数据放 `tests/fixtures/`，验收清单放 `tests/acceptance.json`。
+性能工作负载与专用测量程序放 `benchmarks/`，通用运行及发布工具放 `scripts/`。
+不按语言或扩展名限制这些目录；目录按需创建，原生子项目遵循自身生态约定。
 
 ## 文档边界
 

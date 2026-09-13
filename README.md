@@ -42,9 +42,12 @@ Read [AGENTS.md](AGENTS.md) for the complete development contract. Update shared
 here and run `make sync-policy`; do not customize individual copies. Runtime source
 stays at package roots. Tests, examples, benchmarks, tools and native sources live in
 `tests/`, `examples/`, `benchmarks/`, `scripts/` and `native/` respectively.
-`tests/` holds plugin ERT Lisp and fixture data; Python/Shell runners live in
-`scripts/`, their tests in `scripts/tests/`, and acceptance selection in
-`scripts/acceptance.json`. `benchmarks/` holds Lisp performance workloads only.
+Organize by responsibility: correctness tests and their helpers go in `tests/`,
+including development-tool tests in `tests/tools/` and data in `tests/fixtures/`.
+`tests/acceptance.json` selects public scenarios. Dedicated measurement harnesses
+and workloads belong in `benchmarks/`; general runners and release tools belong in
+`scripts/`. Language and file extension do not determine these boundaries.
+Create directories only when needed; native subprojects retain ecosystem conventions.
 
 ## Documentation
 

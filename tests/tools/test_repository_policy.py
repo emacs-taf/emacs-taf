@@ -21,7 +21,7 @@ class PolicyTests(unittest.TestCase):
             self.write(f, (ROOT / f).read_text())
         self.write('README.md', '# Package\n')
         self.write('tests/public-tests.el', '(ert-deftest public-roundtrip () (should t))\n')
-        self.write('scripts/acceptance.json', '{"cases": [{"name": "public-roundtrip", "file": "tests/public-tests.el", "purpose": "roundtrip"}]}')
+        self.write('tests/acceptance.json', '{"cases": [{"name": "public-roundtrip", "file": "tests/public-tests.el", "purpose": "roundtrip"}]}')
         self.write('Makefile', 'compile:\ntest:\ncheck: structure-check acceptance\nclean:\nstructure-check:\nsetup-hooks:\n')
 
     def write(self, path, text):
@@ -34,18 +34,16 @@ class PolicyTests(unittest.TestCase):
     def test_minimal_package_does_not_need_empty_documents(self):
         self.assertEqual('', self.errors())
 
-    def test_tool_tests_and_lisp_benchmarks_have_distinct_homes(self):
-        self.write('scripts/tests/test_runner.py', '# test runner')
-        self.write('benchmarks/package-benchmark.el', '; workload')
-        self.write('tests/fixtures/input.json', '{}')
+    def test_responsibilities_allow_mixed_languages_and_test_data(self):
+        for path in ['tests/tools/test_runner.py', 'tests/public.erts',
+                     'benchmarks/measure.py', 'benchmarks/run.sh',
+                     'benchmarks/input.json', 'tests/fixtures/input.json']:
+            self.write(path, '')
         self.assertEqual('', self.errors())
 
-    def test_misplaced_runners_are_rejected(self):
-        for path in ['tests/run.sh', 'tests/test_runner.py', 'benchmarks/run.sh']:
-            with self.subTest(path=path):
-                self.write(path, '# runner')
-                self.assertIn('scripts/', self.errors())
-                (self.root / path).unlink()
+    def test_tool_assertions_do_not_drift_into_runner_directory(self):
+        self.write('scripts/test_runner.py', '# assertions')
+        self.assertIn('tests/tools/', self.errors())
 
     def test_new_plan_document_is_rejected(self):
         self.write('docs/proposals/phase-two.md', '# Plan\n')
@@ -89,7 +87,7 @@ class PolicyTests(unittest.TestCase):
         self.assertIn('missing named scenario', self.errors())
 
     def test_empty_acceptance_inventory_is_rejected(self):
-        self.write('scripts/acceptance.json', '{"cases": []}')
+        self.write('tests/acceptance.json', '{"cases": []}')
         self.assertIn('nonempty', self.errors())
 
     def test_link_case_must_match_even_on_case_insensitive_filesystems(self):
