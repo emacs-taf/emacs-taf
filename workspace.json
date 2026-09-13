@@ -1,0 +1,50 @@
+{
+  "schema": 1,
+  "repositories": {
+    "ebox": {
+      "url": "git@gitea.gklazycat.heiyu.space:geekinney/ebox.git",
+      "revision": "6c7dec221e3faf4a087f9c2aab894f85ad390a39",
+      "branch": "main"
+    },
+    "ebox-playground": {
+      "url": "git@gitea.gklazycat.heiyu.space:geekinney/ebox-playground.git",
+      "revision": "4bad05eaaa0351c32565e610291d52522dceefb2",
+      "branch": "main"
+    },
+    "ecss": {
+      "url": "git@gitea.gklazycat.heiyu.space:geekinney/ecss.git",
+      "revision": "e438c801378ae19106467b485de9b4ef317a8a55",
+      "branch": "main"
+    },
+    "ekp": {
+      "url": "git@github.com:Kinneyzhang/emacs-kp.git",
+      "revision": "e3205b7effba93355cbc51a9a3346efba90e90aa",
+      "branch": "main"
+    },
+    "etaf": {
+      "url": "git@gitea.gklazycat.heiyu.space:geekinney/etaf.git",
+      "revision": "145f4267b1dbe7fa11c5f739b85179c054231bf2",
+      "branch": "main"
+    },
+    "etaf-db": {
+      "url": "git@gitea.gklazycat.heiyu.space:geekinney/etaf-db.git",
+      "revision": "544f0040a8463336a1490f1cf767c7e4b1745c49",
+      "branch": "main"
+    },
+    "etaf-playground": {
+      "url": "git@gitea.gklazycat.heiyu.space:geekinney/etaf-playground.git",
+      "revision": "8f14b635f130f10f66820ea7319f2e85a07dad8c",
+      "branch": "main"
+    },
+    "etaf-ui": {
+      "url": "git@gitea.gklazycat.heiyu.space:geekinney/etaf-ui.git",
+      "revision": "4a14aa373638149240d91b6107c13f58f56f08b1",
+      "branch": "main"
+    },
+    "tp": {
+      "url": "git@gitea.gklazycat.heiyu.space:geekinney/tp.git",
+      "revision": "af7c362ad9122ce8e3525d9d4403cd1badd0f05f",
+      "branch": "main"
+    }
+  }
+}

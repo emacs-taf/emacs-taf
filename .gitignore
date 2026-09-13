@@ -1,0 +1,14 @@
+# Independent sibling repositories.
+/ebox/
+/ebox-playground/
+/ecss/
+/ekp/
+/etaf/
+/etaf-db/
+/etaf-playground/
+/etaf-ui/
+/tp/
+
+*.pyc
+__pycache__/
+.DS_Store
