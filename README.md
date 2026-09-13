@@ -70,8 +70,10 @@ boundaries follow the [Git workflow guidance](https://git-scm.com/docs/gitworkfl
 The 72-character title limit and validation field are project requirements.
 See [AGENTS.md](AGENTS.md) for granularity, breaking changes and history rules.
 
-Commits are local by default. Push only on explicit request or under an agreed
-automatic-push instruction, to the configured upstream after checking divergence.
+Automatically push each coherent group of validated commits to the current branch's
+configured upstream after fetching and checking divergence. This is the user-approved
+default; no repeated confirmation is needed. If no upstream exists or delivery fails,
+keep the local commits and report the blocker.
 Never force-push or publish to all remotes implicitly. Hooks validate structure and
 message format; authors remain responsible for meaning, scope and actual verification.
 

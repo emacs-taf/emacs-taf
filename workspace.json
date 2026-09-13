@@ -3,47 +3,47 @@
   "repositories": {
     "ebox": {
       "url": "git@gitea.gklazycat.heiyu.space:geekinney/ebox.git",
-      "revision": "523877e3bc14d88aeb1b1b3ff548c270cdfbac7f",
+      "revision": "c4c295125bdd6634c7881a45e604915a06e85f7f",
       "branch": "main"
     },
     "ebox-playground": {
       "url": "git@gitea.gklazycat.heiyu.space:geekinney/ebox-playground.git",
-      "revision": "3d4d35e3015ab1af0d7939cd9a049d967e6a4479",
+      "revision": "fb782fa3b0ca34beca49c10957014aa782f48379",
       "branch": "main"
     },
     "ecss": {
       "url": "git@gitea.gklazycat.heiyu.space:geekinney/ecss.git",
-      "revision": "d0c53ac1ed828ff35e0010735067aa4f6632ebe0",
+      "revision": "cde66868b3b5608c3de6daf55e3b220fd4c3a93a",
       "branch": "main"
     },
     "ekp": {
       "url": "git@github.com:Kinneyzhang/emacs-kp.git",
-      "revision": "c539a6b775821a210414639f16cbb0b602dcd23a",
+      "revision": "40a1c26a74e9a5913cce0b2b6c8922edb8ade0c5",
       "branch": "main"
     },
     "etaf": {
       "url": "git@gitea.gklazycat.heiyu.space:geekinney/etaf.git",
-      "revision": "8320c2548780865fabd76d7d9ded058c4e12692c",
+      "revision": "48e4d30bb730e6bb16d672262edb53d7fc4b384d",
       "branch": "main"
     },
     "etaf-db": {
       "url": "git@gitea.gklazycat.heiyu.space:geekinney/etaf-db.git",
-      "revision": "d235320f49a497ec52a95f83d5f5b102784c76c8",
+      "revision": "a254d4b5a70f2dc0adba0d0b77c477060e5567fc",
       "branch": "main"
     },
     "etaf-playground": {
       "url": "git@gitea.gklazycat.heiyu.space:geekinney/etaf-playground.git",
-      "revision": "6d42a7b7258e8988cbb0815fd7842668ee9a706c",
+      "revision": "d46492bdd660e63659ef48f03da73c36804c28fe",
       "branch": "main"
     },
     "etaf-ui": {
       "url": "git@gitea.gklazycat.heiyu.space:geekinney/etaf-ui.git",
-      "revision": "fcd03be83739b66c081e9142933c74ac430eaee0",
+      "revision": "b3b18ca1f1fbf3ae428d35348028c78e5aee4208",
       "branch": "main"
     },
     "tp": {
       "url": "git@gitea.gklazycat.heiyu.space:geekinney/tp.git",
-      "revision": "431bcbc9bc48bd835ad13f20f7633d94c3e90ca0",
+      "revision": "f1b45d939c2c23f1fbd9245ab147415626782f10",
       "branch": "main"
     }
   }
