@@ -92,3 +92,50 @@ class BoundaryTests(unittest.TestCase):
         self.assertIn('calling signature', errors)
         self.assertIn('duplicate', errors)
         self.assertIn('documentation', errors)
+
+
+class DeclarationCommandTests(unittest.TestCase):
+    def test_distinct_bindings_share_a_symbol_but_not_a_namespace(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            entry = root / 'sample.el'
+            def run(records):
+                entry.write_text(';;; Commentary:\n' + records +
+                                 ";;; Code:\n(provide 'sample)\n")
+                return subprocess.run(
+                    ['python3', str(ROOT/'scripts/check-api.py'), '--root', directory],
+                    capture_output=True, text=True)
+            result = run(';; Function: sample-error (object)\n;; Read an error value.\n'
+                         ';; Error: sample-error\n;; Signal an invalid operation.\n')
+            self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+            for first, second in [('Function', 'Function'), ('Function', 'Macro'),
+                                  ('Variable', 'Hook'), ('Error', 'Error')]:
+                with self.subTest(first=first, second=second):
+                    result = run(f';; {first}: sample-value ()\n;; First binding.\n'
+                                 f';; {second}: sample-value ()\n;; Duplicate binding.\n')
+                    self.assertNotEqual(0, result.returncode)
+                    self.assertIn('duplicate API declaration', result.stderr)
+
+    @unittest.skipUnless(shutil.which('emacs'), 'batch Emacs is unavailable')
+    def test_same_named_function_and_error_are_both_verified(self):
+        with tempfile.TemporaryDirectory() as directory:
+            entry = Path(directory)/'sample.el'
+            source = (";;; Commentary:\n"
+                      ";; Function: sample-error (object)\n;; Read an error value.\n"
+                      ";; Error: sample-error\n;; Signal invalid input.\n"
+                      ";;; Code:\n"
+                      "(defun sample-error (object) object)\n"
+                      "(define-error 'sample-error \"Invalid input\")\n"
+                      "(provide 'sample)\n")
+            def run(text):
+                entry.write_text(text)
+                return subprocess.run(
+                    ['emacs', '-Q', '--batch', '-l', str(ROOT/'scripts/check-api.el')],
+                    cwd=directory, capture_output=True, text=True)
+            result = run(source)
+            self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+            for removed in ["(defun sample-error (object) object)\n",
+                            "(define-error 'sample-error \"Invalid input\")\n"]:
+                result = run(source.replace(removed, ''))
+                self.assertNotEqual(0, result.returncode)
+                self.assertIn('unavailable after loading', result.stdout + result.stderr)

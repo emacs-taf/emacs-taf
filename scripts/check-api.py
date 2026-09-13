@@ -43,17 +43,23 @@ def declarations(entry):
     if ';;; Commentary:' not in source or ';;; Code:' not in source:
         return {}, [f'{entry}: missing Commentary/Code sections']
     commentary = source.split(';;; Commentary:', 1)[1].split(';;; Code:', 1)[0]
-    records = {}; errors = []
+    records = {}; errors = []; bindings = set()
     matches = list(API.finditer(commentary))
     for index, match in enumerate(matches):
         kind, name, signature = match.groups()
         detail = commentary[match.end():matches[index+1].start() if index+1<len(matches) else len(commentary)]
-        if name in records: errors.append(f'{entry}: duplicate API declaration: {name}')
+        namespace = {'Function': 'function', 'Macro': 'function',
+                     'Variable': 'value', 'Hook': 'value',
+                     'Error': 'error', 'Component': 'component'}[kind]
+        binding = (namespace, name)
+        if binding in bindings:
+            errors.append(f'{entry}: duplicate API declaration: {name} ({namespace})')
+        bindings.add(binding)
         if '--' in name: errors.append(f'{entry}: private symbol declared as API: {name}')
         if kind in ('Function', 'Macro', 'Component') and not signature.strip().startswith('('):
             errors.append(f'{entry}: {name} needs a calling signature')
         if not re.search(r'^;;\s+\S', detail, re.M): errors.append(f'{entry}: {name} needs usage/behavior documentation')
-        records[name] = kind.lower()
+        records.setdefault(name, set()).add(kind.lower())
     if not records: errors.append(f'{entry}: public API declarations are empty')
     return records, errors
 

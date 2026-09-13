@@ -81,6 +81,8 @@ to every repository changed from this workspace.
   `;; Function: name (arguments)`, `Macro`, `Variable`, `Hook`, `Error` or `Component`,
   followed by purpose, inputs/results and usage guidance. Document meaningful error
   and lifecycle constraints; keep signatures and behavior aligned with docstrings.
+  A symbol with separate function and error-condition bindings has one record for
+  each; duplicate records within the same binding namespace are invalid.
   Group related interfaces for reading. Do not maintain a second API variable/list
   or repeat implementations in the entry. README and manuals link to this inventory.
   Attach autoload declarations to Function/Macro records so package.el exposes the
