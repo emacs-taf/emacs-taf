@@ -21,8 +21,9 @@ public interfaces, releases and behavior checks.
 ## Setup
 
 Clone the repositories from `workspace.json` into sibling directories with exactly
-these names. The recorded revisions are the source baseline for the organization
-migration, not a certified release lock. `python3 scripts/workspace.py status` reports
+these names. The recorded revisions identify the child commits verified together by
+`make check`; they are an integration checkpoint, not a release certification.
+Commits must be pushed before this checkpoint is available from the remote URLs. `python3 scripts/workspace.py status` reports
 revision differences without changing checkouts. Package READMEs specify installation
 requirements; native builds are explicit package targets.
 
