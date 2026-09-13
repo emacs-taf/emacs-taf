@@ -33,6 +33,14 @@ class BoundaryTests(unittest.TestCase):
     def test_public_calls_and_function_references_pass(self):
         self.assertEqual('', self.check("(require 'provider)\n(provider-open)\n(mapcar #'provider-open nil)"))
 
+    def test_own_package_private_calls_in_test_helpers_are_rejected(self):
+        tests = self.root/'provider/tests'
+        tests.mkdir()
+        (tests/'public-tests.el').write_text(
+            "(defun test-helper () (provider-helper))\n"
+            "(ert-deftest public-case () (test-helper))\n")
+        self.assertIn('provider-helper', self.check('(provider-open)'))
+
     def test_unlisted_nonprivate_name_is_not_an_export(self):
         self.assertIn('internal to provider', self.check('(provider-helper)'))
 

@@ -45,7 +45,8 @@ live in `lisp/`. Small single-file packages may keep implementation in the entry
 `tests/`, `examples/`, `benchmarks/`, `scripts/` and `native/` respectively.
 Organize by responsibility: correctness tests and their helpers go in `tests/`,
 including development-tool tests in `tests/tools/` and data in `tests/fixtures/`.
-`tests/acceptance.json` selects public scenarios. Dedicated measurement harnesses
+`tests/acceptance.json` inventories every maintained Lisp test. Tests use only
+public package APIs; private implementation tests are deleted. Dedicated measurement harnesses
 and workloads belong in `benchmarks/`; general runners and release tools belong in
 `scripts/`. Language and file extension do not determine these boundaries.
 Create directories only when needed; native subprojects retain ecosystem conventions.

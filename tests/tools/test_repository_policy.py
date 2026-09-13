@@ -96,6 +96,14 @@ class PolicyTests(unittest.TestCase):
         self.write('tests/public-tests.el', '(ert-deftest renamed-roundtrip () (should t))\n')
         self.assertIn('missing named scenario', self.errors())
 
+    def test_unlisted_lisp_test_cannot_form_a_hidden_suite(self):
+        self.write('tests/hidden-tests.el', '(ert-deftest hidden () (should t))\n')
+        self.assertIn('cover exactly all', self.errors())
+
+    def test_native_internal_unit_suite_is_rejected(self):
+        self.write('native/src/lib.rs', '#[cfg(test)] mod tests {}\n')
+        self.assertIn('native internal unit tests', self.errors())
+
     def test_empty_acceptance_inventory_is_rejected(self):
         self.write('tests/acceptance.json', '{"cases": []}')
         self.assertIn('nonempty', self.errors())
