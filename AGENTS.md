@@ -105,6 +105,25 @@ contracts. The rules below also apply in independent package checkouts.
   contracts and native acceptance evidence; arbitrary callbacks alone do not prove
   those capabilities. Do not introduce a speculative browser event system or a new
   generic package merely to share names.
+- ETAF's application-facing API must prioritize predictable Component props,
+  committed callback snapshots, trackable prop sources, instance-owned state and
+  local Host references. Preserve shallow refs and explicit value access; reduce
+  state packing/unpacking and provide complete public ownership/disposal contracts.
+  New binding syntax must lower to the existing controlled value/callback model.
+- Teach Components, props/slots, refs/computed values and local callbacks first.
+  Ordinary functions compose reusable application logic; Behavior is an advanced
+  Host attachment with lifecycle, and Action is an optional named command boundary.
+  Do not require either for simple local changes or add parallel authoring models.
+- Resource and Data must converge on a shared asynchronous loading lifecycle with
+  cancellation, stale-result rejection and owner cleanup. Forms and product controls
+  belong to ETAF UI; persistent Component render-error recovery belongs to ETAF;
+  physical input and native editing integration remain Ebox responsibilities.
+  These are target capabilities, not assertions about current support.
+- Validate application usability through public workflows, including two mounted
+  instances, search, form editing, asynchronous save and failure recovery. Complete
+  API creation/use/update/error/disposal paths and developer diagnostics before
+  promoting internal machinery or requiring users to manage runtime identities,
+  request generations or committed-handler caches themselves.
 - Migrate providers and consumers together, then delete the superseded route,
   grammar, examples and private tests. Keep package manuals and architecture aligned
   with implemented behavior and record remaining migration gaps only in the workspace

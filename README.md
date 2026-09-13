@@ -37,7 +37,8 @@ require an appropriate Emacs executable (`make check EMACS=/path/to/emacs`).
 
 Read the [accepted ecosystem architecture and development contract](docs/architecture.zh-CN.md)
 before cross-package work. It records package ownership, shared style and interaction
-semantics, implementation gaps, migration order and observable acceptance criteria.
+semantics, ETAF Component/API usability, asynchronous resources and error recovery,
+implementation gaps, migration order and observable acceptance criteria.
 Its target behavior is explicitly distinguished from the current implementation.
 
 - `make structure-check`: validate every package and detect shared-policy drift.
