@@ -26,7 +26,7 @@ migration, not a certified release lock. `python3 scripts/workspace.py status` r
 revision differences without changing checkouts. Package READMEs specify installation
 requirements; native builds are explicit package targets.
 
-Run `make setup-hooks` after cloning to enable the staged structure gate in every
+Run `make setup-hooks` after cloning to enable the staged structure and commit-message gates in every
 checkout. Python 3.10+ and Git are required for policy checks; package checks also
 require an appropriate Emacs executable (`make check EMACS=/path/to/emacs`).
 
@@ -56,6 +56,20 @@ several files; callers link to the provider's manual. Preserve legal notices.
 This is a project convention informed by [Diátaxis](https://diataxis.fr/),
 [README guidance](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-readmes)
 and [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), not a universal filename standard.
+
+## Git workflow
+
+Commit each validated, complete modification promptly; keep related code, tests and
+contract documentation together. Use [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/)
+with a concrete title, explanatory body and `Validation:` results. Logical commit
+boundaries follow the [Git workflow guidance](https://git-scm.com/docs/gitworkflows).
+The 72-character title limit and validation field are project requirements.
+See [AGENTS.md](AGENTS.md) for granularity, breaking changes and history rules.
+
+Commits are local by default. Push only on explicit request or under an agreed
+automatic-push instruction, to the configured upstream after checking divergence.
+Never force-push or publish to all remotes implicitly. Hooks validate structure and
+message format; authors remain responsible for meaning, scope and actual verification.
 
 ## Enforcement
 

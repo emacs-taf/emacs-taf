@@ -22,7 +22,7 @@
 清单中的提交是本次目录整理的源代码基线，不是已认证的发布版本组合。
 `python3 scripts/workspace.py status` 可以查看版本差异，不会切换仓库。
 
-克隆后运行 `make setup-hooks`，启用所有仓库的暂存区检查。
+克隆后运行 `make setup-hooks`，启用所有仓库的暂存区检查和提交信息检查。
 规范工具需要 Python 3.10+ 和 Git；各包的验证还需要合适版本的 Emacs。
 可通过 `make check EMACS=/path/to/emacs` 指定可执行文件。
 
@@ -48,6 +48,18 @@ README 只负责入门和导航。完整用法及跨模块接口契约放入 `do
 这是一套结合 [Diátaxis](https://diataxis.fr/)、
 [README 指引](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-readmes)
 和 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 的项目约定，并非通用文件名标准。
+
+## Git 工作流
+
+每完成一个验证通过、能够独立说明和回退的修改点就及时提交；相关代码、测试与接口
+文档放在同一次提交。消息遵循 [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/)，
+使用具体标题、解释正文和 `Validation:` 验证结果。提交粒度参考
+[Git 官方工作流](https://git-scm.com/docs/gitworkflows)；标题最多 72 字符和验证字段是本项目附加要求。
+完整粒度、破坏性变更与历史保留规则见 [AGENTS.md](AGENTS.md)。
+
+默认及时本地提交；明确要求推送或约定自动推送后，先检查分叉，再推送当前分支的 upstream。
+不隐式推送所有远端，不强制覆盖远端历史。钩子检查目录与消息格式，修改范围是否合理、
+提交描述是否真实、验证是否充分仍需开发者负责。
 
 ## 持续约束
 

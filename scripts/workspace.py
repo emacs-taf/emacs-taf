@@ -8,7 +8,7 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-SHARED = ('AGENTS.md', '.editorconfig', 'scripts/check-repository.py', 'scripts/run-acceptance.py', '.githooks/pre-commit',
+SHARED = ('AGENTS.md', '.editorconfig', 'scripts/check-repository.py', 'scripts/run-acceptance.py', '.githooks/pre-commit', '.githooks/commit-msg', 'scripts/check-commit-message.py',
           '.github/workflows/structure.yml')
 
 
@@ -33,13 +33,13 @@ def main():
             # Never replace another hook configuration implicitly.
             old = subprocess.run(['git', '-C', str(repo), 'config', '--local', '--get',
                                   'core.hooksPath'], text=True, capture_output=True).stdout.strip()
-            legacy = repo / '.git/hooks/pre-commit'
-            if old not in ('', '.githooks') or (not old and legacy.exists()):
+            legacy = any((repo / '.git/hooks' / hook).exists() for hook in ('pre-commit', 'commit-msg'))
+            if old not in ('', '.githooks') or (not old and legacy):
                 print(f'{name}: existing hooks need manual integration', file=sys.stderr)
                 failed = True
                 continue
             subprocess.run(['git', '-C', str(repo), 'config', '--local', 'core.hooksPath', '.githooks'], check=True)
-            print(f'{name}: staged structure hook enabled')
+            print(f'{name}: structure and commit-message hooks enabled')
         elif args.action == 'status':
             actual = subprocess.check_output(['git', '-C', str(repo), 'rev-parse', 'HEAD'], text=True).strip()
             print(f'{name}: {actual}' + (' (matches recorded revision)' if actual==entry['revision'] else ' (different from recorded revision)'))
