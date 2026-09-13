@@ -132,14 +132,18 @@ contracts belong in the package manual, architecture document and executable tes
   shared history or squash distinct changes without explicit authorization. Prefer a
   focused fix or revert. Use log, blame, diff and bisect when locating regressions;
   mark pre-existing untestable revisions as skipped rather than bad in a bisect.
-- The user authorizes automatic upstream pushes: after completing a coherent group
-  of validated commits, fetch and inspect divergence, then push the current branch
-  to its configured upstream without asking again. Keep local commits timely while
-  work is in progress; push at validated delivery checkpoints, not on every save.
-  Required acceptance gates must pass; disclose known pre-existing broader failures.
-- Do not infer a destination when no upstream exists, or push other remotes, branches
-  or tags implicitly. Resolve divergence without force or rewriting shared history.
-  If authentication, connectivity or missing upstream prevents delivery, retain local
-  commits and report the specific blocker. Never substitute a different remote.
-  Report local commit and push status separately; never claim an unpushed commit is
-  backed up remotely. Do not bypass the shared hooks to finish a task.
+- Each module uses two active remotes: laycat at gitea.gklazycat.heiyu.space
+  and aliyun at gitea.vhkd.top. The current branch tracks laycat. Reserve origin
+  for a future GitHub remote; leave it unconfigured until requested. Preserve unrelated third-party source and licensing links.
+- The user authorizes automatic pushes to both services: after completing a
+  coherent group of validated commits, fetch and inspect each destination,
+  then push the current branch to its same-named branch on laycat and aliyun.
+  Do not stop after pushing only the configured upstream. No repeated approval
+  is needed. Keep local commits timely and push at validated checkpoints.
+- Do not infer a destination when a remote is missing, or publish other branches
+  or tags implicitly. Resolve divergence without force or rewriting history.
+  If authentication, connectivity or configuration prevents either push, retain
+  local commits and report success or failure separately for each destination.
+  The root workspace currently has no remote; keep its commits local until a
+  destination is provided. Never claim an unpushed commit is backed up remotely.
+  Do not bypass shared hooks to finish a task.

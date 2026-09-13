@@ -21,7 +21,9 @@ public interfaces, releases and behavior checks.
 ## Setup
 
 Clone the repositories from `workspace.json` into sibling directories with exactly
-these names. The recorded revisions identify the child commits verified together by
+these names. Clone with `git clone -o laycat <url> <name>` and add the matching
+`aliyun` URL at `https://gitea.vhkd.top/geekinney/<name>.git`.
+The recorded revisions identify the child commits verified together by
 `make check`; they are an integration checkpoint, not a release certification.
 Commits must be pushed before this checkpoint is available from the remote URLs. `python3 scripts/workspace.py status` reports
 revision differences without changing checkouts. Package READMEs specify installation
@@ -73,12 +75,15 @@ boundaries follow the [Git workflow guidance](https://git-scm.com/docs/gitworkfl
 The 72-character title limit and validation field are project requirements.
 See [AGENTS.md](AGENTS.md) for granularity, breaking changes and history rules.
 
-Automatically push each coherent group of validated commits to the current branch's
-configured upstream after fetching and checking divergence. This is the user-approved
-default; no repeated confirmation is needed. If no upstream exists or delivery fails,
-keep the local commits and report the blocker.
-Never force-push or publish to all remotes implicitly. Hooks validate structure and
-message format; authors remain responsible for meaning, scope and actual verification.
+Every module uses `laycat` at `gitea.gklazycat.heiyu.space` and `aliyun` at
+`gitea.vhkd.top`. After a coherent group of validated commits, fetch and inspect
+both destinations, then push the current branch to its same-named branch on both.
+This is the user-authorized default; pushing only the upstream is incomplete.
+Do not force-push or implicitly publish other branches or tags. Report each
+remote's delivery status separately. Reserve `origin` for future GitHub use;
+it is currently unconfigured. The root workspace has no remote configured.
+Hooks validate structure and message format; authors remain responsible for
+scope, accurate descriptions and validation.
 
 ## Enforcement
 
