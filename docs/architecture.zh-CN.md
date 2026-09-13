@@ -271,7 +271,7 @@ effect scope 的创建、进入、清理注册和停止接口已完整公开，�
 
 | 项目 | 已检查到的当前情况 | 待收敛目标 |
 | --- | --- | --- |
-| 渲染接入 | ETAF 直接构造规范 Ebox 输入，通过候选变更和 render port 提交 | 保持公共边界，补齐作用域、身份和交互映射，避免引入序列化往返 |
+| 渲染接入 | ETAF 直接构造规范 Ebox 输入，通过候选变更和 render port 提交；role、ARIA、disabled 进入共享选择器事实 | 保持公共边界，补齐作用域、身份和交互映射，避免引入序列化往返 |
 | 增量发布 | ETAF、Ebox、TP 已有分层候选与配对提交基础 | 让新增交互状态参与同一一致性契约，不新建旁路 |
 | 样式计算 | Ebox 通过 ECSS 处理程序构造的 important、CSS-wide longhand 与变量值，custom property 更新可影响绘制和几何；ETAF 仍有简化规则匹配与合并 | 删除 ETAF 的第二套语义；规则顺序、specificity 和结构选择器一致 |
 | 样式所有权 | ECSS 作用域可快照显式规则目标；Ebox 规范输入按 source 身份解析目标，保持结构选择器、继承与候选发布语义 | ETAF 提供组件、slot 与 fallback 的目标归属；补齐多根组件接入并删除旧样式栈 |
