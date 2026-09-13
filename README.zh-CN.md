@@ -31,12 +31,11 @@
 规范工具需要 Python 3.10+ 和 Git；各包的验证还需要合适版本的 Emacs。
 可通过 `make check EMACS=/path/to/emacs` 指定可执行文件。
 
-- `make structure-check`：检查目录、文档命名、引用、构建路径和共享规范是否漂移。
+- `make structure-check`：检查目录、文档命名、引用、构建路径和共享工具是否漂移。
 - `make check`：先验证规范检查器，再按依赖顺序运行各仓库公共验收。
 - `make compile`、`make test`、`make clean`：调用各仓库自己的入口。
-- `make sync-policy`：同步规范、检查器、提交钩子和 CI 配置。
+- `make sync-policy`：分发在工作区维护的共享检查器、提交钩子、格式和 CI 配置。
 
-完整规则见 [AGENTS.md](AGENTS.md)。修改规范时改工作区源文件，再同步到所有仓库。
 多文件包的源码放 `lisp/`，单文件包可保留根目录入口；测试、示例、基准、工具和原生实现分别放在
 `tests/`、`examples/`、`benchmarks/`、`scripts/` 和 `native/`。
 按职责组织：正确性测试及辅助代码放 `tests/`，工具测试放 `tests/tools/`，
@@ -62,7 +61,6 @@ README 只负责入门和导航。完整用法及跨模块接口契约放入 `do
 文档放在同一次提交。消息遵循 [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/)，
 使用具体标题、解释正文和 `Validation:` 验证结果。提交粒度参考
 [Git 官方工作流](https://git-scm.com/docs/gitworkflows)；标题最多 72 字符和验证字段是本项目附加要求。
-完整粒度、破坏性变更与历史保留规则见 [AGENTS.md](AGENTS.md)。
 
 每个模块统一使用两个远端：`laycat` 指向 `gitea.gklazycat.heiyu.space`，
 `aliyun` 指向 `gitea.vhkd.top`。每完成一组验证通过的提交，先 fetch 并检查两端分叉，
@@ -76,5 +74,5 @@ README 只负责入门和导航。完整用法及跨模块接口契约放入 `do
 
 提交钩子检查实际暂存内容，CI 配置在 push 和 pull request 时运行同一个检查器。
 本地钩子可以被绕过；远端管理员需要启用 Actions，并将结构检查设为合并必需条件。
-本次本地整理不修改远端权限或分支规则。自动检查负责机械一致性，公共接口的正确性
+远端权限和分支保护在各托管服务上管理。自动检查负责机械一致性，公共接口的正确性
 仍由行为测试和代码审查保证。

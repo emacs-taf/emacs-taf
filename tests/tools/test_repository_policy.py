@@ -1,6 +1,8 @@
 """Behavioral regressions for drift detection and staged-content checking."""
 import importlib.util
+import json
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -35,25 +37,94 @@ class PolicyTests(unittest.TestCase):
     def test_minimal_package_does_not_need_empty_documents(self):
         self.assertEqual('', self.errors())
 
-    def test_workspace_cli_requires_its_ecosystem_contract(self):
+    def test_workspace_cli_requires_root_instructions_and_ecosystem_contract(self):
         self.write('workspace.json', '{"schema": 1, "repositories": {}}')
         self.write('scripts/api-workspace.json', '{}')
         (self.root / 'package.el').unlink()
         # Exercise both worktree and exact-index CLI behavior. An untracked or
         # unstaged replacement must not conceal deletion from the next commit.
         subprocess.run(['git', 'init', '-q', str(self.root)], check=True)
+        self.write('AGENTS.md', '# Workspace instructions\n')
         self.write('docs/architecture.zh-CN.md', '# Accepted ecosystem contract\n')
         subprocess.run(['git', '-C', str(self.root), 'add', '.'], check=True)
         command = [sys.executable, str(self.root / 'scripts/check-repository.py'),
                    '--root', str(self.root)]
         accepted = subprocess.run(command, capture_output=True, text=True)
         self.assertEqual(0, accepted.returncode, accepted.stderr)
-        subprocess.run(['git', '-C', str(self.root), 'rm', '--cached',
-                        'docs/architecture.zh-CN.md'], check=True, capture_output=True)
-        rejected = subprocess.run(command + ['--staged'], capture_output=True, text=True)
-        self.assertEqual(1, rejected.returncode)
-        self.assertIn('workspace requires the accepted ecosystem architecture contract',
-                      rejected.stderr)
+        for path, message in [
+                ('AGENTS.md', 'workspace requires its development instructions'),
+                ('docs/architecture.zh-CN.md',
+                 'workspace requires the accepted ecosystem architecture contract')]:
+            with self.subTest(path=path):
+                subprocess.run(['git', '-C', str(self.root), 'rm', '--cached', path],
+                               check=True, capture_output=True)
+                rejected = subprocess.run(command + ['--staged'], capture_output=True, text=True)
+                self.assertEqual(1, rejected.returncode)
+                self.assertIn(message, rejected.stderr)
+                subprocess.run(['git', '-C', str(self.root), 'add', path], check=True)
+
+    def test_workspace_sync_preserves_optional_local_instructions(self):
+        # Exercise the real CLI against a workspace with an independent checkout.
+        # A local instruction file is owned by its package, not the synchronizer.
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = Path(directory)
+            package = workspace / 'sample'
+            shutil.copytree(self.root, package)
+            for path in POLICY.SHARED + ('scripts/workspace.py', 'Makefile'):
+                target = workspace / path
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(ROOT / path, target)
+            (workspace / 'README.md').write_text('# Workspace\n')
+            (workspace / 'AGENTS.md').write_text('# Workspace development instructions\n')
+            (workspace / 'docs').mkdir()
+            (workspace / 'docs/architecture.zh-CN.md').write_text('# Accepted contract\n')
+            (workspace / 'workspace.json').write_text(json.dumps({'schema': 1, 'repositories': {
+                'sample': {'url': 'https://example.invalid/sample.git', 'revision': 'unused',
+                           'branch': 'main'}}}))
+            (workspace / '.gitignore').write_text('sample/\n__pycache__/\n')
+            (package / '.gitignore').write_text('__pycache__/\n')
+            for repo in [workspace, package]:
+                subprocess.run(['git', 'init', '-q', str(repo)], check=True)
+            command = [sys.executable, str(workspace / 'scripts/workspace.py')]
+
+            def run(action, success=True):
+                result = subprocess.run(command + [action], capture_output=True, text=True)
+                self.assertEqual(0 if success else 1, result.returncode, result.stderr)
+                return result
+
+            run('sync')
+            self.assertFalse((package / 'AGENTS.md').exists())
+            run('check')
+
+            local = package / 'AGENTS.md'
+            local.write_text('# Local instructions\nRead [the package](README.md).\n')
+            nested = package / 'native/AGENTS.md'
+            nested.parent.mkdir()
+            nested.write_text('# Native build instructions\n')
+            expected = {path: path.read_bytes() for path in [local, nested]}
+            (workspace / 'AGENTS.md').write_text('# Changed workspace instructions\n')
+            run('sync')
+            self.assertEqual(expected, {path: path.read_bytes() for path in expected})
+            run('check')
+            (package / '.editorconfig').write_text('root = false\n')
+            self.assertIn('shared tooling drift', run('check', success=False).stderr)
+            run('sync')
+            self.assertEqual(expected, {path: path.read_bytes() for path in expected})
+            run('check')
+            subprocess.run(['git', '-C', str(package), 'add', '.'], check=True)
+            staged = subprocess.run([sys.executable, str(package / 'scripts/check-repository.py'),
+                                     '--root', str(package), '--staged'],
+                                    capture_output=True, text=True)
+            self.assertEqual(0, staged.returncode, staged.stderr)
+
+            # Local ownership must not exempt instructions from normal link checks.
+            local.write_text('[missing](docs/missing.md)\n')
+            self.assertIn('broken local link', run('check', success=False).stderr)
+            local.unlink()
+            run('sync')
+            self.assertFalse(local.exists())
+            self.assertEqual(expected[nested], nested.read_bytes())
+            run('check')
 
     def test_responsibilities_allow_mixed_languages_and_test_data(self):
         for path in ['tests/tools/test_runner.py', 'tests/public.erts',

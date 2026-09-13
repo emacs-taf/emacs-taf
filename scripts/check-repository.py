@@ -12,14 +12,14 @@ import sys
 import tempfile
 from urllib.parse import unquote
 
-POLICY_VERSION = 8
+POLICY_VERSION = 9
 DOC_NAMES = {'README.md', 'README.zh-CN.md', 'CHANGELOG.md', 'CHANGELOG.zh-CN.md',
              'AGENTS.md', 'docs/manual.md', 'docs/manual.zh-CN.md',
              'docs/architecture.md', 'docs/architecture.zh-CN.md'}
 DIRS = {'lisp', 'tests', 'examples', 'benchmarks', 'scripts', 'docs', 'native',
         'dictionaries', 'design', '.github', '.gitea', '.githooks'}
 SKIP = {'.git', '__pycache__', 'target', '.omx', '.worktrees', '.claude'}
-SHARED = ('scripts/check-api.py', 'scripts/check-api.el', 'scripts/api-workspace.json', 'AGENTS.md', '.editorconfig', 'scripts/check-repository.py', 'scripts/run-acceptance.py', '.githooks/pre-commit', '.githooks/commit-msg', 'scripts/check-commit-message.py',
+SHARED = ('scripts/check-api.py', 'scripts/check-api.el', 'scripts/api-workspace.json', '.editorconfig', 'scripts/check-repository.py', 'scripts/run-acceptance.py', '.githooks/pre-commit', '.githooks/commit-msg', 'scripts/check-commit-message.py',
           '.github/workflows/structure.yml')
 
 
@@ -45,10 +45,12 @@ def check(root, files=None):
     workspace = (root / 'workspace.json').exists()
     allowed_dirs = DIRS | (set(__import__('json').loads((root / 'workspace.json').read_text())['repositories']) if workspace else set())
     def fail(path, message): errors.append(f'{path}: {message}')
-    for required in ['README.md', 'AGENTS.md', 'Makefile', 'scripts/check-repository.py',
+    for required in ['README.md', 'Makefile', 'scripts/check-repository.py',
                      '.githooks/pre-commit', '.githooks/commit-msg', 'scripts/check-commit-message.py', '.github/workflows/structure.yml',
                      'scripts/check-api.py', 'scripts/check-api.el', 'scripts/api-workspace.json']:
         if required not in files: fail(required, 'required maintained file is missing')
+    if workspace and 'AGENTS.md' not in files:
+        fail('AGENTS.md', 'workspace requires its development instructions')
     if workspace and 'docs/architecture.zh-CN.md' not in files:
         fail('docs/architecture.zh-CN.md', 'workspace requires the accepted ecosystem architecture contract')
     root_lisp = [f for f in files if '/' not in f and f.endswith('.el')]
@@ -60,6 +62,7 @@ def check(root, files=None):
     spellings = {}
     for f in files:
         parts = PurePosixPath(f).parts
+        instructions = parts[-1] == 'AGENTS.md'
         for i in range(1, len(parts) + 1):
             spelling = '/'.join(parts[:i]); old = spellings.setdefault(spelling.casefold(), spelling)
             if old != spelling: fail(f, f'case collision with {old}')
@@ -75,9 +78,9 @@ def check(root, files=None):
                 fail(f, 'delete native internal unit tests; validate through public package APIs')
         # Preserve upstream dictionary/vendor licensing and resource names.
         external = parts[0] == 'dictionaries' or f.startswith('native/vendor/')
-        if f.endswith('.md') and f not in DOC_NAMES and not external:
+        if f.endswith('.md') and f not in DOC_NAMES and not external and not instructions:
             fail(f, 'use README, CHANGELOG, docs/manual or docs/architecture; merge or delete other documents')
-        if f.startswith('docs/') and (len(parts) != 2 or f not in DOC_NAMES):
+        if f.startswith('docs/') and not instructions and (len(parts) != 2 or f not in DOC_NAMES):
             fail(f, 'documentation must be flat and use the fixed document names')
         if re.search(r'(^|/)(?:\.DS_Store|[^/]+\.(?:elc|eln|pyc|o|so|dylib|dll))$', f) or 'target' in parts or '__pycache__' in parts:
             fail(f, 'generated artifact must not be tracked')

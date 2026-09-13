@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Synchronize shared policy, check all repositories, or install local hooks."""
+"""Synchronize shared tooling, check all repositories, or install local hooks."""
 import argparse
 import json
 from pathlib import Path
@@ -8,7 +8,7 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-SHARED = ('scripts/check-api.py', 'scripts/check-api.el', 'scripts/api-workspace.json', 'AGENTS.md', '.editorconfig', 'scripts/check-repository.py', 'scripts/run-acceptance.py', '.githooks/pre-commit', '.githooks/commit-msg', 'scripts/check-commit-message.py',
+SHARED = ('scripts/check-api.py', 'scripts/check-api.el', 'scripts/api-workspace.json', '.editorconfig', 'scripts/check-repository.py', 'scripts/run-acceptance.py', '.githooks/pre-commit', '.githooks/commit-msg', 'scripts/check-commit-message.py',
           '.github/workflows/structure.yml')
 
 
@@ -57,7 +57,7 @@ def main():
         else:
             for rel in SHARED:
                 if not (repo / rel).exists() or (repo / rel).read_bytes() != (ROOT / rel).read_bytes():
-                    print(f'{name}/{rel}: shared policy drift; run workspace.py sync', file=sys.stderr)
+                    print(f'{name}/{rel}: shared tooling drift; run workspace.py sync', file=sys.stderr)
                     failed = True
             if subprocess.run([sys.executable, str(ROOT / 'scripts/check-repository.py'), '--root', str(repo)]).returncode:
                 failed = True

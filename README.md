@@ -41,20 +41,19 @@ semantics, ETAF Component/API usability, asynchronous resources and error recove
 implementation gaps, migration order and observable acceptance criteria.
 Its target behavior is explicitly distinguished from the current implementation.
 
-- `make structure-check`: validate every package and detect shared-policy drift.
+- `make structure-check`: validate every package and detect shared-tooling drift.
 - `make check`: run policy regression tests and public package acceptance checks in dependency order.
 - `make compile`, `make test`, `make clean`: delegate to package-owned entry points.
-- `make sync-policy`: distribute the canonical policy, checker, hook and CI workflow.
+- `make sync-policy`: distribute shared checkers, hooks, formatting and CI configuration maintained here.
 
-Read [AGENTS.md](AGENTS.md) for the complete development contract. Update shared files
-here and run `make sync-policy`; do not customize individual copies. Packages expose one root entry with the supported API in its Commentary.
+Packages expose one root entry with the supported API in its Commentary.
 Checkout users add repository roots to `load-path`; multi-file implementations
 live in `lisp/`. Small single-file packages may keep implementation in the entry. Tests, examples, benchmarks, tools and native sources live in
 `tests/`, `examples/`, `benchmarks/`, `scripts/` and `native/` respectively.
 Organize by responsibility: correctness tests and their helpers go in `tests/`,
 including development-tool tests in `tests/tools/` and data in `tests/fixtures/`.
-`tests/acceptance.json` inventories every maintained Lisp test. Tests use only
-public package APIs; private implementation tests are deleted. Dedicated measurement harnesses
+`tests/acceptance.json` inventories every maintained Lisp test. Tests exercise only
+public package APIs. Dedicated measurement harnesses
 and workloads belong in `benchmarks/`; general runners and release tools belong in
 `scripts/`. Language and file extension do not determine these boundaries.
 Create directories only when needed; native subprojects retain ecosystem conventions.
@@ -81,7 +80,6 @@ contract documentation together. Use [Conventional Commits](https://www.conventi
 with a concrete title, explanatory body and `Validation:` results. Logical commit
 boundaries follow the [Git workflow guidance](https://git-scm.com/docs/gitworkflows).
 The 72-character title limit and validation field are project requirements.
-See [AGENTS.md](AGENTS.md) for granularity, breaking changes and history rules.
 
 Every module uses `laycat` at `gitea.gklazycat.heiyu.space` and `aliyun` at
 `gitea.vhkd.top`. After a coherent group of validated commits, fetch and inspect
@@ -98,6 +96,6 @@ scope, accurate descriptions and validation.
 The pre-commit hook checks the exact Git index. The checked-in CI workflow runs the
 same structure check on pushes and pull requests. Local hooks can be bypassed;
 remote administrators must enable Actions and make the structure job a required
-merge check. This workspace does not configure remote permissions or branch rules.
+merge check. Remote permissions and branch protection are managed on each hosting service.
 The checker catches mechanical drift; interface design and documentation accuracy
 still require behavioral tests and review.

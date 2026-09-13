@@ -1,15 +1,27 @@
-# Repository development contract
+# Workspace development instructions
 
-This file is the shared development policy for this workspace and its packages.
-The workspace copy is authoritative; `python3 scripts/workspace.py sync` distributes
-it and the shared checks. Do not customize a package copy. Package-specific
-contracts belong in the package manual, architecture document and executable tests.
+Start development from this directory. These instructions govern work across the
+independent repositories listed in `workspace.json`.
+
+## Locate the task
+
+- Use [README.md](README.md) for the repository map and workspace commands. Each
+  child has its own Git history; inspect and commit changes in the owning repository.
+  The root repository tracks orchestration, documentation and integration revisions.
+- Before editing a package, discover and read any AGENTS.md on the path from its
+  root to the target files, then its README and the relevant contract sections.
+- Maintain common instructions here. Add a local AGENTS.md only when its scope
+  needs special development commands, critical reminders or document navigation.
+- For architecture or cross-package changes, read the applicable parts of
+  [the ecosystem contract](docs/architecture.zh-CN.md) and the affected providers'
+  public contracts. Select documents by the task and the responsible packages;
+  distinguish required targets from implemented behavior.
 
 ## Structure
 
-- Each package has one root entry named after its provided package feature
-  (etaf-db uses etaf-sqlite.el). Keep package metadata, the public API Commentary
-  and implementation loading there. Multi-file implementations live in lisp/;
+- Each package has one root entry named after its provided package feature.
+  Keep package metadata, public API Commentary and implementation loading there.
+  Multi-file implementations live in lisp/;
   do not duplicate the entry, add forwarding wrappers or preserve obsolete paths.
   Small single-file packages may implement their behavior in the root entry.
 - Checkout users add repository roots to load-path and require the package entry.
@@ -36,16 +48,32 @@ contracts belong in the package manual, architecture document and executable tes
 
 ## Documentation
 
-- `README.md`: purpose, installation, minimal example, documentation links and checks.
-- `CHANGELOG.md`: notable user-visible changes and migration instructions, grouped by
-  version; follow Keep a Changelog. Do not fabricate releases or copy commit logs.
-- `docs/manual.md`: task-oriented usage, integration workflows, lifecycle, errors
-  and runnable examples. Link to the entry Commentary for the supported API list.
-- `docs/architecture.md`: current ownership, dependency direction and invariants.
-  Describe implemented behavior, not unaccepted proposals. The workspace additionally
-  maintains `docs/architecture.zh-CN.md` as the accepted ecosystem development
-  contract: distinguish current implementation, required target behavior and remaining
-  work explicitly. Update it in place; do not create separate plans or decision logs.
+Maintain this documentation policy only in the workspace root AGENTS.md. Apply it
+to every repository changed from this workspace.
+
+| Location | Reader and purpose | Include | Exclude |
+| --- | --- | --- | --- |
+| Root `AGENTS.md` | Development agents working across the workspace | Task navigation, common engineering rules, document selection, validation and Git delivery instructions | Product tutorials, full API contracts, detailed architecture, task transcripts and progress reports |
+| Local `AGENTS.md`, when needed | Agents changing that specific scope | Special commands, critical local reminders and links to the relevant contracts | Copies of root rules, unrelated package requirements and full design documents |
+| `README.md` | People evaluating, installing or starting to use the project | Purpose, capabilities, prerequisites, installation, a minimal working example, documentation links and brief contribution/check commands; the workspace README describes orchestration | Agent setup, AGENTS.md discovery or maintenance, agent workflow instructions, task reports, detailed design and exhaustive API references |
+| Root entry `.el` Commentary | Package consumers looking up supported APIs | The authoritative API inventory, signatures, purpose, inputs/results, usage and lifecycle/error constraints | Duplicate implementations, private APIs and refactoring plans |
+| `docs/manual.md` | Users integrating the package or completing a task | Supported workflows, configuration, composition, runnable examples, lifecycle, failures and recovery | Agent operation, implementation walkthroughs, speculative APIs and a second full API inventory |
+| Package `docs/architecture.md` | Maintainers understanding the implemented system | Responsibilities, dependency direction, data flow, invariants and the rationale for current design | Agent operation, task chronology, abandoned designs and unimplemented proposals |
+| Workspace `docs/architecture.zh-CN.md` | Maintainers coordinating ecosystem development | Cross-package responsibilities, accepted target contracts, relevant implementation gaps, dependency order and observable acceptance criteria | Conversation history, agent operation, unaccepted ideas and claims that pending capabilities already work |
+| `CHANGELOG.md` | Users deciding how to upgrade | Notable user-visible changes and necessary migration instructions, organized by release or Unreleased following Keep a Changelog | Copied commit logs, internal work reports, fabricated releases and routine edits without user impact |
+
+- Before writing, identify the reader's task and the owning document above. Update
+  its relevant section; if the content does not serve that purpose, relocate or
+  omit it rather than appending a new explanation. Check the final diff against
+  these boundaries before committing.
+- Write standalone descriptions of the maintained behavior or accepted requirement.
+  Readers must not need the conversation, previous edits or abandoned approaches to
+  understand the text. Keep durable design rationale where it explains a current
+  decision; record user-relevant version transitions in CHANGELOG. Task narration
+  belongs in the conversation and change history.
+- Maintain each detailed contract in one authoritative location and link to it
+  from other documents. Create optional documents only for maintained content;
+  reuse existing sections and remove stale or redundant material.
 - English uses the default name; Chinese translations use `.zh-CN.md` consistently.
   Keep existing translations aligned when their contract changes. Do not create empty
   translations or documents merely to fill a template. Legal notices are exempt.
@@ -64,75 +92,14 @@ contracts belong in the package manual, architecture document and executable tes
   ownership, lifecycle, failure semantics and a runnable example in its manual.
   Keep private implementation symbols out of consumer code.
 
-## Ecosystem architecture
-
-These are accepted constraints for subsequent development, not a claim that all
-existing implementations already comply. Before changing cross-package boundaries,
-read the workspace root's `docs/architecture.zh-CN.md` and the affected package
-contracts. The rules below also apply in independent package checkouts.
-
-- Keep ECSS, TP and EKP independent of Ebox and ETAF. Ebox owns reusable text/box
-  presentation and host interaction; ETAF owns Components, application state,
-  effects and lifecycle. UI components, data adapters and Playgrounds consume these
-  layers. Core packages must not acquire dependencies on applications or demos.
-- ECSS is Ebox's required style engine, including for inline-only use. ECSS owns
-  selector matching, specificity, cascade and inheritance; Ebox owns its property
-  schema and display projection. ETAF supplies component scope and theme context
-  through public interfaces. Do not add a second matcher or precedence algorithm.
-- The target stylesheet representation is an ordered list of selector/declaration
-  rules. Do not require a redundant `styles` head. A static `.ecss` file is one
-  unevaluated rule list; ordinary Elisp expressions follow ordinary quoting rules.
-  Stylesheet context belongs to the mounted surface or component owner, with no
-  implicit mutable global context shared by unrelated applications.
-- ETAF lowers resolved Hosts to canonical Ebox input through public interfaces;
-  it must not serialize and reparse an intermediate `.ebox` program. Preserve
-  structural, style-scope and identity semantics across lowering.
-- Ebox is the authority for host input targeting, focus, disabled boundaries and
-  gesture lifecycle. ETAF adapts its declarations and invokes application callbacks
-  within its state batch; it must converge on the Ebox interaction path instead of
-  retaining a separate target search, focus authority or physical input dispatcher.
-  Native editor adapters retain Emacs editing semantics and explicit ownership.
-- ETAF computes application invalidation, Ebox computes rendering impact, and TP
-  publishes managed surface changes. Keep application refs and display bindings in
-  their owning layers; do not mirror authoritative state or create a second buffer
-  writer. Matching interaction bindings and rendered state publish together;
-  discarded candidates must not become live event targets.
-- Ebox must remain independently usable. For supported host capabilities, direct
-  Ebox plus ordinary Elisp state/callbacks and ETAF must express equivalent visible
-  behavior. This does not eliminate ETAF's runtime or promise zero overhead.
-- Extend shared host capabilities from actual application needs. Inline editing,
-  input methods, undo, selection and complex gestures require explicit lifecycle
-  contracts and native acceptance evidence; arbitrary callbacks alone do not prove
-  those capabilities. Do not introduce a speculative browser event system or a new
-  generic package merely to share names.
-- ETAF's application-facing API must prioritize predictable Component props,
-  committed callback snapshots, trackable prop sources, instance-owned state and
-  local Host references. Preserve shallow refs and explicit value access; reduce
-  state packing/unpacking and provide complete public ownership/disposal contracts.
-  New binding syntax must lower to the existing controlled value/callback model.
-- Teach Components, props/slots, refs/computed values and local callbacks first.
-  Ordinary functions compose reusable application logic; Behavior is an advanced
-  Host attachment with lifecycle, and Action is an optional named command boundary.
-  Do not require either for simple local changes or add parallel authoring models.
-- Resource and Data must converge on a shared asynchronous loading lifecycle with
-  cancellation, stale-result rejection and owner cleanup. Forms and product controls
-  belong to ETAF UI; persistent Component render-error recovery belongs to ETAF;
-  physical input and native editing integration remain Ebox responsibilities.
-  These are target capabilities, not assertions about current support.
-- Validate application usability through public workflows, including two mounted
-  instances, search, form editing, asynchronous save and failure recovery. Complete
-  API creation/use/update/error/disposal paths and developer diagnostics before
-  promoting internal machinery or requiring users to manage runtime identities,
-  request generations or committed-handler caches themselves.
-- Migrate providers and consumers together, then delete the superseded route,
-  grammar, examples and private tests. Keep package manuals and architecture aligned
-  with implemented behavior and record remaining migration gaps only in the workspace
-  architecture contract. Public behavior checks and review enforce semantic rules;
-  the structure checker cannot certify architectural convergence or GUI performance.
-
 ## Development and validation
 
-- Read README and relevant manual/architecture sections before changing a boundary.
+- Apply design requirements to their responsible packages and affected integrations.
+  A package's requirements do not automatically apply to its dependencies.
+- Preserve each package's documented responsibility, independent use and dependency
+  direction. Keep shared capabilities in their owning provider; do not duplicate
+  authoritative state or algorithms in consumers. Migrate affected callers with
+  interface changes and remove the superseded route once migration is complete.
 - A move or deletion must update all code, Makefiles, tests and documentation references
   in the same change. Use stable behavior-based names, not development-phase labels.
 - Put behavioral regressions in tests. Do not require documents to enumerate every
@@ -152,9 +119,10 @@ contracts. The rules below also apply in independent package checkouts.
   supported package APIs. Preserve upstream vendor sources.
   Development tools may test their supported command/input/output contracts.
   GUI appearance and performance use their separate acceptance targets.
-- Run `make structure-check` and the affected tests while developing; run `make check`
-  before declaring a package change complete. Workspace changes also run
-  `python3 scripts/workspace.py check` and affected consumer checks.
+- From this directory, use `make -C <package> structure-check` and affected tests
+  while developing; run `make -C <package> check` before completing a package change.
+  Workspace changes run `python3 scripts/workspace.py check`; integrated changes
+  run workspace `make check`, including affected consumers in dependency order.
 - Each package exposes `compile`, `test`, `check`, `clean`, `structure-check`, and
   `setup-hooks`. `check` includes the structural gate. Serialize commands that clean
   and rebuild shared dependencies; parallel builds must not race over sibling outputs.
@@ -170,8 +138,9 @@ contracts. The rules below also apply in independent package checkouts.
 - Never weaken a check, add an exclusion or skip a test just to make a failure green.
   Update obsolete checks to the current contract and retain behavioral coverage.
 - If a new document or directory does not fit this policy, first simplify the design.
-  Necessary policy changes must update the workspace source, shared checker and its
-  regression tests together, then synchronize every package.
+  Maintain shared checkers, hooks and configuration in the workspace and distribute
+  them with `python3 scripts/workspace.py sync`. Changes to mechanically enforced
+  rules update the checker and its tool regressions together.
 
 ## Git history and delivery
 
