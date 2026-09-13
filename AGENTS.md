@@ -125,6 +125,20 @@ to every repository changed from this workspace.
   while developing; run `make -C <package> check` before completing a package change.
   Workspace changes run `python3 scripts/workspace.py check`; integrated changes
   run workspace `make check`, including affected consumers in dependency order.
+- Validate each complete feature change through the affected examples' data flow,
+  visible rendering, behavior and interaction latency before continuing to another
+  feature. Provider unit scenarios alone do not establish application acceptance.
+  Interface or recommended-authoring changes migrate UI components, all maintained
+  consuming examples, manuals and tests in the same coherent delivery.
+- Establish a performance baseline before editing and compare after each coherent
+  change. Use `make verify-baseline` once, then `make verify BASELINE=/path/result.json`
+  for repeatable batch correctness, latency samples and regression comparison.
+  Keep raw evidence outside Git; inspect the compact result before opening specific
+  failure logs. A failed, missing or incomparable gate remains unverified, including
+  pre-existing failures. Do not postpone performance work until ecosystem completion.
+  These batch commands do not certify actual GUI rendering or input latency; run
+  and inspect the affected examples through their maintained GUI workflow too.
+  Use three independent sample sets for the final performance claim.
 - Each package exposes `compile`, `test`, `check`, `clean`, `structure-check`, and
   `setup-hooks`. `check` includes the structural gate. Serialize commands that clean
   and rebuild shared dependencies; parallel builds must not race over sibling outputs.

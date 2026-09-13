@@ -43,6 +43,13 @@ Its target behavior is explicitly distinguished from the current implementation.
 
 - `make structure-check`: validate every package and detect shared-tooling drift.
 - `make check`: run policy regression tests and public package acceptance checks in dependency order.
+- `make verify-baseline`: save a batch correctness/performance baseline with logs and raw samples.
+- `make verify BASELINE=/path/result.json`: run the same batch checks and compare p95/max
+  with the baseline; increases over 2 ms fail independently of the existing 50 ms limit.
+  `make verify-repeatability BASELINE=/path/result.json` compares three independent sets
+  against a three-set baseline recorded with `scripts/verify.py --record-baseline --repeatability`.
+  Each run prints a compact summary and an evidence directory outside Git. Actual GUI
+  rendering/input and installation checks remain separate acceptance requirements.
 - `make compile`, `make test`, `make clean`: delegate to package-owned entry points.
 - `make sync-policy`: distribute shared checkers, hooks, formatting and CI configuration maintained here.
 

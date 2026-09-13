@@ -70,7 +70,7 @@ class PolicyTests(unittest.TestCase):
             workspace = Path(directory)
             package = workspace / 'sample'
             shutil.copytree(self.root, package)
-            for path in POLICY.SHARED + ('scripts/workspace.py', 'Makefile'):
+            for path in POLICY.SHARED + ('scripts/workspace.py', 'scripts/verify.py', 'Makefile'):
                 target = workspace / path
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(ROOT / path, target)

@@ -24,3 +24,11 @@ clean:
 .PHONY: api-check
 api-check:
 	@set -e; for repo in $(MODULE_DIRS); do $(MAKE) -C "$$repo" api-check EMACS="$(EMACS)"; done
+
+.PHONY: verify verify-baseline verify-repeatability
+verify:
+	python3 scripts/verify.py --emacs "$(EMACS)" --baseline "$(BASELINE)"
+verify-baseline:
+	python3 scripts/verify.py --emacs "$(EMACS)" --record-baseline
+verify-repeatability:
+	python3 scripts/verify.py --emacs "$(EMACS)" --baseline "$(BASELINE)" --repeatability

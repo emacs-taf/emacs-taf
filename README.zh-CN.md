@@ -43,6 +43,16 @@
 性能工作负载与专用测量程序放 `benchmarks/`，通用运行及发布工具放 `scripts/`。
 不按语言或扩展名限制这些目录；目录按需创建，原生子项目遵循自身生态约定。
 
+## 快速批量回归
+
+`make verify-baseline` 保存功能与性能基线；修改后运行
+`make verify BASELINE=/path/result.json`，自动保留日志和原始样本，并比较 p95/max。
+增加超过 2 ms 即失败，既有 50 ms 绝对门槛仍独立生效。默认每场景 5 次预热、
+30 次采样；三组对比使用 `make verify-repeatability BASELINE=/path/result.json`，
+对应基线通过 `scripts/verify.py --record-baseline --repeatability` 生成。
+终端只输出简短结果与 Git 外的证据目录。实际 GUI 渲染、输入和安装认证仍需
+各自的验收流程，批量通过不能替代它们。
+
 ## 文档边界
 
 README 只负责入门和导航。完整用法及跨模块接口契约放入 `docs/manual.md`；
