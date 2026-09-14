@@ -33,7 +33,7 @@
     },
     "etaf-playground": {
       "url": "git@gitea.gklazycat.heiyu.space:geekinney/etaf-playground.git",
-      "revision": "0e30f95b7c2ee946f50848e2e8f20c959add8bd2",
+      "revision": "dcf9e11bec02f8631985e6ba991ee55341704e9c",
       "branch": "main"
     },
     "etaf-ui": {
