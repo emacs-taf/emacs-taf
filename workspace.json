@@ -3,7 +3,7 @@
   "repositories": {
     "ebox": {
       "url": "git@gitea.gklazycat.heiyu.space:geekinney/ebox.git",
-      "revision": "f9a913d32c7e3412e031f6ef0452bf7c243a1cc9",
+      "revision": "3ff2c59912086120fadb406d0282d12c6741d576",
       "branch": "main"
     },
     "ebox-playground": {
