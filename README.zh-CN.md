@@ -12,7 +12,7 @@
 | ebox | Box 布局、渲染与增量发布；依赖 ecss、tp，可选 ekp |
 | etaf | 组件、状态与应用运行时；依赖 ebox、tp |
 | etaf-ui | 通用 UI 组件 |
-| etaf-db | SQLite 适配器；Lisp 包名为 `etaf-sqlite` |
+| etaf-db | ETAF 数据库后端；目前支持 SQLite |
 | ebox-playground | Ebox 布局示例 |
 | etaf-playground | 应用集成示例 |
 

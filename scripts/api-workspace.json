@@ -20,7 +20,7 @@
     "url": "git@gitea.gklazycat.heiyu.space:geekinney/etaf.git"
   },
   "etaf-db": {
-    "entry": "etaf-sqlite",
+    "entry": "etaf-db",
     "url": "git@gitea.gklazycat.heiyu.space:geekinney/etaf-db.git"
   },
   "etaf-playground": {

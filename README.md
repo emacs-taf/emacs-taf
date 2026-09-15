@@ -14,7 +14,7 @@ public interfaces, releases and behavior checks.
 | ebox | Box layout, rendering and incremental publication | ecss, tp; optional ekp |
 | etaf | Components, state and application runtime | ebox, tp |
 | etaf-ui | Reusable UI components | etaf |
-| etaf-db | SQLite adapter; the Lisp package is `etaf-sqlite` | etaf |
+| etaf-db | Database backends for ETAF; currently SQLite | etaf |
 | ebox-playground | Runnable Ebox layout examples | ebox |
 | etaf-playground | Application integration examples | etaf, etaf-ui, etaf-db |
 
