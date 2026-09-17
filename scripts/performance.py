@@ -1,0 +1,666 @@
+#!/usr/bin/env python3
+"""Run registered Emacs performance scenarios and explain reproducible evidence.
+
+CLI: list, run, summarize, compare, cancel. JSON schema 1 keeps raw samples,
+verification, context, provider phases, sampled CPU/allocation stacks and source
+revisions. Diagnostic samples never enter latency statistics or acceptance.
+"""
+import argparse
+from collections import Counter, defaultdict
+from datetime import datetime, timezone
+import fnmatch
+import hashlib
+import json
+import math
+import os
+from pathlib import Path
+import platform
+import subprocess
+import sys
+import tempfile
+import time
+import uuid
+
+ROOT = Path(__file__).resolve().parents[1]
+DRIVER = ROOT / "benchmarks/performance-driver.el"
+PHASES = ("source", "style", "plan", "layout", "projection", "transaction")
+
+
+def read_json(path):
+    def invalid_constant(value):
+        raise ValueError(f"Non-finite JSON number: {value}")
+    return json.loads(Path(path).read_text(encoding="utf-8"), parse_constant=invalid_constant)
+
+
+def write_json(path, value):
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    temporary.replace(path)
+
+
+def discover(root, extra):
+    """Resolve scenario entry files and public package roots without shell code."""
+    if (root / "workspace.json").is_file():
+        packages = [root / name for name in read_json(root / "workspace.json")["repositories"]]
+    else:
+        packages = [root] + sorted(p for p in root.parent.iterdir()
+                                   if p.is_dir() and (p / (p.name + ".el")).is_file() and p != root)
+    entries = ([Path(p).resolve() for p in extra] if extra else
+               [p / "benchmarks/performance-scenarios.el" for p in [root] + packages
+                if (p / "benchmarks/performance-scenarios.el").is_file()])
+    return list(dict.fromkeys(entries)), list(dict.fromkeys(packages))
+
+
+def source_snapshot(packages):
+    result = {}
+    for package in packages:
+        def git(*arguments):
+            return subprocess.check_output(["git", "-C", str(package), *arguments], stderr=subprocess.DEVNULL)
+        try:
+            digest = hashlib.sha256(git("diff", "--binary", "HEAD"))
+            for relative in git("ls-files", "--others", "--exclude-standard", "-z").split(b"\0"):
+                if relative:
+                    file = package / os.fsdecode(relative)
+                    digest.update(relative)
+                    digest.update(os.fsencode(os.readlink(file)) if file.is_symlink() else file.read_bytes())
+            result[package.name] = {
+                "path": str(package), "revision": git("rev-parse", "HEAD").decode().strip(),
+                "status": git("status", "--porcelain").decode(),
+                "change_digest": digest.hexdigest(),
+            }
+        except (OSError, subprocess.CalledProcessError):
+            result[package.name] = {"path": str(package), "revision": None}
+    return result
+
+
+def form(function, configuration):
+    return ("(progn (when (and (fboundp 'taf-benchmark-running-p) (taf-benchmark-running-p)) "
+            '(error "A performance job is already running")) '
+            f"(load {json.dumps(str(DRIVER), ensure_ascii=False)} nil t t) "
+            f"({function} {json.dumps(str(configuration), ensure_ascii=False)}))")
+
+
+def client_command(args, expression):
+    return [args.emacsclient, *(["-s", args.server] if getattr(args, "server", None) else []), "--eval", expression]
+
+
+def native_preflight(args, paths, directory):
+    """Reject unknown live code generations; never hot-reload or create Emacs."""
+    output = directory / "native-preflight.json"
+    configuration = directory / "native-preflight-configuration.json"
+    write_json(configuration, {"output": str(output), "mode": "gui", "code_roots": list(map(str, paths))})
+    process = subprocess.run(client_command(args, form("taf-benchmark-probe", configuration)),
+                             capture_output=True, text=True, timeout=15)
+    (directory / "native-preflight.log").write_text(process.stdout + process.stderr, encoding="utf-8")
+    if process.returncode or not output.exists():
+        raise ValueError("Existing Emacs server is unavailable; start its server with M-x server-start")
+    probe = read_json(output)
+    environment = probe["environment"]
+    if not environment.get("graphic") or probe.get("running") or probe.get("profiler_active"):
+        raise ValueError("GUI preflight requires a graphical frame and no existing benchmark or profiler")
+    for library in probe.get("libraries", []):
+        if library["loaded"] and (not library.get("file") or not Path(library["file"]).resolve().is_relative_to(Path(library["root"]).resolve())):
+            raise ValueError(f"Loaded {library['feature']} comes from {library.get('file')}, "
+                             f"outside the selected checkout {library['root']}")
+    started = environment["emacs_start"]
+    loaded = [Path(path).resolve() for path in probe.get("loaded_files", [])]
+    stale = []
+    for root in paths:
+        root = root.resolve()
+        if not any(file.is_relative_to(root) for file in loaded):
+            continue
+        candidates = list(root.glob("*.el")) + list(root.glob("*.elc"))
+        for directory_name in ("lisp", "examples"):
+            candidates.extend((root / directory_name).glob("*.el"))
+            candidates.extend((root / directory_name).glob("*.elc"))
+        stale.extend(str(file) for file in candidates if file.stat().st_mtime > started)
+    probe["stale_code_files"] = stale
+    write_json(output, probe)
+    if stale:
+        raise ValueError(f"Loaded packages were edited or rebuilt after this Emacs started ({len(stale)} files). "
+                         "Finish compilation, restart the same native Emacs and run M-x server-start; "
+                         f"see {output}")
+    return probe
+
+
+def catalog(args, entries, paths, directory):
+    output = directory / "catalog.json"
+    configuration = directory / "catalog-configuration.json"
+    write_json(configuration, {"output": str(output), "scenario_files": list(map(str, entries)),
+                               "load_paths": list(map(str, paths)), "code_roots": list(map(str, paths))})
+    command = [args.emacs, "-Q", "--batch", "--eval", "(setq load-prefer-newer t native-comp-jit-compilation nil)",
+               "--eval", form("taf-benchmark-catalog", configuration)]
+    result = subprocess.run(command, capture_output=True, text=True, timeout=60)
+    (directory / "catalog.log").write_text(result.stdout + result.stderr, encoding="utf-8")
+    if result.returncode or not output.exists():
+        raise ValueError(f"Scenario catalog failed; see {directory / 'catalog.log'}")
+    return read_json(output)
+
+
+def percentile(values, fraction):
+    ordered = sorted(values)
+    return ordered[max(0, math.ceil(len(ordered) * fraction) - 1)]
+
+
+def finite_nonnegative(value):
+    return isinstance(value, (float, int)) and not isinstance(value, bool) and math.isfinite(value) and value >= 0
+
+
+def valid_sample(sample, mode, require_foreground=False):
+    if not isinstance(sample, dict):
+        return False
+    if not all(finite_nonnegative(sample.get(key)) for key in ("wall_ms", "action_ms", "settle_ms", "gc_ms", "setup_ms")):
+        return False
+    if not (sample.get("correct") is True and sample.get("environment_stable") is True):
+        return False
+    if sample.get("action_ms", 0) > sample["wall_ms"] + .01 or sample.get("gc_ms", 0) > sample["wall_ms"] + .1:
+        return False
+    if not isinstance(sample.get("allocations"), list) or not sample["allocations"]:
+        return False
+    if not all(finite_nonnegative(value) for value in sample["allocations"]):
+        return False
+    before, after = sample.get("before"), sample.get("after")
+    required = ("pid", "emacs", "system", "buffer", "graphic", "font", "width", "height", "frame", "window")
+    if not isinstance(before, dict) or not isinstance(after, dict):
+        return False
+    if any(key not in before or key not in after or before[key] != after[key] for key in required):
+        return False
+    if before.get("context") != after.get("context") or before.get("text_scale") != after.get("text_scale"):
+        return False
+    if sample.get("diagnostic_kind") == "trace":
+        seen = {report.get("provider") for report in sample.get("reports", [])}
+        if not set(sample.get("required_providers", [])).issubset(seen):
+            return False
+        total = 0.0
+        for report in sample.get("reports", []):
+            phases = report.get("phases", [])
+            if report.get("provider") == "ebox" and phases:
+                values = [phase.get("ms") for phase in phases]
+                if not all(finite_nonnegative(value) for value in values):
+                    return False
+                if not finite_nonnegative(report.get("ms")) or abs(sum(values) - report["ms"]) > .1:
+                    return False
+                total += sum(values)
+        if total > sample["wall_ms"] + .1:
+            return False
+    if not all(isinstance(context.get("foreground"), bool) for context in (before, after)):
+        return False
+    return mode != "gui" or (before.get("graphic") is True and after.get("graphic") is True
+                             and (not require_foreground or
+                                  (before["foreground"] is True and after["foreground"] is True)))
+
+
+def stable_context(context):
+    """Native code may change between revisions; backend availability may not."""
+    if isinstance(context, dict):
+        return {key: value for key, value in context.items() if key not in ("native_hash", "native_path")}
+    return context
+
+
+def merge_profiles(samples):
+    profiles = {}
+    for kind in ("cpu", "memory"):
+        functions = {}
+        stacks = Counter()
+        total = 0
+        for sample in samples:
+            profile = ((sample.get("profile") or {}).get(kind) or {})
+            total += profile.get("total", 0)
+            for row in profile.get("functions", []):
+                key = (row["function"], row.get("file"), row.get("line"))
+                target = functions.setdefault(key, {**row, "self": 0, "inclusive": 0})
+                target["self"] += row["self"]
+                target["inclusive"] += row["inclusive"]
+            for stack in profile.get("stacks", []):
+                stacks[tuple(stack["stack"])] += stack["weight"]
+        profiles[kind] = {
+            "unit": "samples" if kind == "cpu" else "bytes", "total": total,
+            "functions": sorted(functions.values(), key=lambda r: r["inclusive"], reverse=True),
+            "stacks": [{"weight": weight, "stack": list(stack)} for stack, weight in stacks.most_common(20)],
+        }
+    return profiles
+
+
+def findings(case):
+    """Generate evidence-based investigation hints, never assert a root cause."""
+    result = []
+    phases = case.get("phases_ms", {})
+    profiles = case.get("profiles", {})
+    functions = profiles.get("cpu", {}).get("functions", [])
+    if case["impact"] == "metadata" and phases.get("layout", 0) > 0.01:
+        result.append({"kind": "layout_on_state_only_update",
+                       "evidence_ms": phases["layout"],
+                       "investigate": "A state-only scenario performed layout; inspect style effects and projection admission."})
+    if case["impact"] == "metadata" and any(
+            "prepare-declarative-root" in row["function"] for row in functions):
+        result.append({"kind": "full_source_preparation",
+                       "investigate": "CPU samples include complete author-root preparation during a state-only update."})
+    if case.get("root_owner_updates") and case.get("over_budget") and case["impact"] in ("metadata", "local"):
+        result.append({"kind": "expanded_owner_scope", "updates": case["root_owner_updates"],
+                       "investigate": "The published owner includes the constraint root; inspect layout dependencies and rejected local proofs."})
+    if case.get("gc_ms") and max(case["gc_ms"]) > 0:
+        result.append({"kind": "gc_in_interaction", "worst_gc_ms": max(case["gc_ms"]),
+                       "investigate": "GC is included in latency. Inspect allocation hotspots and retained lifetimes; do not discard these samples."})
+    if functions and profiles["cpu"]["total"] < 30:
+        result.append({"kind": "limited_cpu_samples", "samples": profiles["cpu"]["total"],
+                       "investigate": "Function percentages have low resolution; increase diagnostic samples for this scenario."})
+    if case.get("diagnostic_count") and not phases:
+        result.append({"kind": "provider_phases_unavailable",
+                       "investigate": "The loaded provider did not expose phase timings; CPU stacks remain available."})
+    return result
+
+
+def analyze(raw_runs, descriptors, settings):
+    cases = {}
+    overall_valid = all(run.get("status") == "completed" for run in raw_runs)
+    expected = settings["sets"] * settings["samples"]
+    for descriptor in descriptors:
+        identifier = descriptor["id"]
+        all_samples = [s for run in raw_runs for s in run.get("samples", []) if s["scenario"] == identifier]
+        samples = [s for s in all_samples if not s.get("diagnostic")]
+        diagnostics = [s for s in all_samples if s.get("diagnostic")]
+        invalid = [s for s in all_samples if not valid_sample(
+            s, settings["mode"], settings.get("focus_policy") == "foreground" and not s.get("diagnostic"))]
+        combinations = {(s.get("set"), s.get("sample")) for s in samples}
+        wanted = {(group, number) for group in range(1, settings["sets"] + 1)
+                  for number in range(settings["samples"])}
+        diagnostic_wanted = ({(group, number, kind) for group in range(1, settings["sets"] + 1)
+                              for number in range(settings["diagnostic_samples"])
+                              for kind in ("trace", "cpu", "memory")} if settings["diagnose"] else set())
+        valid = (len(samples) == expected and combinations == wanted and not invalid
+                 and len(diagnostics) == len(diagnostic_wanted)
+                 and {(s.get("set"), s.get("sample"), s.get("diagnostic_kind")) for s in diagnostics} == diagnostic_wanted)
+        overall_valid &= valid
+        values = [s["wall_ms"] for s in samples if finite_nonnegative(s.get("wall_ms"))]
+        phase_samples = defaultdict(list)
+        root_updates = 0
+        strategies = Counter()
+        rejections = Counter()
+        for sample in diagnostics:
+            phases = defaultdict(float)
+            for report in sample.get("reports", []):
+                if report["provider"] != "ebox":
+                    continue
+                strategies[(report["strategy"], report["projection"])] += 1
+                root_updates += (report.get("root_id") is not None and report["root_id"] in report.get("owners", []))
+                if report.get("rejections") not in (None, "nil"):
+                    rejections[report["rejections"]] += 1
+                for phase in report.get("phases", []):
+                    phases[phase["phase"]] += phase["ms"]
+            for name, value in phases.items():
+                phase_samples[name].append(value)
+            if phases:
+                phase_samples["outside_ebox"].append(sample["wall_ms"] - sum(phases.values()))
+        environments = [{**{key: sample.get("before", {}).get(key) for key in
+                         ("emacs", "system", "font", "width", "height", "graphic", "foreground", "text_scale", "native_jit")},
+                         "foreground_after": sample.get("after", {}).get("foreground"),
+                         "context": stable_context(sample.get("before", {}).get("context"))}
+                        for sample in samples]
+        environment_variants = sorted({json.dumps(e, sort_keys=True): e for e in environments}.values(),
+                                      key=lambda item: json.dumps(item, sort_keys=True))
+        case = {**descriptor, "valid": valid, "count": len(samples), "expected_count": expected,
+                "invalid_count": len(invalid), "samples_ms": values,
+                "gc_ms": [s["gc_ms"] for s in samples if finite_nonnegative(s.get("gc_ms"))],
+                "cpu_ms": [s["cpu_ms"] for s in samples if finite_nonnegative(s.get("cpu_ms"))],
+                "allocation_cons_counts": [s["allocations"][0] for s in samples if s.get("allocations")],
+                "environments": environment_variants,
+                "sets": [{"set": number, "samples_ms": [s["wall_ms"] for s in samples if s["set"] == number]}
+                         for number in range(1, settings["sets"] + 1)],
+                "diagnostic_count": len(diagnostics),
+                "phases_ms": {name: statistics_median(v) for name, v in phase_samples.items()},
+                "root_owner_updates": root_updates,
+                "strategies": [{"strategy": strategy, "projection": projection, "count": count}
+                               for (strategy, projection), count in strategies.items()],
+                "rejections": dict(rejections), "profiles": merge_profiles(diagnostics)}
+        if values:
+            case.update(p50_ms=statistics_median(values), p95_ms=percentile(values, .95),
+                        p99_ms=percentile(values, .99), max_ms=max(values),
+                        over_budget=sum(value > descriptor["budget_ms"] for value in values),
+                        over_hard_limit=sum(value > 500 for value in values))
+        else:
+            case.update(p50_ms=None, p95_ms=None, p99_ms=None, max_ms=None, over_budget=0, over_hard_limit=0)
+        case["findings"] = findings(case)
+        cases[identifier] = case
+    return cases, overall_valid
+
+
+def statistics_median(values):
+    ordered = sorted(values)
+    midpoint = len(ordered) // 2
+    return ordered[midpoint] if len(ordered) % 2 else (ordered[midpoint - 1] + ordered[midpoint]) / 2
+
+
+def compare(before, after, allowance=2.0):
+    """Compare complete matching workloads; invalid evidence is incomparable."""
+    if before.get("schema") != 1 or after.get("schema") != 1:
+        return {"status": "incomparable", "reason": "Unsupported report schema"}
+    if not before.get("valid") or not after.get("valid"):
+        return {"status": "incomparable", "reason": "A run has missing or invalid samples"}
+    for report in (before, after):
+        settings = report.get("settings", {})
+        expected = settings.get("sets", 0) * settings.get("samples", 0)
+        if expected <= 0 or not report.get("cases"):
+            return {"status": "incomparable", "reason": "Empty or unspecified sample coverage"}
+        for name, case in report["cases"].items():
+            values = case.get("samples_ms", [])
+            groups = case.get("sets", [])
+            if (not case.get("valid") or len(values) != expected or case.get("count") != expected
+                    or not all(finite_nonnegative(value) for value in values)
+                    or len(groups) != settings["sets"]
+                    or {group.get("set") for group in groups} != set(range(1, settings["sets"] + 1))
+                    or any(len(group.get("samples_ms", [])) != settings["samples"] for group in groups)
+                    or sorted(values) != sorted(value for group in groups for value in group["samples_ms"])
+                    or case.get("p95_ms") != percentile(values, .95) or case.get("max_ms") != max(values)):
+                return {"status": "incomparable", "reason": f"{name}: incomplete or inconsistent latency evidence"}
+    if before["settings"]["mode"] != after["settings"]["mode"] or before.get("machine") != after.get("machine"):
+        return {"status": "incomparable", "reason": "Execution mode or machine differs"}
+    if before.get("tool_identity") != after.get("tool_identity") or any(
+            before["settings"].get(field) != after["settings"].get(field)
+            for field in ("sets", "samples", "boundary", "focus_policy")):
+        return {"status": "incomparable", "reason": "Measurement driver, boundary or sample grouping differs"}
+    if before["cases"].keys() != after["cases"].keys():
+        return {"status": "incomparable", "reason": "Scenario coverage differs"}
+    rows = []
+    for name, current in after["cases"].items():
+        previous = before["cases"][name]
+        for field in ("version", "isolation", "budget_ms", "source_sha256", "environments", "expected_count"):
+            if previous.get(field) != current.get(field):
+                return {"status": "incomparable", "reason": f"{name}: {field} differs"}
+        for metric in ("p95_ms", "max_ms"):
+            delta = current[metric] - previous[metric]
+            rows.append({"scenario": name, "metric": metric, "before_ms": previous[metric],
+                         "after_ms": current[metric], "delta_ms": delta, "regressed": delta > allowance})
+    return {"status": "regressed" if any(row["regressed"] for row in rows) else "passed",
+            "allowance_ms": allowance, "rows": rows,
+            "acceptance_eligible": bool(before.get("acceptance_eligible") and after.get("acceptance_eligible"))}
+
+
+def summarize(report, selected=None, details=False):
+    print(f"status={report.get('status')} mode={report.get('settings', {}).get('mode')} "
+          f"focus={report.get('settings', {}).get('focus_policy', 'unspecified')} "
+          f"valid={report.get('valid')} acceptance_eligible={report.get('acceptance_eligible')}")
+    for name, case in report.get("cases", {}).items():
+        if selected and not fnmatch.fnmatchcase(name, selected):
+            continue
+        if not case.get("samples_ms"):
+            print(f"{name}: no valid completion ({case.get('count', 0)}/{case.get('expected_count')})")
+            continue
+        print(f"{name}: n={case['count']} p50={case['p50_ms']:.2f} p95={case['p95_ms']:.2f} "
+              f"max={case['max_ms']:.2f} ms budget={case['budget_ms']} "
+              f"slow={case['over_budget']} invalid={case['invalid_count']}")
+        if report.get("settings", {}).get("mode") == "gui":
+            print("  focus conditions: " + ", ".join(sorted({
+                "foreground" if environment.get("foreground") and environment.get("foreground_after") else
+                "background" if not environment.get("foreground") and not environment.get("foreground_after") else
+                "changed during sample" for environment in case.get("environments", [])})))
+        if details:
+            phases = case.get("phases_ms", {})
+            if phases:
+                print("  exclusive diagnostic phase medians (ms): " + " ".join(
+                    f"{name}={phases[name]:.2f}" for name in (*PHASES, "outside_ebox") if name in phases))
+            for kind in ("cpu", "memory"):
+                profile = case.get("profiles", {}).get(kind, {})
+                total = profile.get("total", 0)
+                if total:
+                    print(f"  {kind}: {total} {profile['unit']} (diagnostic only)")
+                    for row in sorted(profile["functions"], key=lambda row: row["self"], reverse=True)[:6]:
+                        print(f"    self={100 * row['self'] / total:.1f}% incl={100 * row['inclusive'] / total:.1f}% "
+                              f"{row['function']} {row.get('file', '')}:{row.get('line') or ''}")
+            for finding in case.get("findings", []):
+                print(f"  {finding['kind']}: {finding['investigate']}")
+    if report.get("comparison"):
+        print("comparison=" + report["comparison"]["status"])
+        if report["comparison"].get("reason"):
+            print(report["comparison"]["reason"])
+    for error in report.get("errors", []):
+        print("UNVERIFIED: " + str(error))
+    return 2 if not report.get("valid") else int(report.get("status") == "failed")
+
+
+def run_backend(args, configuration, log_path):
+    """Run one set; retain progress and terminate only owned batch processes."""
+    config = read_json(configuration)
+    output = Path(config["output"])
+    deadline = time.monotonic() + args.run_timeout
+    log = log_path.open("w", encoding="utf-8")
+    process = None
+    try:
+        if args.mode == "batch":
+            process = subprocess.Popen([args.emacs, "-Q", "--batch", "--eval",
+                                        "(setq load-prefer-newer t native-comp-jit-compilation nil)",
+                                        "--eval", form("taf-benchmark-start", configuration)], stdout=log, stderr=subprocess.STDOUT)
+        else:
+            start = subprocess.run(client_command(args, form("taf-benchmark-start", configuration)),
+                                   capture_output=True, text=True, timeout=15)
+            log.write(start.stdout + start.stderr)
+            log.flush()
+            if start.returncode or "scheduled" not in start.stdout:
+                return {"status": "error", "error": f"Cannot start native job; see {log_path}", "samples": []}
+        last = {}
+        while time.monotonic() < deadline:
+            try:
+                last = read_json(output)
+            except (FileNotFoundError, json.JSONDecodeError):
+                pass
+            if last.get("status") and last["status"] != "running":
+                if process:
+                    process.wait(timeout=5)
+                    if process.returncode:
+                        return {**last, "status": "error", "error": f"Batch exited {process.returncode}; see {log_path}"}
+                return last
+            if process and process.poll() is not None:
+                return {**last, "status": "error", "error": f"Batch exited {process.returncode}; see {log_path}"}
+            active = last.get("active", {})
+            if active and active.get("stage") != "waiting_for_foreground" and time.time() - active.get("started_at", time.time()) > args.timeout:
+                raise TimeoutError(f"{active.get('scenario')}: {active.get('stage')} exceeded {args.timeout}s")
+            time.sleep(.05)
+        raise TimeoutError(f"Run exceeded {args.run_timeout}s")
+    except (OSError, ValueError, subprocess.SubprocessError) as error:
+        if process and process.poll() is None:
+            process.terminate()
+            try:
+                process.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait()
+        elif args.mode == "gui":
+            try:
+                subprocess.run(client_command(args, f"(taf-benchmark-cancel {json.dumps(config.get('run_id'))})"),
+                               capture_output=True, timeout=2)
+            except (OSError, subprocess.SubprocessError):
+                log.write("Native Emacs did not answer cancellation; press C-g if it remains busy.\n")
+        try:
+            last = read_json(output)
+        except (OSError, ValueError):
+            last = {}
+        return {**last, "status": "timeout" if isinstance(error, (TimeoutError, subprocess.TimeoutExpired)) else "error",
+                "error": str(error)}
+    finally:
+        if process and process.poll() is None:
+            process.terminate()
+            try:
+                process.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait()
+        log.close()
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    subparsers = parser.add_subparsers(dest="command", required=True)
+    for name in ("list", "run"):
+        command = subparsers.add_parser(name)
+        command.add_argument("--root", type=Path, default=ROOT)
+        command.add_argument("--scenario-file", action="append", default=[])
+        command.add_argument("--scenario", action="append", default=[])
+        command.add_argument("--emacs", default="emacs")
+        command.add_argument("--load-path", action="append", default=[], help="Additional public package root.")
+    run = subparsers.choices["run"]
+    run.add_argument("--mode", choices=("batch", "gui"), required=True)
+    run.add_argument("--emacsclient", default="emacsclient")
+    run.add_argument("--server", help="Existing named Emacs server; no alternate editor is started.")
+    run.add_argument("--focus-policy", choices=("any", "foreground"), default="any",
+                     help="GUI latency permits background by default; diagnostics always record actual focus without waiting.")
+    run.add_argument("--foreground", action="store_true",
+                     help="Activate Emacs once and require foreground for latency samples; diagnostics permit background.")
+    run.add_argument("--samples", type=int, default=10)
+    run.add_argument("--sets", type=int, default=3)
+    run.add_argument("--diagnose", action="store_true")
+    run.add_argument("--diagnostic-samples", type=int, default=3)
+    run.add_argument("--timeout", type=float, default=15)
+    run.add_argument("--run-timeout", type=float, default=300)
+    run.add_argument("--output-dir", type=Path)
+    run.add_argument("--baseline", type=Path)
+    summary = subparsers.add_parser("summarize")
+    summary.add_argument("report", type=Path)
+    summary.add_argument("--scenario")
+    summary.add_argument("--details", action="store_true")
+    comparison = subparsers.add_parser("compare")
+    comparison.add_argument("before", type=Path)
+    comparison.add_argument("after", type=Path)
+    comparison.add_argument("--allowance-ms", type=float, default=2)
+    cancel = subparsers.add_parser("cancel")
+    cancel.add_argument("--emacsclient", default="emacsclient")
+    cancel.add_argument("--server")
+    args = parser.parse_args()
+    if args.command == "summarize":
+        return summarize(read_json(args.report), args.scenario, args.details)
+    if args.command == "compare":
+        if not math.isfinite(args.allowance_ms) or args.allowance_ms < 0:
+            parser.error("--allowance-ms must be finite and nonnegative")
+        result = compare(read_json(args.before), read_json(args.after), args.allowance_ms)
+        print(json.dumps(result, indent=2))
+        return {"passed": 0, "regressed": 1, "incomparable": 2}[result["status"]]
+    if args.command == "cancel":
+        return subprocess.run(client_command(args, "(taf-benchmark-cancel)"), timeout=5).returncode
+    entries, paths = discover(args.root.resolve(), args.scenario_file)
+    paths = list(dict.fromkeys([*paths, *(Path(path).resolve() for path in args.load_path)]))
+    if not entries:
+        parser.error("No benchmarks/performance-scenarios.el entries found")
+    if args.command == "list":
+        with tempfile.TemporaryDirectory(prefix="taf-perf-catalog-") as directory:
+            for case in catalog(args, entries, paths, Path(directory)):
+                if any(fnmatch.fnmatchcase(case["id"], pattern) for pattern in (args.scenario or ["*"])):
+                    print(f"{case['id']:40} {','.join(case['modes']):10} {case['budget_ms']:5}ms {case['description']}")
+        return 0
+    if not args.scenario:
+        parser.error("Select --scenario PATTERN explicitly; use list to inspect coverage")
+    if not (1 <= args.samples <= 1000 and 1 <= args.sets <= 20 and 1 <= args.diagnostic_samples <= 100):
+        parser.error("Sample/set counts are outside supported bounds")
+    if not (0 < args.timeout < math.inf and 0 < args.run_timeout < math.inf):
+        parser.error("Timeouts must be finite and positive")
+    output = (args.output_dir or Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) /
+              "emacs-taf/performance" / (datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ-") + uuid.uuid4().hex[:8])).resolve()
+    output.mkdir(parents=True, exist_ok=True)
+    if any(output.iterdir()):
+        parser.error("Output directory must be empty; evidence is never overwritten")
+    try:
+        descriptors = [case for case in catalog(args, entries, paths, output)
+                       if args.mode in case["modes"] and any(fnmatch.fnmatchcase(case["id"], p) for p in args.scenario)]
+    except (OSError, ValueError, subprocess.SubprocessError) as failure:
+        report = {"schema": 1, "status": "unverified", "valid": False, "acceptance_eligible": False,
+                  "settings": {"mode": args.mode}, "errors": [str(failure)], "runs": []}
+        write_json(output / "result.json", report)
+        print(f"Evidence: {output}", flush=True)
+        return summarize(report)
+    if not descriptors:
+        parser.error("No scenarios match the requested mode and pattern")
+    for case in descriptors:
+        case["source_sha256"] = hashlib.sha256(Path(case["source"]).read_bytes()).hexdigest()
+    settings = {"mode": args.mode, "samples": args.samples, "sets": args.sets,
+                "focus_policy": "foreground" if args.foreground else args.focus_policy,
+                "diagnose": args.diagnose, "diagnostic_samples": args.diagnostic_samples,
+                "timeout": args.timeout, "boundary": "invoke-settlement-redisplay-v1"}
+    source_roots = list(dict.fromkeys([args.root.resolve(), *paths]))
+    report = {"schema": 1, "status": "running", "valid": False, "settings": settings,
+              "machine": {"node": platform.node(), "system": platform.platform(), "machine": platform.machine()},
+              "sources": source_snapshot(source_roots), "runs": [], "errors": [],
+              "tool_identity": {"runner": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+                                "driver": hashlib.sha256(DRIVER.read_bytes()).hexdigest()},
+              "host_context": {"cpu_count": os.cpu_count(), "load_before": list(os.getloadavg()) if hasattr(os, 'getloadavg') else None},
+              "acceptance_eligible": args.sets >= 3 and args.samples * args.sets >= 30,
+              "not_certified": ["hardware input latency", "OS compositor presentation", "visual appearance review"]}
+    write_json(output / "result.json", report)
+    print(f"Evidence: {output}", flush=True)
+    if args.mode == "gui":
+        try:
+            report["native_preflight"] = native_preflight(args, paths, output)
+        except (ValueError, subprocess.SubprocessError) as failure:
+            report.update(status="unverified", valid=False)
+            report["errors"].append(str(failure))
+            write_json(output / "result.json", report)
+            return summarize(report)
+    raw_runs = []
+    for kind in (["latency", "trace", "cpu", "memory"] if args.diagnose else ["latency"]):
+        diagnostic = kind != "latency"
+        groups = [[case] for case in descriptors] if args.mode == "batch" else [descriptors]
+        units = [(number, group_index, group) for number in range(1, args.sets + 1)
+                 for group_index, group in enumerate(groups, 1)]
+        for number, group_index, group in units:
+            label = f"{kind}-{number}" + (f"-{group_index}" if len(groups) > 1 else "")
+            jobs = [{"id": case["id"], "set": number, "sample": sample,
+                     "diagnostic": diagnostic, "diagnostic_kind": kind}
+                    for case in group for sample in range(args.diagnostic_samples if diagnostic else args.samples)]
+            configuration = output / (label + "-configuration.json")
+            write_json(configuration, {"output": str(output / (label + ".json")), "mode": args.mode,
+                                       "run_id": uuid.uuid4().hex,
+                                       "scenario_files": list(map(str, entries)), "load_paths": list(map(str, paths)),
+                                       "code_roots": list(map(str, paths)), "jobs": jobs, "timeout": args.timeout,
+                                       "require_foreground": settings["focus_policy"] == "foreground" and not diagnostic,
+                                       "foreground": bool(args.foreground and kind == "latency" and number == 1)})
+            raw = run_backend(args, configuration, output / (label + ".log"))
+            raw_runs.append(raw)
+            report["runs"].append({"name": label, "status": raw.get("status"), "file": label + ".json",
+                                   "active": raw.get("active"), "error": raw.get("error")})
+            if raw.get("error"):
+                report["errors"].append(raw["error"])
+            print(f"{label}: {raw.get('status')} samples={len(raw.get('samples', []))}", flush=True)
+            write_json(output / "result.json", report)
+            if raw.get("status") != "completed":
+                break
+        if raw_runs[-1].get("status") != "completed":
+            break
+    cases, valid = analyze(raw_runs, descriptors, settings)
+    report["host_context"]["load_after"] = list(os.getloadavg()) if hasattr(os, 'getloadavg') else None
+    if report["tool_identity"] != {"runner": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+                                   "driver": hashlib.sha256(DRIVER.read_bytes()).hexdigest()}:
+        valid = False
+        report["errors"].append("Performance tool changed during measurement")
+    native_artifacts = {(sample.get('before', {}).get('context', {}).get('native_path'),
+                         sample.get('before', {}).get('context', {}).get('native_hash'))
+                        for run in raw_runs for sample in run.get('samples', []) if isinstance(sample.get('before', {}).get('context'), dict)}
+    for path, expected_hash in native_artifacts:
+        if path and expected_hash and (not Path(path).is_file() or hashlib.sha256(Path(path).read_bytes()).hexdigest() != expected_hash):
+            valid = False
+            report["errors"].append(f"Loaded native artifact differs from the current file: {path}")
+    final_sources = source_snapshot(source_roots)
+    if final_sources != report["sources"]:
+        valid = False
+        report["errors"].append("Workspace sources changed during measurement")
+    report["final_sources"] = final_sources
+    if args.mode == "gui" and any(run.get("environment", {}).get("pid") != report["native_preflight"]["environment"]["pid"] for run in raw_runs):
+        valid = False
+        report["errors"].append("The native Emacs instance changed between sets")
+    report.update(cases=cases, valid=valid)
+    report["status"] = ("unverified" if not valid else "failed" if any(case.get("over_budget") or case.get("over_hard_limit") for case in cases.values())
+                        else "passed" if report["acceptance_eligible"] else "screened")
+    if args.baseline:
+        try:
+            report["comparison"] = compare(read_json(args.baseline), report)
+        except (OSError, ValueError, KeyError, TypeError) as failure:
+            report["comparison"] = {"status": "incomparable", "reason": str(failure)}
+        if report["comparison"]["status"] == "incomparable":
+            report.update(status="unverified", valid=False)
+        elif report["comparison"]["status"] == "regressed":
+            report["status"] = "failed"
+    write_json(output / "result.json", report)
+    return summarize(report, details=args.diagnose)
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as failure:
+        print(f"UNVERIFIED: {failure}", file=sys.stderr)
+        raise SystemExit(2)

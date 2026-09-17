@@ -139,6 +139,19 @@ to every repository changed from this workspace.
   These batch commands do not certify actual GUI rendering or input latency; run
   and inspect the affected examples through their maintained GUI workflow too.
   Use three independent sample sets for the final performance claim.
+- Use `scripts/performance.py` for repeatable interaction latency and diagnosis;
+  select maintained scenarios with `perf-list` and add new adapters to the owning
+  package's `benchmarks/performance-scenarios.el`. Reuse its separate latency,
+  trace, CPU and allocation passes, baseline comparison and saved evidence rather
+  than writing temporary measurement scripts. See `docs/manual.md` for the tool
+  contract. Invalid, incomplete, stale-code or incomparable runs remain unverified.
+- Use existing performance evidence until a concrete uncertainty requires another
+  measurement. Stop diagnosis once the dominant cost is actionable and fix it.
+  After a change, screen only affected representative scenarios; reserve full
+  three-set matrices for final acceptance. Do not repeat unchanged button suites
+  or collect more samples merely to show activity. Background diagnosis and
+  window-scoped capture do not require foreground focus; request it only for an
+  explicitly selected foreground input-latency gate.
 - Each package exposes `compile`, `test`, `check`, `clean`, `structure-check`, and
   `setup-hooks`. `check` includes the structural gate. Serialize commands that clean
   and rebuild shared dependencies; parallel builds must not race over sibling outputs.

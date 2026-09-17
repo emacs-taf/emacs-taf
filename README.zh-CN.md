@@ -33,8 +33,10 @@
 
 - `make structure-check`：检查目录、文档命名、引用、构建路径和共享工具是否漂移。
 - `make check`：先验证规范检查器，再按依赖顺序运行各仓库公共验收。
-- `make -C etaf-ui perf-check`：通过现有原生 Emacs 对比可见 Gallery 的回调、
-  键盘和鼠标延迟；测量期间保持 Emacs 在前台。
+- `make perf-list`：列出已注册的通用性能场景；
+  `make perf-check PERF_ARGS='--mode gui --scenario gallery.review.mouse --diagnose'`
+  通过现有原生 Emacs 分开采集延迟、阶段、CPU 和分配数据。
+  使用 `--baseline /path/result.json` 比较基线，详见[测评流程与场景接口](docs/manual.zh-CN.md)。
 - `make compile`、`make test`、`make clean`：调用各仓库自己的入口。
 - `make sync-policy`：分发在工作区维护的共享检查器、提交钩子、格式和 CI 配置。
 

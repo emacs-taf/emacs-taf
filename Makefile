@@ -32,3 +32,11 @@ verify-baseline:
 	python3 scripts/verify.py --emacs "$(EMACS)" --record-baseline
 verify-repeatability:
 	python3 scripts/verify.py --emacs "$(EMACS)" --baseline "$(BASELINE)" --repeatability
+
+.PHONY: perf-list perf-check perf-compare
+perf-list:
+	python3 scripts/performance.py list $(PERF_ARGS)
+perf-check:
+	python3 scripts/performance.py run --emacs "$(EMACS)" $(PERF_ARGS)
+perf-compare:
+	python3 scripts/performance.py compare "$(BASELINE)" "$(RESULT)"

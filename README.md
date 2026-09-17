@@ -43,8 +43,11 @@ Its target behavior is explicitly distinguished from the current implementation.
 
 - `make structure-check`: validate every package and detect shared-tooling drift.
 - `make check`: run policy regression tests and public package acceptance checks in dependency order.
-- `make -C etaf-ui perf-check`: compare visible Gallery callback, keyboard and
-  mouse latency through the existing native Emacs server; keep Emacs in front.
+- `make perf-list`: list registered performance scenarios.
+- `make perf-check PERF_ARGS='--mode gui --scenario gallery.review.mouse --diagnose'`:
+  measure the existing native Emacs, then collect separate phase, CPU and memory
+  diagnostics. `--baseline /path/result.json` compares a previous run. See the
+  [performance workflow and scenario interface](docs/manual.md).
 - `make verify-baseline`: save a batch correctness/performance baseline with logs and raw samples.
 - `make verify BASELINE=/path/result.json`: run the same batch checks and compare p95/max
   with the baseline; increases over 2 ms fail independently of the existing 50 ms limit.
