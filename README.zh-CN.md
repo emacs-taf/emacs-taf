@@ -7,10 +7,9 @@
 | 仓库 | 职责 |
 | --- | --- |
 | ecss | 选择器与样式层叠 |
-| tp | 文本属性、保留式 surface 与事务 |
 | ekp | Knuth–Plass 段落排版 |
-| ebox | Box 布局、渲染与增量发布；依赖 ecss、tp，可选 ekp |
-| etaf | 组件、状态与应用运行时；依赖 ebox、tp |
+| ebox | Box 布局、渲染与增量发布；依赖 ecss，可选 ekp |
+| etaf | 组件、状态与应用运行时；依赖 ebox |
 | etaf-ui | 通用 UI 组件 |
 | etaf-db | ETAF 数据库后端；目前支持 SQLite |
 | ebox-playground | Ebox 布局示例 |

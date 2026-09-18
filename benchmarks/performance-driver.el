@@ -140,8 +140,8 @@
                   :root_id (plist-get report :constraint-root-node-id)
                   :owners (vconcat (plist-get report :owner-ids))
                   :reconciled (plist-get report :reconciled-objects)
-                  :text_operations (plist-get report :tp-text-operations)
-                  :property_operations (plist-get report :tp-property-operations)
+                  :text_operations (plist-get report :publication-text-operations)
+                  :property_operations (plist-get report :publication-property-operations)
                   :rejections
                   (let ((print-length 12) (print-level 4))
                     (format "%S" (plist-get report :projection-rejections))))

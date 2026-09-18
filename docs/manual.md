@@ -84,8 +84,9 @@ generation remain validation conditions.
 
 Ebox's public observer supplies exclusive `source`, `style`, `plan`, `layout`,
 `projection` and `transaction` milliseconds. Nested stages are charged to their
-innermost phase. `transaction` includes remaining commit work, TP preparation,
-publication and acceptance; TP's separate duration overlaps that phase. The
+innermost phase. `transaction` includes remaining commit work, including Ebox
+publication preparation and acceptance; the `ebox-publication` writer duration
+overlaps that phase. The
 report also shows time outside Ebox, which can include application code, input
 dispatch, asynchronous waiting and driver overhead. Medians of separate phases
 need not add up to the median of whole operations.

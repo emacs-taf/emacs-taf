@@ -66,7 +66,7 @@ CPU 样本不足会明确标记，可针对单个场景增大 `--diagnostic-samp
 
 Ebox 的公共 observer 给出互不重计的 `source`、`style`、`plan`、`layout`、
 `projection`、`transaction` 毫秒数。嵌套阶段只计入最内层；`transaction` 包含其余
-提交工作、TP 准备／发布及接纳，TP 的单独报告与它重叠。Ebox 之外的时间可能来自应用、
+提交工作、Ebox 内部发布准备及接纳，`ebox-publication` 写入阶段的报告与它重叠。Ebox 之外的时间可能来自应用、
 输入分发、异步等待和驱动开销。各阶段的中位数之和不一定等于整体耗时的中位数。
 
 提示规则会指出纯状态更新中的完整 source 准备、不必要的布局、扩大的根 owner 及 GC。

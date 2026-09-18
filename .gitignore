@@ -7,7 +7,6 @@
 /etaf-db/
 /etaf-playground/
 /etaf-ui/
-/tp/
 
 *.pyc
 __pycache__/

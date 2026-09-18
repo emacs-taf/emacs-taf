@@ -30,7 +30,7 @@
   "Workspace checkout that owns this file.")
 
 (defconst etaf-ecosystem--order
-  '(ecss tp ekp ebox etaf etaf-db ebox-playground etaf-playground etaf-ui)
+  '(ecss ekp ebox etaf etaf-db ebox-playground etaf-playground etaf-ui)
   "Child repositories in dependency order; unknown children load last.")
 
 (defun etaf-ecosystem--repositories ()

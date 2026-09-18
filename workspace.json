@@ -3,47 +3,42 @@
   "repositories": {
     "ebox": {
       "url": "git@gitea.gklazycat.heiyu.space:geekinney/ebox.git",
-      "revision": "92d75a30c8c3c61dae0cce92d2233189759d2425",
+      "revision": "ee23e107f4f30ccf2b619707fbe5e56c148f74e8",
       "branch": "main"
     },
     "ebox-playground": {
       "url": "git@gitea.gklazycat.heiyu.space:geekinney/ebox-playground.git",
-      "revision": "423c701b293f24685f8268147945a59b5fedf6c0",
+      "revision": "df0cbff17ff9059ba7b50f8d375edbb3b14db436",
       "branch": "main"
     },
     "ecss": {
       "url": "git@gitea.gklazycat.heiyu.space:geekinney/ecss.git",
-      "revision": "528ee3a45fad7663f883eac7e8898eb4ecaf759d",
+      "revision": "5f4a1cb7624c568c468425103c0852aadcaea738",
       "branch": "main"
     },
     "ekp": {
       "url": "git@gitea.gklazycat.heiyu.space:geekinney/ekp.git",
-      "revision": "9c87e51cefefe18b269ccd6916845f6758d6dba1",
+      "revision": "eadd400f888068d268b637435788119cff75221f",
       "branch": "main"
     },
     "etaf": {
       "url": "git@gitea.gklazycat.heiyu.space:geekinney/etaf.git",
-      "revision": "283e2b75fe6216b48ce46e7c034887adac5953bd",
+      "revision": "a39e019ff3beecab4eec9766594dce40ea19158f",
       "branch": "main"
     },
     "etaf-db": {
       "url": "git@gitea.gklazycat.heiyu.space:geekinney/etaf-db.git",
-      "revision": "91563f900042d96fa94e570ab1477215edae2630",
+      "revision": "15e95e26eb55906b1778d4ae46835680867479c1",
       "branch": "main"
     },
     "etaf-playground": {
       "url": "git@gitea.gklazycat.heiyu.space:geekinney/etaf-playground.git",
-      "revision": "d8dec11dde2df5d4e70197aa750b6a90dfc3adc4",
+      "revision": "ab2b651198f6aca557c4f908987d2282be019371",
       "branch": "main"
     },
     "etaf-ui": {
       "url": "git@gitea.gklazycat.heiyu.space:geekinney/etaf-ui.git",
-      "revision": "87084ab8f8caa37c0c857630e2554d38ed96ce30",
-      "branch": "main"
-    },
-    "tp": {
-      "url": "git@gitea.gklazycat.heiyu.space:geekinney/tp.git",
-      "revision": "8158ef1f43333e328766e10c7bbc66bb3e8ba2fb",
+      "revision": "1586c20b8d06ba786e9a3f80df0334b9ef8b09ae",
       "branch": "main"
     }
   }

@@ -3,16 +3,15 @@
 [中文](README.zh-CN.md)
 
 This repository owns the shared development policy and local orchestration for
-nine independent Emacs Lisp repositories. Each package retains its own Git history,
+eight independent Emacs Lisp repositories. Each package retains its own Git history,
 public interfaces, releases and behavior checks.
 
 | Repository | Responsibility | Dependencies in this workspace |
 | --- | --- | --- |
 | ecss | Selector and cascade semantics | None |
-| tp | Text properties, retained surfaces and transactions | None |
 | ekp | Knuth–Plass paragraph layout | None |
-| ebox | Box layout, rendering and incremental publication | ecss, tp; optional ekp |
-| etaf | Components, state and application runtime | ebox, tp |
+| ebox | Box layout, rendering and incremental publication | ecss; optional ekp |
+| etaf | Components, state and application runtime | ebox |
 | etaf-ui | Reusable UI components | etaf |
 | etaf-db | Database backends for ETAF; currently SQLite | etaf |
 | ebox-playground | Runnable Ebox layout examples | ebox |
