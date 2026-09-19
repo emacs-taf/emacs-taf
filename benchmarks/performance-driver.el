@@ -18,6 +18,11 @@
 ;; Start asynchronous GUI work, or run a batch job to completion.
 ;; Function: taf-benchmark-running-p ()
 ;; Query whether this driver owns an active job before reloading the tool.
+;; Function: taf-benchmark-detach-fixture ()
+;; After a run stops, transfer its retained live buffer to the caller without
+;; invoking fixture cleanup. Return that buffer, or nil when none is live.
+;; The caller owns its later cleanup; subsequent runs leave it intact.
+;; Signal user-error while a job is running.
 ;; Function: taf-benchmark-cancel (&optional run-id)
 ;; Cancel only this tool's jobs and profiler. Never stop the Emacs process.
 ;; RUN-ID, when provided, must match the active run's identity.
@@ -499,6 +504,18 @@
 (defun taf-benchmark-running-p ()
   "Return non-nil while this driver owns a running job."
   (equal (plist-get taf-benchmark--report :status) "running"))
+
+(defun taf-benchmark-detach-fixture ()
+  "Transfer the stopped run's retained fixture buffer to the caller.
+Return its live buffer, or nil when no live fixture buffer remains.  Clear
+the driver's fixture ownership without invoking cleanup, unmounting, or
+killing the buffer.  The caller becomes responsible for later cleanup.
+Signal `user-error' while a benchmark job is running."
+  (when (taf-benchmark-running-p)
+    (user-error "Cannot detach a fixture while a performance job is running"))
+  (let ((buffer (plist-get taf-benchmark--fixture :buffer)))
+    (setq taf-benchmark--fixture nil taf-benchmark--fixture-key nil)
+    (and (buffer-live-p buffer) buffer)))
 
 (defun taf-benchmark-cancel (&optional run-id)
   "Cancel this tool's scheduled work without terminating Emacs."

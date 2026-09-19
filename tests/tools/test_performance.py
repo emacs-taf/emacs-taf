@@ -94,6 +94,94 @@ class PerformanceTool(unittest.TestCase):
         processes = {json.loads((output / run["file"]).read_text())["environment"]["pid"] for run in report["runs"]}
         self.assertEqual(len(processes), 2)
 
+    def test_detached_fixture_survives_the_next_driver_run(self):
+        directory = self.base / "detach-fixture"
+        directory.mkdir()
+        scenario = directory / "scenarios.el"
+        scenario.write_text(""";;; -*- lexical-binding: t; -*-
+(defvar taf-test-detach-fixtures nil)
+(taf-benchmark-register
+ "fixture.detach" :modes '(gui) :budget-ms 100 :impact 'local :isolation 'series
+ :setup (lambda (_mode) (pop taf-test-detach-fixtures)))
+""")
+        output = directory / "report.json"
+        configuration = {
+            "output": str(output), "mode": "gui", "run_id": "detach-fixture",
+            "scenario_files": [str(scenario)], "load_paths": [], "code_roots": [],
+            "jobs": [{"id": "fixture.detach", "set": 1, "sample": 0,
+                      "diagnostic": False, "diagnostic_kind": "latency"}],
+            "timeout": 2,
+        }
+        config = directory / "configuration.json"
+        config.write_text(json.dumps(configuration))
+        empty_config = directory / "empty-configuration.json"
+        empty_config.write_text(json.dumps({**configuration, "jobs": []}))
+        script = directory / "detach-test.el"
+        script.write_text(""";;; -*- lexical-binding: t; -*-
+(require 'ert)
+(require 'ebox)
+(defvar taf-test-detach-fixtures nil)
+(ert-deftest taf-test-detached-fixture-lifetime ()
+  (should-not (taf-benchmark-detach-fixture))
+  (let ((fixtures
+         (cl-loop repeat 3
+                  collect
+                  (let* ((fixture (taf-test-fixture 'counter))
+                         (buffer (plist-get fixture :buffer)))
+                    (ebox-render-to-buffer buffer (ebox-build '(box "Mounted")))
+                    (plist-put fixture :invoke
+                               (lambda (_sample)
+                                 (should (taf-benchmark-running-p))
+                                 (should-error (taf-benchmark-detach-fixture)
+                                               :type 'user-error)))
+                    (plist-put fixture :verify
+                               (lambda () (ebox-surface-buffer-mounted-p buffer)))
+                    fixture))))
+    (setq taf-test-detach-fixtures (copy-sequence fixtures))
+    (let ((buffers (mapcar (lambda (fixture) (plist-get fixture :buffer)) fixtures)))
+      (unwind-protect
+          ;; Exercise retained GUI lifecycle in an isolated batch process.
+          ;; Actual rendering above uses the process's real display context.
+          (let ((noninteractive nil))
+            (cl-letf (((symbol-function 'display-graphic-p) (lambda (&optional _display) t)))
+              (cl-labels
+                  ((run (configuration)
+                     (taf-benchmark-start configuration)
+                     (with-timeout (5 (ert-fail "Driver did not finish"))
+                       (while (taf-benchmark-running-p) (accept-process-output nil .01)))
+                     (with-temp-buffer
+                       (insert-file-contents REPORT)
+                       (should (equal (plist-get (json-parse-buffer :object-type 'plist)
+                                                 :status)
+                                      "completed")))))
+                (run CONFIG)
+                (should (eq (taf-benchmark-detach-fixture) (nth 0 buffers)))
+                (should-not (taf-benchmark-detach-fixture))
+                (run CONFIG)
+                (should (buffer-live-p (nth 0 buffers)))
+                (should (ebox-surface-buffer-mounted-p (nth 0 buffers)))
+                (should (ebox-surface-buffer-mounted-p (nth 1 buffers)))
+                (run CONFIG)
+                (should-not (buffer-live-p (nth 1 buffers)))
+                (should (ebox-surface-buffer-mounted-p (nth 0 buffers)))
+                (should (ebox-surface-buffer-mounted-p (nth 2 buffers)))
+                (run EMPTY_CONFIG)
+                (should-not (buffer-live-p (nth 2 buffers)))
+                (should (ebox-surface-buffer-mounted-p (nth 0 buffers)))
+                (should-not (taf-benchmark-detach-fixture)))))
+        (taf-benchmark-cancel)
+        (dolist (fixture fixtures) (funcall (plist-get fixture :cleanup)))))))
+(ert-run-tests-batch-and-exit)
+""".replace("EMPTY_CONFIG", json.dumps(str(empty_config)))
+               .replace("CONFIG", json.dumps(str(config)))
+               .replace("REPORT", json.dumps(str(output))))
+        process = subprocess.run(
+            ["emacs", "-Q", "--batch", "-L", str(ROOT / "ecss"), "-L", str(ROOT / "ebox"),
+             "--eval", "(setq load-prefer-newer t)",
+             "-l", str(ROOT / "benchmarks/performance-driver.el"), "-l", str(FIXTURE), "-l", str(script)],
+            capture_output=True, text=True, timeout=10)
+        self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
+
     def test_functional_failure_is_not_a_performance_pass(self):
         process, report, output = self.run_case("failure", "fixture.fail")
         self.assertEqual(process.returncode, 2)

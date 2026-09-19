@@ -88,6 +88,11 @@ Emacs／模块边界，Rust/C 内部仍需相应原生 profiler。场景提供�
 GUI 计时终点是显式完成条件满足且强制 redisplay 返回，不包含硬件输入及系统合成器
 最终呈现。Batch 结果不证明 GUI 延迟。界面外观仍需运行维护的 GUI 流程并检查当前窗口截图。
 
+最后一个 GUI fixture 默认由工具保管，下一次运行时会清理。若要继续手动使用该页面，
+或测量它当前的状态，请在任务结束后通过同一个 emacsclient 调用
+`(taf-benchmark-detach-fixture)`。它返回仍存活的 buffer，移交清理责任并保持应用挂载；
+运行中的任务不允许移交。使用现有页面的适配器也应在清理时保留借用的 buffer。
+
 ## 一次注册，重复使用
 
 注册及 fixture 接口见 [performance-driver.el](../benchmarks/performance-driver.el)
