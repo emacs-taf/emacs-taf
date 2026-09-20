@@ -54,8 +54,23 @@ class PerformanceTool(unittest.TestCase):
         self.assertEqual(len(case["samples_ms"]), 2)
         latency = json.loads((output / "latency-1.json").read_text())
         self.assertTrue(all(not row["diagnostic"] and row["profile"] is None for row in latency["samples"]))
+        self.assertEqual([row["outcome"] for row in latency["samples"]],
+                         [{"count": 1}, {"count": 2}])
+        self.assertEqual([row["value"] for row in case["latency_outcomes"]],
+                         [{"count": 1}, {"count": 2}])
+        self.assertIn("slowest outcome (set 1, sample", process.stdout)
+        # The outcome callback deliberately waits longer than the case budget.
+        # Reading it must remain outside the measured operation.
+        self.assertTrue(all(row["wall_ms"] < 100 for row in latency["samples"]))
         trace = json.loads((output / "trace-1.json").read_text())
         self.assertEqual(trace["samples"][0]["reports"][0]["provider"], "fixture")
+        observed = trace["samples"][0]["reports"][0]
+        self.assertIn("viewport-context", observed["native_declined"])
+        self.assertIn("Unsupported size", observed["native_fallback"])
+        self.assertEqual({row["kind"] for row in case["native_diagnostics"]},
+                         {"native_declined", "native_fallback"})
+        self.assertIn("native_declined (1)", process.stdout)
+        self.assertIn("Unsupported size", process.stdout)
         self.assertIsNone(trace["samples"][0]["profile"])
         for kind in ("cpu", "memory"):
             data = json.loads((output / (kind + "-1.json")).read_text())

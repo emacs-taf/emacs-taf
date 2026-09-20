@@ -55,6 +55,12 @@ baseline comparison checks p95 and maximum independently, with a 2 ms regression
 allowance. Different workloads, drivers, sample coverage, focus/display conditions or machines
 are incomparable. Changed source revisions are expected and recorded.
 
+Gallery fixtures synchronize Ebox's layout viewport after the buffer is displayed,
+before timing any interaction. Batch Gallery fixtures use 120 character widths and
+40 lines. The versioned workloads distinguish this setup from earlier samples
+whose hidden initial mount had no resolved layout viewport. Existing-page scenarios
+borrow the caller's current viewport without resetting it.
+
 `passed` means the selected latency gate passed; `failed` means measured latency
 or a baseline gate failed; `screened` means a smaller valid run completed;
 `unverified` means evidence is missing, invalid or incomplete. Exit codes are
@@ -98,6 +104,18 @@ Inspect the stage costs and stacks before changing architecture. Native calls
 can be attributed to the Emacs/module boundary; Rust/C internals require their
 native profiler. The report records the loaded module hash when a workload
 provides it.
+
+Trace reports retain `native_declined` for missing input capabilities and
+`native_fallback` for unsuccessful execution attempts. A loaded module does not
+prove native layout ran. Read these bounded reasons alongside the actual projection
+and phase costs before proposing a native optimization.
+
+An adapter's optional `:outcome` callback reads a bounded, JSON-safe result through
+public APIs after timing and profiling stop. It must not change application state.
+The result is saved with that exact latency sample; detailed summaries show the
+slowest sample's outcome. Gallery records its last commit's projection, dirty-node
+count, root ownership and publication operations. This does not capture earlier
+commits within the same input; use the separate trace pass for the full sequence.
 
 ## Evidence and failure handling
 

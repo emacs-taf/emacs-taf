@@ -276,9 +276,13 @@ def analyze(raw_runs, descriptors, settings):
         root_updates = 0
         strategies = Counter()
         rejections = Counter()
+        native_diagnostics = Counter()
         for sample in diagnostics:
             phases = defaultdict(float)
             for report in sample.get("reports", []):
+                for field in ("native_declined", "native_fallback"):
+                    if report.get(field):
+                        native_diagnostics[(field, report[field])] += 1
                 if report["provider"] != "ebox":
                     continue
                 strategies[(report["strategy"], report["projection"])] += 1
@@ -307,8 +311,13 @@ def analyze(raw_runs, descriptors, settings):
                 "sets": [{"set": number, "samples_ms": [s["wall_ms"] for s in samples if s["set"] == number]}
                          for number in range(1, settings["sets"] + 1)],
                 "diagnostic_count": len(diagnostics),
+                "latency_outcomes": [{"set": s["set"], "sample": s["sample"],
+                                      "wall_ms": s["wall_ms"], "value": s["outcome"]}
+                                     for s in samples if s.get("outcome") is not None],
                 "phases_ms": {name: statistics_median(v) for name, v in phase_samples.items()},
                 "root_owner_updates": root_updates,
+                "native_diagnostics": [{"kind": kind, "reason": reason, "count": count}
+                                       for (kind, reason), count in native_diagnostics.items()],
                 "strategies": [{"strategy": strategy, "projection": projection, "count": count}
                                for (strategy, projection), count in strategies.items()],
                 "rejections": dict(rejections), "profiles": merge_profiles(diagnostics)}
@@ -394,10 +403,16 @@ def summarize(report, selected=None, details=False):
                 "background" if not environment.get("foreground") and not environment.get("foreground_after") else
                 "changed during sample" for environment in case.get("environments", [])})))
         if details:
+            if case.get("latency_outcomes"):
+                worst = max(case["latency_outcomes"], key=lambda row: row["wall_ms"])
+                value = json.dumps(worst["value"], ensure_ascii=False, sort_keys=True)
+                print(f"  slowest outcome (set {worst['set']}, sample {worst['sample']}): {value[:1400]}")
             phases = case.get("phases_ms", {})
             if phases:
                 print("  exclusive diagnostic phase medians (ms): " + " ".join(
                     f"{name}={phases[name]:.2f}" for name in (*PHASES, "outside_ebox") if name in phases))
+            for diagnostic in case.get("native_diagnostics", []):
+                print(f"  {diagnostic['kind']} ({diagnostic['count']}): {diagnostic['reason']}")
             for kind in ("cpu", "memory"):
                 profile = case.get("profiles", {}).get(kind, {})
                 total = profile.get("total", 0)

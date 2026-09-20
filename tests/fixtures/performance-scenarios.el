@@ -34,8 +34,13 @@
                                     (setq settled t))) timers))
               (_ (with-current-buffer buffer (erase-buffer) (insert (number-to-string count)))))
             (when sink
-              (funcall sink buffer (list :provider 'fixture :stage 'update :duration-ms 0.01))))
+              (funcall sink buffer (list :provider 'fixture :stage 'update :duration-ms 0.01
+                                         :native-declined-reason '(:reason viewport-context :width nil)
+                                         :native-fallback-reason "Unsupported size"))))
           :settled (lambda () settled)
+          :outcome (lambda ()
+                     (when (eq kind 'counter) (sleep-for .12))
+                     (list :count count))
           :verify (lambda ()
                     (if (eq kind 'fail) "Deliberate verification failure"
                       (with-current-buffer buffer (equal (buffer-string) (number-to-string count)))))

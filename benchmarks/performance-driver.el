@@ -9,6 +9,9 @@
 ;; Optional :settled is a predicate for asynchronous completion; :observe
 ;; takes a report sink and returns a cleanup function. Reports are provider
 ;; public observer plists. Optional :environment returns JSON-safe metadata.
+;; Optional :outcome reads a bounded JSON-safe value from public application
+;; APIs after timing and profiling stop, before verification. It must be read-only.
+;; This records each latency sample's accepted result without enabling tracing.
 ;; :ready waits for fixture initialization; :prepare resolves targets after
 ;; showing the buffer and before timing. :required-providers lists expected
 ;; observer provider symbols. Observer cleanup/collection runs after timing
@@ -141,6 +144,14 @@
                                            collect (list :phase (symbol-name phase) :ms ms)))
                   :strategy (format "%s" (plist-get report :strategy))
                   :projection (format "%s" (plist-get report :projection-kind))
+                  :native_fallback
+                  (when-let* ((reason (plist-get report :native-fallback-reason)))
+                    (let ((print-length 12) (print-level 4) (print-circle t))
+                      (truncate-string-to-width (format "%S" reason) 1200 nil nil "…")))
+                  :native_declined
+                  (when-let* ((reason (plist-get report :native-declined-reason)))
+                    (let ((print-length 12) (print-level 4) (print-circle t))
+                      (truncate-string-to-width (format "%S" reason) 1200 nil nil "…")))
                   :dirty_count (plist-get report :dirty-count)
                   :root_id (plist-get report :constraint-root-node-id)
                   :owners (vconcat (plist-get report :owner-ids))
@@ -386,12 +397,15 @@
                    (spec (plist-get taf-benchmark--active :spec))
                    (before (plist-get taf-benchmark--active :before))
                    (after (taf-benchmark--environment))
+                   (outcome (when-let* ((probe (plist-get taf-benchmark--fixture :outcome)))
+                              (funcall probe)))
                    (verification (funcall (plist-get taf-benchmark--fixture :verify)))
                    (row
                     (list :scenario (plist-get job :id) :set (plist-get job :set)
                           :sample (plist-get job :sample)
                           :diagnostic (if (plist-get job :diagnostic) t :false)
                           :diagnostic_kind (plist-get job :diagnostic_kind)
+                          :outcome outcome
                           :wall_ms (* 1000 (- finished (plist-get taf-benchmark--active :started)))
                           :action_ms (* 1000 (- (plist-get taf-benchmark--active :action_end)
                                                (plist-get taf-benchmark--active :started)))
