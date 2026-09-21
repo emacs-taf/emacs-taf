@@ -8,7 +8,7 @@
     },
     "ebox-playground": {
       "url": "git@gitea.gklazycat.heiyu.space:geekinney/ebox-playground.git",
-      "revision": "cf7160077455e8f8b76fcfcae96b23391bbdc11d",
+      "revision": "84b5823d736056d057ea3621dffa7f96deac7d47",
       "branch": "main"
     },
     "ecss": {
@@ -38,12 +38,12 @@
     },
     "etaf-ui": {
       "url": "git@gitea.gklazycat.heiyu.space:geekinney/etaf-ui.git",
-      "revision": "16c8a1ce689e947f169a60c38b385e6596d5d7b0",
+      "revision": "0c8f9b41c709e88df59b288487a317c24e23c68a",
       "branch": "main"
     },
     "etaf-desktop": {
       "url": "git@gitea.gklazycat.heiyu.space:geekinney/etaf-desktop.git",
-      "revision": "f4ee562d31e9fb1150564374c3d4a2c5018eb7cb",
+      "revision": "b79d61279edb2d787b81d43ce5b1e41db64802ec",
       "branch": "main"
     }
   }
