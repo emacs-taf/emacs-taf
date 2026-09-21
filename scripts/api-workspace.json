@@ -23,6 +23,10 @@
     "entry": "etaf-db",
     "url": "git@gitea.gklazycat.heiyu.space:geekinney/etaf-db.git"
   },
+  "etaf-desktop": {
+    "entry": "etaf-desktop",
+    "url": "git@gitea.gklazycat.heiyu.space:geekinney/etaf-desktop.git"
+  },
   "etaf-playground": {
     "entry": "etaf-playground",
     "url": "git@gitea.gklazycat.heiyu.space:geekinney/etaf-playground.git"

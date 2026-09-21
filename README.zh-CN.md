@@ -12,8 +12,9 @@
 | etaf | 组件、状态与应用运行时；依赖 ebox |
 | etaf-ui | 通用 UI 组件 |
 | etaf-db | ETAF 数据库后端；目前支持 SQLite |
+| etaf-desktop | 基于 ETAF UI 的 Emacs 桌面窗口管理应用；依赖 ETAF、ETAF UI |
 | ebox-playground | Ebox 布局示例 |
-| etaf-playground | 应用集成示例 |
+| etaf-playground | ETAF/UI 集成示例与验收入口 |
 
 ## 开始开发
 

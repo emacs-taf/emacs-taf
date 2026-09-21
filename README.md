@@ -3,7 +3,7 @@
 [中文](README.zh-CN.md)
 
 This repository owns the shared development policy and local orchestration for
-eight independent Emacs Lisp repositories. Each package retains its own Git history,
+nine independent Emacs Lisp repositories. Each package retains its own Git history,
 public interfaces, releases and behavior checks.
 
 | Repository | Responsibility | Dependencies in this workspace |
@@ -14,8 +14,9 @@ public interfaces, releases and behavior checks.
 | etaf | Components, state and application runtime | ebox |
 | etaf-ui | Reusable UI components | etaf |
 | etaf-db | Database backends for ETAF; currently SQLite | etaf |
+| etaf-desktop | Desktop window-management application built from ETAF UI | etaf, etaf-ui |
 | ebox-playground | Runnable Ebox layout examples | ebox |
-| etaf-playground | Application integration examples | etaf, etaf-ui, etaf-db |
+| etaf-playground | ETAF/UI integration examples and acceptance surfaces | etaf, etaf-ui, etaf-db, etaf-desktop |
 
 ## Setup
 
