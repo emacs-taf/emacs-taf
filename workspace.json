@@ -3,7 +3,7 @@
   "repositories": {
     "ebox": {
       "url": "git@gitea.gklazycat.heiyu.space:geekinney/ebox.git",
-      "revision": "b3406daa88283a11ad602650e175df6409161eb0",
+      "revision": "1e914de03634b0a5bbe06dc495f93bc8e01d855a",
       "branch": "main"
     },
     "ebox-playground": {
@@ -38,7 +38,7 @@
     },
     "etaf-ui": {
       "url": "git@gitea.gklazycat.heiyu.space:geekinney/etaf-ui.git",
-      "revision": "5a5488648ec1cfc8627c1a678aab25a825992d16",
+      "revision": "b972ebe64ae75b2930262f3b9b25f471c988151e",
       "branch": "main"
     },
     "etaf-desktop": {
