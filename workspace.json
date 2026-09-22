@@ -43,7 +43,7 @@
     },
     "etaf-desktop": {
       "url": "git@gitea.gklazycat.heiyu.space:geekinney/etaf-desktop.git",
-      "revision": "57e1db0ca4e60bb32b106ec80c0e3c5873606328",
+      "revision": "5203d1e24827e5d2194e9540cb7af1ea9236e85e",
       "branch": "main"
     }
   }
