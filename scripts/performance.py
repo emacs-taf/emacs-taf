@@ -25,6 +25,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DRIVER = ROOT / "benchmarks/performance-driver.el"
 PHASES = ("source", "style", "plan", "layout", "projection", "transaction")
 WARMUP_PROTOCOL = "recorded-before-latency-per-scenario-set-v1"
+LIBRARY_CODE_PROTOCOL = "entry-lisp-examples-load-history-v1"
 
 
 def read_json(path):
@@ -147,6 +148,21 @@ def finite_nonnegative(value):
     return isinstance(value, (float, int)) and not isinstance(value, bool) and math.isfinite(value) and value >= 0
 
 
+def library_code_strategy(libraries):
+    """Normalize execution format without equating versions' module inventories."""
+    if not isinstance(libraries, list) or any(
+            not isinstance(row, dict) or row.get("format") not in ("source", "compiled", "native")
+            or not all(isinstance(row.get(key), str) and row[key] for key in ("package", "library", "file", "origin"))
+            for row in libraries):
+        return "unknown"
+    formats = {row["format"] for row in libraries}
+    if not formats:
+        return "not-applicable"
+    if formats == {"source"}:
+        return "interpreted"
+    return "mixed" if "source" in formats else "compiled"
+
+
 def valid_sample(sample, mode, require_foreground=False):
     if not isinstance(sample, dict):
         return False
@@ -163,6 +179,9 @@ def valid_sample(sample, mode, require_foreground=False):
     before, after = sample.get("before"), sample.get("after")
     required = ("pid", "emacs", "system", "buffer", "graphic", "font", "width", "height", "frame", "window")
     if not isinstance(before, dict) or not isinstance(after, dict):
+        return False
+    strategy = library_code_strategy(before.get("runtime_libraries"))
+    if strategy in ("mixed", "unknown") or strategy != library_code_strategy(after.get("runtime_libraries")):
         return False
     if any(key not in before or key not in after or before[key] != after[key] for key in required):
         return False
@@ -203,6 +222,7 @@ def sample_environments(samples):
     environments = [{**{key: sample.get("before", {}).get(key) for key in
                      ("emacs", "system", "font", "width", "height", "graphic", "foreground", "text_scale", "native_jit")},
                      "foreground_after": sample.get("after", {}).get("foreground"),
+                     "code_strategy": library_code_strategy(sample.get("before", {}).get("runtime_libraries")),
                      "context": stable_context(sample.get("before", {}).get("context"))}
                     for sample in samples]
     return sorted({json.dumps(e, sort_keys=True): e for e in environments}.values(),
@@ -317,6 +337,18 @@ def analyze(raw_runs, descriptors, settings):
                       if not any(all(failure[key] == sample.get(key) for key in identity)
                                  for sample in latency_rows)]
         warmup_failures = [failure for failure in failures if failure["phase"] == "warmup"]
+        code_strategies = {library_code_strategy(sample.get(side, {}).get("runtime_libraries"))
+                           for sample in all_samples for side in ("before", "after")}
+        libraries = {json.dumps(row, sort_keys=True): row
+                     for sample in all_samples for side in ("before", "after")
+                     for row in sample.get(side, {}).get("runtime_libraries", [])}
+        unmapped_native = {row["file"]: row for sample in all_samples for side in ("before", "after")
+                           for row in sample.get(side, {}).get("unmapped_native_libraries", [])}
+        code_valid = len(code_strategies) == 1 and not code_strategies.intersection({"mixed", "unknown"})
+        code_error = (None if code_valid else
+                      "Runtime library load formats are missing, mixed or changed during the scenario")
+        valid &= code_valid
+        overall_valid &= code_valid
         phase_samples = defaultdict(list)
         root_updates = 0
         strategies = Counter()
@@ -341,6 +373,9 @@ def analyze(raw_runs, descriptors, settings):
             if phases:
                 phase_samples["outside_ebox"].append(sample["wall_ms"] - sum(phases.values()))
         case = {**descriptor, "valid": valid, "count": len(samples), "expected_count": expected,
+                "runtime_code": {"strategies": sorted(code_strategies), "reason": code_error,
+                                 "libraries": sorted(libraries.values(), key=lambda row: row["file"]),
+                                 "unmapped_native_libraries": sorted(unmapped_native.values(), key=lambda row: row["file"])},
                 "invalid_count": len(invalid), "samples_ms": values,
                 "gc_ms": [s["gc_ms"] for s in samples if finite_nonnegative(s.get("gc_ms"))],
                 "cpu_ms": [s["cpu_ms"] for s in samples if finite_nonnegative(s.get("cpu_ms"))],
@@ -403,9 +438,17 @@ def compare(before, after, allowance=2.0):
         if (not isinstance(settings.get("warmups"), int) or isinstance(settings["warmups"], bool)
                 or settings["warmups"] < 0 or settings.get("warmup_protocol") != WARMUP_PROTOCOL):
             return {"status": "incomparable", "reason": "Missing or unsupported warmup protocol"}
+        if settings.get("library_code_protocol") != LIBRARY_CODE_PROTOCOL:
+            return {"status": "incomparable", "reason": "Missing or unsupported runtime library code evidence"}
         if report.get("acceptance_eligible") is not acceptance_coverage(settings):
             return {"status": "incomparable", "reason": "Acceptance eligibility does not match sample coverage"}
         for name, case in report["cases"].items():
+            code = case.get("runtime_code", {})
+            strategy = library_code_strategy(code.get("libraries"))
+            if (strategy in ("mixed", "unknown") or code.get("strategies") != [strategy]
+                    or any(environment.get("code_strategy") != strategy
+                           for environment in case.get("environments", []) + case.get("warmups", {}).get("environments", []))):
+                return {"status": "incomparable", "reason": f"{name}: missing, mixed or inconsistent runtime library code formats"}
             values = case.get("samples_ms", [])
             groups = case.get("sets", [])
             if (not case.get("valid") or len(values) != expected or case.get("count") != expected
@@ -440,13 +483,15 @@ def compare(before, after, allowance=2.0):
         return {"status": "incomparable", "reason": "Execution mode or machine differs"}
     if before.get("tool_identity") != after.get("tool_identity") or any(
             before["settings"].get(field) != after["settings"].get(field)
-            for field in ("sets", "samples", "warmups", "warmup_protocol", "boundary", "focus_policy")):
+            for field in ("sets", "samples", "warmups", "warmup_protocol", "library_code_protocol", "boundary", "focus_policy")):
         return {"status": "incomparable", "reason": "Measurement driver, boundary, warmups or sample grouping differs"}
     if before["cases"].keys() != after["cases"].keys():
         return {"status": "incomparable", "reason": "Scenario coverage differs"}
     rows = []
     for name, current in after["cases"].items():
         previous = before["cases"][name]
+        if previous["runtime_code"]["strategies"] != current["runtime_code"]["strategies"]:
+            return {"status": "incomparable", "reason": f"{name}: runtime library execution strategy differs"}
         for field in ("version", "isolation", "budget_ms", "source_sha256", "environments", "expected_count"):
             if previous.get(field) != current.get(field):
                 return {"status": "incomparable", "reason": f"{name}: {field} differs"}
@@ -472,6 +517,7 @@ def summarize(report, selected=None, details=False):
         combined = case.get("all_latency", {})
         maximum = warmups.get("max_ms")
         total_maximum = combined.get("max_ms")
+        print(f"{name}: runtime-code={','.join(case.get('runtime_code', {}).get('strategies', [])) or 'unknown'}")
         print(f"{name}: warmups={warmups.get('count', 0)}/{warmups.get('expected_count', 0)} "
               f"max={'unavailable' if maximum is None else f'{maximum:.2f}'} ms "
               f"failures={len(warmups.get('failures', []))}; "
@@ -494,6 +540,12 @@ def summarize(report, selected=None, details=False):
                 "background" if not environment.get("foreground") and not environment.get("foreground_after") else
                 "changed during sample" for environment in case.get("environments", [])})))
         if details:
+            counts = Counter(row["format"] for row in case.get("runtime_code", {}).get("libraries", []))
+            if counts:
+                print("  runtime library formats: " + ", ".join(f"{kind}={count}" for kind, count in sorted(counts.items())))
+            unmapped = case.get("runtime_code", {}).get("unmapped_native_libraries", [])
+            if unmapped:
+                print(f"  external native libraries without known source origin: {len(unmapped)} (outside classified scope)")
             if case.get("latency_outcomes"):
                 worst = max(case["latency_outcomes"], key=lambda row: row["wall_ms"])
                 value = json.dumps(worst["value"], ensure_ascii=False, sort_keys=True)
@@ -679,6 +731,7 @@ def main():
         case["source_sha256"] = hashlib.sha256(Path(case["source"]).read_bytes()).hexdigest()
     settings = {"mode": args.mode, "samples": args.samples, "sets": args.sets,
                 "warmups": args.warmups, "warmup_protocol": WARMUP_PROTOCOL,
+                "library_code_protocol": LIBRARY_CODE_PROTOCOL,
                 "focus_policy": "foreground" if args.foreground else args.focus_policy,
                 "diagnose": args.diagnose, "diagnostic_samples": args.diagnostic_samples,
                 "timeout": args.timeout, "boundary": "invoke-settlement-redisplay-v1"}
@@ -735,6 +788,8 @@ def main():
         if raw_runs[-1].get("status") != "completed":
             break
     cases, valid = analyze(raw_runs, descriptors, settings)
+    report["errors"].extend(f"{name}: {case['runtime_code']['reason']}"
+                            for name, case in cases.items() if case["runtime_code"]["reason"])
     report["host_context"]["load_after"] = list(os.getloadavg()) if hasattr(os, 'getloadavg') else None
     if report["tool_identity"] != {"runner": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
                                    "driver": hashlib.sha256(DRIVER.read_bytes()).hexdigest()}:

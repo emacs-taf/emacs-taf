@@ -40,6 +40,8 @@
 (require 'profiler)
 (require 'subr-x)
 
+(defvar comp-eln-to-el-h)
+
 (defvar taf-benchmark--registry nil)
 (defvar taf-benchmark--configuration nil)
 (defvar taf-benchmark--report nil)
@@ -55,6 +57,10 @@
 (defvar taf-benchmark--loaded-before nil)
 (defvar taf-benchmark--profiler-settings nil)
 (defvar taf-benchmark--locations nil)
+(defvar taf-benchmark--library-history nil)
+(defvar taf-benchmark--library-history-length nil)
+(defvar taf-benchmark--runtime-libraries [])
+(defvar taf-benchmark--unmapped-native-libraries [])
 
 (defun taf-benchmark-register (id &rest properties)
   "Register scenario ID with supported PROPERTIES."
@@ -99,6 +105,55 @@
                                                               (expand-file-name (car entry)))) roots))
                          (expand-file-name (car entry)))) load-history))))
 
+(defun taf-benchmark--runtime-libraries ()
+  "Record actual runtime library load formats outside the measured operation.
+Selected package entries, lisp modules and examples count as runtime code;
+explicit scenario adapters do not.  A changed load history refreshes this
+cached evidence so lazy library loading is visible after an operation."
+  (let ((history-length (length load-history)))
+    (unless (and (eq taf-benchmark--library-history load-history)
+                 (eql taf-benchmark--library-history-length history-length))
+      (let ((roots
+             (mapcar (lambda (root)
+                       (cons (file-name-nondirectory (directory-file-name root))
+                             (file-name-as-directory (file-truename root))))
+                     (plist-get taf-benchmark--configuration :code_roots)))
+            (scenarios (mapcar #'file-truename
+                               (plist-get taf-benchmark--configuration :scenario_files)))
+            libraries unmapped-native)
+        (dolist (entry load-history)
+          (when (stringp (car entry))
+            (let* ((file (file-truename (car entry)))
+                   (native (string-suffix-p ".eln" file))
+                   (mapped (and native (boundp 'comp-eln-to-el-h)
+                                (hash-table-p comp-eln-to-el-h)
+                                (gethash (file-name-nondirectory file) comp-eln-to-el-h)))
+                   (origin (if (stringp mapped) (file-truename mapped) file))
+                   (matched nil))
+              (dolist (root roots)
+                (let* ((package (car root)) (directory (cdr root))
+                       (relative (and (string-prefix-p directory origin)
+                                      (substring origin (length directory)))))
+                  (when (and relative (not (member origin scenarios))
+                             (or (string-match-p
+                                  (concat "\\`" (regexp-quote package) "\\.el\\(?:c\\|n\\)?\\(?:\\.gz\\)?\\'") relative)
+                                 (string-prefix-p "lisp/" relative)
+                                 (string-prefix-p "examples/" relative)))
+                    (setq matched t)
+                    (push (list :package package :library relative :file file :origin origin
+                                :format (cond (native "native")
+                                              ((string-match-p "\\.elc\\(?:\\.gz\\)?\\'" file) "compiled")
+                                              ((string-match-p "\\.el\\(?:\\.gz\\)?\\'" file) "source")
+                                              (t "unknown")))
+                          libraries))))
+              (when (and native (not matched) (not (stringp mapped)))
+                (push (list :file file :scope "unmapped-external") unmapped-native)))))
+        (setq taf-benchmark--runtime-libraries (vconcat (nreverse libraries))
+              taf-benchmark--unmapped-native-libraries (vconcat (nreverse unmapped-native))
+              taf-benchmark--library-history load-history
+              taf-benchmark--library-history-length history-length))))
+  taf-benchmark--runtime-libraries)
+
 (defun taf-benchmark--environment ()
   "Capture stable execution context and separate dynamic GC settings."
   (let ((gui (eq (intern (plist-get taf-benchmark--configuration :mode)) 'gui)))
@@ -114,6 +169,8 @@
           :text_scale (and (boundp 'text-scale-mode-amount) text-scale-mode-amount)
           :gc_threshold gc-cons-threshold :gc_percentage gc-cons-percentage
           :native_jit (if (and (boundp 'native-comp-jit-compilation) native-comp-jit-compilation) t :false)
+          :runtime_libraries (taf-benchmark--runtime-libraries)
+          :unmapped_native_libraries taf-benchmark--unmapped-native-libraries
           :context (when-let* ((probe (plist-get taf-benchmark--fixture :environment)))
                      (funcall probe)))))
 
@@ -451,7 +508,9 @@
         (with-temp-buffer
           (insert-file-contents file)
           (json-parse-buffer :object-type 'plist :array-type 'list :null-object nil :false-object nil)))
-  (setq taf-benchmark--registry nil taf-benchmark--loaded-before (taf-benchmark--files))
+  (setq taf-benchmark--registry nil taf-benchmark--loaded-before (taf-benchmark--files)
+        taf-benchmark--library-history nil taf-benchmark--library-history-length nil
+        taf-benchmark--runtime-libraries [] taf-benchmark--unmapped-native-libraries [])
   (dolist (directory (plist-get taf-benchmark--configuration :load_paths))
     (add-to-list 'load-path directory))
   (dolist (source (plist-get taf-benchmark--configuration :scenario_files))
@@ -480,6 +539,8 @@
         (with-temp-buffer
           (insert-file-contents configuration-file)
           (json-parse-buffer :object-type 'plist :array-type 'list)))
+  (setq taf-benchmark--library-history nil taf-benchmark--library-history-length nil
+        taf-benchmark--runtime-libraries [] taf-benchmark--unmapped-native-libraries [])
   (taf-benchmark--json-write
    (plist-get taf-benchmark--configuration :output)
    (list :environment (taf-benchmark--environment)

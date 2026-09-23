@@ -33,6 +33,27 @@ loaded packages edited or rebuilt after Emacs started. Restart the same native
 Emacs and run `M-x server-start` to establish a fresh code generation. This is a
 conservative freshness check; the tool does not hot-reload package implementations.
 
+Every sample records the actual loaded files for selected package entries,
+`lisp/` implementations and `examples/` application code before and after timing.
+Explicit benchmark adapters are excluded. `runtime_code` summarizes these as
+`compiled`, `interpreted`, `mixed`, or `not-applicable` when no selected runtime
+library was loaded. `.elc` records mean compiled loading and may also represent
+native code in Emacs's load history; they do not prove bytecode-only execution.
+Detailed file paths and formats remain available for diagnosis.
+Native artifacts use Emacs's known source-origin mapping when available.
+External `.eln` files without a known origin are retained separately as
+`unmapped_native_libraries`; their ownership cannot be established, so they
+are outside the classified package scope. This is library-loading evidence,
+not a claim about every dynamically redefined function in the process.
+
+Mixed formats, missing evidence or a format change during a scenario leave the
+run unverified. Comparisons require the same execution strategy, while allowing
+different checkout paths or additional compiled modules. Two entirely interpreted
+runs remain comparable. Existing `.elc` files and `native_jit` alone do not prove
+compiled execution: a newer source can win under `load-prefer-newer`. Recompile
+the intended checkout for a compiled comparison; the tool never alters file
+timestamps or rebuilds code to make the evidence appear fresh.
+
 Defaults are three sets with five recorded warmups followed by ten formal latency
 samples per scenario and set. `--warmups N` changes the warmup count; zero is useful
 for a cold screen. Warmups use the same preparation, timing, settlement, foreground

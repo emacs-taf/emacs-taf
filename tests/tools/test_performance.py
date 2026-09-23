@@ -43,6 +43,118 @@ class PerformanceTool(unittest.TestCase):
         return subprocess.run([sys.executable, str(COMMAND), "compare", str(left), str(right)],
                               capture_output=True, text=True, timeout=5)
 
+    def runtime_case(self, name, strategy, extra_module=False, lazy_source=False, symlink_root=False):
+        """Exercise real library loading, including stale fixture bytecode."""
+        directory = self.base / name
+        package = directory / "fixture-runtime"
+        library = package / "lisp"
+        library.mkdir(parents=True)
+        entry = package / "fixture-runtime.el"
+        worker = library / "fixture-worker.el"
+        entry.write_text(""";;; -*- lexical-binding: t; -*-
+(add-to-list 'load-path (expand-file-name "lisp" (file-name-directory load-file-name)))
+(require 'fixture-worker)
+(provide 'fixture-runtime)
+""")
+        worker.write_text(""";;; -*- lexical-binding: t; -*-
+(defun fixture-next (value) (1+ value))
+(provide 'fixture-worker)
+""")
+        sources = [worker, entry]
+        if extra_module:
+            extra = library / "fixture-extra.el"
+            extra.write_text("(provide 'fixture-extra)\n")
+            worker.write_text("(require 'fixture-extra)\n" + worker.read_text())
+            sources.insert(0, extra)
+        compilation = subprocess.run(
+            ["emacs", "-Q", "--batch", "-L", str(library), "-f", "batch-byte-compile",
+             *map(str, sources)], capture_output=True, text=True, timeout=10)
+        self.assertEqual(compilation.returncode, 0, compilation.stdout + compilation.stderr)
+        if strategy in ("interpreted", "mixed"):
+            # Reproduce a checkout newer than copied .elc artifacts.  These
+            # fixture-only timestamp changes must never occur in the runner.
+            for source in sources if strategy == "interpreted" else [worker]:
+                source.write_text(source.read_text() + "; changed source\n")
+                newer = source.with_suffix(".elc").stat().st_mtime_ns + 2_000_000_000
+                os.utime(source, ns=(newer, newer))
+        lazy = "nil"
+        if lazy_source:
+            examples = package / "examples"
+            examples.mkdir()
+            example = examples / "fixture-example.el"
+            example.write_text("(provide 'fixture-example)\n")
+            lazy = f'(load {json.dumps(str(example))} nil t t)'
+        scenario = directory / "scenario.el"
+        scenario.write_text(""";;; -*- lexical-binding: t; -*-
+(require 'fixture-runtime)
+(taf-benchmark-register
+ "fixture.library" :modes '(batch) :budget-ms 100 :impact 'local :isolation 'series
+ :setup (lambda (_mode)
+          (let ((buffer (generate-new-buffer " *library-fixture*")) (count 0))
+            (list :buffer buffer
+                  :invoke (lambda (_sample)
+                            LAZY_LOAD
+                            (setq count (fixture-next count))
+                            (with-current-buffer buffer
+                              (erase-buffer) (insert (number-to-string count))))
+                  :verify (lambda ()
+                            (with-current-buffer buffer (equal (buffer-string) (number-to-string count))))
+                  :cleanup (lambda () (kill-buffer buffer))))))
+""".replace("LAZY_LOAD", lazy))
+        if symlink_root:
+            workspace = directory / "workspace"
+            workspace.mkdir()
+            (workspace / "fixture-runtime").symlink_to(package, target_is_directory=True)
+            (workspace / "workspace.json").write_text(json.dumps({"repositories": {"fixture-runtime": {}}}))
+            paths = ["--root", str(workspace)]
+        else:
+            paths = ["--load-path", str(package)]
+        return self.run_case(name + "-run", "fixture.library", *paths, "--scenario-file", str(scenario))
+
+    def test_library_formats_reject_false_compiled_speedups_and_allow_module_splits(self):
+        source_process, source, source_output = self.runtime_case("libraries-source", "interpreted")
+        compiled_process, compiled, compiled_output = self.runtime_case("libraries-compiled", "compiled")
+        split_process, split, _ = self.runtime_case("libraries-split", "compiled", extra_module=True)
+        linked_process, linked, _ = self.runtime_case("libraries-symlink", "compiled", symlink_root=True)
+        for process in (source_process, compiled_process, split_process, linked_process):
+            self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
+        for report, strategy, count in ((source, "interpreted", 2), (compiled, "compiled", 2),
+                                        (split, "compiled", 3), (linked, "compiled", 2)):
+            code = report["cases"]["fixture.library"]["runtime_code"]
+            self.assertEqual(code["strategies"], [strategy])
+            self.assertEqual(len(code["libraries"]), count)
+        raw = json.loads((source_output / "latency-1.json").read_text())
+        self.assertEqual({row["format"] for row in raw["samples"][0]["before"]["runtime_libraries"]}, {"source"})
+        raw = json.loads((compiled_output / "latency-1.json").read_text())
+        self.assertEqual({row["format"] for row in raw["samples"][0]["before"]["runtime_libraries"]}, {"compiled"})
+        self.assertEqual(self.compare(source, source).returncode, 0)
+        mismatch = self.compare(source, compiled)
+        self.assertEqual(mismatch.returncode, 2)
+        self.assertIn("execution strategy differs", mismatch.stdout)
+        # A package split adds a compiled module without changing workload or
+        # execution strategy.  Paths and module counts are diagnostic evidence.
+        self.assertEqual(self.compare(compiled, split).returncode, 0)
+        self.assertEqual(self.compare(compiled, linked).returncode, 0)
+        missing = copy.deepcopy(compiled)
+        del missing["cases"]["fixture.library"]["runtime_code"]
+        self.assertEqual(self.compare(compiled, missing).returncode, 2)
+
+    def test_mixed_and_mid_sample_library_formats_remain_unverified(self):
+        for name, strategy, lazy in (("libraries-mixed", "mixed", False),
+                                      ("libraries-lazy", "compiled", True)):
+            with self.subTest(name=name):
+                process, report, output = self.runtime_case(name, strategy, lazy_source=lazy)
+                self.assertEqual(process.returncode, 2, process.stdout + process.stderr)
+                self.assertFalse(report["valid"])
+                code = report["cases"]["fixture.library"]["runtime_code"]
+                self.assertIn("mixed", code["strategies"])
+                self.assertIn("Runtime library load formats", " ".join(report["errors"]))
+                self.assertEqual(self.compare(report, report).returncode, 2)
+                if lazy:
+                    raw = json.loads((output / "latency-1.json").read_text())["samples"][0]
+                    self.assertEqual({row["format"] for row in raw["before"]["runtime_libraries"]}, {"compiled"})
+                    self.assertEqual({row["format"] for row in raw["after"]["runtime_libraries"]}, {"compiled", "source"})
+
     def test_latency_trace_cpu_and_memory_are_separate(self):
         process, report, output = self.good
         self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
