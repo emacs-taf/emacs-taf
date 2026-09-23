@@ -139,6 +139,12 @@ to every repository changed from this workspace.
   These batch commands do not certify actual GUI rendering or input latency; run
   and inspect the affected examples through their maintained GUI workflow too.
   Use three independent sample sets for the final performance claim.
+- The user authorizes launching Emacs from the command line for GUI validation
+  without repeated approval. The user's init starts the server automatically.
+  Prefer a usable existing server; when a fresh process is needed, start it
+  yourself and verify its PID, graphical frame and loaded code. Do not ask the
+  user to launch Emacs or start its server. Preserve unrelated Emacs instances
+  and application focus; this authorization does not permit closing their work.
 - Use `scripts/performance.py` for repeatable interaction latency and diagnosis;
   select maintained scenarios with `perf-list` and add new adapters to the owning
   package's `benchmarks/performance-scenarios.el`. Reuse its separate latency,
