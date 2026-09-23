@@ -26,12 +26,13 @@ class PerformanceTool(unittest.TestCase):
         cls.directory.cleanup()
 
     @classmethod
-    def run_case(cls, name, scenario, *extra):
+    def run_case(cls, name, scenario, *extra, warmups=0):
         output = cls.base / name
         process = subprocess.run(
             [sys.executable, str(COMMAND), "run", "--root", str(ROOT),
              "--scenario-file", str(FIXTURE), "--mode", "batch", "--scenario", scenario,
-             "--samples", "2", "--sets", "1", "--output-dir", str(output), *extra],
+             "--samples", "2", "--sets", "1", "--output-dir", str(output),
+             *([] if warmups is None else ["--warmups", str(warmups)]), *extra],
             capture_output=True, text=True, timeout=25)
         return process, json.loads((output / "result.json").read_text()), output
 
@@ -82,6 +83,142 @@ class PerformanceTool(unittest.TestCase):
         self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
         self.assertTrue(report["valid"])
         self.assertTrue(all(value >= 10 for value in report["cases"]["fixture.async"]["samples_ms"]))
+
+    def test_default_warmups_retain_first_use_without_polluting_latency(self):
+        process, report, output = self.run_case("warmups", "fixture.sequence", "--sets", "2", warmups=None)
+        self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
+        self.assertEqual(report["settings"]["warmups"], 5)
+        case = report["cases"]["fixture.sequence"]
+        self.assertEqual(case["count"], 4)
+        self.assertEqual(case["over_budget"], 0)
+        self.assertEqual(case["warmups"]["count"], 10)
+        self.assertEqual(case["warmups"]["attempted_count"], 10)
+        self.assertEqual(case["warmups"]["failures"], [])
+        self.assertGreaterEqual(case["warmups"]["max_ms"], 150)
+        self.assertEqual(case["all_latency"]["count"], 14)
+        self.assertEqual(case["all_latency"]["max_ms"], case["warmups"]["max_ms"])
+        self.assertLess(case["max_ms"], case["warmups"]["max_ms"])
+        for number in (1, 2):
+            raw = json.loads((output / f"latency-{number}.json").read_text())["samples"]
+            self.assertEqual([row["phase"] for row in raw], ["warmup"] * 5 + ["latency"] * 2)
+            self.assertEqual([row["iteration"] for row in raw], list(range(7)))
+            self.assertEqual([row["sample"] for row in raw], list(range(5)) + [0, 1])
+            self.assertEqual([row["outcome"] for row in raw], [{"count": value} for value in range(1, 8)])
+            self.assertTrue(all(row["correct"] and row["environment_stable"] for row in raw))
+            self.assertTrue(all(row["profile"] is None and not row["diagnostic"] for row in raw))
+        self.assertIn("warmups=10/10", process.stdout)
+        self.assertIn("all-latency=14/14", process.stdout)
+        self.assertEqual(self.compare(report, report).returncode, 0)
+        for mutate in (
+            lambda item: item["settings"].update(warmups=4),
+            lambda item: item["settings"].update(warmup_protocol="unrecorded"),
+            lambda item: item["cases"]["fixture.sequence"]["warmups"]["samples_ms"].pop(),
+            lambda item: item["cases"]["fixture.sequence"]["warmups"].update(max_ms=0),
+            lambda item: item["cases"]["fixture.sequence"]["warmups"]["environments"][0].update(font="different"),
+            lambda item: item["cases"]["fixture.sequence"]["all_latency"].update(count=4),
+        ):
+            with self.subTest(mutate=mutate):
+                changed = copy.deepcopy(report)
+                mutate(changed)
+                self.assertEqual(self.compare(report, changed).returncode, 2)
+
+    def test_warmup_verification_and_context_failures_remain_unverified(self):
+        for scenario in ("fixture.fail", "fixture.context"):
+            with self.subTest(scenario=scenario):
+                process, report, output = self.run_case("warmup-" + scenario, scenario, warmups=1)
+                self.assertEqual(process.returncode, 2)
+                self.assertFalse(report["valid"])
+                case = report["cases"][scenario]
+                self.assertEqual(case["count"], 0)
+                self.assertEqual(case["warmups"]["count"], 1)
+                self.assertEqual(case["warmups"]["invalid_count"], 1)
+                self.assertEqual(len(case["warmups"]["failures"]), 1)
+                self.assertEqual(case["all_latency"]["count"], 1)
+                self.assertEqual(case["all_latency"]["attempted_count"], 1)
+                raw = json.loads((output / "latency-1.json").read_text())
+                self.assertEqual(raw["active"]["phase"], "warmup")
+                self.assertEqual(raw["samples"][0]["phase"], "warmup")
+
+    def test_timed_out_warmup_preserves_attempt_and_failure_reason(self):
+        process, report, _ = self.run_case("warmup-timeout", "fixture.timeout", "--timeout", ".3",
+                                         "--run-timeout", "3", warmups=1)
+        self.assertEqual(process.returncode, 2)
+        case = report["cases"]["fixture.timeout"]
+        self.assertEqual(case["count"], 0)
+        self.assertEqual(case["warmups"]["count"], 0)
+        self.assertEqual(case["warmups"]["attempted_count"], 1)
+        self.assertEqual(case["all_latency"]["attempted_count"], 1)
+        failure = case["warmups"]["failures"][0]
+        self.assertEqual(failure["phase"], "warmup")
+        self.assertEqual(failure["stage"], "action")
+        self.assertIn("exceeded", failure["reason"])
+
+    def test_warmups_are_configurable_and_do_not_enter_diagnostics(self):
+        process, report, output = self.run_case("warmup-diagnose", "fixture.async", "--diagnose",
+                                              "--diagnostic-samples", "1", warmups=2)
+        self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
+        case = report["cases"]["fixture.async"]
+        self.assertEqual(case["warmups"]["count"], 2)
+        self.assertEqual(case["count"], 2)
+        self.assertEqual(case["diagnostic_count"], 3)
+        self.assertTrue(all(value >= 10 for value in case["warmups"]["samples_ms"]))
+        for kind in ("trace", "cpu", "memory"):
+            rows = json.loads((output / f"{kind}-1.json").read_text())["samples"]
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0]["phase"], "diagnostic")
+
+    def test_warmups_obey_the_all_interaction_hard_limit(self):
+        process, report, _ = self.run_case("warmup-hard-limit", "fixture.cold-slow", warmups=1)
+        self.assertEqual(process.returncode, 1, process.stdout + process.stderr)
+        self.assertTrue(report["valid"])
+        self.assertEqual(report["status"], "failed")
+        case = report["cases"]["fixture.cold-slow"]
+        self.assertEqual(case["over_budget"], 0)
+        self.assertEqual(case["over_hard_limit"], 1)
+        self.assertGreaterEqual(case["warmups"]["max_ms"], 550)
+        self.assertLess(case["max_ms"], 100)
+
+    def test_warmup_bounds_are_validated_before_creating_evidence(self):
+        for count in (-1, 1001):
+            with self.subTest(count=count):
+                output = self.base / f"warmup-bounds-{count}"
+                process = subprocess.run(
+                    [sys.executable, str(COMMAND), "run", "--root", str(ROOT),
+                     "--scenario-file", str(FIXTURE), "--mode", "batch", "--scenario", "fixture.counter",
+                     "--warmups", str(count), "--output-dir", str(output)],
+                    capture_output=True, text=True, timeout=5)
+                self.assertEqual(process.returncode, 2)
+                self.assertIn("outside supported bounds", process.stderr)
+                self.assertFalse(output.exists())
+
+    def test_acceptance_requires_three_complete_thirty_sample_sets(self):
+        process, report, _ = self.run_case("short-acceptance", "fixture.async", "--sets", "3",
+                                         "--samples", "10", warmups=5)
+        self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
+        self.assertFalse(report["acceptance_eligible"])
+        self.assertEqual(report["status"], "screened")
+        changed = copy.deepcopy(report)
+        changed["acceptance_eligible"] = True
+        self.assertEqual(self.compare(changed, changed).returncode, 2)
+
+    def test_diagnostic_failures_remain_distinct_from_latency_and_each_other(self):
+        process, report, _ = self.run_case("diagnostic-fail", "fixture.diagnostic-fail", "--diagnose",
+                                         "--diagnostic-samples", "1", warmups=1)
+        self.assertEqual(process.returncode, 2)
+        case = report["cases"]["fixture.diagnostic-fail"]
+        self.assertEqual(case["warmups"]["count"], 1)
+        self.assertEqual(case["all_latency"]["failures"], [])
+        self.assertEqual({failure["diagnostic_kind"] for failure in case["failures"]}, {"trace", "cpu"})
+        self.assertIn("Deliberate profiler-pass failure", process.stdout)
+
+    def test_cleanup_failure_retains_its_reason_without_adding_an_attempt(self):
+        process, report, _ = self.run_case("cleanup-fail", "fixture.cleanup-fail", warmups=1)
+        self.assertEqual(process.returncode, 2)
+        case = report["cases"]["fixture.cleanup-fail"]
+        self.assertEqual(case["all_latency"]["count"], 3)
+        self.assertEqual(case["all_latency"]["attempted_count"], 3)
+        self.assertEqual(case["failures"][0]["stage"], "cleanup")
+        self.assertEqual(case["failures"][0]["reason"], "Deliberate cleanup failure")
 
     def test_cpu_report_identifies_the_application_leaf(self):
         process, report, output = self.run_case("hot", "fixture.hot", "--diagnose", "--diagnostic-samples", "2")
@@ -266,6 +403,7 @@ class PerformanceTool(unittest.TestCase):
             group["samples_ms"] = [value + 3 for value in group["samples_ms"]]
         for metric in ("p50_ms", "p95_ms", "p99_ms", "max_ms"):
             case[metric] += 3
+        case["all_latency"]["max_ms"] += 3
         result = self.compare(before, after)
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
         self.assertEqual(json.loads(result.stdout)["status"], "regressed")

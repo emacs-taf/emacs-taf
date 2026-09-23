@@ -15,8 +15,15 @@
     (push (run-at-time .01 nil (lambda () (setq ready t))) timers)
     (list :buffer buffer :ready (lambda () ready)
           :invoke
-          (lambda (_sample)
+          (lambda (sample)
             (cl-incf count)
+            (when (eq kind 'sequence)
+              (unless (= sample (1- count))
+                (error "Operation index did not advance across warmups"))
+              (when (= count 1) (sleep-for .15)))
+            (when (and (eq kind 'cold-slow) (= count 1)) (sleep-for .55))
+            (when (and (eq kind 'diagnostic-fail) (profiler-running-p))
+              (error "Deliberate profiler-pass failure"))
             (when (eq kind 'hot) (taf-test-hot-leaf))
             (pcase kind
               ('timeout (while t (sleep-for .1)))
@@ -33,7 +40,7 @@
                                       (erase-buffer) (insert (number-to-string count)))
                                     (setq settled t))) timers))
               (_ (with-current-buffer buffer (erase-buffer) (insert (number-to-string count)))))
-            (when sink
+            (when (and sink (not (eq kind 'diagnostic-fail)))
               (funcall sink buffer (list :provider 'fixture :stage 'update :duration-ms 0.01
                                          :native-declined-reason '(:reason viewport-context :width nil)
                                          :native-fallback-reason "Unsupported size"))))
@@ -48,10 +55,11 @@
           :cleanup (lambda ()
                      (mapc #'cancel-timer timers)
                      (when (buffer-live-p buffer) (kill-buffer buffer))
+                     (when (eq kind 'cleanup-fail) (error "Deliberate cleanup failure"))
                      (unless (equal profile-settings (cons profiler-max-stack-depth profiler-sampling-interval))
                        (error "The driver did not restore profiler settings"))))))
 
-(dolist (kind '(counter async fail timeout slow context hot))
+(dolist (kind '(counter async fail timeout slow context hot sequence cold-slow diagnostic-fail cleanup-fail))
   (let ((variant kind))
     (taf-benchmark-register
      (format "fixture.%s" variant) :version 1 :modes '(batch) :budget-ms (if (eq kind 'slow) 5 100)

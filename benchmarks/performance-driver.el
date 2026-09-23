@@ -5,7 +5,8 @@
 ;; Function: taf-benchmark-register (id &rest properties)
 ;; Register a scenario with :setup, :modes, :budget-ms and :impact. SETUP takes
 ;; the mode symbol and returns :buffer, :invoke, :verify and :cleanup functions.
-;; INVOKE takes a sample index. VERIFY returns t or a short failure string.
+;; INVOKE takes an operation index, increasing through warmups and formal
+;; samples within a scenario/set. VERIFY returns t or a short failure string.
 ;; Optional :settled is a predicate for asynchronous completion; :observe
 ;; takes a report sink and returns a cleanup function. Reports are provider
 ;; public observer plists. Optional :environment returns JSON-safe metadata.
@@ -17,6 +18,9 @@
 ;; observer provider symbols. Observer cleanup/collection runs after timing
 ;; and profiling stop. CPU, allocation and provider traces use separate passes.
 ;; A fresh fixture is the default; :isolation series reuses it within a set.
+;; Warmups use the same preparation, timing, settlement and verification as
+;; formal samples. Their rows retain phase "warmup" and stay outside formal
+;; latency statistics. The driver preserves the runtime's GC settings.
 ;; Function: taf-benchmark-start (configuration-file)
 ;; Start asynchronous GUI work, or run a batch job to completion.
 ;; Function: taf-benchmark-running-p ()
@@ -272,6 +276,9 @@
   "Publish JOB and STAGE before entering potentially expensive work."
   (setf (plist-get taf-benchmark--report :active)
         (list :scenario (plist-get job :id) :sample (plist-get job :sample)
+              :set (plist-get job :set) :phase (plist-get job :phase)
+              :diagnostic_kind (plist-get job :diagnostic_kind)
+              :iteration (or (plist-get job :iteration) (plist-get job :sample))
               :stage stage :started_at (float-time)))
   (taf-benchmark--save))
 
@@ -366,7 +373,8 @@
             (plist-put taf-benchmark--active :gcs_start gcs-done)
             (plist-put taf-benchmark--active :cpu_start (current-cpu-time))
             (plist-put taf-benchmark--active :started (float-time))
-            (funcall (plist-get taf-benchmark--fixture :invoke) (plist-get job :sample))
+            (funcall (plist-get taf-benchmark--fixture :invoke)
+                     (or (plist-get job :iteration) (plist-get job :sample)))
             (plist-put taf-benchmark--active :action_end (float-time)))
           (taf-benchmark--settle)))
     ((error quit)
@@ -403,6 +411,8 @@
                    (row
                     (list :scenario (plist-get job :id) :set (plist-get job :set)
                           :sample (plist-get job :sample)
+                          :phase (plist-get job :phase)
+                          :iteration (or (plist-get job :iteration) (plist-get job :sample))
                           :diagnostic (if (plist-get job :diagnostic) t :false)
                           :diagnostic_kind (plist-get job :diagnostic_kind)
                           :outcome outcome

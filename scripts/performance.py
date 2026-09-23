@@ -3,7 +3,7 @@
 
 CLI: list, run, summarize, compare, cancel. JSON schema 1 keeps raw samples,
 verification, context, provider phases, sampled CPU/allocation stacks and source
-revisions. Diagnostic samples never enter latency statistics or acceptance.
+revisions. Warmups and diagnostic samples never enter formal latency statistics.
 """
 import argparse
 from collections import Counter, defaultdict
@@ -24,6 +24,7 @@ import uuid
 ROOT = Path(__file__).resolve().parents[1]
 DRIVER = ROOT / "benchmarks/performance-driver.el"
 PHASES = ("source", "style", "plan", "layout", "projection", "transaction")
+WARMUP_PROTOCOL = "recorded-before-latency-per-scenario-set-v1"
 
 
 def read_json(path):
@@ -197,6 +198,22 @@ def stable_context(context):
     return context
 
 
+def sample_environments(samples):
+    """Retain comparable display and capability variants for a sample phase."""
+    environments = [{**{key: sample.get("before", {}).get(key) for key in
+                     ("emacs", "system", "font", "width", "height", "graphic", "foreground", "text_scale", "native_jit")},
+                     "foreground_after": sample.get("after", {}).get("foreground"),
+                     "context": stable_context(sample.get("before", {}).get("context"))}
+                    for sample in samples]
+    return sorted({json.dumps(e, sort_keys=True): e for e in environments}.values(),
+                  key=lambda item: json.dumps(item, sort_keys=True))
+
+
+def acceptance_coverage(settings):
+    """Require complete per-set warmup and formal sample coverage."""
+    return settings["sets"] >= 3 and settings["samples"] >= 30 and settings["warmups"] >= 5
+
+
 def merge_profiles(samples):
     profiles = {}
     for kind in ("cpu", "memory"):
@@ -257,21 +274,49 @@ def analyze(raw_runs, descriptors, settings):
     for descriptor in descriptors:
         identifier = descriptor["id"]
         all_samples = [s for run in raw_runs for s in run.get("samples", []) if s["scenario"] == identifier]
-        samples = [s for s in all_samples if not s.get("diagnostic")]
+        warmups = [s for s in all_samples if s.get("phase") == "warmup"]
+        samples = [s for s in all_samples if not s.get("diagnostic") and s.get("phase") != "warmup"]
         diagnostics = [s for s in all_samples if s.get("diagnostic")]
         invalid = [s for s in all_samples if not valid_sample(
             s, settings["mode"], settings.get("focus_policy") == "foreground" and not s.get("diagnostic"))]
         combinations = {(s.get("set"), s.get("sample")) for s in samples}
         wanted = {(group, number) for group in range(1, settings["sets"] + 1)
                   for number in range(settings["samples"])}
+        warmup_wanted = {(group, number) for group in range(1, settings["sets"] + 1)
+                         for number in range(settings["warmups"])}
         diagnostic_wanted = ({(group, number, kind) for group in range(1, settings["sets"] + 1)
                               for number in range(settings["diagnostic_samples"])
                               for kind in ("trace", "cpu", "memory")} if settings["diagnose"] else set())
         valid = (len(samples) == expected and combinations == wanted and not invalid
+                 and len(warmups) == len(warmup_wanted)
+                 and {(s.get("set"), s.get("sample")) for s in warmups} == warmup_wanted
                  and len(diagnostics) == len(diagnostic_wanted)
                  and {(s.get("set"), s.get("sample"), s.get("diagnostic_kind")) for s in diagnostics} == diagnostic_wanted)
         overall_valid &= valid
         values = [s["wall_ms"] for s in samples if finite_nonnegative(s.get("wall_ms"))]
+        warmup_values = [s["wall_ms"] for s in warmups if finite_nonnegative(s.get("wall_ms"))]
+        failures = []
+        identity = ("set", "sample", "phase", "diagnostic_kind")
+        for run in raw_runs:
+            active = run.get("active") or {}
+            if run.get("status") != "completed" and active.get("scenario") == identifier:
+                failures.append({**{key: active.get(key) for key in identity},
+                                 "stage": "cleanup" if run.get("cleanup_error") and not run.get("error") else active.get("stage"),
+                                 "reason": run.get("error") or run.get("cleanup_error") or run.get("status")})
+        for sample in invalid:
+            if not any(all(failure[key] == sample.get(key) for key in identity)
+                       for failure in failures):
+                failures.append({**{key: sample.get(key) for key in identity},
+                                 "stage": "verification",
+                                 "reason": sample.get("verification") or (
+                                     "Execution context changed" if not sample.get("environment_stable")
+                                     else "Sample failed measurement validation")})
+        latency_rows = warmups + samples
+        latency_failures = [failure for failure in failures if failure["phase"] != "diagnostic"]
+        incomplete = [failure for failure in latency_failures
+                      if not any(all(failure[key] == sample.get(key) for key in identity)
+                                 for sample in latency_rows)]
+        warmup_failures = [failure for failure in failures if failure["phase"] == "warmup"]
         phase_samples = defaultdict(list)
         root_updates = 0
         strategies = Counter()
@@ -295,21 +340,26 @@ def analyze(raw_runs, descriptors, settings):
                 phase_samples[name].append(value)
             if phases:
                 phase_samples["outside_ebox"].append(sample["wall_ms"] - sum(phases.values()))
-        environments = [{**{key: sample.get("before", {}).get(key) for key in
-                         ("emacs", "system", "font", "width", "height", "graphic", "foreground", "text_scale", "native_jit")},
-                         "foreground_after": sample.get("after", {}).get("foreground"),
-                         "context": stable_context(sample.get("before", {}).get("context"))}
-                        for sample in samples]
-        environment_variants = sorted({json.dumps(e, sort_keys=True): e for e in environments}.values(),
-                                      key=lambda item: json.dumps(item, sort_keys=True))
         case = {**descriptor, "valid": valid, "count": len(samples), "expected_count": expected,
                 "invalid_count": len(invalid), "samples_ms": values,
                 "gc_ms": [s["gc_ms"] for s in samples if finite_nonnegative(s.get("gc_ms"))],
                 "cpu_ms": [s["cpu_ms"] for s in samples if finite_nonnegative(s.get("cpu_ms"))],
                 "allocation_cons_counts": [s["allocations"][0] for s in samples if s.get("allocations")],
-                "environments": environment_variants,
+                "environments": sample_environments(samples),
                 "sets": [{"set": number, "samples_ms": [s["wall_ms"] for s in samples if s["set"] == number]}
                          for number in range(1, settings["sets"] + 1)],
+                "warmups": {"count": len(warmups), "expected_count": len(warmup_wanted),
+                            "attempted_count": len(warmups) + sum(f["phase"] == "warmup" for f in incomplete),
+                            "invalid_count": sum(s.get("phase") == "warmup" for s in invalid),
+                            "samples_ms": warmup_values, "max_ms": max(warmup_values, default=None),
+                            "environments": sample_environments(warmups),
+                            "sets": [{"set": number, "samples_ms": [s["wall_ms"] for s in warmups if s["set"] == number]}
+                                     for number in range(1, settings["sets"] + 1)],
+                            "failures": warmup_failures},
+                "all_latency": {"attempted_count": len(latency_rows) + len(incomplete),
+                                "count": len(latency_rows), "max_ms": max(values + warmup_values, default=None),
+                                "failures": latency_failures},
+                "failures": failures,
                 "diagnostic_count": len(diagnostics),
                 "latency_outcomes": [{"set": s["set"], "sample": s["sample"],
                                       "wall_ms": s["wall_ms"], "value": s["outcome"]}
@@ -324,10 +374,10 @@ def analyze(raw_runs, descriptors, settings):
         if values:
             case.update(p50_ms=statistics_median(values), p95_ms=percentile(values, .95),
                         p99_ms=percentile(values, .99), max_ms=max(values),
-                        over_budget=sum(value > descriptor["budget_ms"] for value in values),
-                        over_hard_limit=sum(value > 500 for value in values))
+                        over_budget=sum(value > descriptor["budget_ms"] for value in values))
         else:
-            case.update(p50_ms=None, p95_ms=None, p99_ms=None, max_ms=None, over_budget=0, over_hard_limit=0)
+            case.update(p50_ms=None, p95_ms=None, p99_ms=None, max_ms=None, over_budget=0)
+        case["over_hard_limit"] = sum(value > 500 for value in values + warmup_values)
         case["findings"] = findings(case)
         cases[identifier] = case
     return cases, overall_valid
@@ -350,6 +400,11 @@ def compare(before, after, allowance=2.0):
         expected = settings.get("sets", 0) * settings.get("samples", 0)
         if expected <= 0 or not report.get("cases"):
             return {"status": "incomparable", "reason": "Empty or unspecified sample coverage"}
+        if (not isinstance(settings.get("warmups"), int) or isinstance(settings["warmups"], bool)
+                or settings["warmups"] < 0 or settings.get("warmup_protocol") != WARMUP_PROTOCOL):
+            return {"status": "incomparable", "reason": "Missing or unsupported warmup protocol"}
+        if report.get("acceptance_eligible") is not acceptance_coverage(settings):
+            return {"status": "incomparable", "reason": "Acceptance eligibility does not match sample coverage"}
         for name, case in report["cases"].items():
             values = case.get("samples_ms", [])
             groups = case.get("sets", [])
@@ -361,12 +416,32 @@ def compare(before, after, allowance=2.0):
                     or sorted(values) != sorted(value for group in groups for value in group["samples_ms"])
                     or case.get("p95_ms") != percentile(values, .95) or case.get("max_ms") != max(values)):
                 return {"status": "incomparable", "reason": f"{name}: incomplete or inconsistent latency evidence"}
+            warmups = case.get("warmups", {})
+            warmup_values = warmups.get("samples_ms", [])
+            warmup_groups = warmups.get("sets", [])
+            warmup_expected = settings["sets"] * settings["warmups"]
+            if (warmups.get("count") != warmup_expected or warmups.get("expected_count") != warmup_expected
+                    or warmups.get("attempted_count") != warmup_expected or warmups.get("invalid_count") != 0
+                    or warmups.get("failures") != [] or len(warmup_values) != warmup_expected
+                    or not all(finite_nonnegative(value) for value in warmup_values)
+                    or len(warmup_groups) != settings["sets"]
+                    or {group.get("set") for group in warmup_groups} != set(range(1, settings["sets"] + 1))
+                    or any(len(group.get("samples_ms", [])) != settings["warmups"] for group in warmup_groups)
+                    or sorted(warmup_values) != sorted(value for group in warmup_groups for value in group["samples_ms"])
+                    or warmups.get("max_ms") != max(warmup_values, default=None)):
+                return {"status": "incomparable", "reason": f"{name}: incomplete or inconsistent warmup evidence"}
+            combined = case.get("all_latency", {})
+            if (combined.get("count") != expected + warmup_expected
+                    or combined.get("attempted_count") != expected + warmup_expected
+                    or combined.get("max_ms") != max(values + warmup_values)
+                    or combined.get("failures") != []):
+                return {"status": "incomparable", "reason": f"{name}: inconsistent complete latency evidence"}
     if before["settings"]["mode"] != after["settings"]["mode"] or before.get("machine") != after.get("machine"):
         return {"status": "incomparable", "reason": "Execution mode or machine differs"}
     if before.get("tool_identity") != after.get("tool_identity") or any(
             before["settings"].get(field) != after["settings"].get(field)
-            for field in ("sets", "samples", "boundary", "focus_policy")):
-        return {"status": "incomparable", "reason": "Measurement driver, boundary or sample grouping differs"}
+            for field in ("sets", "samples", "warmups", "warmup_protocol", "boundary", "focus_policy")):
+        return {"status": "incomparable", "reason": "Measurement driver, boundary, warmups or sample grouping differs"}
     if before["cases"].keys() != after["cases"].keys():
         return {"status": "incomparable", "reason": "Scenario coverage differs"}
     rows = []
@@ -375,6 +450,8 @@ def compare(before, after, allowance=2.0):
         for field in ("version", "isolation", "budget_ms", "source_sha256", "environments", "expected_count"):
             if previous.get(field) != current.get(field):
                 return {"status": "incomparable", "reason": f"{name}: {field} differs"}
+        if previous["warmups"].get("environments") != current["warmups"].get("environments"):
+            return {"status": "incomparable", "reason": f"{name}: warmup environments differ"}
         for metric in ("p95_ms", "max_ms"):
             delta = current[metric] - previous[metric]
             rows.append({"scenario": name, "metric": metric, "before_ms": previous[metric],
@@ -391,6 +468,20 @@ def summarize(report, selected=None, details=False):
     for name, case in report.get("cases", {}).items():
         if selected and not fnmatch.fnmatchcase(name, selected):
             continue
+        warmups = case.get("warmups", {})
+        combined = case.get("all_latency", {})
+        maximum = warmups.get("max_ms")
+        total_maximum = combined.get("max_ms")
+        print(f"{name}: warmups={warmups.get('count', 0)}/{warmups.get('expected_count', 0)} "
+              f"max={'unavailable' if maximum is None else f'{maximum:.2f}'} ms "
+              f"failures={len(warmups.get('failures', []))}; "
+              f"all-latency={combined.get('count', 0)}/{combined.get('attempted_count', 0)} completed/attempted "
+              f"max={'unavailable' if total_maximum is None else f'{total_maximum:.2f}'} ms "
+              f"failures={len(combined.get('failures', []))} hard-limit={case.get('over_hard_limit', 0)}")
+        for failure in case.get("failures", []):
+            phase = failure.get("diagnostic_kind") if failure["phase"] == "diagnostic" else failure["phase"]
+            print(f"  {phase} set {failure['set']} sample {failure['sample']} "
+                  f"{failure['stage']}: {failure['reason']}")
         if not case.get("samples_ms"):
             print(f"{name}: no valid completion ({case.get('count', 0)}/{case.get('expected_count')})")
             continue
@@ -521,6 +612,8 @@ def main():
                      help="Activate Emacs once and require foreground for latency samples; diagnostics permit background.")
     run.add_argument("--samples", type=int, default=10)
     run.add_argument("--sets", type=int, default=3)
+    run.add_argument("--warmups", type=int, default=5,
+                     help="Recorded warmups before each scenario/set's formal latency samples (default: 5).")
     run.add_argument("--diagnose", action="store_true")
     run.add_argument("--diagnostic-samples", type=int, default=3)
     run.add_argument("--timeout", type=float, default=15)
@@ -561,7 +654,8 @@ def main():
         return 0
     if not args.scenario:
         parser.error("Select --scenario PATTERN explicitly; use list to inspect coverage")
-    if not (1 <= args.samples <= 1000 and 1 <= args.sets <= 20 and 1 <= args.diagnostic_samples <= 100):
+    if not (1 <= args.samples <= 1000 and 1 <= args.sets <= 20 and 0 <= args.warmups <= 1000
+            and 1 <= args.diagnostic_samples <= 100):
         parser.error("Sample/set counts are outside supported bounds")
     if not (0 < args.timeout < math.inf and 0 < args.run_timeout < math.inf):
         parser.error("Timeouts must be finite and positive")
@@ -584,6 +678,7 @@ def main():
     for case in descriptors:
         case["source_sha256"] = hashlib.sha256(Path(case["source"]).read_bytes()).hexdigest()
     settings = {"mode": args.mode, "samples": args.samples, "sets": args.sets,
+                "warmups": args.warmups, "warmup_protocol": WARMUP_PROTOCOL,
                 "focus_policy": "foreground" if args.foreground else args.focus_policy,
                 "diagnose": args.diagnose, "diagnostic_samples": args.diagnostic_samples,
                 "timeout": args.timeout, "boundary": "invoke-settlement-redisplay-v1"}
@@ -594,7 +689,7 @@ def main():
               "tool_identity": {"runner": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
                                 "driver": hashlib.sha256(DRIVER.read_bytes()).hexdigest()},
               "host_context": {"cpu_count": os.cpu_count(), "load_before": list(os.getloadavg()) if hasattr(os, 'getloadavg') else None},
-              "acceptance_eligible": args.sets >= 3 and args.samples * args.sets >= 30,
+              "acceptance_eligible": acceptance_coverage(settings),
               "not_certified": ["hardware input latency", "OS compositor presentation", "visual appearance review"]}
     write_json(output / "result.json", report)
     print(f"Evidence: {output}", flush=True)
@@ -614,9 +709,12 @@ def main():
                  for group_index, group in enumerate(groups, 1)]
         for number, group_index, group in units:
             label = f"{kind}-{number}" + (f"-{group_index}" if len(groups) > 1 else "")
-            jobs = [{"id": case["id"], "set": number, "sample": sample,
+            phases = ([("diagnostic", args.diagnostic_samples)] if diagnostic
+                      else [("warmup", args.warmups), ("latency", args.samples)])
+            jobs = [{"id": case["id"], "set": number, "sample": sample, "phase": phase,
+                     "iteration": sample + (args.warmups if phase == "latency" else 0),
                      "diagnostic": diagnostic, "diagnostic_kind": kind}
-                    for case in group for sample in range(args.diagnostic_samples if diagnostic else args.samples)]
+                    for case in group for phase, count in phases for sample in range(count)]
             configuration = output / (label + "-configuration.json")
             write_json(configuration, {"output": str(output / (label + ".json")), "mode": args.mode,
                                        "run_id": uuid.uuid4().hex,

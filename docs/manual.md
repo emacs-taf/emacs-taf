@@ -33,12 +33,23 @@ loaded packages edited or rebuilt after Emacs started. Restart the same native
 Emacs and run `M-x server-start` to establish a fresh code generation. This is a
 conservative freshness check; the tool does not hot-reload package implementations.
 
-Defaults are three sets with ten latency samples per scenario. Batch sets use
+Defaults are three sets with five recorded warmups followed by ten formal latency
+samples per scenario and set. `--warmups N` changes the warmup count; zero is useful
+for a cold screen. Warmups use the same preparation, timing, settlement, foreground
+policy and correctness checks as formal samples. Their timings, results and failures
+remain in the evidence, but do not enter formal latency percentiles or budget checks.
+The separate 500 ms hard limit applies to both warmups and formal interactions.
+No warmups are inserted into the separate diagnostic passes. Batch sets use
 fresh Emacs processes per scenario and set, isolating unrelated workloads' caches
 and retained state; GUI sets use fresh fixtures in the same native process.
 Scenarios marked `series` retain their fixture within one set and declare that
-steady-state condition in the catalog. Setup is outside the timed operation.
+steady-state condition in the catalog; their warmups and formal samples share that
+fixture. Fresh-isolation scenarios keep recreating their fixture for every operation.
+Setup is outside the timed operation.
 For a quick screen, use `--sets 1 --samples 3`; it cannot certify repeatability.
+The sample-coverage gate requires at least three sets, thirty formal samples per
+set and five warmups per set (`--sets 3 --samples 30 --warmups 5`). A smaller run
+remains a screen even when all its measured operations meet the latency budget.
 
 Record a baseline by keeping the resulting `result.json`. Compare a change with:
 
@@ -50,9 +61,10 @@ python3 scripts/performance.py summarize /path/to/result.json --scenario gallery
 
 Every sample must pass the scenario's visible/semantic verification and context
 checks. All slow samples, including GC, remain in the report. Each scenario has
-its own maximum-latency budget and there is a separate 500 ms hard limit. A
+its own formal maximum-latency budget and there is a separate 500 ms hard limit
+covering warmups too. A
 baseline comparison checks p95 and maximum independently, with a 2 ms regression
-allowance. Different workloads, drivers, sample coverage, focus/display conditions or machines
+allowance. Different workloads, drivers, warmup protocols, sample coverage, focus/display conditions or machines
 are incomparable. Changed source revisions are expected and recorded.
 
 Gallery fixtures synchronize Ebox's layout viewport after the buffer is displayed,
@@ -123,7 +135,15 @@ Evidence defaults to `~/.cache/emacs-taf/performance/` (or `$XDG_CACHE_HOME`).
 `--output-dir DIR` selects an empty directory. Existing evidence is never
 overwritten. `result.json` is the compact comparison/report entry; per-set JSON,
 configuration files, profiler summaries and logs preserve the complete run.
-Progress records the scenario, sample and stage before setup or invocation.
+Every raw row records `phase` (`warmup`, `latency` or `diagnostic`), its per-phase
+sample number and continuous operation `iteration`. The summary's `warmups` keeps
+counts, maximum, all timings and failures; `all_latency` reports the combined
+warmup/formal count, maximum and failures, including first use. `attempted_count`
+also includes an interrupted operation without a completed timing. An unavailable
+maximum stays null; the failure and active stage remain visible. Slow warmups never
+disappear behind a passing formal distribution, and a failed warmup invalidates the
+run. Progress records the scenario, set, phase, sample and stage before setup or
+invocation.
 
 `--timeout` bounds a setup/action/settlement step; `--run-timeout` bounds each
 set. A timed-out batch process owned by the tool is terminated. A GUI timeout
@@ -177,6 +197,8 @@ called after timing and profiling stop. `:required-providers` detects missing
 expected observations. `:environment` returns JSON-safe capability facts.
 Verification returns exactly `t` or a short failure string. Cleanup releases only
 the fixture's resources. The final GUI fixture stays available for inspection.
+The `:invoke` index starts at zero for each scenario/set and advances continuously
+through warmups and formal samples; diagnostic passes have their own index sequence.
 
 Keep scenario inputs, versions and verification stable across an A/B comparison.
 Register new application scenarios with their owning package and validate the
