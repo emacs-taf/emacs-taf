@@ -95,10 +95,10 @@ The 72-character title limit and validation field are project requirements.
 
 Every module uses `laycat` at `gitea.gklazycat.heiyu.space` and `aliyun` at
 `gitea.vhkd.top`. After a coherent group of validated commits, fetch and inspect
-both destinations, then push the current branch to its same-named branch on both.
-This is the user-authorized default; pushing only the upstream is incomplete.
-Do not force-push or implicitly publish other branches or tags. Report each
-remote's delivery status separately. Reserve `origin` for future GitHub use;
+`aliyun`, then push the current branch to its same-named branch there.
+Automatic delivery requires aliyun; laycat remains configured for manual
+maintenance and delivery. Do not force-push or implicitly publish other branches
+or tags. Report aliyun's delivery result. Reserve `origin` for future GitHub use;
 it is currently unconfigured. The root workspace has no remote configured.
 Hooks validate structure and message format; authors remain responsible for
 scope, accurate descriptions and validation.

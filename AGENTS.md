@@ -199,18 +199,19 @@ to every repository changed from this workspace.
   shared history or squash distinct changes without explicit authorization. Prefer a
   focused fix or revert. Use log, blame, diff and bisect when locating regressions;
   mark pre-existing untestable revisions as skipped rather than bad in a bisect.
-- Each module uses two active remotes: laycat at gitea.gklazycat.heiyu.space
+- Each module keeps two remotes: laycat at gitea.gklazycat.heiyu.space
   and aliyun at gitea.vhkd.top. The current branch tracks laycat. Reserve origin
   for a future GitHub remote; leave it unconfigured until requested. Preserve unrelated third-party source and licensing links.
-- The user authorizes automatic pushes to both services: after completing a
-  coherent group of validated commits, fetch and inspect each destination,
-  then push the current branch to its same-named branch on laycat and aliyun.
-  Do not stop after pushing only the configured upstream. No repeated approval
-  is needed. Keep local commits timely and push at validated checkpoints.
+- The user authorizes automatic delivery to aliyun: after completing a coherent
+  group of validated commits, fetch and inspect aliyun, then push the current
+  branch to its same-named branch there. No repeated approval is needed.
+  Leave laycat configured; the user handles its availability and delivery
+  manually. Do not retry it or block delivery on it. Keep local commits timely
+  and push to aliyun at validated checkpoints.
 - Do not infer a destination when a remote is missing, or publish other branches
   or tags implicitly. Resolve divergence without force or rewriting history.
-  If authentication, connectivity or configuration prevents either push, retain
-  local commits and report success or failure separately for each destination.
+  If authentication, connectivity or configuration prevents the aliyun push,
+  retain local commits and report that delivery failure.
   The root workspace currently has no remote; keep its commits local until a
   destination is provided. Never claim an unpushed commit is backed up remotely.
   Do not bypass shared hooks to finish a task.
