@@ -227,6 +227,8 @@ to every repository changed from this workspace.
 
 Every repository here is a colocated Jujutsu workspace (`jj git init --colocate`).
 Use jj for every write operation; use git read-only (inspection, remotes, CI).
+The same steps are available as `pi-skill jj-workflow status|commit|publish|undo|workspace-*`
+(prefer the command when publishing: it fetches, checks fast-forward and verifies the push).
 
 - Work on one change: `jj new -m "type(scope): summary"` (or edit first, then
   `jj describe`). jj snapshots the working copy on every command, so there is
