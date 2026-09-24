@@ -162,7 +162,8 @@ to every repository changed from this workspace.
   `setup-hooks`. `check` includes the structural gate. Serialize commands that clean
   and rebuild shared dependencies; parallel builds must not race over sibling outputs.
 - Run `make setup-hooks` after cloning. The pre-commit gate checks staged contents,
-  not merely the working tree. CI runs the same structural and API checker plus
+  not merely the working tree. jj does not run git hooks, so run the affected checks
+  yourself before publishing a jj change (see `Local version control (jj)`). CI runs the same structural and API checker plus
   `make api-check` in batch Emacs, fetching
   missing provider checkouts. Local checks use sibling sources; CI uses provider
   default branches. `workspace.json` records the tested combination of revisions.
@@ -221,3 +222,23 @@ to every repository changed from this workspace.
   The root workspace currently has no remote; keep its commits local until a
   destination is provided. Never claim an unpushed commit is backed up remotely.
   Do not bypass shared hooks to finish a task.
+
+## Local version control (jj)
+
+Every repository here is a colocated Jujutsu workspace (`jj git init --colocate`).
+Use jj for every write operation; use git read-only (inspection, remotes, CI).
+
+- Work on one change: `jj new -m "type(scope): summary"` (or edit first, then
+  `jj describe`). jj snapshots the working copy on every command, so there is
+  nothing to stage. Close the change with `jj new` before starting unrelated work.
+- Publish before pushing: `jj bookmark set <branch> -r @-`, then push with the
+  existing remote rules (`jj git push --remote <remote>`, or
+  `git push <remote> <branch>:<branch>`). Git's HEAD is detached while jj owns the
+  working copy; that is expected, not a repository problem.
+- jj does not run git hooks. Keep the Conventional Commit contract by hand, and run
+  the affected checks plus the workspace check before publishing a change.
+- Recover with `jj undo`, inspect history with `jj log`, and use `jj evolog -p` to
+  see a file's revisions. Use `jj workspace add <dir>` for parallel experiments,
+  never `git worktree`.
+- History that exists on a remote is immutable (`immutable_heads()` includes
+  `remote_bookmarks()`), so rewriting published commits is refused by design.

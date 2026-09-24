@@ -52,8 +52,24 @@ def main():
             subprocess.run(['git', '-C', str(repo), 'config', '--local', 'core.hooksPath', '.githooks'], check=True)
             print(f'{name}: structure and commit-message hooks enabled')
         elif args.action == 'status':
-            actual = subprocess.check_output(['git', '-C', str(repo), 'rev-parse', 'HEAD'], text=True).strip()
-            print(f'{name}: {actual}' + (' (matches recorded revision)' if actual==entry['revision'] else ' (different from recorded revision)'))
+            # jj 协作：HEAD 会指向 jj 的工作副本提交（detached），
+            # "在哪个版本上"看的是分支引用；旧行为在分支上提交时与 HEAD 等价。
+            branch = entry.get('branch', 'main')
+            try:
+                actual = subprocess.check_output(['git', '-C', str(repo), 'rev-parse', f'refs/heads/{branch}'], text=True).strip()
+            except subprocess.CalledProcessError:
+                actual = subprocess.check_output(['git', '-C', str(repo), 'rev-parse', 'HEAD'], text=True).strip()
+            line = f'{name}: {actual}' + (' (matches recorded revision)' if actual==entry['revision'] else ' (different from recorded revision)')
+            if (repo / '.jj').exists() and shutil.which('jj'):
+                try:
+                    change = subprocess.check_output(
+                        ['jj', '-R', str(repo), 'log', '--no-graph', '-r', '@',
+                         '-T', 'change_id.short() ++ " " ++ commit_id.short()'],
+                        text=True, stderr=subprocess.DEVNULL).strip()
+                    line += f' [jj @ {change}]'
+                except subprocess.CalledProcessError:
+                    pass
+            print(line)
         else:
             for rel in SHARED:
                 if not (repo / rel).exists() or (repo / rel).read_bytes() != (ROOT / rel).read_bytes():
