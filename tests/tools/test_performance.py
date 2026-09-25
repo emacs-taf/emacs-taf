@@ -1,8 +1,10 @@
 """Black-box contracts for the shared performance command and scenario driver."""
 import copy
+import importlib.util
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -519,6 +521,31 @@ class PerformanceTool(unittest.TestCase):
         result = self.compare(before, after)
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
         self.assertEqual(json.loads(result.stdout)["status"], "regressed")
+
+
+@unittest.skipUnless(shutil.which("jj"), "jj is not installed")
+class SourceProvenance(unittest.TestCase):
+    def test_secondary_jj_workspace_records_revision_and_changes(self):
+        spec = importlib.util.spec_from_file_location("performance", COMMAND)
+        tool = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(tool)
+        with tempfile.TemporaryDirectory() as directory:
+            main, second = Path(directory) / "main", Path(directory) / "second"
+            subprocess.run(["jj", "git", "init", str(main)], check=True, capture_output=True)
+            (main / "package.el").write_text("(provide 'package)\n")
+            subprocess.run(["jj", "commit", "-m", "base"], cwd=main, check=True, capture_output=True)
+            subprocess.run(["jj", "workspace", "add", str(second)], cwd=main,
+                           check=True, capture_output=True)
+            head = subprocess.check_output(["jj", "log", "--no-graph", "-r", "@-", "-T", "commit_id"],
+                                           cwd=second, text=True).strip()
+            clean = tool.source_snapshot([second])["second"]
+            self.assertEqual(head, clean["revision"])
+            self.assertEqual("", clean["status"])
+            (second / "package.el").write_text("(provide 'package) ; edited\n")
+            edited = tool.source_snapshot([second])["second"]
+            self.assertEqual(head, edited["revision"])
+            self.assertIn("package.el", edited["status"])
+            self.assertNotEqual(clean["change_digest"], edited["change_digest"])
 
 
 if __name__ == "__main__":

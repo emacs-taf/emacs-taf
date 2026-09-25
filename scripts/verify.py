@@ -22,6 +22,15 @@ def snapshot(root):
         repo = root / name
         def git(*args):
             return subprocess.check_output(['git', '-C', str(repo), *args], stderr=subprocess.DEVNULL)
+        if not (repo / '.git').exists() and (repo / '.jj').is_dir():
+            # An index-less jj workspace: @- is the colocated Git HEAD view.
+            def jj(*args):
+                return subprocess.check_output(['jj', '--no-pager', *args], cwd=repo,
+                                               stderr=subprocess.DEVNULL)
+            result[name] = {'revision': jj('log', '--no-graph', '-r', '@-', '-T', 'commit_id').decode().strip(),
+                            'status': jj('diff', '-r', '@', '--summary').decode(),
+                            'change_digest': hashlib.sha256(jj('diff', '-r', '@', '--git')).hexdigest()}
+            continue
         status = git('status', '--porcelain', '--untracked-files=all').decode()
         digest = hashlib.sha256(git('diff', '--binary', 'HEAD'))
         for relative in git('ls-files', '--others', '--exclude-standard', '-z').split(b'\0'):

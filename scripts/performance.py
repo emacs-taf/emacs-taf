@@ -71,8 +71,24 @@ def source_snapshot(packages):
                 "change_digest": digest.hexdigest(),
             }
         except (OSError, subprocess.CalledProcessError):
-            result[package.name] = {"path": str(package), "revision": None}
+            result[package.name] = jj_source_snapshot(package)
     return result
+
+
+def jj_source_snapshot(package):
+    """Describe an index-less jj workspace like its colocated Git HEAD view."""
+    def jj(*arguments):
+        return subprocess.check_output(["jj", "--no-pager", *arguments], cwd=package,
+                                       stderr=subprocess.DEVNULL)
+    try:
+        if not (package / ".jj").is_dir():
+            raise OSError("no jj workspace")
+        return {"path": str(package),
+                "revision": jj("log", "--no-graph", "-r", "@-", "-T", "commit_id").decode().strip(),
+                "status": jj("diff", "-r", "@", "--summary").decode(),
+                "change_digest": hashlib.sha256(jj("diff", "-r", "@", "--git")).hexdigest()}
+    except (OSError, subprocess.CalledProcessError):
+        return {"path": str(package), "revision": None}
 
 
 def form(function, configuration):
