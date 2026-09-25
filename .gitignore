@@ -12,6 +12,3 @@
 *.pyc
 __pycache__/
 .DS_Store
-
-# Local agent session state (see AGENTS.md, Session handoff).
-/HANDOFF.md

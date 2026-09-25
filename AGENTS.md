@@ -17,23 +17,6 @@ independent repositories listed in `workspace.json`.
   public contracts. Select documents by the task and the responsible packages;
   distinguish required targets from implemented behavior.
 
-## Session handoff and output budget
-
-Remote agents (ChatGPT through DevSpace) reuse one conversation for many hours.
-Keep that conversation cheap to render and replaceable; the working state lives on disk.
-
-- `HANDOFF.md` at this root is the resumable state, kept untracked. Read it before
-  acting when it exists; update it at each coherent checkpoint (current state,
-  next step, paths and commands, open risks) so any new session resumes in seconds.
-- Keep decision-relevant detail verbatim in the conversation: requirement and
-  acceptance criteria, exact error lines, exit codes, failing scenario names and
-  counts, interface signatures, `file:line` pointers.
-- Never paste bulk output into the conversation: redirect it to a file under
-  `/tmp/<task>/` and report an evidence card (command, exit code, pass/fail counts,
-  first failure, artifact path). Read large files in slices via `offset`/`limit`.
-- Delegate long searches, bulk edits and full test matrices to subagents; bring
-  back conclusions and artifact paths, and re-read the artifacts only on demand.
-
 ## Structure
 
 - Each package has one root entry named after its provided package feature.
