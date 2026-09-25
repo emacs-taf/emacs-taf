@@ -33,6 +33,15 @@ Run `make setup-hooks` after cloning to enable the staged structure and commit-m
 checkout. Python 3.10+ and Git are required for policy checks; package checks also
 require an appropriate Emacs executable (`make check EMACS=/path/to/emacs`).
 
+Local history is managed with [Jujutsu](https://docs.jj-vcs.dev/latest/) on top of Git.
+In this root and every clone, run `jj git init --colocate`, then protect pushed
+history:
+
+```sh
+jj config set --repo 'revset-aliases."immutable_heads()"' \
+  'builtin_immutable_heads() | remote_bookmarks()'
+```
+
 ## Development
 
 Read the [accepted ecosystem architecture and development contract](docs/architecture.zh-CN.md)
@@ -85,17 +94,21 @@ This is a project convention informed by [Diátaxis](https://diataxis.fr/),
 [README guidance](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-readmes)
 and [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), not a universal filename standard.
 
-## Git workflow
+## Version control workflow
 
 Commit each validated, complete modification promptly; keep related code, tests and
 contract documentation together. Use [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/)
 with a concrete title, explanatory body and `Validation:` results. Logical commit
 boundaries follow the [Git workflow guidance](https://git-scm.com/docs/gitworkflows).
 The 72-character title limit and validation field are project requirements.
+Make local writes with jj and use Git read-only. jj does not run Git hooks, so
+check each message with `python3 scripts/check-commit-message.py <file>` and the
+sealed change with `python3 scripts/check-repository.py --staged` before pushing.
 
 Every module uses `laycat` at `gitea.gklazycat.heiyu.space` and `aliyun` at
 `gitea.vhkd.top`. After a coherent group of validated commits, fetch and inspect
-`aliyun`, then push the current branch to its same-named branch there.
+`aliyun`, then push the branch recorded in `workspace.json` to its same-named
+branch there with `jj git push --remote aliyun -b <branch>`.
 Automatic delivery requires aliyun; laycat remains configured for manual
 maintenance and delivery. Do not force-push or implicitly publish other branches
 or tags. Report aliyun's delivery result. Reserve `origin` for future GitHub use;
@@ -105,7 +118,8 @@ scope, accurate descriptions and validation.
 
 ## Enforcement
 
-The pre-commit hook checks the exact Git index. The checked-in CI workflow runs the
+The pre-commit hook checks the exact Git index; jj commits bypass it, so run the
+same check before pushing. The checked-in CI workflow runs the
 same structure check on pushes and pull requests. Local hooks can be bypassed;
 remote administrators must enable Actions and make the structure job a required
 merge check. Remote permissions and branch protection are managed on each hosting service.

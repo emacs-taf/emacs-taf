@@ -31,6 +31,14 @@
 规范工具需要 Python 3.10+ 和 Git；各包的验证还需要合适版本的 Emacs。
 可通过 `make check EMACS=/path/to/emacs` 指定可执行文件。
 
+本地历史在 Git 之上用 [Jujutsu](https://docs.jj-vcs.dev/latest/) 管理。在根目录和每个克隆中运行
+`jj git init --colocate`，再保护已推送的历史：
+
+```sh
+jj config set --repo 'revset-aliases."immutable_heads()"' \
+  'builtin_immutable_heads() | remote_bookmarks()'
+```
+
 - `make structure-check`：检查目录、文档命名、引用、构建路径和共享工具是否漂移。
 - `make check`：先验证规范检查器，再按依赖顺序运行各仓库公共验收。
 - `make perf-list`：列出已注册的通用性能场景；
@@ -69,16 +77,19 @@ README 只负责入门和导航。完整用法及跨模块接口契约放入 `do
 [README 指引](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-readmes)
 和 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 的项目约定，并非通用文件名标准。
 
-## Git 工作流
+## 版本控制工作流
 
 每完成一个验证通过、能够独立说明和回退的修改点就及时提交；相关代码、测试与接口
 文档放在同一次提交。消息遵循 [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/)，
 使用具体标题、解释正文和 `Validation:` 验证结果。提交粒度参考
 [Git 官方工作流](https://git-scm.com/docs/gitworkflows)；标题最多 72 字符和验证字段是本项目附加要求。
+本地写操作使用 jj，Git 只读。jj 不运行 Git 钩子，推送前用
+`python3 scripts/check-commit-message.py <文件>` 检查每条提交信息，并用
+`python3 scripts/check-repository.py --staged` 检查已封口的改动。
 
 每个模块统一使用两个远端：`laycat` 指向 `gitea.gklazycat.heiyu.space`，
 `aliyun` 指向 `gitea.vhkd.top`。每完成一组验证通过的提交，先 fetch 并检查 aliyun，
-再将当前分支推送到 aliyun 的同名分支。自动交付以 aliyun 成功为准；laycat 保留配置，
+再用 `jj git push --remote aliyun -b <分支>` 将 `workspace.json` 记录的分支推送到 aliyun 的同名分支。自动交付以 aliyun 成功为准；laycat 保留配置，
 由用户手动维护和交付。这是用户已授权的默认规则，无需重复确认。
 不强制覆盖历史，不隐式推送其他分支或标签。
 `origin` 预留给未来的 GitHub，目前不配置。克隆时使用 `git clone -o laycat`，
@@ -87,7 +98,8 @@ README 只负责入门和导航。完整用法及跨模块接口契约放入 `do
 
 ## 持续约束
 
-提交钩子检查实际暂存内容，CI 配置在 push 和 pull request 时运行同一个检查器。
+提交钩子检查实际暂存内容；jj 提交不会触发钩子，推送前需手动运行同一检查。
+CI 配置在 push 和 pull request 时运行同一个检查器。
 本地钩子可以被绕过；远端管理员需要启用 Actions，并将结构检查设为合并必需条件。
 远端权限和分支保护在各托管服务上管理。自动检查负责机械一致性，公共接口的正确性
 仍由行为测试和代码审查保证。

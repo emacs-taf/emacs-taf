@@ -161,12 +161,12 @@ to every repository changed from this workspace.
 - Each package exposes `compile`, `test`, `check`, `clean`, `structure-check`, and
   `setup-hooks`. `check` includes the structural gate. Serialize commands that clean
   and rebuild shared dependencies; parallel builds must not race over sibling outputs.
-- Run `make setup-hooks` after cloning. The pre-commit gate checks staged contents,
-  not merely the working tree. jj does not run git hooks, so run the affected checks
-  yourself before publishing a jj change (see `Local version control (jj)`). CI runs the same structural and API checker plus
-  `make api-check` in batch Emacs, fetching
-  missing provider checkouts. Local checks use sibling sources; CI uses provider
-  default branches. `workspace.json` records the tested combination of revisions.
+- Run `make setup-hooks` after cloning so Git commits run the structure and message
+  gates on the exact index. jj does not run Git hooks; run the same commands before
+  publishing (see `Checks before publishing`). CI runs the same structural and API
+  checker plus `make api-check` in batch Emacs, fetching missing provider checkouts.
+  Local checks use sibling sources; CI uses provider default branches.
+  `workspace.json` records the tested combination of revisions.
   The boundary gate covers runtime, runnable examples and Lisp tests/helpers.
   Tests may not reference internal APIs of either their own package or a provider.
   Static checks cover direct references; code review must also reject dynamically
@@ -178,18 +178,39 @@ to every repository changed from this workspace.
   them with `python3 scripts/workspace.py sync`. Changes to mechanically enforced
   rules update the checker and its tool regressions together.
 
-## Git history and delivery
+## Version control and delivery
+
+This root and every repository in `workspace.json` are colocated Jujutsu
+repositories. Use jj for every local write: changes, descriptions, bookmarks,
+rebases and bisection. Use git read-only for inspection and CI. Git's HEAD stays
+detached at `@-` while jj owns the working copy; that is expected.
+`pi-skill jj-workflow status|commit|publish|undo|workspace-*` wraps these steps
+where installed. Its `publish` fetches, checks fast-forward and re-reads the
+remote, but does not run the checks below.
+
+### Changes
 
 - Commit promptly after a coherent change has been validated, before starting an
   unrelated change and before ending a completed task. A commit is one explainable,
   independently reviewable and revertible change, not one function or a fixed count
   of files/lines. Keep its code, regression coverage and documentation together.
   Split unrelated fixes, formatting, moves and features; keep necessary path/caller
-  updates together so each commit remains usable for `git bisect`.
-- Inspect `git status`, the diff and staged diff before committing. Stage only the
-  current change; never include another person's unfinished work or generated files.
-  Run affected checks and `make check` before committing a completed package change.
-  Report failures honestly; do not create a passing-looking checkpoint by hiding them.
+  updates together so each commit remains usable for bisection.
+- A working copy has one writer. jj snapshots every file into `@` on each command,
+  so run `jj st` before editing: a non-empty `@` you did not create holds another
+  person's unfinished work. Do not describe, squash, abandon or restore it; seal
+  only your paths with `jj commit <paths> -m "…"`, and ask before continuing when
+  both of you edit the same file. Parallel agents and experiments use their own
+  `jj workspace add <dir>`, never `git worktree`. Never include generated files.
+- Start a change with `jj new -m "type(scope): summary"`, or edit first and run
+  `jj describe`. Inspect `jj st` and `jj diff`, then seal it with `jj commit -m "…"`
+  (describe plus `jj new`): the finished change becomes `@-` and further work starts
+  in an empty `@`. Run affected checks and `make check` before sealing a completed
+  package change. Report failures honestly; do not create a passing-looking
+  checkpoint by hiding them.
+- Unpublished commits (`mutable()`) may be reworded, squashed into their own change
+  or rebased. Never rewrite published commits, force-push or squash distinct changes
+  without explicit authorization. Prefer a focused fix or `jj revert`.
 - Use Conventional Commits: `type(scope): concrete imperative English summary`.
   Scope is optional; types are feat, fix, docs, refactor, perf, test, build, ci,
   chore and revert. The project limits titles to 72 characters. Avoid generic
@@ -197,50 +218,77 @@ to every repository changed from this workspace.
   behavior or reason; include `Validation:` with actual commands/results (or why a
   check was not run). Breaking changes require both `!` and a `BREAKING CHANGE:`
   footer explaining impact and migration. Edit generated merge/revert messages to
-  follow this contract. The commit-msg hook checks format, not factual accuracy.
-- Commit provider changes before consumers in cross-repository work. Mention relevant
-  provider commit hashes in consumer messages when an interface dependency changes.
-  At an integrated checkpoint, update workspace.json to the verified child revisions
-  and record the checks; never describe uncommitted trees as a reproducible checkpoint.
-- Preserve useful checkpoints. Do not amend published commits, force-push, rewrite
-  shared history or squash distinct changes without explicit authorization. Prefer a
-  focused fix or revert. Use log, blame, diff and bisect when locating regressions;
-  mark pre-existing untestable revisions as skipped rather than bad in a bisect.
-- Each module keeps two remotes: laycat at gitea.gklazycat.heiyu.space
-  and aliyun at gitea.vhkd.top. The current branch tracks laycat. Reserve origin
-  for a future GitHub remote; leave it unconfigured until requested. Preserve unrelated third-party source and licensing links.
+  follow this contract. The message checker verifies format, not factual accuracy.
+
+### Checks before publishing
+
+jj runs no Git hooks, so run their commands from the repository root. Check the
+message of every commit in the publish range (`<range>` is `main@aliyun..@-` in a
+child and `main..@-` in the root), then the sealed tree, which the colocated Git
+index mirrors as `@-`. The final query must print nothing. Do not skip these
+checks to finish a task.
+
+```sh
+jj log -r <commit> --no-graph -T description > /tmp/msg
+python3 scripts/check-commit-message.py /tmp/msg
+python3 scripts/check-repository.py --staged
+jj log -r '(<range>) & (conflicts() | divergent() | description(exact:""))'
+```
+
+### Publishing
+
+- Each module keeps two remotes: laycat at gitea.gklazycat.heiyu.space and aliyun
+  at gitea.vhkd.top. Reserve origin for a future GitHub remote; leave it
+  unconfigured until requested. Preserve unrelated third-party source and licensing
+  links.
+- The published bookmark is the `branch` recorded in `workspace.json` (`main`).
+  jj does not derive the push remote from tracking, and no `git.fetch` or
+  `git.push` default is configured, so always name the remote and the bookmark.
 - The user authorizes automatic delivery to aliyun: after completing a coherent
-  group of validated commits, fetch and inspect aliyun, then push the current
-  branch to its same-named branch there. No repeated approval is needed.
-  Leave laycat configured; the user handles its availability and delivery
-  manually. Do not retry it or block delivery on it. Keep local commits timely
-  and push to aliyun at validated checkpoints.
-- Do not infer a destination when a remote is missing, or publish other branches
-  or tags implicitly. Resolve divergence without force or rewriting history.
-  If authentication, connectivity or configuration prevents the aliyun push,
-  retain local commits and report that delivery failure.
-  The root workspace currently has no remote; keep its commits local until a
-  destination is provided. Never claim an unpushed commit is backed up remotely.
-  Do not bypass shared hooks to finish a task.
+  group of validated commits, publish `@-` to the same-named branch there. No
+  repeated approval is needed. Leave laycat configured; the user handles its
+  availability and delivery manually. Do not retry it or block delivery on it.
+  Keep local commits timely and push to aliyun at validated checkpoints.
 
-## Local version control (jj)
+  ```sh
+  jj git fetch --remote aliyun
+  jj log -r '@-..main@aliyun'      # must be empty: publishing fast-forwards
+  jj log -r 'main@aliyun..@-'      # the commits being published
+  jj bookmark set main -r @-
+  jj git push --remote aliyun -b main
+  ```
 
-Every repository here is a colocated Jujutsu workspace (`jj git init --colocate`).
-Use jj for every write operation; use git read-only (inspection, remotes, CI).
-The same steps are available as `pi-skill jj-workflow status|commit|publish|undo|workspace-*`
-(prefer the command when publishing: it fetches, checks fast-forward and verifies the push).
+- When `@-..main@aliyun` is not empty, rebase the unpublished commits with
+  `jj rebase -b @- -o main@aliyun` and repeat the checks; if they are already
+  immutable (for example on laycat), merge with `jj new @- main@aliyun -m "…"`.
+  Never force-push.
+- Do not infer a destination when a remote is missing, or publish other bookmarks
+  or tags implicitly. If authentication, connectivity or configuration prevents the
+  aliyun push, retain local commits and report that delivery failure. Never claim
+  an unpushed commit is backed up remotely.
+- The root workspace has no remote; keep its commits local until a destination is
+  provided, but still move its `main` bookmark with `jj bookmark set main -r @-`
+  after each completed commit.
 
-- Work on one change: `jj new -m "type(scope): summary"` (or edit first, then
-  `jj describe`). jj snapshots the working copy on every command, so there is
-  nothing to stage. Close the change with `jj new` before starting unrelated work.
-- Publish before pushing: `jj bookmark set <branch> -r @-`, then push with the
-  existing remote rules (`jj git push --remote <remote>`, or
-  `git push <remote> <branch>:<branch>`). Git's HEAD is detached while jj owns the
-  working copy; that is expected, not a repository problem.
-- jj does not run git hooks. Keep the Conventional Commit contract by hand, and run
-  the affected checks plus the workspace check before publishing a change.
-- Recover with `jj undo`, inspect history with `jj log`, and use `jj evolog -p` to
-  see a file's revisions. Use `jj workspace add <dir>` for parallel experiments,
-  never `git worktree`.
-- History that exists on a remote is immutable (`immutable_heads()` includes
-  `remote_bookmarks()`), so rewriting published commits is refused by design.
+### Cross-repository revisions
+
+- Commit provider changes before consumers. jj rewrites give a commit a new ID
+  while its change ID stays, so publish provider commits before quoting their IDs
+  in consumer messages when an interface dependency changes.
+- At an integrated checkpoint, record each child's published `main` commit
+  (`jj log -r main --no-graph -T commit_id`) in workspace.json together with the
+  checks. `python3 scripts/workspace.py status` compares that bookmark, not `@`.
+  Never describe uncommitted trees or an unsealed `@` as a reproducible checkpoint.
+
+### History and recovery
+
+- Published history is immutable because the `immutable_heads()` alias includes
+  `remote_bookmarks()` (see the README setup); jj refuses to rewrite it by design.
+  Confirm it with `jj config get 'revset-aliases."immutable_heads()"'`.
+- Locate regressions with `jj log -p <path>` (file history), `jj file annotate
+  <path>` (blame), `jj diff` and `jj bisect run --range <good>..<bad> -- <command>`.
+  Bisection edits the working copy, so run it in a separate `jj workspace add`;
+  exit status 125 skips a pre-existing untestable revision instead of marking it bad.
+- Undo the last operation with `jj undo`, or restore an earlier state from
+  `jj op log` with `jj op restore <operation>`. `jj evolog -p -r <rev>` shows how a
+  single change was rewritten, not a file's history.
