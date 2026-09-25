@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path, PurePosixPath
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -18,22 +19,36 @@ DOC_NAMES = {'README.md', 'README.zh-CN.md', 'CHANGELOG.md', 'CHANGELOG.zh-CN.md
              'docs/architecture.md', 'docs/architecture.zh-CN.md'}
 DIRS = {'lisp', 'tests', 'examples', 'benchmarks', 'scripts', 'docs', 'native',
         'dictionaries', 'design', '.github', '.gitea', '.githooks'}
-SKIP = {'.git', '__pycache__', 'target', '.omx', '.worktrees', '.claude'}
+SKIP = {'.git', '.jj', '__pycache__', 'target', '.omx', '.worktrees', '.claude'}
 SHARED = ('scripts/check-api.py', 'scripts/check-api.el', 'scripts/api-workspace.json', '.editorconfig', 'scripts/check-repository.py', 'scripts/run-acceptance.py', '.githooks/pre-commit', '.githooks/commit-msg', 'scripts/check-commit-message.py',
           '.github/workflows/structure.yml')
 
 
-def inventory(root):
-    """Include new nonignored files, and exclude deleted or generated files."""
+def git_checkout_p(root):
+    """Whether ROOT is the top level of its own Git checkout."""
     try:
         top = subprocess.check_output(['git', '-C', str(root), 'rev-parse', '--show-toplevel'],
                                       stderr=subprocess.DEVNULL, text=True).strip()
-        if Path(top).resolve() == root.resolve():
-            raw = subprocess.check_output(['git', '-C', str(root), 'ls-files', '-z',
-                                           '--cached', '--others', '--exclude-standard'])
-            return sorted({s for s in raw.decode().split('\0') if s and (root / s).is_file()})
-    except subprocess.CalledProcessError:
-        pass
+        return Path(top).resolve() == root.resolve()
+    except (subprocess.CalledProcessError, OSError):
+        return False
+
+
+def inventory(root):
+    """Include new nonignored files, and exclude deleted or generated files."""
+    if git_checkout_p(root):
+        raw = subprocess.check_output(['git', '-C', str(root), 'ls-files', '-z',
+                                       '--cached', '--others', '--exclude-standard'])
+        return sorted({s for s in raw.decode().split('\0') if s and (root / s).is_file()})
+    if (root / '.jj').is_dir() and shutil.which('jj'):
+        # A secondary jj workspace has no Git index; jj snapshots new files and
+        # applies the same ignore rules.
+        try:
+            raw = subprocess.check_output(['jj', 'file', 'list', '--no-pager'], cwd=root,
+                                          stderr=subprocess.DEVNULL, text=True)
+            return sorted({s for s in raw.splitlines() if s and (root / s).is_file()})
+        except subprocess.CalledProcessError:
+            pass
     return sorted(str(p.relative_to(root)) for p in root.rglob('*')
                   if p.is_file() and not (set(p.relative_to(root).parts) & SKIP)
                   and p.suffix not in {'.elc', '.pyc', '.o', '.so', '.dylib', '.dll'})
@@ -167,6 +182,17 @@ def main():
     parser.add_argument('--root', type=Path, default=Path(__file__).resolve().parents[1])
     parser.add_argument('--staged', action='store_true')
     args = parser.parse_args()
+    if (args.staged and not git_checkout_p(args.root) and (args.root / '.jj').is_dir()
+            and shutil.which('jj')):
+        # A secondary jj workspace has no index.  Its sealed tree is the working
+        # copy exactly when the working-copy change is empty.
+        changed = subprocess.run(['jj', 'diff', '--no-pager', '--name-only', '-r', '@'],
+                                 cwd=args.root, capture_output=True, text=True)
+        if changed.returncode or changed.stdout.strip():
+            print(changed.stderr.strip() or 'jj workspace has unsealed changes; seal them before '
+                  '--staged checks', file=sys.stderr)
+            return 1
+        args.staged = False
     if args.staged:
         # Materialize the index, so unstaged repairs cannot hide a broken commit.
         with tempfile.TemporaryDirectory(prefix='repository-index-') as directory:

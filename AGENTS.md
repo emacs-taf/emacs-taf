@@ -225,8 +225,9 @@ remote, but does not run the checks below.
 jj runs no Git hooks, so run their commands from the repository root. Check the
 message of every commit in the publish range (`<range>` is `main@aliyun..@-` in a
 child and `main..@-` in the root), then the sealed tree, which the colocated Git
-index mirrors as `@-`. The final query must print nothing. Do not skip these
-checks to finish a task.
+index mirrors as `@-`. A secondary `jj workspace add` checkout has no Git index;
+there `--staged` accepts only an empty `@` and checks that sealed working copy.
+The final query must print nothing. Do not skip these checks to finish a task.
 
 ```sh
 jj log -r <commit> --no-graph -T description > /tmp/msg

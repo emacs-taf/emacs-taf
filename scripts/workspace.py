@@ -31,7 +31,8 @@ def main():
         failed = True
     for name, entry in repos.items():
         repo = ROOT / name
-        if not (repo / '.git').exists():
+        # A secondary `jj workspace add` checkout has only jj metadata.
+        if not ((repo / '.git').exists() or (repo / '.jj').exists()):
             print(f'{name}: missing independent checkout ({entry["url"]})', file=sys.stderr)
             failed = True
             continue
@@ -40,6 +41,8 @@ def main():
                 target = repo / rel
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(ROOT / rel, target)
+        elif args.action == 'setup-hooks' and not (repo / '.git').exists():
+            print(f'{name}: jj workspace without Git hooks; run the publishing checks')
         elif args.action == 'setup-hooks':
             # Never replace another hook configuration implicitly.
             old = subprocess.run(['git', '-C', str(repo), 'config', '--local', '--get',
@@ -55,10 +58,15 @@ def main():
             # jj 协作：HEAD 会指向 jj 的工作副本提交（detached），
             # "在哪个版本上"看的是分支引用；旧行为在分支上提交时与 HEAD 等价。
             branch = entry.get('branch', 'main')
-            try:
-                actual = subprocess.check_output(['git', '-C', str(repo), 'rev-parse', f'refs/heads/{branch}'], text=True).strip()
-            except subprocess.CalledProcessError:
-                actual = subprocess.check_output(['git', '-C', str(repo), 'rev-parse', 'HEAD'], text=True).strip()
+            if not (repo / '.git').exists():
+                actual = subprocess.check_output(
+                    ['jj', '-R', str(repo), 'log', '--no-graph', '-r', branch, '-T', 'commit_id'],
+                    text=True).strip()
+            else:
+                try:
+                    actual = subprocess.check_output(['git', '-C', str(repo), 'rev-parse', f'refs/heads/{branch}'], text=True).strip()
+                except subprocess.CalledProcessError:
+                    actual = subprocess.check_output(['git', '-C', str(repo), 'rev-parse', 'HEAD'], text=True).strip()
             line = f'{name}: {actual}' + (' (matches recorded revision)' if actual==entry['revision'] else ' (different from recorded revision)')
             if (repo / '.jj').exists() and shutil.which('jj'):
                 try:

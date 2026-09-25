@@ -221,6 +221,41 @@ class PolicyTests(unittest.TestCase):
         self.assertEqual(1,result.returncode)
         self.assertIn('broken local link',result.stderr)
 
+    def test_secondary_jj_workspace_metadata_is_not_project_content(self):
+        # A non-colocated `jj workspace add` checkout has no Git index.
+        self.write('.jj/repo', '../../main/.jj/repo')
+        self.write('.jj/working_copy/tree_state', 'state')
+        self.assertEqual('', self.errors())
+
+    @unittest.skipUnless(shutil.which('jj'), 'jj is not installed')
+    def test_secondary_jj_workspace_checks_new_files_and_honors_ignores(self):
+        with tempfile.TemporaryDirectory() as directory:
+            main = Path(directory) / 'main'
+            second = Path(directory) / 'second'
+            subprocess.run(['jj', 'git', 'init', str(main)], check=True, capture_output=True)
+            shutil.copytree(self.root, main, dirs_exist_ok=True)
+            (main / '.gitignore').write_text('/child/\n')
+            subprocess.run(['jj', 'commit', '-m', 'base'], cwd=main, check=True, capture_output=True)
+            subprocess.run(['jj', 'workspace', 'add', str(second)], cwd=main,
+                           check=True, capture_output=True)
+            (second / 'child').mkdir()
+            (second / 'child/AUDIT.md').write_text('# Independent ignored checkout\n')
+            self.assertEqual('', '\n'.join(POLICY.check(second)))
+            (second / 'AUDIT.md').write_text('# Extra\n')
+            errors = '\n'.join(POLICY.check(second))
+            self.assertIn('AUDIT.md: use README', errors)
+            self.assertNotIn('child/', errors)
+            # Without an index, --staged checks only a sealed working copy.
+            command = [sys.executable, str(second / 'scripts/check-repository.py'), '--staged']
+            unsealed = subprocess.run(command, capture_output=True, text=True)
+            self.assertEqual(1, unsealed.returncode)
+            self.assertIn('unsealed', unsealed.stderr)
+            subprocess.run(['jj', 'commit', '-m', 'audit'], cwd=second,
+                           check=True, capture_output=True)
+            sealed = subprocess.run(command, capture_output=True, text=True)
+            self.assertEqual(1, sealed.returncode)
+            self.assertIn('AUDIT.md: use README', sealed.stderr)
+
     def test_untracked_new_documents_are_checked(self):
         subprocess.run(['git','init','-q',str(self.root)],check=True)
         self.write('AUDIT.md','# Extra\n')
