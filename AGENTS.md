@@ -121,6 +121,11 @@ to every repository changed from this workspace.
   supported package APIs. Preserve upstream vendor sources.
   Development tools may test their supported command/input/output contracts.
   GUI appearance and performance use their separate acceptance targets.
+- Debug and test scripts that print ETAF/EBox buffer content must take the text
+  with `buffer-substring-no-properties`; when printing structures that may carry
+  text properties or cycles, bind `print-circle` (plus `print-length`/`print-level`
+  as needed). `%S` expands every text property, and cyclic property graphs
+  (keymaps and closures referencing each other) print forever and exhaust memory.
 - From this directory, use `make -C <package> structure-check` and affected tests
   while developing; run `make -C <package> check` before completing a package change.
   Workspace changes run `python3 scripts/workspace.py check`; integrated changes
