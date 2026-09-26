@@ -50,6 +50,7 @@
 (defvar taf-benchmark--fixture nil)
 (defvar taf-benchmark--fixture-key nil)
 (defvar taf-benchmark--window nil)
+(defvar taf-benchmark--previous-buffer nil)
 (defvar taf-benchmark--active nil)
 (defvar taf-benchmark--observations nil)
 (defvar taf-benchmark--unobserve nil)
@@ -318,11 +319,19 @@ cached evidence so lazy library loading is visible after an operation."
         (plist-get taf-benchmark--report :finished_at) (float-time)
         (plist-get taf-benchmark--report :loaded_files) (vconcat (taf-benchmark--files)))
   (setq taf-benchmark--jobs nil)
-  (when noninteractive
-    (condition-case cleanup-error (taf-benchmark--dispose)
-      ((error quit)
-       (setf (plist-get taf-benchmark--report :cleanup_error) (taf-benchmark--error cleanup-error)
-             (plist-get taf-benchmark--report :status) "error"))))
+  (if noninteractive
+      (condition-case cleanup-error (taf-benchmark--dispose)
+        ((error quit)
+         (setf (plist-get taf-benchmark--report :cleanup_error) (taf-benchmark--error cleanup-error)
+               (plist-get taf-benchmark--report :status) "error")))
+    ;; The final fixture buffer stays alive for inspection, but the benchmark
+    ;; window returns to the user's buffer instead of a fixed-size workload.
+    (when (and (window-live-p taf-benchmark--window)
+               (buffer-live-p taf-benchmark--previous-buffer)
+               taf-benchmark--fixture
+               (eq (window-buffer taf-benchmark--window)
+                   (plist-get taf-benchmark--fixture :buffer)))
+      (set-window-buffer taf-benchmark--window taf-benchmark--previous-buffer)))
   (taf-benchmark--save))
 
 (defun taf-benchmark--schedule (function &optional delay)
@@ -568,6 +577,7 @@ cached evidence so lazy library loading is visible after an operation."
   (unless (or noninteractive (display-graphic-p)) (error "An existing graphical Emacs is required"))
   (when (and (not noninteractive) (active-minibuffer-window)) (error "An active minibuffer prevents measurement"))
   (setq taf-benchmark--window (selected-window)
+        taf-benchmark--previous-buffer (window-buffer (selected-window))
         taf-benchmark--locations (make-hash-table :test #'equal)
         taf-benchmark--jobs (plist-get taf-benchmark--configuration :jobs)
         taf-benchmark--report

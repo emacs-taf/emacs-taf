@@ -216,7 +216,9 @@ redisplay returns. It does not measure physical hardware input or OS compositor
 presentation. Batch results do not certify GUI latency. Visual appearance still
 requires the maintained GUI workflow and inspection of a current window capture.
 
-The final GUI fixture normally remains owned by the runner until the next run.
+The final GUI fixture normally remains owned by the runner until the next run;
+when the job stops, the benchmark window shows the buffer it displayed before
+the run and the fixture buffer stays alive for inspection.
 To keep that page for manual interaction or an existing-page scenario, call
 `(taf-benchmark-detach-fixture)` through the same emacsclient after the job stops.
 It returns the live buffer, transfers cleanup ownership to the caller and leaves
