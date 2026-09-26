@@ -64,6 +64,10 @@ activates the current frame once and requires focus during latency samples;
 `--focus-policy foreground` requires focus without activating it. Diagnostic
 passes always allow background execution and retain their actual focus state.
 Window-scoped screenshots and recordings do not require foreground activation.
+On macOS, App Nap throttles a background Emacs several-fold, so background
+samples measure the throttle instead of the code. Start a dedicated measurement
+Emacs with `-NSAppSleepDisabled YES` (a per-process Cocoa default) and confirm
+that a pure Lisp loop runs as fast there as in batch Emacs.
 
 Finish compilation before GUI acceptance. Preflight records the process, package
 origins and loaded files. It rejects another checkout, an active profiler, and
