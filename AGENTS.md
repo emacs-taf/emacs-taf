@@ -126,6 +126,13 @@ to every repository changed from this workspace.
   text properties or cycles, bind `print-circle` (plus `print-length`/`print-level`
   as needed). `%S` expands every text property, and cyclic property graphs
   (keymaps and closures referencing each other) print forever and exhaust memory.
+- Look up Lisp with `python3 scripts/elisp.py def SYMBOL...` (complete forms)
+  and `refs SYMBOL` (callers by enclosing definition) instead of searching and
+  reading guessed line ranges; batch independent lookups and reads into one call.
+  Run batch Lisp through `python3 scripts/elisp.py run`, which loads the
+  workspace via `scripts/ecosystem.el` and bounds time, memory, output and
+  printing; do not hand-write `-L` chains or timeout wrappers. See
+  [the tool manual](docs/manual.md).
 - From this directory, use `make -C <package> structure-check` and affected tests
   while developing; run `make -C <package> check` before completing a package change.
   Workspace changes run `python3 scripts/workspace.py check`; integrated changes

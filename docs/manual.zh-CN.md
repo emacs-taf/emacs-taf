@@ -1,9 +1,40 @@
-# 工作区性能测评
+# 工作区开发工具
 
 [English](manual.md)
 
-工作区维护一套测量驱动。各包在 `benchmarks/performance-scenarios.el` 注册长期维护的
+工作区维护共用的开发命令：`scripts/elisp.py` 跨各仓库查找和运行 Lisp，
+`scripts/performance.py` 是唯一的测量驱动。各包在 `benchmarks/performance-scenarios.el` 注册长期维护的
 场景，提供应用初始化、操作和验证条件；计时、profiler、超时和基线比较由通用工具负责。
+
+## 查找和运行 Lisp
+
+`scripts/elisp.py` 读取工作区各仓库下的全部 `.el` 文件，跳过 `.jj`、`.worktrees`
+等隐藏目录。查一个定义只需一条命令，不必先搜索再猜行号范围；批量运行也不必手写
+`load-path`。
+
+```sh
+python3 scripts/elisp.py def ebox-surface--project etaf-ecosystem-require
+python3 scripts/elisp.py refs ebox-surface--project
+python3 scripts/elisp.py run -p etaf-desktop -e '(featurep (quote etaf-desktop))'
+python3 scripts/elisp.py run -p ebox -L ebox/tests -l ebox/tests/ebox-active-tests.el -f ert-run-tests-batch-and-exit
+```
+
+- `def SYMBOL...` 打印每个定义的完整形式，标题为 `;; 文件:起始行-结束行`，库文件排在
+  测试、基准和示例之前。`cl-defstruct` 生成的访问函数解析到对应结构体。超过
+  `--max-lines`（默认 250，0 表示不限）的形式在末尾给出剩余行范围。符号没有定义时
+  列出相近的已定义名称，退出码为 1。
+- `refs SYMBOL` 按文件和所在的顶层形式（`defun 名称: 行号`）列出引用，排除定义处和
+  注释行。第一行给出引用数和定义位置。
+- `run` 启动 `emacs -Q --batch`，由 `scripts/ecosystem.el` 把各仓库加入 `load-path`。
+  `-p FEATURE` 加载工作区 feature，`-L DIR` 追加测试目录等路径，`-l FILE`、
+  `-f FUNCTION`、`-e FORM` 按命令行顺序执行。每个 `-e` 的值打印时不带文本属性。
+  整个运行期间设置 `print-circle`、`print-length`（50）和 `print-level`（8），
+  循环或带属性的结构都能有限地打印。
+- `--timeout`（120 秒）、`--max-rss-mb`（2048）以及 64 倍 `--max-output-kb` 的
+  输出上限会终止 Emacs。输出超过 `--max-output-kb`（32）时只打印首尾，完整日志保留
+  在给出的路径。最后一行是
+  `status=ok|error|timeout|memory|output exit=N seconds=S peak_rss_mb=M`，输出被截断时
+  追加 `log=PATH`。退出码沿用 Emacs 自身的退出码；被上限终止时为 124，用法错误为 2。
 
 ## 执行一次测评
 
