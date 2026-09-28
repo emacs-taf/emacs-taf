@@ -3,7 +3,7 @@
   "repositories": {
     "ebox": {
       "url": "git@gitea.gklazycat.heiyu.space:geekinney/ebox.git",
-      "revision": "6d25e44a6da601218cc92a32df4eb47542c78a84",
+      "revision": "4ca8a86e4f3b325c73083a8d366430461c04191d",
       "branch": "main"
     },
     "ebox-playground": {
@@ -33,17 +33,17 @@
     },
     "etaf-playground": {
       "url": "git@gitea.gklazycat.heiyu.space:geekinney/etaf-playground.git",
-      "revision": "23c085bc6a387886c5cf456cb466df6ff12b9111",
+      "revision": "900c1e85f94f5d7b52fc90e307904ac984b1d5a4",
       "branch": "main"
     },
     "etaf-ui": {
       "url": "git@gitea.gklazycat.heiyu.space:geekinney/etaf-ui.git",
-      "revision": "70124fe5fc1d37017d50a142c6b00e020a069ccb",
+      "revision": "7411e01dab5da33f3e421ff1ea89785f065d0e0c",
       "branch": "main"
     },
     "etaf-desktop": {
       "url": "git@gitea.gklazycat.heiyu.space:geekinney/etaf-desktop.git",
-      "revision": "7ae7c05badbaa3a21ea1b82df2de4430c5779afe",
+      "revision": "133e1ea4b5d53a666856053900e8063bd4598a47",
       "branch": "main"
     }
   }
