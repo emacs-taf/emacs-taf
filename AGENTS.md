@@ -102,6 +102,14 @@ to every repository changed from this workspace.
   direction. Keep shared capabilities in their owning provider; do not duplicate
   authoritative state or algorithms in consumers. Migrate affected callers with
   interface changes and remove the superseded route once migration is complete.
+- Build applications by composing the shared component catalog. When app UI or
+  interaction has no reusable component, extract it into the owning provider
+  (ETAF components in etaf-ui, engine primitives in ebox) with props for
+  customization, then consume it from the app; do not re-implement it locally.
+  Component defaults must be modern and visually coherent: unified icon metrics
+  that never grow the standard line height, consistent spacing and state styling
+  through theme tokens. The catalog accumulates across applications so later
+  text apps reuse it instead of rebuilding the same control.
 - A move or deletion must update all code, Makefiles, tests and documentation references
   in the same change. Use stable behavior-based names, not development-phase labels.
 - Put behavioral regressions in tests. Do not require documents to enumerate every
