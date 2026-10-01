@@ -35,9 +35,9 @@ LIBRARY = r''';;; fixture-lib.el --- Fixture library -*- lexical-binding: t; -*-
 '''
 
 
-def elisp(root, *args, timeout=60):
+def elisp(root, *args, timeout=60, input=None):
     return subprocess.run([sys.executable, str(COMMAND), "--root", str(root), *args],
-                          capture_output=True, text=True, timeout=timeout)
+                          capture_output=True, text=True, timeout=timeout, input=input)
 
 
 class ElispTool(unittest.TestCase):
@@ -131,6 +131,37 @@ class ElispTool(unittest.TestCase):
             self.assertNotIn("line 2500\n", result.stdout)
         finally:
             log.unlink()
+
+
+    def test_check_ignores_delimiters_hidden_in_strings_comments_and_chars(self):
+        good = elisp(self.root, "check", str(self.root / "fixture/lisp/fixture-lib.el"))
+        self.assertEqual(good.returncode, 0, good.stdout)
+        self.assertTrue(good.stdout.endswith(": ok\n"), good.stdout)
+        stdin = elisp(self.root, "check", "-", input='(list "a ) b" ?\\) ) ;; )\n')
+        self.assertEqual(stdin.returncode, 0, stdin.stdout)
+        self.assertTrue(stdin.stdout.endswith("-: ok\n"), stdin.stdout)
+
+    def test_check_reports_unclosed_and_unmatched_delimiters(self):
+        truncated = self.root / "truncated.el"
+        truncated.write_text('(defun truncated ()\n  (list "a ) b" ?\\) ; )\n')
+        result = elisp(self.root, "check", str(truncated))
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stdout.strip(),
+                         f"{truncated}: 2 unclosed '(' form(s), innermost at line 2")
+        unmatched = self.root / "unmatched.el"
+        unmatched.write_text("(defun unmatched ())\n)\n")
+        result = elisp(self.root, "check", str(unmatched))
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stdout.strip(), f"{unmatched}: line 2: unexpected ')'")
+        mixed = elisp(self.root, "check", "-", input="(let ((x 1])\n")
+        self.assertEqual(mixed.returncode, 1)
+        self.assertIn("line 1: unexpected ']'", mixed.stdout)
+
+    def test_check_reports_unreadable_files(self):
+        missing = self.root / "missing.el"
+        result = elisp(self.root, "check", str(missing))
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("cannot read", result.stderr)
 
 
 if __name__ == "__main__":

@@ -5,6 +5,8 @@ def   print the complete source form of each named definition
 refs  list the references to a symbol grouped by enclosing definition
 run   run Emacs in batch with the workspace loaded, bounded printing and
       time, memory and output limits
+check report .el files whose Lisp delimiters are unbalanced outside comments,
+      strings and ?characters
 """
 from __future__ import annotations
 
@@ -63,6 +65,55 @@ def form_end(text: str, start: int) -> int | None:
 
 def line_of(text: str, offset: int) -> int:
     return text.count("\n", 0, offset) + 1
+
+
+def lisp_balance(text: str) -> tuple[list[tuple[int, str]], list[tuple[int, str]]]:
+    """Return TEXT's unclosed openers and unmatched closers as (line, char).
+
+    Comments, strings and ?characters hide delimiters; a mismatched closer is
+    unmatched and leaves its opener unclosed.
+    """
+    pairs = {")": "(", "]": "["}
+    open_stack: list[tuple[int, str]] = []
+    unmatched: list[tuple[int, str]] = []
+    line, index, size = 1, 0, len(text)
+    while index < size:
+        char = text[index]
+        if char == "\n":
+            line += 1
+        elif char == ";":
+            newline = text.find("\n", index)
+            if newline == -1:
+                break
+            index = newline
+            continue
+        elif char == '"':
+            index += 1
+            while index < size:
+                if text[index] == "\\":
+                    line += text[index:index + 2].count("\n")
+                    index += 2
+                    continue
+                if text[index] == '"':
+                    break
+                line += text[index] == "\n"
+                index += 1
+        elif char == "?":
+            if text[index + 1:index + 2] == "\\":
+                line += text[index + 1:index + 3].count("\n")
+                index += 2
+            else:
+                line += text[index + 1:index + 2] == "\n"
+                index += 1
+        elif char in "([":
+            open_stack.append((line, char))
+        elif char in ")]":
+            if open_stack and open_stack[-1][1] == pairs[char]:
+                open_stack.pop()
+            else:
+                unmatched.append((line, char))
+        index += 1
+    return open_stack, unmatched
 
 
 def relative(path: Path, root: Path) -> str:
@@ -233,6 +284,33 @@ def emit(log: Path, limit_kb: int) -> bool:
     return True
 
 
+def command_check(args: argparse.Namespace) -> int:
+    """Report files whose Lisp delimiters do not balance."""
+    failed = 0
+    for name in args.files:
+        if name == "-":
+            text = sys.stdin.read()
+        else:
+            try:
+                text = Path(name).read_text(errors="replace")
+            except OSError as problem:
+                print(f"{name}: cannot read: {problem.strerror}", file=sys.stderr)
+                failed = 1
+                continue
+        open_stack, unmatched = lisp_balance(text)
+        if unmatched:
+            line, char = unmatched[0]
+            print(f"{name}: line {line}: unexpected '{char}'")
+            failed = 1
+        elif open_stack:
+            line, char = open_stack[-1]
+            print(f"{name}: {len(open_stack)} unclosed '{char}' form(s), innermost at line {line}")
+            failed = 1
+        else:
+            print(f"{name}: ok")
+    return failed
+
+
 def command_run(args: argparse.Namespace) -> int:
     if not args.actions:
         print("error=usage run needs at least one -e FORM, -l FILE or -f FUNCTION", file=sys.stderr)
@@ -312,6 +390,12 @@ def main() -> int:
     run.add_argument("--max-output-kb", type=int, default=32,
                      help="print head and tail beyond this size (default 32)")
     run.add_argument("--emacs", default=os.environ.get("EMACS", "emacs"))
+
+    check = commands.add_parser(
+        "check", help="report unbalanced Lisp delimiters outside comments and strings")
+    check.set_defaults(handler=command_check)
+    check.add_argument("files", nargs="+", metavar="FILE",
+                       help="Lisp file to check, or - for standard input")
     args = parser.parse_args()
     return args.handler(args)
 

@@ -21,6 +21,7 @@ python3 scripts/elisp.py def ebox-surface--project etaf-ecosystem-require
 python3 scripts/elisp.py refs ebox-surface--project
 python3 scripts/elisp.py run -p etaf-desktop -e '(featurep (quote etaf-desktop))'
 python3 scripts/elisp.py run -p ebox -L ebox/tests -l ebox/tests/ebox-active-tests.el -f ert-run-tests-batch-and-exit
+python3 scripts/elisp.py check ebox/lisp/ebox-interaction.el
 ```
 
 - `def SYMBOL...` prints each complete definition form under a
@@ -38,6 +39,11 @@ python3 scripts/elisp.py run -p ebox -L ebox/tests -l ebox/tests/ebox-active-tes
   `-e FORM` run in command-line order. Each `-e` value prints without text
   properties. `print-circle`, `print-length` (50) and `print-level` (8) apply to
   the whole run, so cyclic or property-laden structures print finitely.
+- `check FILE...` reports delimiters that comments, strings and `?characters`
+  hide, printing `FILE: ok`, `FILE: line N: unexpected ')'` or
+  `FILE: N unclosed '(' form(s), innermost at line L`. `-` reads standard input,
+  so a heredoc probe is checked before Emacs starts. The exit status is 0 when
+  every file balances and 1 otherwise.
 - `--timeout` (120 s), `--max-rss-mb` (2048) and an output ceiling of 64 times
   `--max-output-kb` stop Emacs. Output beyond `--max-output-kb` (32) prints its
   head and tail and keeps the full log at the reported path. The last line is
