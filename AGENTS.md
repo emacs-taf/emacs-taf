@@ -197,6 +197,12 @@ to every repository changed from this workspace.
   Tests may not reference internal APIs of either their own package or a provider.
   Static checks cover direct references; code review must also reject dynamically
   constructed private calls. These checks do not constitute Lisp access control.
+- A diagnostic the framework reports while a test runs (component validation,
+  a renderer warning, a byte-compilation or loader error) is a defect, not
+  noise: read it, find the owning layer and fix it there. Never silence it
+  with `ignore-errors`, a wider `condition-case`, a suppressed warning or a
+  test exclusion; suppressing is only right when the diagnostic itself is
+  wrong, and then the fix belongs where the diagnostic is raised.
 - Never weaken a check, add an exclusion or skip a test just to make a failure green.
   Update obsolete checks to the current contract and retain behavioral coverage.
 - If a new document or directory does not fit this policy, first simplify the design.
