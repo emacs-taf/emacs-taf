@@ -220,6 +220,35 @@ slowest sample's outcome. Gallery records its last commit's projection, dirty-no
 count, root ownership and publication operations. This does not capture earlier
 commits within the same input; use the separate trace pass for the full sequence.
 
+## Judge Ebox interaction ownership
+
+A press or `ebox-activate` resolves the node that owns a buffer position.
+Judge that ownership with the framework's own spatial facts, never by reading
+the rendered line text: one buffer line interleaves cells from different
+columns, and a multi-row cell's lower rows are blanks that still belong to its
+hit area.
+
+```elisp
+;; In a probe, with the view mounted and its client state loaded:
+(let* ((state (ebox-surface--buffer-client-state buffer))
+       (owner (ebox-interaction--navigation-owner position state))
+       (ref (and owner (ebox-interaction--focus-ref state owner)))
+       (bounds (and ref (ebox-host-ref-bounds buffer ref))))
+  (list :owner owner
+        :inside (and bounds (<= (car bounds) position (cdr bounds)))))
+```
+
+`ebox-host-ref-bounds` is the public border-box query for a host reference: it
+returns `(START . END)` for the node's rendered characters, excluding margins
+and structural newlines. A resolution is correct only when the pressed position
+lies inside those bounds. `ebox-interaction--navigation-owner` and
+`ebox-interaction--focus-ref` are internal and belong in probes, not in
+consumers or tests. A keymap can be published on a cell whose paint chain
+reaches no declaration, such as a flex gap, a box's padding, a clipped
+surface's trailing cell or a multi-row cell's lower rows; Ebox resolves those
+through the published keymap snapshot, so the bounds check stays the acceptance
+test.
+
 ## Evidence and failure handling
 
 Evidence defaults to `~/.cache/emacs-taf/performance/` (or `$XDG_CACHE_HOME`).
