@@ -23,12 +23,12 @@
     },
     "etaf": {
       "url": "git@gitea.gklazycat.heiyu.space:geekinney/etaf.git",
-      "revision": "b44afc5732591b76aba112e71700b0861548ac16",
+      "revision": "a9830027fb0fd6e9542a5c0c627fd7ca42e65b4e",
       "branch": "main"
     },
     "etaf-db": {
       "url": "git@gitea.gklazycat.heiyu.space:geekinney/etaf-db.git",
-      "revision": "53752e850e1f2667ce777a580c100bb1f9c5c0fc",
+      "revision": "bd860bc628b4b82da318d7db71d5f7fe8812ab8f",
       "branch": "main"
     },
     "etaf-playground": {
