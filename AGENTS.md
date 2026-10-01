@@ -110,6 +110,12 @@ to every repository changed from this workspace.
   that never grow the standard line height, consistent spacing and state styling
   through theme tokens. The catalog accumulates across applications so later
   text apps reuse it instead of rebuilding the same control.
+- Applications and catalog components use ETAF's public API only; Ebox stays an
+  internal engine behind it. When an application needs a lower-level capability
+  (measurement, retained updates, viewport control), extend the ETAF API first
+  and consume that; never call ebox- prefixed functions from an app or a
+  catalog component. ETAF must stay the simple, low-understanding-cost entry for
+  building complete text applications.
 - A move or deletion must update all code, Makefiles, tests and documentation references
   in the same change. Use stable behavior-based names, not development-phase labels.
 - Put behavioral regressions in tests. Do not require documents to enumerate every
