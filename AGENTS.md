@@ -96,6 +96,7 @@ to every repository changed from this workspace.
 
 ## Development and validation
 
+- Before treating a dependency or framework as defective, restore its original implementation and run the same case; a passing counter-proof means it is not the framework, so do not patch its code.
 - Apply design requirements to their responsible packages and affected integrations.
   A package's requirements do not automatically apply to its dependencies.
 - Preserve each package's documented responsibility, independent use and dependency
