@@ -269,6 +269,11 @@ python3 scripts/check-repository.py --staged
 jj log -r '(<range>) & (conflicts() | divergent() | description(exact:""))'
 ```
 
+Run each command from the repository being published. The workspace root's
+`scripts/check-repository.py` defaults `--root` to the workspace root, so
+invoking it by absolute path from a child checks the root (and fails on
+unrelated root files) instead of the child's sealed tree.
+
 ### Publishing
 
 - Each module keeps two remotes: laycat at gitea.gklazycat.heiyu.space and aliyun
