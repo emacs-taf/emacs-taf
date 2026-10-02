@@ -23,7 +23,7 @@
     },
     "etaf": {
       "url": "git@gitea.gklazycat.heiyu.space:geekinney/etaf.git",
-      "revision": "c829ca77661eb5595da112234c74822c7a89e828",
+      "revision": "4bd6117311a59c4e9ba5343bcbf76bcc8db3a397",
       "branch": "main"
     },
     "etaf-db": {
