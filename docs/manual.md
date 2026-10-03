@@ -220,6 +220,46 @@ slowest sample's outcome. Gallery records its last commit's projection, dirty-no
 count, root ownership and publication operations. This does not capture earlier
 commits within the same input; use the separate trace pass for the full sequence.
 
+## Measure the Ebox commit
+
+A state write, however small, ends in a full-root Ebox commit: the transaction
+reconciles the whole painted tree and re-applies every host property, so
+`reconciled-objects` and `property-operations` describe the view, not the
+change.  A 120-row reader page measured 347 reconciled objects and 312 property
+operations for a selection move that dirtied two owners, with observer phases
+`projection` 65 ms and `transaction` 11 ms (2026-10-03, batch Emacs, the
+etaf-rss reader fixture).  This is why an application can make its own work
+scoped and still miss a latency budget: the changed-owner count and the commit
+cost must be read together.  Retained host updates that bypass the render
+pipeline are the current route around the full commit for hot paths; otherwise
+the cost belongs to Ebox's projection and must be fixed there.
+
+Measure it without editing packages.  Run this inside the mounted buffer, with
+the application ready and its fixtures settled:
+
+```elisp
+(etaf-performance-mode 1)
+(etaf-performance-clear)
+(dotimes (_ 20) (my-application-action))
+(let ((data (etaf-performance-report-data)))
+  (dolist (operation (plist-get data :operations))
+    (dolist (stage (plist-get operation :stages))
+      (princ (format "%S %S %.2fms %S\n"
+                     (plist-get stage :stage) (plist-get stage :provider)
+                     (plist-get stage :duration-ms)
+                     (plist-get stage :metadata))))))
+(etaf-performance-mode -1)
+```
+
+The `commit` stage metadata carries the decision: `dirty-count` and
+`dirty-keys` are what really changed, `owner-ids` the affected hosts,
+`reconciled-objects` and `property-operations` the whole-tree work, and the
+`phase-duration-ms` alist splits the commit into `source`, `style`, `plan`,
+`layout`, `projection` and `transaction`.  Compare the same operation without
+`etaf-performance-mode` (its recording adds overhead) using `benchmark-run`,
+and treat batch numbers as the portable ones: a background GUI frame measures
+App Nap rather than the code.
+
 ## Judge Ebox interaction ownership
 
 A press or `ebox-activate` resolves the node that owns a buffer position.
