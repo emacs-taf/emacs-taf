@@ -43,6 +43,12 @@
 (defvar comp-eln-to-el-h)
 
 (defvar taf-benchmark--registry nil)
+(defvar taf-benchmark--scenario-cache (make-hash-table :test #'equal)
+  "Registered scenarios per already loaded scenario entry set.
+GUI runs schedule one configuration per latency and diagnostic pass in the
+same Emacs process.  Loading an entry file again would repeat its one-time
+definitions (components, constants, variables), which are not reload-safe, so
+a set that was already loaded here restores its recorded registrations.")
 (defvar taf-benchmark--configuration nil)
 (defvar taf-benchmark--report nil)
 (defvar taf-benchmark--jobs nil)
@@ -511,6 +517,16 @@ cached evidence so lazy library loading is visible after an operation."
               (taf-benchmark--schedule #'taf-benchmark--next)))))
     ((error quit) (taf-benchmark--finish "error" (taf-benchmark--error condition)))))
 
+(defun taf-benchmark--scenario-identity (sources)
+  "Return SOURCES with the attributes that make a reload necessary."
+  (mapcar (lambda (source)
+            (let ((attributes (file-attributes source)))
+              (list (expand-file-name source)
+                    (and attributes (file-attribute-size attributes))
+                    (and attributes
+                         (float-time (file-attribute-modification-time attributes))))))
+          sources))
+
 (defun taf-benchmark--load-configuration (file)
   "Read FILE and load explicitly selected scenario entry files."
   (setq taf-benchmark--configuration
@@ -522,8 +538,14 @@ cached evidence so lazy library loading is visible after an operation."
         taf-benchmark--runtime-libraries [] taf-benchmark--unmapped-native-libraries [])
   (dolist (directory (plist-get taf-benchmark--configuration :load_paths))
     (add-to-list 'load-path directory))
-  (dolist (source (plist-get taf-benchmark--configuration :scenario_files))
-    (load source nil t t)))
+  (let* ((sources (plist-get taf-benchmark--configuration :scenario_files))
+         (identity (taf-benchmark--scenario-identity sources))
+         (cached (gethash identity taf-benchmark--scenario-cache)))
+    (if cached
+        (setq taf-benchmark--registry (copy-sequence cached))
+      (dolist (source sources) (load source nil t t))
+      (puthash identity (copy-sequence taf-benchmark--registry)
+               taf-benchmark--scenario-cache))))
 
 (defun taf-benchmark-catalog (configuration-file)
   "Write the registered public scenario descriptors from CONFIGURATION-FILE."

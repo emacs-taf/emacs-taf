@@ -448,6 +448,61 @@ class PerformanceTool(unittest.TestCase):
             capture_output=True, text=True, timeout=10)
         self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
 
+    def test_scenario_entries_load_once_per_emacs_process(self):
+        directory = self.base / "reload-scenario"
+        directory.mkdir()
+        scenario = directory / "scenarios.el"
+        scenario.write_text(""";;; -*- lexical-binding: t; -*-
+(defvar taf-test-reload-loads 0)
+(setq taf-test-reload-loads (1+ taf-test-reload-loads))
+(taf-benchmark-register
+ "fixture.reload" :modes '(batch) :budget-ms 100 :impact 'local
+ :setup
+ (lambda (_mode)
+   (let ((buffer (generate-new-buffer " *reload*")))
+     (ebox-render-to-buffer buffer (ebox-build '(box "Reload")))
+     (list :buffer buffer
+           :invoke (lambda (_sample) nil)
+           :verify (lambda ()
+                     (with-current-buffer buffer
+                       (string-match-p "Reload" (buffer-string))))
+           :cleanup (lambda ()
+                      (when (buffer-live-p buffer) (kill-buffer buffer)))))))
+""")
+        configurations = []
+        for number, name in enumerate(("latency", "trace"), start=1):
+            configuration = {
+                "output": str(directory / (name + ".json")), "mode": "batch", "run_id": name,
+                "scenario_files": [str(scenario)], "load_paths": [], "code_roots": [],
+                "jobs": [{"id": "fixture.reload", "set": 1, "sample": number,
+                          "diagnostic": name == "trace",
+                          "diagnostic_kind": "trace" if name == "trace" else None,
+                          "phase": "diagnostic" if name == "trace" else "latency"}],
+                "timeout": 3,
+            }
+            path = directory / (name + "-configuration.json")
+            path.write_text(json.dumps(configuration))
+            configurations.append(str(path))
+        script = directory / "reload-test.el"
+        script.write_text(""";;; -*- lexical-binding: t; -*-
+(require 'ert)
+(require 'ebox)
+(ert-deftest taf-test-scenario-entries-load-once ()
+  (dolist (configuration CONFIGURATIONS)
+    (taf-benchmark-start configuration)
+    (with-timeout (5 (ert-fail "Driver did not finish"))
+      (while (taf-benchmark-running-p) (accept-process-output nil .01))))
+  (should (= taf-test-reload-loads 1)))
+(ert-run-tests-batch-and-exit)
+""".replace("CONFIGURATIONS",
+                      "(list " + " ".join(json.dumps(path) for path in configurations) + ")"))
+        process = subprocess.run(
+            ["emacs", "-Q", "--batch", "-L", str(ROOT / "ecss"), "-L", str(ROOT / "ebox"),
+             "--eval", "(setq load-prefer-newer t)",
+             "-l", str(ROOT / "benchmarks/performance-driver.el"), "-l", str(script)],
+            capture_output=True, text=True, timeout=15)
+        self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
+
     def test_functional_failure_is_not_a_performance_pass(self):
         process, report, output = self.run_case("failure", "fixture.fail")
         self.assertEqual(process.returncode, 2)
