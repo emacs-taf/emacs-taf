@@ -152,6 +152,12 @@ to every repository changed from this workspace.
   while developing; run `make -C <package> check` before completing a package change.
   Workspace changes run `python3 scripts/workspace.py check`; integrated changes
   run workspace `make check`, including affected consumers in dependency order.
+- Ebox's optional native layout module is a separate artifact: `make -C ebox
+  native-build` builds the checkout only, while Emacs loads the ABI-specific copy
+  under `~/.emacs.d/ebox/native/<platform>/<abi>/`. After changing `ebox/native/`,
+  install it with a batch `(ebox-native-reflow--build)` and wait for the
+  asynchronous build to finish before verifying in any Emacs; a stale module keeps
+  running silently and makes every measurement describe the old code.
 - Validate each complete feature change through the affected examples' data flow,
   visible rendering, behavior and interaction latency before continuing to another
   feature. Provider unit scenarios alone do not establish application acceptance.
