@@ -357,6 +357,11 @@ completion of asynchronous actions (5 ms polling resolution is recorded).
 `:observe` accepts a report sink and returns a cleanup/collection function,
 called after timing and profiling stop. `:required-providers` detects missing
 expected observations. `:environment` returns JSON-safe capability facts.
+A fixture may declare `:disposes-buffer t` for a close/unmount operation. Its
+target must be live on entry and dead on exit; frame, window, font and other
+context checks still apply. Missing disposal, undeclared target loss or a
+simultaneous context change fails the gate. Records retain the target-death
+fact and both contexts; the flag alone never exempts validation.
 Verification returns exactly `t` or a short failure string. Cleanup releases only
 the fixture's resources. The final GUI fixture stays available for inspection.
 The `:invoke` index starts at zero for each scenario/set and advances continuously

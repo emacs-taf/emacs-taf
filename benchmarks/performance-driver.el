@@ -13,6 +13,9 @@
 ;; Optional :outcome reads a bounded JSON-safe value from public application
 ;; APIs after timing and profiling stop, before verification. It must be read-only.
 ;; This records each latency sample's accepted result without enabling tracing.
+;; A :disposes-buffer fixture times intentional target-buffer disposal. Entry
+;; must have a live target, exit must have a dead target, and frame/window/font
+;; constraints still apply. It is not permission for an arbitrary target change.
 ;; :ready waits for fixture initialization; :prepare resolves targets after
 ;; showing the buffer and before timing. :required-providers lists expected
 ;; observer provider symbols. Observer cleanup/collection runs after timing
@@ -168,6 +171,7 @@ cached evidence so lazy library loading is visible after an operation."
           :emacs_start (float-time before-init-time) :init user-init-file
           :buffer (and taf-benchmark--fixture
                        (buffer-name (plist-get taf-benchmark--fixture :buffer)))
+          :dispose_buffer (if (plist-get taf-benchmark--fixture :disposes-buffer) t :false)
           :graphic (if (display-graphic-p) t :false)
           :foreground (if (and gui (eq (frame-focus-state (selected-frame)) t)) t :false)
           :font (format "%s" (frame-parameter nil 'font))
@@ -183,20 +187,28 @@ cached evidence so lazy library loading is visible after an operation."
 
 (defun taf-benchmark--context-equal-p (before after)
   "Compare execution context, keeping automatic GC policy transitions as data."
-  (cl-every (lambda (key) (equal (plist-get before key) (plist-get after key)))
-            (append '(:pid :emacs :system :buffer :graphic :font :width :height :frame :window :text_scale :context)
-                    (when (plist-get taf-benchmark--configuration :require_foreground) '(:foreground)))))
+  (let ((disposed (and (plist-get taf-benchmark--fixture :disposes-buffer)
+                       (not (buffer-live-p (plist-get taf-benchmark--fixture :buffer)))
+                       (stringp (plist-get before :buffer)) (null (plist-get after :buffer)))))
+    (and (or (not (plist-get taf-benchmark--fixture :disposes-buffer)) disposed)
+         (cl-every (lambda (key) (equal (plist-get before key) (plist-get after key)))
+                   (append '(:pid :emacs :system :dispose_buffer :graphic :font :width :height :frame :window :text_scale :context)
+                           (unless disposed '(:buffer))
+                           (when (plist-get taf-benchmark--configuration :require_foreground) '(:foreground)))))))
 
-(defun taf-benchmark--window-valid-p ()
+(defun taf-benchmark--window-valid-p (&optional after-input)
   "Check the exact GUI target without selecting another application."
-  (or noninteractive
+  (and (or (not (and after-input (plist-get taf-benchmark--fixture :disposes-buffer)))
+           (not (buffer-live-p (plist-get taf-benchmark--fixture :buffer))))
+       (or noninteractive
       (and (window-live-p taf-benchmark--window)
            (eq (selected-window) taf-benchmark--window)
-           (eq (window-buffer taf-benchmark--window)
-               (plist-get taf-benchmark--fixture :buffer))
+           (or (and after-input (plist-get taf-benchmark--fixture :disposes-buffer))
+               (eq (window-buffer taf-benchmark--window)
+                   (plist-get taf-benchmark--fixture :buffer)))
            (display-graphic-p)
            (eq (frame-visible-p (selected-frame)) t)
-           (not (active-minibuffer-window)))))
+           (not (active-minibuffer-window))))))
 
 (defun taf-benchmark--capture-report (&rest arguments)
   "Collect only scalar fields from a provider observer's ARGUMENTS."
@@ -456,7 +468,11 @@ cached evidence so lazy library loading is visible after an operation."
   "Await a scenario's explicit completion predicate, then verify its result."
   (condition-case condition
       (when (equal (plist-get taf-benchmark--report :status) "running")
-        (with-current-buffer (plist-get taf-benchmark--fixture :buffer)
+        (with-current-buffer
+            (if (and (plist-get taf-benchmark--fixture :disposes-buffer)
+                     (not (buffer-live-p (plist-get taf-benchmark--fixture :buffer))))
+                (if (window-live-p taf-benchmark--window) (window-buffer taf-benchmark--window) (current-buffer))
+              (plist-get taf-benchmark--fixture :buffer))
           (if (when-let* ((settled (plist-get taf-benchmark--fixture :settled))) (not (funcall settled)))
               (if (> (- (float-time) (plist-get taf-benchmark--active :started))
                      (plist-get taf-benchmark--configuration :timeout))
@@ -502,7 +518,9 @@ cached evidence so lazy library loading is visible after an operation."
                           :correct (if (eq verification t) t :false)
                           :verification (unless (eq verification t)
                                           (if (stringp verification) verification "Verification did not return t"))
-                          :environment_stable (if (and (taf-benchmark--window-valid-p)
+                          :target_disposed (if (and (plist-get taf-benchmark--fixture :disposes-buffer)
+                                                    (not (buffer-live-p (plist-get taf-benchmark--fixture :buffer)))) t :false)
+                          :environment_stable (if (and (taf-benchmark--window-valid-p t)
                                                       (taf-benchmark--context-equal-p before after)) t :false)
                           :before before :after after :budget_ms (plist-get spec :budget-ms)
                           :impact (symbol-name (or (plist-get spec :impact) 'unspecified))

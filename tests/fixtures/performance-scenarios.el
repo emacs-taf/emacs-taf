@@ -59,6 +59,21 @@
                      (unless (equal profile-settings (cons profiler-max-stack-depth profiler-sampling-interval))
                        (error "The driver did not restore profiler settings"))))))
 
+(defvar text-scale-mode-amount 0)
+(dolist (kind '(dispose dispose-unexpected dispose-missing dispose-context))
+  (let ((variant kind))
+    (taf-benchmark-register
+     (format "fixture.%s" variant) :version 1 :modes '(batch) :budget-ms 100 :impact 'local
+     :setup (lambda (_mode)
+              (let ((buffer (generate-new-buffer " *disposal-fixture*")))
+                (list :buffer buffer :disposes-buffer (not (eq variant 'dispose-unexpected))
+                      :invoke (lambda (_sample)
+                                (unless (eq variant 'dispose-missing) (kill-buffer buffer))
+                                (when (eq variant 'dispose-context)
+                                  (setq text-scale-mode-amount (1+ text-scale-mode-amount))))
+                      :verify (lambda () t)
+                      :cleanup (lambda () (when (buffer-live-p buffer) (kill-buffer buffer)))))))))
+
 (dolist (kind '(counter async fail timeout slow context hot sequence cold-slow diagnostic-fail cleanup-fail))
   (let ((variant kind))
     (taf-benchmark-register

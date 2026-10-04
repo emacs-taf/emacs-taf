@@ -38,6 +38,19 @@ class PerformanceTool(unittest.TestCase):
             capture_output=True, text=True, timeout=25)
         return process, json.loads((output / "result.json").read_text()), output
 
+    def test_disposal_requires_actual_target_death_and_stable_parent_context(self):
+        process, result, output = self.run_case("dispose", "fixture.dispose")
+        self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
+        self.assertTrue(result["valid"])
+        raw = json.loads((output / "latency-1.json").read_text())
+        self.assertTrue(all(row["target_disposed"] for row in raw["samples"]))
+        self.assertTrue(all(row["before"]["buffer"] and row["after"]["buffer"] is None
+                            for row in raw["samples"]))
+        for name in ("dispose-unexpected", "dispose-missing", "dispose-context"):
+            process, result, _ = self.run_case(name, "fixture." + name)
+            self.assertNotEqual(process.returncode, 0, process.stdout + process.stderr)
+            self.assertFalse(result["valid"])
+
     def compare(self, before, after):
         left, right = self.base / "before.json", self.base / "after.json"
         left.write_text(json.dumps(before))

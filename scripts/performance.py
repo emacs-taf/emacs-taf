@@ -199,7 +199,15 @@ def valid_sample(sample, mode, require_foreground=False):
     strategy = library_code_strategy(before.get("runtime_libraries"))
     if strategy in ("mixed", "unknown") or strategy != library_code_strategy(after.get("runtime_libraries")):
         return False
-    if any(key not in before or key not in after or before[key] != after[key] for key in required):
+    disposing = (before.get("dispose_buffer") is True and after.get("dispose_buffer") is True
+                 and sample.get("target_disposed") is True
+                 and isinstance(before.get("buffer"), str) and after.get("buffer") is None)
+    if before.get("dispose_buffer", False) != after.get("dispose_buffer", False):
+        return False
+    if before.get("dispose_buffer") is True and not disposing:
+        return False
+    if any(key not in before or key not in after or
+           (before[key] != after[key] and not (disposing and key == "buffer")) for key in required):
         return False
     if before.get("context") != after.get("context") or before.get("text_scale") != after.get("text_scale"):
         return False
