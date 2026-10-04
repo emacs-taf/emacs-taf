@@ -119,8 +119,9 @@ Gallery 测量在显示 buffer 后、开始计时前同步 Ebox 的布局视口�
    `load` 不够：Emacs 31 的 `require` 不会调用被 advice 的 subr。
 2. 不抢焦点地启动后台实例：`open -g -n -a Emacs --env 'EMACSLOADPATH=<私有目录>:'
    --args -l <启动文件>`。启动文件在 init 文件之后运行：把隔离根放到最前、移除
-   `~/emacs-taf` 条目、启动命名 server 并记录 PID。加上 `-NSAppSleepDisabled YES`，
-   避免 App Nap 限制后台测量。
+   `~/emacs-taf` 条目、启动命名 server 并记录 PID。后台测量不能被 App Nap
+   限制；按「执行一次测评」一节的方法确认，不要传 `-NSAppSleepDisabled`，
+   Emacs 会把它当作未知选项拒绝。
 3. 测量前先证明只有一个代码代：每个 provider 的 `locate-library` 结果与 `load-history`
    里的 `(provide . feature)` 条目都必须落在隔离根下。性能驱动会在预检里重复这项检查，
    并拒绝加载自另一份 checkout 的库。

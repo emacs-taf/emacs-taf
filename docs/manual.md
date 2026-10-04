@@ -92,10 +92,14 @@ activates the current frame once and requires focus during latency samples;
 `--focus-policy foreground` requires focus without activating it. Diagnostic
 passes always allow background execution and retain their actual focus state.
 Window-scoped screenshots and recordings do not require foreground activation.
-On macOS, App Nap throttles a background Emacs several-fold, so background
-samples measure the throttle instead of the code. Start a dedicated measurement
-Emacs with `-NSAppSleepDisabled YES` (a per-process Cocoa default) and confirm
-that a pure Lisp loop runs as fast there as in batch Emacs.
+On macOS, App Nap can throttle a background Emacs, so background samples then
+measure the throttle instead of the code. Confirm a dedicated measurement Emacs
+is not throttled by running a pure Lisp loop there and in batch Emacs. If it is,
+disable App Nap for the app while measuring (`defaults write org.gnu.Emacs
+NSAppSleepDisabled -bool YES` before starting it, `defaults delete org.gnu.Emacs
+NSAppSleepDisabled` afterwards); `-NSAppSleepDisabled` cannot be passed as a
+command-line argument because Emacs rejects unknown options before its GUI layer
+sees them.
 
 Finish compilation before GUI acceptance. Preflight records the process, package
 origins and loaded files. It rejects another checkout, an active profiler, and
@@ -191,8 +195,9 @@ forms also add `~/emacs-taf` paths, and an added path wins the resolution.
    `open -g -n -a Emacs --env 'EMACSLOADPATH=<private directory>:' --args -l
    <start file>`. The start file runs after the init file: it puts the isolated
    roots first, removes the `~/emacs-taf` entries, starts the named server and
-   records its PID. Add `-NSAppSleepDisabled YES` so App Nap does not throttle
-   the background measurement.
+   records its PID. Background measurement must not be App-Nap throttled; check
+   it as described in [Run a measured change](#run-a-measured-change) instead of
+   passing `-NSAppSleepDisabled`, which Emacs rejects as an unknown option.
 3. Prove one code generation before measuring: `locate-library` for every
    provider and the `(provide . feature)` entries in `load-history` must all
    resolve under the isolated root. The performance driver repeats this in its
