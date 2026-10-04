@@ -124,7 +124,9 @@ Gallery 测量在显示 buffer 后、开始计时前同步 Ebox 的布局视口�
    Emacs 会把它当作未知选项拒绝。
 3. 测量前先证明只有一个代码代：每个 provider 的 `locate-library` 结果与 `load-history`
    里的 `(provide . feature)` 条目都必须落在隔离根下。性能驱动会在预检里重复这项检查，
-   并拒绝加载自另一份 checkout 的库。
+   并拒绝加载自另一份 checkout 的库。测量前先确认每个检出都已跟到已发布的 main：
+   jj workspace 有自己的工作副本提交，而 `workspace.py status` 读的是主检出的书签，
+   因此隔离检出可能悄悄落在 main 之后，使测量与记录的 revision 双双失效。
 4. 运行 `scripts/performance.py run --mode gui --server <名字> --root <隔离根>
    --load-path <应用根>`，并按记录的 PID 关闭实例，不要按进程名杀。
 

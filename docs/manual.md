@@ -201,7 +201,11 @@ forms also add `~/emacs-taf` paths, and an added path wins the resolution.
 3. Prove one code generation before measuring: `locate-library` for every
    provider and the `(provide . feature)` entries in `load-history` must all
    resolve under the isolated root. The performance driver repeats this in its
-   preflight and rejects a library loaded from another checkout.
+   preflight and rejects a library loaded from another checkout. Confirm each
+   checkout follows its published main first: a jj workspace keeps its own
+   working-copy commit, and `workspace.py status` reads the primary checkout's
+   bookmarks, so an isolated checkout can sit behind main and invalidate both
+   the measurement and the recorded revision.
 4. Run `scripts/performance.py run --mode gui --server <name> --root <isolated
    root> --load-path <app root>` and close the instance by its recorded PID,
    never by process name.
