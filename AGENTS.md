@@ -183,7 +183,9 @@ to every repository changed from this workspace.
   package's `benchmarks/performance-scenarios.el`. Reuse its separate latency,
   trace, CPU and allocation passes, baseline comparison and saved evidence rather
   than writing temporary measurement scripts. See `docs/manual.md` for the tool
-  contract. Invalid, incomplete, stale-code or incomparable runs remain unverified.
+  contract; [validating an isolated checkout](docs/manual.md#validate-an-isolated-checkout-in-a-real-gui)
+  in the full user init follows the manual's isolated GUI session recipe.
+  Invalid, incomplete, stale-code or incomparable runs remain unverified.
 - Use existing performance evidence until a concrete uncertainty requires another
   measurement. Stop diagnosis once the dominant cost is actionable and fix it.
   After a change, screen only affected representative scenarios; reserve full

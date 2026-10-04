@@ -173,6 +173,37 @@ a performance pass. `acceptance_eligible` separately records sufficient sample
 coverage. Existing `make verify` continues to run the complete batch correctness
 and Research Shelf verification workflow.
 
+## Validate an isolated checkout in a real GUI
+
+A `jj workspace add` checkout must be exercised in the full user configuration
+without ever loading the main checkout's code generation. The user init reads
+`emacs-taf-dir` for package roots, but `init-etaf.el` and eager `use-package`
+forms also add `~/emacs-taf` paths, and an added path wins the resolution.
+
+1. Put a private `site-start.el` first on the load path with
+   `EMACSLOADPATH=<private directory>:`. It runs before the init file, so it can
+   `setq` (never `defvar`) `emacs-taf-dir` to the isolated root, set a private
+   `server-name`, `load-prefer-newer` and a bounded `kill-emacs` watchdog, and
+   advise `require` and `load` to redirect `~/emacs-taf` libraries and relative
+   names to the isolated root. Advising `load` alone is not enough: Emacs 31's
+   `require` does not call the advised subr.
+2. Start a background instance with
+   `open -g -n -a Emacs --env 'EMACSLOADPATH=<private directory>:' --args -l
+   <start file>`. The start file runs after the init file: it puts the isolated
+   roots first, removes the `~/emacs-taf` entries, starts the named server and
+   records its PID. Add `-NSAppSleepDisabled YES` so App Nap does not throttle
+   the background measurement.
+3. Prove one code generation before measuring: `locate-library` for every
+   provider and the `(provide . feature)` entries in `load-history` must all
+   resolve under the isolated root. The performance driver repeats this in its
+   preflight and rejects a library loaded from another checkout.
+4. Run `scripts/performance.py run --mode gui --server <name> --root <isolated
+   root> --load-path <app root>` and close the instance by its recorded PID,
+   never by process name.
+
+The two helper files belong to one measurement session, not to the checkout;
+keep them under the system temporary directory.
+
 ## Read the diagnosis
 
 `--diagnose` runs three additional passes after latency sampling:

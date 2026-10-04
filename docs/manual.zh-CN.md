@@ -106,6 +106,29 @@ Gallery 测量在显示 buffer 后、开始计时前同步 Ebox 的布局视口�
 采样覆盖是否足够。功能执行完成不等于性能通过。已有 `make verify` 继续负责完整批处理
 功能检查与 Research Shelf 验证流程。
 
+## 在真实 GUI 中验证隔离检出
+
+`jj workspace add` 检出必须在完整用户配置里运行，且绝不能加载主检出的代码代。用户 init 会从
+`emacs-taf-dir` 取包根，但 `init-etaf.el` 与提前加载的 `use-package` 还会添加
+`~/emacs-taf` 路径，且已加入的路径会赢得解析。
+
+1. 用 `EMACSLOADPATH=<私有目录>:` 让私有的 `site-start.el` 排在加载路径最前。它在 init
+   文件之前运行，因此可以用 `setq`（不能用 `defvar`）把 `emacs-taf-dir` 指向隔离根，设置
+   私有 `server-name`、`load-prefer-newer` 和有界的 `kill-emacs` 看门狗，并对 `require`
+   与 `load` 加 advice，把 `~/emacs-taf` 库与相对名重定向到隔离根。只 advice
+   `load` 不够：Emacs 31 的 `require` 不会调用被 advice 的 subr。
+2. 不抢焦点地启动后台实例：`open -g -n -a Emacs --env 'EMACSLOADPATH=<私有目录>:'
+   --args -l <启动文件>`。启动文件在 init 文件之后运行：把隔离根放到最前、移除
+   `~/emacs-taf` 条目、启动命名 server 并记录 PID。加上 `-NSAppSleepDisabled YES`，
+   避免 App Nap 限制后台测量。
+3. 测量前先证明只有一个代码代：每个 provider 的 `locate-library` 结果与 `load-history`
+   里的 `(provide . feature)` 条目都必须落在隔离根下。性能驱动会在预检里重复这项检查，
+   并拒绝加载自另一份 checkout 的库。
+4. 运行 `scripts/performance.py run --mode gui --server <名字> --root <隔离根>
+   --load-path <应用根>`，并按记录的 PID 关闭实例，不要按进程名杀。
+
+这两个辅助文件只属于一次测量会话，不属于检出；放在系统临时目录下。
+
 ## 读取诊断
 
 `--diagnose` 在正常延迟采样完成后，另行运行三种诊断：
