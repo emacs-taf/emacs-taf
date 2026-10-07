@@ -260,45 +260,75 @@ slowest sample's outcome. Gallery records its last commit's projection, dirty-no
 count, root ownership and publication operations. This does not capture earlier
 commits within the same input; use the separate trace pass for the full sequence.
 
-## Measure the Ebox commit
+## Measure the incremental commit
 
-A state write, however small, ends in a full-root Ebox commit: the transaction
-reconciles the whole painted tree and re-applies every host property, so
-`reconciled-objects` and `property-operations` describe the view, not the
-change.  A 120-row reader page measured 347 reconciled objects and 312 property
-operations for a selection move that dirtied two owners, with observer phases
-`projection` 65 ms and `transaction` 11 ms (2026-10-03, batch Emacs, the
-etaf-rss reader fixture).  This is why an application can make its own work
-scoped and still miss a latency budget: the changed-owner count and the commit
-cost must be read together.  Retained host updates that bypass the render
-pipeline are the current route around the full commit for hot paths; otherwise
-the cost belongs to Ebox's projection and must be fixed there.
+A state write can use a retained update, a scoped candidate, or a wider fallback.
+Read the actual path from the report. A small final buffer patch does not prove
+that preparation, layout, projection and transaction work stayed local; conversely,
+a fallback does not imply that every text property was rewritten. Retained Host
+updates remain supported, but applications should not have to select them manually
+to make ordinary declarations responsive.
 
-Measure it without editing packages.  Run this inside the mounted buffer, with
-the application ready and its fixtures settled:
+Use the registered workloads to separate a local row update, structural append and
+an ordinary catalog control. Run the initial diagnosis with a small sample count:
 
-```elisp
-(etaf-performance-mode 1)
-(etaf-performance-clear)
-(dotimes (_ 20) (my-application-action))
-(let ((data (etaf-performance-report-data)))
-  (dolist (operation (plist-get data :operations))
-    (dolist (stage (plist-get operation :stages))
-      (princ (format "%S %S %.2fms %S\n"
-                     (plist-get stage :stage) (plist-get stage :provider)
-                     (plist-get stage :duration-ms)
-                     (plist-get stage :metadata))))))
-(etaf-performance-mode -1)
+```sh
+python3 scripts/performance.py run --mode batch \
+  --scenario row-update.30 --scenario row-update.400 \
+  --scenario list-append.30 --scenario list-append.120 \
+  --scenario gallery.review.steady.callback \
+  --sets 1 --samples 5 --warmups 2 --diagnose --diagnostic-samples 4
 ```
 
-The `commit` stage metadata carries the decision: `dirty-count` and
-`dirty-keys` are what really changed, `owner-ids` the affected hosts,
-`reconciled-objects` and `property-operations` the whole-tree work, and the
-`phase-duration-ms` alist splits the commit into `source`, `style`, `plan`,
-`layout`, `projection` and `transaction`.  Compare the same operation without
-`etaf-performance-mode` (its recording adds overhead) using `benchmark-run`,
-and treat batch numbers as the portable ones: a background GUI frame measures
-App Nap rather than the code.
+For repeatability, keep profiling separate and initialize three independent sets:
+
+```sh
+python3 scripts/performance.py run --mode batch \
+  --scenario row-update.30 --scenario row-update.400 \
+  --scenario list-append.30 --scenario list-append.120 \
+  --scenario gallery.review.steady.callback \
+  --sets 3 --samples 30 --warmups 5
+```
+
+Keep the printed evidence directory. Add `--baseline /path/to/result.json` to the
+same repeatability command after a change, with the same workload and environment.
+Inspect a particular result with:
+
+```sh
+python3 scripts/performance.py summarize /path/to/result.json \
+  --scenario gallery.review.steady.callback --details
+```
+
+The row workloads retain a fixed number of rows and change the first row's paint
+and weight. Append workloads start with the named size and keep growing within
+each set, including warmups. They are not fixed-size single-insertion experiments.
+The Gallery callback workload measures the complete local callback, settlement
+and publication boundary; it does not certify keyboard or mouse input. Batch
+results do not certify graphical redisplay or foreground input latency. Use the
+corresponding registered GUI workloads for those boundaries.
+
+Interpret the commit and publication reports together:
+
+| Evidence | Interpretation |
+| --- | --- |
+| `dirty-count`, `dirty-keys`, owner scope | What changed and which owners the plan selected; not a measure of all work performed. |
+| Requested and actual projection, rejection reasons | Whether a local plan executed or fell back. An `output-proof` refusal alone does not identify the specific failed precondition. |
+| `reconciled-objects` | Objects coordinated by the publication; compare with the change size and inspect phases. This counter alone does not cover every global scan or copy. |
+| Text and `property-operations` | Actual output operations; a small count can coexist with expensive complete projection. |
+| Full-root publication flag | Scope of final publication, not proof that all upstream calculation was scoped. |
+| `phase-duration-ms` | Exclusive source/style/plan/layout/projection/transaction work; compare with the remaining operation time. |
+| GC and allocation stacks | Included pauses and allocation candidates; separate runtime work from driver serialization and other measurement overhead. |
+
+Correctness, execution strategy and latency need separate conclusions. A native
+module may be loaded without being used; an actual native-frame commit can still
+have expensive source preparation or publication. Background GUI timing also
+needs the App Nap and focus checks described above; it must not be presented as
+foreground input certification.
+
+The cross-package cost model, current implementation gaps and required acceptance
+matrix are maintained in the [ecosystem architecture](architecture.zh-CN.md),
+sections 6, 9, 10.4 and 11.5. This workflow explains how to obtain evidence; it
+does not make pending architecture targets implemented behavior.
 
 ## Judge Ebox interaction ownership
 

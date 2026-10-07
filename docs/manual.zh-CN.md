@@ -165,6 +165,65 @@ Trace 的 `native_declined` 保留原生输入能力不足的原因，`native_fa
 Gallery 记录最后一次提交的投影、脏节点数、根节点归属和发布操作数。这不包含同一次
 输入中更早的提交，完整提交序列仍由独立 trace pass 提供。
 
+## 测量增量提交
+
+一次状态写入可以走保留更新、局部候选或范围更大的回退，以报告的实际路径为准。
+最终 buffer patch 很小，不代表准备、布局、投影和事务全过程都局部；发生回退也不代表
+全部文本属性都被重写。保留 Host 更新仍是支持的能力，但普通声明不应要求应用手工
+选择它才能获得低延迟。
+
+使用已注册的行更新、结构追加和普通控件场景，先以少量样本定位阶段：
+
+```sh
+python3 scripts/performance.py run --mode batch \
+  --scenario row-update.30 --scenario row-update.400 \
+  --scenario list-append.30 --scenario list-append.120 \
+  --scenario gallery.review.steady.callback \
+  --sets 1 --samples 5 --warmups 2 --diagnose --diagnostic-samples 4
+```
+
+正式重复性测量与 profiler 分开，使用三组独立初始化：
+
+```sh
+python3 scripts/performance.py run --mode batch \
+  --scenario row-update.30 --scenario row-update.400 \
+  --scenario list-append.30 --scenario list-append.120 \
+  --scenario gallery.review.steady.callback \
+  --sets 3 --samples 30 --warmups 5
+```
+
+保留命令打印的证据目录。改动后，在相同正式命令后追加
+`--baseline /path/to/result.json`，保持负载与环境可比。查看单个场景：
+
+```sh
+python3 scripts/performance.py summarize /path/to/result.json \
+  --scenario gallery.review.steady.callback --details
+```
+
+行更新场景保持固定行数，改变第一行的绘制与字重。追加场景从名称中的行数开始，
+在同一组内持续增长，预热也真实追加；不能把它描述为固定规模的单次插入实验。
+Gallery callback 测量回调、结算和发布的完整本地边界，不认证键盘或鼠标路径。
+批处理不能认证实际图形显示或前台输入延迟；这些边界使用相应的已注册 GUI 场景。
+
+提交和发布报告应合并解释：
+
+| 证据 | 正确解释 |
+| --- | --- |
+| `dirty-count`、`dirty-keys`、owner 范围 | 实际变化和计划选中的 owner，不是全部计算工作量 |
+| 请求及实际投影、拒绝原因 | 局部计划是否实际执行；仅有 `output-proof` 不能确认具体失败条件 |
+| `reconciled-objects` | 发布协调的对象数量，应结合变化规模和阶段成本；不覆盖所有全局扫描与复制 |
+| 文本与 `property-operations` | 实际输出操作；数量很少时仍可能进行了昂贵的完整投影 |
+| full-root 发布标志 | 最终发布范围，不证明上游计算局部 |
+| `phase-duration-ms` | source/style/plan/layout/projection/transaction 的独占阶段成本，并与操作其余时间对照 |
+| GC 与分配栈 | 计入的停顿与候选分配热点；区分运行时、驱动序列化及其他测量开销 |
+
+正确性、实际执行策略与延迟分别下结论。原生模块已加载不代表它被使用，实际
+native-frame 提交也可能有昂贵的 source 准备或发布。后台 GUI 必须执行前文的
+App Nap 和焦点检查，不能当成前台输入认证。
+
+跨包成本模型、当前实现差距和验收矩阵维护在[生态架构](architecture.zh-CN.md)
+第 6、9、10.4、11.5 节。本节说明获取证据的方法，不把待实现目标描述为已有行为。
+
 ## 证据与失败
 
 默认结果保存在 `~/.cache/emacs-taf/performance/`（遵循 `$XDG_CACHE_HOME`）。
