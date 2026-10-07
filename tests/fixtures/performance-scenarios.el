@@ -81,3 +81,35 @@
      :required-providers '(fixture) :isolation 'series :impact 'local
      :description "Tool protocol fixture"
      :setup (lambda (_mode) (taf-test-fixture variant)))))
+
+(defun taf-test-gate-fixture (kind)
+  "Return a renderer-like gate fixture of KIND over a five-line buffer."
+  (let ((buffer (generate-new-buffer " *taf-gate-fixture*")) sink)
+    (with-current-buffer buffer
+      (dotimes (i 5) (insert (format "row %d\n" i))))
+    (list :buffer buffer
+          :invoke
+          (lambda (sample)
+            (if (eq kind 'replay)
+                (forward-line (if (cl-evenp sample) 1 -1))
+              (with-current-buffer buffer
+                ;; Rewrite the whole third line, changing only its face.
+                (goto-char (point-min))
+                (forward-line 2)
+                (delete-region (point) (line-beginning-position 2))
+                (insert (propertize "row 2" 'face (and (cl-evenp sample) 'bold)) "\n")
+                (when sink
+                  (funcall sink buffer (list :ranges (if (eq kind 'wrong-ranges)
+                                                         '((0 1 1))
+                                                       '((2 1 1)))))))))
+          :verify (lambda () (with-current-buffer buffer (= (count-lines (point-min) (point-max)) 5)))
+          :observe (lambda (collector) (setq sink collector) (lambda () (setq sink nil)))
+          :cleanup (lambda () (kill-buffer buffer)))))
+
+(dolist (kind '(rewrite wrong-ranges replay))
+  (let ((variant kind))
+    (taf-benchmark-register
+     (format "fixture.gate.%s" variant) :version 1 :modes '(batch) :budget-ms 100
+     :isolation 'series :impact 'local :description "Gate runner fixture"
+     :gate (list :class 'local :twin (if (eq variant 'replay) 'replay 'diff))
+     :setup (lambda (_mode) (taf-test-gate-fixture variant)))))

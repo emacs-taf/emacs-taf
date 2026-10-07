@@ -177,6 +177,45 @@ a performance pass. `acceptance_eligible` separately records sufficient sample
 coverage. Existing `make verify` continues to run the complete batch correctness
 and Research Shelf verification workflow.
 
+## Gate a change in the GUI
+
+`gate` is the quick per-change check. It runs every selected scenario that
+declares `:gate` back to back inside an existing GUI server, typically a full
+matrix in a minute or two, and judges fixed budgets. Use `run` for diagnosis,
+baselines and the final three-set acceptance.
+
+```sh
+python3 scripts/performance.py gate --server fg --scenario-file ebox/benchmarks/performance-scenarios.el --scenario '^ebox\.'
+python3 scripts/performance.py gate --report ~/.cache/emacs-taf/gate/<run>.json
+```
+
+Each sample times `:invoke` (the operation) and the following forced redisplay
+(end to end), after five untimed warmups, and records allocated conses. The
+scenario's `:gate` plist selects a class; a trailing numeric id component is the
+size, which `rows` uses as the row count unless `:rows` is given:
+
+| Class | Operation budget (p50 unless noted) |
+| --- | --- |
+| `local` | 50 µs, p95 200 µs, conses 200 |
+| `propagate` | 200 µs |
+| `structure` | 300 µs |
+| `rows` | 40 µs per row |
+| `info` | reported only |
+
+For `local`, `propagate` and `structure`, the largest size of a family may not
+exceed 1.5 × the smallest size's operation p50 plus 20 µs. `:twin diff`
+requires `:observe` reports with `:ranges`, a list of `(START OLD NEW)` line
+replacements in application order. The runner converts each sample's ranges
+into the smallest plain-buffer edit producing the same text and properties,
+replays it on a copy of the initial buffer without moving point (Emacs redraws
+an edit on the line at point through a faster path) and requires the end-to-end p50 to
+stay within 200 µs of that floor; `rows` compares the redisplay time after the
+operation instead, because its row budget already bounds the operation. Ranges
+that do not reproduce the live buffer fail the scenario. `:twin replay` times `:invoke` again on a plain copy shown in
+the selected window, so its operation must act on the current buffer. Exit
+status is 0 for a pass, 1 for a failed budget, verification or twin, and 2 for
+an incomplete report.
+
 ## Validate an isolated checkout in a real GUI
 
 A `jj workspace add` checkout must be exercised in the full user configuration

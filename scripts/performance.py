@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Run registered Emacs performance scenarios and explain reproducible evidence.
 
-CLI: list, run, summarize, compare, cancel. JSON schema 1 keeps raw samples,
-verification, context, provider phases, sampled CPU/allocation stacks and source
-revisions. Warmups and diagnostic samples never enter formal latency statistics.
+CLI: list, run, summarize, compare, cancel, gate. JSON schema 1 keeps raw
+samples, verification, context, provider phases, sampled CPU/allocation stacks
+and source revisions. Warmups and diagnostic samples never enter formal latency
+statistics. gate runs every scenario that declares :gate back to back in a GUI
+server and checks the budget classes in GATE_CLASSES.
 """
 import argparse
 from collections import Counter, defaultdict
@@ -23,6 +25,23 @@ import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 DRIVER = ROOT / "benchmarks/performance-driver.el"
+GATE_RUNNER = ROOT / "benchmarks/performance-gate.el"
+# Operation budgets in microseconds, excluding redisplay.  "rows" scales by the
+# scenario's row count.  Every class with a twin also requires end-to-end time
+# within GATE_TWIN_SLACK_US of the plain-buffer twin; "redisplay" classes
+# compare only the time after the operation, whose own cost the row budget bounds.
+GATE_CLASSES = {
+    "local": {"op_p50": 50, "op_p95": 200, "cons_p50": 200, "flat": True},
+    "propagate": {"op_p50": 200, "flat": True},
+    "structure": {"op_p50": 300, "flat": True},
+    "rows": {"op_p50_per_row": 40, "redisplay": True},
+    "info": {},
+}
+GATE_TWIN_SLACK_US = 200
+# Size independence: the largest size's op p50 may not exceed the smallest's
+# by more than this factor plus slack.
+GATE_FLAT_FACTOR = 1.5
+GATE_FLAT_SLACK_US = 20
 PHASES = ("source", "style", "plan", "layout", "projection", "transaction")
 WARMUP_PROTOCOL = "recorded-before-latency-per-scenario-set-v1"
 LIBRARY_CODE_PROTOCOL = "entry-lisp-examples-load-history-v1"
@@ -668,6 +687,115 @@ def run_backend(args, configuration, log_path):
         log.close()
 
 
+def gate_evaluate(report):
+    """Return (rows, failures) for a gate REPORT; rows are display tuples."""
+    rows, failures, families = [], [], defaultdict(list)
+    for result in report.get("results") or []:
+        name = result["id"]
+        family, _, size = name.rpartition(".")
+        gate = result.get("gate") or {}
+        klass = gate.get("class", "info")
+        if klass not in GATE_CLASSES:
+            failures.append(f"{name}: unknown gate class {klass}")
+            continue
+        if result.get("error"):
+            failures.append(f"{name}: {result['error']}")
+            rows.append((name, klass, None, None, None, None, None, None, "ERROR"))
+            continue
+        budget = GATE_CLASSES[klass]
+        op, total, cons = result["op"], result["total"], result["cons"]
+        op50, op95 = percentile(op, .5), percentile(op, .95)
+        total50, cons50 = percentile(total, .5), percentile(cons, .5)
+        twin50 = percentile(result["twin"], .5) if result.get("twin") else None
+        own = []
+        if result.get("verify") is not True:
+            own.append(f"verify: {result.get('verify')}")
+        if result.get("twin-error"):
+            own.append(f"twin: {result['twin-error']}")
+        if gate.get("twin") and twin50 is None and not result.get("twin-error"):
+            own.append("twin: no samples")
+        if "op_p50" in budget and op50 > budget["op_p50"]:
+            own.append(f"op p50 {op50:.0f} > {budget['op_p50']} us")
+        if "op_p95" in budget and op95 > budget["op_p95"]:
+            own.append(f"op p95 {op95:.0f} > {budget['op_p95']} us")
+        if "cons_p50" in budget and cons50 > budget["cons_p50"]:
+            own.append(f"cons p50 {cons50:.0f} > {budget['cons_p50']}")
+        if "op_p50_per_row" in budget:
+            per_row = op50 / max(1, gate.get("rows") or (int(size) if size.isdigit() else 1))
+            if per_row > budget["op_p50_per_row"]:
+                own.append(f"op {per_row:.1f} us/row > {budget['op_p50_per_row']}")
+        if twin50 is not None and budget.get("redisplay"):
+            overhead = percentile([t - o for t, o in zip(total, op)], .5)
+            if overhead - twin50 > GATE_TWIN_SLACK_US:
+                own.append(f"redisplay {overhead - twin50:+.0f} us over twin")
+        elif twin50 is not None and total50 - twin50 > GATE_TWIN_SLACK_US:
+            own.append(f"e2e {total50 - twin50:+.0f} us over twin")
+        if budget.get("flat") and size.isdigit():
+            families[family].append((int(size), op50, name))
+        failures.extend(f"{name}: {reason}" for reason in own)
+        rows.append((name, klass, op50, op95, total50, twin50, cons50, result.get("gcs"),
+                     "FAIL" if own else "PASS"))
+    for family, sizes in families.items():
+        sizes.sort()
+        (small, small50, _), (large, large50, name) = sizes[0], sizes[-1]
+        if large > small and large50 > small50 * GATE_FLAT_FACTOR + GATE_FLAT_SLACK_US:
+            failures.append(f"{family}: op p50 grows {small50:.0f} -> {large50:.0f} us "
+                            f"from {small} to {large} rows")
+    return rows, failures
+
+
+def gate_print(report):
+    rows, failures = gate_evaluate(report)
+    frame = report.get("frame", {})
+    print(f"frame {frame.get('width')}x{frame.get('height')} px font {frame.get('font')}")
+    print(f"{'scenario':44} {'class':9} {'op50':>7} {'op95':>7} {'e2e50':>7} {'twin50':>7} "
+          f"{'cons50':>7} {'gc':>3}  result")
+    def cell(value):
+        return f"{value:7.0f}" if isinstance(value, (int, float)) else f"{'-':>7}"
+    for name, klass, op50, op95, total50, twin50, cons50, gcs, result in rows:
+        print(f"{name:44} {klass:9} {cell(op50)} {cell(op95)} {cell(total50)} {cell(twin50)} "
+              f"{cell(cons50)} {gcs if gcs is not None else '-':>3}  {result}")
+    for failure in failures:
+        print(f"FAIL {failure}")
+    complete = report.get("status") == "done" and len(report.get("results") or []) == report.get("total")
+    status = "PASS" if complete and not failures else "FAIL" if complete else "UNVERIFIED"
+    print(f"{status}: {len(rows)} scenarios, {len(failures)} failures")
+    return 0 if status == "PASS" else 1 if status == "FAIL" else 2
+
+
+def gate(args, entries):
+    output = (args.output or Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) /
+              "emacs-taf/gate" / (datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ-") + uuid.uuid4().hex[:8] + ".json")).resolve()
+    output.parent.mkdir(parents=True, exist_ok=True)
+    configuration = output.with_suffix(".configuration.json")
+    write_json(configuration, {"output": str(output), "scenario_files": list(map(str, entries)),
+                               "scenarios": args.scenario or ["."], "samples": args.samples})
+    expression = ("(progn (when (and (fboundp 'taf-gate-running-p) (taf-gate-running-p)) "
+                  '(error "A gate job is already running")) '
+                  f"(load {json.dumps(str(GATE_RUNNER), ensure_ascii=False)} nil t t) "
+                  f"(taf-gate-start {json.dumps(str(configuration), ensure_ascii=False)}))")
+    start = subprocess.run(client_command(args, expression), capture_output=True, text=True, timeout=30)
+    if start.returncode or "scheduled" not in start.stdout:
+        raise ValueError(f"Cannot start gate job: {start.stdout}{start.stderr}")
+    deadline, report, shown = time.monotonic() + args.run_timeout, {}, 0
+    while time.monotonic() < deadline:
+        try:
+            report = read_json(output)
+        except (FileNotFoundError, json.JSONDecodeError):
+            time.sleep(.1)
+            continue
+        done = len(report.get("results") or [])
+        if done > shown:
+            print(f"\r{done}/{report.get('total')} scenarios", end="", file=sys.stderr, flush=True)
+            shown = done
+        if report.get("status") != "running":
+            break
+        time.sleep(.2)
+    print(file=sys.stderr)
+    print(f"Evidence: {output}")
+    return gate_print(report)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -707,7 +835,27 @@ def main():
     cancel = subparsers.add_parser("cancel")
     cancel.add_argument("--emacsclient", default="emacsclient")
     cancel.add_argument("--server")
+    gating = subparsers.add_parser("gate")
+    gating.add_argument("--root", type=Path, default=ROOT)
+    gating.add_argument("--scenario-file", action="append", default=[])
+    gating.add_argument("--scenario", action="append", default=[],
+                        help="Emacs regexp selecting scenario ids (default: all with :gate).")
+    gating.add_argument("--server", help="Existing named GUI Emacs server (required to run).")
+    gating.add_argument("--emacsclient", default="emacsclient")
+    gating.add_argument("--samples", type=int, default=40)
+    gating.add_argument("--run-timeout", type=float, default=900)
+    gating.add_argument("--output", type=Path)
+    gating.add_argument("--report", type=Path, help="Re-evaluate an existing gate report instead of running.")
     args = parser.parse_args()
+    if args.command == "gate":
+        if args.report:
+            return gate_print(read_json(args.report))
+        if not args.server:
+            parser.error("gate requires --server unless --report is given")
+        if not 5 <= args.samples <= 1000:
+            parser.error("--samples must be between 5 and 1000")
+        entries, _ = discover(args.root.resolve(), args.scenario_file)
+        return gate(args, entries)
     if args.command == "summarize":
         return summarize(read_json(args.report), args.scenario, args.details)
     if args.command == "compare":

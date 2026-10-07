@@ -106,6 +106,39 @@ Gallery 测量在显示 buffer 后、开始计时前同步 Ebox 的布局视口�
 采样覆盖是否足够。功能执行完成不等于性能通过。已有 `make verify` 继续负责完整批处理
 功能检查与 Research Shelf 验证流程。
 
+## 在 GUI 中门禁一次改动
+
+`gate` 是每次改动后的快速检查。它在已有的 GUI 服务器里连续运行所有选中且声明了
+`:gate` 的场景，完整矩阵通常一两分钟内完成，并按固定预算判定。诊断、基线和最终
+三组验收仍使用 `run`。
+
+```sh
+python3 scripts/performance.py gate --server fg --scenario-file ebox/benchmarks/performance-scenarios.el --scenario '^ebox\.'
+python3 scripts/performance.py gate --report ~/.cache/emacs-taf/gate/<run>.json
+```
+
+每个样本在五次不计时预热之后，分别计时 `:invoke`（操作）和随后的强制重绘（端到端），
+并记录分配的 cons 数。场景的 `:gate` plist 选择类别；id 末尾的数字段是规模，
+`rows` 类在未给出 `:rows` 时以它作为行数：
+
+| 类别 | 操作预算（未注明时为 p50） |
+| --- | --- |
+| `local` | 50 µs，p95 200 µs，cons 200 |
+| `propagate` | 200 µs |
+| `structure` | 300 µs |
+| `rows` | 每行 40 µs |
+| `info` | 只报告 |
+
+对 `local`、`propagate` 和 `structure`，同一场景族最大规模的操作 p50 不得超过最小
+规模的 1.5 倍再加 20 µs。`:twin diff` 要求 `:observe` 报告携带 `:ranges`，即按应用
+顺序排列的 `(START OLD NEW)` 行替换列表。运行器把每个样本的区段换算成在普通 buffer
+上得到相同文本和属性的最小编辑，在初始 buffer 的副本上重放且不移动光标（Emacs 对
+光标所在行的编辑走更快的重绘路径），并要求端到端 p50 不超过这一下限 200 µs；
+`rows` 类改为比较操作之后的重绘时间，因为其每行预算已约束操作本身。区段无法复现
+实际 buffer 时场景失败。`:twin replay` 在选中窗口显示的
+普通副本上再次计时 `:invoke`，因此该操作必须作用于当前 buffer。退出码 0 表示通过，
+1 表示预算、验证或孪生检查失败，2 表示报告不完整。
+
 ## 在真实 GUI 中验证隔离检出
 
 `jj workspace add` 检出必须在完整用户配置里运行，且绝不能加载主检出的代码代。用户 init 会从

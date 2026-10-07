@@ -414,7 +414,7 @@ class PerformanceTool(unittest.TestCase):
                                  (should-error (taf-benchmark-detach-fixture)
                                                :type 'user-error)))
                     (plist-put fixture :verify
-                               (lambda () (ebox-surface-buffer-mounted-p buffer)))
+                               (lambda () (and (ebox-buffer-mount buffer) t)))
                     fixture))))
     (setq taf-test-detach-fixtures (copy-sequence fixtures))
     (let ((buffers (mapcar (lambda (fixture) (plist-get fixture :buffer)) fixtures)))
@@ -438,15 +438,15 @@ class PerformanceTool(unittest.TestCase):
                 (should-not (taf-benchmark-detach-fixture))
                 (run CONFIG)
                 (should (buffer-live-p (nth 0 buffers)))
-                (should (ebox-surface-buffer-mounted-p (nth 0 buffers)))
-                (should (ebox-surface-buffer-mounted-p (nth 1 buffers)))
+                (should (ebox-buffer-mount (nth 0 buffers)))
+                (should (ebox-buffer-mount (nth 1 buffers)))
                 (run CONFIG)
                 (should-not (buffer-live-p (nth 1 buffers)))
-                (should (ebox-surface-buffer-mounted-p (nth 0 buffers)))
-                (should (ebox-surface-buffer-mounted-p (nth 2 buffers)))
+                (should (ebox-buffer-mount (nth 0 buffers)))
+                (should (ebox-buffer-mount (nth 2 buffers)))
                 (run EMPTY_CONFIG)
                 (should-not (buffer-live-p (nth 2 buffers)))
-                (should (ebox-surface-buffer-mounted-p (nth 0 buffers)))
+                (should (ebox-buffer-mount (nth 0 buffers)))
                 (should-not (taf-benchmark-detach-fixture)))))
         (taf-benchmark-cancel)
         (dolist (fixture fixtures) (funcall (plist-get fixture :cleanup)))))))
@@ -589,6 +589,82 @@ class PerformanceTool(unittest.TestCase):
         result = self.compare(before, after)
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
         self.assertEqual(json.loads(result.stdout)["status"], "regressed")
+
+
+class PerformanceGate(unittest.TestCase):
+    """The gate runner's twin contract and the budget classes it is judged by."""
+
+    def evaluate(self, results, status="done", total=None):
+        with tempfile.TemporaryDirectory() as directory:
+            report = Path(directory) / "gate.json"
+            report.write_text(json.dumps({"status": status, "frame": {}, "results": results,
+                                          "total": len(results) if total is None else total}))
+            return subprocess.run([sys.executable, str(COMMAND), "gate", "--report", str(report)],
+                                  capture_output=True, text=True, timeout=20)
+
+    @staticmethod
+    def result(name, klass, op, total=1000, twin=None, cons=10, verify=True, **gate):
+        return {"id": name, "gate": {"class": klass, **gate}, "op": [op] * 5, "total": [total] * 5,
+                "cons": [cons] * 5, "twin": None if twin is None else [twin] * 5,
+                "twin-error": None, "gcs": 0, "verify": verify}
+
+    def test_runner_replays_reported_ranges_and_rejects_unreported_changes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output, configuration = Path(directory) / "gate.json", Path(directory) / "configuration.json"
+            configuration.write_text(json.dumps({"output": str(output), "scenario_files": [str(FIXTURE)],
+                                                 "scenarios": [r"fixture\.gate\."], "samples": 6}))
+            subprocess.run(["emacs", "-Q", "--batch", "-l", str(ROOT / "benchmarks/performance-gate.el"),
+                            "--eval", f"(progn (taf-gate-start {json.dumps(str(configuration))}) "
+                            "(with-timeout (20) (while (taf-gate-running-p) (accept-process-output nil 0.05))))"],
+                           check=True, capture_output=True, timeout=30)
+            report = json.loads(output.read_text())
+            evaluated = subprocess.run([sys.executable, str(COMMAND), "gate", "--report", str(output)],
+                                       capture_output=True, text=True, timeout=20)
+        results = {result["id"]: result for result in report["results"]}
+        self.assertEqual("done", report["status"])
+        self.assertEqual(3, report["total"])
+        for name in ("fixture.gate.rewrite", "fixture.gate.replay"):
+            self.assertIs(True, results[name]["verify"])
+            self.assertIsNone(results[name]["twin-error"])
+            self.assertEqual(6, len(results[name]["twin"]))
+            self.assertEqual(6, len(results[name]["op"]))
+        self.assertIn("do not reproduce", results["fixture.gate.wrong-ranges"]["twin-error"])
+        self.assertIsNone(results["fixture.gate.wrong-ranges"]["twin"])
+        self.assertEqual(1, evaluated.returncode, evaluated.stdout)
+        self.assertIn("FAIL fixture.gate.wrong-ranges: twin:", evaluated.stdout)
+        self.assertNotIn("FAIL fixture.gate.rewrite", evaluated.stdout)
+
+    def test_budget_classes_end_to_end_slack_and_size_independence(self):
+        passing = [self.result("a.local.30", "local", 40, total=1100, twin=1000),
+                   self.result("a.local.10000", "local", 45, total=1150, twin=1000),
+                   self.result("a.tree.400", "propagate", 190),
+                   self.result("a.list.400", "structure", 290),
+                   self.result("a.mount.400", "rows", 400 * 39),
+                   self.result("a.filter.400", "rows", 9000, total=10100, twin=1000)]
+        process = self.evaluate(passing)
+        self.assertEqual(0, process.returncode, process.stdout)
+        self.assertIn("PASS: 6 scenarios, 0 failures", process.stdout)
+        failing = [self.result("b.op.30", "local", 51),
+                   self.result("b.cons.30", "local", 10, cons=201),
+                   self.result("b.e2e.30", "local", 10, total=1201, twin=1000),
+                   self.result("b.verify.30", "local", 10, verify="stale row"),
+                   self.result("b.grow.30", "propagate", 20),
+                   self.result("b.grow.10000", "propagate", 51),
+                   self.result("b.mount.400", "rows", 400 * 41),
+                   self.result("b.filter.400", "rows", 9000, total=10201, twin=1000),
+                   self.result("b.unknown.30", "fast", 1)]
+        process = self.evaluate(failing)
+        self.assertEqual(1, process.returncode, process.stdout)
+        for expected in ("b.op.30: op p50 51 > 50", "b.cons.30: cons p50 201 > 200",
+                         "b.e2e.30: e2e +201 us over twin", "b.verify.30: verify: stale row",
+                         "b.grow: op p50 grows 20 -> 51", "b.mount.400: op 41.0 us/row > 40",
+                         "b.filter.400: redisplay +201 us over twin",
+                         "b.unknown.30: unknown gate class fast"):
+            self.assertIn("FAIL " + expected, process.stdout)
+
+    def test_incomplete_or_running_reports_are_unverified(self):
+        self.assertEqual(2, self.evaluate([self.result("c.x.30", "local", 1)], total=2).returncode)
+        self.assertEqual(2, self.evaluate([], status="running", total=1).returncode)
 
 
 @unittest.skipUnless(shutil.which("jj"), "jj is not installed")
