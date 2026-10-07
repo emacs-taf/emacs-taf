@@ -22,7 +22,7 @@ public interfaces, releases and behavior checks.
 
 Clone the repositories from `workspace.json` into sibling directories with exactly
 these names. Clone with `git clone -o laycat <url> <name>` and add the matching
-`aliyun` URL at `https://gitea.vhkd.top/geekinney/<name>.git`.
+`aliyun` URL at `https://forgejo.vhkd.top/emacs-taf/<name>.git`.
 The recorded revisions identify the child commits verified together by
 `make check`; they are an integration checkpoint, not a release certification.
 Commits must be pushed before this checkpoint is available from the remote URLs. `python3 scripts/workspace.py status` reports
@@ -106,13 +106,14 @@ check each message with `python3 scripts/check-commit-message.py <file>` and the
 sealed change with `python3 scripts/check-repository.py --staged` before pushing.
 
 Every module uses `laycat` at `gitea.gklazycat.heiyu.space` and `aliyun` at
-`gitea.vhkd.top`. After a coherent group of validated commits, fetch and inspect
+`forgejo.vhkd.top`. After a coherent group of validated commits, fetch and inspect
 `aliyun`, then push the branch recorded in `workspace.json` to its same-named
 branch there with `jj git push --remote aliyun -b <branch>`.
 Automatic delivery requires aliyun; laycat remains configured for manual
 maintenance and delivery. Do not force-push or implicitly publish other branches
 or tags. Report aliyun's delivery result. Reserve `origin` for future GitHub use;
-it is currently unconfigured. The root workspace has no remote configured.
+it is currently unconfigured. The root workspace uses the same `aliyun` and
+`laycat` remotes as the modules.
 Hooks validate structure and message format; authors remain responsible for
 scope, accurate descriptions and validation.
 

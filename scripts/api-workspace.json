@@ -1,38 +1,38 @@
 {
   "ebox": {
     "entry": "ebox",
-    "url": "git@gitea.gklazycat.heiyu.space:geekinney/ebox.git"
+    "url": "git@gitea.gklazycat.heiyu.space:emacs-taf/ebox.git"
   },
   "ebox-playground": {
     "entry": "ebox-playground",
-    "url": "git@gitea.gklazycat.heiyu.space:geekinney/ebox-playground.git"
+    "url": "git@gitea.gklazycat.heiyu.space:emacs-taf/ebox-playground.git"
   },
   "ecss": {
     "entry": "ecss",
-    "url": "git@gitea.gklazycat.heiyu.space:geekinney/ecss.git"
+    "url": "git@gitea.gklazycat.heiyu.space:emacs-taf/ecss.git"
   },
   "ekp": {
     "entry": "ekp",
-    "url": "git@gitea.gklazycat.heiyu.space:geekinney/ekp.git"
+    "url": "git@gitea.gklazycat.heiyu.space:emacs-taf/ekp.git"
   },
   "etaf": {
     "entry": "etaf",
-    "url": "git@gitea.gklazycat.heiyu.space:geekinney/etaf.git"
+    "url": "git@gitea.gklazycat.heiyu.space:emacs-taf/etaf.git"
   },
   "etaf-db": {
     "entry": "etaf-db",
-    "url": "git@gitea.gklazycat.heiyu.space:geekinney/etaf-db.git"
+    "url": "git@gitea.gklazycat.heiyu.space:emacs-taf/etaf-db.git"
   },
   "etaf-desktop": {
     "entry": "etaf-desktop",
-    "url": "git@gitea.gklazycat.heiyu.space:geekinney/etaf-desktop.git"
+    "url": "git@gitea.gklazycat.heiyu.space:emacs-taf/etaf-desktop.git"
   },
   "etaf-playground": {
     "entry": "etaf-playground",
-    "url": "git@gitea.gklazycat.heiyu.space:geekinney/etaf-playground.git"
+    "url": "git@gitea.gklazycat.heiyu.space:emacs-taf/etaf-playground.git"
   },
   "etaf-ui": {
     "entry": "etaf-ui",
-    "url": "git@gitea.gklazycat.heiyu.space:geekinney/etaf-ui.git"
+    "url": "git@gitea.gklazycat.heiyu.space:emacs-taf/etaf-ui.git"
   }
 }

@@ -88,12 +88,13 @@ README 只负责入门和导航。完整用法及跨模块接口契约放入 `do
 `python3 scripts/check-repository.py --staged` 检查已封口的改动。
 
 每个模块统一使用两个远端：`laycat` 指向 `gitea.gklazycat.heiyu.space`，
-`aliyun` 指向 `gitea.vhkd.top`。每完成一组验证通过的提交，先 fetch 并检查 aliyun，
+`aliyun` 指向 `forgejo.vhkd.top`。每完成一组验证通过的提交，先 fetch 并检查 aliyun，
 再用 `jj git push --remote aliyun -b <分支>` 将 `workspace.json` 记录的分支推送到 aliyun 的同名分支。自动交付以 aliyun 成功为准；laycat 保留配置，
 由用户手动维护和交付。这是用户已授权的默认规则，无需重复确认。
 不强制覆盖历史，不隐式推送其他分支或标签。
 `origin` 预留给未来的 GitHub，目前不配置。克隆时使用 `git clone -o laycat`，
-再添加对应的 `aliyun` 远端。报告 aliyun 的推送结果；根工作区未配置远端，暂时只保留本地提交。
+再添加对应的 `aliyun` 远端。报告 aliyun 的推送结果；根工作区使用与各模块相同的
+`aliyun` 和 `laycat` 远端。
 钩子检查目录与消息格式，修改范围、描述准确性和验证充分性仍需开发者负责。
 
 ## 持续约束

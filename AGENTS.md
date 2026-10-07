@@ -285,7 +285,7 @@ unrelated root files) instead of the child's sealed tree.
 ### Publishing
 
 - Each module keeps two remotes: laycat at gitea.gklazycat.heiyu.space and aliyun
-  at gitea.vhkd.top. Reserve origin for a future GitHub remote; leave it
+  at forgejo.vhkd.top. Reserve origin for a future GitHub remote; leave it
   unconfigured until requested. Preserve unrelated third-party source and licensing
   links.
 - The published bookmark is the `branch` recorded in `workspace.json` (`main`).
@@ -313,9 +313,8 @@ unrelated root files) instead of the child's sealed tree.
   or tags implicitly. If authentication, connectivity or configuration prevents the
   aliyun push, retain local commits and report that delivery failure. Never claim
   an unpushed commit is backed up remotely.
-- The root workspace has no remote; keep its commits local until a destination is
-  provided, but still move its `main` bookmark with `jj bookmark set main -r @-`
-  after each completed commit.
+- The root workspace uses the same `aliyun` and `laycat` remotes as the modules;
+  move its `main` bookmark with `jj bookmark set main -r @-` before pushing.
 
 ### Cross-repository revisions
 
