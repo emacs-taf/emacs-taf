@@ -3,20 +3,46 @@
 [中文](README.zh-CN.md)
 
 This repository owns the shared development policy and local orchestration for
-nine independent Emacs Lisp repositories. Each package retains its own Git history,
-public interfaces, releases and behavior checks.
+the Emacs TAF ecosystem: its framework packages, the etaf-apps application
+workspace and the applications built on them. Each repository retains its own Git
+history, public interfaces, releases and behavior checks.
+
+## Repositories
+
+Framework packages and workspace tooling developed in this checkout:
 
 | Repository | Responsibility | Dependencies in this workspace |
 | --- | --- | --- |
-| ecss | Selector and cascade semantics | None |
-| ekp | Knuth–Plass paragraph layout | None |
-| ebox | Box layout, rendering and incremental publication | ecss; optional ekp |
-| etaf | Components, state and application runtime | ebox |
-| etaf-ui | Reusable UI components | etaf |
-| etaf-db | Database backends for ETAF; currently SQLite | etaf |
-| etaf-desktop | Desktop window-management application built from ETAF UI | etaf, etaf-ui |
-| ebox-playground | Runnable Ebox layout examples | ebox |
-| etaf-playground | ETAF/UI integration examples and acceptance surfaces | etaf, etaf-ui, etaf-db, etaf-desktop |
+| [ecss](https://forgejo.vhkd.top/emacs-taf/ecss) | Selector and cascade semantics | None |
+| [ekp](https://forgejo.vhkd.top/emacs-taf/ekp) | Knuth–Plass paragraph layout | None |
+| [ebox](https://forgejo.vhkd.top/emacs-taf/ebox) | Box layout, rendering and incremental publication | ecss; optional ekp |
+| [etaf](https://forgejo.vhkd.top/emacs-taf/etaf) | Components, state and application runtime | ebox |
+| [etaf-ui](https://forgejo.vhkd.top/emacs-taf/etaf-ui) | Reusable UI components | etaf |
+| [etaf-db](https://forgejo.vhkd.top/emacs-taf/etaf-db) | Database backends for ETAF; currently SQLite | etaf |
+| [etaf-apps](https://forgejo.vhkd.top/emacs-taf/etaf-apps) | Application workspace: their integration checkpoints and shared tooling | etaf, etaf-ui, etaf-db |
+| [ebox-playground](https://forgejo.vhkd.top/emacs-taf/ebox-playground) | Runnable Ebox layout examples | ebox |
+| [etaf-playground](https://forgejo.vhkd.top/emacs-taf/etaf-playground) | ETAF/UI integration examples and acceptance surfaces | etaf, etaf-ui, etaf-db, etaf-desktop |
+
+## Applications
+
+Every application is an independent repository with its own history and checks.
+[etaf-desktop](https://forgejo.vhkd.top/emacs-taf/etaf-desktop) is developed in this
+workspace; the others live in the [etaf-apps](https://forgejo.vhkd.top/emacs-taf/etaf-apps)
+workspace, whose README owns their dependency lists:
+
+| Application | Responsibility |
+| --- | --- |
+| [etaf-desktop](https://forgejo.vhkd.top/emacs-taf/etaf-desktop) | Desktop window-management application built from ETAF and ETAF UI |
+| [etaf-ncm](https://forgejo.vhkd.top/emacs-taf/etaf-ncm) | NetEase Cloud Music player: library browsing, playback control, lyrics and queue |
+| [etaf-weread](https://forgejo.vhkd.top/emacs-taf/etaf-weread) | WeChat Reading client: shelf, notebook, highlights, store search and statistics |
+| [etaf-md-preview](https://forgejo.vhkd.top/emacs-taf/etaf-md-preview) | Markdown reading view: centered measure, headings, tables, callouts, code and media cards |
+| [etaf-rss](https://forgejo.vhkd.top/emacs-taf/etaf-rss) | RSS reader: subscriptions, folders, unread and starred scopes, reading pane, search and OPML |
+| [etaf-reader](https://forgejo.vhkd.top/emacs-taf/etaf-reader) | Local ebook reader: EPUB/TXT/Markdown/HTML/FB2/PDF import, paged reading, annotations and progress |
+| [etaf-pi](https://forgejo.vhkd.top/emacs-taf/etaf-pi) | Native Pi agent client: streamed conversations, tool output, session recovery and multiline input |
+| [etaf-telega](https://forgejo.vhkd.top/emacs-taf/etaf-telega) | Telegram client on Telega's TDLib backend: chats, live message stream, composer and message actions |
+| [etaf-ascii-video](https://forgejo.vhkd.top/emacs-taf/etaf-ascii-video) | Video and HTTP(S) streams inside an Emacs buffer as pure characters |
+| [etaf-video-player](https://forgejo.vhkd.top/emacs-taf/etaf-video-player) | Local video and streams as sharp image frames with sound |
+| [etaf-algo-lab](https://forgejo.vhkd.top/emacs-taf/etaf-algo-lab) | Learn algorithms by watching, steering and comparing them inside Emacs |
 
 ## Setup
 

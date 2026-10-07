@@ -2,19 +2,42 @@
 
 [English](README.md)
 
-本仓库管理 9 个独立仓库的统一规范和本地构建入口；各包保留自己的 Git 历史、公共接口和发布流程。
+本仓库管理 Emacs TAF 生态的统一规范和本地构建入口：框架包、应用工作区与各个应用；各仓库保留自己的 Git 历史、公共接口和发布流程。
 
-| 仓库 | 职责 |
+## 仓库
+
+框架包与工作区工具都在本检出中：
+
+| 仓库 | 职责 | 本工作区依赖 |
+| --- | --- | --- |
+| [ecss](https://forgejo.vhkd.top/emacs-taf/ecss) | 选择器与样式层叠 | 无 |
+| [ekp](https://forgejo.vhkd.top/emacs-taf/ekp) | Knuth–Plass 段落排版 | 无 |
+| [ebox](https://forgejo.vhkd.top/emacs-taf/ebox) | Box 布局、渲染与增量发布 | ecss；可选 ekp |
+| [etaf](https://forgejo.vhkd.top/emacs-taf/etaf) | 组件、状态与应用运行时 | ebox |
+| [etaf-ui](https://forgejo.vhkd.top/emacs-taf/etaf-ui) | 通用 UI 组件 | etaf |
+| [etaf-db](https://forgejo.vhkd.top/emacs-taf/etaf-db) | ETAF 数据库后端；目前支持 SQLite | etaf |
+| [etaf-apps](https://forgejo.vhkd.top/emacs-taf/etaf-apps) | 应用工作区：各应用的集成检查点与共享工具 | etaf、etaf-ui、etaf-db |
+| [ebox-playground](https://forgejo.vhkd.top/emacs-taf/ebox-playground) | Ebox 布局示例 | ebox |
+| [etaf-playground](https://forgejo.vhkd.top/emacs-taf/etaf-playground) | ETAF/UI 集成示例与验收入口 | etaf、etaf-ui、etaf-db、etaf-desktop |
+
+## 应用
+
+每个应用都是独立仓库，有各自的历史和检查。
+[etaf-desktop](https://forgejo.vhkd.top/emacs-taf/etaf-desktop) 在本工作区开发，其余在 [etaf-apps](https://forgejo.vhkd.top/emacs-taf/etaf-apps) 工作区，其 README 维护依赖清单：
+
+| 应用 | 职责 |
 | --- | --- |
-| ecss | 选择器与样式层叠 |
-| ekp | Knuth–Plass 段落排版 |
-| ebox | Box 布局、渲染与增量发布；依赖 ecss，可选 ekp |
-| etaf | 组件、状态与应用运行时；依赖 ebox |
-| etaf-ui | 通用 UI 组件 |
-| etaf-db | ETAF 数据库后端；目前支持 SQLite |
-| etaf-desktop | 基于 ETAF UI 的 Emacs 桌面窗口管理应用；依赖 ETAF、ETAF UI |
-| ebox-playground | Ebox 布局示例 |
-| etaf-playground | ETAF/UI 集成示例与验收入口 |
+| [etaf-desktop](https://forgejo.vhkd.top/emacs-taf/etaf-desktop) | 基于 ETAF 与 ETAF UI 的 Emacs 桌面窗口管理应用 |
+| [etaf-ncm](https://forgejo.vhkd.top/emacs-taf/etaf-ncm) | 网易云音乐播放器：曲库浏览、播放控制、歌词与队列 |
+| [etaf-weread](https://forgejo.vhkd.top/emacs-taf/etaf-weread) | 微信读书客户端：书架、笔记本、划线、书店搜索与统计 |
+| [etaf-md-preview](https://forgejo.vhkd.top/emacs-taf/etaf-md-preview) | Markdown 阅读视图：居中版心、标题、表格、提示块、代码与媒体卡片 |
+| [etaf-rss](https://forgejo.vhkd.top/emacs-taf/etaf-rss) | RSS 阅读器：订阅、分组、未读与收藏、阅读栏、搜索与 OPML |
+| [etaf-reader](https://forgejo.vhkd.top/emacs-taf/etaf-reader) | 本地电子书阅读器：EPUB/TXT/Markdown/HTML/FB2/PDF 导入、翻页阅读、标注与进度 |
+| [etaf-pi](https://forgejo.vhkd.top/emacs-taf/etaf-pi) | 原生 Pi 代理客户端：流式对话、工具输出、会话恢复与多行输入 |
+| [etaf-telega](https://forgejo.vhkd.top/emacs-taf/etaf-telega) | 基于 Telega TDLib 的 Telegram 客户端：会话、实时消息、就地编辑与消息操作 |
+| [etaf-ascii-video](https://forgejo.vhkd.top/emacs-taf/etaf-ascii-video) | 在 Emacs buffer 里用纯字符播放视频与 HTTP(S) 流 |
+| [etaf-video-player](https://forgejo.vhkd.top/emacs-taf/etaf-video-player) | 在 Emacs 里以清晰图像帧加声音播放本地视频与流 |
+| [etaf-algo-lab](https://forgejo.vhkd.top/emacs-taf/etaf-algo-lab) | 在 Emacs 里观看、操控并比较算法运行 |
 
 ## 开始开发
 
