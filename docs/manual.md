@@ -297,8 +297,9 @@ input; use the separate trace pass for the full sequence.
 A state write marks only the retained nodes its bindings reach. Ebox relayouts
 the smallest boundary whose outer size is unchanged and rewrites the affected
 buffer lines; a structural change or a size change that escapes every boundary
-widens the region, and only a viewport change or an explicit refit repaints the
-whole buffer. Read the actual path from the flush reports.
+widens the region. Mount, a viewport change and an explicit refit repaint the
+whole buffer, and so do overlapping line replacements. Read the actual path
+from the flush reports.
 
 Use the registered workloads to separate a local row update, structural append and
 an ordinary catalog control. Run the initial diagnosis with a small sample count:
@@ -342,7 +343,7 @@ Interpret the flush reports together:
 
 | Evidence | Interpretation |
 | --- | --- |
-| `strategy` | `lines` rewrote only affected lines; `full` repainted the buffer, expected only for mount, viewport change or refit. |
+| `strategy` | `lines` rewrote only affected lines; `full` repainted the buffer: expected for mount, viewport change or refit; on a local update it means the damage overlapped. |
 | `edits` | Node changes the flush consumed; compare with the size of the state change. |
 | `lines` | Buffer lines rewritten; a local update should stay proportional to the changed rows, not the document. |
 | Ebox `ms` and time outside Ebox | Whether cost sits in layout and buffer writes or in application and reactive work. |

@@ -198,8 +198,8 @@ Action、mount、refit 或 `etaf-performance-call-operation` 包裹的代码）�
 ## 测量增量提交
 
 一次状态写入只标记其绑定所及的保留节点。Ebox 重新布局外部尺寸不变的最小边界，并
-重写受影响的 buffer 行；结构变化或越过所有边界的尺寸变化会扩大范围，只有视口变化
-或显式 refit 才重绘整个 buffer。以 flush 报告的实际路径为准。
+重写受影响的 buffer 行；结构变化或越过所有边界的尺寸变化会扩大范围；挂载、视口变化
+和显式 refit 重绘整个 buffer，相互重叠的行替换也会合并为整体重绘。以 flush 报告的实际路径为准。
 
 使用已注册的行更新、结构追加和普通控件场景，先以少量样本定位：
 
@@ -238,7 +238,7 @@ flush 报告应合并解释：
 
 | 证据 | 正确解释 |
 | --- | --- |
-| `strategy` | `lines` 只重写受影响行；`full` 重绘整个 buffer，只应出现在 mount、视口变化或 refit |
+| `strategy` | `lines` 只重写受影响行；`full` 重绘整个 buffer：mount、视口变化或 refit 时属正常；局部更新出现时说明改写范围重叠 |
 | `edits` | 本次 flush 消费的节点变化，应与状态变化规模对照 |
 | `lines` | 重写的 buffer 行数；局部更新应与变化的行数成比例，而不是与文档规模成比例 |
 | Ebox `ms` 与 Ebox 之外耗时 | 成本位于布局与 buffer 写入，还是位于应用与响应式工作 |
