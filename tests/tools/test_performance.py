@@ -192,13 +192,13 @@ class PerformanceTool(unittest.TestCase):
         self.assertTrue(all(row["wall_ms"] < 100 for row in latency["samples"]))
         trace = json.loads((output / "trace-1.json").read_text())
         self.assertEqual(trace["samples"][0]["reports"][0]["provider"], "fixture")
-        observed = trace["samples"][0]["reports"][0]
-        self.assertIn("viewport-context", observed["native_declined"])
-        self.assertIn("Unsupported size", observed["native_fallback"])
-        self.assertEqual({row["kind"] for row in case["native_diagnostics"]},
-                         {"native_declined", "native_fallback"})
-        self.assertIn("native_declined (1)", process.stdout)
-        self.assertIn("Unsupported size", process.stdout)
+        flush = trace["samples"][0]["reports"][1]
+        self.assertEqual((flush["provider"], flush["strategy"], flush["edits"], flush["lines"]),
+                         ("ebox", "full", 1, 2))
+        self.assertEqual(case["strategies"], [{"strategy": "full", "count": 1}])
+        self.assertEqual(case["flush_medians"]["lines"], 2)
+        self.assertIn("full_repaint_on_local_update", {row["kind"] for row in case["findings"]})
+        self.assertIn("flush strategies: full=1", process.stdout)
         self.assertIsNone(trace["samples"][0]["profile"])
         for kind in ("cpu", "memory"):
             data = json.loads((output / (kind + "-1.json")).read_text())

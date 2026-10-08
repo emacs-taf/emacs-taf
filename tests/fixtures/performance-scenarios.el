@@ -41,9 +41,9 @@
                                     (setq settled t))) timers))
               (_ (with-current-buffer buffer (erase-buffer) (insert (number-to-string count)))))
             (when (and sink (not (eq kind 'diagnostic-fail)))
-              (funcall sink buffer (list :provider 'fixture :stage 'update :duration-ms 0.01
-                                         :native-declined-reason '(:reason viewport-context :width nil)
-                                         :native-fallback-reason "Unsupported size"))))
+              (funcall sink buffer (list :provider 'fixture :stage 'update :duration-ms 0.01))
+              (funcall sink buffer (list :provider 'ebox :strategy 'full :edits 1 :lines 2
+                                         :duration-ms 0.01))))
           :settled (lambda () settled)
           :outcome (lambda ()
                      (when (eq kind 'counter) (sleep-for .12))

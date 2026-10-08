@@ -213,34 +213,16 @@ cached evidence so lazy library loading is visible after an operation."
 (defun taf-benchmark--capture-report (&rest arguments)
   "Collect only scalar fields from a provider observer's ARGUMENTS."
   (let* ((report (car (last arguments)))
-         (provider (plist-get report :provider))
-         (phases (plist-get report :phase-duration-ms)))
+         (provider (plist-get report :provider)))
     (when provider
       (push (list :provider (symbol-name provider)
                   :stage (format "%s" (plist-get report :stage))
-                  :correlation_id (or (plist-get report :correlation-id) (plist-get report :transaction-id))
+                  :correlation_id (plist-get report :correlation-id)
                   :ms (plist-get report :duration-ms)
-                  :phases (vconcat (cl-loop for (phase ms) on phases by #'cddr
-                                           collect (list :phase (symbol-name phase) :ms ms)))
-                  :strategy (format "%s" (plist-get report :strategy))
-                  :projection (format "%s" (plist-get report :projection-kind))
-                  :native_fallback
-                  (when-let* ((reason (plist-get report :native-fallback-reason)))
-                    (let ((print-length 12) (print-level 4) (print-circle t))
-                      (truncate-string-to-width (format "%S" reason) 1200 nil nil "…")))
-                  :native_declined
-                  (when-let* ((reason (plist-get report :native-declined-reason)))
-                    (let ((print-length 12) (print-level 4) (print-circle t))
-                      (truncate-string-to-width (format "%S" reason) 1200 nil nil "…")))
-                  :dirty_count (plist-get report :dirty-count)
-                  :root_id (plist-get report :constraint-root-node-id)
-                  :owners (vconcat (plist-get report :owner-ids))
-                  :reconciled (plist-get report :reconciled-objects)
-                  :text_operations (plist-get report :publication-text-operations)
-                  :property_operations (plist-get report :publication-property-operations)
-                  :rejections
-                  (let ((print-length 12) (print-level 4))
-                    (format "%S" (plist-get report :projection-rejections))))
+                  :strategy (let ((strategy (plist-get report :strategy)))
+                              (and strategy (format "%s" strategy)))
+                  :edits (plist-get report :edits)
+                  :lines (plist-get report :lines))
             taf-benchmark--observations))))
 
 (defun taf-benchmark--function-location (symbol)

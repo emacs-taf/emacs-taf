@@ -2,9 +2,9 @@
 """Run registered Emacs performance scenarios and explain reproducible evidence.
 
 CLI: list, run, summarize, compare, cancel, gate. JSON schema 1 keeps raw
-samples, verification, context, provider phases, sampled CPU/allocation stacks
-and source revisions. Warmups and diagnostic samples never enter formal latency
-statistics. gate runs every scenario that declares :gate back to back in a GUI
+samples, verification, context, provider flush reports, sampled CPU/allocation
+stacks and source revisions. Warmups and diagnostic samples never enter formal
+latency statistics. gate runs every scenario that declares :gate back to back in a GUI
 server and checks the budget classes in GATE_CLASSES.
 """
 import argparse
@@ -42,7 +42,6 @@ GATE_TWIN_SLACK_US = 200
 # by more than this factor plus slack.
 GATE_FLAT_FACTOR = 1.5
 GATE_FLAT_SLACK_US = 20
-PHASES = ("source", "style", "plan", "layout", "projection", "transaction")
 WARMUP_PROTOCOL = "recorded-before-latency-per-scenario-set-v1"
 LIBRARY_CODE_PROTOCOL = "entry-lisp-examples-load-history-v1"
 
@@ -236,14 +235,10 @@ def valid_sample(sample, mode, require_foreground=False):
             return False
         total = 0.0
         for report in sample.get("reports", []):
-            phases = report.get("phases", [])
-            if report.get("provider") == "ebox" and phases:
-                values = [phase.get("ms") for phase in phases]
-                if not all(finite_nonnegative(value) for value in values):
+            if report.get("provider") == "ebox":
+                if not finite_nonnegative(report.get("ms")):
                     return False
-                if not finite_nonnegative(report.get("ms")) or abs(sum(values) - report["ms"]) > .1:
-                    return False
-                total += sum(values)
+                total += report["ms"]
         if total > sample["wall_ms"] + .1:
             return False
     if not all(isinstance(context.get("foreground"), bool) for context in (before, after)):
@@ -304,29 +299,21 @@ def merge_profiles(samples):
 def findings(case):
     """Generate evidence-based investigation hints, never assert a root cause."""
     result = []
-    phases = case.get("phases_ms", {})
     profiles = case.get("profiles", {})
     functions = profiles.get("cpu", {}).get("functions", [])
-    if case["impact"] == "metadata" and phases.get("layout", 0) > 0.01:
-        result.append({"kind": "layout_on_state_only_update",
-                       "evidence_ms": phases["layout"],
-                       "investigate": "A state-only scenario performed layout; inspect style effects and projection admission."})
-    if case["impact"] == "metadata" and any(
-            "prepare-declarative-root" in row["function"] for row in functions):
-        result.append({"kind": "full_source_preparation",
-                       "investigate": "CPU samples include complete author-root preparation during a state-only update."})
-    if case.get("root_owner_updates") and case.get("over_budget") and case["impact"] in ("metadata", "local"):
-        result.append({"kind": "expanded_owner_scope", "updates": case["root_owner_updates"],
-                       "investigate": "The published owner includes the constraint root; inspect layout dependencies and rejected local proofs."})
+    full = sum(row["count"] for row in case.get("strategies", []) if row["strategy"] == "full")
+    if full and case["impact"] in ("metadata", "local"):
+        result.append({"kind": "full_repaint_on_local_update", "flushes": full,
+                       "investigate": "A local scenario repainted the whole buffer; inspect which mutation invalidated the root."})
     if case.get("gc_ms") and max(case["gc_ms"]) > 0:
         result.append({"kind": "gc_in_interaction", "worst_gc_ms": max(case["gc_ms"]),
                        "investigate": "GC is included in latency. Inspect allocation hotspots and retained lifetimes; do not discard these samples."})
     if functions and profiles["cpu"]["total"] < 30:
         result.append({"kind": "limited_cpu_samples", "samples": profiles["cpu"]["total"],
                        "investigate": "Function percentages have low resolution; increase diagnostic samples for this scenario."})
-    if case.get("diagnostic_count") and not phases:
-        result.append({"kind": "provider_phases_unavailable",
-                       "investigate": "The loaded provider did not expose phase timings; CPU stacks remain available."})
+    if case.get("diagnostic_count") and not case.get("strategies"):
+        result.append({"kind": "flush_reports_unavailable",
+                       "investigate": "The trace pass observed no Ebox flush; CPU stacks remain available."})
     return result
 
 
@@ -392,29 +379,21 @@ def analyze(raw_runs, descriptors, settings):
                       "Runtime library load formats are missing, mixed or changed during the scenario")
         valid &= code_valid
         overall_valid &= code_valid
-        phase_samples = defaultdict(list)
-        root_updates = 0
+        flush_samples = defaultdict(list)
         strategies = Counter()
-        rejections = Counter()
-        native_diagnostics = Counter()
         for sample in diagnostics:
-            phases = defaultdict(float)
+            flush_ms, lines, seen = 0.0, 0, False
             for report in sample.get("reports", []):
-                for field in ("native_declined", "native_fallback"):
-                    if report.get(field):
-                        native_diagnostics[(field, report[field])] += 1
                 if report["provider"] != "ebox":
                     continue
-                strategies[(report["strategy"], report["projection"])] += 1
-                root_updates += (report.get("root_id") is not None and report["root_id"] in report.get("owners", []))
-                if report.get("rejections") not in (None, "nil"):
-                    rejections[report["rejections"]] += 1
-                for phase in report.get("phases", []):
-                    phases[phase["phase"]] += phase["ms"]
-            for name, value in phases.items():
-                phase_samples[name].append(value)
-            if phases:
-                phase_samples["outside_ebox"].append(sample["wall_ms"] - sum(phases.values()))
+                seen = True
+                strategies[report.get("strategy")] += 1
+                flush_ms += report.get("ms") or 0.0
+                lines += report.get("lines") or 0
+            if seen:
+                flush_samples["ebox"].append(flush_ms)
+                flush_samples["outside_ebox"].append(sample["wall_ms"] - flush_ms)
+                flush_samples["lines"].append(lines)
         case = {**descriptor, "valid": valid, "count": len(samples), "expected_count": expected,
                 "runtime_code": {"strategies": sorted(code_strategies), "reason": code_error,
                                  "libraries": sorted(libraries.values(), key=lambda row: row["file"]),
@@ -442,13 +421,10 @@ def analyze(raw_runs, descriptors, settings):
                 "latency_outcomes": [{"set": s["set"], "sample": s["sample"],
                                       "wall_ms": s["wall_ms"], "value": s["outcome"]}
                                      for s in samples if s.get("outcome") is not None],
-                "phases_ms": {name: statistics_median(v) for name, v in phase_samples.items()},
-                "root_owner_updates": root_updates,
-                "native_diagnostics": [{"kind": kind, "reason": reason, "count": count}
-                                       for (kind, reason), count in native_diagnostics.items()],
-                "strategies": [{"strategy": strategy, "projection": projection, "count": count}
-                               for (strategy, projection), count in strategies.items()],
-                "rejections": dict(rejections), "profiles": merge_profiles(diagnostics)}
+                "flush_medians": {name: statistics_median(v) for name, v in flush_samples.items()},
+                "strategies": [{"strategy": strategy, "count": count}
+                               for strategy, count in strategies.items()],
+                "profiles": merge_profiles(diagnostics)}
         if values:
             case.update(p50_ms=statistics_median(values), p95_ms=percentile(values, .95),
                         p99_ms=percentile(values, .99), max_ms=max(values),
@@ -593,12 +569,13 @@ def summarize(report, selected=None, details=False):
                 worst = max(case["latency_outcomes"], key=lambda row: row["wall_ms"])
                 value = json.dumps(worst["value"], ensure_ascii=False, sort_keys=True)
                 print(f"  slowest outcome (set {worst['set']}, sample {worst['sample']}): {value[:1400]}")
-            phases = case.get("phases_ms", {})
-            if phases:
-                print("  exclusive diagnostic phase medians (ms): " + " ".join(
-                    f"{name}={phases[name]:.2f}" for name in (*PHASES, "outside_ebox") if name in phases))
-            for diagnostic in case.get("native_diagnostics", []):
-                print(f"  {diagnostic['kind']} ({diagnostic['count']}): {diagnostic['reason']}")
+            medians = case.get("flush_medians", {})
+            if medians:
+                print(f"  diagnostic medians: ebox flush={medians['ebox']:.2f} ms "
+                      f"outside ebox={medians['outside_ebox']:.2f} ms lines written={medians['lines']:g}")
+            if case.get("strategies"):
+                print("  flush strategies: " + ", ".join(
+                    f"{row['strategy']}={row['count']}" for row in case["strategies"]))
             for kind in ("cpu", "memory"):
                 profile = case.get("profiles", {}).get(kind, {})
                 total = profile.get("total", 0)

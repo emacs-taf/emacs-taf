@@ -13,8 +13,8 @@
 `load-path`。
 
 ```sh
-python3 scripts/elisp.py def ebox-surface--project etaf-ecosystem-require
-python3 scripts/elisp.py refs ebox-surface--project
+python3 scripts/elisp.py def ebox-flush etaf-ecosystem-require
+python3 scripts/elisp.py refs ebox-flush
 python3 scripts/elisp.py run -p etaf-desktop -e '(featurep (quote etaf-desktop))'
 python3 scripts/elisp.py run -p ebox -L ebox/tests -l ebox/tests/ebox-active-tests.el -f ert-run-tests-batch-and-exit
 ```
@@ -171,7 +171,7 @@ python3 scripts/performance.py gate --report ~/.cache/emacs-taf/gate/<run>.json
 
 | 诊断 | 提供的数据 | 用途 |
 | --- | --- | --- |
-| Trace | 公共提供方报告、更新 owner、投影选择、拒绝局部更新的原因、Ebox 独占阶段耗时 | 找到数据流中昂贵的阶段。 |
+| Trace | 公共提供方报告：Runtime operation 及其中的 Ebox flush | 找到数据流中昂贵的部分。 |
 | CPU | 自身／含子调用的采样权重、调用栈、函数名称与源文件位置 | 定位需要分析的函数；采样不是精确的单次调用计时。 |
 | Memory | 分配权重及调用栈 | 解释分配和 GC 压力；分配量本身不能证明泄漏。 |
 
@@ -180,32 +180,28 @@ CPU 样本不足会明确标记，可针对单个场景增大 `--diagnostic-samp
 阈值；前后 GC 设置作为动态状态记录，因为框架的 render burst 可以暂时改变这些值。
 字体、几何、目标、后端能力和代码代仍是有效性条件。
 
-Ebox 的公共 observer 给出互不重计的 `source`、`style`、`plan`、`layout`、
-`projection`、`transaction` 毫秒数。嵌套阶段只计入最内层；`transaction` 包含其余
-提交工作、Ebox 内部发布准备及接纳，`ebox-publication` 写入阶段的报告与它重叠。Ebox 之外的时间可能来自应用、
-输入分发、异步等待和驱动开销。各阶段的中位数之和不一定等于整体耗时的中位数。
+Ebox 的公共 observer 为每次 flush 报告 `strategy`（`lines` 或 `full`）、节点
+`edits` 数、写入的 buffer `lines` 数和耗时。ETAF 只在 Runtime operation（Event、
+Action、mount、refit 或 `etaf-performance-call-operation` 包裹的代码）内转发这些
+报告，因此在 operation 之外写入并 flush 的场景没有 flush 证据。摘要打印 Ebox flush
+耗时、Ebox 之外耗时和写入行数的中位数，以及各 flush 策略的次数。Ebox 之外的时间
+包括应用代码、响应式传播、输入分发、异步等待和驱动开销。各量的中位数之和不一定
+等于整体耗时的中位数。
 
-提示规则会指出纯状态更新中的完整 source 准备、不必要的布局、扩大的根 owner 及 GC。
-它们提供调查线索，不自动宣判根因；小应用使用根 owner 可能合理。原生调用可定位到
-Emacs／模块边界，Rust/C 内部仍需相应原生 profiler。场景提供的已加载模块哈希会进入证据。
-
-Trace 的 `native_declined` 保留原生输入能力不足的原因，`native_fallback` 保留执行
-尝试失败的原因。模块已加载不代表布局已走原生路径；应结合这些有界信息、实际投影
-策略和阶段耗时决定优化方向。
+提示规则会指出局部更新中的整屏重绘、交互中的 GC、CPU 样本不足和缺失的 flush 报告。
+它们提供调查线索，不自动宣判根因；修改架构前先查看 flush 成本和调用栈。
 
 适配器可用 `:outcome` 回调在计时和 profiler 停止后，通过公共接口读取有界、可序列化
 的结果，不得修改应用状态。结果与该条延迟样本一起保存；详细摘要显示最慢样本的结果。
-Gallery 记录最后一次提交的投影、脏节点数、根节点归属和发布操作数。这不包含同一次
-输入中更早的提交，完整提交序列仍由独立 trace pass 提供。
+这不包含同一次输入中更早的 flush，完整序列仍由独立 trace pass 提供。
 
 ## 测量增量提交
 
-一次状态写入可以走保留更新、局部候选或范围更大的回退，以报告的实际路径为准。
-最终 buffer patch 很小，不代表准备、布局、投影和事务全过程都局部；发生回退也不代表
-全部文本属性都被重写。保留 Host 更新仍是支持的能力，但普通声明不应要求应用手工
-选择它才能获得低延迟。
+一次状态写入只标记其绑定所及的保留节点。Ebox 重新布局外部尺寸不变的最小边界，并
+重写受影响的 buffer 行；结构变化或越过所有边界的尺寸变化会扩大范围，只有视口变化
+或显式 refit 才重绘整个 buffer。以 flush 报告的实际路径为准。
 
-使用已注册的行更新、结构追加和普通控件场景，先以少量样本定位阶段：
+使用已注册的行更新、结构追加和普通控件场景，先以少量样本定位：
 
 ```sh
 python3 scripts/performance.py run --mode batch \
@@ -235,27 +231,24 @@ python3 scripts/performance.py summarize /path/to/result.json \
 
 行更新场景保持固定行数，改变第一行的绘制与字重。追加场景从名称中的行数开始，
 在同一组内持续增长，预热也真实追加；不能把它描述为固定规模的单次插入实验。
-Gallery callback 测量回调、结算和发布的完整本地边界，不认证键盘或鼠标路径。
+Gallery callback 测量回调、结算和 flush 的完整本地边界，不认证键盘或鼠标路径。
 批处理不能认证实际图形显示或前台输入延迟；这些边界使用相应的已注册 GUI 场景。
 
-提交和发布报告应合并解释：
+flush 报告应合并解释：
 
 | 证据 | 正确解释 |
 | --- | --- |
-| `dirty-count`、`dirty-keys`、owner 范围 | 实际变化和计划选中的 owner，不是全部计算工作量 |
-| 请求及实际投影、拒绝原因 | 局部计划是否实际执行；仅有 `output-proof` 不能确认具体失败条件 |
-| `reconciled-objects` | 发布协调的对象数量，应结合变化规模和阶段成本；不覆盖所有全局扫描与复制 |
-| 文本与 `property-operations` | 实际输出操作；数量很少时仍可能进行了昂贵的完整投影 |
-| full-root 发布标志 | 最终发布范围，不证明上游计算局部 |
-| `phase-duration-ms` | source/style/plan/layout/projection/transaction 的独占阶段成本，并与操作其余时间对照 |
+| `strategy` | `lines` 只重写受影响行；`full` 重绘整个 buffer，只应出现在 mount、视口变化或 refit |
+| `edits` | 本次 flush 消费的节点变化，应与状态变化规模对照 |
+| `lines` | 重写的 buffer 行数；局部更新应与变化的行数成比例，而不是与文档规模成比例 |
+| Ebox `ms` 与 Ebox 之外耗时 | 成本位于布局与 buffer 写入，还是位于应用与响应式工作 |
 | GC 与分配栈 | 计入的停顿与候选分配热点；区分运行时、驱动序列化及其他测量开销 |
 
-正确性、实际执行策略与延迟分别下结论。原生模块已加载不代表它被使用，实际
-native-frame 提交也可能有昂贵的 source 准备或发布。后台 GUI 必须执行前文的
-App Nap 和焦点检查，不能当成前台输入认证。
+正确性、flush 策略与延迟分别下结论。后台 GUI 必须执行前文的 App Nap 和焦点检查，
+不能当成前台输入认证。
 
-跨包成本模型、当前实现差距和验收矩阵维护在[生态架构](architecture.zh-CN.md)
-第 6、9、10.4、11.5 节。本节说明获取证据的方法，不把待实现目标描述为已有行为。
+跨包成本模型和验收矩阵维护在[生态架构](architecture.zh-CN.md)。本节说明获取证据
+的方法，不把待实现目标描述为已有行为。
 
 ## 证据与失败
 

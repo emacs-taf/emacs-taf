@@ -17,8 +17,8 @@ instead of a search followed by a guessed line range, and a batch run needs no
 hand-written `load-path`.
 
 ```sh
-python3 scripts/elisp.py def ebox-surface--project etaf-ecosystem-require
-python3 scripts/elisp.py refs ebox-surface--project
+python3 scripts/elisp.py def ebox-flush etaf-ecosystem-require
+python3 scripts/elisp.py refs ebox-flush
 python3 scripts/elisp.py run -p etaf-desktop -e '(featurep (quote etaf-desktop))'
 python3 scripts/elisp.py run -p ebox -L ebox/tests -l ebox/tests/ebox-active-tests.el -f ert-run-tests-batch-and-exit
 python3 scripts/elisp.py check ebox/lisp/ebox-interaction.el
@@ -60,10 +60,10 @@ definition, rebuilds it with the gate list replaced by a report of the failing
 gate indices, and emits an adapter that wraps the live symbol.
 
 ```sh
-python3 scripts/diagnose-gates.py ebox-incremental--grouped-owner-span-proof \
-    --root ebox --output /tmp/grouped.gates.el
+python3 scripts/diagnose-gates.py PREDICATE \
+    --root ebox --output /tmp/predicate.gates.el
 python3 scripts/elisp.py run -p ebox -L ebox/tests \
-    -l /tmp/grouped.gates.el -l scenario.el \
+    -l /tmp/predicate.gates.el -l scenario.el \
     -e '(diagnose-gates-install)' -e '(scenario-run)' -e '(diagnose-gates-report)'
 ```
 
@@ -258,7 +258,7 @@ keep them under the system temporary directory.
 
 | Pass | Evidence | Interpretation |
 | --- | --- | --- |
-| Trace | Public provider reports, update owners, projection decisions, rejected proofs and exclusive Ebox phases | Locate the expensive part of the data flow. |
+| Trace | Public provider reports: Runtime operations and the Ebox flushes inside them | Locate the expensive part of the data flow. |
 | CPU | Sampled self/inclusive weights, call stacks, function names and source locations | Find candidate functions to investigate; weights are estimates, not exact per-call times. |
 | Memory | Allocation weights and call stacks | Explain allocation pressure and GC; allocation is not proof of a leak. |
 
@@ -270,43 +270,35 @@ as dynamic state because the framework can temporarily change them during its
 documented render burst. Font, geometry, target, backend capability and source
 generation remain validation conditions.
 
-Ebox's public observer supplies exclusive `source`, `style`, `plan`, `layout`,
-`projection` and `transaction` milliseconds. Nested stages are charged to their
-innermost phase. `transaction` includes remaining commit work, including Ebox
-publication preparation and acceptance; the `ebox-publication` writer duration
-overlaps that phase. The
-report also shows time outside Ebox, which can include application code, input
-dispatch, asynchronous waiting and driver overhead. Medians of separate phases
-need not add up to the median of whole operations.
+Ebox's public observer reports each flush with its `strategy` (`lines` or
+`full`), the number of node `edits`, the buffer `lines` written and its
+duration. ETAF forwards those reports only inside a Runtime operation (Event,
+Action, mount, refit, or an `etaf-performance-call-operation` body), so a
+workload that writes and flushes outside one yields no flush evidence. The
+summary prints the medians of Ebox flush time, time outside Ebox and lines
+written, plus the count of each flush strategy. Time outside Ebox includes
+application code, reactive propagation, input dispatch, asynchronous waiting
+and driver overhead. Medians of separate quantities need not add up to the
+median of whole operations.
 
-Investigation hints identify full source preparation during state-only changes,
-unexpected layout, expanded root ownership and GC. They point to evidence and
-do not assert a root cause. Small applications may legitimately update a root.
-Inspect the stage costs and stacks before changing architecture. Native calls
-can be attributed to the Emacs/module boundary; Rust/C internals require their
-native profiler. The report records the loaded module hash when a workload
-provides it.
-
-Trace reports retain `native_declined` for missing input capabilities and
-`native_fallback` for unsuccessful execution attempts. A loaded module does not
-prove native layout ran. Read these bounded reasons alongside the actual projection
-and phase costs before proposing a native optimization.
+Investigation hints identify a full repaint during a local update, GC inside an
+interaction, too few CPU samples and missing flush reports. They point to
+evidence and do not assert a root cause. Inspect the flush costs and stacks
+before changing architecture.
 
 An adapter's optional `:outcome` callback reads a bounded, JSON-safe result through
 public APIs after timing and profiling stop. It must not change application state.
 The result is saved with that exact latency sample; detailed summaries show the
-slowest sample's outcome. Gallery records its last commit's projection, dirty-node
-count, root ownership and publication operations. This does not capture earlier
-commits within the same input; use the separate trace pass for the full sequence.
+slowest sample's outcome. This does not capture earlier flushes within the same
+input; use the separate trace pass for the full sequence.
 
 ## Measure the incremental commit
 
-A state write can use a retained update, a scoped candidate, or a wider fallback.
-Read the actual path from the report. A small final buffer patch does not prove
-that preparation, layout, projection and transaction work stayed local; conversely,
-a fallback does not imply that every text property was rewritten. Retained Host
-updates remain supported, but applications should not have to select them manually
-to make ordinary declarations responsive.
+A state write marks only the retained nodes its bindings reach. Ebox relayouts
+the smallest boundary whose outer size is unchanged and rewrites the affected
+buffer lines; a structural change or a size change that escapes every boundary
+widens the region, and only a viewport change or an explicit refit repaints the
+whole buffer. Read the actual path from the flush reports.
 
 Use the registered workloads to separate a local row update, structural append and
 an ordinary catalog control. Run the initial diagnosis with a small sample count:
@@ -342,32 +334,28 @@ The row workloads retain a fixed number of rows and change the first row's paint
 and weight. Append workloads start with the named size and keep growing within
 each set, including warmups. They are not fixed-size single-insertion experiments.
 The Gallery callback workload measures the complete local callback, settlement
-and publication boundary; it does not certify keyboard or mouse input. Batch
-results do not certify graphical redisplay or foreground input latency. Use the
+and flush boundary; it does not certify keyboard or mouse input. Batch results
+do not certify graphical redisplay or foreground input latency. Use the
 corresponding registered GUI workloads for those boundaries.
 
-Interpret the commit and publication reports together:
+Interpret the flush reports together:
 
 | Evidence | Interpretation |
 | --- | --- |
-| `dirty-count`, `dirty-keys`, owner scope | What changed and which owners the plan selected; not a measure of all work performed. |
-| Requested and actual projection, rejection reasons | Whether a local plan executed or fell back. An `output-proof` refusal alone does not identify the specific failed precondition. |
-| `reconciled-objects` | Objects coordinated by the publication; compare with the change size and inspect phases. This counter alone does not cover every global scan or copy. |
-| Text and `property-operations` | Actual output operations; a small count can coexist with expensive complete projection. |
-| Full-root publication flag | Scope of final publication, not proof that all upstream calculation was scoped. |
-| `phase-duration-ms` | Exclusive source/style/plan/layout/projection/transaction work; compare with the remaining operation time. |
+| `strategy` | `lines` rewrote only affected lines; `full` repainted the buffer, expected only for mount, viewport change or refit. |
+| `edits` | Node changes the flush consumed; compare with the size of the state change. |
+| `lines` | Buffer lines rewritten; a local update should stay proportional to the changed rows, not the document. |
+| Ebox `ms` and time outside Ebox | Whether cost sits in layout and buffer writes or in application and reactive work. |
 | GC and allocation stacks | Included pauses and allocation candidates; separate runtime work from driver serialization and other measurement overhead. |
 
-Correctness, execution strategy and latency need separate conclusions. A native
-module may be loaded without being used; an actual native-frame commit can still
-have expensive source preparation or publication. Background GUI timing also
-needs the App Nap and focus checks described above; it must not be presented as
-foreground input certification.
+Correctness, flush strategy and latency need separate conclusions. Background
+GUI timing also needs the App Nap and focus checks described above; it must not
+be presented as foreground input certification.
 
-The cross-package cost model, current implementation gaps and required acceptance
-matrix are maintained in the [ecosystem architecture](architecture.zh-CN.md),
-sections 6, 9, 10.4 and 11.5. This workflow explains how to obtain evidence; it
-does not make pending architecture targets implemented behavior.
+The cross-package cost model and required acceptance matrix are maintained in
+the [ecosystem architecture](architecture.zh-CN.md). This workflow explains how
+to obtain evidence; it does not make pending architecture targets implemented
+behavior.
 
 ## Judge Ebox interaction ownership
 
@@ -378,25 +366,22 @@ columns, and a multi-row cell's lower rows are blanks that still belong to its
 hit area.
 
 ```elisp
-;; In a probe, with the view mounted and its client state loaded:
-(let* ((state (ebox-surface--buffer-client-state buffer))
-       (owner (ebox-interaction--navigation-owner position state))
-       (ref (and owner (ebox-interaction--focus-ref state owner)))
-       (bounds (and ref (ebox-host-ref-bounds buffer ref))))
-  (list :owner owner
+;; In a probe, with the view mounted and EXPECTED the node that should own it:
+(let* ((node (ebox-node-at position buffer))
+       (bounds (ebox-node-bounds expected t)))
+  (list :owned (and node (or (eq node expected)
+                             (ebox-node-ancestor-p expected node)))
         :inside (and bounds (<= (car bounds) position (cdr bounds)))))
 ```
 
-`ebox-host-ref-bounds` is the public border-box query for a host reference: it
-returns `(START . END)` for the node's rendered characters, excluding margins
-and structural newlines. A resolution is correct only when the pressed position
-lies inside those bounds. `ebox-interaction--navigation-owner` and
-`ebox-interaction--focus-ref` are internal and belong in probes, not in
-consumers or tests. A keymap can be published on a cell whose paint chain
-reaches no declaration, such as a flex gap, a box's padding, a clipped
-surface's trailing cell or a multi-row cell's lower rows; Ebox resolves those
-through the published keymap snapshot, so the bounds check stays the acceptance
-test.
+`ebox-node-at` returns the innermost node painted at a position and
+`ebox-node-bounds` with ALL-LINES returns `(START . END)` from the node's first
+visible cell to the end of its last painted row. A resolution is correct only
+when the painted node lies inside the expected owner and the position lies
+inside its bounds. From ETAF, use `etaf-host-ref-bounds` with a Host reference
+instead. Blank cells such as a flex gap, a box's padding or a multi-row cell's
+lower rows still carry their owner's keymap, so the bounds check stays the
+acceptance test.
 
 ## Evidence and failure handling
 
