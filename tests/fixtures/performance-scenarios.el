@@ -106,6 +106,27 @@
           :observe (lambda (collector) (setq sink collector) (lambda () (setq sink nil)))
           :cleanup (lambda () (kill-buffer buffer)))))
 
+(defun taf-test-gate-prepared-fixture ()
+  "Return a gate fixture whose :verify requires :prepare before every invoke."
+  (let ((buffer (generate-new-buffer " *taf-gate-prepared*")) (prepared nil) (failure nil))
+    (list :buffer buffer
+          :prepare (lambda ()
+                     (unless (eq (current-buffer) buffer)
+                       (setq failure "Prepared outside the fixture buffer"))
+                     (setq prepared t))
+          :invoke (lambda (sample)
+                    (unless prepared
+                      (setq failure (format "Sample %d ran without :prepare" sample)))
+                    (setq prepared nil))
+          :verify (lambda () (or failure t))
+          :cleanup (lambda () (kill-buffer buffer)))))
+
+(taf-benchmark-register
+ "fixture.gate.prepared" :version 1 :modes '(batch) :budget-ms 100
+ :isolation 'series :impact 'local :description "Gate runner :prepare fixture"
+ :gate (list :class 'local)
+ :setup (lambda (_mode) (taf-test-gate-prepared-fixture)))
+
 (dolist (kind '(rewrite wrong-ranges replay))
   (let ((variant kind))
     (taf-benchmark-register

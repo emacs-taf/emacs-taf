@@ -608,7 +608,7 @@ class PerformanceGate(unittest.TestCase):
                 "cons": [cons] * 5, "twin": None if twin is None else [twin] * 5,
                 "twin-error": None, "gcs": 0, "verify": verify}
 
-    def test_runner_replays_reported_ranges_and_rejects_unreported_changes(self):
+    def test_runner_prepares_samples_and_replays_reported_ranges(self):
         with tempfile.TemporaryDirectory() as directory:
             output, configuration = Path(directory) / "gate.json", Path(directory) / "configuration.json"
             configuration.write_text(json.dumps({"output": str(output), "scenario_files": [str(FIXTURE)],
@@ -622,7 +622,8 @@ class PerformanceGate(unittest.TestCase):
                                        capture_output=True, text=True, timeout=20)
         results = {result["id"]: result for result in report["results"]}
         self.assertEqual("done", report["status"])
-        self.assertEqual(3, report["total"])
+        self.assertEqual(4, report["total"])
+        self.assertIs(True, results["fixture.gate.prepared"]["verify"])
         for name in ("fixture.gate.rewrite", "fixture.gate.replay"):
             self.assertIs(True, results[name]["verify"])
             self.assertIsNone(results[name]["twin-error"])

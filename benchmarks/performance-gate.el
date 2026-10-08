@@ -10,7 +10,9 @@
 ;; ends with status "done" or "error".
 ;;
 ;; Timed samples run unobserved and their conses exclude the measurement's
-;; own; scenario files load from current byte-compiled copies.
+;; own; scenario files load from current byte-compiled copies.  The
+;; fixture's :prepare runs in its buffer before every invocation, outside
+;; the timed region, as in the benchmark driver.
 ;;
 ;; A scenario's :gate plist selects its budget class (:class) and may give
 ;; :rows for row-proportional classes.  A twin runs a second, untimed pass
@@ -243,14 +245,16 @@ ranges and replays them on the snapshot, a replay twin repeats it there."
          (twin (plist-get gate :twin))
          (fixture (funcall (plist-get properties :setup) 'gui))
          (buffer (plist-get fixture :buffer))
-         (invoke (plist-get fixture :invoke))
+         (prepare (plist-get fixture :prepare))
+         (invoke (lambda (index)
+                   (when prepare (with-current-buffer buffer (funcall prepare)))
+                   (funcall (plist-get fixture :invoke) index)))
          (ranges nil) (stop-observing nil) (shadow nil) (snapshot nil) (base 0)
          totals ops conses edits twin-totals verify twin-error
          (gcs gcs-done))
     (unwind-protect
         (progn
           (taf-gate--show buffer)
-          (when-let* ((prepare (plist-get fixture :prepare))) (funcall prepare))
           (dotimes (i taf-gate--warmups)
             (funcall invoke i)
             (redisplay t))
@@ -259,7 +263,9 @@ ranges and replays them on the snapshot, a replay twin repeats it there."
           (setq gcs gcs-done)
           (dotimes (i samples)
             (let ((index (+ taf-gate--warmups i)))
-              (pcase-let ((`(,total ,op ,cons) (taf-gate--time (lambda () (funcall invoke index)))))
+              (when prepare (with-current-buffer buffer (funcall prepare)))
+              (pcase-let ((`(,total ,op ,cons)
+                           (taf-gate--time (lambda () (funcall (plist-get fixture :invoke) index)))))
                 (push total totals) (push op ops) (push cons conses))))
           (setq gcs (- gcs-done gcs))
           (setq verify (condition-case condition (funcall (plist-get fixture :verify))
@@ -293,7 +299,7 @@ ranges and replays them on the snapshot, a replay twin repeats it there."
           (push (car (taf-gate--time
                       (if (eq twin 'diff)
                           (lambda () (save-excursion (mapc #'taf-gate--apply-edit sample-edits)))
-                        (lambda () (funcall invoke index)))))
+                        (lambda () (funcall (plist-get fixture :invoke) index)))))
                 twin-totals))))
     (when (buffer-live-p snapshot) (kill-buffer snapshot))
     (list :id id :gate gate
