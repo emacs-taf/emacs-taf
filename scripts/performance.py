@@ -28,12 +28,16 @@ DRIVER = ROOT / "benchmarks/performance-driver.el"
 GATE_RUNNER = ROOT / "benchmarks/performance-gate.el"
 # Operation budgets in microseconds, excluding redisplay.  "rows" scales by the
 # scenario's row count.  Every class with a twin also requires end-to-end time
-# within GATE_TWIN_SLACK_US of the plain-buffer twin; "redisplay" classes
-# compare only the time after the operation, whose own cost the row budget bounds.
+# within GATE_TWIN_SLACK_US of the plain-buffer twin; "redisplay" classes, whose
+# operation may legitimately grow with the list it rebuilds or compares, compare
+# only the time after the operation, which their own budget already bounds.
 GATE_CLASSES = {
     "local": {"op_p50": 50, "op_p95": 200, "cons_p50": 200, "flat": True},
     "propagate": {"op_p50": 200, "flat": True},
-    "structure": {"op_p50": 300, "flat": True},
+    "structure": {"op_p50": 300, "redisplay": True},
+    "counter": {"op_p50": 30, "cons_p50": 200},
+    "snapshot": {"op_p50": 2000, "redisplay": True},
+    "resize": {"op_p50": 16000},
     "rows": {"op_p50_per_row": 40, "redisplay": True},
     "info": {},
 }

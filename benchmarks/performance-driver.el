@@ -543,9 +543,23 @@ cached evidence so lazy library loading is visible after an operation."
          (cached (gethash identity taf-benchmark--scenario-cache)))
     (if cached
         (setq taf-benchmark--registry (copy-sequence cached))
-      (dolist (source sources) (load source nil t t))
+      (dolist (source sources) (taf-benchmark-load-scenarios source))
       (puthash identity (copy-sequence taf-benchmark--registry)
                taf-benchmark--scenario-cache))))
+
+(declare-function etaf-component-redefine-run "etaf-component" (function))
+
+(defun taf-benchmark-load-scenarios (source)
+  "Load scenario file SOURCE, preferring its current byte-compiled copy.
+Applications run compiled code; loading the source would time interpreted
+closures in every fixture view.  A reload replaces the file's ETAF Components
+through ETAF's authoring-tool boundary; fixtures dispose their Runtimes."
+  (let* ((compiled (concat source "c"))
+         (file (if (file-newer-than-file-p compiled source) compiled source))
+         (load-file (lambda () (load file nil t t))))
+    (if (featurep 'etaf)
+        (etaf-component-redefine-run load-file)
+      (funcall load-file))))
 
 (defun taf-benchmark-catalog (configuration-file)
   "Write the registered public scenario descriptors from CONFIGURATION-FILE."

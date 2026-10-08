@@ -118,25 +118,32 @@ python3 scripts/performance.py gate --report ~/.cache/emacs-taf/gate/<run>.json
 ```
 
 每个样本在五次不计时预热之后，分别计时 `:invoke`（操作）和随后的强制重绘（端到端），
-并记录分配的 cons 数。场景的 `:gate` plist 选择类别；id 末尾的数字段是规模，
+并记录操作分配的 cons 数（不含测量本身的分配）。计时样本不挂观察者；孪生对照使用从
+buffer 快照开始的第二轮不计时样本。场景文件在字节编译副本为最新时加载该副本，因为
+应用运行的是编译后的代码。场景的 `:gate` plist 选择类别；id 末尾的数字段是规模，
 `rows` 类在未给出 `:rows` 时以它作为行数：
 
 | 类别 | 操作预算（未注明时为 p50） |
 | --- | --- |
 | `local` | 50 µs，p95 200 µs，cons 200 |
 | `propagate` | 200 µs |
-| `structure` | 300 µs |
+| `structure` | 每个规模 300 µs |
+| `counter` | 30 µs，cons 200 |
+| `snapshot` | 每个规模 2 ms |
+| `resize` | 16 ms |
 | `rows` | 每行 40 µs |
 | `info` | 只报告 |
 
-对 `local`、`propagate` 和 `structure`，同一场景族最大规模的操作 p50 不得超过最小
-规模的 1.5 倍再加 20 µs。`:twin diff` 要求 `:observe` 报告携带 `:ranges`，即按应用
+对 `local` 和 `propagate`，同一场景族最大规模的操作 p50 不得超过最小规模的 1.5 倍
+再加 20 µs。`structure` 和 `snapshot` 更新要比较或复制新列表，其操作可以在预算内随
+列表增长。`:twin diff` 要求 `:observe` 报告携带 `:ranges`，即按应用
 顺序排列的 `(START OLD NEW)` 行替换列表。运行器把每个样本的区段换算成在普通 buffer
-上得到相同文本和属性的最小编辑，在初始 buffer 的副本上重放且不移动光标（Emacs 对
+上得到相同文本和属性的最小编辑，在快照上重放且不移动光标（Emacs 对
 光标所在行的编辑走更快的重绘路径），并要求端到端 p50 不超过这一下限 200 µs；
-`rows` 类改为比较操作之后的重绘时间，因为其每行预算已约束操作本身。区段无法复现
+`rows`、`structure` 和 `snapshot` 类改为比较操作之后的重绘时间，因为它们的预算已
+约束操作本身。区段无法复现
 实际 buffer 时场景失败。`:twin replay` 在选中窗口显示的
-普通副本上再次计时 `:invoke`，因此该操作必须作用于当前 buffer。退出码 0 表示通过，
+快照上计时第二轮的 `:invoke`，因此该操作必须作用于当前 buffer。退出码 0 表示通过，
 1 表示预算、验证或孪生检查失败，2 表示报告不完整。
 
 ## 在真实 GUI 中验证隔离检出

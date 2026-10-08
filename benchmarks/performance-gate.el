@@ -9,22 +9,30 @@
 ;; at the configuration's output path is rewritten after every scenario and
 ;; ends with status "done" or "error".
 ;;
+;; Timed samples run unobserved and their conses exclude the measurement's
+;; own; scenario files load from current byte-compiled copies.
+;;
 ;; A scenario's :gate plist selects its budget class (:class) and may give
-;; :rows for row-proportional classes.  :twin diff measures the editing floor:
+;; :rows for row-proportional classes.  A twin runs a second, untimed pass
+;; from a snapshot of the buffer.  :twin diff measures the editing floor:
 ;; the fixture's :observe reports carry :ranges, (START OLD NEW) line
-;; replacements in application order.  After each untimed sample the runner
-;; derives the smallest plain-buffer edit that yields the same text and
-;; properties, then replays those edits on a copy of the initial buffer with
-;; the same redisplay timing, keeping point where the fixture keeps it so
-;; Emacs's redisplay of the line at point does not favor the twin; text is
-;; compared after every sample and text properties after the first and last.  :twin replay times the fixture's
-;; :invoke again on a plain copy of the initial buffer shown in the selected
-;; window, for operations such as scrolling that act on the current buffer.
+;; replacements in application order.  After each sample of that pass the
+;; runner derives the smallest plain-buffer edit that yields the same text
+;; and properties, then replays those edits on the snapshot with the same
+;; redisplay timing, keeping point where the fixture keeps it so Emacs's
+;; redisplay of the line at point does not favor the twin; text is compared
+;; after every sample and text properties after the first and last.
+;; :twin replay times the second pass's :invoke on the snapshot shown in the
+;; selected window, for operations such as scrolling that act on the current
+;; buffer.
 ;; Function: taf-gate-running-p ()
 ;; Return non-nil while a gate job is active.
 
 ;;; Code:
 (require 'cl-lib)
+(load (expand-file-name "performance-driver" (file-name-directory
+                                              (or load-file-name buffer-file-name)))
+      nil t)
 
 (defvar taf-gate--job nil
   "Plist of the active gate job, or nil.")
@@ -82,7 +90,7 @@ Conditions may carry cyclic engine structures, so printing is limited."
   (let (registry)
     (cl-letf (((symbol-function 'taf-benchmark-register)
                (lambda (id &rest properties) (push (cons id properties) registry))))
-      (dolist (file files) (load file nil t)))
+      (dolist (file files) (taf-benchmark-load-scenarios file)))
     (nreverse registry)))
 
 (defun taf-gate--show (buffer)
@@ -197,7 +205,10 @@ With PROPERTIES, text properties must be equal too."
       (goto-char (point-min)))
     copy))
 
-(defun taf-gate--time (function)
+(defvar taf-gate--cons-overhead nil
+  "Conses that `taf-gate--time' allocates around an operation that has none.")
+
+(defun taf-gate--time-raw (function)
   "Call FUNCTION and redisplay; return (TOTAL-US OP-US CONSES)."
   (let* ((c0 (car (memory-use-counts)))
          (t0 (current-time))
@@ -210,14 +221,30 @@ With PROPERTIES, text properties must be equal too."
           (* 1e6 (float-time (time-subtract t1 t0)))
           (- c1 c0))))
 
+(defun taf-gate--time (function)
+  "Call FUNCTION and redisplay; return (TOTAL-US OP-US CONSES).
+CONSES excludes what the measurement itself allocates, calibrated once on
+an operation that allocates nothing."
+  (unless taf-gate--cons-overhead
+    (setq taf-gate--cons-overhead
+          (apply #'min (mapcar (lambda (_) (nth 2 (taf-gate--time-raw #'ignore)))
+                               '(1 2 3)))))
+  (let ((result (taf-gate--time-raw function)))
+    (setcar (nthcdr 2 result) (max 0 (- (nth 2 result) taf-gate--cons-overhead)))
+    result))
+
 (defun taf-gate--run-scenario (id properties samples)
-  "Run scenario ID with PROPERTIES for SAMPLES; return its result plist."
+  "Run scenario ID with PROPERTIES for SAMPLES; return its result plist.
+Timed samples run unobserved, so the fixture's report plumbing does not
+count against the operation.  A twin then needs a second, untimed pass of
+SAMPLES from a snapshot of the buffer: a diff twin records that pass's
+ranges and replays them on the snapshot, a replay twin repeats it there."
   (let* ((gate (plist-get properties :gate))
          (twin (plist-get gate :twin))
          (fixture (funcall (plist-get properties :setup) 'gui))
          (buffer (plist-get fixture :buffer))
          (invoke (plist-get fixture :invoke))
-         (ranges nil) (stop-observing nil) (shadow nil) (snapshot nil)
+         (ranges nil) (stop-observing nil) (shadow nil) (snapshot nil) (base 0)
          totals ops conses edits twin-totals verify twin-error
          (gcs gcs-done))
     (unwind-protect
@@ -227,30 +254,34 @@ With PROPERTIES, text properties must be equal too."
           (dotimes (i taf-gate--warmups)
             (funcall invoke i)
             (redisplay t))
-          (when twin
-            (setq snapshot (taf-gate--copy-buffer buffer " *taf-gate twin*")))
-          (when (eq twin 'diff)
-            (unless (plist-get fixture :observe)
-              (error "Scenario %s declares a diff twin without :observe" id))
-            (setq shadow (taf-gate--copy-buffer buffer " *taf-gate shadow*")
-                  stop-observing (funcall (plist-get fixture :observe)
-                                          (lambda (_buffer report)
-                                            (setq ranges (append ranges (plist-get report :ranges)))))))
           (garbage-collect)
           (redisplay t)
           (setq gcs gcs-done)
           (dotimes (i samples)
-            (setq ranges nil)
             (let ((index (+ taf-gate--warmups i)))
               (pcase-let ((`(,total ,op ,cons) (taf-gate--time (lambda () (funcall invoke index)))))
-                (push total totals) (push op ops) (push cons conses)))
-            (when (and shadow (not twin-error))
-              (push (taf-gate--record shadow buffer ranges) edits)
-              (unless (taf-gate--equal-buffers-p shadow buffer (memq i (list 0 (1- samples))))
-                (setq twin-error (format "Reported ranges do not reproduce sample %d" i)))))
+                (push total totals) (push op ops) (push cons conses))))
           (setq gcs (- gcs-done gcs))
           (setq verify (condition-case condition (funcall (plist-get fixture :verify))
-                         (error (taf-gate--message condition)))))
+                         (error (taf-gate--message condition))))
+          (when twin
+            (setq base (+ taf-gate--warmups samples)
+                  snapshot (taf-gate--copy-buffer buffer " *taf-gate twin*"))
+            (when (eq twin 'diff)
+              (unless (plist-get fixture :observe)
+                (error "Scenario %s declares a diff twin without :observe" id))
+              (setq shadow (taf-gate--copy-buffer buffer " *taf-gate shadow*")
+                    stop-observing (funcall (plist-get fixture :observe)
+                                            (lambda (_buffer report)
+                                              (setq ranges (append ranges (plist-get report :ranges))))))
+              (dotimes (i samples)
+                (setq ranges nil)
+                (funcall invoke (+ base i))
+                (redisplay t)
+                (unless twin-error
+                  (push (taf-gate--record shadow buffer ranges) edits)
+                  (unless (taf-gate--equal-buffers-p shadow buffer (memq i (list 0 (1- samples))))
+                    (setq twin-error (format "Reported ranges do not reproduce sample %d" i))))))))
       (when stop-observing (funcall stop-observing))
       (when shadow (kill-buffer shadow))
       (funcall (plist-get fixture :cleanup)))
@@ -258,7 +289,7 @@ With PROPERTIES, text properties must be equal too."
       (taf-gate--show snapshot)
       (setq edits (nreverse edits))
       (dotimes (i samples)
-        (let ((index (+ taf-gate--warmups i)) (sample-edits (nth i edits)))
+        (let ((index (+ base i)) (sample-edits (nth i edits)))
           (push (car (taf-gate--time
                       (if (eq twin 'diff)
                           (lambda () (save-excursion (mapc #'taf-gate--apply-edit sample-edits)))

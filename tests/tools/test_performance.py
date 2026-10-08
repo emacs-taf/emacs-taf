@@ -638,12 +638,16 @@ class PerformanceGate(unittest.TestCase):
         passing = [self.result("a.local.30", "local", 40, total=1100, twin=1000),
                    self.result("a.local.10000", "local", 45, total=1150, twin=1000),
                    self.result("a.tree.400", "propagate", 190),
-                   self.result("a.list.400", "structure", 290),
+                   self.result("a.list.30", "structure", 50),
+                   self.result("a.list.10000", "structure", 290, total=1400, twin=1000),
+                   self.result("a.snapshot.10000", "snapshot", 1900, total=3000, twin=1000),
+                   self.result("a.counter", "counter", 30),
+                   self.result("a.resize.400", "resize", 15000),
                    self.result("a.mount.400", "rows", 400 * 39),
                    self.result("a.filter.400", "rows", 9000, total=10100, twin=1000)]
         process = self.evaluate(passing)
         self.assertEqual(0, process.returncode, process.stdout)
-        self.assertIn("PASS: 6 scenarios, 0 failures", process.stdout)
+        self.assertIn("PASS: 10 scenarios, 0 failures", process.stdout)
         failing = [self.result("b.op.30", "local", 51),
                    self.result("b.cons.30", "local", 10, cons=201),
                    self.result("b.e2e.30", "local", 10, total=1201, twin=1000),
@@ -652,6 +656,10 @@ class PerformanceGate(unittest.TestCase):
                    self.result("b.grow.10000", "propagate", 51),
                    self.result("b.mount.400", "rows", 400 * 41),
                    self.result("b.filter.400", "rows", 9000, total=10201, twin=1000),
+                   self.result("b.list.10000", "structure", 301, total=1502, twin=1000),
+                   self.result("b.snapshot.10000", "snapshot", 2001),
+                   self.result("b.counter", "counter", 31, cons=201),
+                   self.result("b.resize.400", "resize", 16001),
                    self.result("b.unknown.30", "fast", 1)]
         process = self.evaluate(failing)
         self.assertEqual(1, process.returncode, process.stdout)
@@ -659,6 +667,10 @@ class PerformanceGate(unittest.TestCase):
                          "b.e2e.30: e2e +201 us over twin", "b.verify.30: verify: stale row",
                          "b.grow: op p50 grows 20 -> 51", "b.mount.400: op 41.0 us/row > 40",
                          "b.filter.400: redisplay +201 us over twin",
+                         "b.list.10000: op p50 301 > 300", "b.list.10000: redisplay +201 us",
+                         "b.snapshot.10000: op p50 2001 > 2000",
+                         "b.counter: op p50 31 > 30", "b.counter: cons p50 201 > 200",
+                         "b.resize.400: op p50 16001 > 16000",
                          "b.unknown.30: unknown gate class fast"):
             self.assertIn("FAIL " + expected, process.stdout)
 

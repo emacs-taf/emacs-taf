@@ -190,7 +190,11 @@ python3 scripts/performance.py gate --report ~/.cache/emacs-taf/gate/<run>.json
 ```
 
 Each sample times `:invoke` (the operation) and the following forced redisplay
-(end to end), after five untimed warmups, and records allocated conses. The
+(end to end), after five untimed warmups, and records the conses the operation
+allocates, excluding the measurement's own. Timed samples run unobserved; a
+twin uses a second, untimed pass from a snapshot of the buffer. The
+scenario files load from their byte-compiled copies when those are current,
+because applications run compiled code. The
 scenario's `:gate` plist selects a class; a trailing numeric id component is the
 size, which `rows` uses as the row count unless `:rows` is given:
 
@@ -198,20 +202,26 @@ size, which `rows` uses as the row count unless `:rows` is given:
 | --- | --- |
 | `local` | 50 µs, p95 200 µs, conses 200 |
 | `propagate` | 200 µs |
-| `structure` | 300 µs |
+| `structure` | 300 µs at every size |
+| `counter` | 30 µs, conses 200 |
+| `snapshot` | 2 ms at every size |
+| `resize` | 16 ms |
 | `rows` | 40 µs per row |
 | `info` | reported only |
 
-For `local`, `propagate` and `structure`, the largest size of a family may not
-exceed 1.5 × the smallest size's operation p50 plus 20 µs. `:twin diff`
+For `local` and `propagate`, the largest size of a family may not exceed
+1.5 × the smallest size's operation p50 plus 20 µs. A `structure` or `snapshot`
+update compares or copies the new list, so its operation may grow with the list
+within the budget. `:twin diff`
 requires `:observe` reports with `:ranges`, a list of `(START OLD NEW)` line
 replacements in application order. The runner converts each sample's ranges
 into the smallest plain-buffer edit producing the same text and properties,
-replays it on a copy of the initial buffer without moving point (Emacs redraws
+replays it on the snapshot without moving point (Emacs redraws
 an edit on the line at point through a faster path) and requires the end-to-end p50 to
-stay within 200 µs of that floor; `rows` compares the redisplay time after the
-operation instead, because its row budget already bounds the operation. Ranges
-that do not reproduce the live buffer fail the scenario. `:twin replay` times `:invoke` again on a plain copy shown in
+stay within 200 µs of that floor; `rows`, `structure` and `snapshot` compare the
+redisplay time after the operation instead, because their budgets already bound
+the operation. Ranges
+that do not reproduce the live buffer fail the scenario. `:twin replay` times the second pass's `:invoke` on the snapshot shown in
 the selected window, so its operation must act on the current buffer. Exit
 status is 0 for a pass, 1 for a failed budget, verification or twin, and 2 for
 an incomplete report.
