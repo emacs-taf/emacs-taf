@@ -51,28 +51,6 @@ python3 scripts/elisp.py check ebox/lisp/ebox-interaction.el
   `log=PATH` when output was cut. The exit status is Emacs's own, 124 when a
   limit stopped it and 2 for a usage error.
 
-## Read a declined proof
-
-A proof predicate that ends in one long `(when (and GATE ...) ...)` returns nil
-without saying which gate vetoed the change, and editing the engine to print
-gates is both noisy and short-lived. `scripts/diagnose-gates.py` reads one such
-definition, rebuilds it with the gate list replaced by a report of the failing
-gate indices, and emits an adapter that wraps the live symbol.
-
-```sh
-python3 scripts/diagnose-gates.py PREDICATE \
-    --root ebox --output /tmp/predicate.gates.el
-python3 scripts/elisp.py run -p ebox -L ebox/tests \
-    -l /tmp/predicate.gates.el -l scenario.el \
-    -e '(diagnose-gates-install)' -e '(scenario-run)' -e '(diagnose-gates-report)'
-```
-
-`diagnose-gates-install` keeps the original function and records a report for
-every call it wraps; `diagnose-gates-report` prints `fails=(INDICES) ok=BOOL`
-per call and returns the call count. Indices count the clauses of the final
-`(and ...)` from 0, and an `N-error` entry means that clause signalled. The
-scenario must trigger the predicate itself; the adapter never invents calls.
-
 ## Run a measured change
 
 ```sh
