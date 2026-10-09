@@ -183,7 +183,7 @@ Ebox 拥有宿主几何、命中、显示发布及编辑区域的写入边界；
 
 组件必须覆盖单行/多行、占位提示、只读/禁用、受控值同步、修改/提交/取消、原生补全、大小变化和卸载清理。换行与提交按应用提供的键位策略分开；发送失败保留草稿，发送确认不得清除用户等待期间继续输入的新文本。外部值更新、焦点切换和卸载的行为须有明确契约及回归，不用捕获所有按键的自制编辑器替代 Emacs 编辑能力。
 
-输入会话机制已在 Ebox 与 ETAF 落地，作为应用内原地编辑的底层出口。Ebox 的 `ebox-input-begin`、`ebox-input-text`、`ebox-input-end` 与 `ebox-input-active-p` 在节点已显示的文本区间内接受原地编辑，会话期间保留该 buffer 的树变化而不写入，结束时还原原文本、写入延迟的变化并返回用户文本；ETAF 以 `etaf-input-begin`、`etaf-input-text`、`etaf-input-end`、`etaf-input-active-p` 包装，应用在 `etaf-input-end` 之后更新状态并 flush。会话不保存应用值；输入面是应用布局内的已挂载 buffer，frame 不作为输入面。
+输入会话机制已在 Ebox 与 ETAF 落地，作为应用内原地编辑的底层出口。Ebox 的 `ebox-input-begin`、`ebox-input-text`、`ebox-input-end` 与 `ebox-input-active-p` 在隐藏编辑 buffer 中用原生命令、undo 与输入法编辑 text node 的值，节点保持布局并即时显示每次编辑，flush 不因会话而暂停；ETAF 以 `etaf-input-begin`、`etaf-input-text`、`etaf-input-end`、`etaf-input-active-p` 包装，组件在 `:on-change` 中把值同步进状态，回写同一值不产生效果。会话不保存应用值；输入面是应用布局内的已挂载 buffer，frame 不作为输入面。
 
 剩余缺口在通用组件与 GUI 验收：单行/多行、占位提示、受控值同步、原生补全和提交/取消等公共输入组件尚未落地，`etaf-pi` 尚未迁移到公共组件；中文输入法组合、选区、撤销、编辑期间的后台更新以及提交后的发布也尚未完成 GUI 验收。应先提取并验证这些通用能力、迁移 `etaf-pi`，再供 `etaf-telega` 等应用复用；不把上述底层机制或应用专用实现当作通用组件已经完成。
 

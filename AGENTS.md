@@ -141,6 +141,10 @@ to every repository changed from this workspace.
   text properties or cycles, bind `print-circle` (plus `print-length`/`print-level`
   as needed). `%S` expands every text property, and cyclic property graphs
   (keymaps and closures referencing each other) print forever and exhaust memory.
+- Every Lisp file written for Emacs to load, including temporary debug, probe and
+  GUI scripts outside the repositories, starts with
+  `;;; -*- lexical-binding: t; -*-`. Emacs 31 raises a `*Warnings*` buffer over
+  the user's frame for each load of a file without it.
 - Look up Lisp with `python3 scripts/elisp.py def SYMBOL...` (complete forms)
   and `refs SYMBOL` (callers by enclosing definition) instead of searching and
   reading guessed line ranges; batch independent lookups and reads into one call.
