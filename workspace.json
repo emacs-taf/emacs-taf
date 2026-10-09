@@ -3,7 +3,7 @@
   "repositories": {
     "ebox": {
       "url": "git@gitea.gklazycat.heiyu.space:emacs-taf/ebox.git",
-      "revision": "96a66074fd12c254933a0d3e13a6c221a03066a9",
+      "revision": "e863e2012d65eb4f04090e4119fbe93a9eed7eaf",
       "branch": "main"
     },
     "ebox-playground": {
