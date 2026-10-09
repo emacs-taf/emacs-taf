@@ -8,7 +8,7 @@
     },
     "ebox-playground": {
       "url": "git@gitea.gklazycat.heiyu.space:emacs-taf/ebox-playground.git",
-      "revision": "827c54d5b6935ea4ee85fb23b04ff2d1f941a95b",
+      "revision": "d1803466c9d2de7033c88802ff2a78e81f0af1b1",
       "branch": "main"
     },
     "ecss": {
