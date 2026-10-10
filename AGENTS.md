@@ -103,10 +103,26 @@ to every repository changed from this workspace.
   direction. Keep shared capabilities in their owning provider; do not duplicate
   authoritative state or algorithms in consumers. Migrate affected callers with
   interface changes and remove the superseded route once migration is complete.
-- Build applications by composing the shared component catalog. When app UI or
-  interaction has no reusable component, extract it into the owning provider
-  (ETAF components in etaf-ui, engine primitives in ebox) with props for
-  customization, then consume it from the app; do not re-implement it locally.
+- Evolve the shared component catalog while building frameworks and applications.
+  Before reusing a component, assess whether its name, responsibility, visual
+  defaults, interaction model, state ownership and public props fit the intended
+  reusable concept. Existing code is not by itself a reason to reuse it; an
+  earlier application's terminology or assumptions must not dictate a new
+  application's interface.
+  Reuse or configure a component when its semantics already fit. Improve or
+  refactor it when the shared abstraction is wrong; extract a common primitive
+  and compose specialized components when the use cases share mechanisms but
+  have different semantics. Add a new component when it has a distinct reusable
+  responsibility. Name each layer for that responsibility and keep application
+  policy in the application. Do not accumulate application-specific flags,
+  misleading aliases, copied controls or exceptions that make the catalog harder
+  to understand. Avoid speculative abstraction or renaming a sound component
+  merely to match the newest application.
+  Put reusable ETAF components in etaf-ui and engine primitives in ebox, expose
+  required engine capabilities through ETAF, then consume their public APIs.
+  A changed abstraction includes migration of affected consumers, examples,
+  API documentation and public behavior tests; validate both established and new
+  workflows, including appearance, keyboard/mouse interaction and latency.
   Component defaults must be modern and visually coherent: unified icon metrics
   that never grow the standard line height, consistent spacing and state styling
   through theme tokens. The catalog accumulates across applications so later
