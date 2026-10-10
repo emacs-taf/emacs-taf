@@ -152,6 +152,11 @@ to every repository changed from this workspace.
   workspace via `scripts/ecosystem.el` and bounds time, memory, output and
   printing; do not hand-write `-L` chains or timeout wrappers. See
   [the tool manual](docs/manual.md).
+- After editing a `.el` file, byte-compile it: unclosed delimiters surface as
+  `End of file during parsing`. To independently check delimiter balance, run
+  `check-parens` in an `emacs-lisp-mode` buffer; in `fundamental-mode`, `;` is
+  not a comment and apostrophes inside comments are treated as quotes, producing
+  false `Unmatched bracket or quote` reports.
 - From this directory, use `make -C <package> structure-check` and affected tests
   while developing; run `make -C <package> check` before completing a package change.
   Workspace changes run `python3 scripts/workspace.py check`; integrated changes
