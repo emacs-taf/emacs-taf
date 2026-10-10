@@ -194,6 +194,9 @@ to every repository changed from this workspace.
 - Each package exposes `compile`, `test`, `check`, `clean`, `structure-check`, and
   `setup-hooks`. `check` includes the structural gate. Serialize commands that clean
   and rebuild shared dependencies; parallel builds must not race over sibling outputs.
+  Run workspace validation (`make check` / `make verify`) only after editing and
+  committing are complete on a quiet tree: any workspace source change during
+  measurement marks the entire run `UNVERIFIED: Workspace sources changed during measurement`.
 - Run `make setup-hooks` after cloning so Git commits run the structure and message
   gates on the exact index. jj does not run Git hooks; run the same commands before
   publishing (see `Checks before publishing`). CI runs the same structural and API
