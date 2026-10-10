@@ -103,8 +103,11 @@ Gallery 测量在显示 buffer 后、开始计时前同步 Ebox 的布局视口�
 `passed` 表示所选性能门槛通过；`failed` 表示预算或回归门槛失败；`screened` 表示
 较小规模的有效筛查完成；`unverified` 表示缺失、无效或不完整的数据。退出码分别是
 0（通过／筛查完成）、1（性能失败）、2（证据无效）。`acceptance_eligible` 单独说明
-采样覆盖是否足够。功能执行完成不等于性能通过。已有 `make verify` 继续负责完整批处理
-功能检查与 Research Shelf 验证流程。
+采样覆盖是否足够。功能执行完成不等于性能通过。`make verify` 先编译工作区，
+用本工具运行 Playground 注册的批处理场景，再执行完整正确性门禁；性能失败也不跳过
+正确性检查。其 `performance/result.json` 就是本工具的标准报告。一组结果标为
+`screened`；三组基线使用 `scripts/verify.py --record-baseline --repeatability`。
+比较沿用基线的采样组数，并使用本工具的证据有效性、负载一致性和性能回归检查。
 
 ## 在 GUI 中门禁一次改动
 

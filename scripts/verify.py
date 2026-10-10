@@ -43,35 +43,6 @@ def snapshot(root):
     return result
 
 
-def compare_performance(output, baseline, count, allowance):
-    "Compare matching recorded workloads; missing evidence is a failure."
-    previous = json.loads(baseline.read_text())
-    rows = []
-    for index in range(1, count + 1):
-        old = json.loads((baseline.parent / f'performance-{index}.json').read_text())
-        new = json.loads((output / f'performance-{index}.json').read_text())
-        for key in ('warmups', 'machine_id', 'evaluator_identity'):
-            if old.get(key) != new.get(key) or old.get(key) is None:
-                raise ValueError(f'baseline workload differs: {key}')
-        if not old.get('scenarios') or old['scenarios'].keys() != new.get('scenarios', {}).keys():
-            raise ValueError('baseline scenario coverage differs or is empty')
-        for name, target in new['scenarios'].items():
-            base = old['scenarios'][name]
-            if len(base['samples_ms']) != 30 or len(target['samples_ms']) != 30:
-                raise ValueError(f'incomplete samples: {name}')
-            base_samples = sorted(base['samples_ms'])
-            target_samples = sorted(target['samples_ms'])
-            for metric, position in (('p95_ms', 28), ('max_ms', 29)):
-                baseline_value, current_value = base_samples[position], target_samples[position]
-                delta = current_value - baseline_value
-                rows.append({'set': index, 'scenario': name, 'metric': metric,
-                             'baseline_ms': baseline_value, 'current_ms': current_value,
-                             'delta_ms': delta, 'regressed': delta > allowance})
-    return {'baseline': str(baseline), 'baseline_source_identity': previous['source_identity'],
-            'allowance_ms': allowance, 'comparisons': rows,
-            'status': 'failed' if any(row['regressed'] for row in rows) else 'passed'}
-
-
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--root', type=Path, default=ROOT)
@@ -97,13 +68,23 @@ def main():
     except (OSError, subprocess.CalledProcessError, ValueError) as error:
         parser.error(f'cannot record workspace sources: {error}')
     source_id = hashlib.sha256(json.dumps(source, sort_keys=True).encode()).hexdigest()
-    report = {'schema': 1, 'started_at': datetime.now(timezone.utc).isoformat(),
+    sets = 3 if args.repeatability else 1
+    if args.baseline and not args.repeatability:
+        try:
+            prior = json.loads(args.baseline.read_text())
+            if (isinstance(prior, dict) and prior.get('schema') == 2
+                    and prior.get('performance_sets') in (1, 3)):
+                sets = prior['performance_sets']
+        except (OSError, ValueError, TypeError):
+            pass  # The independent comparison phase reports unusable baselines.
+    report = {'schema': 2, 'started_at': datetime.now(timezone.utc).isoformat(),
               'kind': 'workspace-baseline' if args.record_baseline else 'workspace-batch-verification', 'root': str(root),
               'platform': platform.platform(), 'emacs': args.emacs,
-              'coverage': ['batch correctness', 'Research Shelf batch latency'],
+              'coverage': ['batch correctness', 'registered Playground batch latency'],
               'not_certified': ['GUI rendering and input', 'GUI latency', 'installation compatibility'],
               'source_identity': source_id, 'sources': source,
-              'performance_sets': 3 if args.repeatability else 1,
+              'performance_sets': sets,
+              'performance_report': 'performance/result.json',
               'phases': [], 'status': 'running'}
     report_path = output / 'result.json'
 
@@ -131,34 +112,47 @@ def main():
         phase['status'] = 'passed' if phase['exit_code'] == 0 else 'failed'
         save()
         print(f'{phase["status"].upper()} {name} ({phase["seconds"]:.1f}s) {log}', flush=True)
-        return phase['exit_code'] == 0
+        return phase
 
     make = [args.make, f'EMACS={args.emacs}']
-    prepared = run('prepare', make + ['-C', 'etaf-playground', 'perf-prepare'])
-    if prepared:
-        report['native_modules'] = {
-            str(path.relative_to(root)): hashlib.sha256(path.read_bytes()).hexdigest()
-            for path in (root / 'ebox/native/target').glob('*/release/libebox_native_reflow.*')
-            if path.is_file() and path.suffix in ('.so', '.dylib', '.dll')}
-        evaluator = root / 'etaf-playground/benchmarks/benchmark-research-shelf.el'
-        evaluator_id = hashlib.sha256(evaluator.read_bytes()).hexdigest()
-        for index in range(1, report['performance_sets'] + 1):
-            run(f'performance-{index}', make + ['-C', 'etaf-playground', 'perf-evaluator'],
-                {'INCREMENTAL_PERF_MANIFEST': str(output / f'performance-{index}.json'),
-                 'INCREMENTAL_SET_INDEX': str(index),
-                 'INCREMENTAL_SOURCE_IDENTITY': source_id,
-                 'INCREMENTAL_EVALUATOR_IDENTITY': evaluator_id})
+    prepared = run('prepare', make + ['compile'])
+    driver = [sys.executable, str(root / 'scripts/performance.py')]
+    performance_path = output / report['performance_report']
+    if prepared['status'] == 'passed':
+        phase = run('performance', driver + [
+            'run', '--root', str(root), '--emacs', args.emacs, '--mode', 'batch',
+            '--scenario', 'etaf-playground.*', '--sets', str(report['performance_sets']),
+            '--samples', '30', '--warmups', '5', '--output-dir', str(performance_path.parent)])
+        try:
+            performance = json.loads(performance_path.read_text())
+            if (not isinstance(performance, dict)
+                    or performance.get('schema') != 1 or performance.get('valid') is not True
+                    or not performance.get('cases')
+                    or performance.get('status') not in ('passed', 'screened')):
+                raise ValueError('performance driver did not produce valid passing evidence')
+            if phase['status'] == 'passed':
+                phase['status'] = performance['status']
+            phase['report'] = str(performance_path)
+            report['acceptance_eligible'] = performance.get('acceptance_eligible', False)
+        except (OSError, ValueError, TypeError) as error:
+            phase.update(status='failed', reason=str(error))
+        save()
     else:
         report['phases'].append({'name': 'performance', 'status': 'not-run',
                                  'reason': 'preparation failed'})
     if args.baseline:
         try:
-            comparison = compare_performance(output, args.baseline.resolve(),
-                                             report['performance_sets'], args.regression_allowance_ms)
+            previous_path = args.baseline.resolve()
+            previous = json.loads(previous_path.read_text())
+            if (not isinstance(previous, dict) or previous.get('schema') != 2
+                    or previous.get('status') not in ('passed', 'screened')):
+                raise ValueError('baseline is not a successful current-driver workspace run')
+            comparison = run('performance-comparison', driver + [
+                'compare', str(previous_path.parent / 'performance/result.json'),
+                str(performance_path), '--allowance-ms', str(args.regression_allowance_ms)])
         except (OSError, ValueError, KeyError, TypeError) as error:
-            comparison = {'status': 'failed', 'reason': str(error)}
-        comparison['name'] = 'performance-comparison'
-        report['phases'].append(comparison)
+            comparison = {'name': 'performance-comparison', 'status': 'failed', 'reason': str(error)}
+            report['phases'].append(comparison)
         save()
         print(f'{comparison["status"].upper()} performance-comparison', flush=True)
     # A performance failure must not hide the independent correctness result.
@@ -168,8 +162,11 @@ def main():
     except (OSError, subprocess.CalledProcessError, ValueError):
         stable = False
     report['phases'].append({'name': 'source-stability', 'status': 'passed' if stable else 'failed'})
-    passed = all(phase['status'] == 'passed' for phase in report['phases'])
-    report['status'] = 'passed' if passed else 'failed'
+    if not stable:
+        print('UNVERIFIED: Workspace sources changed during measurement', flush=True)
+    passed = all(phase['status'] in ('passed', 'screened') for phase in report['phases'])
+    report['status'] = ('failed' if not passed else
+                        'passed' if report.get('acceptance_eligible') else 'screened')
     report['finished_at'] = datetime.now(timezone.utc).isoformat()
     save()
     print(f'{report["status"].upper()} result {report_path}', flush=True)

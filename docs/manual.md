@@ -152,8 +152,12 @@ or a baseline gate failed; `screened` means a smaller valid run completed;
 0 for a completed passing/screening run, 1 for a latency regression or budget
 failure, and 2 for invalid evidence. A completed operation is not automatically
 a performance pass. `acceptance_eligible` separately records sufficient sample
-coverage. Existing `make verify` continues to run the complete batch correctness
-and Research Shelf verification workflow.
+coverage. `make verify` compiles the workspace, runs the registered Playground
+batch scenarios through this driver, then runs the complete correctness gate
+even if performance failed. Its `performance/result.json` is an ordinary driver
+report. A one-set run is `screened`; use `scripts/verify.py --record-baseline
+--repeatability` for a three-set baseline. Comparison adopts the baseline's
+sample grouping and uses this driver's validity, workload and regression checks.
 
 ## Gate a change in the GUI
 

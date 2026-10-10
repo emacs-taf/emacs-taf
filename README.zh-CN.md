@@ -82,9 +82,12 @@ jj config set --repo 'revset-aliases."immutable_heads()"' \
 
 `make verify-baseline` 保存功能与性能基线；修改后运行
 `make verify BASELINE=/path/result.json`，自动保留日志和原始样本，并比较 p95/max。
-增加超过 2 ms 即失败，既有 50 ms 绝对门槛仍独立生效。默认每场景 5 次预热、
-30 次采样；三组对比使用 `make verify-repeatability BASELINE=/path/result.json`，
+通过 `scripts/performance.py` 比较，增加超过 2 ms 即失败，各注册场景的绝对预算
+仍独立生效。验证先编译工作区，再测量 Playground 注册负载；性能失败后仍运行
+`make check`。默认每场景一组 5 次预热、30 次采样，结果标为 `screened`，仅代表筛查；
+三组对比使用 `make verify-repeatability BASELINE=/path/result.json`，
 对应基线通过 `scripts/verify.py --record-baseline --repeatability` 生成。
+普通 `make verify` 沿用基线的采样组数。
 终端只输出简短结果与 Git 外的证据目录。实际 GUI 渲染、输入和安装认证仍需
 各自的验收流程，批量通过不能替代它们。
 

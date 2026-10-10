@@ -85,9 +85,13 @@ Its target behavior is explicitly distinguished from the current implementation.
   [performance workflow and scenario interface](docs/manual.md).
 - `make verify-baseline`: save a batch correctness/performance baseline with logs and raw samples.
 - `make verify BASELINE=/path/result.json`: run the same batch checks and compare p95/max
-  with the baseline; increases over 2 ms fail independently of the existing 50 ms limit.
+  with the baseline through `scripts/performance.py`; increases over 2 ms fail independently
+  of each registered scenario's absolute budget. The wrapper compiles the workspace, measures
+  the registered Playground workloads, and runs `make check` even after a performance failure.
+  One set of 5 warmups and 30 samples is a screen, reported as `screened`.
   `make verify-repeatability BASELINE=/path/result.json` compares three independent sets
   against a three-set baseline recorded with `scripts/verify.py --record-baseline --repeatability`.
+  Ordinary `make verify` adopts the baseline's sample grouping.
   Each run prints a compact summary and an evidence directory outside Git. Actual GUI
   rendering/input and installation checks remain separate acceptance requirements.
 - `make compile`, `make test`, `make clean`: delegate to package-owned entry points.
