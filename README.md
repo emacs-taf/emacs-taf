@@ -18,7 +18,7 @@ Framework packages and workspace tooling developed in this checkout:
 | [ebox](https://forgejo.vhkd.top/emacs-taf/ebox) | Box layout, rendering and incremental publication | ecss; optional ekp |
 | [etaf](https://forgejo.vhkd.top/emacs-taf/etaf) | Components, state and application runtime | ebox |
 | [etaf-ui](https://forgejo.vhkd.top/emacs-taf/etaf-ui) | Reusable UI components | etaf |
-| `etaf-gamekit` (local checkout) | Game definitions, independent instances, actions and backend adapters | etaf; examples optionally use etaf-ui |
+| `etaf-gamekit` (local checkout) | Game definitions, independent instances, actions and backend adapters | etaf |
 | [etaf-db](https://forgejo.vhkd.top/emacs-taf/etaf-db) | Database backends for ETAF; currently SQLite | etaf |
 | [etaf-apps](https://forgejo.vhkd.top/emacs-taf/etaf-apps) | Application workspace: their integration checkpoints and shared tooling | etaf, etaf-ui, etaf-db |
 | [etaf-games](https://forgejo.vhkd.top/emacs-taf/etaf-games) | Game application workspace: their common contract and integration commands | etaf, etaf-ui; games use etaf-gamekit |
@@ -29,8 +29,9 @@ Framework packages and workspace tooling developed in this checkout:
 `etaf-gamekit` has no configured remote and is not yet part of the published
 revision inventory. Its independent local checkout provides game definitions
 and a common action/observation lifecycle over Godot, boardgame.io and OpenSpiel.
-Game applications own their rules and presentation; Salvage Station lives under
-`etaf-gamekit/examples/salvage/`, outside the framework core.
+Game applications own their rules and presentation and live in the
+[etaf-games](https://forgejo.vhkd.top/emacs-taf/etaf-games) workspace, outside
+the framework core; the core does not depend on their components.
 Install the backend needed by your game, or use
 `make -C etaf-gamekit engine-all GAMEKIT_PYTHON=python3.11` before running the
 complete `make -C etaf-gamekit check`. Its README and manual describe standalone

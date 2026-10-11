@@ -15,7 +15,7 @@
 | [ebox](https://forgejo.vhkd.top/emacs-taf/ebox) | Box 布局、渲染与增量发布 | ecss；可选 ekp |
 | [etaf](https://forgejo.vhkd.top/emacs-taf/etaf) | 组件、状态与应用运行时 | ebox |
 | [etaf-ui](https://forgejo.vhkd.top/emacs-taf/etaf-ui) | 通用 UI 组件 | etaf |
-| `etaf-gamekit`（本地检出） | 游戏定义、独立运行实例、动作与后端适配器 | etaf；示例按需使用 etaf-ui |
+| `etaf-gamekit`（本地检出） | 游戏定义、独立运行实例、动作与后端适配器 | etaf |
 | [etaf-db](https://forgejo.vhkd.top/emacs-taf/etaf-db) | ETAF 数据库后端；目前支持 SQLite | etaf |
 | [etaf-apps](https://forgejo.vhkd.top/emacs-taf/etaf-apps) | 应用工作区：各应用的集成检查点与共享工具 | etaf、etaf-ui、etaf-db |
 | [etaf-games](https://forgejo.vhkd.top/emacs-taf/etaf-games) | 游戏应用工作区：共同开发契约与集成命令 | etaf、etaf-ui；游戏使用 etaf-gamekit |
@@ -25,8 +25,9 @@
 
 `etaf-gamekit` 尚未配置远程，因此不在已发布版本清单中。它的独立本地检出
 提供游戏定义，以及 Godot、boardgame.io、OpenSpiel 共用的动作、观察结果和
-实例生命周期。游戏应用拥有规则与呈现；Salvage Station 位于
-`etaf-gamekit/examples/salvage/`，不属于框架核心。
+实例生命周期。游戏应用拥有规则与呈现，位于
+[etaf-games](https://forgejo.vhkd.top/emacs-taf/etaf-games) 工作区，不属于框架核心；
+核心不依赖它们的组件。
 运行游戏只需安装所选后端；开发时先运行
 `make -C etaf-gamekit engine-all GAMEKIT_PYTHON=python3.11`，再运行完整的
 `make -C etaf-gamekit check`。独立游戏项目和适配器接入说明见包内 README 和手册。
