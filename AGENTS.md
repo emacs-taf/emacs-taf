@@ -34,6 +34,10 @@ independent repositories listed in `workspace.json`.
   input data; use `scripts/` for build, release, environment and general runners.
   Tests and benchmarks may use Lisp, Python, Shell or appropriate data formats.
 - Use `examples/` for runnable usage examples and `native/` for native implementations.
+  Standalone example applications use `examples/<app>/<app>.el` as their entry
+  and follow the same entry/lisp layout. Their entry Commentary owns their API;
+  those exports do not become framework APIs. The boundary gate checks each
+  such application as a separate consumer, including calls from tests.
   Native subprojects follow their language's own layout. Keep domain resources in
   descriptive directories such as `dictionaries/`; do not create generic dumping grounds.
 - Share directory meanings and command interfaces across repositories. Create only

@@ -94,6 +94,53 @@ class BoundaryTests(unittest.TestCase):
         self.assertIn('documentation', errors)
 
 
+class StandaloneExampleCommandTests(unittest.TestCase):
+    def test_example_entry_owns_its_public_api_not_the_framework(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root/'framework.el').write_text(
+                ';;; -*- lexical-binding: t; -*-\n;;; Commentary:\n'
+                ';; Function: framework-start ()\n;; Start an instance.\n;;; Code:\n'
+                "(defun framework-start () t)\n(defun framework--private () t)\n(provide 'framework)\n")
+            example = root/'examples/arena'
+            (example/'lisp').mkdir(parents=True)
+            entry = example/'arena.el'
+            source = (';;; -*- lexical-binding: t; -*-\n;;; Commentary:\n'
+                      ';; Function: arena-open ()\n;; Open a game.\n;;; Code:\n'
+                      "(require 'framework)\n(require 'arena-world)\n"
+                      "(defun arena-open () (framework-start))\n(provide 'arena)\n")
+            entry.write_text(source)
+            (example/'lisp/arena-world.el').write_text(
+                ';;; -*- lexical-binding: t; -*-\n'
+                "(defun arena--private () t)\n(provide 'arena-world)\n")
+            (root/'tests').mkdir()
+            tests = root/'tests/game-tests.el'
+
+            def run(code):
+                tests.write_text(';;; -*- lexical-binding: t; -*-\n' + code)
+                return subprocess.run(
+                    ['python3', str(ROOT/'scripts/check-api.py'), '--root', directory],
+                    capture_output=True, text=True)
+
+            result = run("(require 'arena)\n(arena-open)\n")
+            self.assertEqual(0, result.returncode, result.stderr)
+            for code, diagnostic in [("(arena--private)", 'internal to'),
+                                     ("(require 'arena-world)", 'internal feature'),
+                                     ('(load "arena-world")', 'direct load')]:
+                with self.subTest(code=code):
+                    result = run(code)
+                    self.assertNotEqual(0, result.returncode)
+                    self.assertIn(diagnostic, result.stderr)
+            entry.write_text(source.replace('(framework-start)', '(framework--private)'))
+            result = run("(arena-open)")
+            self.assertNotEqual(0, result.returncode)
+            self.assertIn('framework--private is internal', result.stderr)
+            entry.write_text(source.replace(';; Open a game.\n', ''))
+            result = run("(arena-open)")
+            self.assertNotEqual(0, result.returncode)
+            self.assertIn('needs usage/behavior documentation', result.stderr)
+
+
 class DeclarationCommandTests(unittest.TestCase):
     def test_distinct_bindings_share_a_symbol_but_not_a_namespace(self):
         with tempfile.TemporaryDirectory() as directory:
