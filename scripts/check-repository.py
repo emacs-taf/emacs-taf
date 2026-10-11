@@ -131,8 +131,10 @@ def check(root, files=None):
             fail(f, 'correctness tests belong in tests/; tool tests belong in tests/tools/')
         if external or not f.endswith('.md'): continue
         text = (root / f).read_text()
-        # Validate inline and reference-style Markdown links outside fenced code.
+        # Validate inline and reference-style Markdown links outside fenced and
+        # inline code; a code span may show link syntax without being a link.
         plain = re.sub(r'^(`{3,}|~{3,}).*?^\1\s*$', '', text, flags=re.M | re.S)
+        plain = re.sub(r'(?<!`)(`+)(?!`).+?(?<!`)\1(?!`)', '', plain)
         links = re.findall(r'\]\(<?([^\s)>]+)>?(?:\s+"[^"]*")?\)', plain)
         links += re.findall(r'^\s*\[[^\]]+\]:\s*<?([^\s>]+)>?', plain, re.M)
         for link in links:

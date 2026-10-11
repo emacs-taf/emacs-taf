@@ -191,6 +191,14 @@ class PolicyTests(unittest.TestCase):
             self.assertIn('book chapters are book/<language>/', self.errors())
             (self.root / misplaced).unlink()
 
+    def test_link_syntax_inside_inline_code_is_not_a_link(self):
+        self.write('README.md', '# Package\nWrite `[Views](views.md)` or ``[a](b.md) `x` `` to link.\n')
+        self.assertEqual('', self.errors())
+        self.write('README.md', '# Package\nSee [`views`](views.md).\n')
+        self.assertIn('broken local link (including exact case): views.md', self.errors())
+        self.write('README.md', '# Package\nSee `code` and [views](views.md).\n')
+        self.assertIn('broken local link (including exact case): views.md', self.errors())
+
     def test_keyboard_contract_is_workspace_only_and_checks_links(self):
         document = 'docs/keyboard-navigation.zh-CN.md'
         self.write(document, '# Keyboard navigation contract\n')
