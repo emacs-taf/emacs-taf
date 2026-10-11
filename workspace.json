@@ -3,37 +3,37 @@
   "repositories": {
     "ebox": {
       "url": "git@gitea.gklazycat.heiyu.space:emacs-taf/ebox.git",
-      "revision": "4dbc8cbd1d83db310c439acda690ca527aea3f50",
+      "revision": "e47a154936a3bcdbc6d6a008618a42a044976f99",
       "branch": "main"
     },
     "ebox-playground": {
       "url": "git@gitea.gklazycat.heiyu.space:emacs-taf/ebox-playground.git",
-      "revision": "1fdcb9b396d08b58be84e59613ed6a4e3d57dcd4",
+      "revision": "efc26b6c75978eeacf47a4a8c101a745b33b739b",
       "branch": "main"
     },
     "ecss": {
       "url": "git@gitea.gklazycat.heiyu.space:emacs-taf/ecss.git",
-      "revision": "3758bf794948132ae200ad2c66325d8b64335df3",
+      "revision": "2fa8bee947ac328f39fbacb145852b77ab7f0835",
       "branch": "main"
     },
     "ekp": {
       "url": "git@gitea.gklazycat.heiyu.space:emacs-taf/ekp.git",
-      "revision": "54ca99a6294529c5acbc983cb0d839d5070ba00e",
+      "revision": "5b6078d4fcc6c3e063eabefbebdb6fc19ce32050",
       "branch": "main"
     },
     "etaf": {
       "url": "git@gitea.gklazycat.heiyu.space:emacs-taf/etaf.git",
-      "revision": "fe0b6d2535494c0f3033eb0299b95bd8e7b33eea",
+      "revision": "ae5485f75b5772521132f28cc4419c8682cceca5",
       "branch": "main"
     },
     "etaf-db": {
       "url": "git@gitea.gklazycat.heiyu.space:emacs-taf/etaf-db.git",
-      "revision": "9ad34fead2c86839338192218a0c03d12f0992da",
+      "revision": "ef89278548c84caf12f9566e81ff7930a82f73ce",
       "branch": "main"
     },
     "etaf-playground": {
       "url": "git@gitea.gklazycat.heiyu.space:emacs-taf/etaf-playground.git",
-      "revision": "3b590c1379d065e6d1e3a818d17a6163c48dec7a",
+      "revision": "430437ca60319a22961563046614bc544f13a427",
       "branch": "main"
     },
     "etaf-ui": {
@@ -43,12 +43,12 @@
     },
     "etaf-desktop": {
       "url": "git@gitea.gklazycat.heiyu.space:emacs-taf/etaf-desktop.git",
-      "revision": "713f3841178595d100eb67d832bb0e1747435af9",
+      "revision": "f36f89c528c7557224bebbb3a3d854a05381a0e4",
       "branch": "main"
     },
     "etaf-manual": {
       "url": "git@gitea.gklazycat.heiyu.space:emacs-taf/etaf-manual.git",
-      "revision": "f37f4811d8c2518f44e3e78a3d1ec48b0fb48471",
+      "revision": "54f1ef7bec6d360995efc5fef63dc666a10d9aed",
       "branch": "main"
     }
   }
