@@ -201,6 +201,11 @@ to every repository changed from this workspace.
   text properties or cycles, bind `print-circle` (plus `print-length`/`print-level`
   as needed). `%S` expands every text property, and cyclic property graphs
   (keymaps and closures referencing each other) print forever and exhaust memory.
+  Error handlers and custom debuggers have the same restriction: with
+  `debug-on-error`, never use `%S` for a live Runtime, session or
+  `(backtrace-frames)`; cyclic objects can trap Emacs in a 99% CPU print loop.
+  Bind `print-circle` to `t` and limit `print-length`/`print-level` in error
+  reports, or print only the error message.
 - Every Lisp file written for Emacs to load, including temporary debug, probe and
   GUI scripts outside the repositories, starts with
   `;;; -*- lexical-binding: t; -*-`. Emacs 31 raises a `*Warnings*` buffer over
