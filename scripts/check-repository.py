@@ -227,6 +227,14 @@ def main():
             subprocess.run(['git', '-C', str(args.root), 'checkout-index', '--all',
                             '--prefix', directory + os.sep], check=True)
             snapshot = Path(directory)
+            # Intent-to-add entries (`git add -N`, and the new files of a
+            # colocated jj working copy) are not part of the commit, but
+            # checkout-index writes them as empty files.
+            status = subprocess.check_output(['git', '-C', str(args.root), 'status', '--porcelain=v2',
+                                              '-z', '--untracked-files=no']).decode()
+            for entry in status.split('\0'):
+                if entry.startswith('1 .A '):
+                    (snapshot / entry.split(' ', 8)[8]).unlink(missing_ok=True)
             files = sorted(str(p.relative_to(snapshot)) for p in snapshot.rglob('*') if p.is_file())
             errors = check(snapshot, files)
             if not errors and not (snapshot / 'workspace.json').exists():

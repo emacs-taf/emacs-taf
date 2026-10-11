@@ -191,6 +191,19 @@ class PolicyTests(unittest.TestCase):
             self.assertIn('book chapters are book/<language>/', self.errors())
             (self.root / misplaced).unlink()
 
+    def test_staged_check_ignores_intent_to_add_entries(self):
+        # A colocated jj working copy records its new files this way.
+        subprocess.run(['git', 'init', '-q', str(self.root)], check=True)
+        subprocess.run(['git', '-C', str(self.root), 'add', '.'], check=True)
+        self.write('notes.md', '# Notes\n')
+        subprocess.run(['git', '-C', str(self.root), 'add', '-N', 'notes.md'], check=True)
+        staged = [sys.executable, str(ROOT / 'scripts/check-repository.py'), '--root', str(self.root), '--staged']
+        result = subprocess.run(staged, capture_output=True, text=True)
+        self.assertEqual(0, result.returncode, result.stderr)
+        subprocess.run(['git', '-C', str(self.root), 'add', 'notes.md'], check=True)
+        result = subprocess.run(staged, capture_output=True, text=True)
+        self.assertIn('notes.md: use README, CHANGELOG', result.stderr)
+
     def test_link_syntax_inside_inline_code_is_not_a_link(self):
         self.write('README.md', '# Package\nWrite `[Views](views.md)` or ``[a](b.md) `x` `` to link.\n')
         self.assertEqual('', self.errors())
