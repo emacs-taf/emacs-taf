@@ -631,6 +631,14 @@ def run_backend(args, configuration, log_path):
                         return {**last, "status": "error", "error": f"Batch exited {process.returncode}; see {log_path}"}
                 return last
             if process and process.poll() is not None:
+                # The child can publish its final atomic report between our read
+                # and poll.  Re-read after exit before judging completion.
+                try:
+                    last = read_json(output)
+                except (FileNotFoundError, json.JSONDecodeError):
+                    pass
+                if process.returncode == 0 and last.get("status") not in (None, "running"):
+                    return last
                 return {**last, "status": "error", "error": f"Batch exited {process.returncode}; see {log_path}"}
             active = last.get("active", {})
             if active and active.get("stage") != "waiting_for_foreground" and time.time() - active.get("started_at", time.time()) > args.timeout:

@@ -16,6 +16,33 @@ COMMAND = ROOT / "scripts/performance.py"
 FIXTURE = ROOT / "tests/fixtures/performance-scenarios.el"
 
 
+class ExitPublicationCommand(unittest.TestCase):
+    def test_final_report_published_between_read_and_exit_poll_is_preserved(self):
+        launcher = '''import runpy, subprocess, sys
+original = subprocess.Popen
+class ExitAfterPublication(original):
+    def poll(self):
+        if any("taf-benchmark-start" in str(arg) for arg in self.args):
+            self.wait(timeout=15)
+        return super().poll()
+subprocess.Popen = ExitAfterPublication
+sys.argv = sys.argv[1:]
+runpy.run_path(sys.argv[0], run_name="__main__")
+'''
+        with tempfile.TemporaryDirectory() as directory:
+            process = subprocess.run(
+                [sys.executable, '-c', launcher, str(COMMAND), 'run', '--root', str(ROOT),
+                 '--scenario-file', str(FIXTURE), '--mode', 'batch',
+                 '--scenario', 'fixture.counter', '--sets', '1', '--samples', '2',
+                 '--warmups', '0', '--output-dir', directory],
+                capture_output=True, text=True, timeout=25)
+            self.assertEqual(0, process.returncode, process.stdout + process.stderr)
+            report = json.loads((Path(directory)/'result.json').read_text())
+            self.assertTrue(report['valid'])
+            self.assertEqual(2, report['cases']['fixture.counter']['count'])
+            self.assertNotIn('Batch exited', process.stdout + process.stderr)
+
+
 class PerformanceTool(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
