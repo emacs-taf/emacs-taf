@@ -56,6 +56,37 @@ def read_json(path):
     return json.loads(Path(path).read_text(encoding="utf-8"), parse_constant=invalid_constant)
 
 
+def read_pass_report(path):
+    """Recover completed rows once, after a pass stops; polling stays bounded."""
+    report = read_json(path)
+    name = report.get("sample_journal")
+    if not name:
+        return report
+    rows, error = [], None
+    try:
+        if not isinstance(name, str) or Path(name).name != name:
+            raise ValueError("Sample journal must be beside its report")
+        journal = Path(path).parent / name
+        if journal.resolve().parent != Path(path).resolve().parent:
+            raise ValueError("Sample journal escapes its evidence directory")
+        with journal.open(encoding="utf-8") as stream:
+            for number, line in enumerate(stream, 1):
+                if not line.endswith("\n"):
+                    raise ValueError(f"Incomplete sample journal row {number}")
+                row = json.loads(line)
+                if not isinstance(row, dict):
+                    raise ValueError(f"Invalid sample journal row {number}")
+                rows.append(row)
+        if len(rows) < report.get("sample_count", 0):
+            raise ValueError("Sample journal is missing committed rows")
+    except (OSError, ValueError, TypeError) as failure:
+        error = str(failure)
+    recovered = {**report, "samples": rows}
+    if error:
+        recovered.update(status="error", sample_journal_error=error, error=error)
+    return recovered
+
+
 def write_json(path, value):
     temporary = path.with_suffix(path.suffix + ".tmp")
     temporary.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -625,6 +656,7 @@ def run_backend(args, configuration, log_path):
             except (FileNotFoundError, json.JSONDecodeError):
                 pass
             if last.get("status") and last["status"] != "running":
+                last = read_pass_report(output)
                 if process:
                     process.wait(timeout=5)
                     if process.returncode:
@@ -634,7 +666,7 @@ def run_backend(args, configuration, log_path):
                 # The child can publish its final atomic report between our read
                 # and poll.  Re-read after exit before judging completion.
                 try:
-                    last = read_json(output)
+                    last = read_pass_report(output)
                 except (FileNotFoundError, json.JSONDecodeError):
                     pass
                 if process.returncode == 0 and last.get("status") not in (None, "running"):
@@ -660,7 +692,7 @@ def run_backend(args, configuration, log_path):
             except (OSError, subprocess.SubprocessError):
                 log.write("Native Emacs did not answer cancellation; press C-g if it remains busy.\n")
         try:
-            last = read_json(output)
+            last = read_pass_report(output)
         except (OSError, ValueError):
             last = {}
         return {**last, "status": "timeout" if isinstance(error, (TimeoutError, subprocess.TimeoutExpired)) else "error",

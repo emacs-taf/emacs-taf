@@ -382,6 +382,14 @@ Evidence defaults to `~/.cache/emacs-taf/performance/` (or `$XDG_CACHE_HOME`).
 `--output-dir DIR` selects an empty directory. Existing evidence is never
 overwritten. `result.json` is the compact comparison/report entry; per-set JSON,
 configuration files, profiler summaries and logs preserve the complete run.
+During a pass, the per-set JSON is a bounded progress snapshot: `samples` is
+empty, `sample_count` counts committed rows, and `sample_journal` names its
+adjacent append-only JSONL file. Each completed sample is written once. The
+runner polls progress without rereading the journal; after completion it writes
+the usual complete JSON report. This avoids repeatedly serializing all earlier
+samples on Emacs's interaction thread. If Emacs exits or cannot answer, the
+runner recovers complete journal rows; a torn final line or missing committed
+row keeps the run unverified rather than losing earlier evidence.
 Every raw row records `phase` (`warmup`, `latency` or `diagnostic`), its per-phase
 sample number and continuous operation `iteration`. The summary's `warmups` keeps
 counts, maximum, all timings and failures; `all_latency` reports the combined

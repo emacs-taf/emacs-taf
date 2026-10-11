@@ -392,6 +392,63 @@ class PerformanceTool(unittest.TestCase):
                 self.assertIn(first, functions)
                 self.assertGreaterEqual(functions[first]["self"], stack["weight"])
 
+    def journal_case(self, name, crash=False):
+        directory = self.base / name
+        directory.mkdir()
+        output = directory / "evidence"
+        report = output / "latency-1.json"
+        scenario = directory / "scenario.el"
+        failure = (f'(when (= index 2) (write-region "{{" nil {json.dumps(str(report) + ".samples.jsonl")} t (quote silent)) (kill-emacs 17))'
+                   if crash else "nil")
+        scenario.write_text(''';;; -*- lexical-binding: t; -*-
+(require 'ebox)
+(taf-benchmark-register
+ "fixture.journal" :modes '(batch) :budget-ms 1000 :impact 'local :isolation 'series
+ :setup (lambda (_mode)
+          (let ((buffer (generate-new-buffer " *journal-fixture*")) bytes count)
+            (list :buffer buffer
+                  :invoke (lambda (index)
+                            FAILURE
+                            (setq bytes (file-attribute-size (file-attributes REPORT)))
+                            (with-temp-buffer
+                              (insert-file-contents REPORT)
+                              (setq count (plist-get (json-parse-buffer :object-type 'plist) :sample_count))))
+                  :outcome (lambda () (list :progress_bytes bytes :progress_count count
+                                           :payload (make-string 32000 ?x)))
+                  :verify (lambda () t)
+                  :cleanup (lambda () (kill-buffer buffer))))))
+'''.replace("FAILURE", failure).replace("REPORT", json.dumps(str(report))))
+        process = subprocess.run(
+            [sys.executable, str(COMMAND), "run", "--root", str(ROOT),
+             "--scenario-file", str(scenario), "--scenario", "fixture.journal",
+             "--mode", "batch", "--sets", "1", "--samples", "4", "--warmups", "0",
+             "--output-dir", str(output)], capture_output=True, text=True, timeout=25)
+        return process, json.loads((output / "result.json").read_text()), report
+
+    def test_live_progress_is_bounded_and_final_report_keeps_every_row(self):
+        process, result, path = self.journal_case("journal-complete")
+        self.assertEqual(0, process.returncode, process.stdout + process.stderr)
+        self.assertTrue(result["valid"])
+        final = json.loads(path.read_text())
+        rows = final["samples"]
+        self.assertEqual(4, len(rows))
+        self.assertEqual([0, 1, 2, 3], [row["outcome"]["progress_count"] for row in rows])
+        sizes = [row["outcome"]["progress_bytes"] for row in rows]
+        self.assertLess(max(sizes) - min(sizes), 1024)
+        journal = [json.loads(line) for line in Path(str(path) + ".samples.jsonl").read_text().splitlines()]
+        self.assertTrue(journal == rows, "Journal differs from final sample rows")
+
+    def test_abrupt_exit_recovers_completed_samples_before_a_torn_journal_row(self):
+        process, result, path = self.journal_case("journal-interrupted", crash=True)
+        self.assertNotEqual(0, process.returncode)
+        self.assertFalse(result["valid"])
+        self.assertEqual(2, result["cases"]["fixture.journal"]["count"])
+        self.assertEqual(3, result["cases"]["fixture.journal"]["all_latency"]["attempted_count"])
+        progress = json.loads(path.read_text())
+        self.assertEqual([], progress["samples"])
+        self.assertEqual(2, progress["sample_count"])
+        self.assertTrue(Path(str(path) + ".samples.jsonl").read_text().endswith("{"))
+
     def test_batch_scenarios_use_independent_processes(self):
         process, report, output = self.run_case("isolated", "fixture.counter", "--scenario", "fixture.async")
         self.assertEqual(process.returncode, 0, process.stdout + process.stderr)

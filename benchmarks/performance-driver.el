@@ -54,6 +54,7 @@ definitions (components, constants, variables), which are not reload-safe, so
 a set that was already loaded here restores its recorded registrations.")
 (defvar taf-benchmark--configuration nil)
 (defvar taf-benchmark--report nil)
+(defvar taf-benchmark--journal-count 0)
 (defvar taf-benchmark--jobs nil)
 (defvar taf-benchmark--timer nil)
 (defvar taf-benchmark--fixture nil)
@@ -85,20 +86,37 @@ a set that was already loaded here restores its recorded registrations.")
   (setq properties (plist-put properties :source (or load-file-name buffer-file-name)))
   (push (cons id properties) taf-benchmark--registry))
 
+(defun taf-benchmark--json-text (value)
+  "Encode JSON-safe VALUE as one complete UTF-8 JSON line."
+  (concat (decode-coding-string
+           (json-serialize value :null-object nil :false-object :false) 'utf-8) "\n"))
+
 (defun taf-benchmark--json-write (file value)
   "Atomically write JSON VALUE to FILE without printing application objects."
   (let ((coding-system-for-write 'utf-8-unix)
         (pending (concat file ".tmp")))
-    (with-temp-file pending
-      (insert (decode-coding-string
-               (json-serialize value :null-object nil :false-object :false) 'utf-8))
-      (insert "\n"))
+    (with-temp-file pending (insert (taf-benchmark--json-text value)))
     (rename-file pending file t)))
 
 (defun taf-benchmark--save ()
-  "Save the current bounded report."
-  (taf-benchmark--json-write (plist-get taf-benchmark--configuration :output)
-                             taf-benchmark--report))
+  "Journal each sample once and publish bounded live progress.
+Serialize the complete report only after the pass stops, not between inputs
+while an autonomous application continues running."
+  (let* ((file (plist-get taf-benchmark--configuration :output))
+         (journal (concat file ".samples.jsonl"))
+         (samples (plist-get taf-benchmark--report :samples))
+         (coding-system-for-write 'utf-8-unix))
+    (while (< taf-benchmark--journal-count (length samples))
+      (write-region (taf-benchmark--json-text (aref samples taf-benchmark--journal-count))
+                    nil journal t 'silent)
+      (cl-incf taf-benchmark--journal-count))
+    (if (equal (plist-get taf-benchmark--report :status) "running")
+        (let ((progress (copy-sequence taf-benchmark--report)))
+          (setf (plist-get progress :samples) []
+                (plist-get progress :sample_count) taf-benchmark--journal-count
+                (plist-get progress :sample_journal) (file-name-nondirectory journal))
+          (taf-benchmark--json-write file progress))
+      (taf-benchmark--json-write file taf-benchmark--report))))
 
 (defun taf-benchmark--error (condition)
   "Return bounded CONDITION text, including errors containing closures."
@@ -616,6 +634,7 @@ through ETAF's authoring-tool boundary; fixtures dispose their Runtimes."
         taf-benchmark--previous-buffer (window-buffer (selected-window))
         taf-benchmark--locations (make-hash-table :test #'equal)
         taf-benchmark--jobs (plist-get taf-benchmark--configuration :jobs)
+        taf-benchmark--journal-count 0
         taf-benchmark--report
         (list :schema 1 :status "running" :error nil :started_at (float-time)
               :run_id (plist-get taf-benchmark--configuration :run_id)
@@ -625,6 +644,8 @@ through ETAF's authoring-tool boundary; fixtures dispose their Runtimes."
               :loaded_before (vconcat taf-benchmark--loaded-before) :samples []))
   (when (and (not noninteractive) (plist-get taf-benchmark--configuration :foreground))
     (select-frame-set-input-focus (window-frame taf-benchmark--window)))
+  (let ((coding-system-for-write 'utf-8-unix))
+    (write-region "" nil (concat (plist-get taf-benchmark--configuration :output) ".samples.jsonl") nil 'silent))
   (taf-benchmark--save)
   (taf-benchmark--schedule #'taf-benchmark--next)
   (when noninteractive
