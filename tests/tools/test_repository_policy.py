@@ -177,6 +177,20 @@ class PolicyTests(unittest.TestCase):
         self.write('docs/proposals/phase-two.md', '# Plan\n')
         self.assertIn('fixed document names', self.errors())
 
+    def test_reference_book_chapters_are_content_with_checked_links(self):
+        self.write('book/book.json', '{"parts": []}\n')
+        self.write('book/en/views.md', '# Views\nSee [hosts](hosts.md#host-kinds).\n')
+        self.write('book/en/hosts.md', '# Hosts\n')
+        self.write('book/zh-CN/views.md', '# View\n')
+        self.assertEqual('', self.errors())
+        self.write('book/en/views.md', '# Views\nSee [hosts](missing.md).\n')
+        self.assertIn('broken local link', self.errors())
+        (self.root / 'book/en/views.md').unlink()
+        for misplaced in ('book/notes.md', 'book/en/part/views.md', 'book/en/Views.md'):
+            self.write(misplaced, '# Notes\n')
+            self.assertIn('book chapters are book/<language>/', self.errors())
+            (self.root / misplaced).unlink()
+
     def test_keyboard_contract_is_workspace_only_and_checks_links(self):
         document = 'docs/keyboard-navigation.zh-CN.md'
         self.write(document, '# Keyboard navigation contract\n')

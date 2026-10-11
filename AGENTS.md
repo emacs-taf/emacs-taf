@@ -63,6 +63,7 @@ to every repository changed from this workspace.
 | Root entry `.el` Commentary | Package consumers looking up supported APIs | The authoritative API inventory, signatures, purpose, inputs/results, usage and lifecycle/error constraints | Duplicate implementations, private APIs and refactoring plans |
 | `docs/manual.md` | Users integrating the package or completing a task | Supported workflows, configuration, composition, runnable examples, lifecycle, failures and recovery | Agent operation, implementation walkthroughs, speculative APIs and a second full API inventory |
 | Package `docs/architecture.md` | Maintainers understanding the implemented system | Responsibilities, dependency direction, data flow, invariants and the rationale for current design | Agent operation, task chronology, abandoned designs and unimplemented proposals |
+| ETAF Reference Manual (`etaf-manual/book/`) | Users and developers of the core packages (ecss, ekp, ebox, etaf, etaf-ui, etaf-db) looking up exact behavior | Concept models; one definition entry per public interface whose signature matches Commentary; semantics, ordering, errors and recovery; how each subsystem works (data flow, invariants, cost) explained through concepts and public interfaces; runnable examples; one line per paragraph | Tutorials, task narration, unimplemented target behavior, entries for or references to private symbols, applications, games and a hand-maintained API list outside its definition entries |
 | Workspace `docs/architecture.zh-CN.md` | Maintainers coordinating ecosystem development | Cross-package responsibilities, accepted target contracts, relevant implementation gaps, dependency order and observable acceptance criteria | Conversation history, agent operation, unaccepted ideas and claims that pending capabilities already work |
 | Workspace `docs/keyboard-navigation.zh-CN.md` | Framework and application maintainers implementing keyboard interaction | The authoritative accepted contract for regions, navigation, editing states, key ownership, help, implementation gaps and observable acceptance | Duplicate package API inventories, task narration and claims that target behavior is already implemented |
 | `CHANGELOG.md` | Users deciding how to upgrade | Notable user-visible changes and necessary migration instructions, organized by release or Unreleased following Keep a Changelog | Copied commit logs, internal work reports, fabricated releases and routine edits without user impact |
@@ -81,7 +82,14 @@ to every repository changed from this workspace.
   reuse existing sections and remove stale or redundant material.
   The workspace keyboard navigation contract is maintained in its dedicated
   document above; the ecosystem architecture and package documents link to it.
+- The ETAF Reference Manual owns the user documentation of the core packages.
+  A core package keeps its README, Commentary, CHANGELOG and maintainer
+  `docs/architecture.md` and links to the manual; once the manual covers it,
+  it keeps no `docs/manual.md`. Its chapters live in the etaf-manual repository
+  (see its `docs/manual.md` for the authoring format).
 - English uses the default name; Chinese translations use `.zh-CN.md` consistently.
+  Reference-book chapters use language directories instead: `book/en/<slug>.md`
+  and `book/zh-CN/<slug>.md` with the same slug and definition entries.
   Keep existing translations aligned when their contract changes. Do not create empty
   translations or documents merely to fill a template. Legal notices are exempt.
 - The root entry's Commentary is the authoritative supported API inventory. Use
@@ -98,8 +106,14 @@ to every repository changed from this workspace.
   An unlisted symbol is internal even without `--`. Do not bypass this boundary
   through dynamic symbol lookup, loading a private library or redefining its symbols.
 - Every package with integration APIs documents supported callers, inputs/outputs,
-  ownership, lifecycle, failure semantics and a runnable example in its manual.
+  ownership, lifecycle, failure semantics and a runnable example in its manual;
+  core packages do so in the ETAF Reference Manual.
   Keep private implementation symbols out of consumer code.
+- Keep the reference manual current. A change to a core package's public
+  interface, documented behavior or a mechanism the manual explains updates the
+  affected etaf-manual chapters in both languages in the same integrated
+  delivery; `make -C etaf-manual check` verifies definition coverage, signatures,
+  translations, links and examples against the sibling sources.
 
 ## Development and validation
 
