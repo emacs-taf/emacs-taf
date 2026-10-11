@@ -241,6 +241,18 @@ forms also add `~/emacs-taf` paths, and an added path wins the resolution.
    root> --load-path <app root>` and close the instance by its recorded PID,
    never by process name.
 
+When writers change the primary checkout, snapshot the measured source generation to avoid
+`UNVERIFIED: Workspace sources changed during measurement`:
+copy `workspace.json` and each loaded repository (ecss, ekp, ebox, etaf,
+etaf-ui, and etaf-gamekit/etaf-games or the app) with `rsync -a --exclude .jj
+--exclude .git ~/emacs-taf/<repo> /tmp/<snapshot>/`, substituting a `jj workspace
+add` checkout where a repository change is not in the primary tree. Apply the same
+site-start redirection and start file with `--root /private/tmp/<snapshot>` and
+matching `--load-path`;
+macOS needs the `/private/tmp` truename because preflight compares truenames.
+Report contained commits and uncommitted provider work, delete the snapshot after the run,
+and still finish with quiet-tree `make verify` on the integrated checkout.
+
 The two helper files belong to one measurement session, not to the checkout;
 keep them under the system temporary directory.
 
