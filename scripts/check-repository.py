@@ -25,6 +25,24 @@ SHARED = ('scripts/check-api.py', 'scripts/check-api.el', 'scripts/api-workspace
           '.github/workflows/structure.yml')
 
 
+def provider_directory(root):
+    """Return the checkout directory holding the sibling provider repositories.
+
+    Providers normally sit beside the repository.  A nested application
+    workspace keeps them one level above its own checkout, so accept the
+    nearest ancestor that holds a provider named by the API registry.
+    """
+    try:
+        names = json.loads((Path(__file__).resolve().parent / 'api-workspace.json').read_text())
+    except (OSError, ValueError):
+        names = {}
+    providers = Path(root).resolve().parent
+    if not any((providers / name).is_dir() for name in names) and any(
+            (providers.parent / name).is_dir() for name in names):
+        providers = providers.parent
+    return providers
+
+
 def git_checkout_p(root):
     """Whether ROOT is the top level of its own Git checkout."""
     try:
@@ -205,7 +223,7 @@ def main():
             errors = check(snapshot, files)
             if not errors and not (snapshot / 'workspace.json').exists():
                 result = subprocess.run([sys.executable, str(snapshot/'scripts/check-api.py'),
-                                         '--root', str(snapshot), '--providers-dir', str(args.root.resolve().parent)],
+                                         '--root', str(snapshot), '--providers-dir', str(provider_directory(args.root))],
                                         capture_output=True, text=True)
                 if result.returncode: errors.append(result.stderr.strip())
     else:
@@ -213,7 +231,9 @@ def main():
         if not errors:
             mode = '--workspace' if (args.root/'workspace.json').exists() else '--root'
             result = subprocess.run([sys.executable, str(args.root/'scripts/check-api.py'),
-                                     mode, str(args.root.resolve())], capture_output=True, text=True)
+                                     mode, str(args.root.resolve()),
+                                     '--providers-dir', str(provider_directory(args.root))],
+                                    capture_output=True, text=True)
             if result.returncode: errors.append(result.stderr.strip())
     if errors:
         print('\n'.join(errors), file=sys.stderr)

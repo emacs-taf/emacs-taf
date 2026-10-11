@@ -37,6 +37,33 @@ class PolicyTests(unittest.TestCase):
     def test_minimal_package_does_not_need_empty_documents(self):
         self.assertEqual('', self.errors())
 
+    def test_nested_application_resolves_providers_above_its_workspace(self):
+        # A game checkout nested in a workspace still finds the provider
+        # checkouts beside that workspace, in worktree and staged checks.
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            provider = base / 'etaf'
+            (provider / 'lisp').mkdir(parents=True)
+            (provider / 'etaf.el').write_text(
+                ';;; Commentary:\n;; Function: etaf-open ()\n;; Open the runtime.\n'
+                ";;; Code:\n(defun etaf-open () t)\n(provide 'etaf)\n")
+            app = base / 'games/app'
+            shutil.copytree(self.root, app)
+            (app / 'package.el').write_text(
+                ';;; Commentary:\n;; Function: package-open ()\n;; Return the package value.\n'
+                ";;; Code:\n(require 'etaf)\n(defun package-open () (etaf-open))\n(provide 'package)\n")
+            registry = json.loads((app / 'scripts/api-workspace.json').read_text())
+            (app / 'scripts/api-workspace.json').write_text(
+                json.dumps({'etaf': registry['etaf']}))
+            subprocess.run(['git', 'init', '-q', str(app)], check=True)
+            subprocess.run(['git', '-C', str(app), 'add', '.'], check=True)
+            for extra in ([], ['--staged']):
+                with self.subTest(staged=bool(extra)):
+                    result = subprocess.run(
+                        [sys.executable, str(app / 'scripts/check-repository.py'),
+                         '--root', str(app)] + extra, capture_output=True, text=True)
+                    self.assertEqual(0, result.returncode, result.stderr)
+
     def test_workspace_cli_requires_root_instructions_and_ecosystem_contract(self):
         self.write('workspace.json', '{"schema": 1, "repositories": {}}')
         self.write('scripts/api-workspace.json', '{}')
