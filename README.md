@@ -108,6 +108,8 @@ Its target behavior is explicitly distinguished from the current implementation.
   rendering/input and installation checks remain separate acceptance requirements.
 - `make compile`, `make test`, `make clean`: delegate to package-owned entry points.
 - `make sync-policy`: distribute shared checkers, hooks, formatting and CI configuration maintained here.
+  After committing them in the root, `python3 scripts/workspace.py seal-sync [--dry-run]` commits only those
+  copies in each repository and lists other unpublished commits that publishing it would include.
 
 Packages expose one root entry with the supported API in its Commentary.
 Checkout users add repository roots to `load-path`; multi-file implementations

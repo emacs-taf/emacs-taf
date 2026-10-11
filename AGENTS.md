@@ -282,7 +282,10 @@ to every repository changed from this workspace.
   Update obsolete checks to the current contract and retain behavioral coverage.
 - If a new document or directory does not fit this policy, first simplify the design.
   Maintain shared checkers, hooks and configuration in the workspace and distribute
-  them with `python3 scripts/workspace.py sync`. Changes to mechanically enforced
+  them with `python3 scripts/workspace.py sync`. Commit the root tooling, then run
+  `python3 scripts/workspace.py seal-sync` in the same delivery: it commits only
+  the shared copies in each child and names other unpublished work that
+  publishing that child would include. Changes to mechanically enforced
   rules update the checker and its tool regressions together.
 
 ## Version control and delivery

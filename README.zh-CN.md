@@ -80,6 +80,8 @@ jj config set --repo 'revset-aliases."immutable_heads()"' \
   使用 `--baseline /path/result.json` 比较基线，详见[测评流程与场景接口](docs/manual.zh-CN.md)。
 - `make compile`、`make test`、`make clean`：调用各仓库自己的入口。
 - `make sync-policy`：分发在工作区维护的共享检查器、提交钩子、格式和 CI 配置。
+  在根仓库提交这些文件后，`python3 scripts/workspace.py seal-sync [--dry-run]` 在各仓库只提交这些副本，
+  并列出发布该仓库时会一并带出的其他未发布提交。
 
 多文件包的源码放 `lisp/`，单文件包可保留根目录入口；测试、示例、基准、工具和原生实现分别放在
 `tests/`、`examples/`、`benchmarks/`、`scripts/` 和 `native/`。

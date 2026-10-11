@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Synchronize shared tooling, check all repositories, or install local hooks."""
+"""Synchronize, check and seal shared tooling, report revisions, or install hooks."""
 import argparse
 import json
 from pathlib import Path
@@ -10,13 +10,104 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 SHARED = ('scripts/check-api.py', 'scripts/check-api.el', 'scripts/api-workspace.json', '.editorconfig', 'scripts/check-repository.py', 'scripts/run-acceptance.py', '.githooks/pre-commit', '.githooks/commit-msg', 'scripts/check-commit-message.py',
           '.github/workflows/structure.yml')
+SEAL_TITLE = 'chore(scripts): sync shared workspace tooling'
+
+
+def jj(repo, *args):
+    """Run jj in REPO and return its output; paths print relative to REPO."""
+    return subprocess.run(['jj', *args], cwd=repo, text=True, capture_output=True, check=True).stdout
+
+
+def changed_shared(repo):
+    """Return the shared paths that the working-copy commit of REPO changes."""
+    names = set(jj(repo, 'diff', '-r', '@', '--name-only').split())
+    return [rel for rel in SHARED if rel in names]
+
+
+def seal(repos, remote, dry_run):
+    """Commit the synchronized shared copies of every child, and nothing else.
+
+    A refusal of the preconditions leaves all repositories untouched.  Each
+    sealed commit is structure-checked as committed (the colocated Git index
+    mirrors @-), so another session's work in progress neither fails nor
+    passes it; a commit that fails is reverted and reported."""
+    if not (ROOT / '.jj').exists() or any(not (ROOT / name / '.jj').exists() for name in repos):
+        print('seal-sync needs jj checkouts of the root and every repository', file=sys.stderr)
+        return 1
+    pending = changed_shared(ROOT)
+    if pending:
+        print('commit the root tooling first; uncommitted: ' + ', '.join(pending), file=sys.stderr)
+        return 1
+    failed = False
+    for name in repos:
+        for rel in SHARED:
+            if not (ROOT / name / rel).exists() or (ROOT / name / rel).read_bytes() != (ROOT / rel).read_bytes():
+                print(f'{name}/{rel}: shared tooling drift; run workspace.py sync', file=sys.stderr)
+                failed = True
+    if failed:
+        print('nothing sealed', file=sys.stderr)
+        return 1
+    paths = ' | '.join(f'"{rel}"' for rel in SHARED)
+    source = jj(ROOT, 'log', '--no-graph', '-r', f'latest(::@- & files({paths}))',
+                '-T', 'commit_id.short() ++ " " ++ description.first_line()').strip()
+    for name, entry in repos.items():
+        repo = ROOT / name
+        rels = changed_shared(repo)
+        if not rels:
+            print(f'{name}: shared tooling already sealed')
+        elif dry_run:
+            print(f'{name}: would seal ' + ', '.join(rels))
+        else:
+            message = (f'{SEAL_TITLE}\n\nCopy the shared tooling maintained in the workspace root, as of\n'
+                       f'{source}:\n\n' + ''.join(f'- {rel}\n' for rel in rels) +
+                       '\nValidation: workspace.py seal-sync found each copy identical to the\n'
+                       'committed root tooling and kept this commit only after\n'
+                       'check-repository.py --staged passed on it.\n')
+            working = jj(repo, 'log', '--no-graph', '-r', '@', '-T', 'commit_id').strip()
+            jj(repo, 'commit', *rels, '-m', message)
+            sealed = jj(repo, 'log', '--no-graph', '-r', '@-', '-T', 'commit_id.short()').strip()
+            check = subprocess.run([sys.executable, str(ROOT / 'scripts/check-repository.py'),
+                                    '--root', str(repo), '--staged'], text=True, capture_output=True)
+            if check.returncode == 0:
+                print(f'{name}: sealed {sealed} ({len(rels)} file{"s" if len(rels) > 1 else ""})')
+            else:
+                failed = True
+                print(f'{name}: sealed commit {sealed} fails the structure check:', file=sys.stderr)
+                print(check.stdout + check.stderr, end='', file=sys.stderr)
+                ops = jj(repo, 'op', 'log', '--no-graph', '-n', '10', '-T', 'id ++ " " ++ description ++ "\\n"')
+                op = next((line.split()[0] for line in ops.splitlines() if line.endswith(f' commit {working}')), None)
+                if op:
+                    jj(repo, 'op', 'revert', op)
+                    print(f'{name}: reverted the seal; the copies stay uncommitted', file=sys.stderr)
+                else:
+                    print(f'{name}: could not find the seal operation; inspect jj op log', file=sys.stderr)
+                continue
+        # Publishing @- would also publish every other commit in this range.
+        branch = entry.get('branch', 'main')
+        try:
+            unpublished = jj(repo, 'log', '--no-graph', '-r', f'{branch}@{remote}..@-',
+                             '-T', 'commit_id.short() ++ " " ++ description.first_line() ++ "\n"')
+        except subprocess.CalledProcessError:
+            print(f'{name}: no {branch}@{remote} bookmark; publish it as a new repository')
+            continue
+        others = [line for line in unpublished.splitlines() if line.split(' ', 1)[-1] != SEAL_TITLE]
+        if others:
+            print(f'{name}: publishing @- also publishes other unpublished work:')
+            print(''.join(f'  {line}\n' for line in others), end='')
+    return int(failed)
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=['sync', 'check', 'setup-hooks', 'status'])
+    parser.add_argument('action', choices=['sync', 'check', 'seal-sync', 'setup-hooks', 'status'])
+    parser.add_argument('--remote', default='aliyun',
+                        help='seal-sync: remote whose branch bounds the publish range (default aliyun)')
+    parser.add_argument('--dry-run', action='store_true',
+                        help='seal-sync: report what would be sealed without committing')
     args = parser.parse_args()
     repos = json.loads((ROOT / 'workspace.json').read_text())['repositories']
+    if args.action == 'seal-sync':
+        return seal(repos, args.remote, args.dry_run)
     api_registry = {}
     for name, entry in repos.items():
         entries = list((ROOT/name).glob('*.el'))
