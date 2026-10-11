@@ -155,6 +155,14 @@ to every repository changed from this workspace.
   supported package APIs. Preserve upstream vendor sources.
   Development tools may test their supported command/input/output contracts.
   GUI appearance and performance use their separate acceptance targets.
+- `scripts/run-acceptance.py` serializes one run per checkout and caps ERT failure
+  output: concurrent runs are refused with exit 75 unless `--wait SECONDS` queues
+  them, and `--print-level`, `--print-length` and `--max-condition-bytes` tune how
+  much of a failing condition is printed.
+- Assert on small values: bind the result of calls that take large live objects
+  (runtimes, desktops, buffers) to a local before evaluating a `should` form; ERT
+  captures evaluated arguments, so a large object inside the form makes every
+  failure report huge.
 - Debug and test scripts that print ETAF/EBox buffer content must take the text
   with `buffer-substring-no-properties`; when printing structures that may carry
   text properties or cycles, bind `print-circle` (plus `print-length`/`print-level`
