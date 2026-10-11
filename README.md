@@ -18,10 +18,17 @@ Framework packages and workspace tooling developed in this checkout:
 | [ebox](https://forgejo.vhkd.top/emacs-taf/ebox) | Box layout, rendering and incremental publication | ecss; optional ekp |
 | [etaf](https://forgejo.vhkd.top/emacs-taf/etaf) | Components, state and application runtime | ebox |
 | [etaf-ui](https://forgejo.vhkd.top/emacs-taf/etaf-ui) | Reusable UI components | etaf |
+| `etaf-gamekit` (local checkout) | External game-engine sessions, observations and text-game presentation | etaf, etaf-ui |
 | [etaf-db](https://forgejo.vhkd.top/emacs-taf/etaf-db) | Database backends for ETAF; currently SQLite | etaf |
 | [etaf-apps](https://forgejo.vhkd.top/emacs-taf/etaf-apps) | Application workspace: their integration checkpoints and shared tooling | etaf, etaf-ui, etaf-db |
 | [ebox-playground](https://forgejo.vhkd.top/emacs-taf/ebox-playground) | Runnable Ebox layout examples | ebox |
 | [etaf-playground](https://forgejo.vhkd.top/emacs-taf/etaf-playground) | ETAF/UI integration examples and acceptance surfaces | etaf, etaf-ui, etaf-db, etaf-desktop |
+
+`etaf-gamekit` has no configured remote and is not yet part of the published
+revision inventory. Its independent local checkout provides chess through
+python-chess/Stockfish, Glulx stories through Glulxe/RemGlk, and a character-grid
+workload. Run `make -C etaf-gamekit engines` and `make -C etaf-gamekit check`;
+its README and manual describe installation and adapter integration.
 
 ## Applications
 
