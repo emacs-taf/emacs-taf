@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := check
 .NOTPARALLEL:
 EMACS ?= emacs
-MODULE_DIRS := ecss ekp ebox etaf etaf-ui etaf-db etaf-desktop ebox-playground etaf-playground
+MODULE_DIRS := ecss ekp ebox etaf etaf-ui etaf-db etaf-desktop ebox-playground etaf-playground etaf-manual
 .PHONY: compile test check clean structure-check setup-hooks sync-policy
 structure-check:
 	python3 scripts/workspace.py check

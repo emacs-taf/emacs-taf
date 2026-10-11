@@ -27,6 +27,10 @@
     "entry": "etaf-desktop",
     "url": "git@gitea.gklazycat.heiyu.space:emacs-taf/etaf-desktop.git"
   },
+  "etaf-manual": {
+    "entry": "etaf-manual",
+    "url": "git@gitea.gklazycat.heiyu.space:emacs-taf/etaf-manual.git"
+  },
   "etaf-playground": {
     "entry": "etaf-playground",
     "url": "git@gitea.gklazycat.heiyu.space:emacs-taf/etaf-playground.git"

@@ -29,6 +29,7 @@
 | `etaf-desktop` | 基于 ETAF 和 ETAF UI 的 Emacs 桌面管理应用：应用注册与实例生命周期、窗口模型、工作区、z-order、焦点、浮动/平铺布局树、移动/调整大小、最小化/最大化/还原、会话和应用级命令 | 依赖 ETAF 与 ETAF UI；通过其公共 API 使用 Ebox 几何和手势能力，并组合 UI 的窗口、任务栏、启动器、切换器和分割器；窗口策略和业务状态只在此应用层拥有，不下沉到 Ebox、ETAF 或 UI |
 | `ebox-playground` | Ebox 独立使用示例与预览工具 | 使用 Ebox 公共接口；示例专用依赖与预览工具的运行时依赖分开 |
 | `etaf-playground` | ETAF/ETAF UI 及生态集成示例和验收入口 | 按示例需要使用 ETAF、UI 和数据适配器；只消费已发布的公共行为，不承载可复用窗口管理或桌面策略，不能反向成为核心依赖 |
+| `etaf-manual` | 核心包（ecss、ekp、ebox、etaf、etaf-ui、etaf-db）的参考手册：为全部公共接口各写一个定义条目，用概念和公共接口讲清各子系统的机制，中英双语；`etaf-manual` 包把全书作为数据供 Emacs 工具和网站构建读取 | 运行时依赖 ETAF 与 ETAF UI（挂载可运行示例）；门禁读取各核心包入口的 Commentary 记录与版本，签名、公共名字、版本或译本结构不符即失败；只记录公共接口，各包维护者的 `docs/architecture.md` 仍归各包 |
 
 Ebox 独立使用意味着调用者无需 ETAF，且普通用户无需亲自调用 ECSS 的计算接口。它不意味着 Ebox 没有底层依赖。样式表可以不用，ECSS 作为统一样式引擎仍是必需依赖。
 
