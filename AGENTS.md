@@ -130,6 +130,21 @@ to every repository changed from this workspace.
   that never grow the standard line height, consistent spacing and state styling
   through theme tokens. The catalog accumulates across applications so later
   text apps reuse it instead of rebuilding the same control.
+- Application layouts, including games, must have a coherent content grid,
+  aligned region boundaries, intentional spacing and a clear visual hierarchy.
+  Avoid large empty panels created merely by stretching containers.
+  Preserve game-world geometry and intrinsic tile/sprite dimensions across
+  viewport sizes. Reflow, reposition or collapse surrounding panels and use
+  deliberate framing; never stretch game elements merely to fill a window.
+  Adapt region proportions, arrangement and information density to both width
+  and height across the supported viewport range; one well-sized screenshot is
+  not sufficient acceptance. Keep controls readable and preserve standard line
+  metrics rather than squeezing or overlapping them to fit.
+  Define and document a meaningful minimum usable viewport. Below it, preserve
+  the layout's structure and use deliberate viewport clipping or scrolling;
+  do not promise full adaptation to impractically small dimensions. Validate
+  wide, ordinary, compact and short windows in the real GUI, including resize
+  during interaction, before completing an application change.
 - Applications and catalog components use ETAF's public API only; Ebox stays an
   internal engine behind it. When an application needs a lower-level capability
   (measurement, retained updates, viewport control), extend the ETAF API first
