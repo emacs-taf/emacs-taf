@@ -23,7 +23,7 @@
     },
     "etaf": {
       "url": "git@gitea.gklazycat.heiyu.space:emacs-taf/etaf.git",
-      "revision": "484500ee17d3bdd663216c693624a6456e2b9244",
+      "revision": "6a247ed3302daaea0cd04eba4f9dd9dd9e5f877e",
       "branch": "main"
     },
     "etaf-db": {
@@ -38,7 +38,7 @@
     },
     "etaf-ui": {
       "url": "git@gitea.gklazycat.heiyu.space:emacs-taf/etaf-ui.git",
-      "revision": "b7834e21936206a5be47b139f48bb68f756f4688",
+      "revision": "356d8211ae0f55efb9cd7a818c596a8e1eb7be66",
       "branch": "main"
     },
     "etaf-desktop": {
