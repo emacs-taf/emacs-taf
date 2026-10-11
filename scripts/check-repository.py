@@ -13,10 +13,11 @@ import sys
 import tempfile
 from urllib.parse import unquote
 
-POLICY_VERSION = 9
+POLICY_VERSION = 10
 DOC_NAMES = {'README.md', 'README.zh-CN.md', 'CHANGELOG.md', 'CHANGELOG.zh-CN.md',
              'AGENTS.md', 'docs/manual.md', 'docs/manual.zh-CN.md',
              'docs/architecture.md', 'docs/architecture.zh-CN.md'}
+WORKSPACE_DOC_NAMES = {'docs/keyboard-navigation.zh-CN.md'}
 DIRS = {'lisp', 'tests', 'examples', 'benchmarks', 'scripts', 'docs', 'native',
         'dictionaries', 'design', '.github', '.gitea', '.githooks'}
 SKIP = {'.git', '.jj', '__pycache__', 'target', '.omx', '.worktrees', '.claude'}
@@ -58,6 +59,7 @@ def check(root, files=None):
     files = inventory(root) if files is None else files
     errors = []
     workspace = (root / 'workspace.json').exists()
+    doc_names = DOC_NAMES | (WORKSPACE_DOC_NAMES if workspace else set())
     allowed_dirs = DIRS | (set(__import__('json').loads((root / 'workspace.json').read_text())['repositories']) if workspace else set())
     def fail(path, message): errors.append(f'{path}: {message}')
     for required in ['README.md', 'Makefile', 'scripts/check-repository.py',
@@ -83,7 +85,7 @@ def check(root, files=None):
             if old != spelling: fail(f, f'case collision with {old}')
         if len(parts) > 1 and parts[0] not in allowed_dirs:
             fail(f, 'unapproved top-level directory')
-        if len(parts) == 1 and f not in DOC_NAMES and f not in {
+        if len(parts) == 1 and f not in doc_names and f not in {
                 'Makefile', 'LICENSE', 'COPYING', 'NOTICE', '.gitignore',
                 '.gitattributes', '.editorconfig', 'workspace.json',
                 'release-dependencies.json'} and not f.endswith('.el'):
@@ -93,9 +95,9 @@ def check(root, files=None):
                 fail(f, 'delete native internal unit tests; validate through public package APIs')
         # Preserve upstream dictionary/vendor licensing and resource names.
         external = parts[0] == 'dictionaries' or f.startswith('native/vendor/')
-        if f.endswith('.md') and f not in DOC_NAMES and not external and not instructions:
+        if f.endswith('.md') and f not in doc_names and not external and not instructions:
             fail(f, 'use README, CHANGELOG, docs/manual or docs/architecture; merge or delete other documents')
-        if f.startswith('docs/') and not instructions and (len(parts) != 2 or f not in DOC_NAMES):
+        if f.startswith('docs/') and not instructions and (len(parts) != 2 or f not in doc_names):
             fail(f, 'documentation must be flat and use the fixed document names')
         if re.search(r'(^|/)(?:\.DS_Store|[^/]+\.(?:elc|eln|pyc|o|so|dylib|dll))$', f) or 'target' in parts or '__pycache__' in parts:
             fail(f, 'generated artifact must not be tracked')

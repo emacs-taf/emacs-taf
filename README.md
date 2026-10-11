@@ -116,7 +116,9 @@ calling signatures and usage notes. Put integration workflows and examples in
 `docs/manual.md`, current internal ownership in `docs/architecture.md`, and notable
 version changes in `CHANGELOG.md`. The latter three are created only when needed.
 The workspace architecture document also owns accepted cross-package target behavior
-and migration boundaries; maintain it in place instead of adding separate plans.
+and migration boundaries. The dedicated [keyboard navigation contract](docs/keyboard-navigation.zh-CN.md)
+owns regions, editing states and key binding rules; other documents link to it.
+Maintain these contracts in place instead of adding separate plans.
 Translations consistently use `.zh-CN.md`. Do not duplicate the same contract in
 several files; callers link to the provider's manual. Preserve legal notices.
 

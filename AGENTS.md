@@ -60,6 +60,7 @@ to every repository changed from this workspace.
 | `docs/manual.md` | Users integrating the package or completing a task | Supported workflows, configuration, composition, runnable examples, lifecycle, failures and recovery | Agent operation, implementation walkthroughs, speculative APIs and a second full API inventory |
 | Package `docs/architecture.md` | Maintainers understanding the implemented system | Responsibilities, dependency direction, data flow, invariants and the rationale for current design | Agent operation, task chronology, abandoned designs and unimplemented proposals |
 | Workspace `docs/architecture.zh-CN.md` | Maintainers coordinating ecosystem development | Cross-package responsibilities, accepted target contracts, relevant implementation gaps, dependency order and observable acceptance criteria | Conversation history, agent operation, unaccepted ideas and claims that pending capabilities already work |
+| Workspace `docs/keyboard-navigation.zh-CN.md` | Framework and application maintainers implementing keyboard interaction | The authoritative accepted contract for regions, navigation, editing states, key ownership, help, implementation gaps and observable acceptance | Duplicate package API inventories, task narration and claims that target behavior is already implemented |
 | `CHANGELOG.md` | Users deciding how to upgrade | Notable user-visible changes and necessary migration instructions, organized by release or Unreleased following Keep a Changelog | Copied commit logs, internal work reports, fabricated releases and routine edits without user impact |
 
 - Before writing, identify the reader's task and the owning document above. Update
@@ -74,6 +75,8 @@ to every repository changed from this workspace.
 - Maintain each detailed contract in one authoritative location and link to it
   from other documents. Create optional documents only for maintained content;
   reuse existing sections and remove stale or redundant material.
+  The workspace keyboard navigation contract is maintained in its dedicated
+  document above; the ecosystem architecture and package documents link to it.
 - English uses the default name; Chinese translations use `.zh-CN.md` consistently.
   Keep existing translations aligned when their contract changes. Do not create empty
   translations or documents merely to fill a template. Legal notices are exempt.

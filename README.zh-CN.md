@@ -96,7 +96,9 @@ jj config set --repo 'revset-aliases."immutable_heads()"' \
 README 只负责入门和导航。完整用法及跨模块接口契约放入 `docs/manual.md`；
 当前内部职责与依赖方向放入 `docs/architecture.md`；版本变化与迁移说明放入
 `CHANGELOG.md`。后三类按需创建，不凑模板。中文译本统一使用 `.zh-CN.md`。
-工作区架构文档同时维护已确定的跨包开发目标和迁移边界，直接更新原文，不另建计划或决策记录。
+工作区架构文档同时维护已确定的跨包开发目标和迁移边界。
+[区域导航与键盘交互方案](docs/keyboard-navigation.zh-CN.md)独立维护区域、编辑状态和键位规则，其他文档引用该契约。
+这些契约直接在原文维护，不另建重复的计划或决策记录。
 同一契约只在提供方维护一份，消费方链接过去。许可证及上游来源声明必须保留。
 
 这是一套结合 [Diátaxis](https://diataxis.fr/)、

@@ -150,6 +150,34 @@ class PolicyTests(unittest.TestCase):
         self.write('docs/proposals/phase-two.md', '# Plan\n')
         self.assertIn('fixed document names', self.errors())
 
+    def test_keyboard_contract_is_workspace_only_and_checks_links(self):
+        document = 'docs/keyboard-navigation.zh-CN.md'
+        self.write(document, '# Keyboard navigation contract\n')
+        command = [sys.executable, str(self.root / 'scripts/check-repository.py'),
+                   '--root', str(self.root)]
+        package = subprocess.run(command, capture_output=True, text=True)
+        self.assertEqual(1, package.returncode)
+        self.assertIn('fixed document names', package.stderr)
+
+        self.write('workspace.json', '{"schema": 1, "repositories": {}}')
+        self.write('scripts/api-workspace.json', '{}')
+        self.write('AGENTS.md', '# Workspace instructions\n')
+        self.write('docs/architecture.zh-CN.md', '# Ecosystem contract\n')
+        self.write('README.md', '[Keyboard contract](' + document + ')\n')
+        (self.root / 'package.el').unlink()
+        accepted = subprocess.run(command, capture_output=True, text=True)
+        self.assertEqual(0, accepted.returncode, accepted.stderr)
+
+        self.write('.gitignore', '__pycache__/\n')
+        subprocess.run(['git', 'init', '-q', str(self.root)], check=True)
+        subprocess.run(['git', '-C', str(self.root), 'add', '.'], check=True)
+        staged = subprocess.run(command + ['--staged'], capture_output=True, text=True)
+        self.assertEqual(0, staged.returncode, staged.stderr)
+        self.write(document, '[Missing](missing.md)\n')
+        broken = subprocess.run(command, capture_output=True, text=True)
+        self.assertEqual(1, broken.returncode)
+        self.assertIn('broken local link', broken.stderr)
+
     def test_broken_link_is_rejected(self):
         self.write('README.md', '[usage](docs/absent.md)\n')
         self.assertIn('broken local link', self.errors())
