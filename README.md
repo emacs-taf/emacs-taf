@@ -21,6 +21,7 @@ Framework packages and workspace tooling developed in this checkout:
 | `etaf-gamekit` (local checkout) | Game definitions, independent instances, actions and backend adapters | etaf; examples optionally use etaf-ui |
 | [etaf-db](https://forgejo.vhkd.top/emacs-taf/etaf-db) | Database backends for ETAF; currently SQLite | etaf |
 | [etaf-apps](https://forgejo.vhkd.top/emacs-taf/etaf-apps) | Application workspace: their integration checkpoints and shared tooling | etaf, etaf-ui, etaf-db |
+| [etaf-games](https://forgejo.vhkd.top/emacs-taf/etaf-games) | Game application workspace: their common contract and integration commands | etaf, etaf-ui; games use etaf-gamekit |
 | [ebox-playground](https://forgejo.vhkd.top/emacs-taf/ebox-playground) | Runnable Ebox layout examples | ebox |
 | [etaf-playground](https://forgejo.vhkd.top/emacs-taf/etaf-playground) | ETAF/UI integration examples and acceptance surfaces | etaf, etaf-ui, etaf-db, etaf-desktop |
 | [etaf-manual](https://forgejo.vhkd.top/emacs-taf/etaf-manual) | The ETAF Reference Manual for the core packages, in English and Chinese, checked against their public interfaces | etaf, etaf-ui; its gate reads ecss, ekp, ebox and etaf-db |
@@ -55,6 +56,10 @@ workspace, whose README owns their dependency lists:
 | [etaf-ascii-video](https://forgejo.vhkd.top/emacs-taf/etaf-ascii-video) | Video and HTTP(S) streams inside an Emacs buffer as pure characters |
 | [etaf-video-player](https://forgejo.vhkd.top/emacs-taf/etaf-video-player) | Local video and streams as sharp image frames with sound |
 | [etaf-algo-lab](https://forgejo.vhkd.top/emacs-taf/etaf-algo-lab) | Learn algorithms by watching, steering and comparing them inside Emacs |
+
+Game applications are independent repositories in the
+[etaf-games](https://forgejo.vhkd.top/emacs-taf/etaf-games) workspace, whose README
+owns their dependency lists and shared acceptance contract.
 
 ## Setup
 

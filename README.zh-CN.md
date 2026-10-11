@@ -18,6 +18,7 @@
 | `etaf-gamekit`（本地检出） | 游戏定义、独立运行实例、动作与后端适配器 | etaf；示例按需使用 etaf-ui |
 | [etaf-db](https://forgejo.vhkd.top/emacs-taf/etaf-db) | ETAF 数据库后端；目前支持 SQLite | etaf |
 | [etaf-apps](https://forgejo.vhkd.top/emacs-taf/etaf-apps) | 应用工作区：各应用的集成检查点与共享工具 | etaf、etaf-ui、etaf-db |
+| [etaf-games](https://forgejo.vhkd.top/emacs-taf/etaf-games) | 游戏应用工作区：共同开发契约与集成命令 | etaf、etaf-ui；游戏使用 etaf-gamekit |
 | [ebox-playground](https://forgejo.vhkd.top/emacs-taf/ebox-playground) | Ebox 布局示例 | ebox |
 | [etaf-playground](https://forgejo.vhkd.top/emacs-taf/etaf-playground) | ETAF/UI 集成示例与验收入口 | etaf、etaf-ui、etaf-db、etaf-desktop |
 | [etaf-manual](https://forgejo.vhkd.top/emacs-taf/etaf-manual) | 核心包的《ETAF 参考手册》，中英双语，对照公共接口检查 | etaf、etaf-ui；门禁还读取 ecss、ekp、ebox 和 etaf-db |
@@ -48,6 +49,9 @@
 | [etaf-ascii-video](https://forgejo.vhkd.top/emacs-taf/etaf-ascii-video) | 在 Emacs buffer 里用纯字符播放视频与 HTTP(S) 流 |
 | [etaf-video-player](https://forgejo.vhkd.top/emacs-taf/etaf-video-player) | 在 Emacs 里以清晰图像帧加声音播放本地视频与流 |
 | [etaf-algo-lab](https://forgejo.vhkd.top/emacs-taf/etaf-algo-lab) | 在 Emacs 里观看、操控并比较算法运行 |
+
+游戏应用是独立的仓库，位于 [etaf-games](https://forgejo.vhkd.top/emacs-taf/etaf-games) 工作区，
+其 README 维护依赖清单与共同验收契约。
 
 ## 开始开发
 
