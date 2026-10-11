@@ -266,7 +266,7 @@ GUI Escape 与终端 ESC、Meta 和功能键序列分别验证，沿用 Emacs �
 | 能力 | 当前公开契约 | 目标差距 |
 | --- | --- | --- |
 | 焦点与方向 | Ebox 的 `ebox-focus-direction` 支持可选 ROOT 限域；ETAF 以 `etaf-direction` 实现三态（`:on-direction` 返回 `handled`／`hold`／`release`）、separator／slider 步进、区域内移动与边界跨区；无区域时保持 Ebox 空间移动与边缘滚动 | 无（GUI 与终端验收见 §11） |
-| 区域键位 | `M-g` 选择入口；`Escape`、`M-g`、`C-g`、方向键、`?`、`Tab` 为声明期保留项；`etaf-set-direction-scheme` 在原子冲突校验后于 arrows 与 vim 方案间切换 | 无 |
+| 区域键位 | `M-g` 选择入口；`Escape`、`M-g`、`C-g`、方向键、`?`、`Tab` 为声明期保留项，组件调用方 `:keymap` 同样按保留集校验；`etaf-set-direction-scheme` 在原子冲突校验后于 arrows 与 vim 方案间切换 | 无 |
 | 帮助 | `?` 是保留键，打开只读 `etaf-help`；`etaf-palette` 经 `M-x` 调用 | 应用独立帮助页可继续迁为 `:help` 声明（可选增强） |
 | 原地输入 | Escape 留稿、`C-c C-k` 放弃、方向键在文本边界退编辑并进入相邻区域、再次编辑复用会话恢复光标与撤销已实现 | 无（GUI 验收见 §11） |
 | Escape 与中断 | 框架、浮层与输入组件已无 `C-g` 绑定；Escape 按层级退出 | 无（GUI 与终端验收见 §11） |
