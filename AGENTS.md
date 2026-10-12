@@ -148,6 +148,17 @@ to every repository changed from this workspace.
   that never grow the standard line height, consistent spacing and state styling
   through theme tokens. The catalog accumulates across applications so later
   text apps reuse it instead of rebuilding the same control.
+- Interactive states must not stack.  A control or row that is already
+  active or selected keeps its selected presentation and takes no
+  pointer-hover highlight; hover feedback belongs to unselected targets
+  only.  Catalog components with a selected state suppress their hover
+  fill, and application rows apply hover only when they are not the
+  current or selected one.
+- User-visible copy follows mixed-script typography: a Chinese character
+  next to a Latin letter or digit keeps one separating space, in literal
+  strings and in values joined at display time alike (for example a
+  chapter card reads `上一章 18 盒与常规流`); full-width punctuation keeps
+  its own spacing.
 - Application layouts, including games, must have a coherent content grid,
   aligned region boundaries, intentional spacing and a clear visual hierarchy.
   Avoid large empty panels created merely by stretching containers.
