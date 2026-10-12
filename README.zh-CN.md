@@ -34,7 +34,10 @@
 
 ## 应用
 
-每个应用都是独立仓库，有各自的历史和检查。
+应用与游戏是构建在框架之上的两类程序，每一个都是独立仓库，有各自的历史和检查。
+
+### 应用
+
 [etaf-desktop](https://github.com/emacs-taf/etaf-desktop) 在本工作区开发，其余在 [etaf-apps](https://github.com/emacs-taf/etaf-apps) 工作区，其 README 维护依赖清单：
 
 | 应用 | 职责 |
@@ -51,8 +54,18 @@
 | [etaf-video-player](https://github.com/emacs-taf/etaf-video-player) | 在 Emacs 里以清晰图像帧加声音播放本地视频与流 |
 | [etaf-algo-lab](https://github.com/emacs-taf/etaf-algo-lab) | 在 Emacs 里观看、操控并比较算法运行 |
 
-游戏应用是独立的仓库，位于 [etaf-games](https://github.com/emacs-taf/etaf-games) 工作区，
-其 README 维护依赖清单与共同验收契约。
+### 游戏
+
+游戏应用位于 [etaf-games](https://github.com/emacs-taf/etaf-games) 工作区，其 README
+维护依赖清单与共同验收契约。它们基于 [etaf-gamekit](https://github.com/emacs-taf/etaf-gamekit)
+提供游戏定义、独立运行实例、动作与后端适配器，规则、呈现和资源保存在各自的仓库：
+
+| 游戏 | 说明 | 后端 |
+| --- | --- | --- |
+| [etaf-solitaire](https://github.com/emacs-taf/etaf-solitaire) | Verdant：K+ Klondike 纸牌，支持撤销与重做 | OpenSpiel |
+| [etaf-salvage](https://github.com/emacs-taf/etaf-salvage) | Salvage Station：实时探索与回收 | Godot |
+| [etaf-tanks](https://github.com/emacs-taf/etaf-tanks) | Iron Tide：原生竞技场的实时坦克对战 | Godot |
+| [etaf-xiangqi](https://github.com/emacs-taf/etaf-xiangqi) | 楚河：中国象棋双人对弈 | OpenSpiel |
 
 ## 开始开发
 
@@ -61,10 +74,7 @@
 公共行为验收条件，并明确区分开发目标与当前实现。
 
 按 `workspace.json` 中的地址克隆各仓库，保持同级目录与名称；清单中的 `url` 是
-GitHub 主仓，用 `git clone -o origin <url> <name>` 克隆。维护者再添加镜像远端
-`aliyun`（`https://forgejo.vhkd.top/emacs-taf/<name>.git`）和 `laycat`
-（`git@gitea.gklazycat.heiyu.space:emacs-taf/<name>.git`）。发布的文件统一写 GitHub
-主仓地址，因此各镜像上的仓库链接和包 URL 一致；各镜像以自己的域名提供同一组提交。
+GitHub 主仓，用 `git clone -o origin <url> <name>` 克隆。
 清单记录一起通过 `make check` 的子仓库提交，是集成检查点，不是发布认证。
 提交推送后，才能从清单中的远端地址获取这组版本。
 `python3 scripts/workspace.py status` 可以查看版本差异，不会切换仓库。
@@ -136,14 +146,11 @@ README 只负责入门和导航。完整用法及跨模块接口契约放入 `do
 `python3 scripts/check-commit-message.py <文件>` 检查每条提交信息，并用
 `python3 scripts/check-repository.py --staged` 检查已封口的改动。
 
-每个模块的公开主仓是 `origin`（`github.com/emacs-taf`），`aliyun`
-（`forgejo.vhkd.top`）和 `laycat`（`gitea.gklazycat.heiyu.space`）是镜像。
-每完成一组验证通过的提交，先 fetch 并检查，再用
-`jj git push --remote <远端> -b <分支>` 将 `workspace.json` 记录的分支推送到
-aliyun 和 origin 的同名分支。自动交付覆盖 aliyun 与 origin；laycat 保留配置，
-由用户手动维护和交付。这是用户已授权的默认规则，无需重复确认。
-不强制覆盖历史，不隐式推送其他分支或标签。报告每次推送结果；根工作区使用与各模块
-相同的 `origin`、`aliyun` 和 `laycat` 远端。
+每个模块发布到公开主仓 `origin`（`github.com/emacs-taf`）。每完成一组验证通过的提交，
+先 fetch 并检查 `origin`，再用 `jj git push --remote origin -b <分支>` 将
+`workspace.json` 记录的分支推送到它的同名分支。交付规则（包括维护者的其他远端）
+维护在 AGENTS.md。不强制覆盖历史，不隐式推送其他分支或标签。报告每次推送结果；
+根工作区使用与各模块相同的远端。
 钩子检查目录与消息格式，修改范围、描述准确性和验证充分性仍需开发者负责。
 
 ## 持续约束

@@ -38,7 +38,11 @@ game projects and adapter integration.
 
 ## Applications
 
-Every application is an independent repository with its own history and checks.
+Applications and games are two kinds of programs built on the framework; each is
+an independent repository with its own history and checks.
+
+### Applications
+
 [etaf-desktop](https://github.com/emacs-taf/etaf-desktop) is developed in this
 workspace; the others live in the [etaf-apps](https://github.com/emacs-taf/etaf-apps)
 workspace, whose README owns their dependency lists:
@@ -57,19 +61,26 @@ workspace, whose README owns their dependency lists:
 | [etaf-video-player](https://github.com/emacs-taf/etaf-video-player) | Local video and streams as sharp image frames with sound |
 | [etaf-algo-lab](https://github.com/emacs-taf/etaf-algo-lab) | Learn algorithms by watching, steering and comparing them inside Emacs |
 
-Game applications are independent repositories in the
-[etaf-games](https://github.com/emacs-taf/etaf-games) workspace, whose README
-owns their dependency lists and shared acceptance contract.
+### Games
+
+Game applications live in the [etaf-games](https://github.com/emacs-taf/etaf-games)
+workspace, whose README owns their dependency lists and shared acceptance contract.
+They build on [etaf-gamekit](https://github.com/emacs-taf/etaf-gamekit) for game
+definitions, independent instances, actions and backend adapters, and keep their
+rules, presentation and resources in their own repositories:
+
+| Game | Description | Backend |
+| --- | --- | --- |
+| [etaf-solitaire](https://github.com/emacs-taf/etaf-solitaire) | Verdant: K+ Klondike solitaire with undo and redo | OpenSpiel |
+| [etaf-salvage](https://github.com/emacs-taf/etaf-salvage) | Salvage Station: real-time exploration and extraction | Godot |
+| [etaf-tanks](https://github.com/emacs-taf/etaf-tanks) | Iron Tide: real-time tank battle with a native arena | Godot |
+| [etaf-xiangqi](https://github.com/emacs-taf/etaf-xiangqi) | Chu He: xiangqi (Chinese chess) hot-seat | OpenSpiel |
 
 ## Setup
 
 Clone the repositories listed in `workspace.json` into sibling directories with
 exactly these names. Each record's `url` is its GitHub origin: clone with
-`git clone -o origin <url> <name>`. Maintainers add the mirrors as `aliyun`
-(`https://forgejo.vhkd.top/emacs-taf/<name>.git`) and `laycat`
-(`git@gitea.gklazycat.heiyu.space:emacs-taf/<name>.git`) remotes. Published files
-name the GitHub origin, so repository links and package URLs stay the same on every
-mirror, which serves the same commits under its own host.
+`git clone -o origin <url> <name>`.
 The recorded revisions identify the child commits verified together by
 `make check`; they are an integration checkpoint, not a release certification.
 Commits must be pushed before this checkpoint is available from the remote URLs. `python3 scripts/workspace.py status` reports
@@ -160,15 +171,13 @@ Make local writes with jj and use Git read-only. jj does not run Git hooks, so
 check each message with `python3 scripts/check-commit-message.py <file>` and the
 sealed change with `python3 scripts/check-repository.py --staged` before pushing.
 
-Every module has `origin` at `github.com/emacs-taf` as its public home, with
-`aliyun` at `forgejo.vhkd.top` and `laycat` at `gitea.gklazycat.heiyu.space` as
-mirrors. After a coherent group of validated commits, fetch and inspect `aliyun`,
-then push the branch recorded in `workspace.json` to its same-named branch on
-`aliyun` and `origin` with `jj git push --remote <remote> -b <branch>`.
-Automatic delivery covers `aliyun` and `origin`; laycat remains configured for
-manual maintenance and delivery. Do not force-push or implicitly publish other
-branches or tags. Report each delivery result. The root workspace uses the same
-`origin`, `aliyun` and `laycat` remotes as the modules.
+Every module publishes to `origin` at `github.com/emacs-taf`. After a coherent
+group of validated commits, fetch and inspect `origin`, then push the branch
+recorded in `workspace.json` to its same-named branch with
+`jj git push --remote origin -b <branch>`. The delivery rules, including the
+maintainers' additional remotes, live in AGENTS.md. Do not force-push or
+implicitly publish other branches or tags. Report each delivery result. The root
+workspace uses the same remote as the modules.
 Hooks validate structure and message format; authors remain responsible for
 scope, accurate descriptions and validation.
 
