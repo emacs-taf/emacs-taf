@@ -24,7 +24,7 @@ Framework packages and workspace tooling developed in this checkout:
 | [etaf-games](https://forgejo.vhkd.top/emacs-taf/etaf-games) | Game application workspace: their common contract and integration commands | etaf, etaf-ui; games use etaf-gamekit |
 | [ebox-playground](https://forgejo.vhkd.top/emacs-taf/ebox-playground) | Runnable Ebox layout examples | ebox |
 | [etaf-playground](https://forgejo.vhkd.top/emacs-taf/etaf-playground) | ETAF/UI integration examples and acceptance surfaces | etaf, etaf-ui, etaf-db, etaf-desktop |
-| [etaf-manual](https://forgejo.vhkd.top/emacs-taf/etaf-manual) | The ETAF Reference Manual for the core packages, in English and Chinese, checked against their public interfaces | etaf, etaf-ui; its gate reads ecss, ekp, ebox and etaf-db |
+| [etaf-manual](https://forgejo.vhkd.top/emacs-taf/etaf-manual) | The ETAF Reference Manual for the core packages, in English and Chinese, checked against their public interfaces; published at <https://etaf.top> | etaf, etaf-ui; its gate reads ecss, ekp, ebox and etaf-db |
 
 `etaf-gamekit` has no configured remote and is not yet part of the published
 revision inventory. Its independent local checkout provides game definitions

@@ -21,7 +21,7 @@
 | [etaf-games](https://forgejo.vhkd.top/emacs-taf/etaf-games) | 游戏应用工作区：共同开发契约与集成命令 | etaf、etaf-ui；游戏使用 etaf-gamekit |
 | [ebox-playground](https://forgejo.vhkd.top/emacs-taf/ebox-playground) | Ebox 布局示例 | ebox |
 | [etaf-playground](https://forgejo.vhkd.top/emacs-taf/etaf-playground) | ETAF/UI 集成示例与验收入口 | etaf、etaf-ui、etaf-db、etaf-desktop |
-| [etaf-manual](https://forgejo.vhkd.top/emacs-taf/etaf-manual) | 核心包的《ETAF 参考手册》，中英双语，对照公共接口检查 | etaf、etaf-ui；门禁还读取 ecss、ekp、ebox 和 etaf-db |
+| [etaf-manual](https://forgejo.vhkd.top/emacs-taf/etaf-manual) | 核心包的《ETAF 参考手册》，中英双语，对照公共接口检查；发布于 <https://etaf.top> | etaf、etaf-ui；门禁还读取 ecss、ekp、ebox 和 etaf-db |
 
 `etaf-gamekit` 尚未配置远程，因此不在已发布版本清单中。它的独立本地检出
 提供游戏定义，以及 Godot、boardgame.io、OpenSpiel 共用的动作、观察结果和
