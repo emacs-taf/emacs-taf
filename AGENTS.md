@@ -359,7 +359,7 @@ remote, but does not run the checks below.
 ### Checks before publishing
 
 jj runs no Git hooks, so run their commands from the repository root. Check the
-message of every commit in the publish range (`<range>` is `main@aliyun..@-` in a
+message of every commit in the publish range (`<range>` is `main@origin..@-` in a
 child and `main..@-` in the root), then the sealed tree, which the colocated Git
 index mirrors as `@-`. A secondary `jj workspace add` checkout has no Git index;
 there `--staged` accepts only an empty `@` and checks that sealed working copy.
@@ -379,37 +379,41 @@ unrelated root files) instead of the child's sealed tree.
 
 ### Publishing
 
-- Each module keeps two remotes: laycat at gitea.gklazycat.heiyu.space and aliyun
-  at forgejo.vhkd.top. Reserve origin for a future GitHub remote; leave it
-  unconfigured until requested. Preserve unrelated third-party source and licensing
-  links.
+- Every module has three remotes: `origin` at github.com/emacs-taf (the public
+  home), aliyun at forgejo.vhkd.top and laycat at gitea.gklazycat.heiyu.space
+  (mirrors). Published files name the GitHub origin: repository links, package
+  URL headers and the `url` of every `workspace.json` record. Each mirror serves
+  the same commit under its own host; do not rewrite links per host. Preserve
+  unrelated third-party source and licensing links.
 - The published bookmark is the `branch` recorded in `workspace.json` (`main`).
   jj does not derive the push remote from tracking, and no `git.fetch` or
   `git.push` default is configured, so always name the remote and the bookmark.
-- The user authorizes automatic delivery to aliyun: after completing a coherent
-  group of validated commits, publish `@-` to the same-named branch there. No
-  repeated approval is needed. Leave laycat configured; the user handles its
-  availability and delivery manually. Do not retry it or block delivery on it.
-  Keep local commits timely and push to aliyun at validated checkpoints.
+- The user authorizes automatic delivery to aliyun and origin: after completing a
+  coherent group of validated commits, publish `@-` to the same-named branch on
+  both. No repeated approval is needed. Leave laycat configured; the user handles
+  its availability and delivery manually. Do not retry it or block delivery on it.
+  Keep local commits timely and push at validated checkpoints.
 
   ```sh
   jj git fetch --remote aliyun
-  jj log -r '@-..main@aliyun'      # must be empty: publishing fast-forwards
-  jj log -r 'main@aliyun..@-'      # the commits being published
+  jj git fetch --remote origin
+  jj log -r '@-..main@aliyun | @-..main@origin'  # must be empty: fast-forwards
+  jj log -r '(main@aliyun | main@origin)..@-'    # the commits being published
   jj bookmark set main -r @-
   jj git push --remote aliyun -b main
+  jj git push --remote origin -b main
   ```
 
-- When `@-..main@aliyun` is not empty, rebase the unpublished commits with
-  `jj rebase -b @- -o main@aliyun` and repeat the checks; if they are already
-  immutable (for example on laycat), merge with `jj new @- main@aliyun -m "…"`.
-  Never force-push.
+- When `@-..main@aliyun` or `@-..main@origin` is not empty, rebase the unpublished
+  commits with `jj rebase -b @- -o main@aliyun` or `-o main@origin` and repeat the
+  checks; if they are already immutable (for example on laycat), merge with
+  `jj new @- main@aliyun -m "…"`. Never force-push.
 - Do not infer a destination when a remote is missing, or publish other bookmarks
-  or tags implicitly. If authentication, connectivity or configuration prevents the
-  aliyun push, retain local commits and report that delivery failure. Never claim
+  or tags implicitly. If authentication, connectivity or configuration prevents a
+  push, retain local commits and report that delivery failure. Never claim
   an unpushed commit is backed up remotely.
-- The root workspace uses the same `aliyun` and `laycat` remotes as the modules;
-  move its `main` bookmark with `jj bookmark set main -r @-` before pushing.
+- The root workspace uses the same `origin`, `aliyun` and `laycat` remotes as the
+  modules; move its `main` bookmark with `jj bookmark set main -r @-` before pushing.
 
 ### Cross-repository revisions
 

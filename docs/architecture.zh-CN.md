@@ -261,7 +261,7 @@ ETAF 保留组件、单向输入、实例状态、响应式依赖和自动清理
 ### 8.3 实例状态、引用与受控绑定
 
 - 保留 setup 一次初始化、视图后续计算的生命周期。提供一次声明的实例命名绑定，让视图和处理器能够直接引用稳定句柄，减少反复装入 plist、调用 `etaf-state` 再逐项拆包的样板。
-- 命名绑定采用已实现的 `:bindings ((name initializer) ...)`：按顺序初始化一次，视图和回调直接使用保留值，可选 setup 负责初始化工作。具体契约见 [ETAF 入口](https://gitea.gklazycat.heiyu.space/emacs-taf/etaf/src/branch/main/etaf.el)；保持身份、闭包、组件重排、失败和卸载的公共验收。普通应用使用命名绑定，原有 `etaf-state` 仅用于没有命名绑定的进阶 opaque setup 用法。
+- 命名绑定采用已实现的 `:bindings ((name initializer) ...)`：按顺序初始化一次，视图和回调直接使用保留值，可选 setup 负责初始化工作。具体契约见 [ETAF 入口](https://github.com/emacs-taf/etaf/blob/main/etaf.el)；保持身份、闭包、组件重排、失败和卸载的公共验收。普通应用使用命名绑定，原有 `etaf-state` 仅用于没有命名绑定的进阶 opaque setup 用法。
 - `etaf-ref`、`etaf-value` 与 `etaf-computed` 保持明确含义。原地修改 ref 内的 plist、向量等不被自动视为响应式写入；`etaf-update-value` 将普通函数返回的新值交给现有写入路径，不通过隐藏深层代理改变普通 Elisp 数据语义。更新函数不得修改旧值或执行外部副作用；函数失败保留旧值，写入后的显示失败不撤销业务值。
 - 组件内部定位采用实例局部引用或稳定句柄。两个实例可以各自定位同名内部控件而不冲突；对外地址通过明确接口暴露。普通按钮和普通组件组合默认不需要手写 `:ref` 或生成唯一符号。
 - 列表 key、宿主引用和状态 ref 分别负责保留身份、定位和业务值，不得混为一套对象。通用定位与焦点机制最终仍由 Ebox 提供，ETAF 只承担组件实例到宿主身份的映射。

@@ -13,23 +13,23 @@ Framework packages and workspace tooling developed in this checkout:
 
 | Repository | Responsibility | Dependencies in this workspace |
 | --- | --- | --- |
-| [ecss](https://forgejo.vhkd.top/emacs-taf/ecss) | Selector and cascade semantics | None |
-| [ekp](https://forgejo.vhkd.top/emacs-taf/ekp) | Knuth–Plass paragraph layout | None |
-| [ebox](https://forgejo.vhkd.top/emacs-taf/ebox) | Box layout, rendering and incremental publication | ecss; optional ekp |
-| [etaf](https://forgejo.vhkd.top/emacs-taf/etaf) | Components, state and application runtime | ebox |
-| [etaf-ui](https://forgejo.vhkd.top/emacs-taf/etaf-ui) | Reusable UI components | etaf |
-| [etaf-gamekit](https://forgejo.vhkd.top/emacs-taf/etaf-gamekit) | Game definitions, independent instances, actions and backend adapters | etaf |
-| [etaf-db](https://forgejo.vhkd.top/emacs-taf/etaf-db) | Database backends for ETAF; currently SQLite | etaf |
-| [etaf-apps](https://forgejo.vhkd.top/emacs-taf/etaf-apps) | Application workspace: their integration checkpoints and shared tooling | etaf, etaf-ui, etaf-db |
-| [etaf-games](https://forgejo.vhkd.top/emacs-taf/etaf-games) | Game application workspace: their common contract and integration commands | etaf, etaf-ui; games use etaf-gamekit |
-| [ebox-playground](https://forgejo.vhkd.top/emacs-taf/ebox-playground) | Runnable Ebox layout examples | ebox |
-| [etaf-playground](https://forgejo.vhkd.top/emacs-taf/etaf-playground) | ETAF/UI integration examples and acceptance surfaces | etaf, etaf-ui, etaf-db, etaf-desktop |
-| [etaf-manual](https://forgejo.vhkd.top/emacs-taf/etaf-manual) | The ETAF Reference Manual for the core packages, in English and Chinese, checked against their public interfaces; published at <https://etaf.top> | etaf, etaf-ui; its gate reads ecss, ekp, ebox and etaf-db |
+| [ecss](https://github.com/emacs-taf/ecss) | Selector and cascade semantics | None |
+| [ekp](https://github.com/emacs-taf/ekp) | Knuth–Plass paragraph layout | None |
+| [ebox](https://github.com/emacs-taf/ebox) | Box layout, rendering and incremental publication | ecss; optional ekp |
+| [etaf](https://github.com/emacs-taf/etaf) | Components, state and application runtime | ebox |
+| [etaf-ui](https://github.com/emacs-taf/etaf-ui) | Reusable UI components | etaf |
+| [etaf-gamekit](https://github.com/emacs-taf/etaf-gamekit) | Game definitions, independent instances, actions and backend adapters | etaf |
+| [etaf-db](https://github.com/emacs-taf/etaf-db) | Database backends for ETAF; currently SQLite | etaf |
+| [etaf-apps](https://github.com/emacs-taf/etaf-apps) | Application workspace: their integration checkpoints and shared tooling | etaf, etaf-ui, etaf-db |
+| [etaf-games](https://github.com/emacs-taf/etaf-games) | Game application workspace: their common contract and integration commands | etaf, etaf-ui; games use etaf-gamekit |
+| [ebox-playground](https://github.com/emacs-taf/ebox-playground) | Runnable Ebox layout examples | ebox |
+| [etaf-playground](https://github.com/emacs-taf/etaf-playground) | ETAF/UI integration examples and acceptance surfaces | etaf, etaf-ui, etaf-db, etaf-desktop |
+| [etaf-manual](https://github.com/emacs-taf/etaf-manual) | The ETAF Reference Manual for the core packages, in English and Chinese, checked against their public interfaces; published at <https://etaf.top> | etaf, etaf-ui; its gate reads ecss, ekp, ebox and etaf-db |
 
-[etaf-gamekit](https://forgejo.vhkd.top/emacs-taf/etaf-gamekit) provides game
+[etaf-gamekit](https://github.com/emacs-taf/etaf-gamekit) provides game
 definitions and a common action/observation lifecycle over Godot, boardgame.io
 and OpenSpiel. Game applications own their rules and presentation and live in
-the [etaf-games](https://forgejo.vhkd.top/emacs-taf/etaf-games) workspace,
+the [etaf-games](https://github.com/emacs-taf/etaf-games) workspace,
 outside the framework core; the core does not depend on their components.
 Install the backend needed by your game, or use
 `make -C etaf-gamekit engine-all GAMEKIT_PYTHON=python3.11` before running the
@@ -39,33 +39,37 @@ game projects and adapter integration.
 ## Applications
 
 Every application is an independent repository with its own history and checks.
-[etaf-desktop](https://forgejo.vhkd.top/emacs-taf/etaf-desktop) is developed in this
-workspace; the others live in the [etaf-apps](https://forgejo.vhkd.top/emacs-taf/etaf-apps)
+[etaf-desktop](https://github.com/emacs-taf/etaf-desktop) is developed in this
+workspace; the others live in the [etaf-apps](https://github.com/emacs-taf/etaf-apps)
 workspace, whose README owns their dependency lists:
 
 | Application | Responsibility |
 | --- | --- |
-| [etaf-desktop](https://forgejo.vhkd.top/emacs-taf/etaf-desktop) | Desktop window-management application built from ETAF and ETAF UI |
-| [etaf-ncm](https://forgejo.vhkd.top/emacs-taf/etaf-ncm) | NetEase Cloud Music player: library browsing, playback control, lyrics and queue |
-| [etaf-weread](https://forgejo.vhkd.top/emacs-taf/etaf-weread) | WeChat Reading client: shelf, notebook, highlights, store search and statistics |
-| [etaf-md-preview](https://forgejo.vhkd.top/emacs-taf/etaf-md-preview) | Markdown reading view: centered measure, headings, tables, callouts, code and media cards |
-| [etaf-rss](https://forgejo.vhkd.top/emacs-taf/etaf-rss) | RSS reader: subscriptions, folders, unread and starred scopes, reading pane, search and OPML |
-| [etaf-reader](https://forgejo.vhkd.top/emacs-taf/etaf-reader) | Local ebook reader: EPUB/TXT/Markdown/HTML/FB2/PDF import, paged reading, annotations and progress |
-| [etaf-pi](https://forgejo.vhkd.top/emacs-taf/etaf-pi) | Native Pi agent client: streamed conversations, tool output, session recovery and multiline input |
-| [etaf-telega](https://forgejo.vhkd.top/emacs-taf/etaf-telega) | Telegram client on Telega's TDLib backend: chats, live message stream, composer and message actions |
-| [etaf-ascii-video](https://forgejo.vhkd.top/emacs-taf/etaf-ascii-video) | Video and HTTP(S) streams inside an Emacs buffer as pure characters |
-| [etaf-video-player](https://forgejo.vhkd.top/emacs-taf/etaf-video-player) | Local video and streams as sharp image frames with sound |
-| [etaf-algo-lab](https://forgejo.vhkd.top/emacs-taf/etaf-algo-lab) | Learn algorithms by watching, steering and comparing them inside Emacs |
+| [etaf-desktop](https://github.com/emacs-taf/etaf-desktop) | Desktop window-management application built from ETAF and ETAF UI |
+| [etaf-ncm](https://github.com/emacs-taf/etaf-ncm) | NetEase Cloud Music player: library browsing, playback control, lyrics and queue |
+| [etaf-weread](https://github.com/emacs-taf/etaf-weread) | WeChat Reading client: shelf, notebook, highlights, store search and statistics |
+| [etaf-md-preview](https://github.com/emacs-taf/etaf-md-preview) | Markdown reading view: centered measure, headings, tables, callouts, code and media cards |
+| [etaf-rss](https://github.com/emacs-taf/etaf-rss) | RSS reader: subscriptions, folders, unread and starred scopes, reading pane, search and OPML |
+| [etaf-reader](https://github.com/emacs-taf/etaf-reader) | Local ebook reader: EPUB/TXT/Markdown/HTML/FB2/PDF import, paged reading, annotations and progress |
+| [etaf-pi](https://github.com/emacs-taf/etaf-pi) | Native Pi agent client: streamed conversations, tool output, session recovery and multiline input |
+| [etaf-telega](https://github.com/emacs-taf/etaf-telega) | Telegram client on Telega's TDLib backend: chats, live message stream, composer and message actions |
+| [etaf-ascii-video](https://github.com/emacs-taf/etaf-ascii-video) | Video and HTTP(S) streams inside an Emacs buffer as pure characters |
+| [etaf-video-player](https://github.com/emacs-taf/etaf-video-player) | Local video and streams as sharp image frames with sound |
+| [etaf-algo-lab](https://github.com/emacs-taf/etaf-algo-lab) | Learn algorithms by watching, steering and comparing them inside Emacs |
 
 Game applications are independent repositories in the
-[etaf-games](https://forgejo.vhkd.top/emacs-taf/etaf-games) workspace, whose README
+[etaf-games](https://github.com/emacs-taf/etaf-games) workspace, whose README
 owns their dependency lists and shared acceptance contract.
 
 ## Setup
 
-Clone the repositories from `workspace.json` into sibling directories with exactly
-these names. Clone with `git clone -o laycat <url> <name>` and add the matching
-`aliyun` URL at `https://forgejo.vhkd.top/emacs-taf/<name>.git`.
+Clone the repositories listed in `workspace.json` into sibling directories with
+exactly these names. Each record's `url` is its GitHub origin: clone with
+`git clone -o origin <url> <name>`. Maintainers add the mirrors as `aliyun`
+(`https://forgejo.vhkd.top/emacs-taf/<name>.git`) and `laycat`
+(`git@gitea.gklazycat.heiyu.space:emacs-taf/<name>.git`) remotes. Published files
+name the GitHub origin, so repository links and package URLs stay the same on every
+mirror, which serves the same commits under its own host.
 The recorded revisions identify the child commits verified together by
 `make check`; they are an integration checkpoint, not a release certification.
 Commits must be pushed before this checkpoint is available from the remote URLs. `python3 scripts/workspace.py status` reports
@@ -156,15 +160,15 @@ Make local writes with jj and use Git read-only. jj does not run Git hooks, so
 check each message with `python3 scripts/check-commit-message.py <file>` and the
 sealed change with `python3 scripts/check-repository.py --staged` before pushing.
 
-Every module uses `laycat` at `gitea.gklazycat.heiyu.space` and `aliyun` at
-`forgejo.vhkd.top`. After a coherent group of validated commits, fetch and inspect
-`aliyun`, then push the branch recorded in `workspace.json` to its same-named
-branch there with `jj git push --remote aliyun -b <branch>`.
-Automatic delivery requires aliyun; laycat remains configured for manual
-maintenance and delivery. Do not force-push or implicitly publish other branches
-or tags. Report aliyun's delivery result. Reserve `origin` for future GitHub use;
-it is currently unconfigured. The root workspace uses the same `aliyun` and
-`laycat` remotes as the modules.
+Every module has `origin` at `github.com/emacs-taf` as its public home, with
+`aliyun` at `forgejo.vhkd.top` and `laycat` at `gitea.gklazycat.heiyu.space` as
+mirrors. After a coherent group of validated commits, fetch and inspect `aliyun`,
+then push the branch recorded in `workspace.json` to its same-named branch on
+`aliyun` and `origin` with `jj git push --remote <remote> -b <branch>`.
+Automatic delivery covers `aliyun` and `origin`; laycat remains configured for
+manual maintenance and delivery. Do not force-push or implicitly publish other
+branches or tags. Report each delivery result. The root workspace uses the same
+`origin`, `aliyun` and `laycat` remotes as the modules.
 Hooks validate structure and message format; authors remain responsible for
 scope, accurate descriptions and validation.
 

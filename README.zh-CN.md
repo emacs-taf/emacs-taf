@@ -10,23 +10,23 @@
 
 | 仓库 | 职责 | 本工作区依赖 |
 | --- | --- | --- |
-| [ecss](https://forgejo.vhkd.top/emacs-taf/ecss) | 选择器与样式层叠 | 无 |
-| [ekp](https://forgejo.vhkd.top/emacs-taf/ekp) | Knuth–Plass 段落排版 | 无 |
-| [ebox](https://forgejo.vhkd.top/emacs-taf/ebox) | Box 布局、渲染与增量发布 | ecss；可选 ekp |
-| [etaf](https://forgejo.vhkd.top/emacs-taf/etaf) | 组件、状态与应用运行时 | ebox |
-| [etaf-ui](https://forgejo.vhkd.top/emacs-taf/etaf-ui) | 通用 UI 组件 | etaf |
-| [etaf-gamekit](https://forgejo.vhkd.top/emacs-taf/etaf-gamekit) | 游戏定义、独立运行实例、动作与后端适配器 | etaf |
-| [etaf-db](https://forgejo.vhkd.top/emacs-taf/etaf-db) | ETAF 数据库后端；目前支持 SQLite | etaf |
-| [etaf-apps](https://forgejo.vhkd.top/emacs-taf/etaf-apps) | 应用工作区：各应用的集成检查点与共享工具 | etaf、etaf-ui、etaf-db |
-| [etaf-games](https://forgejo.vhkd.top/emacs-taf/etaf-games) | 游戏应用工作区：共同开发契约与集成命令 | etaf、etaf-ui；游戏使用 etaf-gamekit |
-| [ebox-playground](https://forgejo.vhkd.top/emacs-taf/ebox-playground) | Ebox 布局示例 | ebox |
-| [etaf-playground](https://forgejo.vhkd.top/emacs-taf/etaf-playground) | ETAF/UI 集成示例与验收入口 | etaf、etaf-ui、etaf-db、etaf-desktop |
-| [etaf-manual](https://forgejo.vhkd.top/emacs-taf/etaf-manual) | 核心包的《ETAF 参考手册》，中英双语，对照公共接口检查；发布于 <https://etaf.top> | etaf、etaf-ui；门禁还读取 ecss、ekp、ebox 和 etaf-db |
+| [ecss](https://github.com/emacs-taf/ecss) | 选择器与样式层叠 | 无 |
+| [ekp](https://github.com/emacs-taf/ekp) | Knuth–Plass 段落排版 | 无 |
+| [ebox](https://github.com/emacs-taf/ebox) | Box 布局、渲染与增量发布 | ecss；可选 ekp |
+| [etaf](https://github.com/emacs-taf/etaf) | 组件、状态与应用运行时 | ebox |
+| [etaf-ui](https://github.com/emacs-taf/etaf-ui) | 通用 UI 组件 | etaf |
+| [etaf-gamekit](https://github.com/emacs-taf/etaf-gamekit) | 游戏定义、独立运行实例、动作与后端适配器 | etaf |
+| [etaf-db](https://github.com/emacs-taf/etaf-db) | ETAF 数据库后端；目前支持 SQLite | etaf |
+| [etaf-apps](https://github.com/emacs-taf/etaf-apps) | 应用工作区：各应用的集成检查点与共享工具 | etaf、etaf-ui、etaf-db |
+| [etaf-games](https://github.com/emacs-taf/etaf-games) | 游戏应用工作区：共同开发契约与集成命令 | etaf、etaf-ui；游戏使用 etaf-gamekit |
+| [ebox-playground](https://github.com/emacs-taf/ebox-playground) | Ebox 布局示例 | ebox |
+| [etaf-playground](https://github.com/emacs-taf/etaf-playground) | ETAF/UI 集成示例与验收入口 | etaf、etaf-ui、etaf-db、etaf-desktop |
+| [etaf-manual](https://github.com/emacs-taf/etaf-manual) | 核心包的《ETAF 参考手册》，中英双语，对照公共接口检查；发布于 <https://etaf.top> | etaf、etaf-ui；门禁还读取 ecss、ekp、ebox 和 etaf-db |
 
-[etaf-gamekit](https://forgejo.vhkd.top/emacs-taf/etaf-gamekit) 提供游戏定义，
+[etaf-gamekit](https://github.com/emacs-taf/etaf-gamekit) 提供游戏定义，
 以及 Godot、boardgame.io、OpenSpiel 共用的动作、观察结果和
 实例生命周期。游戏应用拥有规则与呈现，位于
-[etaf-games](https://forgejo.vhkd.top/emacs-taf/etaf-games) 工作区，不属于框架核心；
+[etaf-games](https://github.com/emacs-taf/etaf-games) 工作区，不属于框架核心；
 核心不依赖它们的组件。
 运行游戏只需安装所选后端；开发时先运行
 `make -C etaf-gamekit engine-all GAMEKIT_PYTHON=python3.11`，再运行完整的
@@ -35,23 +35,23 @@
 ## 应用
 
 每个应用都是独立仓库，有各自的历史和检查。
-[etaf-desktop](https://forgejo.vhkd.top/emacs-taf/etaf-desktop) 在本工作区开发，其余在 [etaf-apps](https://forgejo.vhkd.top/emacs-taf/etaf-apps) 工作区，其 README 维护依赖清单：
+[etaf-desktop](https://github.com/emacs-taf/etaf-desktop) 在本工作区开发，其余在 [etaf-apps](https://github.com/emacs-taf/etaf-apps) 工作区，其 README 维护依赖清单：
 
 | 应用 | 职责 |
 | --- | --- |
-| [etaf-desktop](https://forgejo.vhkd.top/emacs-taf/etaf-desktop) | 基于 ETAF 与 ETAF UI 的 Emacs 桌面窗口管理应用 |
-| [etaf-ncm](https://forgejo.vhkd.top/emacs-taf/etaf-ncm) | 网易云音乐播放器：曲库浏览、播放控制、歌词与队列 |
-| [etaf-weread](https://forgejo.vhkd.top/emacs-taf/etaf-weread) | 微信读书客户端：书架、笔记本、划线、书店搜索与统计 |
-| [etaf-md-preview](https://forgejo.vhkd.top/emacs-taf/etaf-md-preview) | Markdown 阅读视图：居中版心、标题、表格、提示块、代码与媒体卡片 |
-| [etaf-rss](https://forgejo.vhkd.top/emacs-taf/etaf-rss) | RSS 阅读器：订阅、分组、未读与收藏、阅读栏、搜索与 OPML |
-| [etaf-reader](https://forgejo.vhkd.top/emacs-taf/etaf-reader) | 本地电子书阅读器：EPUB/TXT/Markdown/HTML/FB2/PDF 导入、翻页阅读、标注与进度 |
-| [etaf-pi](https://forgejo.vhkd.top/emacs-taf/etaf-pi) | 原生 Pi 代理客户端：流式对话、工具输出、会话恢复与多行输入 |
-| [etaf-telega](https://forgejo.vhkd.top/emacs-taf/etaf-telega) | 基于 Telega TDLib 的 Telegram 客户端：会话、实时消息、就地编辑与消息操作 |
-| [etaf-ascii-video](https://forgejo.vhkd.top/emacs-taf/etaf-ascii-video) | 在 Emacs buffer 里用纯字符播放视频与 HTTP(S) 流 |
-| [etaf-video-player](https://forgejo.vhkd.top/emacs-taf/etaf-video-player) | 在 Emacs 里以清晰图像帧加声音播放本地视频与流 |
-| [etaf-algo-lab](https://forgejo.vhkd.top/emacs-taf/etaf-algo-lab) | 在 Emacs 里观看、操控并比较算法运行 |
+| [etaf-desktop](https://github.com/emacs-taf/etaf-desktop) | 基于 ETAF 与 ETAF UI 的 Emacs 桌面窗口管理应用 |
+| [etaf-ncm](https://github.com/emacs-taf/etaf-ncm) | 网易云音乐播放器：曲库浏览、播放控制、歌词与队列 |
+| [etaf-weread](https://github.com/emacs-taf/etaf-weread) | 微信读书客户端：书架、笔记本、划线、书店搜索与统计 |
+| [etaf-md-preview](https://github.com/emacs-taf/etaf-md-preview) | Markdown 阅读视图：居中版心、标题、表格、提示块、代码与媒体卡片 |
+| [etaf-rss](https://github.com/emacs-taf/etaf-rss) | RSS 阅读器：订阅、分组、未读与收藏、阅读栏、搜索与 OPML |
+| [etaf-reader](https://github.com/emacs-taf/etaf-reader) | 本地电子书阅读器：EPUB/TXT/Markdown/HTML/FB2/PDF 导入、翻页阅读、标注与进度 |
+| [etaf-pi](https://github.com/emacs-taf/etaf-pi) | 原生 Pi 代理客户端：流式对话、工具输出、会话恢复与多行输入 |
+| [etaf-telega](https://github.com/emacs-taf/etaf-telega) | 基于 Telega TDLib 的 Telegram 客户端：会话、实时消息、就地编辑与消息操作 |
+| [etaf-ascii-video](https://github.com/emacs-taf/etaf-ascii-video) | 在 Emacs buffer 里用纯字符播放视频与 HTTP(S) 流 |
+| [etaf-video-player](https://github.com/emacs-taf/etaf-video-player) | 在 Emacs 里以清晰图像帧加声音播放本地视频与流 |
+| [etaf-algo-lab](https://github.com/emacs-taf/etaf-algo-lab) | 在 Emacs 里观看、操控并比较算法运行 |
 
-游戏应用是独立的仓库，位于 [etaf-games](https://forgejo.vhkd.top/emacs-taf/etaf-games) 工作区，
+游戏应用是独立的仓库，位于 [etaf-games](https://github.com/emacs-taf/etaf-games) 工作区，
 其 README 维护依赖清单与共同验收契约。
 
 ## 开始开发
@@ -60,7 +60,11 @@
 样式与交互语义、ETAF 组件与 API 易用性、异步资源与错误恢复、当前差距、迁移顺序和
 公共行为验收条件，并明确区分开发目标与当前实现。
 
-按 `workspace.json` 中的地址克隆各仓库，保持同级目录与名称。
+按 `workspace.json` 中的地址克隆各仓库，保持同级目录与名称；清单中的 `url` 是
+GitHub 主仓，用 `git clone -o origin <url> <name>` 克隆。维护者再添加镜像远端
+`aliyun`（`https://forgejo.vhkd.top/emacs-taf/<name>.git`）和 `laycat`
+（`git@gitea.gklazycat.heiyu.space:emacs-taf/<name>.git`）。发布的文件统一写 GitHub
+主仓地址，因此各镜像上的仓库链接和包 URL 一致；各镜像以自己的域名提供同一组提交。
 清单记录一起通过 `make check` 的子仓库提交，是集成检查点，不是发布认证。
 提交推送后，才能从清单中的远端地址获取这组版本。
 `python3 scripts/workspace.py status` 可以查看版本差异，不会切换仓库。
@@ -132,14 +136,14 @@ README 只负责入门和导航。完整用法及跨模块接口契约放入 `do
 `python3 scripts/check-commit-message.py <文件>` 检查每条提交信息，并用
 `python3 scripts/check-repository.py --staged` 检查已封口的改动。
 
-每个模块统一使用两个远端：`laycat` 指向 `gitea.gklazycat.heiyu.space`，
-`aliyun` 指向 `forgejo.vhkd.top`。每完成一组验证通过的提交，先 fetch 并检查 aliyun，
-再用 `jj git push --remote aliyun -b <分支>` 将 `workspace.json` 记录的分支推送到 aliyun 的同名分支。自动交付以 aliyun 成功为准；laycat 保留配置，
+每个模块的公开主仓是 `origin`（`github.com/emacs-taf`），`aliyun`
+（`forgejo.vhkd.top`）和 `laycat`（`gitea.gklazycat.heiyu.space`）是镜像。
+每完成一组验证通过的提交，先 fetch 并检查，再用
+`jj git push --remote <远端> -b <分支>` 将 `workspace.json` 记录的分支推送到
+aliyun 和 origin 的同名分支。自动交付覆盖 aliyun 与 origin；laycat 保留配置，
 由用户手动维护和交付。这是用户已授权的默认规则，无需重复确认。
-不强制覆盖历史，不隐式推送其他分支或标签。
-`origin` 预留给未来的 GitHub，目前不配置。克隆时使用 `git clone -o laycat`，
-再添加对应的 `aliyun` 远端。报告 aliyun 的推送结果；根工作区使用与各模块相同的
-`aliyun` 和 `laycat` 远端。
+不强制覆盖历史，不隐式推送其他分支或标签。报告每次推送结果；根工作区使用与各模块
+相同的 `origin`、`aliyun` 和 `laycat` 远端。
 钩子检查目录与消息格式，修改范围、描述准确性和验证充分性仍需开发者负责。
 
 ## 持续约束
