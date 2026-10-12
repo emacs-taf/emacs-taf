@@ -48,7 +48,7 @@
     },
     "etaf-manual": {
       "url": "git@gitea.gklazycat.heiyu.space:emacs-taf/etaf-manual.git",
-      "revision": "62aebc9537f80a45d383f845382e8d01758fa20b",
+      "revision": "dfc200fb07cfc9b0ef4e5f3fbf9b42a25f0b4ad2",
       "branch": "main"
     }
   }
