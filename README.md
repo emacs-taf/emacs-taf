@@ -18,7 +18,7 @@ Framework packages and workspace tooling developed in this checkout:
 | [ebox](https://forgejo.vhkd.top/emacs-taf/ebox) | Box layout, rendering and incremental publication | ecss; optional ekp |
 | [etaf](https://forgejo.vhkd.top/emacs-taf/etaf) | Components, state and application runtime | ebox |
 | [etaf-ui](https://forgejo.vhkd.top/emacs-taf/etaf-ui) | Reusable UI components | etaf |
-| `etaf-gamekit` (local checkout) | Game definitions, independent instances, actions and backend adapters | etaf |
+| [etaf-gamekit](https://forgejo.vhkd.top/emacs-taf/etaf-gamekit) | Game definitions, independent instances, actions and backend adapters | etaf |
 | [etaf-db](https://forgejo.vhkd.top/emacs-taf/etaf-db) | Database backends for ETAF; currently SQLite | etaf |
 | [etaf-apps](https://forgejo.vhkd.top/emacs-taf/etaf-apps) | Application workspace: their integration checkpoints and shared tooling | etaf, etaf-ui, etaf-db |
 | [etaf-games](https://forgejo.vhkd.top/emacs-taf/etaf-games) | Game application workspace: their common contract and integration commands | etaf, etaf-ui; games use etaf-gamekit |
@@ -26,12 +26,11 @@ Framework packages and workspace tooling developed in this checkout:
 | [etaf-playground](https://forgejo.vhkd.top/emacs-taf/etaf-playground) | ETAF/UI integration examples and acceptance surfaces | etaf, etaf-ui, etaf-db, etaf-desktop |
 | [etaf-manual](https://forgejo.vhkd.top/emacs-taf/etaf-manual) | The ETAF Reference Manual for the core packages, in English and Chinese, checked against their public interfaces; published at <https://etaf.top> | etaf, etaf-ui; its gate reads ecss, ekp, ebox and etaf-db |
 
-`etaf-gamekit` has no configured remote and is not yet part of the published
-revision inventory. Its independent local checkout provides game definitions
-and a common action/observation lifecycle over Godot, boardgame.io and OpenSpiel.
-Game applications own their rules and presentation and live in the
-[etaf-games](https://forgejo.vhkd.top/emacs-taf/etaf-games) workspace, outside
-the framework core; the core does not depend on their components.
+[etaf-gamekit](https://forgejo.vhkd.top/emacs-taf/etaf-gamekit) provides game
+definitions and a common action/observation lifecycle over Godot, boardgame.io
+and OpenSpiel. Game applications own their rules and presentation and live in
+the [etaf-games](https://forgejo.vhkd.top/emacs-taf/etaf-games) workspace,
+outside the framework core; the core does not depend on their components.
 Install the backend needed by your game, or use
 `make -C etaf-gamekit engine-all GAMEKIT_PYTHON=python3.11` before running the
 complete `make -C etaf-gamekit check`. Its README and manual describe standalone
