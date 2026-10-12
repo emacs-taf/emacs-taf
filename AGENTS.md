@@ -393,6 +393,12 @@ unrelated root files) instead of the child's sealed tree.
   URL headers and the `url` of every `workspace.json` record. Each mirror serves
   the same commit under its own host; do not rewrite links per host. Preserve
   unrelated third-party source and licensing links.
+- The public home presents release history only: it carries release tags
+  (`v<major>.<minor>.<patch>`, with a GitHub Release when the notes are ready)
+  and keeps each repository's topics to the role topic, `emacs` and at most two
+  specific topics. Milestone, candidate, performance and rollback tags belong to
+  the bisect and recovery workflow, stay on the mirrors and are never pushed to
+  origin.
 - The published bookmark is the `branch` recorded in `workspace.json` (`main`).
   jj does not derive the push remote from tracking, and no `git.fetch` or
   `git.push` default is configured, so always name the remote and the bookmark.
