@@ -191,6 +191,18 @@ class PolicyTests(unittest.TestCase):
             self.assertIn('book chapters are book/<language>/', self.errors())
             (self.root / misplaced).unlink()
 
+    def test_generated_book_chapters_are_valid_link_targets(self):
+        self.write('book/book.json', json.dumps({
+            'languages': ['en', 'zh-CN'], 'parts': [], 'indices': [],
+            'appendices': [{'id': 'theme-token-table', 'generate': 'token-table'}]}))
+        self.write('book/en/views.md', '# Views\nSee [tokens](theme-token-table.md).\n')
+        self.write('book/zh-CN/views.md', '# View\n见[tokens](theme-token-table.md)。\n')
+        self.assertEqual('', self.errors())
+        self.write('book/en/views.md', '# Views\nSee [tokens](missing.md).\n')
+        self.assertIn('broken local link', self.errors())
+        self.write('book/en/views.md', '# Views\nSee [tokens](theme-token-table.md#token-ui-fg).\n')
+        self.assertEqual('', self.errors())
+
     def test_staged_check_ignores_intent_to_add_entries(self):
         # A colocated jj working copy records its new files this way.
         subprocess.run(['git', 'init', '-q', str(self.root)], check=True)

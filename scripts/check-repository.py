@@ -13,7 +13,7 @@ import sys
 import tempfile
 from urllib.parse import unquote
 
-POLICY_VERSION = 11
+POLICY_VERSION = 12
 DOC_NAMES = {'README.md', 'README.zh-CN.md', 'CHANGELOG.md', 'CHANGELOG.zh-CN.md',
              'AGENTS.md', 'docs/manual.md', 'docs/manual.zh-CN.md',
              'docs/architecture.md', 'docs/architecture.zh-CN.md'}
@@ -76,9 +76,31 @@ def inventory(root):
                   and p.suffix not in {'.elc', '.pyc', '.o', '.so', '.dylib', '.dll'})
 
 
+def generated_book_chapters(root):
+    """Return book/<language>/<id>.md names that book.json declares as generated.
+
+    A generated appendix or index has no chapter file; the package builds the
+    chapter from the book model, so links to it are valid without one.
+    """
+    description = Path(root) / 'book/book.json'
+    if not description.is_file():
+        return set()
+    try:
+        book = json.loads(description.read_text())
+    except (OSError, ValueError):
+        return set()
+    names = set()
+    for spec in list(book.get('appendices') or []) + list(book.get('indices') or []):
+        if isinstance(spec, dict) and spec.get('id') and spec.get('generate'):
+            for language in book.get('languages') or []:
+                names.add(f'book/{language}/{spec["id"]}.md')
+    return names
+
+
 def check(root, files=None):
     files = inventory(root) if files is None else files
     errors = []
+    generated_chapters = generated_book_chapters(root)
     workspace = (root / 'workspace.json').exists()
     doc_names = DOC_NAMES | (WORKSPACE_DOC_NAMES if workspace else set())
     allowed_dirs = DIRS | (set(__import__('json').loads((root / 'workspace.json').read_text())['repositories']) if workspace else set())
@@ -144,7 +166,9 @@ def check(root, files=None):
             target = Path(os.path.normpath(str(Path(f).parent / rel)))
             if '..' in target.parts:
                 fail(f, f'cross-repository link must use the provider URL: {link}')
-            elif target.as_posix() != '.' and target.as_posix() not in files and not any(name.startswith(target.as_posix().rstrip('/') + '/') for name in files):
+            elif (target.as_posix() != '.' and target.as_posix() not in files
+                  and target.as_posix() not in generated_chapters
+                  and not any(name.startswith(target.as_posix().rstrip('/') + '/') for name in files)):
                 fail(f, f'broken local link (including exact case): {link}')
     makefile = root / 'Makefile'
     if makefile.exists():
