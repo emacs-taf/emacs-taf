@@ -40,6 +40,10 @@ independent repositories listed in `workspace.json`.
   such application as a separate consumer, including calls from tests.
   Native subprojects follow their language's own layout. Keep domain resources in
   descriptive directories such as `dictionaries/`; do not create generic dumping grounds.
+- Use `site/` for a static website build: its source, content generator and
+  publish scripts are maintained files; dependencies, generated content and
+  the build output stay untracked. A repository that publishes a site provides
+  one command that regenerates the content and deploys the current build.
 - Share directory meanings and command interfaces across repositories. Create only
   the directories a repository needs; do not impose identical empty skeletons.
 - Create directories only when they contain maintained files. Use lowercase kebab-case

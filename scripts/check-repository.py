@@ -19,7 +19,7 @@ DOC_NAMES = {'README.md', 'README.zh-CN.md', 'CHANGELOG.md', 'CHANGELOG.zh-CN.md
              'docs/architecture.md', 'docs/architecture.zh-CN.md'}
 WORKSPACE_DOC_NAMES = {'docs/keyboard-navigation.zh-CN.md'}
 DIRS = {'lisp', 'tests', 'examples', 'benchmarks', 'scripts', 'docs', 'native',
-        'dictionaries', 'design', 'book', '.github', '.gitea', '.githooks'}
+        'dictionaries', 'design', 'book', 'site', '.github', '.gitea', '.githooks'}
 # A reference book is product content rendered by its package: one Markdown
 # chapter per file under book/<language>/, with the same link checks as docs.
 BOOK_CHAPTER = re.compile(r'book/[a-z]{2}(?:-[A-Z][A-Za-z]+)?/[a-z0-9]+(?:-[a-z0-9]+)*\.md')

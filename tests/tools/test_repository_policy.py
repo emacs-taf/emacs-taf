@@ -37,6 +37,15 @@ class PolicyTests(unittest.TestCase):
     def test_minimal_package_does_not_need_empty_documents(self):
         self.assertEqual('', self.errors())
 
+    def test_site_build_directory_is_accepted(self):
+        self.write('site/package.json', '{}\n')
+        self.write('site/.gitignore', 'node_modules/\ndist/\n')
+        self.assertEqual('', self.errors())
+
+    def test_unknown_top_level_directory_is_rejected(self):
+        self.write('probe/notes.md', '# Notes\n')
+        self.assertIn('unapproved top-level directory', self.errors())
+
     def test_nested_application_resolves_providers_above_its_workspace(self):
         # A game checkout nested in a workspace still finds the provider
         # checkouts beside that workspace, in worktree and staged checks.
