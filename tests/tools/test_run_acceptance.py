@@ -104,6 +104,9 @@ class AcceptanceRunnerTests(unittest.TestCase):
             HOLD_SCENARIOS.format(marker=json.dumps(str(marker)), release=json.dumps(str(release))))
         first = subprocess.Popen([sys.executable, str(RUNNER), '--emacs', EMACS, '--root', str(root)],
                                  stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+        # Cleanup is LIFO: stop first, then drain/reap and close its pipe,
+        # including when an assertion aborts the lock-handshake scenario.
+        self.addCleanup(first.communicate)
         self.addCleanup(first.kill)
         for _ in range(100):
             if marker.exists():
@@ -117,6 +120,7 @@ class AcceptanceRunnerTests(unittest.TestCase):
         with open(error_log, 'w') as errors:
             queued = subprocess.Popen([sys.executable, str(RUNNER), '--emacs', EMACS, '--root', str(root), '--wait', '30'],
                                       stdout=subprocess.DEVNULL, stderr=errors, text=True)
+        self.addCleanup(queued.wait)
         self.addCleanup(queued.kill)
         for _ in range(100):
             if 'waiting up to' in error_log.read_text():
