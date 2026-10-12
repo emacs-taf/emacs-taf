@@ -545,6 +545,64 @@ class PerformanceTool(unittest.TestCase):
             capture_output=True, text=True, timeout=10)
         self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
 
+    def test_gui_series_preserves_the_displayed_fixture_window(self):
+        directory = self.base / "gui-window-presentation"
+        directory.mkdir()
+        scenario = directory / "scenario.el"
+        scenario.write_text(""";;; -*- lexical-binding: t; -*-
+(taf-benchmark-register
+ "fixture.window" :modes '(gui) :budget-ms 100 :impact 'local :isolation 'series
+ :setup (lambda (_mode)
+          (let ((buffer (generate-new-buffer " *window-fixture*")) (prepared nil))
+            (list :buffer buffer
+                  :prepare (lambda ()
+                             (unless (eq (window-buffer) buffer)
+                               (error "Fixture was not shown"))
+                             (if prepared
+                                 (unless (equal (window-margins) '(2 . 3))
+                                   (error "Fixture window presentation was reset"))
+                               (set-window-margins nil 2 3)
+                               (setq prepared t)))
+                  :invoke (lambda (_sample) nil)
+                  :verify (lambda () (equal (window-margins) '(2 . 3)))
+                  :cleanup (lambda () (kill-buffer buffer))))))
+""")
+        output = directory / "report.json"
+        config = directory / "configuration.json"
+        config.write_text(json.dumps({
+            "output": str(output), "mode": "gui", "run_id": "gui-window-presentation",
+            "scenario_files": [str(scenario)], "load_paths": [], "code_roots": [],
+            "jobs": [{"id": "fixture.window", "set": 1, "sample": number,
+                      "diagnostic": False, "diagnostic_kind": "latency"}
+                     for number in range(3)], "timeout": 2,
+        }))
+        script = directory / "window-test.el"
+        script.write_text(""";;; -*- lexical-binding: t; -*-
+(require 'ert)
+(ert-deftest taf-test-gui-window-presentation ()
+  ;; Exercise GUI lifecycle with a real terminal window.  No graphical
+  ;; rendering claim is made by this command-contract regression.
+  (let ((noninteractive nil))
+    (cl-letf (((symbol-function 'display-graphic-p) (lambda (&optional _display) t)))
+      (unwind-protect
+          (progn
+            (taf-benchmark-start CONFIG)
+            (with-timeout (5 (ert-fail "Driver did not finish"))
+              (while (taf-benchmark-running-p) (accept-process-output nil .01)))
+            (with-temp-buffer
+              (insert-file-contents REPORT)
+              (let ((report (json-parse-buffer :object-type 'plist :null-object nil)))
+                (should-not (plist-get report :error))
+                (should (equal (plist-get report :status) "completed"))
+                (should (= (length (plist-get report :samples)) 3)))))
+        (taf-benchmark-cancel)))))
+(ert-run-tests-batch-and-exit)
+""".replace("CONFIG", json.dumps(str(config))).replace("REPORT", json.dumps(str(output))))
+        process = subprocess.run(
+            ["emacs", "-Q", "--batch", "-l", str(ROOT / "benchmarks/performance-driver.el"),
+             "-l", str(script)], capture_output=True, text=True, timeout=10)
+        self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
+
     def test_scenario_entries_load_once_per_emacs_process(self):
         directory = self.base / "reload-scenario"
         directory.mkdir()

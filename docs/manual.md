@@ -117,7 +117,11 @@ fresh Emacs processes per scenario and set, isolating unrelated workloads' cache
 and retained state; GUI sets use fresh fixtures in the same native process.
 Scenarios marked `series` retain their fixture within one set and declare that
 steady-state condition in the catalog; their warmups and formal samples share that
-fixture. Fresh-isolation scenarios keep recreating their fixture for every operation.
+fixture. The driver leaves an already displayed fixture in its window rather than
+reinstalling the buffer between samples, preserving its window presentation and
+continuous rendering. It still switches buffers when the target changes and
+redisplays before timing and at settlement. Fresh-isolation scenarios keep
+recreating their fixture for every operation.
 Setup is outside the timed operation.
 For a quick screen, use `--sets 1 --samples 3`; it cannot certify repeatability.
 The sample-coverage gate requires at least three sets, thirty formal samples per

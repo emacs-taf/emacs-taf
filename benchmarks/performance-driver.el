@@ -21,6 +21,8 @@
 ;; observer provider symbols. Observer cleanup/collection runs after timing
 ;; and profiling stop. CPU, allocation and provider traces use separate passes.
 ;; A fresh fixture is the default; :isolation series reuses it within a set.
+;; An already displayed fixture keeps its window presentation between samples;
+;; the driver switches the window's buffer only when the target changes.
 ;; Warmups use the same preparation, timing, settlement and verification as
 ;; formal samples. Their rows retain phase "warmup" and stay outside formal
 ;; latency statistics. The driver preserves the runtime's GC settings.
@@ -405,7 +407,12 @@ cached evidence so lazy library loading is visible after an operation."
             (error "Scenario returned an invalid fixture"))
           (unless noninteractive
             (select-window taf-benchmark--window)
-            (set-window-buffer taf-benchmark--window (plist-get taf-benchmark--fixture :buffer))
+            ;; Reinstalling even the same buffer resets window presentation
+            ;; and redisplay state.  A series must keep its live display, not
+            ;; repeatedly reopen it before each measured operation.
+            (unless (eq (window-buffer taf-benchmark--window)
+                        (plist-get taf-benchmark--fixture :buffer))
+              (set-window-buffer taf-benchmark--window (plist-get taf-benchmark--fixture :buffer)))
             (redisplay t))
           (taf-benchmark--progress job "ready")
           (taf-benchmark--schedule #'taf-benchmark--ready))))
