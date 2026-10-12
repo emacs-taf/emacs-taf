@@ -158,6 +158,14 @@ to every repository changed from this workspace.
   only.  Catalog components with a selected state suppress their hover
   fill, and application rows apply hover only when they are not the
   current or selected one.
+- State colours must come from the Theme.  A hover, selected or active fill
+  reads a theme token or is derived from the theme's own surface and text
+  colours; never use a fixed light-only literal, because a dark application
+  would paint light text on it.  A derived state colour must keep the label
+  at least as readable as the resting state, and hover feedback stays
+  visible.  Check every interactive surface with the pointer in both
+  palettes, and prefer deriving in the owning catalog component over
+  repeating a colour in each application.
 - User-visible copy follows mixed-script typography: a Chinese character
   next to a Latin letter or digit keeps one separating space, in literal
   strings and in values joined at display time alike (for example a
