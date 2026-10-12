@@ -221,6 +221,12 @@ to every repository changed from this workspace.
   `(backtrace-frames)`; cyclic objects can trap Emacs in a 99% CPU print loop.
   Bind `print-circle` to `t` and limit `print-length`/`print-level` in error
   reports, or print only the error message.
+- Do not call functions that move match data (`string-match`, `string-trim`,
+  `string-replace`, and similar) from a function-valued REP callback to
+  `replace-regexp-in-string`: Emacs uses the callback's leftover match data as
+  the replacement base, so only a prefix is replaced (`(a.md)` becomes `(a/`
+  with a leftover `md)`). Wrap every callback body in `save-match-data`, or
+  save `(match-string 0)` before other work.
 - Every Lisp file written for Emacs to load, including temporary debug, probe and
   GUI scripts outside the repositories, starts with
   `;;; -*- lexical-binding: t; -*-`. Emacs 31 raises a `*Warnings*` buffer over
