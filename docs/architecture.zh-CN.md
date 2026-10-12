@@ -489,7 +489,7 @@ Research Shelf 保留为 SQLite 集成与固定性能负载，使用 256 条记�
 | 细粒度引擎门禁 | `python3 scripts/performance.py gate` 在真实用户配置的 GUI 服务器中运行声明 `:gate` 的场景（Ebox 与 ETAF 的 `benchmarks/performance-scenarios.el`），按 30/400/10k 行规模分别计时操作、强制重绘和操作分配；类别、预算与孪生对照见[工作区工具手册](manual.md#gate-a-change-in-the-gui)，真实配置运行方式见同手册的隔离 GUI 验证一节 | 局部绘制与同宽文字 p50 ≤ 50 µs、p95 ≤ 200 µs、≤ 200 cons 且与规模无关；Flex 内变宽文字 p50 ≤ 200 µs；Data 增量追加 ≤ 300 µs，快照追加 10k 行 ≤ 2 ms；计数器 ≤ 30 µs；挂载 ≤ 40 µs/行；400 行窗口缩放 ≤ 16 ms；端到端不超过同等直接 buffer 编辑 + 0.2 ms |
 | Atelier Gallery 输入路径筛查 | `make -C etaf-ui perf-check` 通过通用工作区工具测量注册的回调、原生键盘命令和完整鼠标按下/释放场景；默认三组、每组十次独立挂载，记录命令开始至完成条件和强制 redisplay 返回，保留前后台、窗口、GC 和正确性事实；`--diagnose` 分别采集提供方阶段、CPU 与分配热点 | 复选框目标 50 ms，浮层目标 100 ms，500 ms 单独作为所有交互的硬底线；任何超标、无效或缺失样本均不得宣称通过。此命令用于首次交互筛查，不替代上述稳态分布和完整应用验收 |
 
-GUI 测量遵循 ETAF 手册的[已有 GUI 动作测量契约](https://gitea.gklazycat.heiyu.space/emacs-taf/etaf/src/branch/main/docs/manual.md#measuring-an-existing-gui-action)。必须让计时覆盖该动作引起的同步工作及实际显示提交；如果更新被调度到回调返回之后，不能在回调返回处提前停止计时。打开原生编辑器测到编辑界面可用，输入确认另测其处理与发布。用户思考和输入的时间、异步外部 IO 等待时间分别记录，不计入 50 ms 本地处理预算；请求启动和结果到达后的处理/发布分别受门槛约束，不能扣除回调中同步执行的数据库或其他计算工作。首次挂载另行报告，不能混入已预热的交互分布。
+GUI 测量遵循 ETAF 手册的[已有 GUI 动作测量契约](https://gitea.gklazycat.heiyu.space/emacs-taf/etaf-manual/src/branch/main/book/zh-CN/performance-engineering.md#性能场景与预算)。必须让计时覆盖该动作引起的同步工作及实际显示提交；如果更新被调度到回调返回之后，不能在回调返回处提前停止计时。打开原生编辑器测到编辑界面可用，输入确认另测其处理与发布。用户思考和输入的时间、异步外部 IO 等待时间分别记录，不计入 50 ms 本地处理预算；请求启动和结果到达后的处理/发布分别受门槛约束，不能扣除回调中同步执行的数据库或其他计算工作。首次挂载另行报告，不能混入已预热的交互分布。
 
 使用相同机器、代码 revision、数据、字体、GC 策略和记录模式比较改动前后结果；宽、窄窗口沿用现有 GUI 适配器的 1300×750 与 700×500 像素 frame 请求，并记录窗口管理器实际允许的 frame 和文本 viewport 尺寸。环境不能容纳时记录可复现的替代尺寸，两版及两种写法保持一致。resize 本身另行计时和检查，前台测量中的几何变化不能当成固定窗口动作的有效样本。
 
