@@ -3,7 +3,7 @@
   "repositories": {
     "ebox": {
       "url": "git@gitea.gklazycat.heiyu.space:emacs-taf/ebox.git",
-      "revision": "2d94343ed03d2a4889aef60e15a161d791a1d276",
+      "revision": "41d50c29d9c50a0ba02d7ef4c4d134d0e6f8803f",
       "branch": "main"
     },
     "ebox-playground": {
@@ -48,7 +48,7 @@
     },
     "etaf-manual": {
       "url": "git@gitea.gklazycat.heiyu.space:emacs-taf/etaf-manual.git",
-      "revision": "79d96ab73310ae5f9a073440d1cebe0f73f85675",
+      "revision": "50be7563483554e9c93d03cc7d717ad200d535c1",
       "branch": "main"
     }
   }
