@@ -1,0 +1,664 @@
+{
+ "check": {
+  "ok": true,
+  "protocol": 1,
+  "signed_in": true,
+  "name": "测试用户",
+  "avatar": "https://example.test/avatar.jpg",
+  "handle": "",
+  "source": "fake",
+  "as_of": "2026-01-01T00:00:00Z"
+ },
+ "feed home": {
+  "ok": true,
+  "protocol": 1,
+  "count": 3,
+  "next": "cursor-home",
+  "title": "",
+  "description": "",
+  "avatar": "",
+  "tabs": [],
+  "filters": [],
+  "alerts": [],
+  "items": [
+   {
+    "kind": "video",
+    "id": "v1",
+    "title": "测试视频一：ETAF 入门",
+    "thumbnail": "https://i.ytimg.com/vi/v1/hq720.jpg",
+    "author": "测试频道",
+    "channel_id": "UC1",
+    "duration": 125,
+    "views": "12万次观看",
+    "published": "2天前",
+    "live": false
+   },
+   {
+    "kind": "video",
+    "id": "v2",
+    "title": "测试视频二：播放列表概览",
+    "thumbnail": "https://i.ytimg.com/vi/v2/hq720.jpg",
+    "author": "另一个频道",
+    "channel_id": "UC2",
+    "duration": 300,
+    "views": "3.2万次观看",
+    "published": "1周前",
+    "live": true
+   },
+   {
+    "kind": "short",
+    "id": "s1",
+    "title": "#Shorts 测试短片",
+    "thumbnail": "https://i.ytimg.com/vi/s1/hq720.jpg",
+    "author": "短片频道",
+    "channel_id": "UC9",
+    "duration": 15,
+    "views": "1.1万次观看",
+    "published": "5天前"
+   }
+  ]
+ },
+ "more cursor-home": {
+  "ok": true,
+  "protocol": 1,
+  "count": 1,
+  "next": null,
+  "title": "",
+  "description": "",
+  "avatar": "",
+  "tabs": [],
+  "filters": [],
+  "alerts": [],
+  "items": [
+   {
+    "kind": "video",
+    "id": "v3",
+    "title": "订阅频道的新视频",
+    "thumbnail": "https://i.ytimg.com/vi/v3/hq720.jpg",
+    "author": "订阅频道",
+    "channel_id": "UC3",
+    "duration": 60,
+    "views": "999次观看",
+    "published": "3小时前",
+    "live": false
+   }
+  ]
+ },
+ "feed subscriptions": {
+  "ok": true,
+  "protocol": 1,
+  "count": 1,
+  "next": null,
+  "title": "订阅内容",
+  "description": "",
+  "avatar": "",
+  "tabs": [],
+  "filters": [],
+  "alerts": [],
+  "items": [
+   {
+    "kind": "video",
+    "id": "v3",
+    "title": "订阅频道的新视频",
+    "thumbnail": "https://i.ytimg.com/vi/v3/hq720.jpg",
+    "author": "订阅频道",
+    "channel_id": "UC3",
+    "duration": 60,
+    "views": "999次观看",
+    "published": "3小时前",
+    "live": false
+   }
+  ]
+ },
+ "feed history": {
+  "ok": true,
+  "protocol": 1,
+  "count": 1,
+  "next": null,
+  "title": "观看历史",
+  "description": "",
+  "avatar": "",
+  "tabs": [],
+  "filters": [],
+  "alerts": [],
+  "items": [
+   {
+    "kind": "video",
+    "id": "v1",
+    "title": "测试视频一：ETAF 入门",
+    "thumbnail": "https://i.ytimg.com/vi/v1/hq720.jpg",
+    "author": "测试频道",
+    "channel_id": "UC1",
+    "duration": 125,
+    "views": "12万次观看",
+    "published": "2天前",
+    "live": false
+   }
+  ]
+ },
+ "feed playlists": {
+  "ok": true,
+  "protocol": 1,
+  "count": 1,
+  "next": null,
+  "title": "播放列表",
+  "description": "",
+  "avatar": "",
+  "tabs": [],
+  "filters": [],
+  "alerts": [],
+  "items": [
+   {
+    "kind": "playlist",
+    "id": "PL1",
+    "title": "测试播放列表",
+    "thumbnail": "https://i.ytimg.com/vi/v1/hq720.jpg",
+    "author": "测试频道",
+    "channel_id": "UC1",
+    "duration": 0,
+    "views": "",
+    "published": ""
+   }
+  ]
+ },
+ "feed watch-later": {
+  "ok": true,
+  "protocol": 1,
+  "count": 0,
+  "next": null,
+  "title": "稍后观看",
+  "description": "",
+  "avatar": "",
+  "tabs": [],
+  "filters": [],
+  "alerts": [],
+  "items": []
+ },
+ "feed liked": {
+  "ok": true,
+  "protocol": 1,
+  "count": 0,
+  "next": null,
+  "title": "喜欢的视频",
+  "description": "",
+  "avatar": "",
+  "tabs": [],
+  "filters": [],
+  "alerts": [],
+  "items": []
+ },
+ "feed shorts": {
+  "ok": true,
+  "protocol": 1,
+  "count": 1,
+  "next": null,
+  "title": "Shorts",
+  "description": "",
+  "avatar": "",
+  "tabs": [],
+  "filters": [],
+  "alerts": [],
+  "items": [
+   {
+    "kind": "short",
+    "id": "s1",
+    "title": "#Shorts 测试短片",
+    "thumbnail": "https://i.ytimg.com/vi/s1/hq720.jpg",
+    "author": "短片频道",
+    "channel_id": "UC9",
+    "duration": 15,
+    "views": "1.1万次观看",
+    "published": "5天前"
+   }
+  ]
+ },
+ "feed live": {
+  "ok": true,
+  "protocol": 1,
+  "count": 1,
+  "next": null,
+  "title": "直播",
+  "description": "",
+  "avatar": "",
+  "tabs": [],
+  "filters": [],
+  "alerts": [],
+  "items": [
+   {
+    "kind": "video",
+    "id": "v2",
+    "title": "测试视频二：播放列表概览",
+    "thumbnail": "https://i.ytimg.com/vi/v2/hq720.jpg",
+    "author": "另一个频道",
+    "channel_id": "UC2",
+    "duration": 300,
+    "views": "3.2万次观看",
+    "published": "1周前",
+    "live": true
+   }
+  ]
+ },
+ "search Emacs --filter videos": {
+  "ok": true,
+  "protocol": 1,
+  "count": 2,
+  "next": "cursor-search",
+  "title": "",
+  "description": "",
+  "avatar": "",
+  "tabs": [],
+  "filters": [],
+  "alerts": [],
+  "items": [
+   {
+    "kind": "video",
+    "id": "v1",
+    "title": "测试视频一：ETAF 入门",
+    "thumbnail": "https://i.ytimg.com/vi/v1/hq720.jpg",
+    "author": "测试频道",
+    "channel_id": "UC1",
+    "duration": 125,
+    "views": "12万次观看",
+    "published": "2天前",
+    "live": false
+   },
+   {
+    "kind": "video",
+    "id": "v2",
+    "title": "测试视频二：播放列表概览",
+    "thumbnail": "https://i.ytimg.com/vi/v2/hq720.jpg",
+    "author": "另一个频道",
+    "channel_id": "UC2",
+    "duration": 300,
+    "views": "3.2万次观看",
+    "published": "1周前",
+    "live": true
+   }
+  ]
+ },
+ "search 不存在 --filter all": {
+  "ok": true,
+  "protocol": 1,
+  "count": 0,
+  "next": null,
+  "title": "",
+  "description": "",
+  "avatar": "",
+  "tabs": [],
+  "filters": [],
+  "alerts": [],
+  "items": []
+ },
+ "browse UC1": {
+  "ok": true,
+  "protocol": 1,
+  "count": 1,
+  "next": null,
+  "title": "测试频道",
+  "description": "",
+  "avatar": "",
+  "tabs": [
+   {
+    "title": "视频",
+    "selected": true,
+    "params": "tab-videos",
+    "id": "videos"
+   },
+   {
+    "title": "Shorts",
+    "selected": false,
+    "params": "tab-shorts",
+    "id": "shorts"
+   }
+  ],
+  "filters": [],
+  "alerts": [],
+  "items": [
+   {
+    "kind": "video",
+    "id": "v1",
+    "title": "测试视频一：ETAF 入门",
+    "thumbnail": "https://i.ytimg.com/vi/v1/hq720.jpg",
+    "author": "测试频道",
+    "channel_id": "UC1",
+    "duration": 125,
+    "views": "12万次观看",
+    "published": "2天前",
+    "live": false
+   }
+  ]
+ },
+ "browse UC1 --params tab-shorts": {
+  "ok": true,
+  "protocol": 1,
+  "count": 1,
+  "next": null,
+  "title": "测试频道",
+  "description": "",
+  "avatar": "",
+  "tabs": [],
+  "filters": [],
+  "alerts": [],
+  "items": [
+   {
+    "kind": "short",
+    "id": "s1",
+    "title": "#Shorts 测试短片",
+    "thumbnail": "https://i.ytimg.com/vi/s1/hq720.jpg",
+    "author": "短片频道",
+    "channel_id": "UC9",
+    "duration": 15,
+    "views": "1.1万次观看",
+    "published": "5天前"
+   }
+  ]
+ },
+ "browse PL1": {
+  "ok": true,
+  "protocol": 1,
+  "count": 2,
+  "next": null,
+  "title": "测试播放列表",
+  "description": "",
+  "avatar": "",
+  "tabs": [],
+  "filters": [],
+  "alerts": [],
+  "items": [
+   {
+    "kind": "video",
+    "id": "v1",
+    "title": "测试视频一：ETAF 入门",
+    "thumbnail": "https://i.ytimg.com/vi/v1/hq720.jpg",
+    "author": "测试频道",
+    "channel_id": "UC1",
+    "duration": 125,
+    "views": "12万次观看",
+    "published": "2天前",
+    "live": false
+   },
+   {
+    "kind": "video",
+    "id": "v2",
+    "title": "测试视频二：播放列表概览",
+    "thumbnail": "https://i.ytimg.com/vi/v2/hq720.jpg",
+    "author": "另一个频道",
+    "channel_id": "UC2",
+    "duration": 300,
+    "views": "3.2万次观看",
+    "published": "1周前",
+    "live": true
+   }
+  ]
+ },
+ "video v1": {
+  "ok": true,
+  "protocol": 1,
+  "id": "v1",
+  "title": "测试视频一：ETAF 入门",
+  "description": "这是描述文本，包含多个字的空间用于测试折叠。",
+  "duration": 125,
+  "views": "12万次观看",
+  "author": "测试频道",
+  "channel_id": "UC1",
+  "avatar": "",
+  "thumbnail": "https://i.ytimg.com/vi/v1/hq720.jpg",
+  "published": "2天前",
+  "subscribers": "8.8万位订阅者",
+  "subscribed": false,
+  "like_status": "INDIFFERENT",
+  "likes": "1234",
+  "live": false,
+  "playability": "OK",
+  "playability_message": "",
+  "related": [
+   {
+    "kind": "video",
+    "id": "v2",
+    "title": "测试视频二：播放列表概览",
+    "thumbnail": "https://i.ytimg.com/vi/v2/hq720.jpg",
+    "author": "另一个频道",
+    "channel_id": "UC2",
+    "duration": 300,
+    "views": "3.2万次观看",
+    "published": "1周前",
+    "live": true
+   },
+   {
+    "kind": "short",
+    "id": "s1",
+    "title": "#Shorts 测试短片",
+    "thumbnail": "https://i.ytimg.com/vi/s1/hq720.jpg",
+    "author": "短片频道",
+    "channel_id": "UC9",
+    "duration": 15,
+    "views": "1.1万次观看",
+    "published": "5天前"
+   }
+  ],
+  "related_next": "related-1",
+  "comments_next": "comments-1",
+  "captions": []
+ },
+ "video v2": {
+  "ok": true,
+  "protocol": 1,
+  "id": "v2",
+  "title": "测试视频二：播放列表概览",
+  "description": "",
+  "duration": 300,
+  "views": "3.2万次观看",
+  "author": "另一个频道",
+  "channel_id": "UC2",
+  "avatar": "",
+  "thumbnail": "",
+  "published": "1周前",
+  "subscribers": "1万位订阅者",
+  "subscribed": true,
+  "like_status": "LIKE",
+  "likes": "500",
+  "live": true,
+  "playability": "OK",
+  "playability_message": "",
+  "related": [],
+  "related_next": null,
+  "comments_next": null,
+  "captions": []
+ },
+ "comments v1": {
+  "ok": true,
+  "protocol": 1,
+  "count": "2",
+  "next": null,
+  "sort": [
+   {
+    "title": "最热门",
+    "selected": true,
+    "cursor": "sort-top"
+   },
+   {
+    "title": "最新",
+    "selected": false,
+    "cursor": "sort-new"
+   }
+  ],
+  "can_comment": true,
+  "requires_channel": false,
+  "comment_params": null,
+  "items": [
+   {
+    "kind": "comment",
+    "id": "c1",
+    "text": "这是第一条测试评论，包含足够长的文本，用来验证换行与截断。",
+    "author": "评论者甲",
+    "channel_id": "UCC1",
+    "avatar": "",
+    "published": "1天前",
+    "likes": "42",
+    "reply_count": "2",
+    "replies": "cursor-replies-c1"
+   },
+   {
+    "kind": "comment",
+    "id": "c2",
+    "text": "第二条评论。",
+    "author": "评论者乙",
+    "channel_id": "UCC2",
+    "avatar": "",
+    "published": "2小时前",
+    "likes": "3",
+    "reply_count": "",
+    "replies": null
+   }
+  ]
+ },
+ "more cursor-replies-c1": {
+  "ok": true,
+  "protocol": 1,
+  "count": "2",
+  "next": null,
+  "items": [
+   {
+    "kind": "comment",
+    "id": "r1",
+    "text": "一条回复。",
+    "author": "回复者",
+    "channel_id": "UCR1",
+    "avatar": "",
+    "published": "1天前",
+    "likes": "1",
+    "reply_count": "",
+    "replies": null
+   }
+  ],
+  "sort": [],
+  "can_comment": true,
+  "requires_channel": false
+ },
+ "more sort-new": {
+  "ok": true,
+  "protocol": 1,
+  "count": "2",
+  "next": null,
+  "sort": [],
+  "can_comment": true,
+  "requires_channel": false,
+  "items": [
+   {
+    "kind": "comment",
+    "id": "c2",
+    "text": "第二条评论。",
+    "author": "评论者乙",
+    "channel_id": "UCC2",
+    "avatar": "",
+    "published": "2小时前",
+    "likes": "3",
+    "reply_count": "",
+    "replies": null
+   },
+   {
+    "kind": "comment",
+    "id": "c1",
+    "text": "这是第一条测试评论，包含足够长的文本，用来验证换行与截断。",
+    "author": "评论者甲",
+    "channel_id": "UCC1",
+    "avatar": "",
+    "published": "1天前",
+    "likes": "42",
+    "reply_count": "2",
+    "replies": "cursor-replies-c1"
+   }
+  ]
+ },
+ "source v1 --quality 720": {
+  "ok": true,
+  "protocol": 1,
+  "id": "v1",
+  "title": "测试视频一：ETAF 入门",
+  "video_url": "https://media.test/video.m4s?q=720",
+  "audio_url": "https://media.test/audio.m4s?q=720",
+  "headers": {
+   "User-Agent": "TestAgent/1.0",
+   "Accept-Language": "zh-CN"
+  },
+  "proxy": "http://127.0.0.1:7890",
+  "width": 1280,
+  "height": 720,
+  "fps": 30,
+  "duration": 125,
+  "qualities": [
+   1080,
+   720,
+   480
+  ],
+  "subtitles": [
+   {
+    "language": "zh-Hans",
+    "kind": "manual",
+    "name": "中文"
+   }
+  ],
+  "expires": "1792000000",
+  "source": "fake",
+  "as_of": "2026-01-01T00:00:00Z"
+ },
+ "source v1 --quality 1080": {
+  "ok": true,
+  "protocol": 1,
+  "id": "v1",
+  "title": "测试视频一：ETAF 入门",
+  "video_url": "https://media.test/video.m4s?q=1080",
+  "audio_url": "https://media.test/audio.m4s?q=1080",
+  "headers": {
+   "User-Agent": "TestAgent/1.0",
+   "Accept-Language": "zh-CN"
+  },
+  "proxy": "http://127.0.0.1:7890",
+  "width": 1280,
+  "height": 720,
+  "fps": 30,
+  "duration": 125,
+  "qualities": [
+   1080,
+   720,
+   480
+  ],
+  "subtitles": [
+   {
+    "language": "zh-Hans",
+    "kind": "manual",
+    "name": "中文"
+   }
+  ],
+  "expires": "1792000000",
+  "source": "fake",
+  "as_of": "2026-01-01T00:00:00Z"
+ },
+ "action like v1": {
+  "ok": true,
+  "protocol": 1,
+  "operation": "like",
+  "target": "v1",
+  "status": "preview",
+  "committed": null,
+  "verified": false
+ },
+ "action like v1 --yes": {
+  "ok": true,
+  "protocol": 1,
+  "operation": "like",
+  "target": "v1",
+  "status": "confirmed",
+  "committed": true,
+  "verified": true
+ },
+ "action comment v1 --text 你好 --yes": {
+  "ok": true,
+  "protocol": 1,
+  "operation": "comment",
+  "target": "v1",
+  "status": "submitted",
+  "committed": null,
+  "verified": false
+ }
+}

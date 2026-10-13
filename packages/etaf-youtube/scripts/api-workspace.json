@@ -1,0 +1,42 @@
+{
+  "etaf-algo-lab": {
+    "entry": "etaf-algo-lab",
+    "url": "https://github.com/emacs-taf/etaf-algo-lab.git"
+  },
+  "etaf-ascii-video": {
+    "entry": "etaf-ascii-video",
+    "url": "https://github.com/emacs-taf/etaf-ascii-video.git"
+  },
+  "etaf-md-preview": {
+    "entry": "etaf-md-preview",
+    "url": "https://github.com/emacs-taf/etaf-md-preview.git"
+  },
+  "etaf-ncm": {
+    "entry": "etaf-ncm",
+    "url": "https://github.com/emacs-taf/etaf-ncm.git"
+  },
+  "etaf-pi": {
+    "entry": "etaf-pi",
+    "url": "https://github.com/emacs-taf/etaf-pi.git"
+  },
+  "etaf-reader": {
+    "entry": "etaf-reader",
+    "url": "https://github.com/emacs-taf/etaf-reader.git"
+  },
+  "etaf-rss": {
+    "entry": "etaf-rss",
+    "url": "https://github.com/emacs-taf/etaf-rss.git"
+  },
+  "etaf-telega": {
+    "entry": "etaf-telega",
+    "url": "https://github.com/emacs-taf/etaf-telega.git"
+  },
+  "etaf-video-player": {
+    "entry": "etaf-video-player",
+    "url": "https://github.com/emacs-taf/etaf-video-player.git"
+  },
+  "etaf-weread": {
+    "entry": "etaf-weread",
+    "url": "https://github.com/emacs-taf/etaf-weread.git"
+  }
+}

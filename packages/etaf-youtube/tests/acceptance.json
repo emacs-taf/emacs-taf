@@ -1,0 +1,100 @@
+{
+ "schema": 1,
+ "load_path": [
+  ".",
+  "tests",
+  "../../etaf",
+  "../../etaf-ui",
+  "../../ebox",
+  "../../ecss",
+  "../../etaf-db"
+ ],
+ "support": [],
+ "cases": [
+  {
+   "name": "etaf-youtube-check-records-account",
+   "file": "tests/etaf-youtube-tests.el",
+   "purpose": "Opening a session asks the skill for the account and records its name and sign-in state."
+  },
+  {
+   "name": "etaf-youtube-home-feed-loads-cards",
+   "file": "tests/etaf-youtube-tests.el",
+   "purpose": "The home route loads list items, a title and a pagination cursor into the state."
+  },
+  {
+   "name": "etaf-youtube-load-more-appends-items",
+   "file": "tests/etaf-youtube-tests.el",
+   "purpose": "Load-more reads the cursor and appends the next page without replacing the first."
+  },
+  {
+   "name": "etaf-youtube-search-sends-the-selected-filter",
+   "file": "tests/etaf-youtube-tests.el",
+   "purpose": "Search sends the query and the selected filter to the skill and shows the search route."
+  },
+  {
+   "name": "etaf-youtube-watch-loads-video-comments-and-source",
+   "file": "tests/etaf-youtube-tests.el",
+   "purpose": "Opening a video reads its details, comments and a resolved media source with split audio, headers and proxy."
+  },
+  {
+   "name": "etaf-youtube-stale-feed-reply-is-dropped",
+   "file": "tests/etaf-youtube-tests.el",
+   "purpose": "A reply from a route the user has left never replaces the newest list."
+  },
+  {
+   "name": "etaf-youtube-player-commands-update-state",
+   "file": "tests/etaf-youtube-tests.el",
+   "purpose": "Seek, speed, volume, mute and quality update the session and re-resolve the source at the new quality."
+  },
+  {
+   "name": "etaf-youtube-writes-need-explicit-confirmation",
+   "file": "tests/etaf-youtube-tests.el",
+   "purpose": "A write is previewed without confirmation and submitted only with it, then reported with its certainty."
+  },
+  {
+   "name": "etaf-youtube-comment-submitted-unverified-is-a-warning",
+   "file": "tests/etaf-youtube-tests.el",
+   "purpose": "A submitted but unverified comment is shown as a warning and is never retried automatically."
+  },
+  {
+   "name": "etaf-youtube-selection-and-activation",
+   "file": "tests/etaf-youtube-tests.el",
+   "purpose": "Selection moves within the list and activation opens the selected video route."
+  },
+  {
+   "name": "etaf-youtube-back-retraces-history",
+   "file": "tests/etaf-youtube-tests.el",
+   "purpose": "Back returns to the previous route and reloads its list."
+  },
+  {
+   "name": "etaf-youtube-chips-switch-channel-tabs",
+   "file": "tests/etaf-youtube-tests.el",
+   "purpose": "A channel tab chip browses the same channel with its parameters."
+  },
+  {
+   "name": "etaf-youtube-replies-load-per-comment",
+   "file": "tests/etaf-youtube-tests.el",
+   "purpose": "Replies load through the comment's own cursor and appear in the reply map."
+  },
+  {
+   "name": "etaf-youtube-theme-sidebar-and-theater",
+   "file": "tests/etaf-youtube-tests.el",
+   "purpose": "Appearance and layout choices change the reported state and the palette."
+  },
+  {
+   "name": "etaf-youtube-thumbnails-load-through-the-injected-fetcher",
+   "file": "tests/etaf-youtube-tests.el",
+   "purpose": "Requesting a thumbnail stores a descriptor, bumps the version and does not repeat the request."
+  },
+  {
+   "name": "etaf-youtube-view-mounts-with-list-content",
+   "file": "tests/etaf-youtube-tests.el",
+   "purpose": "The mounted shell renders the loaded list inside an ETAF buffer."
+  },
+  {
+   "name": "etaf-youtube-destroy-releases-the-session",
+   "file": "tests/etaf-youtube-tests.el",
+   "purpose": "Destroy cancels the session and leaves a destroyed model safe to destroy again."
+  }
+ ]
+}
