@@ -34,6 +34,9 @@ releases the session, its requests and its player.
   page stacks and its transport wraps, and a short window shortens the canvas
   so the transport stays visible. Below about 40 columns or 12 rows the
   structure is kept and the viewport clips.
+- Regions: the shell, sidebar, content and comment areas are named regions,
+  so `M-g` selects one with a hint key and `C-c s`/`C-c c`/`C-c m` focus the
+  sidebar, content and comments directly.
 - Local state: playback preferences and per-video resume positions in a
   SQLite store; account lists and comments stay in memory because the account
   remains their authority.
@@ -57,8 +60,11 @@ releases the session, its requests and its player.
 
 Application keys: `SPC` play/pause, `f`/`b` seek five seconds, `[`/`]` volume,
 `m` mute, `s` sidebar, `t` theater, `d` appearance, `r` refresh, `u` back,
-`RET` activate, `/` search. Escape, Tab, `?`, the arrows, `M-g` and `q` keep
-their framework behavior.
+`RET` activate, `/` search, and `C-c s`/`C-c c`/`C-c m` to focus the sidebar,
+content and comment regions. `M-g` selects a region by hint key, `?` lists the
+application keys and region hints, and a key never fires while the search
+field (or any other text input) is editing. Escape, Tab, the arrows and `q`
+keep their framework behavior.
 
 ## Documentation
 

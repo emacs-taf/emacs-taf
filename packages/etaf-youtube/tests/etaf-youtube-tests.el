@@ -289,6 +289,27 @@ FIXTURES-SYM is bound to the fixture table and LOG-SYM to the call log."
     (etaf-youtube-seek app 2)
     (should-not (etaf-youtube-caption-text app))))
 
+(ert-deftest etaf-youtube-regions-declare-navigable-areas ()
+  "The mounted shell names the sidebar, content and comment regions."
+  (etaf-youtube-tests--with-app app fixtures log
+    (etaf-youtube-locate app 'home)
+    (should (etaf-youtube-tests--wait
+             (lambda () (= 3 (plist-get (etaf-youtube-state app) :items)))))
+    (let ((buffer (generate-new-buffer " *etaf-youtube-regions*")))
+      (unwind-protect
+          (progn
+            (etaf-mount buffer (etaf-youtube-view app)
+                        (list :viewport-width 1200 :viewport-height 40))
+            (etaf-runtime-flush (etaf-runtime-for-buffer buffer))
+            (let ((runtime (etaf-runtime-for-buffer buffer)))
+              (should (etaf-region-focus etaf-youtube-region-shell runtime))
+              (should (etaf-region-focus etaf-youtube-region-content runtime))
+              (should (etaf-region-focus etaf-youtube-region-sidebar runtime))
+              ;; The comment region belongs to the watch page only.
+              (should-error (etaf-region-focus etaf-youtube-region-comments runtime)
+                            :type 'etaf-event-error)))
+        (when (buffer-live-p buffer) (kill-buffer buffer))))))
+
 (ert-deftest etaf-youtube-resume-round-trip ()
   "A watched position survives leaving the video and returns on reopen."
   (let* ((etaf-youtube-store-file (make-temp-file "etaf-youtube-resume-" nil

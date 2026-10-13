@@ -57,10 +57,26 @@
 ;; Variable: etaf-youtube-buffer-name
 ;; Buffer name of the mounted application, `"*YouTube*'" by default.
 ;;
-;; Variable: etaf-youtube-mode-map
-;; Application keymap: SPC play/pause, f/b seek, [ ] volume, m mute, s
-;; sidebar, t theater, d appearance, r refresh, u back, RET activate, /
-;; search.  The renderer keeps Escape, Tab, `?', the arrows, M-g and q.
+;; Variable: etaf-youtube-region-shell
+;; Region id of the whole application shell, for `etaf-region-focus' and
+;; the `M-g' region selector.
+;;
+;; Variable: etaf-youtube-region-sidebar
+;; Region id of the navigation sidebar, expanded or as the icon rail.
+;;
+;; Variable: etaf-youtube-region-content
+;; Region id of the scrollable content area.
+;;
+;; Variable: etaf-youtube-region-comments
+;; Region id of the watch page comment section.
+;;
+;; The application key surface is declared on the View, so `?' lists it with
+;; the region hints and an active text input keeps the keys.  SPC plays and
+;; pauses, f and b seek, [ and ] change the volume, m mutes, s folds the
+;; sidebar, t toggles theater mode, d switches the palette, r refreshes, u
+;; goes back, RET activates the selected row, / edits the search field, and
+;; M-g or C-c s, C-c c and C-c m reach the sidebar, content and comment
+;; regions.  The renderer keeps Escape, Tab, `?', the arrows and q.
 ;;
 ;; Function: etaf-youtube-create (&key service images store)
 ;; Create a session and return it.

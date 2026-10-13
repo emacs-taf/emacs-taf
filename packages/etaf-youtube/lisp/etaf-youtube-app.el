@@ -141,23 +141,32 @@
   (interactive)
   (etaf-youtube-activate (etaf-youtube--current-model)))
 
-(defvar etaf-youtube-mode-map
-  (let ((map (make-sparse-keymap)))
-    (define-key map (kbd "SPC") #'etaf-youtube-toggle-playback-command)
-    (define-key map (kbd "f") #'etaf-youtube-seek-forward-command)
-    (define-key map (kbd "b") #'etaf-youtube-seek-backward-command)
-    (define-key map (kbd "]") #'etaf-youtube-volume-up-command)
-    (define-key map (kbd "[") #'etaf-youtube-volume-down-command)
-    (define-key map (kbd "m") #'etaf-youtube-mute-command)
-    (define-key map (kbd "s") #'etaf-youtube-sidebar-command)
-    (define-key map (kbd "t") #'etaf-youtube-theater-command)
-    (define-key map (kbd "d") #'etaf-youtube-theme-command)
-    (define-key map (kbd "r") #'etaf-youtube-refresh-command)
-    (define-key map (kbd "u") #'etaf-youtube-back-command)
-    (define-key map (kbd "RET") #'etaf-youtube-activate-command)
-    (define-key map (kbd "/") #'etaf-youtube-focus-search)
-    map)
-  "Application bindings that do not conflict with the renderer's own keys.")
+(defun etaf-youtube--focus-region (region-id label)
+  "Focus REGION-ID in the current session, reporting LABEL when absent."
+  (let* ((model (etaf-youtube--current-model))
+         (buffer (plist-get model :buffer))
+         (runtime (and buffer (get-buffer buffer)
+                       (etaf-runtime-for-buffer buffer))))
+    (unless runtime
+      (user-error "The YouTube session is not mounted"))
+    (condition-case nil
+        (etaf-region-focus region-id runtime)
+      (error (user-error "当前页面没有%s" label)))))
+
+(defun etaf-youtube-focus-sidebar-command ()
+  "Move focus to the navigation sidebar."
+  (interactive)
+  (etaf-youtube--focus-region etaf-youtube-region-sidebar "侧栏"))
+
+(defun etaf-youtube-focus-content-command ()
+  "Move focus to the content area."
+  (interactive)
+  (etaf-youtube--focus-region etaf-youtube-region-content "内容区"))
+
+(defun etaf-youtube-focus-comments-command ()
+  "Move focus to the comment section of the watch page."
+  (interactive)
+  (etaf-youtube--focus-region etaf-youtube-region-comments "评论区"))
 
 ;;;###autoload
 (defun etaf-youtube-open ()
@@ -174,8 +183,7 @@
                   (let ((table (copy-sequence (or standard-display-table
                                                   (make-display-table)))))
                     (set-display-table-slot table 'truncation ?\s)
-                    table))
-      (use-local-map etaf-youtube-mode-map))
+                    table)))
     (pop-to-buffer buffer)
     (let ((window (get-buffer-window buffer t)))
       (etaf-mount buffer (etaf-youtube-view (buffer-local-value 'etaf-youtube--model

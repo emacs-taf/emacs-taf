@@ -28,7 +28,10 @@ project uses [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
-- The mounted player is connected to the session, so the transport clock and
+- Application keys are declared on the view instead of a buffer keymap, so
+  they keep working while a row has focus, `?` lists them, and the search
+  field keeps every key while it edits.  The mounted player is connected to
+  the session, so the transport clock and
   the recorded position follow playback, and pause, seek, volume and mute
   reach the decoder.
 - Content below the sidebar breakpoint lays out inside the icon rail instead

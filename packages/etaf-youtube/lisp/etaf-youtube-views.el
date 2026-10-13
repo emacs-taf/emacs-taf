@@ -27,6 +27,18 @@
 (defvar etaf-youtube-caption-ref 'etaf-youtube-caption
   "Ref of the subtitle band Host above the transport controls.")
 
+(defconst etaf-youtube-region-shell 'etaf-youtube-region-shell
+  "Region id of the whole application shell.")
+
+(defconst etaf-youtube-region-sidebar 'etaf-youtube-region-sidebar
+  "Region id of the navigation sidebar, expanded or as the icon rail.")
+
+(defconst etaf-youtube-region-content 'etaf-youtube-region-content
+  "Region id of the scrollable content area.")
+
+(defconst etaf-youtube-region-comments 'etaf-youtube-region-comments
+  "Region id of the watch page comment section.")
+
 ;;; ---------------------------------------------------------------------------
 ;;; Layout helpers
 ;;; ---------------------------------------------------------------------------
@@ -228,6 +240,24 @@ renderer payloads use; anything else is zero."
           :background-color (plist-get c :bg)
           :color (plist-get c :ink)
           :overflow 'hidden
+          :region (list :id etaf-youtube-region-shell :label "应用" :key ?a)
+          :keys (list
+                 (list "SPC" 'etaf-youtube-toggle-playback-command "播放 / 暂停")
+                 (list "f" 'etaf-youtube-seek-forward-command "快进 5 秒")
+                 (list "b" 'etaf-youtube-seek-backward-command "快退 5 秒")
+                 (list "]" 'etaf-youtube-volume-up-command "音量 +5")
+                 (list "[" 'etaf-youtube-volume-down-command "音量 -5")
+                 (list "m" 'etaf-youtube-mute-command "静音")
+                 (list "s" 'etaf-youtube-sidebar-command "折叠 / 展开侧栏")
+                 (list "t" 'etaf-youtube-theater-command "影院模式")
+                 (list "d" 'etaf-youtube-theme-command "切换外观")
+                 (list "r" 'etaf-youtube-refresh-command "刷新")
+                 (list "u" 'etaf-youtube-back-command "返回")
+                 (list "RET" 'etaf-youtube-activate-command "打开选中项")
+                 (list "/" 'etaf-youtube-focus-search "搜索")
+                 (list "C-c s" 'etaf-youtube-focus-sidebar-command "焦点：侧栏")
+                 (list "C-c c" 'etaf-youtube-focus-content-command "焦点：内容")
+                 (list "C-c m" 'etaf-youtube-focus-comments-command "焦点：评论"))
       (etaf-youtube-topbar :model model :colors c :columns columns)
       (flex :flex-direction 'row :flex-grow 1 :flex-basis '(lh 0)
             :min-height '(lh 0)
@@ -238,6 +268,8 @@ renderer payloads use; anything else is zero."
         (box :flex-grow 1 :flex-basis '(ch 0) :min-width '(px 0)
              :overflow 'scroll
              :ref 'etaf-youtube-content
+             :region (list :id etaf-youtube-region-content :label "内容" :key ?c
+                           :neighbors (list :left etaf-youtube-region-sidebar))
           (etaf-youtube-watch :if (eq view 'watch)
                               :model model :colors c
                               :columns content-columns)
@@ -329,6 +361,8 @@ COMPACT keeps only the avatar, for top bars that cannot fit the name."
           :background-color (plist-get colors :bg)
           :row-gap '(lh 0)
           :border-right (list '(px 1) 'solid (plist-get colors :line))
+          :region (list :id etaf-youtube-region-sidebar :label "侧栏" :key ?l
+                        :neighbors (list :right etaf-youtube-region-content))
           :if active
       (etaf-youtube-sidebar-items :model model :colors colors :current current)
       (box :height '(lh 1))
@@ -344,6 +378,8 @@ COMPACT keeps only the avatar, for top bars that cannot fit the name."
         :background-color (plist-get colors :bg)
         :row-gap '(lh 0)
         :border-right (list '(px 1) 'solid (plist-get colors :line))
+        :region (list :id etaf-youtube-region-sidebar :label "侧栏" :key ?l
+                      :neighbors (list :right etaf-youtube-region-content))
         :if active
     (etaf-youtube-rail-button :for (entry '(("⌂" . home) ("⚡" . shorts)
                                             ("☰" . subscriptions)
@@ -911,6 +947,7 @@ COMPACT keeps only the avatar, for top bars that cannot fit the name."
          (requires-channel (plist-get payload :requires_channel)))
     (etaf-view (flex :flex-direction 'column :row-gap '(lh 1)
           :padding-top '(lh 1)
+          :region (list :id etaf-youtube-region-comments :label "评论" :key ?m)
       (text :color (plist-get colors :ink) :font-weight 'bold
             (expr (if (and (stringp count)
                            (string-match-p "\\`[0-9,]+\\'" count))
