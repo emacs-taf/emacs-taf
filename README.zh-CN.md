@@ -65,7 +65,7 @@
 | [etaf-solitaire](https://github.com/emacs-taf/etaf-solitaire) | Verdant：K+ Klondike 纸牌，支持撤销与重做 | OpenSpiel |
 | [etaf-salvage](https://github.com/emacs-taf/etaf-salvage) | Salvage Station：实时探索与回收 | Godot |
 | [etaf-tanks](https://github.com/emacs-taf/etaf-tanks) | Iron Tide：原生竞技场的实时坦克对战 | Godot |
-| [etaf-xiangqi](https://github.com/emacs-taf/etaf-xiangqi) | 楚河：中国象棋双人对弈 | OpenSpiel |
+| [etaf-xiangqi](https://github.com/emacs-taf/etaf-xiangqi) | 楚河：中国象棋人机对战或同机双人对弈 | OpenSpiel |
 
 ## 开始开发
 
