@@ -183,6 +183,7 @@ cache and STORE to the SQLite store.  The account check starts immediately;
                :duration (etaf-ref 0 :name 'etaf-youtube-duration)
                :message (etaf-ref nil :name 'etaf-youtube-message)
                :pending-seek (etaf-ref nil :name 'etaf-youtube-pending-seek)
+               :player-handle etaf-youtube-player-handle
                :player-timer nil
                :buffer nil)))
     (etaf-youtube--set app :display-position
