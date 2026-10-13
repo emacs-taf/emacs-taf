@@ -24,6 +24,9 @@
 (defvar etaf-youtube-search-ref 'etaf-youtube-search-field
   "Ref of the top bar search field, used by the application's focus key.")
 
+(defvar etaf-youtube-caption-ref 'etaf-youtube-caption
+  "Ref of the subtitle band Host above the transport controls.")
+
 ;;; ---------------------------------------------------------------------------
 ;;; Layout helpers
 ;;; ---------------------------------------------------------------------------
@@ -89,6 +92,52 @@ The last line carries an ellipsis when text is dropped."
     (when (and (< index (length text)) result)
       (setcar (last result) (etaf-youtube--clip (car (last result)) width)))
     result))
+
+(defun etaf-youtube--clip-pixels (text pixels)
+  "Return TEXT shortened so it fits PIXELS display pixels.
+TEXT is cut on character boundaries and trailing blanks are removed."
+  (if (or (string-empty-p text) (<= (etaf-string-pixel-width text) pixels))
+      text
+    (let ((result "")
+          (index 0))
+      (while (and (< index (length text))
+                  (let ((candidate (concat result (char-to-string (aref text index)))))
+                    (<= (etaf-string-pixel-width candidate) pixels)))
+        (setq result (concat result (char-to-string (aref text index)))
+              index (1+ index)))
+      (string-trim-right result))))
+
+(defun etaf-youtube--caption-lines (text pixels &optional lines)
+  "Return TEXT as at most LINES subtitle lines fitting PIXELS pixels.
+The wrap uses the renderer's own glyph measurement, unlike a column count
+that assumes every CJK character occupies two ASCII cells, so a wide CJK
+font cannot overflow a band whose height the caller already fixed.  Text
+that does not fit ends its last line with an ellipsis."
+  (let ((text (replace-regexp-in-string "[\n\r]+" " " (or text "")))
+        (lines (or lines 2))
+        (result nil)
+        (current "")
+        (index 0)
+        (overflow nil))
+    (while (and (< index (length text)) (not overflow))
+      (let* ((char (char-to-string (aref text index)))
+             (candidate (concat current char)))
+        (if (and (not (string-empty-p current))
+                 (> (etaf-string-pixel-width candidate) pixels))
+            (if (>= (length result) (1- lines))
+                (setq overflow t)
+              (push current result)
+              (setq current (if (string= char " ") "" char)
+                    index (1+ index)))
+          (setq current candidate
+                index (1+ index)))))
+    (setq result (nreverse result))
+    (if overflow
+        (append result
+                (list (concat (etaf-youtube--clip-pixels
+                               current (- pixels (etaf-string-pixel-width "…")))
+                              "…")))
+      (if (string-empty-p current) result (append result (list current))))))
 
 (defun etaf-youtube--chunk (items size)
   "Return ITEMS split into lists of at most SIZE."
@@ -578,6 +627,7 @@ renderer payloads use; anything else is zero."
   "Render the video canvas with its transport controls."
   :bindings ((media (plist-get model :media))
              (media-status (plist-get model :media-status))
+             (captions-on (plist-get model :captions-on))
              (playing (plist-get model :playing))
              (duration (plist-get model :duration))
              (display-position (plist-get model :display-position))
@@ -592,6 +642,11 @@ renderer payloads use; anything else is zero."
   (let* ((source (etaf-youtube-media-src model))
          (state (plist-get (etaf-value media-status) :state))
          (rows (etaf-youtube--image-rows columns nil))
+         (caption (etaf-youtube-caption-text model))
+         (caption-pixels (* (max 4 (- columns 2))
+                            (or (plist-get (etaf-display-metrics) :char-width) 8)))
+         (caption-line (and caption
+                            (car (etaf-youtube--caption-lines caption caption-pixels 1))))
          (bar-color (plist-get colors :accent)))
     (etaf-view (flex :flex-direction 'column :row-gap '(lh 0)
           :background-color "#000000"
@@ -620,6 +675,19 @@ renderer payloads use; anything else is zero."
         (text :color (plist-get colors :muted)
               (expr (or (plist-get (etaf-value media-status) :message)
                   "播放源不可用"))))
+      ;; The subtitle band is the picture's last flow row, one line tall
+      ;; while captions are enabled.  A fixed row keeps the controls below
+      ;; it from moving when a cue starts, and it never overlaps the live
+      ;; canvas, whose retained frame updates replace picture rows.
+      (box :if (etaf-value captions-on)
+           :ref etaf-youtube-caption-ref
+           :width (list 'ch columns)
+           :height '(lh 1)
+           :background-color (plist-get colors :panel2)
+           :color (plist-get colors :ink)
+           :text-align 'center
+           :overflow 'hidden
+        (text (expr (or caption-line ""))))
       (flex :flex-direction 'column :padding '((lh 0) (ch 2))
             :background-color (plist-get colors :panel)
             :row-gap '(lh 0)

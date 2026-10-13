@@ -47,6 +47,11 @@
    "purpose": "Seek, speed, volume, mute and quality update the session and re-resolve the source at the new quality."
   },
   {
+   "name": "etaf-youtube-captions-follow-the-playback-position",
+   "file": "tests/etaf-youtube-tests.el",
+   "purpose": "Turning captions on loads the track's cues and reports the cue covering the current playback position."
+  },
+  {
    "name": "etaf-youtube-writes-need-explicit-confirmation",
    "file": "tests/etaf-youtube-tests.el",
    "purpose": "A write is previewed without confirmation and submitted only with it, then reported with its certainty."

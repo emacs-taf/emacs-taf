@@ -738,13 +738,18 @@ source normalizer takes an alist."
   app)
 
 (defun etaf-youtube-caption-text (app)
-  "Return APP's subtitle text at the current position, or nil."
-  (when-let* ((captions (etaf-youtube--read app :captions)))
-    (let ((position (etaf-youtube--read app :position)))
-      (seq-find (lambda (cue)
-                  (and (>= position (or (plist-get cue :start) 0))
-                       (< position (or (plist-get cue :end) 0))))
-                (plist-get captions :cues)))))
+  "Return APP's subtitle text at the current position, or nil.
+Cues are half-open intervals: a cue is active from its `start' inclusive to
+its `end' exclusive."
+  (when-let* ((captions (etaf-youtube--read app :captions))
+              (position (etaf-youtube--read app :position)))
+    (when (numberp position)
+      (when-let* ((cue (seq-find (lambda (cue)
+                                   (and (>= position (or (plist-get cue :start) 0))
+                                        (< position (or (plist-get cue :end) 0))))
+                                 (plist-get captions :cues)))
+                  (text (plist-get cue :text)))
+        (and (stringp text) (not (string-empty-p text)) text)))))
 
 ;;; ---------------------------------------------------------------------------
 ;;; Comments

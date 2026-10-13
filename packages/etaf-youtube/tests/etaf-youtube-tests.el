@@ -265,6 +265,29 @@ FIXTURES-SYM is bound to the fixture table and LOG-SYM to the call log."
                                 (etaf-youtube-tests--calls log)))))
     (should (= 1080 (plist-get (etaf-youtube-state app) :quality)))))
 
+(ert-deftest etaf-youtube-captions-follow-the-playback-position ()
+  "Captions load the track's cues and report the active one at the position."
+  (etaf-youtube-tests--with-app app fixtures log
+    (etaf-youtube-open-video app "v1")
+    (should (etaf-youtube-tests--wait
+             (lambda () (etaf-youtube-media-src app))))
+    (should-not (etaf-youtube-caption-text app))
+    (etaf-youtube-toggle-captions app)
+    (should (etaf-youtube-tests--wait
+             (lambda () (member '("captions" "v1" "--language" "zh-Hans")
+                                (etaf-youtube-tests--calls log)))))
+    (should (etaf-youtube-tests--wait
+             (lambda () (etaf-youtube-caption-text app))))
+    (should (equal "欢迎观看这个演示" (etaf-youtube-caption-text app)))
+    (etaf-youtube-seek app 20)
+    (should (equal "ETAF 用声明式视图构建文本应用"
+                   (etaf-youtube-caption-text app)))
+    (etaf-youtube-seek app 10)
+    (should-not (etaf-youtube-caption-text app))
+    (etaf-youtube-toggle-captions app)
+    (etaf-youtube-seek app 2)
+    (should-not (etaf-youtube-caption-text app))))
+
 (ert-deftest etaf-youtube-writes-need-explicit-confirmation ()
   "A write is previewed without YES and submitted only with it."
   (etaf-youtube-tests--with-app app fixtures log

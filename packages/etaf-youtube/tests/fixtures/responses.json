@@ -634,6 +634,36 @@
   "source": "fake",
   "as_of": "2026-01-01T00:00:00Z"
  },
+ "captions v1 --language zh-Hans": {
+  "ok": true,
+  "protocol": 1,
+  "language": "zh-Hans",
+  "kind": "manual",
+  "cues": [
+   {
+    "start": 0,
+    "end": 4,
+    "text": "欢迎观看这个演示"
+   },
+   {
+    "start": 4,
+    "end": 9,
+    "text": "这一段字幕验证跟随播放位置"
+   },
+   {
+    "start": 18,
+    "end": 26,
+    "text": "ETAF 用声明式视图构建文本应用"
+   },
+   {
+    "start": 26,
+    "end": 30,
+    "text": "字幕层停在画布下沿"
+   }
+  ],
+  "source": "fake",
+  "as_of": "2026-01-01T00:00:00Z"
+ },
  "action like v1": {
   "ok": true,
   "protocol": 1,

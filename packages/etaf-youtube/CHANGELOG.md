@@ -15,8 +15,9 @@ project uses [Semantic Versioning](https://semver.org/).
 - Native playback through the ETAF video Component: the skill resolves
   separate video and audio streams with their headers and proxy, the video
   decoder and the ffplay sidecar receive the same network options, and the
-  page offers seek, volume, mute, playback rate, quality, captions and
-  theater mode.
+  page offers seek, volume, mute, playback rate, quality, theater mode and
+  captions, which render the cue that covers the playback position as one
+  subtitle line under the canvas.
 - Explicit account writes: like, dislike, unsubscribe, save and comment are
   previewed offline unless the caller confirms, submitted writes that could
   not be read back are reported as unverified and never retried, and an
