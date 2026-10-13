@@ -168,7 +168,13 @@ renderer payloads use; anything else is zero."
          (view (plist-get (etaf-value route) :view))
          (narrow (<= columns 88))
          (sidebar-visible (and (etaf-value sidebar) (> columns 88)))
-         (content-columns (- columns (if sidebar-visible 26 0))))
+         (rail-visible (and narrow (etaf-value sidebar)))
+         ;; The content views lay out for the box they are rendered into, so
+         ;; the rail's six columns (plus its border) come out of `columns'
+         ;; exactly like the expanded sidebar's twenty-six.
+         (content-columns (- columns (cond (sidebar-visible 26)
+                                           (rail-visible 7)
+                                           (t 0)))))
     (etaf-view (flex :flex-direction 'column :width '(vw 100) :height '(vh 100)
           :background-color (plist-get c :bg)
           :color (plist-get c :ink)
@@ -179,7 +185,7 @@ renderer payloads use; anything else is zero."
         (etaf-youtube-sidebar :model model :colors c :columns columns
                               :active sidebar-visible)
         (etaf-youtube-sidebar-rail :model model :colors c
-                                   :active (and narrow (etaf-value sidebar)))
+                                   :active rail-visible)
         (box :flex-grow 1 :flex-basis '(ch 0) :min-width '(px 0)
              :overflow 'scroll
              :ref 'etaf-youtube-content
