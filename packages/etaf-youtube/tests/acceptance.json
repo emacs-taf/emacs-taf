@@ -52,6 +52,11 @@
    "purpose": "Turning captions on loads the track's cues and reports the cue covering the current playback position."
   },
   {
+   "name": "etaf-youtube-resume-round-trip",
+   "file": "tests/etaf-youtube-tests.el",
+   "purpose": "Leaving a watch page records the playback position in the local store and reopening the video restores it."
+  },
+  {
    "name": "etaf-youtube-writes-need-explicit-confirmation",
    "file": "tests/etaf-youtube-tests.el",
    "purpose": "A write is previewed without confirmation and submitted only with it, then reported with its certainty."

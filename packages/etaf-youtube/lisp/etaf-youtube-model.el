@@ -30,6 +30,12 @@
 (defconst etaf-youtube--quality-levels '(2160 1440 1080 720 480 360 240 144)
   "Video heights a quality choice may name, from high to low.")
 
+(defconst etaf-youtube--resume-interval 15
+  "Position change in seconds that persists a new resume point.")
+
+(defconst etaf-youtube--resume-end-margin 15
+  "Seconds before the end where a stored resume point is not restored.")
+
 (defconst etaf-youtube--feed-views
   '(home shorts subscriptions history playlists watch-later liked live)
   "Routes that read one of the account's feed lists.")
@@ -177,6 +183,8 @@ cache and STORE to the SQLite store.  The account check starts immediately;
                :comment-draft (etaf-ref "" :name 'etaf-youtube-comment-draft)
                :comments-sort (etaf-ref nil :name 'etaf-youtube-comments-sort)
                :position (etaf-ref 0 :name 'etaf-youtube-position)
+               :resume (etaf-ref nil :name 'etaf-youtube-resume)
+               :resume-recorded nil
                :scrub (etaf-ref nil :name 'etaf-youtube-scrub)
                :display-position nil
                :playing (etaf-ref nil :name 'etaf-youtube-playing)
@@ -200,6 +208,7 @@ cache and STORE to the SQLite store.  The account check starts immediately;
 
 (defun etaf-youtube-destroy (app)
   "Release APP's transport, downloads, timer and store."
+  (ignore-errors (etaf-youtube--record-resume app t))
   (when-let* ((timer (plist-get app :player-timer)))
     (cancel-timer timer)
     (etaf-youtube--set app :player-timer nil))
@@ -219,7 +228,7 @@ cache and STORE to the SQLite store.  The account check starts immediately;
   "Return APP's state as a detached plist.
 Keys are `:view' and its `:params', `:account', `:feed-status', `:items',
 `:next', `:selected', `:video', `:media-status', `:comments', `:playing',
-`:position', `:duration', `:volume', `:speed', `:quality', `:muted',
+`:position', `:duration', `:resume', `:volume', `:speed', `:quality', `:muted',
 `:captions-on', `:sidebar', `:theater', `:theme' and `:message'."
   (let* ((route (etaf-youtube--read app :route))
          (feed (etaf-youtube--read app :feed))
@@ -250,6 +259,7 @@ Keys are `:view' and its `:params', `:account', `:feed-status', `:items',
      :playing (etaf-youtube--read app :playing)
      :position (etaf-youtube--read app :position)
      :duration (etaf-youtube--read app :duration)
+     :resume (etaf-youtube--read app :resume)
      :volume (etaf-youtube--read app :volume)
      :speed (etaf-youtube--read app :speed)
      :quality (etaf-youtube--read app :quality)
@@ -352,6 +362,8 @@ VIEW is `home', `shorts', `subscriptions', `history', `playlists',
   (if (eq view 'watch)
       (etaf-youtube-open-video app (plist-get args :id))
     (let ((current (etaf-youtube--read app :route)))
+      (when (eq (plist-get current :view) 'watch)
+        (etaf-youtube--record-resume app t))
       (unless (equal current (list :view view :args args))
         (etaf-youtube--write app :history
                              (cons current (seq-take (etaf-youtube--read app :history)
@@ -392,6 +404,9 @@ VIEW is `home', `shorts', `subscriptions', `history', `playlists',
     (if (null history)
         (etaf-youtube-locate app 'home)
       (let ((previous (car history)))
+        (when (and (eq (plist-get (etaf-youtube--read app :route) :view) 'watch)
+                   (not (eq (plist-get previous :view) 'watch)))
+          (etaf-youtube--record-resume app t))
         (etaf-youtube--write app :history (cdr history))
         (etaf-youtube--write app :route previous)
         (unless (eq (plist-get previous :view) 'watch)
@@ -493,6 +508,8 @@ tab they name."
   (interactive)
   (when (or (null id) (string-empty-p id))
     (user-error "A video id is required"))
+  ;; Persist where the previous video stopped before its state is reset.
+  (etaf-youtube--record-resume app t)
   (let ((current (etaf-youtube--read app :route)))
     (unless (and (eq (plist-get current :view) 'watch)
                  (equal (plist-get (plist-get current :args) :id) id))
@@ -511,6 +528,8 @@ tab they name."
   (etaf-youtube--write app :captions nil)
   (etaf-youtube--write app :captions-on nil)
   (etaf-youtube--write app :position 0)
+  (etaf-youtube--write app :resume nil)
+  (etaf-youtube--write app :resume-recorded nil)
   (etaf-youtube--write app :duration 0)
   (etaf-youtube--write app :playing nil)
   (etaf-youtube--stop-player-timer app)
@@ -530,7 +549,14 @@ tab they name."
                                  (etaf-youtube-store-resume
                                   (plist-get app :store) id))))
              (when (and (numberp resume) (> resume 5))
-               (etaf-youtube--write app :pending-seek resume))))
+               (etaf-youtube--write app :resume resume)
+               (let ((duration (or (plist-get video :duration) 0)))
+                 ;; A point at the very end would immediately finish again;
+                 ;; resume only when some of the video is still ahead.
+                 (when (or (<= duration 0)
+                           (< resume (- duration etaf-youtube--resume-end-margin)))
+                   (etaf-youtube--write app :pending-seek resume)
+                   (etaf-youtube--write app :resume-recorded resume))))))
        (etaf-youtube--write app :video-status
                             (list :state 'error
                                   :message (plist-get result :message))))))
@@ -597,6 +623,25 @@ source normalizer takes an alist."
   "Return the mounted player's state, or nil when it is not mounted."
   (ignore-errors (etaf-video-state (plist-get app :player-handle))))
 
+(defun etaf-youtube--record-resume (app &optional force position)
+  "Persist APP's resume point for the current video.
+POSITION defaults to APP's playback position.  Without FORCE a write happens
+only after `etaf-youtube--resume-interval' seconds of movement, so ordinary
+playback persists a point every fifteen seconds instead of every tick.  A
+write needs a store, a loaded video and a numeric position."
+  (let* ((video (etaf-youtube--read app :video))
+         (store (plist-get app :store))
+         (position (or position (etaf-youtube--read app :position)))
+         (recorded (etaf-youtube--read app :resume-recorded)))
+    (when (and store video (numberp position)
+               (or force
+                   (null recorded)
+                   (>= (abs (- position recorded))
+                       etaf-youtube--resume-interval)))
+      (etaf-youtube-store-record-resume store (plist-get video :id) position)
+      (etaf-youtube--write app :resume-recorded position)
+      (etaf-youtube--write app :resume position))))
+
 (defun etaf-youtube--start-player-timer (app)
   "Start polling APP's player once a second."
   (unless (plist-get app :player-timer)
@@ -620,8 +665,12 @@ source normalizer takes an alist."
       (etaf-youtube--write app :pending-seek nil)
       (ignore-errors (etaf-video-seek (plist-get app :player-handle) seek))
       (etaf-youtube--write app :position seek))
-    (when (plist-get state :ended)
-      (etaf-youtube--write app :playing nil))))
+    (if (plist-get state :ended)
+        (progn
+          (etaf-youtube--write app :playing nil)
+          ;; A finished video resumes from its beginning, not from its end.
+          (etaf-youtube--record-resume app t 0))
+      (etaf-youtube--record-resume app))))
 
 (defun etaf-youtube-toggle-playback (app)
   "Toggle APP's video between playing and paused."
@@ -633,10 +682,11 @@ source normalizer takes an alist."
    ((etaf-youtube--player-state app)
     (ignore-errors
       (etaf-video-toggle-playback (plist-get app :player-handle)))
-    (etaf-youtube--write app :playing
-                         (and (plist-get (etaf-youtube--player-state app)
-                                         :playing)
-                              t)))
+    (let ((playing (and (plist-get (etaf-youtube--player-state app)
+                                   :playing)
+                        t)))
+      (etaf-youtube--write app :playing playing)
+      (unless playing (etaf-youtube--record-resume app t))))
    (t (etaf-youtube--note app "The player is not ready yet" 'info)))
   app)
 

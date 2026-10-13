@@ -75,8 +75,9 @@
 ;; Return APP's state as a detached plist.
 ;; Keys are `:view', `:params', `:account', `:feed-status', `:title',
 ;; `:items', `:next', `:selected', `:video', `:media-status', `:comments',
-;; `:playing', `:position', `:duration', `:volume', `:speed', `:quality',
-;; `:muted', `:captions-on', `:sidebar', `:theater', `:theme' and `:message'.
+;; `:playing', `:position', `:duration', `:resume', `:volume', `:speed',
+;; `:quality', `:muted', `:captions-on', `:sidebar', `:theater', `:theme' and
+;; `:message'.
 ;;
 ;; Function: etaf-youtube-locate (app view &optional args)
 ;; Navigate APP to VIEW with ARGS and load its content.

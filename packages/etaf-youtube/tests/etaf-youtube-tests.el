@@ -84,10 +84,11 @@ LOG is a cons whose car receives argument lists, newest first."
     #'ignore))
 
 (cl-defun etaf-youtube-tests--app (&key (fixtures (etaf-youtube-tests--fixture-table))
-                                        log fetcher async)
+                                        log fetcher async (store :none))
   "Create a test session over FIXTURES.
 LOG receives the skill calls; FETCHER defaults to the pixel copy; ASYNC uses
-a delayed runner instead of the fixture runner."
+a delayed runner instead of the fixture runner; STORE is a store object or
+`:none'."
   (let ((directory (make-temp-file "etaf-youtube-thumbs-" t)))
     (etaf-youtube-create
      :service (etaf-youtube-service-create
@@ -99,7 +100,7 @@ a delayed runner instead of the fixture runner."
               :directory directory
               :fetcher (or fetcher (etaf-youtube-tests--thumbnail-fetcher))
               :proxy-fn (lambda () nil))
-     :store :none)))
+     :store store)))
 
 (defmacro etaf-youtube-tests--with-app (binding fixtures-sym log-sym &rest body)
   "Run BODY with BINDING bound to a fixture session.
@@ -287,6 +288,29 @@ FIXTURES-SYM is bound to the fixture table and LOG-SYM to the call log."
     (etaf-youtube-toggle-captions app)
     (etaf-youtube-seek app 2)
     (should-not (etaf-youtube-caption-text app))))
+
+(ert-deftest etaf-youtube-resume-round-trip ()
+  "A watched position survives leaving the video and returns on reopen."
+  (let* ((etaf-youtube-store-file (make-temp-file "etaf-youtube-resume-" nil
+                                                  ".sqlite3"))
+         (fixtures (etaf-youtube-tests--fixture-table))
+         (store (etaf-youtube-store-open))
+         (app (etaf-youtube-tests--app :fixtures fixtures :store store)))
+    (unwind-protect
+        (progn
+          (should store)
+          (etaf-youtube-open-video app "v1")
+          (should (etaf-youtube-tests--wait
+                   (lambda () (etaf-youtube-media-src app))))
+          (etaf-youtube-seek app 42)
+          (etaf-youtube-locate app 'home)
+          (should (= 42 (etaf-youtube-store-resume store "v1")))
+          (etaf-youtube-open-video app "v1")
+          (should (etaf-youtube-tests--wait
+                   (lambda () (etaf-youtube-media-src app))))
+          (should (= 42 (plist-get (etaf-youtube-state app) :resume))))
+      (etaf-youtube-destroy app)
+      (etaf-youtube-store-close store))))
 
 (ert-deftest etaf-youtube-writes-need-explicit-confirmation ()
   "A write is previewed without YES and submitted only with it."
