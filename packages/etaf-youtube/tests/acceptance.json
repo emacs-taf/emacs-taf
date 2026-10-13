@@ -95,6 +95,21 @@
    "name": "etaf-youtube-destroy-releases-the-session",
    "file": "tests/etaf-youtube-tests.el",
    "purpose": "Destroy cancels the session and leaves a destroyed model safe to destroy again."
+  },
+  {
+   "name": "etaf-youtube-process-runner-reads-skill-json",
+   "file": "tests/etaf-youtube-tests.el",
+   "purpose": "The default process runner drains a real child process and parses its protocol JSON without a browser."
+  },
+  {
+   "name": "etaf-youtube-thumbnails-strip-signed-query",
+   "file": "tests/etaf-youtube-tests.el",
+   "purpose": "Signed YouTube thumbnail tokens are dropped before downloading so the CDN serves the decodable JPEG while the cache still keys the original URL."
+  },
+  {
+   "name": "etaf-youtube-thumbnail-disk-cache-survives-reopen",
+   "file": "tests/etaf-youtube-tests.el",
+   "purpose": "A cached thumbnail file survives a later session that reuses the same thumbnail directory."
   }
  ]
 }

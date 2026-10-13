@@ -31,6 +31,10 @@
   (expand-file-name "pixel.png" etaf-youtube-tests--fixtures)
   "A one-pixel PNG standing in for a downloaded thumbnail.")
 
+(defconst etaf-youtube-tests--fake-skill
+  (expand-file-name "fake-skill.sh" etaf-youtube-tests--fixtures)
+  "Executable standing in for pi-skill in the process-runner test.")
+
 (defun etaf-youtube-tests--fixture-table ()
   "Return the canned protocol replies as a hash table."
   (with-temp-buffer
@@ -185,7 +189,9 @@ FIXTURES-SYM is bound to the fixture table and LOG-SYM to the call log."
         (should (equal "https://media.test/audio.m4s?q=720"
                        (plist-get source :audio-url)))
         (should (equal "http://127.0.0.1:7890" (plist-get source :proxy)))
-        (should (plist-get source :headers))
+        (should (equal '(("User-Agent" . "TestAgent/1.0")
+                         ("Accept-Language" . "zh-CN"))
+                       (plist-get source :headers)))
         (should (plist-get source :audio))))
     (should (equal '(1080 720 480) (etaf-youtube-quality-choices app)))))
 
@@ -392,6 +398,10 @@ FIXTURES-SYM is bound to the fixture table and LOG-SYM to the call log."
              (lambda () (etaf-youtube-images-descriptor
                          images "https://i.ytimg.com/vi/x/hq720.jpg"))))
     (should (> (etaf-value version) 0))
+    ;; The descriptor must point at a readable file, not the temporary path.
+    (let ((image (etaf-youtube-images-descriptor
+                  images "https://i.ytimg.com/vi/x/hq720.jpg")))
+      (should (file-exists-p (plist-get (cdr image) :file))))
     (should-not (etaf-youtube-images-request
                  images "https://i.ytimg.com/vi/x/hq720.jpg"))
     (etaf-youtube-images-cancel images)))
@@ -425,6 +435,71 @@ FIXTURES-SYM is bound to the fixture table and LOG-SYM to the call log."
     (should (etaf-youtube-destroy app))
     (should (etaf-youtube-destroy app))
     (should (null (plist-get (etaf-youtube-state app) :playing)))))
+
+(ert-deftest etaf-youtube-process-runner-reads-skill-json ()
+  "The default process runner drains a real child and parses its JSON.
+The fake skill is an executable script, so this exercises process creation,
+pipe draining, exit-status handling and JSON decoding without a browser."
+  (let* ((service (etaf-youtube-service-create :timeout 10))
+         (etaf-youtube-program etaf-youtube-tests--fake-skill)
+         (result nil))
+    (etaf-youtube-service-call service '("check")
+                               (lambda (value) (setq result value))
+                               :process-test)
+    (should (etaf-youtube-tests--wait (lambda () result)))
+    (should (eq 'ok (plist-get result :status)))
+    (should (equal "Process Runner" (plist-get (plist-get result :value) :name)))
+    (etaf-youtube-service-close service)))
+
+(ert-deftest etaf-youtube-thumbnails-strip-signed-query ()
+  "Signed YouTube thumbnail tokens are dropped before downloading.
+The token makes the CDN answer with AVIF while the unsigned URL serves a
+JPEG, so the fetcher must receive the unsigned address while the cache still
+keys the original URL."
+  (let* ((directory (make-temp-file "etaf-youtube-unsigned-" t))
+         (seen nil)
+         (images (etaf-youtube-images-create
+                  :directory directory
+                  :fetcher (lambda (_images url file callback)
+                             (setq seen url)
+                             (copy-file etaf-youtube-tests--pixel file t)
+                             (funcall callback nil)
+                             #'ignore)
+                  :proxy-fn (lambda () nil))))
+    (etaf-youtube-images-request
+     images "https://i.ytimg.com/vi/x/hq720.jpg?sqp=token&rs=abc")
+    (should (etaf-youtube-tests--wait (lambda () seen)))
+    (should (equal "https://i.ytimg.com/vi/x/hq720.jpg" seen))
+    (let ((image (etaf-youtube-images-descriptor
+                  images "https://i.ytimg.com/vi/x/hq720.jpg?sqp=token&rs=abc")))
+      (should image)
+      (should (file-exists-p (plist-get (cdr image) :file))))))
+
+(ert-deftest etaf-youtube-thumbnail-disk-cache-survives-reopen ()
+  "A cached thumbnail file is still there when a later session reads it.
+The disk cache is keyed by the original URL; reopening must reuse the file
+instead of deleting the target it just found."
+  (let* ((directory (make-temp-file "etaf-youtube-reopen-" t))
+         (url "https://i.ytimg.com/vi/cache/hq720.jpg")
+         (first (etaf-youtube-images-create
+                 :directory directory
+                 :fetcher (etaf-youtube-tests--thumbnail-fetcher)
+                 :proxy-fn (lambda () nil)))
+         (second (etaf-youtube-images-create
+                  :directory directory
+                  :fetcher (lambda (_images _url _file callback)
+                             (funcall callback "must not download again")
+                             #'ignore)
+                  :proxy-fn (lambda () nil))))
+    (etaf-youtube-images-request first url)
+    (should (etaf-youtube-tests--wait
+             (lambda () (etaf-youtube-images-descriptor first url))))
+    (etaf-youtube-images-request second url)
+    (should (etaf-youtube-tests--wait
+             (lambda () (etaf-youtube-images-descriptor second url))))
+    (let ((image (etaf-youtube-images-descriptor second url)))
+      (should image)
+      (should (file-exists-p (plist-get (cdr image) :file))))))
 
 (provide 'etaf-youtube-tests)
 ;;; etaf-youtube-tests.el ends here

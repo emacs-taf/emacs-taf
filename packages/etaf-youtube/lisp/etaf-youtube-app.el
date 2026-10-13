@@ -22,8 +22,40 @@
   :type 'string
   :group 'etaf-youtube)
 
+(defcustom etaf-youtube-resize-delay 0.15
+  "Seconds of quiet after a window change before the layout refits."
+  :type 'number
+  :group 'etaf-youtube)
+
 (defvar-local etaf-youtube--model nil
   "Model shown by the current buffer's runtime.")
+
+(defvar etaf-youtube--resize-timer nil
+  "Pending debounced refit of the application's window.")
+
+(defun etaf-youtube--refit-windows ()
+  "Refit every mounted YouTube runtime to its showing window."
+  (setq etaf-youtube--resize-timer nil)
+  (dolist (frame (frame-list))
+    (when (frame-live-p frame)
+      (dolist (window (window-list frame t))
+        (with-current-buffer (window-buffer window)
+          (when (and (bound-and-true-p etaf-youtube--model)
+                     (etaf-runtime-for-buffer (current-buffer)))
+            (etaf-runtime-refit (etaf-runtime-for-buffer (current-buffer))
+                                (window-body-width window t)
+                                (window-body-height window))))))))
+
+(defun etaf-youtube--window-size-change (frame)
+  "Schedule a refit after FRAME's windows changed size."
+  (when (frame-live-p frame)
+    (when etaf-youtube--resize-timer
+      (cancel-timer etaf-youtube--resize-timer))
+    (setq etaf-youtube--resize-timer
+          (run-at-time etaf-youtube-resize-delay nil
+                       #'etaf-youtube--refit-windows))))
+
+(add-hook 'window-size-change-functions #'etaf-youtube--window-size-change)
 
 (defun etaf-youtube--current-model ()
   "Return the model of the current buffer, or signal `user-error'."
@@ -138,10 +170,11 @@
       (setf (plist-get etaf-youtube--model :buffer) buffer)
       (use-local-map etaf-youtube-mode-map))
     (pop-to-buffer buffer)
-    (etaf-mount buffer (etaf-youtube-view (buffer-local-value 'etaf-youtube--model
-                                                              buffer))
-                (list :viewport-width (window-body-width nil t)
-                      :viewport-height (window-body-height)))
+    (let ((window (get-buffer-window buffer t)))
+      (etaf-mount buffer (etaf-youtube-view (buffer-local-value 'etaf-youtube--model
+                                                                buffer))
+                  (list :viewport-width (and window (window-body-width window t))
+                        :viewport-height (and window (window-body-height window)))))
     (etaf-runtime-flush (etaf-runtime-for-buffer buffer))
     buffer))
 

@@ -43,6 +43,17 @@
   "Thumbnail cache with bounded asynchronous downloads."
   directory fetcher proxy-fn cache queue active cancels version-ref)
 
+(defun etaf-youtube--fetch-url (url)
+  "Return URL as it should be downloaded.
+YouTube signs thumbnail URLs with a query token that makes its CDN answer
+with AVIF, which Emacs may not decode; the unsigned URL serves the same
+JPEG thumbnail, so the token is dropped for i.ytimg.com images."
+  (if (string-prefix-p "https://i.ytimg.com/" url)
+      (if-let* ((query (string-search "?" url)))
+          (substring url 0 query)
+        url)
+    url))
+
 (defun etaf-youtube--route-proxy ()
   "Return the proxy URL the youtube skill recorded, or nil.
 The skill documents `local/skills/youtube/route.json' schema 1 as route
@@ -223,7 +234,7 @@ non-nil when the request is new."
                                                 directory))
                       (cancel nil))
                   (setq cancel
-                        (funcall fetcher images url target
+                        (funcall fetcher images (etaf-youtube--fetch-url url) target
                                  (lambda (problem)
                                    (cl-decf (etaf-youtube-images-active images))
                                    (remhash url (etaf-youtube-images-cancels images))
@@ -251,12 +262,13 @@ non-nil when the request is new."
              (etaf-youtube--images-bump images)))))))))
 
 (defun etaf-youtube--images-finish (images url file error)
-  "Record URL's downloaded FILE in IMAGES, or its ERROR."
+  "Record URL's downloaded FILE in IMAGES, or its ERROR.
+The temporary file is renamed to its image extension before the descriptor
+is created, so the descriptor never points at the removed temporary path."
   (if (and file (null error))
       (condition-case problem
-          (let* ((type (image-type-from-file-header file))
-                 (image (and type (create-image file type nil))))
-            (if (null image)
+          (let ((type (image-type-from-file-header file)))
+            (if (null type)
                 (progn
                   (ignore-errors (delete-file file))
                   (puthash url (list :status 'error
@@ -264,12 +276,24 @@ non-nil when the request is new."
                            (etaf-youtube-images-cache images)))
               (let* ((target (concat (file-name-sans-extension file)
                                      "." (symbol-name type)))
-                     (final (if (file-exists-p target)
-                                (progn (ignore-errors (delete-file file)) target)
-                              (rename-file file target t)
-                              target)))
-                (puthash url (list :status 'ready :file final :image image)
-                         (etaf-youtube-images-cache images)))))
+                     (final (cond
+                             ;; An already-cached file is used as it is;
+                             ;; deleting the target here would delete the
+                             ;; cache entry itself.
+                             ((equal file target) file)
+                             ((file-exists-p target)
+                              (ignore-errors (delete-file file))
+                              target)
+                             (t (rename-file file target t) target)))
+                     (image (create-image final type nil)))
+                (if (null image)
+                    (progn
+                      (ignore-errors (delete-file final))
+                      (puthash url (list :status 'error
+                                         :message "cannot decode the image")
+                               (etaf-youtube-images-cache images)))
+                  (puthash url (list :status 'ready :file final :image image)
+                           (etaf-youtube-images-cache images))))))
         (error
          (ignore-errors (delete-file file))
          (puthash url (list :status 'error

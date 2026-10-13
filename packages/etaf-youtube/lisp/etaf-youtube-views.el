@@ -99,8 +99,24 @@ The last line carries an ellipsis when text is dropped."
     (nreverse result)))
 
 (defun etaf-youtube--seconds (value)
-  "Return VALUE seconds as M:SS or H:MM:SS."
-  (let ((total (max 0 (floor (or value 0)))))
+  "Return VALUE as a duration in seconds.
+VALUE is a number of seconds or a `M:SS' / `H:MM:SS' string, which some
+renderer payloads use; anything else is zero."
+  (let ((total
+         (cond
+          ((numberp value) (max 0 (floor value)))
+          ((and (stringp value)
+                (string-match "\\`\\([0-9]+\\):\\([0-9][0-9]?\\)\\(?::\\([0-9][0-9]?\\)\\)?\\'" value))
+           (let ((first (string-to-number (match-string 1 value)))
+                 (second (string-to-number (match-string 2 value)))
+                 (third (and (match-string 3 value)
+                             (string-to-number (match-string 3 value)))))
+             (if third (+ (* first 3600) (* second 60) third)
+               (+ (* first 60) second))))
+          ((and (stringp value)
+                (string-match-p "\\`[0-9]+\\(?:\\.[0-9]+\\)?\\'" value))
+           (floor (string-to-number value)))
+          (t 0))))
     (if (>= total 3600)
         (format "%d:%02d:%02d" (/ total 3600) (/ (% total 3600) 60) (% total 60))
       (format "%d:%02d" (/ total 60) (% total 60)))))
@@ -139,7 +155,10 @@ The last line carries an ellipsis when text is dropped."
   (progn
     (etaf-theme-provide palette)
     (etaf-on-mounted
-     (lambda () (etaf-youtube--start-player-timer model)))
+     (lambda ()
+       (etaf-youtube--start-player-timer model)
+       (when (eq 'idle (plist-get (etaf-youtube--read model :feed-status) :state))
+         (etaf-youtube-refresh model))))
     (etaf-on-unmounted
      (lambda () (etaf-youtube-destroy model))))
   :render
@@ -458,9 +477,11 @@ The last line carries an ellipsis when text is dropped."
 (etaf-define-component etaf-youtube-card
     (&key model colors item columns image-rows index)
   "Render one media card for ITEM."
-  :bindings ((selected (plist-get model :selected)))
+  :bindings ((selected (plist-get model :selected))
+             (image-version (etaf-youtube-images-version (plist-get model :images))))
   :render
-  (let* ((active (= (etaf-value selected) index))
+  (let* ((_ (etaf-value image-version))
+         (active (= (etaf-value selected) index))
          (image (etaf-youtube-images-descriptor
                  (plist-get model :images) (plist-get item :thumbnail)))
          (title-lines (etaf-youtube--wrap (plist-get item :title) columns 2))
@@ -471,6 +492,8 @@ The last line carries an ellipsis when text is dropped."
          :aria-label (or (plist-get item :title) "")
          :aria-selected (and active t)
          :width (list 'ch columns)
+         :flex-shrink 0
+         :overflow 'hidden
          :background-color (if active (plist-get colors :selected) nil)
          :hover-style (unless active
                         (list :background-color (plist-get colors :hover)))
@@ -509,15 +532,20 @@ The last line carries an ellipsis when text is dropped."
   :render
   (let* ((payload (etaf-value video))
          (theater-p (etaf-value theater))
-         (two-column (and (not theater-p) (> columns 100)))
-         (main-columns (if two-column (floor (* columns 0.66)) columns))
-         (side-columns (max 20 (- columns main-columns 3))))
+         ;; The page pads three columns on each side; the two columns and
+         ;; their gap must fit inside what remains.
+         (usable (max 40 (- columns 6)))
+         (two-column (and (not theater-p) (> usable 100)))
+         (main-columns (if two-column (floor (* usable 0.66)) usable))
+         (side-columns (if two-column (max 20 (- usable main-columns 3))
+                         usable)))
     (etaf-view (flex :flex-direction 'column :row-gap '(lh 1)
           :padding '((lh 1) (ch 3))
       (flex :flex-direction 'row :column-gap '(ch 3)
             :align-items 'flex-start
+            :width (list 'ch usable)
         (flex :flex-direction 'column :row-gap '(lh 1)
-              :flex-grow 1 :flex-basis '(ch 0) :min-width '(px 0)
+              :width (list 'ch main-columns) :flex-shrink 0
           (etaf-youtube-player :model model :colors colors
                                :columns main-columns)
           (etaf-youtube-video-header :model model :colors colors
@@ -536,7 +564,7 @@ The last line carries an ellipsis when text is dropped."
       (etaf-youtube-recommendations :if (not two-column)
                                     :model model :colors colors
                                     :video payload
-                                    :columns columns)))))
+                                    :columns usable)))))
 
 (etaf-define-component etaf-youtube-player (&key model colors columns)
   "Render the video canvas with its transport controls."
@@ -619,6 +647,7 @@ The last line carries an ellipsis when text is dropped."
                                      (etaf-youtube-set-volume model value))))
           (etaf-select :value (etaf-value speed)
                        :presentation 'dropdown
+                       :hide-label t
                        :width '(ch 12)
                        :options '((0.5 . "0.5x") (1 . "1x") (1.25 . "1.25x")
                                   (1.5 . "1.5x") (2 . "2x"))
@@ -626,6 +655,7 @@ The last line carries an ellipsis when text is dropped."
                                     (etaf-youtube-set-speed model value)))
           (etaf-select :value (etaf-value quality)
                        :presentation 'dropdown
+                       :hide-label t
                        :width '(ch 14)
                        :options (mapcar (lambda (height)
                                           (cons height (format "%dp" height)))
@@ -744,9 +774,11 @@ The last line carries an ellipsis when text is dropped."
 (etaf-define-component etaf-youtube-recommendation
     (&key model colors item columns image-columns image-rows)
   "Render one related video row."
+  :bindings ((image-version (etaf-youtube-images-version (plist-get model :images))))
   :render
-  (let ((image (etaf-youtube-images-descriptor
-                (plist-get model :images) (plist-get item :thumbnail))))
+  (let* ((_ (etaf-value image-version))
+         (image (etaf-youtube-images-descriptor
+                 (plist-get model :images) (plist-get item :thumbnail))))
     (etaf-view (flex :flex-direction 'row :column-gap '(ch 1) :align-items 'flex-start
           :role 'button :tab-index 0
           :on-press (lambda () (etaf-youtube-open-video model (plist-get item :id)))
@@ -782,7 +814,10 @@ The last line carries an ellipsis when text is dropped."
     (etaf-view (flex :flex-direction 'column :row-gap '(lh 1)
           :padding-top '(lh 1)
       (text :color (plist-get colors :ink) :font-weight 'bold
-            (expr (format "%s 条评论" count)))
+            (expr (if (and (stringp count)
+                           (string-match-p "\\`[0-9,]+\\'" count))
+                      (format "%s 条评论" count)
+                    (or count "评论"))))
       (text :if (eq state 'loading) :color (plist-get colors :muted)
             "正在读取评论…")
       (text :if (eq state 'error) :color (plist-get colors :muted)

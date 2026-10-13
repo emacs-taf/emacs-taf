@@ -300,10 +300,12 @@ Return the item list."
          (items (append (and old (plist-get old :items))
                         (plist-get payload :items)))
          (feed (plist-put (copy-sequence payload) :items items)))
+    ;; Start the downloads before publishing the list: a render problem must
+    ;; not be able to skip the prefetch as a side effect.
+    (etaf-youtube--prefetch-thumbnails app items)
     (etaf-youtube--write app :feed feed)
     (etaf-youtube--write app :feed-status (list :state 'ready))
     (etaf-youtube--write app :feed-more nil)
-    (etaf-youtube--prefetch-thumbnails app items)
     items))
 
 (defun etaf-youtube--feed-failed (app result)
@@ -561,13 +563,28 @@ tab they name."
                                     :message (plist-get result :message)
                                     :hint (plist-get result :hint))))))))
 
+(defun etaf-youtube--header-alist (headers)
+  "Return HEADERS as an alist of (NAME . VALUE) strings.
+The skill emits a JSON object as a plist with keyword names; the ETAF video
+source normalizer takes an alist."
+  (let (result)
+    (while (and (consp headers) (cdr headers))
+      (let ((name (car headers)))
+        (push (cons (if (keywordp name)
+                        (substring (symbol-name name) 1)
+                      (format "%s" name))
+                    (format "%s" (cadr headers)))
+              result))
+      (setq headers (cddr headers)))
+    (nreverse result)))
+
 (defun etaf-youtube-media-src (app)
   "Return APP's resolved media as a normalized `etaf-video' source, or nil."
   (when-let* ((media (etaf-youtube--read app :media)))
     (list :kind 'url
           :url (plist-get media :video_url)
           :audio-url (plist-get media :audio_url)
-          :headers (plist-get media :headers)
+          :headers (etaf-youtube--header-alist (plist-get media :headers))
           :proxy (plist-get media :proxy)
           :width (plist-get media :width)
           :height (plist-get media :height)

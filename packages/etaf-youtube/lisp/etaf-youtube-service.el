@@ -124,7 +124,8 @@ runner; the public suite replaces it."
              (done nil))
         ;; A stderr pipe needs its own sentinel, or Emacs queries about the
         ;; unread output when the process exits.
-        (set-process-sentinel err #'ignore)
+        (when-let* ((err-process (get-buffer-process err)))
+          (set-process-sentinel err-process #'ignore))
         (set-process-sentinel
          process
          (lambda (proc _event)
