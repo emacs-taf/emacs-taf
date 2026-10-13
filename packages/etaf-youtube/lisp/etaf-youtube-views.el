@@ -181,6 +181,8 @@ renderer payloads use; anything else is zero."
         (etaf-youtube-sidebar-rail :model model :colors c
                                    :active (and narrow (etaf-value sidebar)))
         (box :flex-grow 1 :flex-basis '(ch 0) :min-width '(px 0)
+             :overflow 'scroll
+             :ref 'etaf-youtube-content
           (etaf-youtube-watch :if (eq view 'watch)
                               :model model :colors c
                               :columns content-columns)
@@ -894,7 +896,9 @@ renderer payloads use; anything else is zero."
                    (expr (format "赞 %s" (or (plist-get comment :likes) ""))))
              (box :role 'button :tab-index 0 :padding-inline '(ch 1)
                   :color (plist-get colors :link)
-                  :if (and reply-count (not (equal reply-count "0")))
+                  :if (and (stringp reply-count)
+                           (not (string-empty-p reply-count))
+                           (not (equal reply-count "0")))
                   :on-press (lambda ()
                               (if replies
                                   (etaf-youtube-load-replies
