@@ -52,6 +52,7 @@
 | [etaf-telega](https://github.com/emacs-taf/etaf-telega) | 基于 Telega TDLib 的 Telegram 客户端：会话、实时消息、就地编辑与消息操作 |
 | [etaf-ascii-video](https://github.com/emacs-taf/etaf-ascii-video) | 在 Emacs buffer 里用纯字符播放视频与 HTTP(S) 流 |
 | [etaf-video-player](https://github.com/emacs-taf/etaf-video-player) | 在 Emacs 里以清晰图像帧加声音播放本地视频与流 |
+| [etaf-video-studio](https://github.com/emacs-taf/etaf-video-studio) | 通过 video-project 技能录制、剪辑并发布软件教程：录屏、非破坏性剪辑、后台预览/导出与两步发布 |
 | [etaf-algo-lab](https://github.com/emacs-taf/etaf-algo-lab) | 在 Emacs 里观看、操控并比较算法运行 |
 
 ### 游戏
