@@ -23,9 +23,17 @@ releases the session, its requests and its player.
   like/dislike, subscribe, save and a comment section with replies.
 - Playback: the ETAF native video Component decodes the resolved stream into
   the application canvas, with audition, seek, volume, mute, playback rate,
-  quality selection, captions and theater mode.
+  quality selection, captions rendered under the canvas and theater mode.
+  Playback state is polled once a second, so the transport clock and position
+  follow the decoder, and leaving a video stores its position for the next
+  opening.
 - Appearance: the application's own dark and light palettes, independent of
   the active Emacs theme, plus a collapsible sidebar.
+- Layout: the shell adapts from wide windows down to a compact one. The
+  sidebar collapses to an icon rail, cards become a single column, the watch
+  page stacks and its transport wraps, and a short window shortens the canvas
+  so the transport stays visible. Below about 40 columns or 12 rows the
+  structure is kept and the viewport clips.
 - Local state: playback preferences and per-video resume positions in a
   SQLite store; account lists and comments stay in memory because the account
   remains their authority.

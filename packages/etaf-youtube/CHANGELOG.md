@@ -25,3 +25,12 @@ project uses [Semantic Versioning](https://semver.org/).
 - The application's own dark and light palettes with a collapsible sidebar
   and a viewport-adaptive card grid, plus a SQLite store for playback
   preferences and per-video resume positions.
+
+### Fixed
+
+- The mounted player is connected to the session, so the transport clock and
+  the recorded position follow playback, and pause, seek, volume and mute
+  reach the decoder.
+- Content below the sidebar breakpoint lays out inside the icon rail instead
+  of running under it, and the watch transport wraps or shortens the canvas
+  in narrow and short windows instead of clipping its controls.

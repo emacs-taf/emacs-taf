@@ -168,6 +168,13 @@
       (unless etaf-youtube--model
         (setq-local etaf-youtube--model (etaf-youtube-create)))
       (setf (plist-get etaf-youtube--model :buffer) buffer)
+      ;; A canvas row that fills the window must not end in Emacs's
+      ;; truncation glyph, which shows as a stray `$' at the right edge.
+      (setq-local buffer-display-table
+                  (let ((table (copy-sequence (or standard-display-table
+                                                  (make-display-table)))))
+                    (set-display-table-slot table 'truncation ?\s)
+                    table))
       (use-local-map etaf-youtube-mode-map))
     (pop-to-buffer buffer)
     (let ((window (get-buffer-window buffer t)))
