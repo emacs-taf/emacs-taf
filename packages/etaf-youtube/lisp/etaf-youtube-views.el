@@ -24,8 +24,18 @@
 (etaf-ui-icon-set-register
  'etaf-youtube-brand
  '(:kind svg :viewbox (0 0 24 24) :inset 0
-   :paths ((youtube . "<rect x='1' y='4' width='22' height='16' rx='5' fill='currentColor' stroke='none'/><path d='M10 8L17 12L10 16Z' fill='white' stroke='none'/>"))
-   :fallback ((youtube . ">"))))
+   :paths ((youtube . "<rect x='1' y='4' width='22' height='16' rx='5' fill='currentColor' stroke='none'/><path d='M10 8L17 12L10 16Z' fill='white' stroke='none'/>")
+           (home . "<path d='M3 11L12 3L21 11M5 9V21H10V14H14V21H19V9' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linejoin='round'/>")
+           (shorts . "<path d='M15 2L6 7A4 4 0 0 0 6 14L8 15L5 17A3 3 0 0 0 8 22L18 16A4 4 0 0 0 18 9L16 8L18 7A3 3 0 0 0 15 2Z' fill='none' stroke='currentColor' stroke-width='1.5'/><path d='M10 9L15 12L10 15Z' fill='currentColor' stroke='none'/>")
+           (subscriptions . "<path d='M7 3H17M5 6H19' stroke='currentColor' stroke-width='1.6'/><rect x='3' y='9' width='18' height='12' rx='2' fill='none' stroke='currentColor' stroke-width='1.6'/><path d='M10 12L15 15L10 18Z' fill='currentColor' stroke='none'/>")
+           (history . "<path d='M4 8A9 9 0 1 1 3 14M3 3V9H9M12 7V12L16 15' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/>")
+           (playlists . "<path d='M3 5H21M3 10H21M3 15H12M3 20H12' stroke='currentColor' stroke-width='1.7'/><path d='M16 14L22 18L16 22Z' fill='currentColor' stroke='none'/>")
+           (watch-later . "<circle cx='12' cy='12' r='9' fill='none' stroke='currentColor' stroke-width='1.7'/><path d='M12 6V12L17 15' fill='none' stroke='currentColor' stroke-width='1.7'/>")
+           (liked . "<path d='M7 10L12 3C15 3 14 7 13 9H19C21 9 21 11 20 14L18 21H7ZM3 10H7V21H3Z' fill='none' stroke='currentColor' stroke-width='1.5' stroke-linejoin='round'/>")
+           (live . "<circle cx='12' cy='12' r='2' fill='currentColor' stroke='none'/><path d='M7 7A7 7 0 0 0 7 17M17 7A7 7 0 0 1 17 17M4 4A11 11 0 0 0 4 20M20 4A11 11 0 0 1 20 20' fill='none' stroke='currentColor' stroke-width='1.5'/>"))
+   :fallback ((youtube . ">") (home . "H") (shorts . "S")
+              (subscriptions . "=") (history . "C") (playlists . "L")
+              (watch-later . "W") (liked . "+") (live . "O"))))
 
 (defvar etaf-youtube-search-ref 'etaf-youtube-search-field
   "Ref of the top bar search field, used by the application's focus key.")
@@ -122,9 +132,17 @@ The last line carries an ellipsis when text is dropped."
       (setcar (last result) (etaf-youtube--clip (car (last result)) width)))
     result))
 
+(defun etaf-youtube--display-copy (text)
+  "Keep one space between Chinese and Latin letters or digits in TEXT."
+  (replace-regexp-in-string
+   "\\([A-Za-z0-9]\\)\\([一-鿿]\\)" "\\1 \\2"
+   (replace-regexp-in-string "\\([一-鿿]\\)\\([A-Za-z0-9]\\)" "\\1 \\2"
+                             (or text ""))))
+
 (defun etaf-youtube--clip-pixels (text pixels)
   "Return TEXT shortened so it fits PIXELS display pixels.
 TEXT is cut on character boundaries and trailing blanks are removed."
+  (setq text (etaf-youtube--display-copy text))
   (if (or (string-empty-p text) (<= (etaf-string-pixel-width text) pixels))
       text
     (let ((result "")
@@ -142,7 +160,8 @@ The wrap uses the renderer's own glyph measurement, unlike a column count
 that assumes every CJK character occupies two ASCII cells, so a wide CJK
 font cannot overflow a band whose height the caller already fixed.  Text
 that does not fit ends its last line with an ellipsis."
-  (let ((text (replace-regexp-in-string "[\n\r]+" " " (or text "")))
+  (let ((text (replace-regexp-in-string "[\n\r]+" " "
+                                       (etaf-youtube--display-copy text)))
         (lines (or lines 2))
         (result nil)
         (current "")
@@ -175,6 +194,29 @@ that does not fit ends its last line with an ellipsis."
       (push (seq-take items size) result)
       (setq items (seq-drop items size)))
     (nreverse result)))
+
+(defun etaf-youtube--card-rows (items columns)
+  "Group ITEMS into landscape and portrait rows fitting COLUMNS.
+Each entry retains its original index so visual grouping cannot change which
+video an activation opens.  Order within each kind follows the backend."
+  (let* ((entries (cl-loop for item in items for index from 0
+                           collect (cons index item)))
+         (short-p (lambda (entry)
+                    (member (plist-get (cdr entry) :kind) '(short "short"))))
+         (rows nil))
+    (dolist (portrait '(nil t))
+      (let* ((group (seq-filter (lambda (entry)
+                                  (eq (not (null (funcall short-p entry))) portrait))
+                                entries))
+             (count (max 1 (min (if portrait 6 4)
+                                (/ (+ columns 3) (if portrait 26 43)))))
+             (width (max 18 (/ (- columns (* 3 (1- count))) count)))
+             (first t))
+        (dolist (row (etaf-youtube--chunk group count))
+          (push (list :entries row :columns width :portrait portrait
+                      :heading (and portrait first)) rows)
+          (setq first nil))))
+    (nreverse rows)))
 
 (defun etaf-youtube--seconds (value)
   "Return VALUE as a duration in seconds.
@@ -247,11 +289,9 @@ renderer payloads use; anything else is zero."
          (narrow (<= columns 88))
          (sidebar-visible (and (etaf-value sidebar) (> columns 88)))
          (rail-visible (and narrow (etaf-value sidebar)))
-         ;; The content views lay out for the box they are rendered into, so
-         ;; the rail's six columns (plus its border) come out of `columns'
-         ;; exactly like the expanded sidebar's twenty-six.
-         (content-columns (- columns (cond (sidebar-visible 26)
-                                           (rail-visible 7)
+         ;; Navigation uses border-box widths, including its own padding.
+         (content-columns (- columns (cond (sidebar-visible 24)
+                                           (rail-visible 6)
                                            (t 0)))))
     (etaf-view (flex :flex-direction 'column :width '(vw 100) :height '(vh 100)
           :background-color (plist-get c :bg)
@@ -277,13 +317,13 @@ renderer payloads use; anything else is zero."
                  (list "C-c m" 'etaf-youtube-focus-comments-command "焦点：评论"))
       (etaf-youtube-topbar :model model :colors c :columns columns)
       (flex :flex-direction 'row :flex-grow 1 :flex-basis '(lh 0)
-            :min-height '(lh 0)
+            :min-height '(lh 0) :overflow 'hidden
         (etaf-youtube-sidebar :model model :colors c :columns columns
                               :active sidebar-visible)
         (etaf-youtube-sidebar-rail :model model :colors c
                                    :active rail-visible)
         (box :flex-grow 1 :flex-basis '(ch 0) :min-width '(px 0)
-             :overflow 'scroll
+             :height 'stretch :min-height '(lh 0) :overflow 'scroll
              :ref 'etaf-youtube-content
              :region (list :id etaf-youtube-region-content :label "内容" :key ?c
                            :neighbors (list :left etaf-youtube-region-sidebar))
@@ -307,14 +347,15 @@ renderer payloads use; anything else is zero."
   :render
   (let* ((small (<= columns 72))
          ;; Equal end slots keep search centered, independent of account names.
-         (side-width (if small '(ch 10) '(ch 20))))
+         (side-width (cond ((<= columns 48) '(ch 6))
+                           (small '(ch 10)) (t '(ch 20)))))
     (etaf-view
-     (flex :ref 'etaf-youtube-topbar :flex-direction 'row
-           :align-items 'center :column-gap '(ch 2)
-           :padding (list (list 'lh 0.5) (list 'ch 2))
+     (flex :ref 'etaf-youtube-topbar :role 'banner :aria-label "YouTube 顶栏"
+           :flex-direction 'row :height '(lh 5) :flex-shrink 0
+           :box-sizing 'border-box :align-items 'center
+           :column-gap (list 'ch (if small 1 2))
+           :padding (list '(lh 0) (list 'ch (if small 1 2)))
            :background-color (plist-get colors :bg)
-           :border-bottom (list '(px 1) 'solid (plist-get colors :line))
-           :sticky 'top
        (flex :flex-direction 'row :align-items 'center :column-gap '(ch 1)
              :width side-width :flex-shrink 0
          (etaf-button :variant 'ghost :aria-label "切换侧栏"
@@ -342,7 +383,11 @@ renderer payloads use; anything else is zero."
        (flex :flex-direction 'row :align-items 'center
              :justify-content 'flex-end :column-gap '(ch 1)
              :width side-width :flex-shrink 0
-         (etaf-button :variant 'ghost :aria-label "切换外观"
+         (etaf-button :if (not small) :variant 'ghost :aria-label "刷新"
+                      :help-echo "刷新当前页面" :padding '((lh 0.5) (ch 1))
+                      :on-press (lambda () (etaf-youtube-refresh model))
+           (etaf-ui-icon :name 'refresh :set 'svg :color (plist-get colors :ink)))
+         (etaf-button :if (> columns 48) :variant 'ghost :aria-label "切换外观"
                       :help-echo (if (eq (etaf-value mode) 'dark)
                                      "切换到浅色外观" "切换到深色外观")
                       :padding '((lh 0.5) (ch 1))
@@ -357,7 +402,7 @@ renderer payloads use; anything else is zero."
       (etaf-view
        (etaf-avatar :name (plist-get account :name)
                     :initials (etaf-youtube--avatar-initials (plist-get account :name))
-                    :size '(ch 4) :lines 3 :background (plist-get colors :link)))
+                    :size '(ch 4) :lines 2 :background (plist-get colors :link)))
     (etaf-view
      (box :role 'button :tab-index 0 :padding-inline '(ch 1)
           :color (plist-get colors :link)
@@ -371,16 +416,18 @@ renderer payloads use; anything else is zero."
   :render
   (let ((current (plist-get (etaf-value route) :view)))
     (etaf-view (flex :flex-direction 'column :width '(ch 24)
-          :padding '((lh 1) (ch 2))
+          :box-sizing 'border-box :flex-shrink 0 :height 'stretch
+          :overflow 'scroll :padding '((lh 1) (ch 1))
           :background-color (plist-get colors :bg)
           :row-gap '(lh 0)
-          :border-right (list '(px 1) 'solid (plist-get colors :line))
           :region (list :id etaf-youtube-region-sidebar :label "侧栏" :key ?l
                         :neighbors (list :right etaf-youtube-region-content))
           :if active
       (etaf-youtube-sidebar-items :model model :colors colors :current current)
-      (box :height '(lh 1))
-      (text :color (plist-get colors :dim) :font-weight 'bold "你")
+      (box :height '(lh 1) :flex-shrink 0)
+      (etaf-divider :flex-shrink 0)
+      (box :flex-shrink 0 :padding '((lh 1) (ch 2))
+        (text :color (plist-get colors :ink) :font-weight 'bold "你"))
       (etaf-youtube-sidebar-items :model model :colors colors :current current
                                   :personal t)))))
 
@@ -388,36 +435,41 @@ renderer payloads use; anything else is zero."
   "Render the compact icon rail used below the sidebar breakpoint."
   :view
   (flex :flex-direction 'column :width '(ch 6) :align-items 'center
-        :padding '((lh 1) (ch 1))
+        :box-sizing 'border-box :flex-shrink 0 :height 'stretch
+        :overflow 'scroll :padding '((lh 1) (ch 0))
         :background-color (plist-get colors :bg)
-        :row-gap '(lh 0)
-        :border-right (list '(px 1) 'solid (plist-get colors :line))
+        :row-gap '(lh 1)
         :region (list :id etaf-youtube-region-sidebar :label "侧栏" :key ?l
                       :neighbors (list :right etaf-youtube-region-content))
         :if active
-    (etaf-youtube-rail-button :for (entry '(("⌂" . home) ("⚡" . shorts)
-                                            ("☰" . subscriptions)
-                                            ("◷" . history) ("≣" . playlists)))
+    (etaf-youtube-rail-button :for (entry '(("首页" . home) ("Shorts" . shorts)
+                                            ("订阅内容" . subscriptions)
+                                            ("历史" . history) ("播放列表" . playlists)))
                               :key (cdr entry)
                               :label (car entry)
                               :view (cdr entry)
                               :model model :colors colors)))
 
 (etaf-define-component etaf-youtube-rail-button (&key label view model colors)
-  "Render one icon-rail button."
-  :view
-  (box :role 'button :tab-index 0 :aria-label (symbol-name view)
-       :padding '((lh 0) (ch 1))
-       :color (plist-get colors :ink)
-       :hover-style (list :background-color (plist-get colors :hover))
-       :on-press (lambda () (etaf-youtube-locate model view))
-    (text (expr label))))
+  "Render one accessible, selected-state-aware SVG navigation button."
+  :bindings ((route (plist-get model :route)))
+  :render
+  (let ((active (eq view (plist-get (etaf-value route) :view))))
+    (etaf-view
+     (etaf-button :variant 'ghost :aria-label label :help-echo label
+                  :aria-selected active :border-radius '(px 8)
+                  :bgcolor (when active (plist-get colors :selected))
+                  :padding '((lh 0) (ch 1))
+                  :on-press (lambda () (etaf-youtube-locate model view))
+       (flex :height '(lh 2) :align-items 'center :justify-content 'center
+         (etaf-ui-icon :name view :set 'etaf-youtube-brand
+                       :color (plist-get colors :ink) :min-width 3))))))
 
 (etaf-define-component etaf-youtube-sidebar-items
     (&key model colors current personal)
   "Render MODEL's navigation entries, PERSONAL for the account lists."
   :view
-  (flex :flex-direction 'column :row-gap '(lh 0)
+  (flex :flex-direction 'column :row-gap '(lh 0) :flex-shrink 0
     (etaf-youtube-sidebar-item
      :for (entry (if personal
                      '(("历史" . history) ("播放列表" . playlists)
@@ -436,16 +488,18 @@ renderer payloads use; anything else is zero."
   "Render one navigation entry."
   :render
   (let ((active (eq view current)))
-    (etaf-view (box :role 'button :tab-index 0 :aria-label label
-         :aria-selected (and active t)
-         :padding '((lh 0) (ch 2))
-         :background-color (if active (plist-get colors :selected) nil)
-         :color (if active (plist-get colors :ink) (plist-get colors :muted))
-         :font-weight (if active 'bold 'normal)
-         :hover-style (unless active
-                        (list :background-color (plist-get colors :hover)))
-         :on-press (lambda () (etaf-youtube-locate model view))
-      (text (expr label))))))
+    (etaf-view
+     (etaf-button :variant 'ghost :aria-label label :aria-selected active
+                  :width 'stretch :border-radius '(px 8)
+                  :padding '((lh 0) (ch 2))
+                  :bgcolor (when active (plist-get colors :selected))
+                  :color (plist-get colors :ink)
+                  :on-press (lambda () (etaf-youtube-locate model view))
+       (flex :flex-direction 'row :height '(lh 2) :align-items 'center
+             :column-gap '(ch 2)
+         (etaf-ui-icon :name view :set 'etaf-youtube-brand
+                       :color (plist-get colors :ink) :min-width 2)
+         (text :font-weight (if active 'bold 'normal) (expr label)))))))
 
 (etaf-define-component etaf-youtube-toast (&key message colors columns)
   "Render MESSAGE as a floating status line."
@@ -457,7 +511,9 @@ renderer payloads use; anything else is zero."
                              ('success (plist-get colors :ok))
                              (_ (plist-get colors :panel3)))
          :color (if (eq variant 'success) "#FFFFFF" (plist-get colors :ink))
-         :position 'absolute :left '(px 2) :top '(lh 1) :z-index 20
+         :position 'absolute :left '(ch 2)
+         :top '(calc (- (vh 100) (lh 3))) :z-index 20
+         :border-radius '(px 8)
       (text (expr (etaf-youtube--clip (or (plist-get message :text) "")
                                       (max 10 (- columns 8)))))))))
 
@@ -476,13 +532,11 @@ renderer payloads use; anything else is zero."
          (items (plist-get payload :items))
          (state (plist-get (etaf-value status) :state))
          (view (plist-get (etaf-value route) :view))
-         (per-row (max 1 (min 4 (floor (/ (- columns 8) 34)))))
-         (card-columns (max 18 (floor (/ (- columns 8 per-row) per-row))))
-         (image-rows (etaf-youtube--image-rows card-columns metrics))
-         (rows (etaf-youtube--chunk items per-row))
-         (index 0))
+         (padding (if (< columns 70) 2 3))
+         (inner (- columns (* 2 padding)))
+         (rows (etaf-youtube--card-rows items inner)))
     (etaf-view (flex :flex-direction 'column :width 'stretch
-          :padding '((lh 1) (ch 3)) :row-gap '(lh 1)
+          :padding (list '(lh 1) (list 'ch padding)) :row-gap '(lh 2)
       (etaf-youtube-list-header :model model :colors colors :payload payload
                                 :state state :view view)
       (flex :flex-direction 'column :row-gap '(lh 0) :if (eq state 'loading)
@@ -504,21 +558,34 @@ renderer payloads use; anything else is zero."
        (when (and items (not (eq state 'loading)))
          (mapcar
           (lambda (row)
-            (etaf-view
-             (flex :flex-direction 'row :column-gap '(ch 2)
-                   :align-items 'flex-start
-               (expr
-                (mapcar
-                 (lambda (item)
-                   (let ((this index))
-                     (setq index (1+ index))
-                     (etaf-view
-                      (etaf-youtube-card :model model :colors colors
-                                         :item item
-                                         :columns card-columns
-                                         :image-rows image-rows
-                                         :index this))))
-                 row)))))
+            (let* ((width (plist-get row :columns))
+                   (portrait (plist-get row :portrait))
+                   (cell (etaf-youtube--display-cell metrics))
+                   (height (if portrait
+                               (max 4 (round (/ (* width (car cell) 16.0)
+                                                (* 9.0 (cdr cell)))))
+                             (etaf-youtube--image-rows width metrics))))
+              (etaf-view
+               (flex :flex-direction 'column :row-gap '(lh 1)
+                 (flex :if (and (not (eq view 'shorts)) (plist-get row :heading))
+                       :flex-direction 'row
+                       :column-gap '(ch 1) :align-items 'center
+                   (etaf-ui-icon :name 'shorts :set 'etaf-youtube-brand
+                                 :color (plist-get colors :accent))
+                   (text :color (plist-get colors :ink) :font-weight 'bold "Shorts"))
+                 (flex :flex-direction 'row :column-gap '(ch 3)
+                       :align-items 'flex-start
+                   (expr
+                    (mapcar
+                     (lambda (entry)
+                       (let ((item (cdr entry)))
+                         (etaf-view
+                          (etaf-youtube-card :model model :colors colors
+                                             :item item :columns width
+                                             :image-rows height
+                                             :key (plist-get item :id)
+                                             :index (car entry)))))
+                     (plist-get row :entries))))))))
           rows)))
       (flex :flex-direction 'row :padding '((lh 1) (ch 0))
             :if (and (plist-get payload :next) (not (eq state 'loading)))
@@ -534,7 +601,8 @@ renderer payloads use; anything else is zero."
   "Render the list title, chips and tabs of PAYLOAD."
   :view
   (flex :flex-direction 'column :row-gap '(lh 1)
-    (flex :flex-direction 'row :align-items 'center :column-gap '(ch 2)
+    (flex :if (not (and (eq view 'home) (plist-get payload :filters)))
+          :flex-direction 'row :align-items 'center :column-gap '(ch 2)
       (text :font-weight 'bold
             :color (plist-get colors :ink)
             (expr (or (and (plist-get payload :title)
@@ -567,21 +635,19 @@ renderer payloads use; anything else is zero."
                        :model model :colors colors :chip chip)))
 
 (etaf-define-component etaf-youtube-chip (&key model colors chip)
-  "Render one filter chip."
+  "Render one filter chip using the catalog button interaction."
   :render
   (let ((selected (plist-get chip :selected)))
-    (etaf-view (box :role 'button :tab-index 0
-         :aria-label (or (plist-get chip :title) "")
-         :aria-selected (and selected t)
-         :padding '((lh 0) (ch 2))
-         :background-color (if selected
-                               (plist-get colors :ink)
+    (etaf-view
+     (etaf-button :variant 'ghost :aria-label (or (plist-get chip :title) "")
+                  :aria-selected (and selected t) :border-radius '(px 6)
+                  :padding '((lh 0) (ch 2))
+                  :bgcolor (if selected (plist-get colors :ink)
                              (plist-get colors :panel3))
-         :color (if selected (plist-get colors :bg) (plist-get colors :ink))
-         :hover-style (unless selected
-                        (list :background-color (plist-get colors :hover)))
-         :on-press (lambda () (etaf-youtube-apply-chip model chip))
-      (text (expr (or (plist-get chip :title) "")))))))
+                  :color (if selected (plist-get colors :bg) (plist-get colors :ink))
+                  :on-press (lambda () (etaf-youtube-apply-chip model chip))
+       (flex :height '(lh 2) :align-items 'center
+         (text (expr (or (plist-get chip :title) ""))))))))
 
 (etaf-define-component etaf-youtube-skeleton-row (&key columns colors)
   "Render a placeholder row while a list loads."
@@ -604,48 +670,70 @@ renderer payloads use; anything else is zero."
          (image (etaf-youtube-images-descriptor
                  (plist-get model :images) (plist-get item :thumbnail)))
          (image-size (etaf-youtube--thumbnail-size image columns image-rows))
-         (title-lines (etaf-youtube--wrap (plist-get item :title) columns 2))
-         (meta (etaf-youtube--meta-line item))
+         (portrait (member (plist-get item :kind) '(short "short")))
+         (has-author (not (string-empty-p (or (plist-get item :author) ""))))
+         (avatar (and has-author (not portrait)))
+         (text-columns (max 10 (- columns (if avatar 6 1))))
+         (pixels (* (1- text-columns)
+                    (car (etaf-youtube--display-cell (etaf-display-metrics)))))
+         (title-lines (etaf-youtube--caption-lines (plist-get item :title) pixels 2))
+         (author (or (plist-get item :author) ""))
+         (meta (string-join
+                (seq-remove #'string-empty-p
+                            (list (or (plist-get item :views) "")
+                                  (or (plist-get item :published) ""))) " · "))
          (duration (plist-get item :duration))
-         (kind (plist-get item :kind)))
-    (etaf-view (box :role 'button :tab-index 0
-         :aria-label (or (plist-get item :title) "")
-         :aria-selected (and active t)
-         :width (list 'ch columns)
-         :flex-shrink 0
-         :overflow 'hidden
-         :background-color (if active (plist-get colors :selected) nil)
-         :hover-style (unless active
-                        (list :background-color (plist-get colors :hover)))
-         :on-press (lambda () (etaf-youtube-press-item model index))
-      (flex :flex-direction 'column :row-gap '(lh 0)
-        (box :width (list 'ch columns) :height (list 'lh image-rows)
-             :overflow 'hidden
-             :background-color (plist-get colors :panel3)
-          (flex :if image :flex-direction 'row :justify-content 'center
-                :align-items 'center :height (list 'lh image-rows)
-            (image :src image :columns (car image-size) :rows (cdr image-size)))
-          (box :if (not image) :width 'stretch :height 'stretch
-               :text-align 'center
-               :padding-top (list 'lh (max 0 (/ (- image-rows 1) 2)))
-               :color (plist-get colors :dim)
-            (text (expr (if (eq kind 'channel) "频道"
-                    (if (eq kind 'playlist) "播放列表" "视频"))))))
-        (flex :flex-direction 'row :column-gap '(ch 1) :padding-top '(lh 0)
-          (text :if (and duration (not (equal duration ""))
-                         (not (member kind '(channel "channel"))))
-                :color (plist-get colors :muted)
-                (expr (if (or (member kind '(short "short"))
-                              (equal duration "Shorts"))
-                          "Shorts"
-                        (etaf-youtube--seconds duration))))
-          (text :color (plist-get colors :muted)
-                (expr (etaf-youtube--clip meta (max 8 columns)))))
-        (text :color (plist-get colors :ink) :font-weight 'bold
-              (expr (or (car title-lines) "")))
-        (text :if (cadr title-lines)
-              :color (plist-get colors :ink) :font-weight 'bold
-              (expr (or (cadr title-lines) ""))))))))
+         (kind (plist-get item :kind))
+         (badge (cond ((or (plist-get item :live)
+                           (and (stringp duration)
+                                (string-match-p "LIVE\\|直播" duration))) "直播")
+                      ((or (member kind '(short "short"))
+                           (equal duration "Shorts")) "Shorts")
+                      ((and duration (not (equal duration ""))
+                            (not (member kind '(channel "channel"))))
+                       (etaf-youtube--seconds duration)))))
+    (etaf-view
+     (etaf-button :variant 'ghost :aria-label (or (plist-get item :title) "")
+                  :aria-selected active :width (list 'ch columns)
+                  :padding '((lh 0) (ch 0)) :border-radius '(px 8)
+                  :overflow 'hidden
+                  :bgcolor (when active (plist-get colors :selected))
+                  :on-press (lambda () (etaf-youtube-press-item model index))
+       (flex :flex-direction 'column :row-gap '(lh 1)
+         (box :position 'relative :width (list 'ch columns)
+              :height (list 'lh image-rows) :overflow 'hidden
+              :background-color (plist-get colors :panel3)
+           (flex :if image :flex-direction 'row :justify-content 'center
+                 :align-items 'center :height (list 'lh image-rows)
+             (image :src image :columns (car image-size) :rows (cdr image-size)))
+           (box :if (not image) :width 'stretch :height 'stretch
+                :text-align 'center
+                :padding-top (list 'lh (max 0 (/ (- image-rows 1) 2)))
+                :color (plist-get colors :dim)
+             (text (expr (cond ((member kind '(channel "channel")) "频道")
+                              ((member kind '(playlist "playlist")) "播放列表")
+                              (t "视频")))))
+           (box :if badge :position 'absolute :z-index 1
+                :left (list 'ch (max 0 (- columns (string-width (or badge "")) 2)))
+                :top (list 'lh (1- image-rows)) :padding-inline '(ch 0.5)
+                :background-color (plist-get colors :badge)
+                :color (plist-get colors :badge-ink) :border-radius '(px 3)
+             (text (expr (or badge "")))))
+         (flex :flex-direction 'row :column-gap '(ch 1)
+               :padding '((lh 0) (ch 0.5)) :align-items 'flex-start
+           (etaf-avatar :if avatar :name author
+                        :initials (etaf-youtube--avatar-initials author)
+                        :size '(ch 4) :lines 2
+                        :background (plist-get colors :avatar-bg))
+           (flex :flex-direction 'column :width (list 'ch text-columns)
+             (box :height '(lh 2) :overflow 'hidden
+               (text :color (plist-get colors :ink) :font-weight 'bold
+                     (expr (string-join title-lines "\n"))))
+             (text :if (and has-author (not portrait))
+                   :color (plist-get colors :muted)
+                   (expr (etaf-youtube--clip-pixels author pixels)))
+             (text :color (plist-get colors :muted)
+                   (expr (etaf-youtube--clip-pixels meta pixels))))))))))
 
 ;;; ---------------------------------------------------------------------------
 ;;; Watch page

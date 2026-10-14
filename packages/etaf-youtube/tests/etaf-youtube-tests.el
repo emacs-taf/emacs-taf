@@ -623,7 +623,10 @@ instead of deleting the target it just found."
           (progn
             (etaf-mount buffer (etaf-youtube-view app)
                         (list :viewport-width 1200 :viewport-height 40))
-            (etaf-runtime-flush (etaf-runtime-for-buffer buffer))
+            (let* ((runtime (etaf-runtime-for-buffer buffer))
+                   (short (etaf-youtube-tests--host runtime :aria-label "A short clip")))
+              (etaf-scroll-into-view runtime short 'end)
+              (etaf-runtime-flush runtime))
             (with-current-buffer buffer
               (let ((text (buffer-substring-no-properties (point-min) (point-max))))
                 (should (string-match-p "A short clip" text))
@@ -661,6 +664,121 @@ instead of deleting the target it just found."
                                images "https://i.ytimg.com/vi/v1/hq720.jpg")))))
       (etaf-youtube-destroy app)
       (delete-directory root t))))
+
+(defun etaf-youtube-tests--host (runtime property value)
+  "Find the rendered Host whose public PROPERTY equals VALUE in RUNTIME."
+  (car (seq-find (lambda (entry) (equal (plist-get (cdr entry) property) value))
+                 (etaf-runtime-host-props-entries runtime))))
+
+(ert-deftest etaf-youtube-header-keeps-its-slot-across-updates ()
+  "Account arrival, scrolling, palette and size changes keep the full header."
+  (etaf-youtube-tests--with-app app fixtures log
+    (let* ((feed (gethash "feed home" fixtures))
+           (sample (aref (gethash "items" feed) 0))
+           (buffer (generate-new-buffer " *youtube-header-test*")))
+      (puthash "items" (vconcat
+                        (cl-loop for i below 36 collect
+                                 (let ((item (copy-hash-table sample)))
+                                   (puthash "id" (format "card-%d" i) item)
+                                   (puthash "thumbnail" "" item)
+                                   item))) feed)
+      (unwind-protect
+          (progn
+            (etaf-mount buffer (etaf-youtube-view app)
+                        '(:viewport-width 1120 :viewport-height 36))
+            (should (etaf-youtube-tests--wait
+                     (lambda () (= 36 (plist-get (etaf-youtube-state app) :items)))))
+            (let* ((runtime (etaf-runtime-for-buffer buffer))
+                   (banner (etaf-youtube-tests--host runtime :role 'banner)))
+              (should banner)
+              (dolist (size '((1120 . 36) (700 . 28) (420 . 22) (1120 . 15)))
+                (etaf-runtime-refit runtime (car size) (cdr size))
+                (dolist (mode '(dark light))
+                  (etaf-youtube-set-theme app mode)
+                  (let* ((content (car (seq-find
+                                        (lambda (entry)
+                                          (eq (plist-get (plist-get (cdr entry) :region) :id)
+                                              etaf-youtube-region-content))
+                                        (etaf-runtime-host-props-entries runtime))))
+                         (offset (etaf-scroll-to runtime content 'end)))
+                    (etaf-runtime-flush runtime)
+                    (let* ((span (etaf-host-ref-bounds runtime banner))
+                           (size (etaf-host-ref-size runtime banner))
+                           (visible (with-current-buffer buffer
+                                      (buffer-substring-no-properties (car span) (cdr span)))))
+                      (should (> offset 0))
+                      (should (= (cdr size) 5))
+                      (should (string-match-p "搜索" visible))
+                      (with-current-buffer buffer (should-not header-line-format))))))
+              (etaf-youtube-refresh app)
+              (should (etaf-youtube-tests--wait
+                       (lambda () (eq (plist-get (plist-get (etaf-youtube-state app) :feed-status)
+                                                 :state) 'ready))))
+              (let ((height (cdr (etaf-host-ref-size runtime banner))))
+                (should (= height 5)))))
+        (when (buffer-live-p buffer) (kill-buffer buffer))))))
+
+(ert-deftest etaf-youtube-navigation-selection-suppresses-hover ()
+  "Expanded and compact navigation use the same selected-state semantics."
+  (etaf-youtube-tests--with-app app fixtures log
+    (etaf-youtube-locate app 'home)
+    (should (etaf-youtube-tests--wait
+             (lambda () (= 3 (plist-get (etaf-youtube-state app) :items)))))
+    (let ((buffer (generate-new-buffer " *youtube-navigation-test*")))
+      (unwind-protect
+          (progn
+            (etaf-mount buffer (etaf-youtube-view app)
+                        '(:viewport-width 1120 :viewport-height 36))
+            (let ((runtime (etaf-runtime-for-buffer buffer)))
+              (dolist (width '(1120 420))
+                (etaf-runtime-refit runtime width 36)
+                (let* ((entries (etaf-runtime-host-props-entries runtime))
+                       (home (seq-find
+                              (lambda (entry)
+                                (and (equal (plist-get (cdr entry) :aria-label) "首页")
+                                     (plist-get (cdr entry) :aria-selected))) entries)))
+                  (should home)
+                  (should-not (plist-get (cdr home) :hover-style))))
+              (etaf-runtime-refit runtime 1120 14)
+              (let* ((sidebar (car (seq-find
+                                   (lambda (entry)
+                                     (eq (plist-get (plist-get (cdr entry) :region) :id)
+                                         etaf-youtube-region-sidebar))
+                                   (etaf-runtime-host-props-entries runtime))))
+                     (offset (etaf-scroll-to runtime sidebar 'end)))
+                (etaf-runtime-flush runtime)
+                (should (> offset 0))
+                (with-current-buffer buffer
+                  (let ((visible (buffer-substring-no-properties (point-min) (point-max))))
+                    (should (string-match-p "喜欢的视频" visible)))))))
+        (when (buffer-live-p buffer) (kill-buffer buffer))))))
+
+(ert-deftest etaf-youtube-grouped-cards-activate-the-original-video ()
+  "Grouping portrait cards does not change the target of a card activation."
+  (etaf-youtube-tests--with-app app fixtures log
+    (let* ((feed (gethash "feed home" fixtures))
+           (items (gethash "items" feed))
+           (short (aref items 0))
+           (buffer (generate-new-buffer " *youtube-card-order-test*"))
+           (opened nil))
+      (puthash "kind" "short" short)
+      (puthash "title" "Portrait first in source" short)
+      (etaf-youtube-locate app 'home)
+      (should (etaf-youtube-tests--wait
+               (lambda () (= 3 (plist-get (etaf-youtube-state app) :items)))))
+      (unwind-protect
+          (progn
+            (etaf-mount buffer (etaf-youtube-view app)
+                        '(:viewport-width 1120 :viewport-height 40))
+            (let* ((runtime (etaf-runtime-for-buffer buffer))
+                   (target (etaf-youtube-tests--host runtime :aria-label
+                                                    "Portrait first in source")))
+              (should target)
+              (cl-letf (((symbol-function 'etaf-youtube-open-video)
+                         (lambda (_app id) (setq opened id))))
+                (etaf-dispatch-event runtime target 'press))
+              (should (equal opened (gethash "id" short)))))
+        (when (buffer-live-p buffer) (kill-buffer buffer))))))
 
 (provide 'etaf-youtube-tests)
 ;;; etaf-youtube-tests.el ends here

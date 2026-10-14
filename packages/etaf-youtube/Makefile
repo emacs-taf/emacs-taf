@@ -8,7 +8,7 @@ SOURCES = lisp/etaf-youtube-theme.el lisp/etaf-youtube-service.el
 SOURCES += lisp/etaf-youtube-images.el lisp/etaf-youtube-store.el
 SOURCES += lisp/etaf-youtube-model.el lisp/etaf-youtube-views.el
 SOURCES += lisp/etaf-youtube-app.el etaf-youtube.el
-SOURCES += $(wildcard scripts/*.el)
+SOURCES += $(wildcard scripts/*.el) $(wildcard benchmarks/*.el)
 
 .PHONY: compile load check clean structure-check setup-hooks acceptance api-check test benchmark
 

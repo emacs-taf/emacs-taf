@@ -27,11 +27,15 @@ releases the session, its requests and its player.
   Playback state is polled once a second, so the transport clock and position
   follow the decoder, and leaving a video stores its position for the next
   opening.
-- Appearance: the application's own dark and light palettes, independent of
-  the active Emacs theme, plus a collapsible sidebar.
+- Appearance: dark and light palettes independent of the Emacs theme,
+  a fixed search/account bar, rounded filter buttons and SVG navigation.
+  Video cards put titles ahead of channel and view metadata; durations sit
+  on the thumbnail and Shorts use a separate portrait grid.
 - Layout: the shell adapts from wide windows down to a compact one. The
-  sidebar collapses to an icon rail, cards become a single column, the watch
-  page stacks and its transport wraps, and a short window shortens the canvas
+  sidebar collapses to an icon rail, landscape cards become a single column,
+  the watch page stacks and its transport wraps. The top bar has a stable
+  height during loading, scrolling and resizing; navigation and content
+  scroll independently below it. A short window shortens the canvas
   so the transport stays visible. Below about 40 columns or 12 rows the
   structure is kept and the viewport clips.
 - Regions: the shell, sidebar, content and comment areas are named regions,
@@ -57,6 +61,10 @@ releases the session, its requests and its player.
 (require 'etaf-youtube)
 (etaf-youtube-open)
 ```
+
+Opening the application replaces the current window's buffer without splitting
+it. The application owns its chrome, so it does not add an Emacs mode line or
+borrow the editor header line for its multi-row top bar.
 
 Application keys: `SPC` play/pause, `f`/`b` seek five seconds, `[`/`]` volume,
 `m` mute, `s` sidebar, `t` theater, `d` appearance, `r` refresh, `u` back,

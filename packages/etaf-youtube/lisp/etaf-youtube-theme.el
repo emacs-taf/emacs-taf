@@ -24,7 +24,7 @@
   '((dark
      :bg "#0F0F0F" :panel "#0F0F0F" :panel2 "#212121" :panel3 "#272727"
      :hover "#272727" :selected "#303030" :line "#303030" :line-soft "#212121"
-     :ink "#F1F1F1" :muted "#AAAAAA" :dim "#717171"
+     :ink "#F1F1F1" :muted "#AAAAAA" :dim "#717171" :avatar-bg "#3F3F3F"
      :accent "#FF0000" :accent-strong "#D90000" :accent-soft "#2A0A0A"
      :link "#3EA6FF" :ok "#2BA640" :danger "#FF4E45" :danger-bg "#2B0F0E"
      :success-bg "#0F2A14" :warn "#F5B942" :warn-bg "#2B230B"
@@ -32,7 +32,7 @@
     (light
      :bg "#FFFFFF" :panel "#FFFFFF" :panel2 "#F2F2F2" :panel3 "#E5E5E5"
      :hover "#E5E5E5" :selected "#D9D9D9" :line "#E5E5E5" :line-soft "#F2F2F2"
-     :ink "#0F0F0F" :muted "#606060" :dim "#909090"
+     :ink "#0F0F0F" :muted "#606060" :dim "#909090" :avatar-bg "#606060"
      :accent "#FF0000" :accent-strong "#CC0000" :accent-soft "#FCE7E7"
      :link "#065FD4" :ok "#1D7A2E" :danger "#C00" :danger-bg "#FBE4E2"
      :success-bg "#E3F3E8" :warn "#A86B14" :warn-bg "#FBF0DA"
@@ -92,8 +92,10 @@ same colors as the application's own Views."
      :ui-disabled-fg muted :ui-disabled-bg panel :ui-disabled-border line
      :ui-accent accent :ui-accent-fg "#FFFFFF" :ui-accent-soft-bg accent-soft
      :ui-button-primary-fg "#FFFFFF" :ui-button-primary-bg accent
-     :ui-button-secondary-fg accent :ui-button-secondary-bg accent-soft
-     :ui-button-ghost-fg muted
+     :ui-button-secondary-fg ink :ui-button-secondary-bg panel
+     :ui-button-secondary-hover-bg (etaf-youtube-color :hover mode)
+     :ui-button-ghost-fg ink
+     :ui-button-ghost-hover-bg (etaf-youtube-color :hover mode)
      :ui-search-bg panel :ui-search-fg ink
      :ui-success-fg ok :ui-success-bg ok-bg :ui-success-border ok-border
      :ui-danger-fg danger :ui-danger-bg danger-bg :ui-danger-border danger-border
@@ -134,6 +136,7 @@ separately for every cell, so one mode change repaints the whole surface."
         :danger (etaf-youtube-color :danger mode)
         :danger-bg (etaf-youtube-color :danger-bg mode)
         :ok (etaf-youtube-color :ok mode)
+        :avatar-bg (etaf-youtube-color :avatar-bg mode)
         :badge (etaf-youtube-color :badge mode)
         :badge-ink (etaf-youtube-color :badge-ink mode)))
 

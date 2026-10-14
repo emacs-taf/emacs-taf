@@ -28,6 +28,13 @@ project uses [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- The complete top bar now keeps a fixed layout slot while only the content
+  below it scrolls. Scrolling, loading and resizing no longer replace it with
+  the empty first row of a single-line sticky header.
+- Navigation has consistent SVG icons and selected states in both sidebar
+  sizes. Filter chips have larger targets, video cards separate title/channel
+  metadata and duration badges, and Shorts use their own portrait grid.
+  Opening the application no longer splits the current window.
 - The header centers its theme-aware search field between balanced control
   groups, with SVG icons and a circular account avatar. Resizing clears stale
   horizontal scroll so the header cannot remain shifted out of the window.

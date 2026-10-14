@@ -47,7 +47,9 @@
                                 (window-body-height window))
             ;; A focused right-hand control can leave Emacs horizontally
             ;; scrolled after a resize, even when the new layout fits.
-            (set-window-hscroll window 0)))))))
+            (set-window-hscroll window 0)
+            (set-window-vscroll window 0 t)
+            (set-window-start window (point-min) t)))))))
 
 (defun etaf-youtube--window-size-change (frame)
   "Schedule a refit after FRAME's windows changed size."
@@ -180,6 +182,10 @@
       (unless etaf-youtube--model
         (setq-local etaf-youtube--model (etaf-youtube-create)))
       (setf (plist-get etaf-youtube--model :buffer) buffer)
+      (setq-local mode-line-format nil
+                  header-line-format nil
+                  auto-hscroll-mode nil
+                  truncate-lines t)
       ;; A canvas row that fills the window must not end in Emacs's
       ;; truncation glyph, which shows as a stray `$' at the right edge.
       (setq-local buffer-display-table
@@ -187,8 +193,10 @@
                                                   (make-display-table)))))
                     (set-display-table-slot table 'truncation ?\s)
                     table)))
-    (pop-to-buffer buffer)
+    (switch-to-buffer buffer)
     (set-window-hscroll (selected-window) 0)
+    (set-window-vscroll (selected-window) 0 t)
+    (set-window-start (selected-window) (point-min) t)
     (let ((window (get-buffer-window buffer t)))
       (etaf-mount buffer (etaf-youtube-view (buffer-local-value 'etaf-youtube--model
                                                                 buffer))

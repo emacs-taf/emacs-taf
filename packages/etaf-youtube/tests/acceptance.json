@@ -12,6 +12,21 @@
  "support": [],
  "cases": [
   {
+   "name": "etaf-youtube-header-keeps-its-slot-across-updates",
+   "file": "tests/etaf-youtube-tests.el",
+   "purpose": "The complete header stays visible while content scrolls, account data arrives, the palette switches and the viewport resizes."
+  },
+  {
+   "name": "etaf-youtube-navigation-selection-suppresses-hover",
+   "file": "tests/etaf-youtube-tests.el",
+   "purpose": "Expanded and compact navigation keep the selected surface without an overriding hover fill."
+  },
+  {
+   "name": "etaf-youtube-grouped-cards-activate-the-original-video",
+   "file": "tests/etaf-youtube-tests.el",
+   "purpose": "Separating portrait Shorts and landscape cards preserves each card's original activation target."
+  },
+  {
    "name": "etaf-youtube-check-records-account",
    "file": "tests/etaf-youtube-tests.el",
    "purpose": "Opening a session asks the skill for the account and records its name and sign-in state."
