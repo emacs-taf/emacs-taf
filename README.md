@@ -61,6 +61,7 @@ workspace, whose README owns their dependency lists:
 | [etaf-video-player](https://github.com/emacs-taf/etaf-video-player) | Local video and streams as sharp image frames with sound |
 | [etaf-video-studio](https://github.com/emacs-taf/etaf-video-studio) | Record, edit and publish software tutorials through the video-project skill: recording, non-destructive edits, background previews/exports and a two-step publish flow |
 | [etaf-algo-lab](https://github.com/emacs-taf/etaf-algo-lab) | Learn algorithms by watching, steering and comparing them inside Emacs |
+| [etaf-screensaver](https://github.com/emacs-taf/etaf-screensaver) | Idle screensavers: canvas-only animation, input dismissal, grouped playback and adapted recorded animations |
 
 ### Games
 

@@ -54,6 +54,7 @@
 | [etaf-video-player](https://github.com/emacs-taf/etaf-video-player) | 在 Emacs 里以清晰图像帧加声音播放本地视频与流 |
 | [etaf-video-studio](https://github.com/emacs-taf/etaf-video-studio) | 通过 video-project 技能录制、剪辑并发布软件教程：录屏、非破坏性剪辑、后台预览/导出与两步发布 |
 | [etaf-algo-lab](https://github.com/emacs-taf/etaf-algo-lab) | 在 Emacs 里观看、操控并比较算法运行 |
+| [etaf-screensaver](https://github.com/emacs-taf/etaf-screensaver) | 空闲屏保：纯画布动画、输入唤回、组合播放与适配的外部录制动画 |
 
 ### 游戏
 
