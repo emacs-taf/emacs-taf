@@ -171,6 +171,15 @@ to every repository changed from this workspace.
   strings and in values joined at display time alike (for example a
   chapter card reads `上一章 18 盒与常规流`); full-width punctuation keeps
   its own spacing.
+- Before implementing a new ETAF interface or a visual redesign, create an SVG
+  design and render it into a complete image for explicit user approval.
+  Use the intended viewport, readable typography and representative content;
+  include panel and control borders in the design, not just layout boxes.
+  Only then reproduce the approved design with ETAF and reusable UI components,
+  and compare real GUI captures against it before functional and performance
+  acceptance. A mockup is not an implemented interface or acceptance evidence.
+  Changes to an approved visual design require renewed approval; fixes that
+  preserve it use the existing design as their reference.
 - Application layouts, including games, must have a coherent content grid,
   aligned region boundaries, intentional spacing and a clear visual hierarchy.
   Avoid large empty panels created merely by stretching containers.
