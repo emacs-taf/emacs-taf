@@ -23,7 +23,7 @@
   (let* ((fixtures (with-temp-buffer
                      (insert-file-contents etaf-youtube-benchmark--fixture-file)
                      (json-parse-buffer :object-type 'hash-table :array-type 'array
-                                        :null-object nil :false-object :json-false)))
+                                        :null-object nil :false-object :false)))
          (feed (gethash "feed home" fixtures))
          (sample (aref (gethash "items" feed) 0))
          (directory (make-temp-file "youtube-benchmark-" t))
@@ -39,11 +39,15 @@
     (setq app
           (etaf-youtube-create
            :store :none
-           :images (etaf-youtube-images-create :directory directory)
+           :images (etaf-youtube-images-create
+                    :directory directory
+                    :fetcher (lambda (_images _url _file callback)
+                               (funcall callback "Artwork is not part of this offline workload")
+                               #'ignore))
            :service (etaf-youtube-service-create
                      :runner
                      (lambda (argv callback)
-                       (let* ((args (cdr argv))
+                       (let* ((args (cddr argv))
                               (end (cl-position "--json" args :test #'equal))
                               (key (string-join (if end (seq-take args end) args) " "))
                               (payload (gethash key fixtures))
@@ -51,18 +55,24 @@
                                       0.001 nil callback
                                       (list :exit (if payload 0 3)
                                             :stdout (json-serialize
-                                                     (or payload (list :ok :json-false
+                                                     (or payload (list :ok :false
                                                                        :message key)))))))
                          (lambda () (cancel-timer timer)))))))
+    (etaf-youtube-locate app 'home)
+    (let ((until (+ (float-time) 3)))
+      (while (and (< (plist-get (etaf-youtube-state app) :items) 36)
+                  (< (float-time) until))
+        (sleep-for 0.01)))
+    (unless (= (plist-get (etaf-youtube-state app) :items) 36)
+      (etaf-youtube-destroy app)
+      (kill-buffer buffer)
+      (delete-directory directory t)
+      (error "YouTube benchmark did not load its 36-card fixture"))
     (when (eq mode 'gui) (switch-to-buffer buffer))
     (etaf-mount buffer (etaf-youtube-view app)
                 (if (eq mode 'batch) '(:viewport-width 1120 :viewport-height 36)
                   (list :viewport-width (window-body-width nil t)
                         :viewport-height (window-body-height))))
-    (let ((until (+ (float-time) 3)))
-      (while (and (< (plist-get (etaf-youtube-state app) :items) 36)
-                  (< (float-time) until))
-        (sleep-for 0.01)))
     (list :buffer buffer
           :invoke (lambda (_sample)
                     (cl-incf step)
