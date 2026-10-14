@@ -28,6 +28,13 @@ project uses [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- The header centers its theme-aware search field between balanced control
+  groups, with SVG icons and a circular account avatar. Resizing clears stale
+  horizontal scroll so the header cannot remain shifted out of the window.
+- Missing custom thumbnail variants fall back to the video's standard JPEG
+  on the same route; HTTP errors do not trigger a slow direct-network probe.
+  Refresh retries failed artwork. Portrait covers keep their aspect ratio,
+  and Shorts retain their label instead of showing a false zero duration.
 - Application keys are declared on the view instead of a buffer keymap, so
   they keep working while a row has focus, `?` lists them, and the search
   field keeps every key while it edits.  The mounted player is connected to

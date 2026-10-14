@@ -94,6 +94,7 @@ same colors as the application's own Views."
      :ui-button-primary-fg "#FFFFFF" :ui-button-primary-bg accent
      :ui-button-secondary-fg accent :ui-button-secondary-bg accent-soft
      :ui-button-ghost-fg muted
+     :ui-search-bg panel :ui-search-fg ink
      :ui-success-fg ok :ui-success-bg ok-bg :ui-success-border ok-border
      :ui-danger-fg danger :ui-danger-bg danger-bg :ui-danger-border danger-border
      :ui-warning-fg warn :ui-warning-bg warn-bg :ui-warning-border warn-border

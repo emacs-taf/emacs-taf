@@ -70,15 +70,15 @@ state containing only the route and probe time."
         (error nil)))))
 
 (defun etaf-youtube--curl-attempt (url file proxy callback)
-  "Download URL into FILE through PROXY and call CALLBACK with nil or an error.
-PROXY may be nil for a direct request.  Return a cancel function."
+  "Download URL into FILE through PROXY and call CALLBACK with error and status.
+PROXY may be nil for a direct request.  Status is the HTTP code, or zero
+on transport failure.  Return a cancel function."
   (let* ((environment
-          (if proxy
-              (cl-remove-if
-               (lambda (entry)
-                 (string-match-p "\\`\\(no_proxy\\|NO_PROXY\\)=" entry))
-               process-environment)
-            process-environment))
+          (cl-remove-if
+           (lambda (entry)
+             (let ((case-fold-search t))
+               (string-match-p "\\`\\(https?_proxy\\|all_proxy\\|no_proxy\\)=" entry)))
+           process-environment))
          (program (executable-find "curl")))
     (if (null program)
         (progn (funcall callback "curl is not on PATH") #'ignore)
@@ -90,8 +90,10 @@ PROXY may be nil for a direct request.  Return a cancel function."
                          :command (append (list program "-fsSL" "--max-time"
                                                 (number-to-string etaf-youtube-image-timeout)
                                                 "--connect-timeout" "10")
-                                          (when proxy (list "-x" proxy))
-                                          (list "-o" file url))
+                                          (list "--noproxy" (if proxy "" "*")
+                                                "--proxy" (or proxy "")
+                                                "--write-out" "%{http_code}"
+                                                "-o" file url))
                          :buffer out
                          :stderr err
                          :coding 'binary
@@ -106,20 +108,23 @@ PROXY may be nil for a direct request.  Return a cancel function."
            (when (and (not done)
                       (memq (process-status proc) '(exit signal failed)))
              (setq done t)
-             (accept-process-output proc 0)
+             (while (accept-process-output proc 0))
              (when-let* ((err-process (get-buffer-process err)))
-               (accept-process-output err-process 0))
+               (while (accept-process-output err-process 0)))
              (let ((status (process-exit-status proc))
+                   (http-status (string-to-number
+                                 (with-current-buffer out (buffer-string))))
                    (message (string-trim (with-current-buffer err (buffer-string)))))
                (when (buffer-live-p out) (kill-buffer out))
                (when (buffer-live-p err) (kill-buffer err))
                (if (and (= status 0) (file-exists-p file)
                         (> (or (nth 7 (file-attributes file)) 0) 0))
-                   (funcall callback nil)
+                   (funcall callback nil http-status)
                  (funcall callback
                           (if (string-empty-p message)
                               (format "curl exited with status %d" status)
-                            message)))))))
+                            message)
+                          http-status))))))
         (lambda ()
           (when (process-live-p process)
             (setq done t)
@@ -129,27 +134,35 @@ PROXY may be nil for a direct request.  Return a cancel function."
 
 (defun etaf-youtube--default-fetcher (images url file callback)
   "Download URL into FILE for IMAGES and call CALLBACK with nil or an error.
-The configured route proxy is tried first, then a direct request.  Return a
-cancel function."
-  (let ((proxy (ignore-errors (funcall (etaf-youtube-images-proxy-fn images))))
-        (cancelled nil)
-        (cancel nil))
+The configured route is tried first; transport failures may try direct.
+A missing YouTube thumbnail variant falls back once to its standard JPEG
+on the same working route.  HTTP errors never trigger pointless route probes.
+Return a cancel function."
+  (let* ((proxy (ignore-errors (funcall (etaf-youtube-images-proxy-fn images))))
+         (fallback (when (and (string-match
+                              "\\`https://i\\.ytimg\\.com/vi/\\([A-Za-z0-9_-]+\\)/" url)
+                             (not (string-suffix-p "/hqdefault.jpg" url)))
+                     (format "https://i.ytimg.com/vi/%s/hqdefault.jpg"
+                             (match-string 1 url))))
+         (cancelled nil)
+         (cancel nil))
     (cl-labels
         ((attempt
-          (attempts)
-          (cond
-           ((or cancelled (null attempts)) nil)
-           (t
+          (target routes fallback-url)
+          (unless cancelled
             (setq cancel
                   (etaf-youtube--curl-attempt
-                   url file (car attempts)
-                   (lambda (error)
+                   target file (car routes)
+                   (lambda (error &optional status)
                      (cond
                       (cancelled nil)
                       ((null error) (funcall callback nil))
-                      ((cdr attempts) (attempt (cdr attempts)))
-                      (t (funcall callback error))))))))))
-      (attempt (if proxy (list proxy nil) (list nil))))
+                      ((and (eq status 404) fallback-url)
+                       (attempt fallback-url routes nil))
+                      ((and (or (null status) (zerop status)) (cdr routes))
+                       (attempt target (cdr routes) fallback-url))
+                      (t (funcall callback error)))))))))
+      (attempt url (if proxy (list proxy nil) (list nil)) fallback))
     (lambda ()
       (setq cancelled t)
       (when (and cancel (functionp cancel)) (ignore-errors (funcall cancel))))))

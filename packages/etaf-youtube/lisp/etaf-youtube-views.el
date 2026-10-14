@@ -21,6 +21,12 @@
 (require 'etaf-youtube-theme)
 (require 'etaf-youtube-model)
 
+(etaf-ui-icon-set-register
+ 'etaf-youtube-brand
+ '(:kind svg :viewbox (0 0 24 24) :inset 0
+   :paths ((youtube . "<rect x='1' y='4' width='22' height='16' rx='5' fill='currentColor' stroke='none'/><path d='M10 8L17 12L10 16Z' fill='white' stroke='none'/>"))
+   :fallback ((youtube . ">"))))
+
 (defvar etaf-youtube-search-ref 'etaf-youtube-search-field
   "Ref of the top bar search field, used by the application's focus key.")
 
@@ -67,6 +73,17 @@ its aspect ratio instead of being squashed."
   (pcase-let* ((`(,char-width . ,line-height) (etaf-youtube--display-cell metrics)))
     (max 4 (min 24 (round (/ (* columns char-width 9.0)
                              (* 16.0 line-height)))))))
+
+(defun etaf-youtube--thumbnail-size (image columns rows)
+  "Fit IMAGE inside COLUMNS by ROWS without stretching portrait artwork."
+  (let* ((size (and image (display-graphic-p) (image-size image t)))
+         (cell (etaf-youtube--display-cell (etaf-display-metrics))))
+    (if (not (and size (> (car size) 0) (> (cdr size) 0)))
+        (cons columns rows)
+      (let ((scale (min (/ (* columns (car cell)) (float (car size)))
+                        (/ (* rows (cdr cell)) (float (cdr size))))))
+        (cons (max 1 (floor (/ (* scale (car size)) (car cell))))
+              (max 1 (floor (/ (* scale (cdr size)) (cdr cell)))))))))
 
 (defun etaf-youtube--clip (text width)
   "Return TEXT clipped to WIDTH columns with an ellipsis.
@@ -288,62 +305,59 @@ renderer payloads use; anything else is zero."
              (account (plist-get model :account))
              (mode (plist-get model :theme-mode)))
   :render
-  (let* ((compact (<= columns 96))
-         (small (<= columns 72))
-         (search-width (cond ((> columns 96) '(ch 48))
-                             ((> columns 72) '(ch 30))
-                             (t 'stretch))))
+  (let* ((small (<= columns 72))
+         ;; Equal end slots keep search centered, independent of account names.
+         (side-width (if small '(ch 10) '(ch 20))))
     (etaf-view
-     (flex :flex-direction 'row :align-items 'center :column-gap '(ch 1)
-           :padding (list (list 'lh 1) (list 'ch 2))
+     (flex :ref 'etaf-youtube-topbar :flex-direction 'row
+           :align-items 'center :column-gap '(ch 2)
+           :padding (list (list 'lh 0.5) (list 'ch 2))
            :background-color (plist-get colors :bg)
            :border-bottom (list '(px 1) 'solid (plist-get colors :line))
            :sticky 'top
-       (box :role 'button :tab-index 0 :aria-label "切换侧栏"
-            :padding-inline '(ch 1)
-            :color (plist-get colors :ink)
-            :on-press (lambda () (etaf-youtube-toggle-sidebar model))
-         (text "☰"))
-       (box :role 'link :tab-index 0 :aria-label "首页"
-            :padding-inline '(ch 1)
-            :on-press (lambda () (etaf-youtube-locate model 'home))
-         (flex :flex-direction 'row :align-items 'center :column-gap '(ch 1)
-           (text :color (plist-get colors :accent) :font-weight 'bold "▶")
-           (text :if (not small) :color (plist-get colors :ink)
-                 :font-weight 'bold "YouTube")))
-       (box :flex-grow (if (eq search-width 'stretch) 0 1)
-            :flex-basis '(ch 0) :min-width '(px 0))
-       (etaf-search-field
-        :bind query
-        :ref etaf-youtube-search-ref
-        :placeholder "搜索"
-        :icon t
-        :width search-width
-        :on-submit (lambda (text)
-                     (etaf-youtube--write model :query (or text ""))
-                     (etaf-youtube-search model (or text ""))))
-       (box :flex-grow 0)
-       (box :role 'button :tab-index 0 :aria-label "切换外观"
-            :padding-inline '(ch 1)
-            :color (plist-get colors :muted)
-            :on-press (lambda () (etaf-youtube-cycle-theme model))
-         (text (expr (if (eq (etaf-value mode) 'dark) "日" "夜"))))
-       (etaf-youtube-account :account (etaf-value account) :colors colors
-                             :compact compact)))))
+       (flex :flex-direction 'row :align-items 'center :column-gap '(ch 1)
+             :width side-width :flex-shrink 0
+         (etaf-button :variant 'ghost :aria-label "切换侧栏"
+                      :help-echo "展开或收起侧栏"
+                      :padding '((lh 0.5) (ch 1))
+                      :on-press (lambda () (etaf-youtube-toggle-sidebar model))
+           (etaf-ui-icon :name 'menu :set 'svg :color (plist-get colors :ink)))
+         (etaf-button :variant 'ghost :aria-label "首页"
+                      :padding '((lh 0) (ch 0))
+                      :on-press (lambda () (etaf-youtube-locate model 'home))
+           (flex :flex-direction 'row :align-items 'center :column-gap '(ch 1)
+             (etaf-ui-icon :name 'youtube :set 'etaf-youtube-brand
+                           :color (plist-get colors :accent) :min-width 3)
+             (text :if (not small) :color (plist-get colors :ink)
+                   :font-weight 'bold "YouTube"))))
+       (flex :flex-direction 'row :justify-content 'center
+             :flex-grow 1 :flex-basis '(ch 0) :min-width '(ch 0)
+         (etaf-search-field
+          :bind query :ref etaf-youtube-search-ref
+          :placeholder "搜索" :icon t
+          :width 'stretch :max-width '(ch 64)
+          :on-submit (lambda (text)
+                       (etaf-youtube--write model :query (or text ""))
+                       (etaf-youtube-search model (or text "")))))
+       (flex :flex-direction 'row :align-items 'center
+             :justify-content 'flex-end :column-gap '(ch 1)
+             :width side-width :flex-shrink 0
+         (etaf-button :variant 'ghost :aria-label "切换外观"
+                      :help-echo (if (eq (etaf-value mode) 'dark)
+                                     "切换到浅色外观" "切换到深色外观")
+                      :padding '((lh 0.5) (ch 1))
+                      :on-press (lambda () (etaf-youtube-cycle-theme model))
+           (etaf-ui-icon :name 'settings :set 'svg :color (plist-get colors :ink)))
+         (etaf-youtube-account :account (etaf-value account) :colors colors))))))
 
-(etaf-define-component etaf-youtube-account (&key account colors compact)
-  "Render the signed-in account chip, or a sign-in hint.
-COMPACT keeps only the avatar, for top bars that cannot fit the name."
+(etaf-define-component etaf-youtube-account (&key account colors)
+  "Render a compact circular account avatar, or a sign-in hint."
   :render
   (if (and account (plist-get account :signed_in))
       (etaf-view
-       (flex :flex-direction 'row :align-items 'center :column-gap '(ch 1)
-         (box :width '(ch 3) :height '(lh 2) :text-align 'center
-              :background-color (plist-get colors :accent)
-              :color "#FFFFFF" :font-weight 'bold
-           (text (expr (etaf-youtube--avatar-initials (plist-get account :name)))))
-         (text :if (not compact) :color (plist-get colors :ink)
-               (expr (etaf-youtube--clip (or (plist-get account :name) "") 14)))))
+       (etaf-avatar :name (plist-get account :name)
+                    :initials (etaf-youtube--avatar-initials (plist-get account :name))
+                    :size '(ch 4) :lines 3 :background (plist-get colors :link)))
     (etaf-view
      (box :role 'button :tab-index 0 :padding-inline '(ch 1)
           :color (plist-get colors :link)
@@ -589,6 +603,7 @@ COMPACT keeps only the avatar, for top bars that cannot fit the name."
          (active (= (etaf-value selected) index))
          (image (etaf-youtube-images-descriptor
                  (plist-get model :images) (plist-get item :thumbnail)))
+         (image-size (etaf-youtube--thumbnail-size image columns image-rows))
          (title-lines (etaf-youtube--wrap (plist-get item :title) columns 2))
          (meta (etaf-youtube--meta-line item))
          (duration (plist-get item :duration))
@@ -607,7 +622,9 @@ COMPACT keeps only the avatar, for top bars that cannot fit the name."
         (box :width (list 'ch columns) :height (list 'lh image-rows)
              :overflow 'hidden
              :background-color (plist-get colors :panel3)
-          (image :if image :src image :columns columns :rows image-rows)
+          (flex :if image :flex-direction 'row :justify-content 'center
+                :align-items 'center :height (list 'lh image-rows)
+            (image :src image :columns (car image-size) :rows (cdr image-size)))
           (box :if (not image) :width 'stretch :height 'stretch
                :text-align 'center
                :padding-top (list 'lh (max 0 (/ (- image-rows 1) 2)))
@@ -615,9 +632,13 @@ COMPACT keeps only the avatar, for top bars that cannot fit the name."
             (text (expr (if (eq kind 'channel) "频道"
                     (if (eq kind 'playlist) "播放列表" "视频"))))))
         (flex :flex-direction 'row :column-gap '(ch 1) :padding-top '(lh 0)
-          (text :if (and duration (not (eq kind 'channel)))
+          (text :if (and duration (not (equal duration ""))
+                         (not (member kind '(channel "channel"))))
                 :color (plist-get colors :muted)
-                (expr (etaf-youtube--seconds duration)))
+                (expr (if (or (member kind '(short "short"))
+                              (equal duration "Shorts"))
+                          "Shorts"
+                        (etaf-youtube--seconds duration))))
           (text :color (plist-get colors :muted)
                 (expr (etaf-youtube--clip meta (max 8 columns)))))
         (text :color (plist-get colors :ink) :font-weight 'bold

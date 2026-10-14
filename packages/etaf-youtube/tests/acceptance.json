@@ -122,6 +122,21 @@
    "purpose": "Signed YouTube thumbnail tokens are dropped before downloading so the CDN serves the decodable JPEG while the cache still keys the original URL."
   },
   {
+   "name": "etaf-youtube-thumbnail-404-falls-back-on-the-working-route",
+   "file": "tests/etaf-youtube-tests.el",
+   "purpose": "A missing custom thumbnail falls back to a JPEG on the same route without inheriting proxy variables."
+  },
+  {
+   "name": "etaf-youtube-shorts-and-search-follow-the-application-theme",
+   "file": "tests/etaf-youtube-tests.el",
+   "purpose": "Shorts do not show a false zero duration, and search colors match the application palette."
+  },
+  {
+   "name": "etaf-youtube-refresh-retries-failed-artwork",
+   "file": "tests/etaf-youtube-tests.el",
+   "purpose": "Refreshing a feed retries failed artwork instead of leaving permanent placeholders."
+  },
+  {
    "name": "etaf-youtube-thumbnail-disk-cache-survives-reopen",
    "file": "tests/etaf-youtube-tests.el",
    "purpose": "A cached thumbnail file survives a later session that reuses the same thumbnail directory."

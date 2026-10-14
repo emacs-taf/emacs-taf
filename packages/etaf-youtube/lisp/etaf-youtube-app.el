@@ -44,7 +44,10 @@
                      (etaf-runtime-for-buffer (current-buffer)))
             (etaf-runtime-refit (etaf-runtime-for-buffer (current-buffer))
                                 (window-body-width window t)
-                                (window-body-height window))))))))
+                                (window-body-height window))
+            ;; A focused right-hand control can leave Emacs horizontally
+            ;; scrolled after a resize, even when the new layout fits.
+            (set-window-hscroll window 0)))))))
 
 (defun etaf-youtube--window-size-change (frame)
   "Schedule a refit after FRAME's windows changed size."
@@ -185,6 +188,7 @@
                     (set-display-table-slot table 'truncation ?\s)
                     table)))
     (pop-to-buffer buffer)
+    (set-window-hscroll (selected-window) 0)
     (let ((window (get-buffer-window buffer t)))
       (etaf-mount buffer (etaf-youtube-view (buffer-local-value 'etaf-youtube--model
                                                                 buffer))

@@ -569,5 +569,98 @@ instead of deleting the target it just found."
       (should image)
       (should (file-exists-p (plist-get (cdr image) :file))))))
 
+(ert-deftest etaf-youtube-thumbnail-404-falls-back-on-the-working-route ()
+  "Missing custom artwork uses a JPEG fallback without changing network route."
+  (let* ((root (make-temp-file "youtube-curl-" t))
+         (trace (expand-file-name "trace" root))
+         (bin (expand-file-name "bin" root))
+         (process-environment (copy-sequence process-environment))
+         (exec-path (cons bin exec-path))
+         (images (etaf-youtube-images-create
+                  :directory (expand-file-name "cache" root)
+                  :proxy-fn (lambda () "http://proxy.test:9")))
+         (url "https://i.ytimg.com/vi/test/hq720_custom_1.jpg?sqp=fixture"))
+    (unwind-protect
+        (progn
+          (make-directory bin)
+          (copy-file (expand-file-name "fake-curl.sh" etaf-youtube-tests--fixtures)
+                     (expand-file-name "curl" bin))
+          (set-file-modes (expand-file-name "curl" bin) #o755)
+          (setenv "YOUTUBE_IMAGE_TRACE" trace)
+          (setenv "YOUTUBE_IMAGE_FIXTURE" etaf-youtube-tests--pixel)
+          (setenv "HTTPS_PROXY" "http://dead.invalid:9")
+          (setenv "no_proxy" "*")
+          (etaf-youtube-images-request images url)
+          (should (etaf-youtube-tests--wait
+                   (lambda () (etaf-youtube-images-descriptor images url))))
+          (let ((calls (with-temp-buffer
+                         (insert-file-contents trace)
+                         (split-string (buffer-string) "\n" t))))
+            (should (equal calls
+                           '("https://i.ytimg.com/vi/test/hq720_custom_1.jpg|proxy=http://proxy.test:9|bypass="
+                             "https://i.ytimg.com/vi/test/hqdefault.jpg|proxy=http://proxy.test:9|bypass=")))))
+      (etaf-youtube-images-cancel images)
+      (delete-directory root t))))
+
+(ert-deftest etaf-youtube-shorts-and-search-follow-the-application-theme ()
+  "Shorts retain their label; search has explicit dark and light colors."
+  (dolist (mode '(dark light))
+    (let ((tokens (etaf-youtube-theme-defaults mode)))
+      (should (equal (plist-get tokens :ui-search-bg)
+                     (etaf-youtube-color :panel2 mode)))
+      (should (equal (plist-get tokens :ui-search-fg)
+                     (etaf-youtube-color :ink mode)))))
+  (etaf-youtube-tests--with-app app fixtures log
+    (let* ((feed (gethash "feed home" fixtures))
+           (short (aref (gethash "items" feed) 2)))
+      (puthash "duration" "Shorts" short)
+      (puthash "title" "A short clip" short))
+    (etaf-youtube-locate app 'home)
+    (should (etaf-youtube-tests--wait
+             (lambda () (= 3 (plist-get (etaf-youtube-state app) :items)))))
+    (let ((buffer (generate-new-buffer " *youtube-short-view*")))
+      (unwind-protect
+          (progn
+            (etaf-mount buffer (etaf-youtube-view app)
+                        (list :viewport-width 1200 :viewport-height 40))
+            (etaf-runtime-flush (etaf-runtime-for-buffer buffer))
+            (with-current-buffer buffer
+              (let ((text (buffer-substring-no-properties (point-min) (point-max))))
+                (should (string-match-p "A short clip" text))
+                (should-not (string-match-p "0:00" text)))))
+        (when (buffer-live-p buffer) (kill-buffer buffer))))))
+
+(ert-deftest etaf-youtube-refresh-retries-failed-artwork ()
+  "Refreshing a feed retries its failed pictures without discarding successes."
+  (let* ((root (make-temp-file "youtube-retry-" t))
+         (ready nil)
+         (images (etaf-youtube-images-create
+                  :directory root :proxy-fn (lambda () nil)
+                  :fetcher (lambda (_images _url file callback)
+                             (if ready
+                                 (progn (copy-file etaf-youtube-tests--pixel file t)
+                                        (funcall callback nil))
+                               (funcall callback "temporary transport failure"))
+                             #'ignore)))
+         (app (etaf-youtube-create
+               :images images :store :none
+               :service (etaf-youtube-service-create
+                         :runner (etaf-youtube-tests--runner
+                                  (etaf-youtube-tests--fixture-table))))))
+    (unwind-protect
+        (progn
+          (etaf-youtube-locate app 'home)
+          (should (etaf-youtube-tests--wait
+                   (lambda () (= 3 (plist-get (etaf-youtube-state app) :items)))))
+          (should-not (etaf-youtube-images-descriptor
+                       images "https://i.ytimg.com/vi/v1/hq720.jpg"))
+          (setq ready t)
+          (etaf-youtube-refresh app)
+          (should (etaf-youtube-tests--wait
+                   (lambda () (etaf-youtube-images-descriptor
+                               images "https://i.ytimg.com/vi/v1/hq720.jpg")))))
+      (etaf-youtube-destroy app)
+      (delete-directory root t))))
+
 (provide 'etaf-youtube-tests)
 ;;; etaf-youtube-tests.el ends here

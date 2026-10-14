@@ -301,8 +301,11 @@ Keys are `:view' and its `:params', `:account', `:feed-status', `:items',
   "Request the thumbnails of ITEMS for APP."
   (let ((images (plist-get app :images)))
     (dolist (item items)
-      (etaf-youtube-images-request images (plist-get item :thumbnail))
-      (etaf-youtube-images-request images (plist-get item :avatar)))))
+      (dolist (url (list (plist-get item :thumbnail) (plist-get item :avatar)))
+        ;; A fresh feed is an explicit opportunity to retry failed artwork;
+        ;; cached and in-flight images remain untouched.
+        (etaf-youtube-images-clear-error images url)
+        (etaf-youtube-images-request images url)))))
 
 (defun etaf-youtube--apply-feed (app payload &optional append)
   "Record PAYLOAD as APP's list, appending to the current items when APPEND.
