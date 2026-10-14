@@ -825,5 +825,18 @@ instead of deleting the target it just found."
                   (should (equal fitted folded)))))
           (etaf-youtube-close))))))
 
+(ert-deftest etaf-youtube-open-hides-the-native-caret ()
+  "The point caret does not draw a second selection over navigation content."
+  (etaf-youtube-tests--with-app app _fixtures _log
+    (let ((etaf-youtube-buffer-name " *youtube-caret-test*"))
+      (save-window-excursion
+        (unwind-protect
+            (cl-letf (((symbol-function 'etaf-youtube-create)
+                       (lambda (&rest _options) app)))
+              (etaf-youtube-open)
+              (should-not (buffer-local-value 'cursor-type
+                                              (get-buffer etaf-youtube-buffer-name))))
+          (etaf-youtube-close))))))
+
 (provide 'etaf-youtube-tests)
 ;;; etaf-youtube-tests.el ends here

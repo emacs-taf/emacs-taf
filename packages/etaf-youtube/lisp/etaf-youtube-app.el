@@ -148,7 +148,12 @@
       (setq-local mode-line-format nil
                   header-line-format nil
                   auto-hscroll-mode nil
-                  truncate-lines t)
+                  truncate-lines t
+                  ;; The point caret is not the application's selection
+                  ;; indicator; focused controls paint their own cue.  Native
+                  ;; text input saves and restores this value while a field
+                  ;; is edited, so typing keeps its own caret.
+                  cursor-type nil)
       ;; A canvas row that fills the window must not end in Emacs's
       ;; truncation glyph, which shows as a stray `$' at the right edge.
       (setq-local buffer-display-table

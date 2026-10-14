@@ -28,6 +28,12 @@ project uses [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- The native point caret no longer draws a second selection bar over
+  navigation content: focused controls show the catalog's own focus cue
+  (underline, plus a fill when the control has no surface), while a text
+  field keeps its caret inside the input session.  Chips and rail items
+  derive a visible hover fill from their own surface instead of hovering in
+  their resting color.
 - The account avatar shares the toolbar icons' line metrics. A three-row
   toolbar and tighter feed/rail spacing keep navigation and the first row
   of videos close together instead of stacking large empty padding bands.
