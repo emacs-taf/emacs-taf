@@ -41,7 +41,7 @@ python3 scripts/elisp.py run -p ebox -L ebox/tests -l ebox/tests/ebox-active-tes
 ```sh
 make perf-list
 python3 scripts/performance.py run --mode batch --scenario 'ebox.focus.*' --diagnose
-python3 scripts/performance.py run --mode gui --scenario gallery.review.mouse --diagnose
+python3 scripts/performance.py run --mode gui --scenario gallery.selection.mouse --diagnose
 ```
 
 可以重复指定 `--scenario` 选择相关场景。`--scenario-file FILE` 加载额外的场景入口，
@@ -87,17 +87,17 @@ checkout、已有 profiler 正在运行，或已加载包在 Emacs 启动后被�
 保留生成的 `result.json` 即可作为基线：
 
 ```sh
-python3 scripts/performance.py run --mode gui --scenario gallery.review.mouse --foreground --baseline /path/to/baseline/result.json
+python3 scripts/performance.py run --mode gui --scenario gallery.selection.mouse --foreground --baseline /path/to/baseline/result.json
 python3 scripts/performance.py compare /path/to/before/result.json /path/to/after/result.json
-python3 scripts/performance.py summarize /path/to/result.json --scenario gallery.review.mouse --details
+python3 scripts/performance.py summarize /path/to/result.json --scenario gallery.selection.mouse --details
 ```
 
 每个样本必须通过场景的可见结果／语义断言和环境检查。所有慢样本及 GC 都保留。
 场景有各自的正式最大延迟预算，另有覆盖预热的独立 500 ms 硬底线。基线分别比较 p95 和最大值，
 回归容差为 2 ms。负载、测量驱动、预热协议、覆盖、前后台／显示条件或机器不同则不可比较；代码版本变化会被记录。
 
-Gallery 测量在显示 buffer 后、开始计时前同步 Ebox 的布局视口；批处理使用 120 个
-字符宽度和 40 行。新版负载与先前隐藏挂载时视口未确定的样本分开编号，不能直接比较。
+Gallery 测量在显示 buffer 后、开始计时前同步 Ebox 的布局视口；批处理使用 160 个
+字符宽度和 50 行。新版负载与先前隐藏挂载时视口未确定的样本分开编号，不能直接比较。
 已有页面场景借用调用者当前的视口，不重置页面。
 
 `passed` 表示所选性能门槛通过；`failed` 表示预算或回归门槛失败；`screened` 表示
@@ -217,7 +217,7 @@ Action、mount、refit 或 `etaf-performance-call-operation` 包裹的代码）�
 python3 scripts/performance.py run --mode batch \
   --scenario row-update.30 --scenario row-update.400 \
   --scenario list-append.30 --scenario list-append.120 \
-  --scenario gallery.review.steady.callback \
+  --scenario gallery.selection.steady.callback \
   --sets 1 --samples 5 --warmups 2 --diagnose --diagnostic-samples 4
 ```
 
@@ -227,7 +227,7 @@ python3 scripts/performance.py run --mode batch \
 python3 scripts/performance.py run --mode batch \
   --scenario row-update.30 --scenario row-update.400 \
   --scenario list-append.30 --scenario list-append.120 \
-  --scenario gallery.review.steady.callback \
+  --scenario gallery.selection.steady.callback \
   --sets 3 --samples 30 --warmups 5
 ```
 
@@ -236,7 +236,7 @@ python3 scripts/performance.py run --mode batch \
 
 ```sh
 python3 scripts/performance.py summarize /path/to/result.json \
-  --scenario gallery.review.steady.callback --details
+  --scenario gallery.selection.steady.callback --details
 ```
 
 行更新场景保持固定行数，改变第一行的绘制与字重。追加场景从名称中的行数开始，

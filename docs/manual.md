@@ -56,7 +56,7 @@ python3 scripts/elisp.py check ebox/lisp/ebox-interaction.el
 ```sh
 make perf-list
 python3 scripts/performance.py run --mode batch --scenario 'ebox.focus.*' --diagnose
-python3 scripts/performance.py run --mode gui --scenario gallery.review.mouse --diagnose
+python3 scripts/performance.py run --mode gui --scenario gallery.selection.mouse --diagnose
 ```
 
 Use `--scenario` repeatedly to select a related group. `--scenario-file FILE`
@@ -131,9 +131,9 @@ remains a screen even when all its measured operations meet the latency budget.
 Record a baseline by keeping the resulting `result.json`. Compare a change with:
 
 ```sh
-python3 scripts/performance.py run --mode gui --scenario gallery.review.mouse --foreground --baseline /path/to/baseline/result.json
+python3 scripts/performance.py run --mode gui --scenario gallery.selection.mouse --foreground --baseline /path/to/baseline/result.json
 python3 scripts/performance.py compare /path/to/before/result.json /path/to/after/result.json
-python3 scripts/performance.py summarize /path/to/result.json --scenario gallery.review.mouse --details
+python3 scripts/performance.py summarize /path/to/result.json --scenario gallery.selection.mouse --details
 ```
 
 Every sample must pass the scenario's visible/semantic verification and context
@@ -145,8 +145,8 @@ allowance. Different workloads, drivers, warmup protocols, sample coverage, focu
 are incomparable. Changed source revisions are expected and recorded.
 
 Gallery fixtures synchronize Ebox's layout viewport after the buffer is displayed,
-before timing any interaction. Batch Gallery fixtures use 120 character widths and
-40 lines. The versioned workloads distinguish this setup from earlier samples
+before timing any interaction. Batch Gallery fixtures use 160 character widths and
+50 lines. The versioned workloads distinguish this setup from earlier samples
 whose hidden initial mount had no resolved layout viewport. Existing-page scenarios
 borrow the caller's current viewport without resetting it.
 
@@ -316,7 +316,7 @@ an ordinary catalog control. Run the initial diagnosis with a small sample count
 python3 scripts/performance.py run --mode batch \
   --scenario row-update.30 --scenario row-update.400 \
   --scenario list-append.30 --scenario list-append.120 \
-  --scenario gallery.review.steady.callback \
+  --scenario gallery.selection.steady.callback \
   --sets 1 --samples 5 --warmups 2 --diagnose --diagnostic-samples 4
 ```
 
@@ -326,7 +326,7 @@ For repeatability, keep profiling separate and initialize three independent sets
 python3 scripts/performance.py run --mode batch \
   --scenario row-update.30 --scenario row-update.400 \
   --scenario list-append.30 --scenario list-append.120 \
-  --scenario gallery.review.steady.callback \
+  --scenario gallery.selection.steady.callback \
   --sets 3 --samples 30 --warmups 5
 ```
 
@@ -336,7 +336,7 @@ Inspect a particular result with:
 
 ```sh
 python3 scripts/performance.py summarize /path/to/result.json \
-  --scenario gallery.review.steady.callback --details
+  --scenario gallery.selection.steady.callback --details
 ```
 
 The row workloads retain a fixed number of rows and change the first row's paint

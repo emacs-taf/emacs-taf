@@ -113,7 +113,7 @@ Its target behavior is explicitly distinguished from the current implementation.
 - `make structure-check`: validate every package and detect shared-tooling drift.
 - `make check`: run policy regression tests and public package acceptance checks in dependency order.
 - `make perf-list`: list registered performance scenarios.
-- `make perf-check PERF_ARGS='--mode gui --scenario gallery.review.mouse --diagnose'`:
+- `make perf-check PERF_ARGS='--mode gui --scenario gallery.selection.mouse --diagnose'`:
   measure the existing native Emacs, then collect separate phase, CPU and memory
   diagnostics. `--baseline /path/result.json` compares a previous run. See the
   [performance workflow and scenario interface](docs/manual.md).
