@@ -722,7 +722,10 @@ instead of deleting the target it just found."
                            (visible (with-current-buffer buffer
                                       (buffer-substring-no-properties (car span) (cdr span)))))
                       (should (> offset 0))
-                      (should (= (cdr size) 5))
+                      (should (= (cdr size) 3))
+                      (let* ((avatar (etaf-youtube-tests--host runtime :aria-label "测试用户"))
+                             (height (and avatar (cdr (etaf-host-ref-size runtime avatar)))))
+                        (should (equal height 1)))
                       (should (string-match-p "搜索" visible))
                       (with-current-buffer buffer (should-not header-line-format))))))
               (etaf-youtube-refresh app)
@@ -730,7 +733,7 @@ instead of deleting the target it just found."
                        (lambda () (eq (plist-get (plist-get (etaf-youtube-state app) :feed-status)
                                                  :state) 'ready))))
               (let ((height (cdr (etaf-host-ref-size runtime banner))))
-                (should (= height 5)))))
+                (should (= height 3)))))
         (when (buffer-live-p buffer) (kill-buffer buffer))))))
 
 (ert-deftest etaf-youtube-navigation-selection-suppresses-hover ()

@@ -354,7 +354,7 @@ renderer payloads use; anything else is zero."
                            (small '(ch 10)) (t '(ch 20)))))
     (etaf-view
      (flex :ref 'etaf-youtube-topbar :role 'banner :aria-label "YouTube 顶栏"
-           :flex-direction 'row :height '(lh 5) :flex-shrink 0
+           :flex-direction 'row :height '(lh 3) :flex-shrink 0
            :box-sizing 'border-box :align-items 'center
            :column-gap (list 'ch (if small 1 2))
            :padding (list '(lh 0) (list 'ch (if small 1 2)))
@@ -405,7 +405,7 @@ renderer payloads use; anything else is zero."
       (etaf-view
        (etaf-avatar :name (plist-get account :name)
                     :initials (etaf-youtube--avatar-initials (plist-get account :name))
-                    :size '(ch 4) :lines 2 :background (plist-get colors :link)))
+                    :size '(ch 3) :lines 1 :background (plist-get colors :link)))
     (etaf-view
      (box :role 'button :tab-index 0 :padding-inline '(ch 1)
           :color (plist-get colors :link)
@@ -420,7 +420,7 @@ renderer payloads use; anything else is zero."
   (let ((current (plist-get (etaf-value route) :view)))
     (etaf-view (flex :flex-direction 'column :width '(ch 24)
           :box-sizing 'border-box :flex-shrink 0 :height 'stretch
-          :overflow 'scroll :padding '((lh 1) (ch 1))
+          :overflow 'scroll :padding '((lh 0) (ch 1))
           :background-color (plist-get colors :bg)
           :row-gap '(lh 0)
           :region (list :id etaf-youtube-region-sidebar :label "侧栏" :key ?l
@@ -439,9 +439,9 @@ renderer payloads use; anything else is zero."
   :view
   (flex :flex-direction 'column :width '(ch 6) :align-items 'center
         :box-sizing 'border-box :flex-shrink 0 :height 'stretch
-        :overflow 'scroll :padding '((lh 1) (ch 0))
+        :overflow 'scroll :padding '((lh 0) (ch 0))
         :background-color (plist-get colors :bg)
-        :row-gap '(lh 1)
+        :row-gap '(lh 0)
         :region (list :id etaf-youtube-region-sidebar :label "侧栏" :key ?l
                       :neighbors (list :right etaf-youtube-region-content))
         :if active
@@ -539,7 +539,7 @@ renderer payloads use; anything else is zero."
          (inner (- columns (* 2 padding)))
          (rows (etaf-youtube--card-rows items inner)))
     (etaf-view (flex :flex-direction 'column :width 'stretch
-          :padding (list '(lh 1) (list 'ch padding)) :row-gap '(lh 2)
+          :padding (list '(lh 0) (list 'ch padding)) :row-gap '(lh 1)
       (etaf-youtube-list-header :model model :colors colors :payload payload
                                 :state state :view view)
       (flex :flex-direction 'column :row-gap '(lh 0) :if (eq state 'loading)
@@ -765,7 +765,7 @@ renderer payloads use; anything else is zero."
          (side-columns (if two-column (max 20 (- usable main-columns 3))
                          usable)))
     (etaf-view (flex :flex-direction 'column :row-gap '(lh 1)
-          :padding '((lh 1) (ch 3))
+          :padding '((lh 0) (ch 3))
       (flex :flex-direction 'row :column-gap '(ch 3)
             :align-items 'flex-start
             :width (list 'ch usable)

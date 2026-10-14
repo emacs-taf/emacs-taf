@@ -28,6 +28,9 @@ project uses [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- The account avatar shares the toolbar icons' line metrics. A three-row
+  toolbar and tighter feed/rail spacing keep navigation and the first row
+  of videos close together instead of stacking large empty padding bands.
 - Window fitting now uses ETAF's automatic usable viewport instead of raw
   window pixels, preventing whole padding rows from disappearing when the
   sidebar is hidden. Duration labels use an opaque palette surface supported

@@ -86,7 +86,7 @@
                                          (lambda (entry) (eq (plist-get (cdr entry) :role) 'banner))
                                          (etaf-runtime-host-props-entries runtime))))
                            (height (and banner (cdr (etaf-host-ref-size runtime banner)))))
-                      (if (and (equal height 5)
+                      (if (and (equal height 3)
                                (= (plist-get (etaf-youtube-state app) :selected) (% step 2)))
                           t "Header or selection was not preserved")))
           :cleanup (lambda ()
