@@ -381,6 +381,11 @@ FIXTURES-SYM is bound to the fixture table and LOG-SYM to the call log."
     (etaf-youtube-locate app 'home)
     (should (etaf-youtube-tests--wait
              (lambda () (= 3 (plist-get (etaf-youtube-state app) :items)))))
+    (should-not (plist-get (etaf-youtube-state app) :selected))
+    (etaf-youtube-activate app)
+    (should (eq 'home (plist-get (etaf-youtube-state app) :view)))
+    (etaf-youtube-select app 1)
+    (should (= 0 (plist-get (etaf-youtube-state app) :selected)))
     (etaf-youtube-select app 1)
     (should (= 1 (plist-get (etaf-youtube-state app) :selected)))
     (etaf-youtube-select app -1)
@@ -388,7 +393,17 @@ FIXTURES-SYM is bound to the fixture table and LOG-SYM to the call log."
     (etaf-youtube-activate app)
     (should (etaf-youtube-tests--wait
              (lambda () (eq 'watch (plist-get (etaf-youtube-state app) :view)))))
-    (should (member '("video" "v1") (etaf-youtube-tests--calls log)))))
+    (should (member '("video" "v1") (etaf-youtube-tests--calls log)))
+    (etaf-youtube-locate app 'home)
+    (should (etaf-youtube-tests--wait
+             (lambda () (= 3 (plist-get (etaf-youtube-state app) :items)))))
+    (should-not (plist-get (etaf-youtube-state app) :selected))
+    (etaf-youtube-select app -1)
+    (should (= 2 (plist-get (etaf-youtube-state app) :selected)))
+    (etaf-youtube-select app -100)
+    (should (= 0 (plist-get (etaf-youtube-state app) :selected)))
+    (etaf-youtube-select app 100)
+    (should (= 2 (plist-get (etaf-youtube-state app) :selected)))))
 
 (ert-deftest etaf-youtube-back-retraces-history ()
   "Back returns to the previous route and reloads it."
@@ -774,7 +789,9 @@ instead of deleting the target it just found."
                    (target (etaf-youtube-tests--host runtime :aria-label
                                                     "Portrait first in source")))
               (should target)
-              (dolist (change '((1 . nil) (-1 . t)))
+              (should-not (plist-get (etaf-runtime-host-props-for runtime target)
+                                     :aria-selected))
+              (dolist (change '((0 . t) (1 . nil) (-1 . t)))
                 (etaf-youtube-select app (car change))
                 (etaf-runtime-flush runtime)
                 (let ((selected (plist-get (etaf-runtime-host-props-for runtime target)
@@ -785,6 +802,25 @@ instead of deleting the target it just found."
                 (etaf-dispatch-event runtime target 'press))
               (should (equal opened (gethash "id" short)))))
         (when (buffer-live-p buffer) (kill-buffer buffer))))))
+
+(ert-deftest etaf-youtube-open-follows-the-usable-window ()
+  "Opening and folding the sidebar use the same viewport as automatic refit."
+  (etaf-youtube-tests--with-app app fixtures log
+    (let ((etaf-youtube-buffer-name " *youtube-window-fit-test*"))
+      (save-window-excursion
+        (unwind-protect
+            (cl-letf (((symbol-function 'etaf-youtube-create)
+                       (lambda (&rest _options) app)))
+              (etaf-youtube-open)
+              (let* ((runtime (etaf-runtime-for-buffer etaf-youtube-buffer-name))
+                     (mounted (etaf-runtime-viewport runtime))
+                     (fitted (etaf-refit runtime (selected-window))))
+                (should (equal mounted fitted))
+                (etaf-youtube-toggle-sidebar app)
+                (etaf-runtime-flush runtime)
+                (let ((folded (etaf-runtime-viewport runtime)))
+                  (should (equal fitted folded)))))
+          (etaf-youtube-close))))))
 
 (provide 'etaf-youtube-tests)
 ;;; etaf-youtube-tests.el ends here

@@ -28,6 +28,18 @@ project uses [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Window fitting now uses ETAF's automatic usable viewport instead of raw
+  window pixels, preventing whole padding rows from disappearing when the
+  sidebar is hidden. Duration labels use an opaque palette surface supported
+  by both text faces and rounded backgrounds. Thumbnail dimensions round to
+  the nearest display cell, keeping the duration over the picture rather
+  than dropping a full image row.
+- Fresh feeds no longer highlight the first card before any selection.
+  Model API consumers must accept nil for `:selected`; explicit selection
+  chooses the first item (or the last when moving backwards), and activation
+  without a selection does nothing.
+  Sidebar controls and filter chips use balanced vertical padding rather
+  than rounding a one-line label into the first of two layout rows.
 - Card selection and thumbnail completion update only cards whose visible
   state changed, avoiding repeated rebuilding of the rest of the feed.
 - The complete top bar now keeps a fixed layout slot while only the content

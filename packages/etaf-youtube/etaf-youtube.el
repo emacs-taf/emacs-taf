@@ -93,7 +93,8 @@
 ;; `:items', `:next', `:selected', `:video', `:media-status', `:comments',
 ;; `:playing', `:position', `:duration', `:resume', `:volume', `:speed',
 ;; `:quality', `:muted', `:captions-on', `:sidebar', `:theater', `:theme' and
-;; `:message'.
+;; `:message'.  `:selected' is a zero-based index or nil when no item has
+;; been selected; a fresh or replaced feed starts unselected.
 ;;
 ;; Function: etaf-youtube-locate (app view &optional args)
 ;; Navigate APP to VIEW with ARGS and load its content.
@@ -126,13 +127,15 @@
 ;; Open video ID in APP: details, comments and a resolved media source.
 ;;
 ;; Function: etaf-youtube-select (app delta)
-;; Move APP's list selection by DELTA.
+;; Move APP's list selection by DELTA, clamping at the ends.
+;; Without a selection, negative DELTA selects the last item; zero or positive
+;; DELTA selects the first.  An empty list remains unselected.
 ;;
 ;; Function: etaf-youtube-press-item (app index)
 ;; Activate APP's zero-based list item INDEX.
 ;;
 ;; Function: etaf-youtube-activate (app)
-;; Activate APP's currently selected item.
+;; Activate APP's currently selected item, or do nothing when none is selected.
 ;;
 ;; Function: etaf-youtube-toggle-sidebar (app)
 ;; Fold or unfold APP's sidebar.

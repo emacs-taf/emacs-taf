@@ -163,7 +163,7 @@ cache and STORE to the SQLite store.  The account check starts immediately;
                :comments (etaf-ref nil :name 'etaf-youtube-comments)
                :comments-status (etaf-ref (list :state 'idle) :name 'etaf-youtube-comments-status)
                :replies (etaf-ref (make-hash-table :test #'equal) :name 'etaf-youtube-replies)
-               :selected (etaf-ref 0 :name 'etaf-youtube-selected)
+               :selected (etaf-ref nil :name 'etaf-youtube-selected)
                :query (etaf-ref "" :name 'etaf-youtube-query)
                :filter (etaf-ref "all" :name 'etaf-youtube-filter)
                :sidebar (etaf-ref t :name 'etaf-youtube-sidebar)
@@ -354,7 +354,7 @@ Return the item list."
        (lambda (result)
          (if (eq (plist-get result :status) 'ok)
              (progn
-               (etaf-youtube--write app :selected 0)
+               (etaf-youtube--write app :selected nil)
                (etaf-youtube--apply-feed app (plist-get result :value)))
            (etaf-youtube--feed-failed app result))))))))
 
@@ -375,7 +375,7 @@ VIEW is `home', `shorts', `subscriptions', `history', `playlists',
       (etaf-youtube--stop-player-timer app)
       (etaf-youtube--write app :feed nil)
       (etaf-youtube--write app :feed-more nil)
-      (etaf-youtube--write app :selected 0)
+      (etaf-youtube--write app :selected nil)
       (cond
        ((null (etaf-youtube--route-args app))
         (etaf-youtube--write app :feed-status (list :state 'error :message "Unknown view")))
@@ -415,7 +415,7 @@ VIEW is `home', `shorts', `subscriptions', `history', `playlists',
         (unless (eq (plist-get previous :view) 'watch)
           (etaf-youtube--stop-player-timer app))
         (etaf-youtube--write app :feed nil)
-        (etaf-youtube--write app :selected 0)
+        (etaf-youtube--write app :selected nil)
         (if (eq (plist-get previous :view) 'watch)
             (etaf-youtube-open-video app (plist-get (plist-get previous :args) :id))
           (etaf-youtube--load-feed app))))))
@@ -431,7 +431,7 @@ VIEW is `home', `shorts', `subscriptions', `history', `playlists',
   "Switch APP's search result filter to FILTER."
   (etaf-youtube--write app :filter filter)
   (etaf-youtube--write app :feed nil)
-  (etaf-youtube--write app :selected 0)
+  (etaf-youtube--write app :selected nil)
   (when (eq (plist-get (etaf-youtube--read app :route) :view) 'search)
     (etaf-youtube--load-feed app))
   app)
@@ -455,7 +455,7 @@ tab they name."
        (lambda (result)
          (if (eq (plist-get result :status) 'ok)
              (progn
-               (etaf-youtube--write app :selected 0)
+               (etaf-youtube--write app :selected nil)
                (etaf-youtube--apply-feed app (plist-get result :value)))
            (etaf-youtube--feed-failed app result)))))
      (t (etaf-youtube--note app "This filter is not available" 'info)))
@@ -466,14 +466,18 @@ tab they name."
 ;;; ---------------------------------------------------------------------------
 
 (defun etaf-youtube-select (app delta)
-  "Move APP's selection by DELTA within the current list."
+  "Move APP's selection by DELTA within the current list.
+With no selection, negative DELTA selects the last item; otherwise the first.
+A new list starts with no selection.  An empty list stays unselected."
   (interactive)
   (let* ((items (etaf-youtube--items app))
          (count (length items))
          (current (etaf-youtube--read app :selected)))
     (when (> count 0)
       (etaf-youtube--write app :selected
-                           (max 0 (min (1- count) (+ current delta))))))
+                           (if (null current)
+                               (if (< delta 0) (1- count) 0)
+                             (max 0 (min (1- count) (+ current delta)))))))
   app)
 
 (defun etaf-youtube-press-item (app index)
@@ -485,10 +489,10 @@ tab they name."
   app)
 
 (defun etaf-youtube-activate (app)
-  "Activate APP's currently selected item."
+  "Activate APP's currently selected item, or do nothing without a selection."
   (interactive)
-  (when-let* ((item (nth (etaf-youtube--read app :selected)
-                         (etaf-youtube--items app))))
+  (when-let* ((index (etaf-youtube--read app :selected))
+              (item (nth index (etaf-youtube--items app))))
     (etaf-youtube--activate-item app item))
   app)
 

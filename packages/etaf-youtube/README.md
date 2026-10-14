@@ -64,7 +64,10 @@ releases the session, its requests and its player.
 
 Opening the application replaces the current window's buffer without splitting
 it. The application owns its chrome, so it does not add an Emacs mode line or
-borrow the editor header line for its multi-row top bar.
+borrow the editor header line for its multi-row top bar. ETAF measures and
+follows the usable window viewport automatically, including the space the
+editor reserves at the right edge. A newly loaded feed has no selected card;
+route selection in the sidebar is independent of card selection.
 
 Application keys: `SPC` play/pause, `f`/`b` seek five seconds, `[`/`]` volume,
 `m` mute, `s` sidebar, `t` theater, `d` appearance, `r` refresh, `u` back,

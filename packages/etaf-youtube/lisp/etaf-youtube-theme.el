@@ -28,7 +28,7 @@
      :accent "#FF0000" :accent-strong "#D90000" :accent-soft "#2A0A0A"
      :link "#3EA6FF" :ok "#2BA640" :danger "#FF4E45" :danger-bg "#2B0F0E"
      :success-bg "#0F2A14" :warn "#F5B942" :warn-bg "#2B230B"
-     :badge "rgba(0,0,0,0.8)" :badge-ink "#FFFFFF" :scrim "#0F0F0F")
+     :badge "#080808" :badge-ink "#FFFFFF" :scrim "#0F0F0F")
     (light
      :bg "#FFFFFF" :panel "#FFFFFF" :panel2 "#F2F2F2" :panel3 "#E5E5E5"
      :hover "#E5E5E5" :selected "#D9D9D9" :line "#E5E5E5" :line-soft "#F2F2F2"
@@ -36,7 +36,7 @@
      :accent "#FF0000" :accent-strong "#CC0000" :accent-soft "#FCE7E7"
      :link "#065FD4" :ok "#1D7A2E" :danger "#C00" :danger-bg "#FBE4E2"
      :success-bg "#E3F3E8" :warn "#A86B14" :warn-bg "#FBF0DA"
-     :badge "rgba(0,0,0,0.8)" :badge-ink "#FFFFFF" :scrim "#0F0F0F"))
+     :badge "#080808" :badge-ink "#FFFFFF" :scrim "#0F0F0F"))
   "Palette of every supported appearance, keyed by mode.")
 
 (defcustom etaf-youtube-theme-mode 'dark

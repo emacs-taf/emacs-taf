@@ -152,6 +152,11 @@
    "purpose": "Refreshing a feed retries failed artwork instead of leaving permanent placeholders."
   },
   {
+   "name": "etaf-youtube-open-follows-the-usable-window",
+   "file": "tests/etaf-youtube-tests.el",
+   "purpose": "Opening and hiding navigation preserve the renderer's usable window viewport rather than overriding it with raw pixels."
+  },
+  {
    "name": "etaf-youtube-thumbnail-disk-cache-survives-reopen",
    "file": "tests/etaf-youtube-tests.el",
    "purpose": "A cached thumbnail file survives a later session that reuses the same thumbnail directory."

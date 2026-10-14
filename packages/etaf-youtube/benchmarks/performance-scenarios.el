@@ -68,11 +68,11 @@
       (kill-buffer buffer)
       (delete-directory directory t)
       (error "YouTube benchmark did not load its 36-card fixture"))
+    ;; Establish the selection before sampling; a fresh feed is unselected.
+    (etaf-youtube-select app 0)
     (when (eq mode 'gui) (switch-to-buffer buffer))
     (etaf-mount buffer (etaf-youtube-view app)
-                (if (eq mode 'batch) '(:viewport-width 1120 :viewport-height 36)
-                  (list :viewport-width (window-body-width nil t)
-                        :viewport-height (window-body-height))))
+                (when (eq mode 'batch) '(:viewport-width 1120 :viewport-height 36)))
     (list :buffer buffer
           :invoke (lambda (_sample)
                     (cl-incf step)

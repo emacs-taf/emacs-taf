@@ -92,8 +92,11 @@ its aspect ratio instead of being squashed."
         (cons columns rows)
       (let ((scale (min (/ (* columns (car cell)) (float (car size)))
                         (/ (* rows (cdr cell)) (float (cdr size))))))
-        (cons (max 1 (floor (/ (* scale (car size)) (car cell))))
-              (max 1 (floor (/ (* scale (cdr size)) (cdr cell)))))))))
+        ;; Quantize to the nearest cell, as the preview's aspect-height does.
+        ;; Flooring twice can drop an entire row (including exact fits with
+        ;; floating-point roundoff) and leave the duration on an empty strip.
+        (cons (max 1 (min columns (round (/ (* scale (car size)) (car cell)))))
+              (max 1 (min rows (round (/ (* scale (cdr size)) (cdr cell))))))))))
 
 (defun etaf-youtube--clip (text width)
   "Return TEXT clipped to WIDTH columns with an ellipsis.
@@ -459,9 +462,9 @@ renderer payloads use; anything else is zero."
      (etaf-button :variant 'ghost :aria-label label :help-echo label
                   :aria-selected active :border-radius '(px 8)
                   :bgcolor (when active (plist-get colors :selected))
-                  :padding '((lh 0) (ch 1))
+                  :padding '((lh 0.5) (ch 1))
                   :on-press (lambda () (etaf-youtube-locate model view))
-       (flex :height '(lh 2) :align-items 'center :justify-content 'center
+       (flex :align-items 'center :justify-content 'center
          (etaf-ui-icon :name view :set 'etaf-youtube-brand
                        :color (plist-get colors :ink) :min-width 3))))))
 
@@ -491,11 +494,11 @@ renderer payloads use; anything else is zero."
     (etaf-view
      (etaf-button :variant 'ghost :aria-label label :aria-selected active
                   :width 'stretch :border-radius '(px 8)
-                  :padding '((lh 0) (ch 2))
+                  :padding '((lh 0.5) (ch 2))
                   :bgcolor (when active (plist-get colors :selected))
                   :color (plist-get colors :ink)
                   :on-press (lambda () (etaf-youtube-locate model view))
-       (flex :flex-direction 'row :height '(lh 2) :align-items 'center
+       (flex :flex-direction 'row :align-items 'center
              :column-gap '(ch 2)
          (etaf-ui-icon :name view :set 'etaf-youtube-brand
                        :color (plist-get colors :ink) :min-width 2)
@@ -641,13 +644,12 @@ renderer payloads use; anything else is zero."
     (etaf-view
      (etaf-button :variant 'ghost :aria-label (or (plist-get chip :title) "")
                   :aria-selected (and selected t) :border-radius '(px 6)
-                  :padding '((lh 0) (ch 2))
+                  :padding '((lh 0.5) (ch 2))
                   :bgcolor (if selected (plist-get colors :ink)
                              (plist-get colors :panel3))
                   :color (if selected (plist-get colors :bg) (plist-get colors :ink))
                   :on-press (lambda () (etaf-youtube-apply-chip model chip))
-       (flex :height '(lh 2) :align-items 'center
-         (text (expr (or (plist-get chip :title) ""))))))))
+       (text (expr (or (plist-get chip :title) "")))))))
 
 (etaf-define-component etaf-youtube-skeleton-row (&key columns colors)
   "Render a placeholder row while a list loads."
@@ -666,7 +668,7 @@ renderer payloads use; anything else is zero."
              (item-index (etaf-prop :index))
              (item-source (etaf-prop :item))
              (selected-p (etaf-computed
-                          (lambda () (= (etaf-value selected) (etaf-value item-index)))))
+                          (lambda () (eql (etaf-value selected) (etaf-value item-index)))))
              (image-version (etaf-youtube-images-version (plist-get model :images)))
              (artwork (etaf-computed
                        (lambda ()
