@@ -774,6 +774,12 @@ instead of deleting the target it just found."
                    (target (etaf-youtube-tests--host runtime :aria-label
                                                     "Portrait first in source")))
               (should target)
+              (dolist (change '((1 . nil) (-1 . t)))
+                (etaf-youtube-select app (car change))
+                (etaf-runtime-flush runtime)
+                (let ((selected (plist-get (etaf-runtime-host-props-for runtime target)
+                                           :aria-selected)))
+                  (should (eq selected (cdr change)))))
               (cl-letf (((symbol-function 'etaf-youtube-open-video)
                          (lambda (_app id) (setq opened id))))
                 (etaf-dispatch-event runtime target 'press))

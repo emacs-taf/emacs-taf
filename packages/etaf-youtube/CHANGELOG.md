@@ -28,6 +28,8 @@ project uses [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Card selection and thumbnail completion update only cards whose visible
+  state changed, avoiding repeated rebuilding of the rest of the feed.
 - The complete top bar now keeps a fixed layout slot while only the content
   below it scrolls. Scrolling, loading and resizing no longer replace it with
   the empty first row of a single-line sticky header.

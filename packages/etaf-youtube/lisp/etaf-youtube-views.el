@@ -663,12 +663,21 @@ renderer payloads use; anything else is zero."
     (&key model colors item columns image-rows index)
   "Render one media card for ITEM."
   :bindings ((selected (plist-get model :selected))
-             (image-version (etaf-youtube-images-version (plist-get model :images))))
+             (item-index (etaf-prop :index))
+             (item-source (etaf-prop :item))
+             (selected-p (etaf-computed
+                          (lambda () (= (etaf-value selected) (etaf-value item-index)))))
+             (image-version (etaf-youtube-images-version (plist-get model :images)))
+             (artwork (etaf-computed
+                       (lambda ()
+                         (etaf-value image-version)
+                         (etaf-youtube-images-descriptor
+                          (plist-get model :images)
+                          (plist-get (etaf-value item-source) :thumbnail)))
+                       :test #'equal)))
   :render
-  (let* ((_ (etaf-value image-version))
-         (active (= (etaf-value selected) index))
-         (image (etaf-youtube-images-descriptor
-                 (plist-get model :images) (plist-get item :thumbnail)))
+  (let* ((active (etaf-value selected-p))
+         (image (etaf-value artwork))
          (image-size (etaf-youtube--thumbnail-size image columns image-rows))
          (portrait (member (plist-get item :kind) '(short "short")))
          (has-author (not (string-empty-p (or (plist-get item :author) ""))))
