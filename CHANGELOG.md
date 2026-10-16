@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Added
+
+- Gallery usage panels provide the public signature, parameter defaults,
+  constraints and callback arguments for all 63 components, together with
+  runnable examples shared with their live previews. References come from
+  the installed UI entry, without a manual-package dependency.
+
 ### Changed
 
 - Application and game help entries now share searchable, read-only help inside
@@ -22,6 +29,15 @@
 
 ### Fixed
 
+- Catalog selection changes paint without shifting labels or resizing controls.
+  Disclosure arrows, calendar columns and multi-row overview previews retain
+  their intended alignment and visibility.
+- Slider arrows stay on valid step-aligned values at a non-step maximum. Range
+  honors its inline thickness while preserving row height and retained updates;
+  the Gallery Splitter scales gestures using its actual pane width.
+- Fresh mounts publish their entire root even when reusing a previously laid-out
+  tree. Stable overlays preserve local damage, and retained line publication
+  avoids replacing unchanged text and its native positions.
 - Shared backdrops dim self-contained PNG, JPEG and SVG images when native SVG
   rendering is available, preserving transparency, vector sharpness, slices and
   geometry. Unsupported formats and file-only image descriptors retain their
