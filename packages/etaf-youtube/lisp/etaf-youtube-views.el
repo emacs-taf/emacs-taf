@@ -20,6 +20,7 @@
 (require 'etaf-ui)
 (require 'etaf-youtube-theme)
 (require 'etaf-youtube-model)
+(declare-function image-size "image.c" (spec &optional pixels frame))
 
 (etaf-ui-icon-set-register
  'etaf-youtube-brand
