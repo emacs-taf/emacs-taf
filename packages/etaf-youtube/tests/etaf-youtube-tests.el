@@ -470,6 +470,7 @@ FIXTURES-SYM is bound to the fixture table and LOG-SYM to the call log."
 
 (ert-deftest etaf-youtube-thumbnails-load-through-the-injected-fetcher ()
   "Requesting a thumbnail stores a descriptor and bumps the version."
+  (skip-unless (and (display-graphic-p) (image-type-available-p 'png)))
   (let* ((directory (make-temp-file "etaf-youtube-thumbs-test-" t))
          (images (etaf-youtube-images-create
                   :directory directory
@@ -539,6 +540,7 @@ pipe draining, exit-status handling and JSON decoding without a browser."
 The token makes the CDN answer with AVIF while the unsigned URL serves a
 JPEG, so the fetcher must receive the unsigned address while the cache still
 keys the original URL."
+  (skip-unless (and (display-graphic-p) (image-type-available-p 'png)))
   (let* ((directory (make-temp-file "etaf-youtube-unsigned-" t))
          (seen nil)
          (images (etaf-youtube-images-create
@@ -562,6 +564,7 @@ keys the original URL."
   "A cached thumbnail file is still there when a later session reads it.
 The disk cache is keyed by the original URL; reopening must reuse the file
 instead of deleting the target it just found."
+  (skip-unless (and (display-graphic-p) (image-type-available-p 'png)))
   (let* ((directory (make-temp-file "etaf-youtube-reopen-" t))
          (url "https://i.ytimg.com/vi/cache/hq720.jpg")
          (first (etaf-youtube-images-create
@@ -586,6 +589,7 @@ instead of deleting the target it just found."
 
 (ert-deftest etaf-youtube-thumbnail-404-falls-back-on-the-working-route ()
   "Missing custom artwork uses a JPEG fallback without changing network route."
+  (skip-unless (and (display-graphic-p) (image-type-available-p 'png)))
   (let* ((root (make-temp-file "youtube-curl-" t))
          (trace (expand-file-name "trace" root))
          (bin (expand-file-name "bin" root))
@@ -650,6 +654,7 @@ instead of deleting the target it just found."
 
 (ert-deftest etaf-youtube-refresh-retries-failed-artwork ()
   "Refreshing a feed retries its failed pictures without discarding successes."
+  (skip-unless (and (display-graphic-p) (image-type-available-p 'png)))
   (let* ((root (make-temp-file "youtube-retry-" t))
          (ready nil)
          (images (etaf-youtube-images-create
