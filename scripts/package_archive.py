@@ -70,7 +70,11 @@ def source_files(root, name, resources=()):
             include = top and (filename == f"{name}.el" or filename.startswith(
                 ("README", "LICENSE", "COPYING", "NOTICE", "CHANGELOG")))
             include = include or (parts[0] == "lisp" and path.suffix == ".el")
-            include = include or any(relative == resource or resource in relative.parents
+            # Compare POSIX spellings: a Path is a WindowsPath on Windows, and
+            # it never equals the PurePosixPath resource names, which silently
+            # dropped every resource directory there.
+            relative_posix = PurePosixPath(relative.as_posix())
+            include = include or any(relative_posix == resource or resource in relative_posix.parents
                                      for resource in resource_paths)
             if not include or filename.startswith("."):
                 continue
