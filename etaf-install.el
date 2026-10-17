@@ -1,7 +1,7 @@
 ;;; -*- lexical-binding: t; -*-
 ;;; etaf-install.el --- Install ETAF with the Emacs package manager
 
-;; Version: 0.1.4
+;; Version: 0.1.5
 ;; Package-Requires: ((emacs "29.1"))
 ;; URL: https://github.com/emacs-taf/emacs-taf
 ;; Keywords: convenience
@@ -67,7 +67,8 @@
     (etaf-video-player "Video with sound in a buffer" application etaf-video-player-open)
     (etaf-desktop "Windows and workspaces" application etaf-desktop-open)
     (etaf-manual "ETAF reference manual" application etaf-manual-open)
-    (etaf-telega "Telegram client" application etaf-telega-open melpa))
+    (etaf-telega "Telegram client" application etaf-telega-open melpa)
+    (etaf-xiangqi "Xiangqi" game etaf-xiangqi-open))
   "Installable targets as (PACKAGE LABEL GROUP OPEN &rest CAPABILITIES).
 GROUP groups the menu: `framework', `application' or `game'.  OPEN is the
 command that presents the installed target, or nil.  CAPABILITIES lists extra
