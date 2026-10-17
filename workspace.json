@@ -67,6 +67,11 @@
       "url": "https://github.com/emacs-taf/etaf-telega.git",
       "revision": "dc0ff161bcec743fd95ec1958bebbd1ee98d1994",
       "branch": "main"
+    },
+    "etaf-gamekit": {
+      "url": "https://github.com/emacs-taf/etaf-gamekit.git",
+      "revision": "f497d52170cdca64f371fe459bdffa70cf70119c",
+      "branch": "main"
     }
   }
 }

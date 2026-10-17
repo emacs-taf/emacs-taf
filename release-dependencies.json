@@ -39,6 +39,11 @@
       "external": [
         "telega"
       ]
+    },
+    "etaf-gamekit": {
+      "resources": [
+        "native"
+      ]
     }
   },
   "targets": [
