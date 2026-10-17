@@ -116,7 +116,7 @@ def write_index(output, packages):
         records.append(f' ({package["name"]} . [{version} {requirements} '
                        f'{json.dumps(package["summary"], ensure_ascii=False)} tar])')
     (output / "archive-contents").write_text("(1\n" + "\n".join(records) + "\n)\n", encoding="utf-8")
-    manifest = {"schema": 1, "packages": packages}
+    manifest = {"schema": 2, "packages": packages}
     (output / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return manifest
 
@@ -124,8 +124,8 @@ def write_index(output, packages):
 def verify(directory):
     """Check manifest paths and bytes before an archive is installed or published."""
     manifest = json.loads((directory / "manifest.json").read_text(encoding="utf-8"))
-    if manifest.get("schema") != 1 or not manifest.get("packages"):
-        raise ValueError("Expected a nonempty schema 1 package manifest")
+    if manifest.get("schema") != 2 or not manifest.get("packages"):
+        raise ValueError("Expected a nonempty schema 2 package manifest; rebuild older archives")
     seen = set()
     for package in manifest["packages"]:
         name, version = package["name"], package["version"]

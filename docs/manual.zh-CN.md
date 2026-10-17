@@ -56,6 +56,9 @@ python3 scripts/package_archive.py verify --directory /tmp/package-archive
 构建器不需要网络、Git 或 Emacs。它原子创建新的输出目录，不覆盖已有目录，
 失败时不留下半成品。清单验证传输字节，不证明发布者身份或运行兼容性；
 后两者需要版本来源和干净环境安装检查。
+清单使用 schema 2，依赖要求是 JSON 名称/版本对。旧的 Ebox 专用 schema 1 报告
+使用 Lisp 字符串，不作为等价证据接受；请用本工具重新构建。这项报告格式变更
+不改变 package.el 的索引或 tar 格式。
 
 ## 执行一次测评
 

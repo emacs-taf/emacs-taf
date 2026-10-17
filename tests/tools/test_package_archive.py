@@ -88,6 +88,19 @@ class PackageArchiveTests(unittest.TestCase):
         (output / "sample-1.2.3.tar").write_bytes(b"corrupt")
         self.assertIn("checksum", self.call("verify", "--directory", output, success=False).stderr)
 
+    def test_older_manifest_schema_is_not_silently_reinterpreted(self):
+        output = self.base / "archive"
+        self.build(output)
+        path = output / "manifest.json"
+        manifest = json.loads(path.read_text())
+        self.assertEqual(manifest["schema"], 2)
+        manifest["schema"] = 1
+        manifest["packages"][0]["requirements"] = '((emacs "29.1"))'
+        path.write_text(json.dumps(manifest))
+        result = self.call("verify", "--directory", output, success=False)
+        self.assertIn("schema 2", result.stderr)
+        self.assertIn("rebuild", result.stderr)
+
     def test_unsafe_manifest_paths_are_rejected(self):
         output = self.base / "archive"
         self.build(output)

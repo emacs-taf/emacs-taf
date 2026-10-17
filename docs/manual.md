@@ -74,6 +74,10 @@ The builder needs no network, Git or Emacs. It atomically creates a new output
 directory and never replaces an existing one; a failed build leaves no partial
 archive. The manifest verifies transport bytes, not publisher identity or runtime
 compatibility. Those require release provenance and clean installation checks.
+The manifest uses schema 2, with dependency requirements as JSON name/version
+pairs. Earlier Ebox-specific schema 1 reports used Lisp strings and are not
+accepted as equivalent evidence; rebuild them with this tool. This report-format
+change does not change package.el's archive or tar format.
 
 ## Run a measured change
 
