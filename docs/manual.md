@@ -255,6 +255,12 @@ reserved for the framework. A manage interface must be a native
 `tabulated-list` buffer because it has to work before ETAF is installed; it
 must not depend on `etaf-ui`. Package lifecycle remains owned by `package.el`.
 
+Installed targets are managed with `M-x etaf-install-manage`. It shows installed
+and available versions, runtime readiness and dependencies, and offers
+package.el-backed install, update, remove, open and doctor actions.
+`etaf-install-update`, `etaf-install-remove` and `etaf-install-status` expose the
+same lifecycle to callers; removal keeps application data and logins.
+
 Never edit files under `/srv/etaf.top` by hand: the deployer owns locking,
 immutable versions, checksum verification and rollback.
 

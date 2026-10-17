@@ -4,6 +4,11 @@
 
 ### Added
 
+- `M-x etaf-install-manage` lists installed and available ETAF targets and
+  offers package.el-backed install, update, remove, open and doctor actions.
+  `etaf-install-update`, `etaf-install-remove` and `etaf-install-status`
+  expose the same lifecycle to callers. Removal deletes package files only;
+  application data, logins and caches stay. `etaf-install` is 0.2.0.
 - `M-x etaf-install` now offers `etaf-weread`, `etaf-ncm` and `etaf-tanks`. The
   WeChat Reading and NetEase backends ship inside their packages, and their
   `<package>-doctor` commands report Node.js, Python 3, mpv and the login state;

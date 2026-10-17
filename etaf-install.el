@@ -1,7 +1,7 @@
 ;;; -*- lexical-binding: t; -*-
 ;;; etaf-install.el --- Install ETAF with the Emacs package manager
 
-;; Version: 0.1.7
+;; Version: 0.2.0
 ;; Package-Requires: ((emacs "29.1"))
 ;; URL: https://github.com/emacs-taf/emacs-taf
 ;; Keywords: convenience
@@ -26,7 +26,8 @@
 ;; by this attempt, preserving older installations and unrelated packages. Report
 ;; cleanup failures without hiding the installation error. Restart before retrying
 ;; because partially loaded Lisp cannot be safely rolled back in this process.
-;; Use the standard package menu for upgrades; restart Emacs after an upgrade.
+;; Use M-x etaf-install-manage for the supported lifecycle; package.el owns
+;; upgrades and removal.  Restart Emacs after upgrading loaded packages.
 ;;
 ;; Function: etaf-install-doctor (&optional package)
 ;; Return a plist with :package, :ready, :required and :optional capability facts.
@@ -39,6 +40,24 @@
 ;; for offline installation and release verification.  Existing archives and
 ;; signature verification policy are preserved; this option never disables TLS.
 ;;
+;; Function: etaf-install-manage ()
+;; Show installed and available ETAF targets in a native tabulated list.  The
+;; buffer supports install, update, remove, open, doctor and refresh through
+;; package.el; it is the supported lifecycle entry for ETAF targets.
+;;
+;; Function: etaf-install-update (&optional package)
+;; Refresh the ETAF and standard archives and upgrade PACKAGE, or every
+;; installed target plus the installer.  Return a report.  Restart Emacs when
+;; an update replaces loaded Lisp.
+;;
+;; Function: etaf-install-remove (package &optional no-confirm)
+;; Remove PACKAGE's package files and its `package-selected-packages' entry.
+;; Application data, logins and caches are kept; shared dependencies remain.
+;;
+;; Function: etaf-install-status (&optional package)
+;; Return installed and available versions, the update flag and runtime facts
+;; for PACKAGE or every supported target.
+;;
 ;; Setup once using the installation block in the workspace README, then use
 ;; M-x etaf-install.  Credentials and external application backends are outside
 ;; this installer's scope.  It offers only targets with a verified Lisp install.
@@ -48,6 +67,7 @@
 (require 'cl-lib)
 (require 'package)
 (require 'subr-x)
+(require 'tabulated-list)
 
 (defgroup etaf-install nil
   "Install the ETAF framework and its Lisp applications."
@@ -83,12 +103,12 @@ required features, such as `sqlite'.")
     (nongnu . "https://elpa.nongnu.org/nongnu/")
     (melpa . "https://melpa.org/packages/"))
   "Standard archives a target may declare as a capability, keyed by symbol.
-They are registered only for the target that needs them, and stay registered so
-later upgrades through `M-x list-packages` can resolve them.")
+They are registered only for the target that needs them, and stay registered
+so the ETAF manager and later upgrades through `M-x list-packages` resolve them.")
 (defvar etaf-install--busy nil)
-(defvar etaf-install--current-package nil
-  "Target being installed, so archive registration can read its capabilities.")
 (defvar etaf-install--restart-required nil)
+(defvar etaf-install--restart-needed nil
+  "Non-nil when an update replaced loaded Lisp; restart before using it.")
 
 ;; package.el evaluates this when enabling the installed package.  Registering
 ;; an archive is local work, not a refresh; respect an existing same-named source.
@@ -127,6 +147,22 @@ later upgrades through `M-x list-packages` can resolve them.")
     (or (cdr (assoc choice choices))
         (user-error "No installation target selected"))))
 
+(defun etaf-install--display-doctor (package &optional facts)
+  "Show PACKAGE's doctor FACTS in a standard help buffer."
+  (let* ((facts (or facts (etaf-install-doctor package)))
+         (required (plist-get facts :required))
+         (optional (plist-get facts :optional)))
+    (with-help-window "*ETAF Installation*"
+      (princ (format "ETAF installation: %s\nEmacs %s on %s\n\n"
+                     package emacs-version system-type))
+      (dolist (section (list (cons "Required" required) (cons "Optional" optional)))
+        (princ (format "%s\n" (car section)))
+        (dolist (fact (cdr section))
+          (princ (format "  %s: %s\n" (car fact) (if (cadr fact) "available" "unavailable")))
+          (unless (cadr fact) (princ (format "    %s\n" (nth 2 fact)))))
+        (princ "\n"))
+      (princ "Install: M-x etaf-install\nManage/update/remove: M-x etaf-install-manage\nRestart Emacs after upgrading loaded packages.\n"))))
+
 ;;;###autoload
 (defun etaf-install-doctor (&optional package)
   "Check required and optional capabilities for PACKAGE without changing anything."
@@ -157,20 +193,25 @@ later upgrades through `M-x list-packages` can resolve them.")
                         :ready (cl-every #'cadr required)
                         :required required :optional optional)))
       (when (called-interactively-p 'interactive)
-        (with-help-window "*ETAF Installation*"
-          (princ (format "ETAF installation: %s\nEmacs %s on %s\n\n"
-                         package emacs-version system-type))
-          (dolist (section (list (cons "Required" required) (cons "Optional" optional)))
-            (princ (format "%s\n" (car section)))
-            (dolist (fact (cdr section))
-              (princ (format "  %s: %s\n" (car fact) (if (cadr fact) "available" "unavailable")))
-              (unless (cadr fact) (princ (format "    %s\n" (nth 2 fact)))))
-            (princ "\n"))
-          (princ "Install: M-x etaf-install\nUpdate/remove: M-x list-packages\nRestart Emacs after upgrading loaded packages.\n")))
+        (etaf-install--display-doctor package result))
       result)))
 
+(defun etaf-install--register-target-archives (package)
+  "Register the standard archives PACKAGE's dependency closure needs."
+  (dolist (capability (nthcdr 4 (etaf-install--target package)))
+    (let ((archive (assq capability etaf-install--extra-archives)))
+      (when (and archive (not (assoc (symbol-name (car archive)) package-archives)))
+        (add-to-list 'package-archives
+                     (cons (symbol-name (car archive)) (cdr archive)) t)))))
+
+(defun etaf-install--register-installed-archives ()
+  "Register standard archives for every installed ETAF target."
+  (dolist (target etaf-install--targets)
+    (when (package-installed-p (car target))
+      (etaf-install--register-target-archives (car target)))))
+
 (defun etaf-install--archive ()
-  "Register the configured archive without changing other sources or policies."
+  "Register the configured ETAF archive without changing other sources or policies."
   (unless (or (string-prefix-p "https://" etaf-install-archive-url)
               (and (file-name-absolute-p etaf-install-archive-url)
                    (file-directory-p etaf-install-archive-url)))
@@ -178,15 +219,26 @@ later upgrades through `M-x list-packages` can resolve them.")
   (let ((url (file-name-as-directory etaf-install-archive-url)))
     (setq package-archives
           (cons (cons "etaf" url)
-                (cl-remove "etaf" package-archives :key #'car :test #'equal))))
-  ;; A target may depend on a standard archive, such as MELPA for Telega.
-  ;; Register it the same way as the ETAF archive, so package.el resolves the
-  ;; dependency and later upgrades work from M-x list-packages too.
-  (dolist (capability (nthcdr 4 (etaf-install--target etaf-install--current-package)))
-    (let ((archive (assq capability etaf-install--extra-archives)))
-      (when (and archive (not (assoc (symbol-name (car archive)) package-archives)))
-        (add-to-list 'package-archives
-                     (cons (symbol-name (car archive)) (cdr archive)) t)))))
+                (cl-remove "etaf" package-archives :key #'car :test #'equal)))))
+
+(defun etaf-install--refresh-archives (packages)
+  "Refresh ETAF and the standard archives PACKAGES need.
+PACKAGES may include the installer itself; only supported targets contribute
+extra archives.  Refresh stays scoped so unrelated sources are untouched."
+  (etaf-install--archive)
+  (dolist (package packages)
+    (when (assq package etaf-install--targets)
+      (etaf-install--register-target-archives package)))
+  (let* ((needed (cons "etaf"
+                       (cl-loop for package in packages
+                                when (assq package etaf-install--targets)
+                                append (cl-loop for capability in (nthcdr 4 (etaf-install--target package))
+                                                for archive = (assq capability etaf-install--extra-archives)
+                                                when archive collect (symbol-name (car archive))))))
+         (package-archives (cl-remove-if-not
+                            (lambda (entry) (member (car entry) needed))
+                            package-archives)))
+    (package-refresh-contents)))
 
 (defun etaf-install--built-in-file-p (file)
   "Return non-nil when FILE belongs to this Emacs's own Lisp tree."
@@ -270,19 +322,10 @@ INSTALLED-ONLY checks offline reopening without computing an upgrade plan."
     (unless package--initialized (package-initialize))
     (etaf-install--check-source package)
     (unless (package-installed-p package)
-      (let ((etaf-install--current-package package))
-        (etaf-install--archive))
       (message "ETAF: checking the official package archive…")
       ;; Scope the refresh to ETAF without discarding the user's other archive
       ;; configuration.  No global signature setting or proxy is rewritten.
-      (let* ((needed (cons "etaf"
-                           (cl-loop for capability in (nthcdr 4 target)
-                                    for archive = (assq capability etaf-install--extra-archives)
-                                    when archive collect (symbol-name (car archive)))))
-             (package-archives (cl-remove-if-not
-                                (lambda (entry) (member (car entry) needed))
-                                package-archives)))
-        (package-refresh-contents))
+      (etaf-install--refresh-archives (list package))
       (let* ((descriptor (cadr (assq package package-archive-contents)))
              (before (apply #'append (mapcar #'cdr package-alist)))
              (selected (copy-sequence package-selected-packages)))
@@ -322,8 +365,473 @@ INSTALLED-ONLY checks offline reopening without computing an upgrade plan."
                               missing "; "))
         (when (and (not no-open) (nth 3 target))
           (call-interactively (nth 3 target)))))
-    (message "ETAF: %s is ready.  M-x etaf-install opens installed targets without downloading again." package)
+    (message "ETAF: %s is ready.  M-x etaf-install opens installed targets; M-x etaf-install-manage updates or removes them." package)
     package))
+
+;;; Target management
+
+(defun etaf-install--version-string (version)
+  "Return VERSION as a dotted string, or nil."
+  (and version (package-version-join version)))
+
+(defun etaf-install--installed-version (package)
+  "Return PACKAGE's installed version list, or nil."
+  (when (package-installed-p package)
+    (let ((descriptor (cadr (assq package package-alist))))
+      (and descriptor (package-desc-version descriptor)))))
+
+(defun etaf-install--available-version (package)
+  "Return PACKAGE's archive version list, or nil."
+  (let ((descriptor (cadr (assq package package-archive-contents))))
+    (and descriptor (package-desc-version descriptor))))
+
+(defun etaf-install--installed-targets ()
+  "Return installed supported targets in menu order."
+  (cl-loop for target in etaf-install--targets
+           when (package-installed-p (car target))
+           collect (car target)))
+
+(defun etaf-install--dependency-names (descriptor)
+  "Return DESCRIPTOR's package dependency closure as symbols.
+Follow archive descriptors so a target such as Telega shows its MELPA/GNU
+dependencies rather than only direct requirements."
+  (let ((seen nil) (names nil) (pending (list descriptor)))
+    (while pending
+      (dolist (requirement (package-desc-reqs (pop pending)))
+        (let ((name (car requirement)))
+          (unless (or (eq name 'emacs) (memq name seen))
+            (push name seen)
+            (push name names)
+            (let ((dependency (cadr (assq name package-archive-contents))))
+              (when dependency (push dependency pending)))))))
+    (nreverse names)))
+
+(defun etaf-install--target-runtime (package)
+  "Return PACKAGE's runtime readiness label."
+  (let* ((facts (etaf-install-doctor package))
+         (missing (cl-find-if (lambda (fact) (not (cadr fact)))
+                              (plist-get facts :required))))
+    (if missing
+        (format "%s missing" (car missing))
+      "Ready")))
+
+(defun etaf-install--target-status (package)
+  "Return a status plist for PACKAGE."
+  (let* ((target (etaf-install--target package))
+         (installed (etaf-install--installed-version package))
+         (available (etaf-install--available-version package))
+         (installed-p (not (null installed)))
+         (update (and installed available (version-list-< installed available)))
+         (runtime (if installed-p (etaf-install--target-runtime package) "—"))
+         (descriptor (or (cadr (assq package package-archive-contents))
+                         (cadr (assq package package-alist)))))
+    (list :package package
+          :label (nth 1 target)
+          :group (nth 2 target)
+          :installed (etaf-install--version-string installed)
+          :available (etaf-install--version-string available)
+          :installed-p installed-p
+          :update update
+          :ready (and installed-p (equal runtime "Ready"))
+          :runtime runtime
+          :dependencies (and descriptor (etaf-install--dependency-names descriptor)))))
+
+;;;###autoload
+(defun etaf-install-status (&optional package)
+  "Return status plists for PACKAGE, or for every supported target.
+Each plist has :package, :label, :group, :installed, :available,
+:installed-p, :update, :ready, :runtime and :dependencies."
+  (unless package--initialized (package-initialize))
+  (if package
+      (etaf-install--target-status package)
+    (mapcar #'etaf-install--target-status
+            (mapcar #'car etaf-install--targets))))
+
+(defun etaf-install--read-installed-target (&optional prompt)
+  "Read an installed target with completion."
+  (unless package--initialized (package-initialize))
+  (let ((installed (etaf-install--installed-targets)))
+    (unless installed (user-error "No ETAF target is installed"))
+    (intern (completing-read (or prompt "Target: ")
+                             (mapcar #'symbol-name installed) nil t))))
+
+;;;###autoload
+(defun etaf-install-update (&optional package)
+  "Update PACKAGE, or every installed target and the installer.
+Refresh the ETAF archive and the standard archives installed targets need,
+upgrade only installed ETAF packages, and return a plist with `:updated',
+`:failed' and `:restart'.  Restart Emacs when a loaded package changes;
+package.el remains the package manager."
+  (interactive (list (unless current-prefix-arg
+                       (etaf-install--read-installed-target "Update: "))))
+  (unless package--initialized (package-initialize))
+  (let* ((targets (if package (list package) (etaf-install--installed-targets)))
+         (all (if package targets
+                (if (package-installed-p 'etaf-install)
+                    (cons 'etaf-install targets)
+                  targets)))
+         updated failed)
+    (condition-case error
+        (etaf-install--refresh-archives all)
+      (error (push (cons 'archives (error-message-string error)) failed)))
+    (unless failed
+      (dolist (name all)
+        (condition-case error
+            (let ((installed (etaf-install--installed-version name))
+                  (available (etaf-install--available-version name)))
+              (when (and installed available (version-list-< installed available))
+                (package-upgrade name)
+                (push (cons name (etaf-install--version-string available)) updated)))
+          (error (push (cons name (error-message-string error)) failed)))))
+    (when updated
+      (setq etaf-install--restart-needed t))
+    (let ((report (list :updated (nreverse updated)
+                        :failed (nreverse failed)
+                        :restart (and updated t))))
+      (when (called-interactively-p 'interactive)
+        (message "ETAF: %s%s%s"
+                 (if updated
+                     (format "updated %s"
+                             (mapconcat (lambda (item) (format "%s %s" (car item) (cdr item)))
+                                        updated ", "))
+                   "no updates")
+                 (if failed (format "; %d failed" (length failed)) "")
+                 (if updated "; restart Emacs to use it" "")))
+      report)))
+
+;;;###autoload
+(defun etaf-install-remove (package &optional no-confirm)
+  "Remove PACKAGE's package files and selection.
+Application data, logins and caches are kept; shared dependencies remain
+installed.  With NO-CONFIRM, skip the prompt."
+  (interactive (list (etaf-install--read-installed-target "Remove: ")))
+  (unless package--initialized (package-initialize))
+  (etaf-install--target package)
+  (unless (package-installed-p package)
+    (user-error "%s is not installed" package))
+  (unless (or no-confirm
+              (y-or-n-p (format "Remove %s? Package files only; app data, logins and caches stay. "
+                                package)))
+    (user-error "Cancelled"))
+  (let ((descriptor (cadr (assq package package-alist))))
+    (package-delete descriptor)
+    (setq package-selected-packages (delete package package-selected-packages))
+    (message "ETAF: %s removed. App data, logins and caches were kept." package)
+    package))
+
+;;; The ETAF Packages buffer
+
+(defvar-local etaf-install--manage-cache nil
+  "Cached status plists for the ETAF Packages buffer.")
+
+(defun etaf-install--manage-statuses ()
+  "Return cached target status plists for this buffer."
+  (or etaf-install--manage-cache
+      (setq etaf-install--manage-cache (etaf-install-status))))
+
+(defun etaf-install--manage-invalidate ()
+  "Drop cached target status."
+  (setq etaf-install--manage-cache nil))
+
+(defun etaf-install--manage-status-cell (status)
+  "Return the status cell for STATUS."
+  (cond ((plist-get status :update)
+         (concat (propertize "● " 'face 'font-lock-keyword-face)
+                 (propertize "Update" 'face 'font-lock-keyword-face)))
+        ((plist-get status :installed-p)
+         (concat (propertize "● " 'face 'success)
+                 (propertize "Installed" 'face 'success)))
+        (t (concat (propertize "● " 'face 'shadow)
+                   (propertize "Not installed" 'face 'shadow)))))
+
+(defun etaf-install--manage-target-cell (status)
+  "Return the target cell for STATUS."
+  (concat (propertize (symbol-name (plist-get status :package)) 'face 'bold)
+          " — "
+          (propertize (plist-get status :label) 'face 'shadow)))
+
+(defun etaf-install--manage-group-cell (status)
+  "Return the group cell for STATUS."
+  (or (cdr (assq (plist-get status :group) etaf-install--group-labels))
+      (capitalize (symbol-name (plist-get status :group)))))
+
+(defun etaf-install--manage-version-cell (version &optional update)
+  "Return a version cell for VERSION, highlighting UPDATE availability."
+  (let ((version (or version "—")))
+    (if update
+        (concat (propertize version 'face 'font-lock-keyword-face) " ↑")
+      (propertize version 'face 'shadow))))
+
+(defun etaf-install--manage-runtime-cell (status)
+  "Return the runtime cell for STATUS."
+  (let ((runtime (plist-get status :runtime)))
+    (propertize runtime
+                'face (cond ((equal runtime "Ready") 'success)
+                            ((equal runtime "—") 'shadow)
+                            (t 'warning)))))
+
+(defun etaf-install--manage-dependency-cell (status)
+  "Return the dependency cell for STATUS."
+  (let ((dependencies (plist-get status :dependencies)))
+    (propertize (if dependencies
+                    (mapconcat #'symbol-name dependencies " · ")
+                  "—")
+                'face 'shadow)))
+
+(defun etaf-install--manage-entries ()
+  "Return tabulated-list entries for ETAF targets."
+  (mapcar
+   (lambda (status)
+     (list (plist-get status :package)
+           (vector (etaf-install--manage-status-cell status)
+                   (etaf-install--manage-target-cell status)
+                   (etaf-install--manage-group-cell status)
+                   (etaf-install--manage-version-cell (plist-get status :installed)
+                                                      (plist-get status :update))
+                   (etaf-install--manage-version-cell (plist-get status :available)
+                                                      (plist-get status :update))
+                   (etaf-install--manage-runtime-cell status)
+                   (etaf-install--manage-dependency-cell status))))
+   (etaf-install--manage-statuses)))
+
+(defvar etaf-install--manage-header-keymap
+  (let ((map (make-sparse-keymap)))
+    (define-key map [mouse-1] #'etaf-install--manage-refresh-from-header)
+    (define-key map [header-line mouse-1] #'etaf-install--manage-refresh-from-header)
+    map)
+  "Mouse map for the ETAF Packages header button.")
+
+(defun etaf-install--manage-header-line ()
+  "Return the header line for the ETAF Packages buffer."
+  (let* ((statuses (etaf-install--manage-statuses))
+         (total (length statuses))
+         (updates (cl-count-if (lambda (status) (plist-get status :update)) statuses))
+         (installer (or (etaf-install--version-string
+                         (etaf-install--installed-version 'etaf-install))
+                        "dev"))
+         (left (concat
+                (propertize " ETAF Packages " 'face '(:weight bold :height 1.35))
+                (propertize (format "  %d targets  " total) 'face 'shadow)
+                (propertize (format "installer %s  " installer) 'face 'shadow)
+                (if (> updates 0)
+                    (propertize (format "● %d updates available  " updates)
+                                'face 'font-lock-keyword-face)
+                  (propertize "No updates  " 'face 'shadow))
+                (when etaf-install--restart-needed
+                  (propertize "● Restart required  " 'face 'warning))))
+         (button (propertize " Refresh " 'face 'mode-line
+                             'mouse-face 'highlight
+                             'keymap etaf-install--manage-header-keymap
+                             'help-echo "Refresh package archives (g)"))
+         (padding (max 2 (- (window-width) (length left) (length button) 8))))
+    (concat left (make-string padding ?\s) button)))
+
+(defun etaf-install--manage-mode-line ()
+  "Return the mode line for the ETAF Packages buffer."
+  (let* ((statuses (etaf-install--manage-statuses))
+         (installed (cl-count-if (lambda (status) (plist-get status :installed-p)) statuses))
+         (updates (cl-count-if (lambda (status) (plist-get status :update)) statuses))
+         (title " ETAF Packages  ")
+         (summary (format "%d targets · %d installed · %d updates"
+                          (length statuses) installed updates))
+         (keys "i install · u update · U update all · d remove · RET open · ? doctor · g refresh · l list-packages · q quit")
+         (padding (max 2 (- (window-width) (length title) (length summary)
+                            (length keys) 2))))
+    (concat title (propertize summary 'face 'shadow)
+            (make-string padding ?\s)
+            (propertize keys 'face 'shadow) " ")))
+
+(define-derived-mode etaf-install--manage-header-mode special-mode "ETAF Header"
+  "Major mode for the ETAF Packages header buffer."
+  (setq-local mode-line-format nil)
+  (setq-local header-line-format nil)
+  (setq-local truncate-lines t))
+
+(defun etaf-install--manage-update-header ()
+  "Refresh the header buffer from the ETAF Packages table."
+  (let ((header (get-buffer "*ETAF Packages Header*"))
+        (table (get-buffer "*ETAF Packages*")))
+    (when (and header table)
+      (with-current-buffer header
+        (setq etaf-install--manage-cache
+              (with-current-buffer table (etaf-install--manage-statuses)))
+        (let ((inhibit-read-only t))
+          (erase-buffer)
+          (insert (etaf-install--manage-header-line) "\n"
+                  (propertize "Install, update, remove and open ETAF targets · package.el owns dependencies and byte compilation" 'face 'shadow) "\n"
+                  (propertize "Remove deletes package files only; app data, logins and caches stay." 'face 'shadow)))))))
+
+(defun etaf-install--manage-refresh-from-header ()
+  "Refresh archives from the header window."
+  (interactive)
+  (let ((table (get-buffer "*ETAF Packages*")))
+    (when table
+      (with-current-buffer table
+        (etaf-install--manage-refresh-archives)))))
+
+(defun etaf-install--manage-show-current ()
+  "Describe the target at point in the echo area."
+  (let ((package (tabulated-list-get-id)))
+    (when package
+      (let ((status (cl-find package (etaf-install--manage-statuses)
+                             :key (lambda (item) (plist-get item :package)))))
+        (when status
+          (message "%s — %s%s"
+                   (plist-get status :label)
+                   (plist-get status :runtime)
+                   (if (plist-get status :dependencies)
+                       (format " · %s"
+                               (mapconcat #'symbol-name
+                                          (plist-get status :dependencies) " · "))
+                     "")))))))
+
+(defun etaf-install--manage-current-target ()
+  "Return the target at point or signal a user error."
+  (or (tabulated-list-get-id)
+      (user-error "No ETAF target on this line")))
+
+(defun etaf-install--manage-reprint ()
+  "Invalidate the cache and reprint the manage buffer."
+  (etaf-install--manage-invalidate)
+  (tabulated-list-revert)
+  (etaf-install--manage-show-current))
+
+(defun etaf-install--manage-install ()
+  "Install the target at point."
+  (interactive)
+  (let ((package (etaf-install--manage-current-target)))
+    (etaf-install package t)
+    (etaf-install--manage-reprint)))
+
+(defun etaf-install--manage-update ()
+  "Update the target at point."
+  (interactive)
+  (let ((package (etaf-install--manage-current-target)))
+    (etaf-install-update package)
+    (etaf-install--manage-reprint)))
+
+(defun etaf-install--manage-update-all ()
+  "Update every installed target and the installer."
+  (interactive)
+  (when (y-or-n-p "Update all installed ETAF targets and the installer? ")
+    (etaf-install-update)
+    (etaf-install--manage-reprint)))
+
+(defun etaf-install--manage-remove ()
+  "Remove the target at point."
+  (interactive)
+  (let ((package (etaf-install--manage-current-target)))
+    (etaf-install-remove package)
+    (etaf-install--manage-reprint)))
+
+(defun etaf-install--manage-open ()
+  "Open the installed target at point."
+  (interactive)
+  (let* ((package (etaf-install--manage-current-target))
+         (target (etaf-install--target package))
+         (open (nth 3 target)))
+    (unless (package-installed-p package)
+      (user-error "%s is not installed" package))
+    (unless open
+      (user-error "%s has no open command" package))
+    (call-interactively open)))
+
+(defun etaf-install--manage-doctor ()
+  "Show the doctor report for the target at point."
+  (interactive)
+  (etaf-install--display-doctor (etaf-install--manage-current-target)))
+
+(defun etaf-install--manage-refresh-archives ()
+  "Refresh the ETAF and installed targets' standard archives."
+  (interactive)
+  (unless package--initialized (package-initialize))
+  (etaf-install--refresh-archives
+   (cons 'etaf-install (etaf-install--installed-targets)))
+  (etaf-install--manage-reprint)
+  (message "ETAF: package archives refreshed"))
+
+(defun etaf-install--manage-list-packages ()
+  "Open the standard package menu."
+  (interactive)
+  (call-interactively #'list-packages))
+
+(defun etaf-install--manage-quit ()
+  "Quit the ETAF Packages window and its header."
+  (interactive)
+  (let ((header-window (get-buffer-window "*ETAF Packages Header*")))
+    (when header-window
+      (delete-window header-window)))
+  (quit-window))
+
+(defvar etaf-install--manage-mode-map
+  (let ((map (make-sparse-keymap)))
+    (set-keymap-parent map tabulated-list-mode-map)
+    (define-key map (kbd "i") #'etaf-install--manage-install)
+    (define-key map (kbd "u") #'etaf-install--manage-update)
+    (define-key map (kbd "U") #'etaf-install--manage-update-all)
+    (define-key map (kbd "d") #'etaf-install--manage-remove)
+    (define-key map (kbd "RET") #'etaf-install--manage-open)
+    (define-key map (kbd "?") #'etaf-install--manage-doctor)
+    (define-key map (kbd "g") #'etaf-install--manage-refresh-archives)
+    (define-key map (kbd "l") #'etaf-install--manage-list-packages)
+    (define-key map (kbd "q") #'etaf-install--manage-quit)
+    map)
+  "Key map for `etaf-install--manage-mode'.")
+
+(define-derived-mode etaf-install--manage-mode tabulated-list-mode "ETAF Packages"
+  "Major mode for the ETAF Packages buffer."
+  (setq tabulated-list-format
+        [("Status" 16 t) ("Target" 51 t) ("Group" 16 t)
+         ("Installed" 14 t) ("Available" 16 t) ("Runtime" 30 t)
+         ("Depends on" 46 t)])
+  (setq tabulated-list-entries #'etaf-install--manage-entries)
+  (setq tabulated-list-padding 1)
+  (setq tabulated-list-sort-key nil)
+  (add-hook 'tabulated-list-revert-hook #'etaf-install--manage-invalidate nil t)
+  (add-hook 'tabulated-list-revert-hook #'etaf-install--manage-update-header nil t)
+  (add-hook 'post-command-hook #'etaf-install--manage-show-current nil t)
+  (setq-local mode-line-format '(:eval (etaf-install--manage-mode-line)))
+  (hl-line-mode 1)
+  (tabulated-list-init-header))
+
+;;;###autoload
+(defun etaf-install-manage ()
+  "Show and manage installed and available ETAF targets."
+  (interactive)
+  (unless package--initialized (package-initialize))
+  (etaf-install--archive)
+  (etaf-install--register-installed-archives)
+  (let ((header (get-buffer-create "*ETAF Packages Header*"))
+        (buffer (get-buffer-create "*ETAF Packages*")))
+    (with-current-buffer header
+      (etaf-install--manage-header-mode))
+    (with-current-buffer buffer
+      (etaf-install--manage-mode)
+      (setq etaf-install--manage-cache nil)
+      (tabulated-list-print t))
+    (pop-to-buffer buffer)
+    (let ((table-window (get-buffer-window buffer)))
+      (let ((existing (get-buffer-window header)))
+        (when (and existing (window-live-p existing))
+          (delete-window existing)))
+      (when (and (not noninteractive)
+                 table-window
+                 (>= (window-height table-window) 8)
+                 (>= (frame-height) 12))
+        (let* ((first-window table-window)
+               (other-window (split-window first-window (- (frame-height) 4) 'above))
+               (header-window (if (< (window-height first-window) (window-height other-window))
+                                  first-window other-window))
+               (table-window (if (< (window-height first-window) (window-height other-window))
+                                 other-window first-window)))
+          (set-window-buffer header-window header)
+          (set-window-buffer table-window buffer)
+          (set-window-parameter header-window 'mode-line-format 'none)
+          (select-window table-window))))
+    (etaf-install--manage-update-header)
+    (etaf-install--manage-show-current)))
+
+(etaf-install--register-installed-archives)
 
 (provide 'etaf-install)
 ;;; etaf-install.el ends here

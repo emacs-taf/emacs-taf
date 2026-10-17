@@ -249,6 +249,55 @@ class InstallTests(unittest.TestCase):
 (when (file-exists-p package-user-dir) (error "Read-only diagnosis modified packages"))
 """)
 
+    def test_status_reports_versions_runtime_and_dependency_closure(self):
+        self.run_lisp("""
+(etaf-install 'etaf-ui t)
+(let ((status (etaf-install-status 'etaf-ui)))
+  (unless (equal (plist-get status :installed) "0.1.0") (error "Wrong installed version"))
+  (unless (equal (plist-get status :available) "0.1.0") (error "Wrong available version"))
+  (unless (plist-get status :installed-p) (error "Installed target not marked installed"))
+  (when (plist-get status :update) (error "Spurious update"))
+  (unless (equal (plist-get status :runtime) "Ready") (error "Runtime not ready"))
+  (unless (member 'etaf (plist-get status :dependencies)) (error "Dependency closure missing etaf"))
+  (unless (member 'ebox (plist-get status :dependencies)) (error "Dependency closure missing ebox")))
+""")
+
+    def test_manage_buffer_lists_targets_and_status(self):
+        self.run_lisp("""
+(etaf-install 'etaf-ui t)
+(etaf-install-manage)
+(unless (get-buffer "*ETAF Packages*") (error "Manage buffer missing"))
+(with-current-buffer "*ETAF Packages*"
+  (unless (derived-mode-p 'tabulated-list-mode) (error "Manage buffer is not a tabulated list"))
+  (unless (string-match-p "etaf-ui" (buffer-string)) (error "Installed target missing from manage buffer"))
+  (unless (string-match-p "Installed" (buffer-string)) (error "Installed status missing from manage buffer")))
+""")
+
+    def test_update_upgrades_an_installed_target_from_the_archive(self):
+        self.run_lisp("(etaf-install 'etaf-ui t)")
+        entry = self.sources / "etaf-ui/etaf-ui.el"
+        entry.write_text(entry.read_text().replace("Version: 0.1.0", "Version: 0.1.1"))
+        self.build()
+        self.run_lisp("""
+(package-initialize)
+(let ((report (etaf-install-update 'etaf-ui)))
+  (unless (package-installed-p 'etaf-ui '(0 1 1))
+    (error "Target not updated: %S" report))
+  (unless (plist-get report :updated) (error "Update was not reported"))
+  (unless (plist-get report :restart) (error "Restart was not reported")))
+""")
+
+    def test_remove_deletes_target_and_selection_but_keeps_shared_dependencies(self):
+        self.run_lisp("(etaf-install 'etaf-ui t)")
+        self.run_lisp("""
+(package-initialize)
+(etaf-install-remove 'etaf-ui t)
+(when (package-installed-p 'etaf-ui) (error "Target remained installed"))
+(unless (package-installed-p 'etaf) (error "Shared etaf dependency was removed"))
+(unless (package-installed-p 'ebox) (error "Shared ebox dependency was removed"))
+(when (memq 'etaf-ui package-selected-packages) (error "Target selection remained"))
+""")
+
 
 if __name__ == "__main__":
     unittest.main()

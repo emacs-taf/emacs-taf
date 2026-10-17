@@ -22,9 +22,12 @@ gallery is the default):
 (call-interactively #'etaf-install)
 ```
 
-Afterward, use `M-x etaf-install`; installed targets reopen offline. Package.el
-owns dependency installation, local byte compilation, updates and removal. No
-Git, Python, system compiler, Pi or replacement Emacs configuration is required.
+Afterward, use `M-x etaf-install`; installed targets reopen offline. Use
+`M-x etaf-install-manage` to see installed and available versions, update,
+remove or open targets, and read the doctor; `M-x list-packages` remains the
+advanced package menu. Package.el owns dependency installation, local byte
+compilation, updates and removal. No Git, Python, system compiler, Pi or
+replacement Emacs configuration is required.
 
 The installer groups its targets: framework (`etaf-ui` gallery, `etaf`,
 `etaf-db`, `ekp`), applications (`etaf-md-preview`, `etaf-video-player`,
@@ -35,7 +38,9 @@ opening. SQLite needs an Emacs build with SQLite support;
 installing anything. External service accounts and media programs are detected,
 not installed; an application's own backend ships in its package.
 
-Use `M-x list-packages` to update or remove packages, and restart after updates.
+Use `M-x etaf-install-manage` for the supported targets and `M-x list-packages`
+for advanced or third-party packages; restart Emacs after updates. Removal keeps
+application data, logins and caches; shared dependencies stay installed.
 A failed installation removes only its newly added packages, reports cleanup
 failures and preserves previous installations; restart before retrying because
 partially loaded Lisp cannot be rolled back. Do not mix source checkouts and
