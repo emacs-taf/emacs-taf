@@ -171,5 +171,134 @@ class PackageReleaseBuildTests(unittest.TestCase):
                 self.assertFalse(list(self.base.glob(".etaf-release-*")))
 
 
+class PackageReleaseStageTests(unittest.TestCase):
+    """Synthetic reports exercise gate inputs; real Emacs checks are above."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.base = Path(self.temp.name)
+        self.root = self.base / "workspace"
+        (self.root / "scripts").mkdir(parents=True)
+        for name in ("package-release.py", "package_archive.py", "install-smoke.el"):
+            shutil.copyfile(ROOT / "scripts" / name, self.root / "scripts" / name)
+        shutil.copyfile(ROOT / "etaf-install.el", self.root / "etaf-install.el")
+        targets = ("etaf-ui", "etaf", "etaf-manual", "ekp", "etaf-db")
+        (self.root / ".gitignore").write_text("__pycache__/\n" + "".join(f"{name}/\n" for name in targets))
+        repositories = {}
+        for name in targets:
+            source = self.root / name
+            source.mkdir()
+            (source / f"{name}.el").write_text(
+                f';;; -*- lexical-binding: t; -*-\n;;; {name}.el --- Fixture\n'
+                f';; Version: 1.0.0\n;; Package-Requires: ((emacs "29.1"))\n(provide \'{name})\n')
+            subprocess.run(["git", "init", "-q", str(source)], check=True)
+            repositories[name] = {"revision": self.commit(source)}
+        (self.root / "workspace.json").write_text(json.dumps({"repositories": repositories}))
+        (self.root / "release-dependencies.json").write_text(json.dumps(
+            {"schema": 1, "packages": {name: {} for name in targets}}))
+        subprocess.run(["git", "init", "-q", str(self.root)], check=True)
+        self.commit(self.root)
+        self.archive = self.base / "archive"
+        self.command("build", "--directory", str(self.archive))
+        self.report = {"schema": 1, "manifest_sha256": self.digest(self.archive / "manifest.json"),
+                       "validator_sha256": self.digest(self.root / "scripts/package-release.py"),
+                       "smoke_sha256": self.digest(self.root / "scripts/install-smoke.el"),
+                       "installations": [{"target": target, "entry": entry, "status": "ok",
+                                          "emacs": "29.1", "system": "gnu/linux"}
+                                         for target in targets for entry in ("etaf-install", "package-install")]}
+        self.output = self.base / "public"
+
+    @staticmethod
+    def digest(path):
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+
+    @staticmethod
+    def commit(repo):
+        subprocess.run(["git", "-C", str(repo), "add", "."], check=True)
+        subprocess.run(["git", "-C", str(repo), "-c", "user.name=Test", "-c", "user.email=test@example.invalid",
+                        "commit", "-qm", "fixture"], check=True)
+        return subprocess.check_output(["git", "-C", str(repo), "rev-parse", "HEAD"], text=True).strip()
+
+    def command(self, *arguments, success=True):
+        result = subprocess.run([sys.executable, str(self.root / "scripts/package-release.py"), *arguments],
+                                capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode == 0, success, result.stdout + result.stderr)
+        return result
+
+    def stage(self, success=True):
+        (self.archive / "installation.json").write_text(json.dumps(self.report))
+        result = self.command("stage", "--directory", str(self.archive), "--output", str(self.output), success=success)
+        if not success:
+            self.assertFalse(self.output.exists())
+        return result
+
+    def test_stage_exports_only_public_files_and_never_local_evidence(self):
+        (self.archive / "installation-etaf-entry.log").write_text("private profile path")
+        (self.archive / "unrelated.txt").write_text("private metadata")
+        self.stage()
+        manifest = json.loads((self.output / "manifest.json").read_text())
+        self.assertEqual({path.name for path in self.output.iterdir()},
+                         {"manifest.json", "archive-contents", *(item["file"] for item in manifest["packages"])})
+        self.assertEqual(set(manifest), {"schema", "workspace", "sources", "packages"})
+        self.assertEqual((self.output / "archive-contents").read_bytes(), (self.archive / "archive-contents").read_bytes())
+        for package in manifest["packages"]:
+            self.assertEqual(self.digest(self.output / package["file"]), package["sha256"])
+
+    def test_partial_duplicate_failed_and_mixed_runtime_evidence_is_rejected(self):
+        original = json.loads(json.dumps(self.report))
+        for mutation in ("partial", "duplicate", "failed", "mixed", "old-emacs"):
+            with self.subTest(mutation=mutation):
+                self.report = json.loads(json.dumps(original))
+                rows = self.report["installations"]
+                if mutation == "partial":
+                    rows.pop()
+                elif mutation == "duplicate":
+                    rows[-1] = rows[0]
+                elif mutation == "failed":
+                    rows[0]["status"] = "failed"
+                elif mutation == "mixed":
+                    rows[0]["system"] = "windows-nt"
+                else:
+                    for row in rows:
+                        row["emacs"] = "28.2"
+                self.assertIn("every target", self.stage(success=False).stderr)
+
+    def test_publisher_refuses_partial_evidence_before_building_or_connecting(self):
+        self.report["installations"].pop()
+        (self.archive / "installation.json").write_text(json.dumps(self.report))
+        publisher = ROOT / "etaf-manual/site/scripts/publish.py"
+        if not publisher.is_file():
+            self.skipTest("Site publisher checkout is not available")
+        result = subprocess.run([sys.executable, str(publisher), "--packages", str(self.archive)],
+                                env=dict(os.environ, ETAF_TOP_HOST="invalid host"),
+                                capture_output=True, text=True, timeout=20)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("every target", result.stderr)
+        self.assertNotIn("Invalid ETAF_TOP_ROOT", result.stderr)
+
+    def test_stale_validator_smoke_or_archive_evidence_is_rejected(self):
+        for key in ("validator_sha256", "smoke_sha256", "manifest_sha256"):
+            with self.subTest(key=key):
+                old = self.report[key]
+                self.report[key] = "0" * 64
+                self.assertIn("stale", self.stage(success=False).stderr)
+                self.report[key] = old
+
+    def test_development_or_mismatched_provenance_is_rejected(self):
+        path = self.archive / "manifest.json"
+        original = json.loads(path.read_text())
+        for mutation in ("development", "source"):
+            with self.subTest(mutation=mutation):
+                manifest = json.loads(json.dumps(original))
+                if mutation == "development":
+                    manifest.pop("workspace")
+                else:
+                    manifest["sources"]["etaf"] = "0" * 40
+                path.write_text(json.dumps(manifest))
+                self.report["manifest_sha256"] = self.digest(path)
+                self.stage(success=False)
+
+
 if __name__ == "__main__":
     unittest.main()

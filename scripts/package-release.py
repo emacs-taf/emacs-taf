@@ -16,6 +16,7 @@ import os
 from pathlib import Path
 import re
 import signal
+import shutil
 import subprocess
 import sys
 import tarfile
@@ -25,6 +26,7 @@ import time
 import package_archive
 
 ROOT = Path(__file__).resolve().parents[1]
+TARGETS = ("etaf-ui", "etaf", "etaf-manual", "ekp", "etaf-db")
 
 
 def run(args, *, cwd=None, env=None, timeout=120, log_file=None):
@@ -173,16 +175,81 @@ def verify(directory, emacs, targets, direct=False):
     print(f"evidence={report}")
 
 
+def stage(directory, output):
+    """Export only public archive files after checking complete, current evidence.
+
+    Evidence is local maintainer input, not a signature or a cross-platform
+    certification. Partial diagnostic reports are never publication inputs.
+    """
+    if output.exists():
+        raise ValueError(f"Refusing to replace existing output: {output}")
+    manifest = package_archive.verify(directory)
+    if not set(TARGETS).issubset({item["name"] for item in manifest["packages"]}):
+        raise ValueError("Publication requires the complete supported package selection")
+    report = json.loads((directory / "installation.json").read_text())
+    digests = {"manifest_sha256": directory / "manifest.json",
+               "validator_sha256": Path(__file__),
+               "smoke_sha256": ROOT / "scripts/install-smoke.el"}
+    if report.get("schema") != 1 or any(
+            report.get(key) != hashlib.sha256(path.read_bytes()).hexdigest()
+            for key, path in digests.items()):
+        raise ValueError("Installation evidence is stale; run the full release check again")
+    expected = {(target, entry) for target in TARGETS
+                for entry in ("etaf-install", "package-install")}
+    installations = report.get("installations", [])
+    if (len(installations) != len(expected)
+            or {(item.get("target"), item.get("entry")) for item in installations} != expected
+            or any(item.get("status") != "ok" or not item.get("emacs")
+                   or not item.get("system") for item in installations)
+            or len({(item["emacs"], item["system"]) for item in installations}) != 1
+            or not re.fullmatch(r"[0-9]+(?:\.[0-9]+)+", installations[0]["emacs"])
+            or tuple(map(int, installations[0]["emacs"].split("."))) < (29, 1)):
+        raise ValueError("Publication requires every target through both installation paths")
+    revision = manifest.get("workspace", "")
+    if not re.fullmatch(r"[0-9a-f]{40}", revision):
+        raise ValueError("Publication requires a sealed workspace build, not a development archive")
+    store = git_directory(ROOT)
+    checkpoint = json.loads(run(["git", "--git-dir", store, "show",
+                                 f"{revision}:workspace.json"])[0])["repositories"]
+    selection = json.loads(run(["git", "--git-dir", store, "show",
+                                f"{revision}:release-dependencies.json"])[0])
+    sources = {name: checkpoint[name]["revision"] for name in selection["packages"]}
+    sources["etaf-install"] = revision
+    if (manifest.get("sources") != sources
+            or set(sources) != {item["name"] for item in manifest["packages"]}):
+        raise ValueError("Package provenance does not match the recorded workspace checkpoint")
+    # Construct a public manifest rather than copying unknown fields, local
+    # profiles, logs or future private evidence into the served directory.
+    public = {"schema": 2, "workspace": revision, "sources": sources, "packages": []}
+    for package in manifest["packages"]:
+        public["packages"].append({key: package[key] for key in
+                                  ("name", "version", "requirements", "summary", "file", "sha256")})
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix=".etaf-public-", dir=output.parent) as work:
+        clean = Path(work) / "packages"
+        clean.mkdir()
+        for name in ("archive-contents", *(item["file"] for item in public["packages"])):
+            if (directory / name).is_symlink():
+                raise ValueError(f"Publication input cannot be a symlink: {name}")
+            shutil.copyfile(directory / name, clean / name)
+        (clean / "manifest.json").write_text(json.dumps(public, indent=2, sort_keys=True) + "\n")
+        package_archive.verify(clean)
+        clean.rename(output)
+    print(f"Public archive prepared; Emacs {installations[0]['emacs']} on {installations[0]['system']}\narchive={output}")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command")
-    for name in ("build", "verify"):
+    for name in ("build", "verify", "stage", "publish"):
         command = sub.add_parser(name)
         command.add_argument("--directory", type=Path, required=True)
         if name == "verify":
             command.add_argument("--emacs", default="emacs")
             command.add_argument("--direct", action="store_true", help="Only verify package-install (default: both installation paths)")
-            command.add_argument("--target", action="append", choices=("etaf-ui", "etaf", "etaf-manual", "ekp", "etaf-db"))
+            command.add_argument("--target", action="append", choices=TARGETS)
+        elif name == "stage":
+            command.add_argument("--output", type=Path, required=True)
     arguments = sys.argv[1:]
     if not arguments or arguments == ["help"]:
         parser.print_help()
@@ -192,8 +259,15 @@ def main():
     args = parser.parse_args(arguments)
     if args.command == "build":
         build(args.directory.resolve())
+    elif args.command == "verify":
+        verify(args.directory.resolve(), args.emacs, args.target or TARGETS, args.direct)
+    elif args.command == "stage":
+        stage(args.directory.resolve(), args.output.resolve())
     else:
-        verify(args.directory.resolve(), args.emacs, args.target or ["etaf-ui", "etaf", "etaf-manual", "ekp", "etaf-db"], args.direct)
+        # The site publisher owns transport, deployment locking and rollback.
+        # It invokes stage before contacting the host and never uploads reports.
+        return subprocess.call([sys.executable, str(ROOT / "etaf-manual/site/scripts/publish.py"),
+                                "--packages-only", str(args.directory.resolve())])
     return 0
 
 

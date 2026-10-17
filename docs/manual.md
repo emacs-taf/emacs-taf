@@ -112,6 +112,22 @@ For a focused diagnosis, use `scripts/package-release.py verify --directory DIR
 --target etaf-ui`; `--direct` runs only ordinary package.el installation. This
 narrower evidence does not certify the omitted targets or installation path.
 
+After the supported environment checks, publish the validated directory with
+`make release-publish RELEASE_DIR=/path/to/release`. The command delegates to the
+manual site's package-only publisher; it does not rebuild or change site pages.
+For the first combined site/package publication, use
+`make -C etaf-manual site-publish PUBLISH_ARGS='--packages /path/to/release'`.
+See the [site deployment contract](https://github.com/emacs-taf/etaf-manual/blob/main/docs/manual.md#publishing-the-site-and-packages)
+for transport, locking, immutable versions, historical downloads and rollback.
+
+`package-release.py stage --directory DIR --output NEW` is the local publication
+gate used by that publisher. It requires a sealed workspace manifest matching its
+recorded providers, current validator/smoke/manifest digests, and all five targets
+through both installation paths on one recorded Emacs/platform. It refuses
+partial evidence and exports only `archive-contents`, a public manifest and its
+listed source tarballs. Reports are local evidence, not signatures; this gate
+alone does not certify other Emacs versions, platforms or GUI behavior.
+
 ## Run a measured change
 
 ```sh

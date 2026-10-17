@@ -22,13 +22,15 @@ clean:
 	@set -e; for repo in $(MODULE_DIRS); do $(MAKE) -C "$$repo" clean; done
 
 RELEASE_DIR ?= /tmp/etaf-release
-.PHONY: installer-compile release-build release-check release-tool-tests
+.PHONY: installer-compile release-build release-check release-publish release-tool-tests
 installer-compile:
 	python3 scripts/elisp.py run --emacs "$(EMACS)" -L . -e '(require (quote bytecomp)) (let ((byte-compile-error-on-warn t)) (dolist (file (quote ("etaf-install.el" "scripts/install-smoke.el"))) (unless (byte-compile-file file) (error "Compilation failed: %s" file))))'
 release-build:
 	python3 scripts/package-release.py build --directory "$(RELEASE_DIR)"
 release-check:
 	python3 scripts/package-release.py verify --directory "$(RELEASE_DIR)" --emacs "$(EMACS)"
+release-publish:
+	python3 scripts/package-release.py publish --directory "$(RELEASE_DIR)"
 release-tool-tests:
 	python3 -m unittest discover -s tests/tools -p 'test_package_*.py'
 	python3 -m unittest discover -s tests/tools -p 'test_install.py'
