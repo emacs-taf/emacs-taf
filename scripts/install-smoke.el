@@ -13,20 +13,32 @@
 (require 'json)
 
 (defun etaf-install-smoke-refresh ()
-  "Refresh archives, retrying once when a registered archive came back empty.
+  "Refresh archives, retrying while a registered archive came back empty.
 Network fetches of a large third-party archive fail intermittently; a missing
-archive would otherwise look like an unavailable dependency."
-  (package-refresh-contents)
-  (let ((missing (cl-remove-if
-                  (lambda (archive)
-                    (or (equal (car archive) "etaf")
-                        (cl-some (lambda (entry)
-                                   (equal (package-desc-archive (cadr entry)) (car archive)))
-                                 package-archive-contents)))
-                  package-archives)))
+archive would otherwise look like an unavailable dependency.  Four attempts
+with growing pauses cover a short outage without hiding one that persists."
+  (let ((attempt 0) missing)
+    (while (progn
+             ;; A failed archive fetch can signal instead of only reporting an
+             ;; empty contents; a retry is the response either way.
+             (condition-case error
+                 (package-refresh-contents)
+               (error (message "Archive refresh attempt %d failed: %s"
+                               (1+ attempt) (error-message-string error))))
+             (setq attempt (1+ attempt)
+                   missing (cl-remove-if
+                            (lambda (archive)
+                              (or (equal (car archive) "etaf")
+                                  (cl-some (lambda (entry)
+                                             (equal (package-desc-archive (cadr entry))
+                                                    (car archive)))
+                                           package-archive-contents)))
+                            package-archives))
+             (and missing (< attempt 4)))
+      (message "Retrying empty archives in %d seconds: %S" (* 5 attempt) missing)
+      (sleep-for (* 5 attempt)))
     (when missing
-      (sleep-for 5)
-      (package-refresh-contents))))
+      (error "Archives unavailable after %d attempts: %S" attempt missing))))
 
 (defvar etaf-install-archive-url)
 
