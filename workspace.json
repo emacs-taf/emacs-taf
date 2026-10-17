@@ -77,6 +77,21 @@
       "url": "https://github.com/emacs-taf/etaf-xiangqi.git",
       "revision": "85a9e32b07702f7bf296f6c95d63ee4bcb6a1407",
       "branch": "main"
+    },
+    "etaf-weread": {
+      "url": "https://github.com/emacs-taf/etaf-weread.git",
+      "revision": "4219f46fab7416d62a113027b3c1cc4d354d170c",
+      "branch": "main"
+    },
+    "etaf-ncm": {
+      "url": "https://github.com/emacs-taf/etaf-ncm.git",
+      "revision": "a26cc981469a955688c02b47818b3ea22288a77f",
+      "branch": "main"
+    },
+    "etaf-tanks": {
+      "url": "https://github.com/emacs-taf/etaf-tanks.git",
+      "revision": "b658d551c8d6f0caa39adc2cdf8b6abf716f3d2c",
+      "branch": "main"
     }
   }
 }

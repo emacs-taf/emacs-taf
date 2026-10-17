@@ -47,6 +47,21 @@
     },
     "etaf-xiangqi": {
       "resources": []
+    },
+    "etaf-weread": {
+      "resources": [
+        "backends"
+      ]
+    },
+    "etaf-ncm": {
+      "resources": [
+        "backends"
+      ]
+    },
+    "etaf-tanks": {
+      "resources": [
+        "native"
+      ]
     }
   },
   "targets": [
@@ -59,6 +74,9 @@
     "etaf-video-player",
     "etaf-desktop",
     "etaf-telega",
-    "etaf-xiangqi"
+    "etaf-xiangqi",
+    "etaf-weread",
+    "etaf-ncm",
+    "etaf-tanks"
   ]
 }

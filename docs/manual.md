@@ -123,8 +123,8 @@ for transport, locking, immutable versions, historical downloads and rollback.
 
 `package-release.py stage --directory DIR --output NEW` is the local publication
 gate used by that publisher. It requires a sealed workspace manifest matching its
-recorded providers, current validator/smoke/manifest digests, and all five targets
-through both installation paths on one recorded Emacs/platform. It refuses
+recorded providers, current validator/smoke/manifest digests, and every target through both
+installation paths on one recorded Emacs/platform. It refuses
 partial evidence and exports only `archive-contents`, a public manifest and its
 listed source tarballs. Reports are local evidence, not signatures; this gate
 alone does not certify other Emacs versions, platforms or GUI behavior.

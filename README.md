@@ -27,12 +27,13 @@ owns dependency installation, local byte compilation, updates and removal. No
 Git, Python, system compiler, Pi or replacement Emacs configuration is required.
 
 The installer groups its targets: framework (`etaf-ui` gallery, `etaf`,
-`etaf-manual`, `etaf-db`, `ekp`) and applications (`etaf-md-preview`,
-`etaf-video-player`, `etaf-desktop`). Each entry reports what is missing before
-opening, and requires no terminal, Python or Pi. SQLite needs an Emacs build with SQLite support;
+`etaf-db`, `ekp`), applications (`etaf-md-preview`, `etaf-video-player`,
+`etaf-desktop`, `etaf-manual`, `etaf-telega`, `etaf-weread`, `etaf-ncm`) and
+games (`etaf-xiangqi`, `etaf-tanks`). Each entry reports what is missing before
+opening. SQLite needs an Emacs build with SQLite support;
 `M-x etaf-install-doctor` reports required and optional capabilities without
-installing anything. External service accounts, media programs and application
-backends are not installed by this entry.
+installing anything. External service accounts and media programs are detected,
+not installed; an application's own backend ships in its package.
 
 Use `M-x list-packages` to update or remove packages, and restart after updates.
 A failed installation removes only its newly added packages, reports cleanup

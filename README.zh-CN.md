@@ -20,7 +20,7 @@
 
 以后运行 `M-x etaf-install` 即可；已安装的目标可以离线重开。依赖安装、本地字节编译、更新和卸载均由 package.el 管理，不需要 Git、Python、系统编译器或 Pi，也不替换现有 Emacs 配置。
 
-安装入口按框架与应用分组：框架含组件画廊（`etaf-ui`）、`etaf`、`etaf-manual`、`etaf-db`、`ekp`；应用含 `etaf-md-preview`、`etaf-video-player`、`etaf-desktop`。每个条目在打开前报告缺少什么，不需要终端、Python 或 Pi。SQLite 需要 Emacs 本身具备 SQLite 支持；`M-x etaf-install-doctor` 只检查必需和可选能力，不执行安装。外部服务账号、媒体程序和应用后端不由此入口安装。
+安装入口按框架、应用与游戏分组：框架含组件画廊（`etaf-ui`）、`etaf`、`etaf-db`、`ekp`；应用含 `etaf-md-preview`、`etaf-video-player`、`etaf-desktop`、`etaf-manual`、`etaf-telega`、`etaf-weread`、`etaf-ncm`；游戏含 `etaf-xiangqi`、`etaf-tanks`。每个条目在打开前报告缺少什么。SQLite 需要 Emacs 本身具备 SQLite 支持；`M-x etaf-install-doctor` 只检查必需和可选能力，不执行安装。外部服务账号与媒体程序只检测、不代装；应用自己的后端随包发布。
 
 使用 `M-x list-packages` 更新或卸载包，更新后重启 Emacs。安装失败时只清理本次新增的包，报告清理失败并保留旧安装；由于已加载的部分 Lisp 无法回滚，重试前需要重启。同一依赖不要混用源码检出和包安装。详见[安装参考](https://etaf.top/zh-cn/introduction/#安装)。下面的源码检出说明面向开发者。
 

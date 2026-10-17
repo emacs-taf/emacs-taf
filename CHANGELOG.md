@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Added
+
+- `M-x etaf-install` now offers `etaf-weread`, `etaf-ncm` and `etaf-tanks`. The
+  WeChat Reading and NetEase backends ship inside their packages, and their
+  `<package>-doctor` commands report Node.js, Python 3, mpv and the login state;
+  the tank game reports the Godot runtime GameKit builds. `etaf-install` is
+  0.1.6.
+
 ### Fixed
 
 - The installer no longer refuses to install a target because one of its runtime

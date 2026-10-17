@@ -569,11 +569,11 @@ GUI 保持实际运行时的 GC 策略与用户设置，测量工具不能额外
 
 ### 13.7 当前差距
 
-- 归档已发布框架 7 个包与 5 个应用（`etaf-manual`、`etaf-md-preview`、`etaf-video-player`、`etaf-desktop`、`etaf-telega`）；游戏段仍为空。
+- 归档的安装目标覆盖框架、应用与游戏三段：框架 7 个包（`etaf-install`、`etaf-ui`、`etaf`、`ebox`、`ecss`、`ekp`、`etaf-db`），应用 7 个（`etaf-manual`、`etaf-md-preview`、`etaf-video-player`、`etaf-desktop`、`etaf-telega`、`etaf-weread`、`etaf-ncm`），游戏 2 个（`etaf-xiangqi`、`etaf-tanks`）。`etaf-gamekit` 随归档发布并由两个游戏声明为依赖，但不是独立安装目标。
 - `etaf-telega` 通过声明 `telega` 与注册 MELPA 自动装齐依赖；`telega-server` 与账号仍未纳入（只检测）。
-- `etaf-ncm` 与 `etaf-weread` 的后端仍在 Pi 技能目录，未迁入应用仓；两者的用户提示仍指向技能，违反 13.2 的组件归属。
-- `etaf-gamekit` 尚未纳入检查点；四个游戏未声明 `etaf-gamekit` 依赖，也还没有引擎检测。
-- 组件的托管目录安装（`npm ci`/`make`）与版本握手、清理命令仍未实现：目前组件随包发布但没有安装步骤。
+- `etaf-weread` 与 `etaf-ncm` 的后端已随应用仓发布，提示、数据目录与检测都指向包内后端；系统侧只检测 Node.js、mpv 等程序。
+- `etaf-salvage` 与 `etaf-solitaire` 尚未纳入检查点，也没有引擎检测；`etaf-gamekit` 的引擎仍由用户在源码侧 `make` 构建。
+- 组件的托管目录安装（`npm ci`/`make` 到 `package-user-dir/etaf/<包>/<版本>/`）与版本握手仍未实现。当前归档内的后端都是纯源码（Node、Python、Shell），随 tar 解包即可运行，所以这两个应用的“装完即用”不依赖它；需要托管安装的是将来带构建步骤的组件。
 
 ### 13.8 新增应用上架
 
