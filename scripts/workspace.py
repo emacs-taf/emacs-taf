@@ -9,7 +9,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 SHARED = ('scripts/check-api.py', 'scripts/check-api.el', 'scripts/api-workspace.json', '.editorconfig', 'scripts/check-repository.py', 'scripts/run-acceptance.py', '.githooks/pre-commit', '.githooks/commit-msg', 'scripts/check-commit-message.py',
-          '.github/workflows/structure.yml')
+          '.github/workflows/structure.yml', 'scripts/package_archive.py')
 SEAL_TITLE = 'chore(scripts): sync shared workspace tooling'
 
 

@@ -25,7 +25,7 @@ DIRS = {'lisp', 'tests', 'examples', 'benchmarks', 'scripts', 'docs', 'native',
 BOOK_CHAPTER = re.compile(r'book/[a-z]{2}(?:-[A-Z][A-Za-z]+)?/[a-z0-9]+(?:-[a-z0-9]+)*\.md')
 SKIP = {'.git', '.jj', '__pycache__', 'target', '.omx', '.worktrees', '.claude'}
 SHARED = ('scripts/check-api.py', 'scripts/check-api.el', 'scripts/api-workspace.json', '.editorconfig', 'scripts/check-repository.py', 'scripts/run-acceptance.py', '.githooks/pre-commit', '.githooks/commit-msg', 'scripts/check-commit-message.py',
-          '.github/workflows/structure.yml')
+          '.github/workflows/structure.yml', 'scripts/package_archive.py')
 
 
 def provider_directory(root):

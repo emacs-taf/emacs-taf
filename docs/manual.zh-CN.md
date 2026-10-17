@@ -36,6 +36,27 @@ python3 scripts/elisp.py run -p ebox -L ebox/tests -l ebox/tests/ebox-active-tes
   `status=ok|error|timeout|memory|output exit=N seconds=S peak_rss_mb=M`，输出被截断时
   追加 `log=PATH`。退出码沿用 Emacs 自身的退出码；被上限终止时为 124，用法错误为 2。
 
+## 构建标准包归档
+
+`scripts/package_archive.py` 是共用的源码包构建器，生成普通 package.el tar 包、
+`archive-contents` 和带校验值的 `manifest.json`：
+
+```sh
+python3 scripts/package_archive.py build --directory /tmp/package-archive \
+  --package ecss=/path/to/ecss --package ebox=/path/to/ebox
+python3 scripts/package_archive.py verify --directory /tmp/package-archive
+```
+
+每个 `--package NAME=SOURCE` 选入包入口、`lisp/` 实现和根目录的许可证、README。
+运行资源用 `--resource NAME=DIRECTORY` 显式加入，包括公共命令打开的可运行示例。
+资源缺失、符号链接、非法元数据、校验值变化和索引不一致都报错。归档不包含字节码、
+原生二进制、缓存和隐藏文件。包描述文件是标记为 `no-byte-compile` 的数据，
+运行时 Lisp 由安装端的 Emacs 编译。同一份输入重复构建会得到相同字节。
+
+构建器不需要网络、Git 或 Emacs。它原子创建新的输出目录，不覆盖已有目录，
+失败时不留下半成品。清单验证传输字节，不证明发布者身份或运行兼容性；
+后两者需要版本来源和干净环境安装检查。
+
 ## 执行一次测评
 
 ```sh
