@@ -35,7 +35,10 @@
       "resources": []
     },
     "etaf-telega": {
-      "resources": []
+      "resources": [],
+      "external": [
+        "telega"
+      ]
     }
   }
 }

@@ -129,10 +129,16 @@ def build(directory):
         manifest = package_archive.build(stage, sources, resources)
         available = {item["name"]: item["version"] for item in manifest["packages"]}
         for package in manifest["packages"]:
+            # A dependency outside the archive must be declared explicitly, so a
+            # typo cannot silently pass and the source of every external package
+            # stays reviewable in the release selection.
+            external = set(selection["packages"][package["name"]].get("external", []))
             for dependency, minimum in package["requirements"]:
                 if dependency == "emacs":
                     continue
                 if dependency not in available:
+                    if dependency in external:
+                        continue
                     raise ValueError(f"{package['name']}: dependency {dependency} is absent")
                 actual = tuple(map(int, available[dependency].split(".")))
                 required = tuple(map(int, minimum.split(".")))
