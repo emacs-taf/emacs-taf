@@ -139,6 +139,12 @@ Check every job at the release revision before publication. A workflow definitio
 is not a passing result, and these batch checks do not certify GUI behavior or a
 different development build used locally.
 
+A POSIX-only pass hides two failure classes: path-flavour comparisons in tools
+that walk trees (a `Path` is not a `PurePosixPath` on Windows), and installed
+packages whose autoloaded files are resolved through the host's `load-path`
+instead of the package's own root. The Windows cell is the platform proof for
+both; when a cell fails, read its log rather than guessing from the exit code.
+
 ## Run a measured change
 
 ```sh
