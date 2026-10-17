@@ -182,8 +182,9 @@ make release-publish RELEASE_DIR=/tmp/release-next
 
 Adding a package to the archive is a fixed sequence; do not invent another route:
 
-1. Keep the package in a recorded repository, or add that repository to
-   `workspace.json` when it is new to the workspace.
+1. Keep the package in a recorded repository: framework providers go in the
+   `repositories` section of `workspace.json`, applications in its
+   `applications` section, both pinned to a published commit.
 2. Declare `Version` and every Emacs dependency in `Package-Requires`; put
    components and runtime resources inside the repository and list resource
    directories in `release-dependencies.json`.

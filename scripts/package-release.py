@@ -26,7 +26,17 @@ import time
 import package_archive
 
 ROOT = Path(__file__).resolve().parents[1]
-TARGETS = ("etaf-ui", "etaf", "etaf-manual", "ekp", "etaf-db")
+
+
+def checkpoint_sources(document):
+    """Return every pinned repository, framework providers and applications.
+
+    Framework providers and applications live in two workspaces with their own
+    checkpoints; a release pins both, so provenance is read from either section.
+    """
+    return {**document.get("repositories", {}), **document.get("applications", {})}
+TARGETS = ("etaf-ui", "etaf", "etaf-manual", "ekp", "etaf-db",
+           "etaf-md-preview", "etaf-video-player", "etaf-desktop")
 
 
 def run(args, *, cwd=None, env=None, timeout=120, log_file=None):
@@ -93,7 +103,7 @@ def build(directory):
         root = work / "workspace"
         export(ROOT, revision, root)
         selection = json.loads((root / "release-dependencies.json").read_text())
-        checkpoint = json.loads((root / "workspace.json").read_text())["repositories"]
+        checkpoint = checkpoint_sources(json.loads((root / "workspace.json").read_text()))
         if selection.get("schema") != 1:
             raise ValueError("Unsupported release selection schema")
         sources, resources, provenance = {"etaf-install": root}, {}, {"etaf-install": revision}
@@ -249,8 +259,8 @@ def stage(directory, output):
     if not re.fullmatch(r"[0-9a-f]{40}", revision):
         raise ValueError("Publication requires a sealed workspace build, not a development archive")
     store = git_directory(ROOT)
-    checkpoint = json.loads(run(["git", "--git-dir", store, "show",
-                                 f"{revision}:workspace.json"])[0])["repositories"]
+    checkpoint = checkpoint_sources(json.loads(run(
+        ["git", "--git-dir", store, "show", f"{revision}:workspace.json"])[0]))
     selection = json.loads(run(["git", "--git-dir", store, "show",
                                 f"{revision}:release-dependencies.json"])[0])
     sources = {name: checkpoint[name]["revision"] for name in selection["packages"]}

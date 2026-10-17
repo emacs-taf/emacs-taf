@@ -1,7 +1,7 @@
 ;;; -*- lexical-binding: t; -*-
 ;;; etaf-install.el --- Install ETAF with the Emacs package manager
 
-;; Version: 0.1.0
+;; Version: 0.1.1
 ;; Package-Requires: ((emacs "29.1"))
 ;; URL: https://github.com/emacs-taf/emacs-taf
 ;; Keywords: convenience
@@ -15,8 +15,10 @@
 ;;
 ;; Function: etaf-install (&optional package no-open)
 ;; Install PACKAGE from the official archive and open its existing application.
-;; Interactive use offers the supported targets, with the component gallery as
-;; the default.  NO-OPEN suppresses opening, for batch installation.  Return the
+;; Interactive use offers the supported targets grouped as framework,
+;; applications and games, with the component gallery as the default.  Each
+;; target may expose a `<package>-doctor' returning the same :required and
+;; :optional facts as `etaf-install-doctor', which are merged into its report.  NO-OPEN suppresses opening, for batch installation.  Return the
 ;; installed package symbol.  Already installed targets can be opened offline.
 ;; Missing mandatory Emacs capabilities or a conflicting source checkout signal
 ;; user-error before installation.  An upgrade of a loaded dependency also
@@ -57,11 +59,18 @@
   :group 'etaf-install)
 
 (defconst etaf-install--targets
-  '((etaf-ui "ETAF components and gallery" etaf-ui-gallery-open)
-    (etaf "ETAF framework" nil)
-    (etaf-manual "ETAF reference manual" etaf-manual-open)
-    (etaf-db "ETAF SQLite backend" nil sqlite)
-    (ekp "Knuth-Plass paragraph layout" nil)))
+  '((etaf-ui "ETAF components and gallery" framework etaf-ui-gallery-open)
+    (etaf "ETAF framework" framework nil)
+    (etaf-manual "ETAF reference manual" framework etaf-manual-open)
+    (etaf-db "ETAF SQLite backend" framework nil sqlite)
+    (ekp "Knuth-Plass paragraph layout" framework nil)
+    (etaf-md-preview "Markdown reading view" application etaf-md-preview-open)
+    (etaf-video-player "Video with sound in a buffer" application etaf-video-player-open)
+    (etaf-desktop "Windows and workspaces" application etaf-desktop-open))
+  "Installable targets as (PACKAGE LABEL GROUP OPEN &rest CAPABILITIES).
+GROUP groups the menu: `framework', `application' or `game'.  OPEN is the
+command that presents the installed target, or nil.  CAPABILITIES lists extra
+required features, such as `sqlite'.")
 
 (defvar etaf-install--busy nil)
 (defvar etaf-install--restart-required nil)
@@ -78,15 +87,30 @@
   (or (assq package etaf-install--targets)
       (user-error "Unsupported target %s; run M-x etaf-install to choose one" package)))
 
+(defconst etaf-install--group-labels
+  '((framework . "Framework") (application . "Application") (game . "Game"))
+  "Menu prefix for each target group.")
+
+(defun etaf-install--target-choices ()
+  "Return completion candidates as (LABEL . PACKAGE), grouped in menu order."
+  (let (choices)
+    (dolist (group '(framework application game))
+      (dolist (target (cl-remove-if-not (lambda (entry) (eq (nth 2 entry) group))
+                                  etaf-install--targets))
+        (push (cons (format "%s — %s (%s)"
+                            (car target) (nth 1 target)
+                            (cdr (assq group etaf-install--group-labels)))
+                    (car target))
+              choices)))
+    (nreverse choices)))
+
 (defun etaf-install--read-target ()
   "Read a supported package with standard Emacs completion."
-  (let* ((choices (mapcar (lambda (target)
-                            (cons (format "%s — %s" (car target) (cadr target))
-                                  (car target)))
-                          etaf-install--targets))
+  (let* ((choices (etaf-install--target-choices))
          (choice (completing-read "Install: " (mapcar #'car choices)
                                   nil t nil nil (caar choices))))
-    (cdr (assoc choice choices))))
+    (or (cdr (assoc choice choices))
+        (user-error "No installation target selected"))))
 
 ;;;###autoload
 (defun etaf-install-doctor (&optional package)
@@ -101,7 +125,11 @@
           (list (list "Native Lisp compilation"
                       (and (fboundp 'native-comp-available-p) (native-comp-available-p))
                       "Byte compilation works without it; a native-comp capable Emacs can improve speed."))))
-    (when (memq 'sqlite (nthcdr 3 target))
+    (when (fboundp (intern (format "%s-doctor" package)))
+      (let ((facts (funcall (intern (format "%s-doctor" package)))))
+        (setq required (append required (plist-get facts :required))
+              optional (append optional (plist-get facts :optional)))))
+    (when (memq 'sqlite (nthcdr 4 target))
       (push (list "SQLite built into Emacs"
                   (and (fboundp 'sqlite-available-p) (sqlite-available-p))
                   "Use an Emacs build with SQLite support; installing the sqlite3 executable is not sufficient.")
@@ -240,8 +268,8 @@ INSTALLED-ONLY checks offline reopening without computing an upgrade plan."
            (signal (car error-data) (cdr error-data))))))
     (etaf-install--check-plan (cadr (assq package package-alist)) t)
     (require package)
-    (when (and (not no-open) (nth 2 target))
-      (call-interactively (nth 2 target)))
+    (when (and (not no-open) (nth 3 target))
+      (call-interactively (nth 3 target)))
     (message "ETAF: %s is ready.  M-x etaf-install opens installed targets without downloading again." package)
     package))
 

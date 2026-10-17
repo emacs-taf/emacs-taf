@@ -118,7 +118,8 @@ make release-publish RELEASE_DIR=/tmp/release-next
 
 新增一个包进归档是固定顺序，不要另开路径：
 
-1. 包放在已记录的仓库；新仓先纳入 `workspace.json` 检查点。
+1. 包放在已记录的仓库：框架提供方记进 `workspace.json` 的 `repositories`，
+   应用记进 `applications`，都钉到已发布的提交。
 2. 声明 `Version` 与全部 Emacs 依赖；组件和运行资源放进仓库，并在
    `release-dependencies.json` 列出资源目录。
 3. 实现 `<包>-doctor`，返回 `(LABEL AVAILABLE REMEDY)`，标清阻塞与降级；安装器只聚合。

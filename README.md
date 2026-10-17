@@ -26,9 +26,10 @@ Afterward, use `M-x etaf-install`; installed targets reopen offline. Package.el
 owns dependency installation, local byte compilation, updates and removal. No
 Git, Python, system compiler, Pi or replacement Emacs configuration is required.
 
-The installer offers the component gallery (`etaf-ui`), framework (`etaf`),
-reference manual (`etaf-manual`), SQLite backend (`etaf-db`) and standalone
-paragraph layout (`ekp`). SQLite needs an Emacs build with SQLite support;
+The installer groups its targets: framework (`etaf-ui` gallery, `etaf`,
+`etaf-manual`, `etaf-db`, `ekp`) and applications (`etaf-md-preview`,
+`etaf-video-player`, `etaf-desktop`). Each entry reports what is missing before
+opening, and requires no terminal, Python or Pi. SQLite needs an Emacs build with SQLite support;
 `M-x etaf-install-doctor` reports required and optional capabilities without
 installing anything. External service accounts, media programs and application
 backends are not installed by this entry.

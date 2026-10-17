@@ -532,13 +532,13 @@ GUI 保持实际运行时的 GC 策略与用户设置，测量工具不能额外
 
 ### 13.1 单一入口
 
-用户只面对一个入口：`M-x etaf-install`。`package.el` 是本项目的机制，不是并列推荐路径；文档只在一次性引导里出现 `package-install 'etaf-install`，因为安装器无法自举自己。菜单按框架、应用、游戏三段组织，每个条目显示当前前提状态。
+用户只面对一个入口：`M-x etaf-install`。`package.el` 是本项目的机制，不是并列推荐路径；文档只在一次性引导里出现 `package-install 'etaf-install`，因为安装器无法自举自己。菜单按框架、应用、游戏三段组织，候选文字以包名开头，便于按名字补全，末尾用括号标注分组；每个条目显示当前前提状态。目标的 `<包>-doctor` 返回与 `etaf-install-doctor` 相同的 `:required`/`:optional` 形状，由安装器合并展示；没有额外前提的目标可以不实现它。
 
 ### 13.2 依赖分为三类，各有归属
 
 | 类别 | 例子 | 归属与机制 |
 | --- | --- | --- |
-| Emacs 包（自有或公共） | `etaf-db`、`telega` | 在 `Package-Requires` 声明；`etaf-install` 注册所需归档（`etaf`、`gnu`、`nongnu`、`melpa`），由 `package.el` 自动解析安装；不关闭签名校验、不改用户其它源 |
+| Emacs 包（自有或公共） | `etaf-db`、`telega` | 在 `Package-Requires` 声明；`etaf-install` 注册所需归档（`etaf`、`gnu`、`nongnu`、`melpa`），由 `package.el` 自动解析安装；不关闭签名校验、不改用户其它源。应用条目在 `workspace.json` 的 `applications` 段记录提交，框架提供方仍在 `repositories` 段 |
 | 自有组件（CLI、Node 后端、可编译模块） | `weread` 后端、`ebook-parse`、EKP C 模块 | 源码放在**应用仓内**，随包同一 tar 发布并计入 sha256；安装到 `package-user-dir/etaf/<包>/<版本>/`；需要 `npm ci` 或 `make` 时在该目录执行，输出进日志、失败可重试；启动时握手校验组件版本与包版本一致 |
 | 系统程序与账号 | ffmpeg、mpv、node、TDLib、Godot、OpenSpiel、平台登录 | 只检测，给出按平台生成的一条可复制命令；不代跑 `sudo`/`brew`/`apt`，不下载第三方二进制 |
 

@@ -4,17 +4,35 @@
     "ecss": {},
     "ebox": {},
     "etaf": {
-      "resources": ["examples"]
+      "resources": [
+        "examples"
+      ]
     },
     "etaf-ui": {
-      "resources": ["examples"]
+      "resources": [
+        "examples"
+      ]
     },
     "etaf-db": {},
     "ekp": {
-      "resources": ["dictionaries", "native"]
+      "resources": [
+        "dictionaries",
+        "native"
+      ]
     },
     "etaf-manual": {
-      "resources": ["book"]
+      "resources": [
+        "book"
+      ]
+    },
+    "etaf-md-preview": {
+      "resources": []
+    },
+    "etaf-video-player": {
+      "resources": []
+    },
+    "etaf-desktop": {
+      "resources": []
     }
   }
 }

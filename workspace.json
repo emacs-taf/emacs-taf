@@ -51,5 +51,17 @@
       "revision": "e6a379eb5f3640f80202f0b1dd015632e207ec3a",
       "branch": "main"
     }
+  },
+  "applications": {
+    "etaf-md-preview": {
+      "url": "https://github.com/emacs-taf/etaf-md-preview.git",
+      "revision": "735b1359dab95542dd4d50ac245a36a8498880a6",
+      "branch": "main"
+    },
+    "etaf-video-player": {
+      "url": "https://github.com/emacs-taf/etaf-video-player.git",
+      "revision": "93a44fc187068b78a33ac0fe6614a59d8dc4c82d",
+      "branch": "main"
+    }
   }
 }
