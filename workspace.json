@@ -62,6 +62,11 @@
       "url": "https://github.com/emacs-taf/etaf-video-player.git",
       "revision": "1669bc858889cd6ebe777039820ee82e725ca2ea",
       "branch": "main"
+    },
+    "etaf-telega": {
+      "url": "https://github.com/emacs-taf/etaf-telega.git",
+      "revision": "dc0ff161bcec743fd95ec1958bebbd1ee98d1994",
+      "branch": "main"
     }
   }
 }

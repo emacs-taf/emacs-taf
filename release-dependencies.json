@@ -33,6 +33,9 @@
     },
     "etaf-desktop": {
       "resources": []
+    },
+    "etaf-telega": {
+      "resources": []
     }
   }
 }

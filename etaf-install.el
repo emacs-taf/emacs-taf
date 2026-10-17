@@ -1,7 +1,7 @@
 ;;; -*- lexical-binding: t; -*-
 ;;; etaf-install.el --- Install ETAF with the Emacs package manager
 
-;; Version: 0.1.3
+;; Version: 0.1.4
 ;; Package-Requires: ((emacs "29.1"))
 ;; URL: https://github.com/emacs-taf/emacs-taf
 ;; Keywords: convenience
@@ -66,13 +66,23 @@
     (etaf-md-preview "Markdown reading view" application etaf-md-preview-open)
     (etaf-video-player "Video with sound in a buffer" application etaf-video-player-open)
     (etaf-desktop "Windows and workspaces" application etaf-desktop-open)
-    (etaf-manual "ETAF reference manual" application etaf-manual-open))
+    (etaf-manual "ETAF reference manual" application etaf-manual-open)
+    (etaf-telega "Telegram client" application etaf-telega-open melpa))
   "Installable targets as (PACKAGE LABEL GROUP OPEN &rest CAPABILITIES).
 GROUP groups the menu: `framework', `application' or `game'.  OPEN is the
 command that presents the installed target, or nil.  CAPABILITIES lists extra
 required features, such as `sqlite'.")
 
+(defconst etaf-install--extra-archives
+  '((gnu . "https://elpa.gnu.org/packages/")
+    (nongnu . "https://elpa.nongnu.org/nongnu/")
+    (melpa . "https://melpa.org/packages/"))
+  "Standard archives a target may declare as a capability, keyed by symbol.
+They are registered only for the target that needs them, and stay registered so
+later upgrades through `M-x list-packages` can resolve them.")
 (defvar etaf-install--busy nil)
+(defvar etaf-install--current-package nil
+  "Target being installed, so archive registration can read its capabilities.")
 (defvar etaf-install--restart-required nil)
 
 ;; package.el evaluates this when enabling the installed package.  Registering
@@ -163,7 +173,15 @@ required features, such as `sqlite'.")
   (let ((url (file-name-as-directory etaf-install-archive-url)))
     (setq package-archives
           (cons (cons "etaf" url)
-                (cl-remove "etaf" package-archives :key #'car :test #'equal)))))
+                (cl-remove "etaf" package-archives :key #'car :test #'equal))))
+  ;; A target may depend on a standard archive, such as MELPA for Telega.
+  ;; Register it the same way as the ETAF archive, so package.el resolves the
+  ;; dependency and later upgrades work from M-x list-packages too.
+  (dolist (capability (nthcdr 4 (etaf-install--target etaf-install--current-package)))
+    (let ((archive (assq capability etaf-install--extra-archives)))
+      (when (and archive (not (assoc (symbol-name (car archive)) package-archives)))
+        (add-to-list 'package-archives
+                     (cons (symbol-name (car archive)) (cdr archive)) t)))))
 
 (defun etaf-install--check-source (package)
   "Refuse unresolved source code or a preloaded checkout for PACKAGE."
@@ -235,11 +253,18 @@ INSTALLED-ONLY checks offline reopening without computing an upgrade plan."
     (unless package--initialized (package-initialize))
     (etaf-install--check-source package)
     (unless (package-installed-p package)
-      (etaf-install--archive)
+      (let ((etaf-install--current-package package))
+        (etaf-install--archive))
       (message "ETAF: checking the official package archive…")
       ;; Scope the refresh to ETAF without discarding the user's other archive
       ;; configuration.  No global signature setting or proxy is rewritten.
-      (let ((package-archives (list (assoc "etaf" package-archives))))
+      (let* ((needed (cons "etaf"
+                           (cl-loop for capability in (nthcdr 4 target)
+                                    for archive = (assq capability etaf-install--extra-archives)
+                                    when archive collect (symbol-name (car archive)))))
+             (package-archives (cl-remove-if-not
+                                (lambda (entry) (member (car entry) needed))
+                                package-archives)))
         (package-refresh-contents))
       (let* ((descriptor (cadr (assq package package-archive-contents)))
              (before (apply #'append (mapcar #'cdr package-alist)))

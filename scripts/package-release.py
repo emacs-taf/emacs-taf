@@ -35,8 +35,15 @@ def checkpoint_sources(document):
     checkpoints; a release pins both, so provenance is read from either section.
     """
     return {**document.get("repositories", {}), **document.get("applications", {})}
-TARGETS = ("etaf-ui", "etaf", "etaf-manual", "ekp", "etaf-db",
-           "etaf-md-preview", "etaf-video-player", "etaf-desktop")
+def release_packages():
+    """Return the packages a release builds, from the release selection.
+
+    The selection, not a constant in this file, decides what a release contains;
+    keeping a second list here made adding a package a three-place edit and let
+    the verification gate and the archive drift apart.
+    """
+    selection = json.loads((ROOT / "release-dependencies.json").read_text())
+    return tuple(sorted(selection["packages"]))
 
 
 def run(args, *, cwd=None, env=None, timeout=120, log_file=None):
@@ -139,6 +146,30 @@ def build(directory):
     print(f"Built {len(manifest['packages'])} packages from sealed workspace {revision[:12]}\narchive={directory}")
 
 
+def scan_diagnostics(text, names):
+    """Return diagnostics attributable to the packages this archive publishes.
+
+    package.el demotes reload errors to messages without failing the process, so
+    both streams are scanned. Third-party dependencies are compiled by hand too:
+    their own deprecation warnings are not ours to fix and must not block a
+    release. Attribute each diagnostic to the file being compiled and ignore the
+    ones that belong to a package outside the archive.
+    """
+    diagnostics, current = [], None
+    pattern = re.compile(
+        r"\bWarning(?: \([^\n]*\))?:|(?:^|\s)Error(?::| in | \()|^Eager macro-expansion failure:")
+    for line in text.splitlines():
+        compiled = re.search(r"\bCompiling (\S+)", line)
+        if compiled:
+            current = compiled[1]
+        if not pattern.search(line):
+            continue
+        if current and not any(f"/elpa/{name}-" in current for name in names):
+            continue
+        diagnostics.append(line)
+    return diagnostics
+
+
 def verify(directory, emacs, targets, direct=False):
     """Exercise entry and standard installs in separate disposable profiles.
 
@@ -147,7 +178,8 @@ def verify(directory, emacs, targets, direct=False):
     """
     report = directory / "installation.json"
     report.unlink(missing_ok=True)
-    package_archive.verify(directory)
+    manifest = package_archive.verify(directory)
+    names = [item["name"] for item in manifest["packages"]]
     manifest_digest = hashlib.sha256((directory / "manifest.json").read_bytes()).hexdigest()
     smoke = ROOT / "scripts/install-smoke.el"
     results = []
@@ -165,11 +197,8 @@ def verify(directory, emacs, targets, direct=False):
                 log = directory / f"installation-{target}-{'direct' if direct_mode else 'entry'}.log"
                 stdout, stderr = run([emacs, "-Q", "--batch", "-l", str(smoke)],
                                      cwd=profile, env=env, timeout=180, log_file=log)
-                # package.el demotes reload errors to messages without failing
-                # the process. Neither output stream may hide such diagnostics.
                 text = (stdout + b"\n" + stderr).decode(errors="replace")
-                diagnostics = [line for line in text.splitlines() if re.search(
-                    r"\bWarning(?: \([^\n]*\))?:|(?:^|\s)Error(?::| in | \()|^Eager macro-expansion failure:", line)]
+                diagnostics = scan_diagnostics(text, names)
                 if diagnostics:
                     raise ValueError(f"Installation diagnostics for {target}:\n"
                                      + "\n".join(diagnostics[:12]) + f"\nlog={log}")
@@ -194,7 +223,7 @@ GROUPS = {
     "Applications": {"etaf-md-preview", "etaf-rss", "etaf-reader", "etaf-algo-lab", "etaf-screensaver",
                      "etaf-desktop", "etaf-miniflux", "etaf-ncm", "etaf-weread", "etaf-bili",
                      "etaf-youtube", "etaf-pi", "etaf-telega", "etaf-ascii-video",
-                     "etaf-video-player", "etaf-video-studio", "etaf-manual"},
+                     "etaf-video-player", "etaf-video-studio", "etaf-manual", "etaf-telega"},
     "Games": {"etaf-gamekit", "etaf-solitaire", "etaf-xiangqi", "etaf-tanks", "etaf-salvage"},
 }
 
@@ -234,8 +263,6 @@ def stage(directory, output):
     if output.exists():
         raise ValueError(f"Refusing to replace existing output: {output}")
     manifest = package_archive.verify(directory)
-    if not set(TARGETS).issubset({item["name"] for item in manifest["packages"]}):
-        raise ValueError("Publication requires the complete supported package selection")
     report = json.loads((directory / "installation.json").read_text())
     digests = {"manifest_sha256": directory / "manifest.json",
                "validator_sha256": Path(__file__),
@@ -244,7 +271,9 @@ def stage(directory, output):
             report.get(key) != hashlib.sha256(path.read_bytes()).hexdigest()
             for key, path in digests.items()):
         raise ValueError("Installation evidence is stale; run the full release check again")
-    expected = {(target, entry) for target in TARGETS
+    # The installer itself is the entry under test, not an installation target.
+    expected = {(item["name"], entry) for item in manifest["packages"]
+                if item["name"] != "etaf-install"
                 for entry in ("etaf-install", "package-install")}
     installations = report.get("installations", [])
     if (len(installations) != len(expected)
@@ -298,7 +327,7 @@ def main():
         if name == "verify":
             command.add_argument("--emacs", default="emacs")
             command.add_argument("--direct", action="store_true", help="Only verify package-install (default: both installation paths)")
-            command.add_argument("--target", action="append", choices=TARGETS)
+            command.add_argument("--target", action="append")
         elif name == "stage":
             command.add_argument("--output", type=Path, required=True)
         elif name == "published":
@@ -313,7 +342,7 @@ def main():
     if args.command == "build":
         build(args.directory.resolve())
     elif args.command == "verify":
-        verify(args.directory.resolve(), args.emacs, args.target or TARGETS, args.direct)
+        verify(args.directory.resolve(), args.emacs, args.target or release_packages(), args.direct)
     elif args.command == "stage":
         stage(args.directory.resolve(), args.output.resolve())
     elif args.command == "published":

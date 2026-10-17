@@ -41,7 +41,13 @@
         package-user-dir (expand-file-name "elpa" profile)
         custom-file (expand-file-name "custom.el" profile)
         package-directory-list nil
-        package-archives (list (cons "etaf" (file-name-as-directory archive)))
+        ;; Mirror the archives the installer registers: a direct
+        ;; `package-install` of a target that depends on a package from a
+        ;; standard archive needs the same sources.
+        package-archives (list (cons "etaf" (file-name-as-directory archive))
+                               '("gnu" . "https://elpa.gnu.org/packages/")
+                               '("nongnu" . "https://elpa.nongnu.org/nongnu/")
+                               '("melpa" . "https://melpa.org/packages/"))
         native-comp-jit-compilation nil
         print-circle t print-length 30 print-level 6)
   (package-initialize)
@@ -120,7 +126,7 @@
                     (kill-buffer example))))))
         (with-current-buffer buffer (etaf-unmount))
         (kill-buffer buffer))))
-  (when (memq target '(etaf-md-preview etaf-video-player etaf-desktop))
+  (when (memq target '(etaf-md-preview etaf-video-player etaf-desktop etaf-telega))
     ;; Applications install and load like any package; their external tools are
     ;; runtime capabilities, so a missing ffmpeg must not fail the install gate.
     (require target)
