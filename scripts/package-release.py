@@ -179,6 +179,42 @@ def verify(directory, emacs, targets, direct=False):
     print(f"evidence={report}")
 
 
+GROUPS = {
+    "Framework": {"etaf-install", "etaf-ui", "etaf", "ebox", "ecss", "ekp", "etaf-db", "etaf-manual"},
+    "Applications": {"etaf-md-preview", "etaf-rss", "etaf-reader", "etaf-algo-lab", "etaf-screensaver",
+                     "etaf-desktop", "etaf-miniflux", "etaf-ncm", "etaf-weread", "etaf-bili",
+                     "etaf-youtube", "etaf-pi", "etaf-telega", "etaf-ascii-video",
+                     "etaf-video-player", "etaf-video-studio"},
+    "Games": {"etaf-gamekit", "etaf-solitaire", "etaf-xiangqi", "etaf-tanks", "etaf-salvage"},
+}
+
+
+def published(url):
+    """List what the live archive actually serves, grouped by role.
+
+    The manifest, not a hand-kept list, is the answer to "what is published";
+    this command exists so nobody has to curl and eyeball it.
+    """
+    from urllib.request import urlopen
+    with urlopen(url.rstrip("/") + "/manifest.json", timeout=30) as response:
+        manifest = json.loads(response.read())
+    if manifest.get("schema") != 2 or not manifest.get("packages"):
+        raise ValueError("The archive does not serve a schema 2 manifest")
+    print(f"archive={url}\nworkspace={manifest.get('workspace', '')[:12]}")
+    seen = set()
+    for group, members in GROUPS.items():
+        rows = sorted((item for item in manifest["packages"] if item["name"] in members),
+                      key=lambda item: item["name"])
+        seen.update(item["name"] for item in rows)
+        print(f"\n{group} ({len(rows)}):")
+        for item in rows:
+            requirements = ", ".join(f"{name} {version}" for name, version in item["requirements"]) or "Emacs"
+            print(f"  {item['name']:<20} {item['version']:<8} {requirements}")
+    other = sorted(item["name"] for item in manifest["packages"] if item["name"] not in seen)
+    if other:
+        print("\nUnclassified: " + ", ".join(other))
+
+
 def stage(directory, output):
     """Export only public archive files after checking complete, current evidence.
 
@@ -245,15 +281,18 @@ def stage(directory, output):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command")
-    for name in ("build", "verify", "stage", "publish"):
+    for name in ("build", "verify", "stage", "publish", "published"):
         command = sub.add_parser(name)
-        command.add_argument("--directory", type=Path, required=True)
+        if name != "published":
+            command.add_argument("--directory", type=Path, required=True)
         if name == "verify":
             command.add_argument("--emacs", default="emacs")
             command.add_argument("--direct", action="store_true", help="Only verify package-install (default: both installation paths)")
             command.add_argument("--target", action="append", choices=TARGETS)
         elif name == "stage":
             command.add_argument("--output", type=Path, required=True)
+        elif name == "published":
+            command.add_argument("--url", default="https://etaf.top/packages/")
     arguments = sys.argv[1:]
     if not arguments or arguments == ["help"]:
         parser.print_help()
@@ -267,6 +306,8 @@ def main():
         verify(args.directory.resolve(), args.emacs, args.target or TARGETS, args.direct)
     elif args.command == "stage":
         stage(args.directory.resolve(), args.output.resolve())
+    elif args.command == "published":
+        published(args.url)
     else:
         # The site publisher owns transport, deployment locking and rollback.
         # It invokes stage before contacting the host and never uploads reports.

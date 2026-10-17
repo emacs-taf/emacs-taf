@@ -300,5 +300,41 @@ class PackageReleaseStageTests(unittest.TestCase):
                 self.stage(success=False)
 
 
+class PackageReleasePublishedTests(unittest.TestCase):
+    """The published query must answer from the archive, not from a hand list."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.archive = Path(self.temp.name)
+        (self.archive / "manifest.json").write_text(json.dumps({
+            "schema": 2, "workspace": "0" * 40, "sources": {},
+            "packages": [
+                {"name": "etaf-ui", "version": "0.1.3", "requirements": [["emacs", "29.1"]],
+                 "summary": "catalog", "file": "etaf-ui-0.1.3.tar", "sha256": "0" * 64},
+                {"name": "etaf-md-preview", "version": "0.1.0", "requirements": [["etaf", "0.2.2"]],
+                 "summary": "markdown", "file": "etaf-md-preview-0.1.0.tar", "sha256": "1" * 64}]}))
+
+    def query(self, success=True):
+        result = subprocess.run(
+            [sys.executable, str(ROOT / "scripts/package-release.py"), "published",
+             "--url", self.archive.as_uri() + "/"], capture_output=True, text=True, timeout=20)
+        self.assertEqual(result.returncode == 0, success, result.stdout + result.stderr)
+        return result
+
+    def test_groups_packages_by_role_from_the_live_manifest(self):
+        output = self.query().stdout
+        self.assertIn("Framework (1):", output)
+        self.assertIn("etaf-ui", output)
+        self.assertIn("Applications (1):", output)
+        self.assertIn("etaf-md-preview", output)
+        self.assertIn("Games (0):", output)
+
+    def test_a_missing_manifest_fails_closed(self):
+        (self.archive / "manifest.json").unlink()
+        result = self.query(success=False)
+        self.assertIn("error=release", result.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()
