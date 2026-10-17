@@ -35,15 +35,16 @@ def checkpoint_sources(document):
     checkpoints; a release pins both, so provenance is read from either section.
     """
     return {**document.get("repositories", {}), **document.get("applications", {})}
-def release_packages():
-    """Return the packages a release builds, from the release selection.
+def release_targets():
+    """Return the installation targets a release must verify.
 
-    The selection, not a constant in this file, decides what a release contains;
-    keeping a second list here made adding a package a three-place edit and let
-    the verification gate and the archive drift apart.
+    The selection is the authority: `packages` lists everything the archive
+    contains, including dependencies such as `ebox` or `ecss` that are not user
+    targets, and `targets` lists the entries a user installs. Keeping one list in
+    this file let the gate and the archive drift apart.
     """
     selection = json.loads((ROOT / "release-dependencies.json").read_text())
-    return tuple(sorted(selection["packages"]))
+    return tuple(selection.get("targets") or sorted(selection["packages"]))
 
 
 def run(args, *, cwd=None, env=None, timeout=120, log_file=None):
@@ -348,7 +349,7 @@ def main():
     if args.command == "build":
         build(args.directory.resolve())
     elif args.command == "verify":
-        verify(args.directory.resolve(), args.emacs, args.target or release_packages(), args.direct)
+        verify(args.directory.resolve(), args.emacs, args.target or release_targets(), args.direct)
     elif args.command == "stage":
         stage(args.directory.resolve(), args.output.resolve())
     elif args.command == "published":

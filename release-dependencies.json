@@ -40,5 +40,16 @@
         "telega"
       ]
     }
-  }
+  },
+  "targets": [
+    "etaf-ui",
+    "etaf",
+    "etaf-manual",
+    "etaf-db",
+    "ekp",
+    "etaf-md-preview",
+    "etaf-video-player",
+    "etaf-desktop",
+    "etaf-telega"
+  ]
 }
