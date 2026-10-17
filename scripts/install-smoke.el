@@ -12,6 +12,22 @@
 (require 'package)
 (require 'json)
 
+(defun etaf-install-smoke-refresh ()
+  "Refresh archives, retrying once when a registered archive came back empty.
+Network fetches of a large third-party archive fail intermittently; a missing
+archive would otherwise look like an unavailable dependency."
+  (package-refresh-contents)
+  (let ((missing (cl-remove-if
+                  (lambda (archive)
+                    (or (equal (car archive) "etaf")
+                        (cl-some (lambda (entry)
+                                   (equal (package-desc-archive (cadr entry)) (car archive)))
+                                 package-archive-contents)))
+                  package-archives)))
+    (when missing
+      (sleep-for 5)
+      (package-refresh-contents))))
+
 (defvar etaf-install-archive-url)
 
 (declare-function etaf-install "etaf-install" (&optional package no-open))
@@ -51,7 +67,7 @@
         native-comp-jit-compilation nil
         print-circle t print-length 30 print-level 6)
   (package-initialize)
-  (package-refresh-contents)
+  (etaf-install-smoke-refresh)
   (if direct
       (progn (package-install target) (require target))
     (package-install 'etaf-install)
