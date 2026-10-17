@@ -132,7 +132,7 @@ def build(directory):
             # A dependency outside the archive must be declared explicitly, so a
             # typo cannot silently pass and the source of every external package
             # stays reviewable in the release selection.
-            external = set(selection["packages"][package["name"]].get("external", []))
+            external = set(selection["packages"].get(package["name"], {}).get("external", []))
             for dependency, minimum in package["requirements"]:
                 if dependency == "emacs":
                     continue
