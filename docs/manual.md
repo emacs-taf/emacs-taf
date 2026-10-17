@@ -102,6 +102,12 @@ The manifest also records the root revision. Rewriting that sealed commit —
 including a message edit — gives it a new identity, so rebuild and rerun
 `release-check` before publishing an amended commit.
 
+`etaf-install` packages the root README, LICENSE and CHANGELOG. A release that
+changes only one of those root files still changes the
+`etaf-install-<version>.tar` bytes; bump `etaf-install`'s `Version` or leave
+those files unchanged when publishing another package at the same version. The
+publisher refuses a changed versioned tarball.
+
 `release-check` runs each supported target through both the installer and ordinary
 `package-install`, in independent `emacs -Q` profiles. It checks dependency origins,
 offline reopening, reactive rendering, the actual gallery entry, copying and
@@ -165,6 +171,11 @@ Check every job at the release revision before publication. A workflow definitio
 is not a passing result, and these batch checks do not certify GUI behavior or a
 different development build used locally.
 
+MELPA rate-limits by source IP, and `package.el` reports a rejected request only
+as `Failed to download 'melpa' archive`; a 429 is invisible in that message. The
+prefetch command prints the HTTP status. Compare a single and a concurrent
+request from the affected egress before treating the failure as a dead network.
+
 A POSIX-only pass hides two failure classes: path-flavour comparisons in tools
 that walk trees (a `Path` is not a `PurePosixPath` on Windows), and installed
 packages whose autoloaded files are resolved through the host's `load-path`
@@ -186,6 +197,12 @@ Dependencies split three ways, and each has one owner:
 | Emacs packages, ours or public (`etaf-db`, `telega`) | `Package-Requires` | `etaf-install` registers the archives its targets need (`etaf`, `gnu`, `nongnu`, `melpa`); `package.el` resolves them; signature checks stay enabled |
 | Our components (CLI, Node backend, buildable module) | the application repository | shipped in the same tar and checksum; installed into `package-user-dir/etaf/<package>/<version>/`; `npm ci` or `make` runs there with a log; the entry checks the component version at startup |
 | System programs and accounts (ffmpeg, mpv, node, TDLib, Godot, login) | the user | detected only; print one platform-specific command; never run `sudo`, `brew` or `apt` |
+
+A target's standard-archive capabilities must cover its whole dependency
+closure, not only its direct archive. The installer keeps only the archives
+named by the target's capability list when it refreshes for installation;
+Telega, for example, names `melpa` for Telega and Transient and `gnu` for
+Compat. A missing archive surfaces as `Package 'compat' ... is unavailable`.
 
 A component's source lives in the application repository, never in another
 repository or a skill directory, so one version bump publishes the Lisp and the
