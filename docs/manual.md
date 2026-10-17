@@ -98,6 +98,10 @@ resources, and an incomplete or too-old dependency closure. The manifest records
 the root and provider revisions. Versioned package files must never be replaced
 with different bytes; change the package's `Version` header for a new release.
 
+The manifest also records the root revision. Rewriting that sealed commit —
+including a message edit — gives it a new identity, so rebuild and rerun
+`release-check` before publishing an amended commit.
+
 `release-check` runs each supported target through both the installer and ordinary
 `package-install`, in independent `emacs -Q` profiles. It checks dependency origins,
 offline reopening, reactive rendering, the actual gallery entry, copying and
@@ -187,11 +191,17 @@ Adding a package to the archive is a fixed sequence; do not invent another route
    `applications` section, both pinned to a published commit.
 2. Declare `Version` and every Emacs dependency in `Package-Requires`; put
    components and runtime resources inside the repository and list resource
-   directories in `release-dependencies.json`.
+   directories in `release-dependencies.json`. The entry must also resolve its
+   own `lisp/` while the byte compiler runs: prefer
+   `byte-compile-current-file`, then `load-file-name`, then
+   `buffer-file-name`. An archive install otherwise reports
+   `Cannot open load file` for the modules.
 3. Implement `<package>-doctor` returning `(LABEL AVAILABLE REMEDY)` facts, and
    mark blocking versus degraded capabilities; the installer aggregates them.
 4. Add the target to `etaf-install--targets` with its group and open command so
-   the menu shows its status before installation.
+   the menu shows its status before installation. Add the same package to the
+   application or game list in `scripts/install-smoke.el`, which reopens and
+   diagnoses it as an installed package during the release gate.
 5. Run the package's `make check`, then the dev-lane install on Emacs 29.1, 30.2
    and 31.1 (29.1 lives on `lightos`, see the host notes).
 6. Commit and publish the provider, record it in `workspace.json`, build the

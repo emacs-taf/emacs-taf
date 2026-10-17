@@ -5,6 +5,11 @@
 ;; The release runner starts this file in a fresh Emacs -Q process.  Both the
 ;; archive and the disposable profile must be supplied explicitly.  It never
 ;; initializes the user's packages, reads their init, or adds source load paths.
+;;
+;; ETAF_INSTALL_DIRECT is read with `getenv`: any non-nil value, including
+;; the empty string, selects ordinary `package-install`.  Unset it
+;; (`env -u ETAF_INSTALL_DIRECT`) when the same profile must exercise the
+;; `etaf-install` path.
 
 ;;; Code:
 

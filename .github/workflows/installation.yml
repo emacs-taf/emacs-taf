@@ -64,7 +64,17 @@ jobs:
         run: python scripts/package-release.py build --directory "${{ runner.temp }}/etaf-release"
       - name: Verify every target through both package.el entry paths
         shell: bash
-        run: python scripts/package-release.py verify --directory "${{ runner.temp }}/etaf-release"
+        # Third-party archives occasionally refuse or throttle a runner; a new
+        # process retries the whole gate, and only a full pass is evidence.
+        run: |
+          for attempt in 1 2 3; do
+            if python scripts/package-release.py verify --directory "${{ runner.temp }}/etaf-release"; then
+              exit 0
+            fi
+            echo "verify attempt $attempt failed; retrying in 30 seconds" >&2
+            sleep 30
+          done
+          exit 1
       - name: Save successful machine-readable evidence (no profiles or logs)
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
