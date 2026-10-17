@@ -52,8 +52,11 @@
     (require 'etaf-install)
     (setq etaf-install-archive-url (file-name-as-directory archive))
     (etaf-install target (not (eq target 'etaf-ui)))
-    (unless (plist-get (etaf-install-doctor target) :ready)
-      (error "Installed target is missing required capabilities")))
+    ;; Framework targets must be usable immediately. An application's external
+    ;; tools are runtime capabilities: the package installs, opening waits.
+    (when (memq target '(etaf-ui etaf etaf-manual ekp etaf-db))
+      (unless (plist-get (etaf-install-doctor target) :ready)
+        (error "Installed target is missing required capabilities"))))
   (dolist (entry package-alist)
     (let ((library (locate-library (symbol-name (car entry)))))
       (unless (and library (file-in-directory-p library package-user-dir))

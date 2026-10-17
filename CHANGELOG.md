@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- The installer no longer refuses to install a target because one of its runtime
+  tools is missing. Installation prerequisites (Emacs version, the SQLite build a
+  package compiles against) still stop it; a target's own required capabilities
+  are reported after installation and hold back only the opening step.
+
 ## [Unreleased]
 
 ### Added

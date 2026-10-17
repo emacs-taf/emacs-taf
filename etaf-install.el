@@ -1,7 +1,7 @@
 ;;; -*- lexical-binding: t; -*-
 ;;; etaf-install.el --- Install ETAF with the Emacs package manager
 
-;; Version: 0.1.2
+;; Version: 0.1.3
 ;; Package-Requires: ((emacs "29.1"))
 ;; URL: https://github.com/emacs-taf/emacs-taf
 ;; Keywords: convenience
@@ -226,8 +226,12 @@ INSTALLED-ONLY checks offline reopening without computing an upgrade plan."
          (target (etaf-install--target package))
          (facts (etaf-install-doctor package))
          (etaf-install--busy t))
+    ;; Only installation prerequisites stop the install: an Emacs that is too old
+    ;; and the SQLite capability the package is compiled against. A target's own
+    ;; runtime tools are reported after installation instead of blocking it.
     (dolist (fact (plist-get facts :required))
-      (unless (cadr fact) (user-error "%s: %s" (car fact) (nth 2 fact))))
+      (when (member (car fact) '("Emacs 29.1 or newer" "SQLite built into Emacs"))
+        (unless (cadr fact) (user-error "%s: %s" (car fact) (nth 2 fact)))))
     (unless package--initialized (package-initialize))
     (etaf-install--check-source package)
     (unless (package-installed-p package)
@@ -268,8 +272,14 @@ INSTALLED-ONLY checks offline reopening without computing an upgrade plan."
            (signal (car error-data) (cdr error-data))))))
     (etaf-install--check-plan (cadr (assq package package-alist)) t)
     (require package)
-    (when (and (not no-open) (nth 3 target))
-      (call-interactively (nth 3 target)))
+    (let ((missing (cl-remove-if #'cadr (plist-get (etaf-install-doctor package) :required))))
+      (if missing
+          (message "ETAF: %s is installed. Missing for use: %s"
+                   package
+                   (mapconcat (lambda (fact) (format "%s (%s)" (car fact) (nth 2 fact)))
+                              missing "; "))
+        (when (and (not no-open) (nth 3 target))
+          (call-interactively (nth 3 target)))))
     (message "ETAF: %s is ready.  M-x etaf-install opens installed targets without downloading again." package)
     package))
 
