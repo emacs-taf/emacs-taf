@@ -28,7 +28,10 @@ jobs:
           from pathlib import Path
           import re
           import subprocess
-          checkpoint = json.loads(Path('workspace.json').read_text())['repositories']
+          document = json.loads(Path('workspace.json').read_text())
+          # Framework providers and applications have separate checkpoints.
+          checkpoint = {**document.get('repositories', {}),
+                        **document.get('applications', {})}
           selection = json.loads(Path('release-dependencies.json').read_text())['packages']
           for name in selection:
               record = checkpoint[name]
