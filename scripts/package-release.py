@@ -190,11 +190,11 @@ def verify(directory, emacs, targets, direct=False):
 
 
 GROUPS = {
-    "Framework": {"etaf-install", "etaf-ui", "etaf", "ebox", "ecss", "ekp", "etaf-db", "etaf-manual"},
+    "Framework": {"etaf-install", "etaf-ui", "etaf", "ebox", "ecss", "ekp", "etaf-db"},
     "Applications": {"etaf-md-preview", "etaf-rss", "etaf-reader", "etaf-algo-lab", "etaf-screensaver",
                      "etaf-desktop", "etaf-miniflux", "etaf-ncm", "etaf-weread", "etaf-bili",
                      "etaf-youtube", "etaf-pi", "etaf-telega", "etaf-ascii-video",
-                     "etaf-video-player", "etaf-video-studio"},
+                     "etaf-video-player", "etaf-video-studio", "etaf-manual"},
     "Games": {"etaf-gamekit", "etaf-solitaire", "etaf-xiangqi", "etaf-tanks", "etaf-salvage"},
 }
 

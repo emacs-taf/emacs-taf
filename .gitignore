@@ -12,6 +12,25 @@
 /etaf-manual/
 /etaf-playground/
 /etaf-ui/
+/etaf-md-preview/
+/etaf-video-player/
+/etaf-ncm/
+/etaf-weread/
+/etaf-telega/
+/etaf-rss/
+/etaf-reader/
+/etaf-algo-lab/
+/etaf-screensaver/
+/etaf-miniflux/
+/etaf-bili/
+/etaf-youtube/
+/etaf-pi/
+/etaf-ascii-video/
+/etaf-video-studio/
+/etaf-solitaire/
+/etaf-xiangqi/
+/etaf-tanks/
+/etaf-salvage/
 
 *.elc
 *.eln

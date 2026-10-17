@@ -1,7 +1,7 @@
 ;;; -*- lexical-binding: t; -*-
 ;;; etaf-install.el --- Install ETAF with the Emacs package manager
 
-;; Version: 0.1.1
+;; Version: 0.1.2
 ;; Package-Requires: ((emacs "29.1"))
 ;; URL: https://github.com/emacs-taf/emacs-taf
 ;; Keywords: convenience
@@ -61,12 +61,12 @@
 (defconst etaf-install--targets
   '((etaf-ui "ETAF components and gallery" framework etaf-ui-gallery-open)
     (etaf "ETAF framework" framework nil)
-    (etaf-manual "ETAF reference manual" framework etaf-manual-open)
     (etaf-db "ETAF SQLite backend" framework nil sqlite)
     (ekp "Knuth-Plass paragraph layout" framework nil)
     (etaf-md-preview "Markdown reading view" application etaf-md-preview-open)
     (etaf-video-player "Video with sound in a buffer" application etaf-video-player-open)
-    (etaf-desktop "Windows and workspaces" application etaf-desktop-open))
+    (etaf-desktop "Windows and workspaces" application etaf-desktop-open)
+    (etaf-manual "ETAF reference manual" application etaf-manual-open))
   "Installable targets as (PACKAGE LABEL GROUP OPEN &rest CAPABILITIES).
 GROUP groups the menu: `framework', `application' or `game'.  OPEN is the
 command that presents the installed target, or nil.  CAPABILITIES lists extra
