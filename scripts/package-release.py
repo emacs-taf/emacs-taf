@@ -47,6 +47,10 @@ def run(args, *, cwd=None, env=None, timeout=120, log_file=None):
         log_file.write_bytes(stdout + b"\n--- stderr ---\n" + stderr)
     if process.returncode:
         detail = f"log={log_file}" if log_file else (stdout + stderr).decode(errors="replace")[-4000:]
+        if log_file and Path(log_file).is_file():
+            # The probe's own output names the failing step; a path alone leaves
+            # CI failures undiagnosable once the runner is gone.
+            detail += "\n" + Path(log_file).read_text(errors="replace")[-3000:]
         raise ValueError(f"Command failed ({process.returncode}): {args[0]}\n{detail}")
     return stdout, stderr
 
