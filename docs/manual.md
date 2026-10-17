@@ -128,6 +128,16 @@ partial evidence and exports only `archive-contents`, a public manifest and its
 listed source tarballs. Reports are local evidence, not signatures; this gate
 alone does not certify other Emacs versions, platforms or GUI behavior.
 
+The root's `Package installation` GitHub Actions workflow defines batch checks
+for Emacs 29.1 and 30.2 on Linux, macOS and Windows. It fetches only the exact
+provider commits recorded in the checkpoint, then builds and verifies all targets
+through both installation paths without source load paths. No matrix failure is
+optional. Successful jobs retain only machine-readable manifests and installation
+reports as CI artifacts; they do not deploy packages or upload installation logs.
+Check every job at the release revision before publication. A workflow definition
+is not a passing result, and these batch checks do not certify GUI behavior or a
+different development build used locally.
+
 ## Run a measured change
 
 ```sh
