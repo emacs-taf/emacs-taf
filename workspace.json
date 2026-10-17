@@ -3,52 +3,52 @@
   "repositories": {
     "ebox": {
       "url": "https://github.com/emacs-taf/ebox.git",
-      "revision": "146e8885b6349d2ce794e8eaf28d475e1995e663",
+      "revision": "e759ea83d9099eb4c7c75ede5e4716d1c00c4588",
       "branch": "main"
     },
     "ebox-playground": {
       "url": "https://github.com/emacs-taf/ebox-playground.git",
-      "revision": "1ee6a35594ed7717c1a888fafb4f76ab5e97da48",
+      "revision": "0b71bbedcb0115656347e4a507098183f4430983",
       "branch": "main"
     },
     "ecss": {
       "url": "https://github.com/emacs-taf/ecss.git",
-      "revision": "9a4270ee39e50e4a6f0ca8cb0893d53e90456fa7",
+      "revision": "f47b4e89f8a950a929b20e0942b20d8b8e1543aa",
       "branch": "main"
     },
     "ekp": {
       "url": "https://github.com/emacs-taf/ekp.git",
-      "revision": "02304a5be6db7b0f925e64ecabd14e27ea5012b7",
+      "revision": "cc2e69888d26a95a133adda8dae1ff9e288bd16d",
       "branch": "main"
     },
     "etaf": {
       "url": "https://github.com/emacs-taf/etaf.git",
-      "revision": "f8c8d5ecd423f34db37ffa17d919738a9237052a",
+      "revision": "7dc94da9149f2aaeef56dc9a6e091c5c57553817",
       "branch": "main"
     },
     "etaf-db": {
       "url": "https://github.com/emacs-taf/etaf-db.git",
-      "revision": "87cf505d5ea72489dd79dc8f94c14a2afbcda607",
+      "revision": "07c02e68f231f35571206d934b2c0d6f699cb30d",
       "branch": "main"
     },
     "etaf-playground": {
       "url": "https://github.com/emacs-taf/etaf-playground.git",
-      "revision": "9be52061ead3e4b601ff7393d7f22e04c96d2e7b",
+      "revision": "f7ef8381e7c28e08aae9b029b5388c97fe41012c",
       "branch": "main"
     },
     "etaf-ui": {
       "url": "https://github.com/emacs-taf/etaf-ui.git",
-      "revision": "c5fd48625ab9a811a072d8fa96f93c254a1eca11",
+      "revision": "c6de05258359ae6cd55fde296bc11e8df88304c5",
       "branch": "main"
     },
     "etaf-desktop": {
       "url": "https://github.com/emacs-taf/etaf-desktop.git",
-      "revision": "69fa6ebc137fc5689d779d297b92aa60b54e5a5e",
+      "revision": "b5a53ed3386b25de5d538910e3dc5e5c2993517d",
       "branch": "main"
     },
     "etaf-manual": {
       "url": "https://github.com/emacs-taf/etaf-manual.git",
-      "revision": "4f61633e930c623f81dcae12e455c7bab80964aa",
+      "revision": "1682a4a95d0bfc0a35d5ecfb39f5b798fc190bfb",
       "branch": "main"
     }
   }
