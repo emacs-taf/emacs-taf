@@ -142,7 +142,7 @@ archive would otherwise look like an unavailable dependency."
                     (kill-buffer example))))))
         (with-current-buffer buffer (etaf-unmount))
         (kill-buffer buffer))))
-  (when (memq target '(etaf-md-preview etaf-video-player etaf-desktop etaf-telega))
+  (when (memq target '(etaf-md-preview etaf-video-player etaf-desktop etaf-telega etaf-xiangqi))
     ;; Applications install and load like any package; their external tools are
     ;; runtime capabilities, so a missing ffmpeg must not fail the install gate.
     (require target)

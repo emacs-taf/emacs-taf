@@ -44,6 +44,9 @@
       "resources": [
         "native"
       ]
+    },
+    "etaf-xiangqi": {
+      "resources": []
     }
   },
   "targets": [
@@ -55,6 +58,7 @@
     "etaf-md-preview",
     "etaf-video-player",
     "etaf-desktop",
-    "etaf-telega"
+    "etaf-telega",
+    "etaf-xiangqi"
   ]
 }
