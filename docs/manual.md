@@ -100,7 +100,8 @@ with different bytes; change the package's `Version` header for a new release.
 
 `release-check` runs each supported target through both the installer and ordinary
 `package-install`, in independent `emacs -Q` profiles. It checks dependency origins,
-offline reopening, reactive rendering, the actual gallery entry and book data.
+offline reopening, reactive rendering, the actual gallery entry, copying and
+running a gallery example, and book data.
 Compiler warnings and demoted loader errors fail the check even when Emacs exits
 successfully. A new attempt invalidates earlier `installation.json` evidence;
 success records the manifest and validator digests plus Emacs, platform and targets.
@@ -355,6 +356,9 @@ Load the tested providers from that ELPA directory in `site-start.el`, before th
 user init can require source checkouts. After init, remove checkout load paths and
 check both `locate-library` and each provider's `load-history` entries. The gallery
 command and implementation must also resolve inside the installed package.
+The server can accept connections before the command-line startup file finishes:
+wait for the post-init profile and provenance checks to complete before driving
+commands, not merely for a responsive server socket.
 
 Do not unload a running full-init dependency graph to switch generations: unrelated
 applications and global hooks may still reference its functions and variables.

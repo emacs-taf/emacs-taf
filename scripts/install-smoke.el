@@ -19,6 +19,12 @@
 (declare-function etaf-ui-gallery-open "etaf-ui" (&optional buffer-or-name))
 (declare-function etaf-manual-book "etaf-manual" (&optional language))
 (declare-function etaf-unmount "etaf" (&optional runtime))
+(declare-function etaf-runtime-for-buffer "etaf" (buffer-or-name))
+(declare-function etaf-runtime-host-props-entries "etaf" (runtime))
+(declare-function etaf-runtime-refit "etaf" (runtime viewport-width &optional viewport-height))
+(declare-function etaf-scroll-into-view "etaf" (runtime host-ref &optional align))
+(declare-function etaf-focus "etaf" (&optional runtime host-ref))
+(declare-function etaf-activate "etaf" (&optional runtime))
 (declare-function ekp-hyphen-create "ekp" (&optional lang file left right))
 (declare-function etaf-sqlite-column "etaf-db" (id sql-name &rest options))
 (declare-function etaf-sqlite-table "etaf-db" (id columns &optional primary-key))
@@ -78,7 +84,37 @@
       (unwind-protect
           (with-current-buffer buffer
             (unless (> (buffer-size) 100)
-              (error "Installed component gallery did not render")))
+              (error "Installed component gallery did not render"))
+            (let ((runtime (etaf-runtime-for-buffer buffer))
+                  (interprogram-cut-function nil)
+                  (kill-ring nil))
+              ;; Use the wide category controls for this copy-and-run workflow;
+              ;; the entry above still opens at the actual batch frame size.
+              (etaf-runtime-refit runtime (* 160 (frame-char-width)) 80)
+              (dolist (label '("基础与操作" "查看用法：etaf-button" "复制示例：etaf-button"))
+                (let* ((entry (cl-find-if
+                               (lambda (entry)
+                                 (equal label (plist-get (cdr entry) :aria-label)))
+                               (etaf-runtime-host-props-entries runtime)))
+                       (ref (car entry)))
+                  (unless ref (error "Installed gallery control is missing: %s" label))
+                  (etaf-scroll-into-view runtime ref)
+                  (etaf-focus runtime ref)
+                  (etaf-activate runtime)))
+              (let ((source (current-kill 0 t)))
+                (unless (string-prefix-p ";;; -*- lexical-binding: t; -*-" source)
+                  (error "Installed gallery did not copy a standalone example"))
+                (unwind-protect
+                    (save-window-excursion
+                      (with-temp-buffer
+                        (insert source)
+                        (let ((lexical-binding t)) (eval-buffer)))
+                      (unless (etaf-runtime-for-buffer "*ETAF UI Example*")
+                        (error "Copied installed example did not mount")))
+                  (when-let* ((example (get-buffer "*ETAF UI Example*")))
+                    (when-let* ((mounted (etaf-runtime-for-buffer example)))
+                      (etaf-unmount mounted))
+                    (kill-buffer example))))))
         (with-current-buffer buffer (etaf-unmount))
         (kill-buffer buffer))))
   (when (eq target 'etaf-manual)
