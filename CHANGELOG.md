@@ -21,6 +21,8 @@
   tools is missing. Installation prerequisites (Emacs version, the SQLite build a
   package compiles against) still stop it; a target's own required capabilities
   are reported after installation and hold back only the opening step.
+- `etaf-gamekit` 0.1.2 marks its JSON configuration validation as side-effect
+  only, avoiding an Emacs 29/30 byte-compiler warning during installation.
 
 ## [Unreleased]
 
