@@ -565,7 +565,7 @@ GUI 保持实际运行时的 GC 策略与用户设置，测量工具不能额外
 
 ### 13.6.1 发布清单的三层含义
 
-`release-dependencies.json` 里 `packages` 是归档包含的全部包（含 `ebox`、`ecss` 这类依赖），`targets` 是用户真正安装的条目，只有它们需要安装证据；包所需的归档外依赖（例如 `telega` 来自 MELPA）必须在 `external` 里显式列出，闭包检查仍会拒绝未声明的缺包。安装诊断只对本归档发布的包负责：第三方依赖在安装时产生的过时宏警告不得阻塞发布，而我们自己的警告仍然失败。已安装包的入口在**编译期与加载期**都要能解析自己的 `lisp/`（`byte-compile-current-file` 回退），否则 `package.el` 安装时会报 `Cannot open load file`。
+`release-dependencies.json` 里 `packages` 是归档包含的全部包（含 `ebox`、`ecss` 这类依赖），`targets` 是用户真正安装的条目，只有它们需要安装证据；包所需的归档外依赖（例如 `telega` 来自 MELPA）必须在 `external` 里显式列出，闭包检查仍会拒绝未声明的缺包。安装诊断只对本归档发布的包负责：第三方依赖在安装时产生的过时宏警告不得阻塞发布，而我们自己的警告仍然失败。已安装包的入口在**编译期与加载期**都要能解析自己的 `lisp/`：编译期优先用 `byte-compile-current-file`，再回退 `load-file-name` 与 `buffer-file-name`（安装脚本本身可能仍在加载，`load-file-name` 会指向脚本而不是入口），否则 `package.el` 安装时会报 `Cannot open load file`。
 
 ### 13.7 当前差距
 
