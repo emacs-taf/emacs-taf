@@ -60,7 +60,7 @@
     },
     "etaf-video-player": {
       "url": "https://github.com/emacs-taf/etaf-video-player.git",
-      "revision": "7cec98bdd409d72369c581df325b04298ca0d89d",
+      "revision": "1669bc858889cd6ebe777039820ee82e725ca2ea",
       "branch": "main"
     }
   }
