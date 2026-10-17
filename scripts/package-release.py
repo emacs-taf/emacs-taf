@@ -278,9 +278,18 @@ def stage(directory, output):
             report.get(key) != hashlib.sha256(path.read_bytes()).hexdigest()
             for key, path in digests.items()):
         raise ValueError("Installation evidence is stale; run the full release check again")
-    # The installer itself is the entry under test, not an installation target.
-    expected = {(item["name"], entry) for item in manifest["packages"]
-                if item["name"] != "etaf-install"
+    revision = manifest.get("workspace", "")
+    if not re.fullmatch(r"[0-9a-f]{40}", revision):
+        raise ValueError("Publication requires a sealed workspace build, not a development archive")
+    store = git_directory(ROOT)
+    checkpoint = checkpoint_sources(json.loads(run(
+        ["git", "--git-dir", store, "show", f"{revision}:workspace.json"])[0]))
+    selection = json.loads(run(["git", "--git-dir", store, "show",
+                                f"{revision}:release-dependencies.json"])[0])
+    # The installer is the entry under test, not a target, and dependencies such
+    # as ebox are not installed directly: the sealed selection names the targets.
+    declare = selection.get("targets") or [item["name"] for item in manifest["packages"]]
+    expected = {(name, entry) for name in declare if name != "etaf-install"
                 for entry in ("etaf-install", "package-install")}
     installations = report.get("installations", [])
     if (len(installations) != len(expected)
@@ -291,14 +300,6 @@ def stage(directory, output):
             or not re.fullmatch(r"[0-9]+(?:\.[0-9]+)+", installations[0]["emacs"])
             or tuple(map(int, installations[0]["emacs"].split("."))) < (29, 1)):
         raise ValueError("Publication requires every target through both installation paths")
-    revision = manifest.get("workspace", "")
-    if not re.fullmatch(r"[0-9a-f]{40}", revision):
-        raise ValueError("Publication requires a sealed workspace build, not a development archive")
-    store = git_directory(ROOT)
-    checkpoint = checkpoint_sources(json.loads(run(
-        ["git", "--git-dir", store, "show", f"{revision}:workspace.json"])[0]))
-    selection = json.loads(run(["git", "--git-dir", store, "show",
-                                f"{revision}:release-dependencies.json"])[0])
     sources = {name: checkpoint[name]["revision"] for name in selection["packages"]}
     sources["etaf-install"] = revision
     if (manifest.get("sources") != sources

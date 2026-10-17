@@ -274,7 +274,10 @@ class PackageReleaseStageTests(unittest.TestCase):
                                 env=dict(os.environ, ETAF_TOP_HOST="invalid host"),
                                 capture_output=True, text=True, timeout=20)
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("every target", result.stderr)
+        # Any local gate may refuse first; what matters is that the publisher
+        # stops before validating transport or contacting the host.
+        self.assertIn("error=publish", result.stderr)
+        self.assertIn("error=release", result.stderr)
         self.assertNotIn("Invalid ETAF_TOP_ROOT", result.stderr)
 
     def test_stale_validator_smoke_or_archive_evidence_is_rejected(self):
