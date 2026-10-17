@@ -569,11 +569,11 @@ GUI 保持实际运行时的 GC 策略与用户设置，测量工具不能额外
 
 ### 13.7 当前差距
 
-- 归档只含 8 个框架包；应用与游戏尚未纳入检查点和发布清单。
-- `etaf-install` 菜单仍是框架的 5 个目标，三段结构、`-doctor` 聚合与组件安装尚未实现。
-- `etaf-telega` 尚未声明 `telega` 依赖，也未注册 MELPA。
-- 组件托管目录、版本握手与清理命令尚未实现。
-- 游戏依赖 `etaf-gamekit` 与 Godot/OpenSpiel，两者都未发布。
+- 归档已发布框架 7 个包与 5 个应用（`etaf-manual`、`etaf-md-preview`、`etaf-video-player`、`etaf-desktop`、`etaf-telega`）；游戏段仍为空。
+- `etaf-telega` 通过声明 `telega` 与注册 MELPA 自动装齐依赖；`telega-server` 与账号仍未纳入（只检测）。
+- `etaf-ncm` 与 `etaf-weread` 的后端仍在 Pi 技能目录，未迁入应用仓；两者的用户提示仍指向技能，违反 13.2 的组件归属。
+- `etaf-gamekit` 尚未纳入检查点；四个游戏未声明 `etaf-gamekit` 依赖，也还没有引擎检测。
+- 组件的托管目录安装（`npm ci`/`make`）与版本握手、清理命令仍未实现：目前组件随包发布但没有安装步骤。
 
 ### 13.8 新增应用上架
 
