@@ -84,6 +84,54 @@ make release-tool-tests
 
 只在 POSIX 上通过会掩盖两类失败：遍历目录的工具里路径风格比较错误（Windows 上的 `Path` 不等于 `PurePosixPath`），以及已安装包的 autoload 文件通过宿主的 `load-path` 而不是包自身根目录解析。Windows 格子是这两类问题的平台证据；格子失败时读日志，不要只看退出码猜。
 
+## 发布一个安装目标
+
+用户看到的入口只有 `M-x etaf-install`，`package.el` 是它下面的机制。引导代码里的
+`(package-install 'etaf-install)` 只出现一次，因为安装器无法安装自己。已接受的契约
+（包括明确不做的部分）见[生态契约](architecture.zh-CN.md)第 13 节。
+
+依赖分三类，各有唯一归属：
+
+| 类别 | 归属 | 处理 |
+| --- | --- | --- |
+| Emacs 包（自有或公共，如 `etaf-db`、`telega`） | `Package-Requires` | `etaf-install` 注册目标所需归档（`etaf`、`gnu`、`nongnu`、`melpa`），由 `package.el` 解析；签名校验保持开启 |
+| 自有组件（CLI、Node 后端、可编译模块） | 应用仓库 | 随包同一 tar 发布并计入校验和；安装到 `package-user-dir/etaf/<包>/<版本>/`，在该目录执行 `npm ci` 或 `make` 并留日志；入口启动时核对组件版本 |
+| 系统程序与账号（ffmpeg、mpv、node、TDLib、Godot、登录） | 用户 | 只检测并打印一条平台命令；不代跑 `sudo`、`brew`、`apt` |
+
+组件源码必须放在应用仓库内，不放别的仓库或技能目录，这样一次版本提升就同时发布
+Lisp 与组件。
+
+开发与发布分开，既快又不会发布旧字节：
+
+```sh
+# dev：直接打包工作区，验证安装，产物不可发布
+python3 scripts/package_archive.py build --directory /tmp/dev-archive \
+  --package etaf-md-preview=etaf-md-preview
+ETAF_INSTALL_ARCHIVE=/tmp/dev-archive ETAF_INSTALL_PROFILE=/tmp/profile \
+  ETAF_INSTALL_TARGET=etaf-md-preview emacs -Q --batch -l scripts/install-smoke.el
+
+# release：只读封口提交，提升版本，跑完整门禁，再显式发布
+make release-build RELEASE_DIR=/tmp/release-next
+make release-check RELEASE_DIR=/tmp/release-next
+make release-publish RELEASE_DIR=/tmp/release-next
+```
+
+新增一个包进归档是固定顺序，不要另开路径：
+
+1. 包放在已记录的仓库；新仓先纳入 `workspace.json` 检查点。
+2. 声明 `Version` 与全部 Emacs 依赖；组件和运行资源放进仓库，并在
+   `release-dependencies.json` 列出资源目录。
+3. 实现 `<包>-doctor`，返回 `(LABEL AVAILABLE REMEDY)`，标清阻塞与降级；安装器只聚合。
+4. 把目标加进 `etaf-install--targets`，带分组与打开命令，菜单需在安装前就显示状态。
+5. 跑该包的 `make check`，再用 dev 道在 Emacs 29.1、30.2、31.1 上实装验证
+   （29.1 在 `lightos` 上，见本机主机清单）。
+6. 提交并发布提供方，记录到 `workspace.json`，构建封口归档并跑 `make release-check`；
+   提交并发布根仓。
+7. `make release-publish` 发布，随后回读 `archive-contents` 与该包详情页。
+8. 页面或书稿有变化就重发站点；让六格安装工作流在发布提交上全部通过。
+
+不要手改 `/srv/etaf.top` 下的文件：部署锁、版本不可变、校验和回读与回滚都由部署器负责。
+
 ## 执行一次测评
 
 ```sh

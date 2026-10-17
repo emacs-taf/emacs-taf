@@ -12,6 +12,11 @@ independent repositories listed in `workspace.json`.
   root to the target files, then its README and the relevant contract sections.
 - Maintain common instructions here. Add a local AGENTS.md only when its scope
   needs special development commands, critical reminders or document navigation.
+- Before changing installation, packaging, release or dependency handling, read
+  the distribution contract (section 13 of
+  [the ecosystem contract](docs/architecture.zh-CN.md)) and the workflow in
+  [the tool manual](docs/manual.md). Menu wording, component layout and the
+  dependency classes are decided there; do not invent a second install path.
 - For architecture or cross-package changes, read the applicable parts of
   [the ecosystem contract](docs/architecture.zh-CN.md) and the affected providers'
   public contracts. Select documents by the task and the responsible packages;

@@ -145,6 +145,64 @@ packages whose autoloaded files are resolved through the host's `load-path`
 instead of the package's own root. The Windows cell is the platform proof for
 both; when a cell fails, read its log rather than guessing from the exit code.
 
+## Publish an install target
+
+`M-x etaf-install` is the single entry users see; `package.el` is the mechanism
+underneath it. The bootstrap line `(package-install 'etaf-install)` appears once
+because the installer cannot install itself. The accepted contract, including
+what is deliberately out of scope, is section 13 of
+[the ecosystem contract](architecture.zh-CN.md).
+
+Dependencies split three ways, and each has one owner:
+
+| Kind | Owner | Handling |
+| --- | --- | --- |
+| Emacs packages, ours or public (`etaf-db`, `telega`) | `Package-Requires` | `etaf-install` registers the archives its targets need (`etaf`, `gnu`, `nongnu`, `melpa`); `package.el` resolves them; signature checks stay enabled |
+| Our components (CLI, Node backend, buildable module) | the application repository | shipped in the same tar and checksum; installed into `package-user-dir/etaf/<package>/<version>/`; `npm ci` or `make` runs there with a log; the entry checks the component version at startup |
+| System programs and accounts (ffmpeg, mpv, node, TDLib, Godot, login) | the user | detected only; print one platform-specific command; never run `sudo`, `brew` or `apt` |
+
+A component's source lives in the application repository, never in another
+repository or a skill directory, so one version bump publishes the Lisp and the
+component together.
+
+Two lanes keep development fast without risking a stale archive:
+
+```sh
+# dev: build the working copies, verify installation, never publish
+python3 scripts/package_archive.py build --directory /tmp/dev-archive \
+  --package etaf-md-preview=etaf-md-preview
+ETAF_INSTALL_ARCHIVE=/tmp/dev-archive ETAF_INSTALL_PROFILE=/tmp/profile \
+  ETAF_INSTALL_TARGET=etaf-md-preview emacs -Q --batch -l scripts/install-smoke.el
+
+# release: sealed commits only, version bumped, full gate, explicit publish
+make release-build RELEASE_DIR=/tmp/release-next
+make release-check RELEASE_DIR=/tmp/release-next
+make release-publish RELEASE_DIR=/tmp/release-next
+```
+
+Adding a package to the archive is a fixed sequence; do not invent another route:
+
+1. Keep the package in a recorded repository, or add that repository to
+   `workspace.json` when it is new to the workspace.
+2. Declare `Version` and every Emacs dependency in `Package-Requires`; put
+   components and runtime resources inside the repository and list resource
+   directories in `release-dependencies.json`.
+3. Implement `<package>-doctor` returning `(LABEL AVAILABLE REMEDY)` facts, and
+   mark blocking versus degraded capabilities; the installer aggregates them.
+4. Add the target to `etaf-install--targets` with its group and open command so
+   the menu shows its status before installation.
+5. Run the package's `make check`, then the dev-lane install on Emacs 29.1, 30.2
+   and 31.1 (29.1 lives on `lightos`, see the host notes).
+6. Commit and publish the provider, record it in `workspace.json`, build the
+   sealed archive and run `make release-check`; commit and publish the root.
+7. Publish with `make release-publish`, then read back `archive-contents` and the
+   package page over HTTPS.
+8. Republish the site when pages or the book changed, and let every cell of the
+   six-cell installation workflow pass on the published commit.
+
+Never edit files under `/srv/etaf.top` by hand: the deployer owns locking,
+immutable versions, checksum verification and rollback.
+
 ## Run a measured change
 
 ```sh
