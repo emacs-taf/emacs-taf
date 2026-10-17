@@ -12,6 +12,11 @@
 
 ### Fixed
 
+- `etaf-install` 0.1.7 registers GNU ELPA for targets whose dependency closure
+  uses it, and lets a dependency upgrade a loaded built-in package instead of
+  aborting before installation. Installing `etaf-telega` on Emacs 29/30 now
+  resolves `compat`, a dependency of MELPA's `transient`, instead of stopping
+  with "Package `compat` (version 31.0) is unavailable".
 - The installer no longer refuses to install a target because one of its runtime
   tools is missing. Installation prerequisites (Emacs version, the SQLite build a
   package compiles against) still stop it; a target's own required capabilities

@@ -1,7 +1,7 @@
 ;;; -*- lexical-binding: t; -*-
 ;;; etaf-install.el --- Install ETAF with the Emacs package manager
 
-;; Version: 0.1.6
+;; Version: 0.1.7
 ;; Package-Requires: ((emacs "29.1"))
 ;; URL: https://github.com/emacs-taf/emacs-taf
 ;; Keywords: convenience
@@ -67,7 +67,8 @@
     (etaf-video-player "Video with sound in a buffer" application etaf-video-player-open)
     (etaf-desktop "Windows and workspaces" application etaf-desktop-open)
     (etaf-manual "ETAF reference manual" application etaf-manual-open)
-    (etaf-telega "Telegram client" application etaf-telega-open melpa)
+    ;; MELPA supplies Telega and Transient; Transient needs Compat from GNU ELPA.
+    (etaf-telega "Telegram client" application etaf-telega-open melpa gnu)
     (etaf-weread "WeChat Reading" application etaf-weread-open)
     (etaf-ncm "NetEase Cloud Music" application etaf-ncm-open)
     (etaf-xiangqi "Xiangqi" game etaf-xiangqi-open)
@@ -187,6 +188,13 @@ later upgrades through `M-x list-packages` can resolve them.")
         (add-to-list 'package-archives
                      (cons (symbol-name (car archive)) (cdr archive)) t)))))
 
+(defun etaf-install--built-in-file-p (file)
+  "Return non-nil when FILE belongs to this Emacs's own Lisp tree."
+  (and file
+       (let ((directory (or (and (boundp 'lisp-directory) lisp-directory)
+                            (expand-file-name "../lisp" data-directory))))
+         (file-in-directory-p file (file-name-as-directory directory)))))
+
 (defun etaf-install--check-source (package)
   "Refuse unresolved source code or a preloaded checkout for PACKAGE."
   (let* ((library (locate-library (symbol-name package)))
@@ -195,10 +203,11 @@ later upgrades through `M-x list-packages` can resolve them.")
                        load-history)))
          (installed (cdr (assq package package-alist))))
     (dolist (file (delete-dups (delq nil (list library loaded))))
-      (unless (cl-some (lambda (descriptor)
-                         (let ((directory (package-desc-dir descriptor)))
-                           (and directory (file-in-directory-p file directory))))
-                       installed)
+      (unless (or (etaf-install--built-in-file-p file)
+                  (cl-some (lambda (descriptor)
+                             (let ((directory (package-desc-dir descriptor)))
+                               (and directory (file-in-directory-p file directory))))
+                           installed))
         (user-error "%s already comes from %s; keep that installation or remove its load-path entry and restart before using package.el"
                     package file)))))
 
@@ -211,9 +220,13 @@ INSTALLED-ONLY checks offline reopening without computing an upgrade plan."
          (pending (list descriptor))
          seen)
     (dolist (item plan)
+      ;; A loaded installed package must be restarted before its replacement
+      ;; can be used.  A built-in is always loaded; install its replacement for
+      ;; the next session instead of aborting before this one can finish.
       (when (and (featurep (package-desc-name item))
                  (not (package-installed-p (package-desc-name item)
-                                           (package-desc-version item))))
+                                           (package-desc-version item)))
+                 (not (package-built-in-p (package-desc-name item))))
         (user-error "A newer %s is required; restart Emacs and install before opening ETAF"
                     (package-desc-name item))))
     (while pending
