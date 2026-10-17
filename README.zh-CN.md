@@ -4,6 +4,26 @@
 
 本仓库管理 Emacs TAF 生态的统一规范和本地构建入口：框架包、应用工作区与各个应用；各仓库保留自己的 Git 历史、公共接口和发布流程。
 
+## 在已有 Emacs 中安装
+
+使用 Emacs 29.1 或更新版本。以下代码只需执行一次，然后选择目标，默认打开组件画廊：
+
+```elisp
+;;; -*- lexical-binding: t; -*-
+(require 'package)
+(add-to-list 'package-archives '("etaf" . "https://etaf.top/packages/"))
+(package-initialize)
+(package-refresh-contents)
+(package-install 'etaf-install)
+(call-interactively #'etaf-install)
+```
+
+以后运行 `M-x etaf-install` 即可；已安装的目标可以离线重开。依赖安装、本地字节编译、更新和卸载均由 package.el 管理，不需要 Git、Python、系统编译器或 Pi，也不替换现有 Emacs 配置。
+
+安装入口提供组件画廊（`etaf-ui`）、框架（`etaf`）、参考手册（`etaf-manual`）、SQLite 后端（`etaf-db`）和独立段落排版（`ekp`）。SQLite 需要 Emacs 本身具备 SQLite 支持；`M-x etaf-install-doctor` 只检查必需和可选能力，不执行安装。外部服务账号、媒体程序和应用后端不由此入口安装。
+
+使用 `M-x list-packages` 更新或卸载包，更新后重启 Emacs。安装失败时只清理本次新增的包，报告清理失败并保留旧安装；由于已加载的部分 Lisp 无法回滚，重试前需要重启。同一依赖不要混用源码检出和包安装。详见[安装参考](https://etaf.top/zh-cn/introduction/#安装)。下面的源码检出说明面向开发者。
+
 ## 仓库
 
 框架包与工作区工具都在本检出中：

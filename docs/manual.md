@@ -79,6 +79,39 @@ pairs. Earlier Ebox-specific schema 1 reports used Lisp strings and are not
 accepted as equivalent evidence; rebuild them with this tool. This report-format
 change does not change package.el's archive or tar format.
 
+### Build and verify the official selection
+
+Maintainers use Python 3.12+, Git and Emacs for release verification. Users need
+only Emacs. Seal the root first, and restore the provider checkouts recorded in
+`workspace.json`; building reads those exact Git objects, not their working
+copies or current remote heads. `release-dependencies.json` selects packages and
+runtime resources, while the root revision supplies the installer.
+
+```sh
+make release-build RELEASE_DIR=/tmp/etaf-release-unique
+make release-check RELEASE_DIR=/tmp/etaf-release-unique EMACS=/path/to/emacs
+make release-tool-tests
+```
+
+`release-build` refuses a dirty root, an existing output directory, missing
+resources, and an incomplete or too-old dependency closure. The manifest records
+the root and provider revisions. Versioned package files must never be replaced
+with different bytes; change the package's `Version` header for a new release.
+
+`release-check` runs each supported target through both the installer and ordinary
+`package-install`, in independent `emacs -Q` profiles. It checks dependency origins,
+offline reopening, reactive rendering, the actual gallery entry and book data.
+Compiler warnings and demoted loader errors fail the check even when Emacs exits
+successfully. A new attempt invalidates earlier `installation.json` evidence;
+success records the manifest and validator digests plus Emacs, platform and targets.
+Keep logs and machine-local evidence private, not in the public package directory.
+Repeat with each supported Emacs/platform combination; a run on one platform does
+not certify another. GUI rendering and interaction require a separate live check.
+
+For a focused diagnosis, use `scripts/package-release.py verify --directory DIR
+--target etaf-ui`; `--direct` runs only ordinary package.el installation. This
+narrower evidence does not certify the omitted targets or installation path.
+
 ## Run a measured change
 
 ```sh
@@ -287,6 +320,29 @@ and still finish with quiet-tree `make verify` on the integrated checkout.
 
 The two helper files belong to one measurement session, not to the checkout;
 keep them under the system temporary directory.
+
+### Verify installed packages in the full user init
+
+Install the release into a disposable `package-user-dir` with the maintained
+installation smoke probe, then use the two private startup files described above.
+Load the tested providers from that ELPA directory in `site-start.el`, before the
+user init can require source checkouts. After init, remove checkout load paths and
+check both `locate-library` and each provider's `load-history` entries. The gallery
+command and implementation must also resolve inside the installed package.
+
+Do not unload a running full-init dependency graph to switch generations: unrelated
+applications and global hooks may still reference its functions and variables.
+Keep unrelated init code intact, stop its public idle modes if they would interfere,
+and verify only the installed providers and target application. If descriptors
+need rescanning after the early loads, use `(package-initialize t)`; reactivating
+facade autoloads over already loaded command autoloads can create a second load
+chain. Use normal activation in a fresh user profile.
+
+Exercise the installer's standard completion with the user's completion frontend,
+then native activation, Theme switching and help in the installed gallery. Capture
+the owned window without changing application focus, inspect the images, and close
+the verification instance on success or failure. Keep helper files and captures
+outside Git. A full-init pass does not replace the separate clean `-Q` install gate.
 
 ## Read the diagnosis
 

@@ -1,0 +1,102 @@
+;;; -*- lexical-binding: t; -*-
+;;; install-smoke.el --- Verify a package archive without source checkouts
+
+;;; Commentary:
+;; The release runner starts this file in a fresh Emacs -Q process.  Both the
+;; archive and the disposable profile must be supplied explicitly.  It never
+;; initializes the user's packages, reads their init, or adds source load paths.
+
+;;; Code:
+
+(require 'cl-lib)
+(require 'package)
+(require 'json)
+
+(defvar etaf-install-archive-url)
+
+(declare-function etaf-install "etaf-install" (&optional package no-open))
+(declare-function etaf-install-doctor "etaf-install" (&optional package))
+(declare-function etaf-ui-gallery-open "etaf-ui" (&optional buffer-or-name))
+(declare-function etaf-manual-book "etaf-manual" (&optional language))
+(declare-function etaf-unmount "etaf" (&optional runtime))
+(declare-function ekp-hyphen-create "ekp" (&optional lang file left right))
+(declare-function etaf-sqlite-column "etaf-db" (id sql-name &rest options))
+(declare-function etaf-sqlite-table "etaf-db" (id columns &optional primary-key))
+(declare-function etaf-sqlite-database "etaf-db" (file table))
+(declare-function etaf-sqlite-initialize "etaf-db" (database))
+
+(let* ((archive (getenv "ETAF_INSTALL_ARCHIVE"))
+       (profile (getenv "ETAF_INSTALL_PROFILE"))
+       (target (intern (or (getenv "ETAF_INSTALL_TARGET") "etaf-ui")))
+       (direct (getenv "ETAF_INSTALL_DIRECT")))
+  (unless (and archive profile (file-directory-p profile))
+    (error "Set ETAF_INSTALL_ARCHIVE and a disposable ETAF_INSTALL_PROFILE"))
+  (setq user-emacs-directory (file-name-as-directory profile)
+        package-user-dir (expand-file-name "elpa" profile)
+        custom-file (expand-file-name "custom.el" profile)
+        package-directory-list nil
+        package-archives (list (cons "etaf" (file-name-as-directory archive)))
+        native-comp-jit-compilation nil
+        print-circle t print-length 30 print-level 6)
+  (package-initialize)
+  (package-refresh-contents)
+  (if direct
+      (progn (package-install target) (require target))
+    (package-install 'etaf-install)
+    (require 'etaf-install)
+    (setq etaf-install-archive-url (file-name-as-directory archive))
+    (etaf-install target (not (eq target 'etaf-ui)))
+    (unless (plist-get (etaf-install-doctor target) :ready)
+      (error "Installed target is missing required capabilities")))
+  (dolist (entry package-alist)
+    (let ((library (locate-library (symbol-name (car entry)))))
+      (unless (and library (file-in-directory-p library package-user-dir))
+        (error "Installed package escaped the disposable profile: %s" (car entry)))))
+  ;; Opening an installed target must not refresh or download again.
+  (unless direct
+    (let ((etaf-install-archive-url "/nonexistent-offline-archive/"))
+      (etaf-install target (not (eq target 'etaf-ui)))))
+  (when (featurep 'etaf)
+    (eval
+     '(let ((value (etaf-ref "before"))
+            (buffer (generate-new-buffer " *etaf-install-smoke*")))
+        (unwind-protect
+            (progn
+              (etaf-mount buffer (etaf-view (text (expr (etaf-value value)))))
+              (setf (etaf-value value) "after")
+              (with-current-buffer buffer
+                (etaf-runtime-flush)
+                (unless (string-match-p "after" (buffer-substring-no-properties (point-min) (point-max)))
+                  (error "Installed reactive rendering failed"))))
+          (with-current-buffer buffer (etaf-unmount))
+          (kill-buffer buffer)))
+     t))
+  (when (eq target 'etaf-ui)
+    (when direct (call-interactively #'etaf-ui-gallery-open))
+    (let ((buffer (get-buffer "*ETAF UI Gallery*")))
+      (unless buffer (error "Installed entry did not open the gallery"))
+      (unwind-protect
+          (with-current-buffer buffer
+            (unless (> (buffer-size) 100)
+              (error "Installed component gallery did not render")))
+        (with-current-buffer buffer (etaf-unmount))
+        (kill-buffer buffer))))
+  (when (eq target 'etaf-manual)
+    (unless (plist-get (etaf-manual-book "en") :chapters)
+      (error "Installed reference manual has no book data")))
+  (when (eq target 'ekp)
+    (unless (ekp-hyphen-create "en")
+      (error "Installed paragraph layout has no English dictionary")))
+  (when (eq target 'etaf-db)
+    (let* ((file (expand-file-name "installation.sqlite" profile))
+           (table (etaf-sqlite-table
+                   'installation
+                   (list (etaf-sqlite-column 'id "id" :type 'integer)) 'id)))
+      (etaf-sqlite-initialize (etaf-sqlite-database file table))
+      (unless (file-regular-p file) (error "Installed SQLite backend did not initialize"))))
+  (princ (json-encode (list :status "ok" :emacs emacs-version
+                           :system (symbol-name system-type) :target (symbol-name target)
+                           :entry (if direct "package-install" "etaf-install")
+                           :packages (mapcar (lambda (entry) (symbol-name (car entry))) package-alist)))))
+
+;;; install-smoke.el ends here

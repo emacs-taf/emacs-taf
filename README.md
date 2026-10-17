@@ -7,6 +7,40 @@ the Emacs TAF ecosystem: its framework packages, the etaf-apps application
 workspace and the applications built on them. Each repository retains its own Git
 history, public interfaces, releases and behavior checks.
 
+## Install in an existing Emacs
+
+Use Emacs 29.1 or newer. Evaluate this once, then choose a target (the component
+gallery is the default):
+
+```elisp
+;;; -*- lexical-binding: t; -*-
+(require 'package)
+(add-to-list 'package-archives '("etaf" . "https://etaf.top/packages/"))
+(package-initialize)
+(package-refresh-contents)
+(package-install 'etaf-install)
+(call-interactively #'etaf-install)
+```
+
+Afterward, use `M-x etaf-install`; installed targets reopen offline. Package.el
+owns dependency installation, local byte compilation, updates and removal. No
+Git, Python, system compiler, Pi or replacement Emacs configuration is required.
+
+The installer offers the component gallery (`etaf-ui`), framework (`etaf`),
+reference manual (`etaf-manual`), SQLite backend (`etaf-db`) and standalone
+paragraph layout (`ekp`). SQLite needs an Emacs build with SQLite support;
+`M-x etaf-install-doctor` reports required and optional capabilities without
+installing anything. External service accounts, media programs and application
+backends are not installed by this entry.
+
+Use `M-x list-packages` to update or remove packages, and restart after updates.
+A failed installation removes only its newly added packages, reports cleanup
+failures and preserves previous installations; restart before retrying because
+partially loaded Lisp cannot be rolled back. Do not mix source checkouts and
+package installations of the same dependency. See the
+[installation reference](https://etaf.top/introduction/#installation).
+The checkout instructions below are for development.
+
 ## Repositories
 
 Framework packages and workspace tooling developed in this checkout:

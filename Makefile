@@ -10,16 +10,28 @@ sync-policy:
 setup-hooks:
 	python3 scripts/workspace.py setup-hooks
 	git config --local core.hooksPath .githooks
-compile:
+compile: installer-compile
 	@set -e; for repo in $(MODULE_DIRS); do $(MAKE) -C "$$repo" compile EMACS="$(EMACS)"; done
 test:
 	python3 -m unittest discover -s tests/tools -p 'test_*.py'
 	@set -e; for repo in $(MODULE_DIRS); do $(MAKE) -C "$$repo" test EMACS="$(EMACS)"; done
-check: structure-check
+check: structure-check installer-compile
 	python3 -m unittest discover -s tests/tools -p 'test_*.py'
 	@set -e; for repo in $(MODULE_DIRS); do $(MAKE) -C "$$repo" check EMACS="$(EMACS)"; done
 clean:
 	@set -e; for repo in $(MODULE_DIRS); do $(MAKE) -C "$$repo" clean; done
+
+RELEASE_DIR ?= /tmp/etaf-release
+.PHONY: installer-compile release-build release-check release-tool-tests
+installer-compile:
+	python3 scripts/elisp.py run --emacs "$(EMACS)" -L . -e '(require (quote bytecomp)) (let ((byte-compile-error-on-warn t)) (dolist (file (quote ("etaf-install.el" "scripts/install-smoke.el"))) (unless (byte-compile-file file) (error "Compilation failed: %s" file))))'
+release-build:
+	python3 scripts/package-release.py build --directory "$(RELEASE_DIR)"
+release-check:
+	python3 scripts/package-release.py verify --directory "$(RELEASE_DIR)" --emacs "$(EMACS)"
+release-tool-tests:
+	python3 -m unittest discover -s tests/tools -p 'test_package_*.py'
+	python3 -m unittest discover -s tests/tools -p 'test_install.py'
 
 .PHONY: api-check
 api-check:

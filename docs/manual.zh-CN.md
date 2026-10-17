@@ -60,6 +60,22 @@ python3 scripts/package_archive.py verify --directory /tmp/package-archive
 使用 Lisp 字符串，不作为等价证据接受；请用本工具重新构建。这项报告格式变更
 不改变 package.el 的索引或 tar 格式。
 
+### 构建与验证官方包集
+
+维护者使用 Python 3.12+、Git 和 Emacs 进行发布验证；用户只需要 Emacs。先封口根仓库，准备 `workspace.json` 记录的提供方检出。构建读取这些精确 Git 对象，不读取未提交文件或当前远端头部。`release-dependencies.json` 选择包及运行资源，根仓库版本提供安装入口。
+
+```sh
+make release-build RELEASE_DIR=/tmp/etaf-release-unique
+make release-check RELEASE_DIR=/tmp/etaf-release-unique EMACS=/path/to/emacs
+make release-tool-tests
+```
+
+`release-build` 拒绝未封口的根目录、已有输出、缺失资源及不完整或版本过旧的依赖闭包。清单记录根仓库和提供方版本。同名同版本包文件不得被不同字节替换；新发布必须更新包的 `Version` 头。
+
+`release-check` 为每个受支持目标分别运行安装入口和普通 `package-install`，每次使用独立的 `emacs -Q` 配置。它检查依赖来源、离线重开、响应式渲染、真实画廊入口和手册数据。即使 Emacs 返回成功，编译警告和被降级为日志的加载错误也会阻止通过。新尝试会使旧的 `installation.json` 失效；成功报告记录清单、验证器摘要，以及 Emacs、平台和已测目标。日志和本机证据应保持私有，不放入公开包目录。每个受支持的 Emacs/平台组合须分别验证；一个平台的结果不证明另一个平台。GUI 渲染与交互另行实测。
+
+定向诊断可运行 `scripts/package-release.py verify --directory DIR --target etaf-ui`；`--direct` 仅验证普通 package.el 安装。这类局部证据不证明省略的目标或安装路径。
+
 ## 执行一次测评
 
 ```sh
@@ -198,6 +214,14 @@ buffer 快照开始的第二轮不计时样本。场景文件在字节编译副�
    --load-path <应用根>`，并按记录的 PID 关闭实例，不要按进程名杀。
 
 这两个辅助文件只属于一次测量会话，不属于检出；放在系统临时目录下。
+
+### 在完整用户配置中验证已安装包
+
+先用维护的安装探针把归档装进临时 `package-user-dir`，再使用上述两个私有启动文件。在 `site-start.el` 中从该 ELPA 目录加载待测提供方，早于用户配置对源码检出的 require。配置加载后移除源码加载路径，并同时核对 `locate-library` 和提供方的 `load-history` 记录；画廊命令及实现也必须来自已安装包。
+
+不要靠卸载正在运行的完整配置依赖图来切换代码代：无关应用和全局 hook 可能仍引用其函数和变量。保留无关初始化代码，只在会干扰验收时关闭其公开空闲模式，并核实待测提供方和目标应用均来自安装目录。提前加载库后若需重新读取包描述，使用 `(package-initialize t)`；再次激活入口 autoload 可能覆盖已经加载的命令 autoload，形成第二层加载链。全新的用户配置仍使用正常激活。
+
+通过用户自己的补全前端选择安装目标，再在已安装画廊中验收原生激活、主题切换和帮助。只截自有窗口，不切应用焦点；检查图像，并在成功或失败后关闭验证实例。辅助文件和截图留在 Git 之外。完整用户配置的结果不能代替独立的干净 `-Q` 安装门禁。
 
 ## 读取诊断
 

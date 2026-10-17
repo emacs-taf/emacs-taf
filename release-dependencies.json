@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "packages": {
+    "ecss": {},
+    "ebox": {},
+    "etaf": {
+      "resources": ["examples"]
+    },
+    "etaf-ui": {
+      "resources": ["examples"]
+    },
+    "etaf-db": {},
+    "ekp": {
+      "resources": ["dictionaries", "native"]
+    },
+    "etaf-manual": {
+      "resources": ["book"]
+    }
+  }
+}
