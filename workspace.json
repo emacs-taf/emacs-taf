@@ -38,7 +38,7 @@
     },
     "etaf-ui": {
       "url": "https://github.com/emacs-taf/etaf-ui.git",
-      "revision": "4cf998814faa203a63a10b215af655e7fd647f4d",
+      "revision": "c606280ef6258b2e90addfec81e59a303bd3e11d",
       "branch": "main"
     },
     "etaf-desktop": {
@@ -48,7 +48,7 @@
     },
     "etaf-manual": {
       "url": "https://github.com/emacs-taf/etaf-manual.git",
-      "revision": "f6e0dafc6c0cd53f21898865d7eff167429b44cf",
+      "revision": "9ebbcef5ee42a767353150d915e7855a81061adc",
       "branch": "main"
     }
   }
