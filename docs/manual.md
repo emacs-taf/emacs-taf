@@ -250,6 +250,11 @@ Adding a package to the archive is a fixed sequence; do not invent another route
 8. Republish the site when pages or the book changed, and let every cell of the
    six-cell installation workflow pass on the published commit.
 
+Future installer commands use the `etaf-install-` package prefix; `etaf-` is
+reserved for the framework. A manage interface must be a native
+`tabulated-list` buffer because it has to work before ETAF is installed; it
+must not depend on `etaf-ui`. Package lifecycle remains owned by `package.el`.
+
 Never edit files under `/srv/etaf.top` by hand: the deployer owns locking,
 immutable versions, checksum verification and rollback.
 
