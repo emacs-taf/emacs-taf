@@ -70,7 +70,7 @@
     },
     "etaf-gamekit": {
       "url": "https://github.com/emacs-taf/etaf-gamekit.git",
-      "revision": "f497d52170cdca64f371fe459bdffa70cf70119c",
+      "revision": "623a77653c625b935cce99fcd962afff84abd0ac",
       "branch": "main"
     },
     "etaf-xiangqi": {
