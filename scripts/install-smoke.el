@@ -37,8 +37,11 @@ with growing pauses cover a short outage without hiding one that persists."
              (and missing (< attempt 4)))
       (message "Retrying empty archives in %d seconds: %S" (* 5 attempt) missing)
       (sleep-for (* 5 attempt)))
+    ;; An empty archive that this target does not need must not fail the
+    ;; installation; a needed dependency still fails with package.el's own
+    ;; message.  Name what stayed empty so a flaky network is visible.
     (when missing
-      (error "Archives unavailable after %d attempts: %S" attempt missing))))
+      (message "Archives still empty after %d attempts: %S" attempt missing))))
 
 (defvar etaf-install-archive-url)
 
