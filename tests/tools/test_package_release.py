@@ -1,5 +1,6 @@
 """Release command contracts, including diagnostics that Emacs demotes to logs."""
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -12,6 +13,19 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 EMACS = os.environ.get("EMACS", "emacs")
+RELEASE = None
+
+
+def release_module():
+    """Load the release CLI without requiring a package installation."""
+    global RELEASE
+    if RELEASE is None:
+        sys.path.insert(0, str(ROOT / "scripts"))
+        spec = importlib.util.spec_from_file_location(
+            "package_release", str(ROOT / "scripts" / "package-release.py"))
+        RELEASE = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(RELEASE)
+    return RELEASE
 
 
 @unittest.skipUnless(shutil.which(EMACS), "Release checks require Emacs")
@@ -89,6 +103,72 @@ class PackageReleaseVerificationTests(unittest.TestCase):
         self.verify("--direct", success=False)
         self.assertFalse((self.archive / "installation.json").exists())
         self.assertIn("Fixture entry failed", (self.archive / "installation-ekp-direct.log").read_text())
+
+
+class PackageReleaseDiagnosticAttributionTests(unittest.TestCase):
+    """A third-party activation error is not evidence about this archive."""
+
+    def test_third_party_activation_error_is_ignored(self):
+        text = (
+            "Compiling /tmp/elpa/ekp-1.0.0/ekp.el...\n"
+            "GEN      seq-autoloads.el\n"
+            "Error in package--load-files-for-activation: "
+            "(file-missing Cannot open load file seq-25)\n")
+        self.assertEqual(release_module().scan_diagnostics(text, ["ekp"]), [])
+
+    def test_third_party_compilation_warning_is_ignored(self):
+        text = (
+            "Compiling /tmp/elpa/seq-2.24/seq-24.el...\n"
+            "seq-24.el:76:8: Warning: fixture third-party warning\n")
+        self.assertEqual(release_module().scan_diagnostics(text, ["ekp"]), [])
+
+    def test_archive_activation_error_is_kept(self):
+        text = (
+            "Checking /tmp/elpa/ekp-1.0.0...\n"
+            "GEN      ekp-autoloads.el\n"
+            "Error in package--load-files-for-activation: fixture failure\n")
+        self.assertEqual(len(release_module().scan_diagnostics(text, ["ekp"])), 1)
+
+
+class StandardArchiveSnapshotTests(unittest.TestCase):
+    """The prefetch manifest is a gate, not a best-effort download."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.directory = Path(self.temp.name)
+        self.archives = []
+        for name in ("gnu", "nongnu", "melpa"):
+            archive = self.directory / name
+            archive.mkdir()
+            index = archive / "archive-contents"
+            index.write_text("(1)\n", encoding="utf-8")
+            self.archives.append({
+                "name": name,
+                "url": f"https://example.invalid/{name}/",
+                "sha256": hashlib.sha256(index.read_bytes()).hexdigest(),
+            })
+        self.write_manifest()
+
+    def write_manifest(self, packages=None):
+        (self.directory / "manifest.json").write_text(json.dumps({
+            "schema": 1,
+            "archives": self.archives,
+            "packages": packages or [],
+        }), encoding="utf-8")
+
+    def test_valid_snapshot_is_accepted(self):
+        release_module().verify_standard_archives(self.directory)
+
+    def test_missing_index_is_rejected(self):
+        (self.directory / "nongnu" / "archive-contents").unlink()
+        with self.assertRaises(ValueError):
+            release_module().verify_standard_archives(self.directory)
+
+    def test_corrupt_index_is_rejected(self):
+        (self.directory / "gnu" / "archive-contents").write_text("(2)\n", encoding="utf-8")
+        with self.assertRaises(ValueError):
+            release_module().verify_standard_archives(self.directory)
 
 
 class PackageReleaseBuildTests(unittest.TestCase):

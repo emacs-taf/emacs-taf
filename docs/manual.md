@@ -117,6 +117,23 @@ For a focused diagnosis, use `scripts/package-release.py verify --directory DIR
 --target etaf-ui`; `--direct` runs only ordinary package.el installation. This
 narrower evidence does not certify the omitted targets or installation path.
 
+A target that depends on a standard archive can be checked without fetching that
+archive for every target. Prefetch one live snapshot, then serve it to the
+verification:
+
+```sh
+python scripts/package-release.py prefetch --directory /tmp/standard-archives
+python scripts/package-release.py verify --directory DIR \
+  --target etaf-telega --standard-archives /tmp/standard-archives
+```
+
+`prefetch` downloads the GNU, NonGNU and MELPA indexes plus the external
+dependency closure declared in `release-dependencies.json`. `verify
+--standard-archives` validates the snapshot manifest and serves it on localhost;
+`install-smoke.el` reads `ETAF_INSTALL_STANDARD_ARCHIVES` only for this path,
+and uses the live archives without it. The snapshot's manifest digest is bound
+into `installation.json`.
+
 After the supported environment checks, publish the validated directory with
 `make release-publish RELEASE_DIR=/path/to/release`. The command delegates to the
 manual site's package-only publisher; it does not rebuild or change site pages.
@@ -136,9 +153,14 @@ alone does not certify other Emacs versions, platforms or GUI behavior.
 The root's `Package installation` GitHub Actions workflow defines batch checks
 for Emacs 29.1 and 30.2 on Linux, macOS and Windows. It fetches only the exact
 provider commits recorded in the checkpoint, then builds and verifies all targets
-through both installation paths without source load paths. No matrix failure is
-optional. Successful jobs retain only machine-readable manifests and installation
-reports as CI artifacts; they do not deploy packages or upload installation logs.
+through both installation paths without source load paths. It first prefetches
+one live standard-archive snapshot for the whole run; each matrix job installs
+from that snapshot over localhost, so a throttled archive fails once with its
+HTTP status instead of as a missing dependency in every target. The matrix
+retry covers only local runner or process failures. No matrix failure is
+optional. The prefetch job retains the snapshot and successful installation
+jobs retain their machine-readable manifests and reports as CI artifacts; they
+do not deploy packages or upload installation logs.
 Check every job at the release revision before publication. A workflow definition
 is not a passing result, and these batch checks do not certify GUI behavior or a
 different development build used locally.

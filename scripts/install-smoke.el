@@ -10,6 +10,12 @@
 ;; the empty string, selects ordinary `package-install`.  Unset it
 ;; (`env -u ETAF_INSTALL_DIRECT`) when the same profile must exercise the
 ;; `etaf-install` path.
+;;
+;; ETAF_INSTALL_STANDARD_ARCHIVES points GNU, NonGNU and MELPA at a prefetched
+;; snapshot served locally by the CI runner.  The runner fetches one live
+;; snapshot per workflow run; every target then installs from that snapshot
+;; instead of re-fetching a rate-limited third-party archive.  Without it the
+;; live archives are used, as in a developer's focused verification.
 
 ;;; Code:
 
@@ -17,19 +23,34 @@
 (require 'package)
 (require 'json)
 
+(defvar etaf-install-smoke-standard-archives
+  (getenv "ETAF_INSTALL_STANDARD_ARCHIVES")
+  "Base URL of a prefetched standard archive snapshot, or nil.")
+
+(defun etaf-install-smoke-standard-archive (name default)
+  "Return the standard archive URL for NAME, preferring the local snapshot."
+  (if etaf-install-smoke-standard-archives
+      (concat (file-name-as-directory etaf-install-smoke-standard-archives)
+              name "/")
+    default))
+
 (defun etaf-install-smoke-refresh ()
   "Refresh archives, retrying while a registered archive came back empty.
 Network fetches of a large third-party archive fail intermittently; a missing
 archive would otherwise look like an unavailable dependency.  Four attempts
-with growing pauses cover a short outage without hiding one that persists."
-  (let ((attempt 0) missing)
+with growing pauses cover a short outage without hiding one that persists.  A
+prefetched snapshot is local: an empty archive there is a snapshot defect, so
+report it immediately instead of retrying and hiding it."
+  (let ((attempt 0) missing last-error)
     (while (progn
              ;; A failed archive fetch can signal instead of only reporting an
              ;; empty contents; a retry is the response either way.
              (condition-case error
                  (package-refresh-contents)
-               (error (message "Archive refresh attempt %d failed: %s"
-                               (1+ attempt) (error-message-string error))))
+               (error
+                (setq last-error error)
+                (message "Archive refresh attempt %d failed: %s"
+                         (1+ attempt) (error-message-string error))))
              (setq attempt (1+ attempt)
                    missing (cl-remove-if
                             (lambda (archive)
@@ -39,14 +60,21 @@ with growing pauses cover a short outage without hiding one that persists."
                                                     (car archive)))
                                            package-archive-contents)))
                             package-archives))
-             (and missing (< attempt 4)))
+             (and missing
+                  (< attempt (if etaf-install-smoke-standard-archives 1 4))))
       (message "Retrying empty archives in %d seconds: %S" (* 5 attempt) missing)
       (sleep-for (* 5 attempt)))
-    ;; An empty archive that this target does not need must not fail the
-    ;; installation; a needed dependency still fails with package.el's own
-    ;; message.  Name what stayed empty so a flaky network is visible.
     (when missing
-      (message "Archives still empty after %d attempts: %S" attempt missing))))
+      (if etaf-install-smoke-standard-archives
+          (error "Prefetched standard archives are incomplete: %S%s"
+                 missing
+                 (if last-error
+                     (format " (%s)" (error-message-string last-error))
+                   ""))
+        ;; An empty archive that this target does not need must not fail the
+        ;; installation; a needed dependency still fails with package.el's own
+        ;; message.  Name what stayed empty so a flaky network is visible.
+        (message "Archives still empty after %d attempts: %S" attempt missing)))))
 
 (defvar etaf-install-archive-url)
 
@@ -80,10 +108,14 @@ with growing pauses cover a short outage without hiding one that persists."
         ;; Mirror the archives the installer registers: a direct
         ;; `package-install` of a target that depends on a package from a
         ;; standard archive needs the same sources.
-        package-archives (list (cons "etaf" (file-name-as-directory archive))
-                               '("gnu" . "https://elpa.gnu.org/packages/")
-                               '("nongnu" . "https://elpa.nongnu.org/nongnu/")
-                               '("melpa" . "https://melpa.org/packages/"))
+        package-archives
+        (list (cons "etaf" (file-name-as-directory archive))
+              (cons "gnu" (etaf-install-smoke-standard-archive
+                            "gnu" "https://elpa.gnu.org/packages/"))
+              (cons "nongnu" (etaf-install-smoke-standard-archive
+                               "nongnu" "https://elpa.nongnu.org/nongnu/"))
+              (cons "melpa" (etaf-install-smoke-standard-archive
+                              "melpa" "https://melpa.org/packages/")))
         native-comp-jit-compilation nil
         print-circle t print-length 30 print-level 6)
   (package-initialize)

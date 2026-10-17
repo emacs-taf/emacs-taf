@@ -9,11 +9,15 @@ profiles with no source load paths.  User Emacs profiles are never touched.
 from __future__ import annotations
 
 import argparse
+import contextlib
+import functools
 import hashlib
+import http.server
 import io
 import json
 import os
 from pathlib import Path
+import random
 import re
 import signal
 import shutil
@@ -21,6 +25,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import threading
 import time
 
 import package_archive
@@ -158,69 +163,209 @@ def scan_diagnostics(text, names):
 
     package.el demotes reload errors to messages without failing the process, so
     both streams are scanned. Third-party dependencies are compiled by hand too:
-    their own deprecation warnings are not ours to fix and must not block a
-    release. Attribute each diagnostic to the file being compiled and ignore the
-    ones that belong to a package outside the archive.
+    their own deprecation warnings and activation errors are not ours to fix and
+    must not block a release. Track the package whose compilation or activation
+    section is current; a diagnostic from another package is not evidence about
+    this archive. Lines before any package context remain visible, so a startup
+    error is not hidden.
     """
-    diagnostics, current = [], None
+    diagnostics, current_package = [], None
     pattern = re.compile(
         r"\bWarning(?: \([^\n]*\))?:|(?:^|\s)Error(?::| in | \()|^Eager macro-expansion failure:")
     for line in text.splitlines():
         compiled = re.search(r"\bCompiling (\S+)", line)
         if compiled:
-            current = compiled[1]
+            found = re.search(r"/elpa/([a-z][a-z0-9-]*)-[0-9]", compiled[1])
+            current_package = found[1] if found else None
+        else:
+            checked = re.search(r"\bChecking \S*/elpa/([a-z][a-z0-9-]*)-[0-9]", line)
+            generated = re.search(r"\bGEN\s+([a-z][a-z0-9-]*)-autoloads\.el", line)
+            if checked:
+                current_package = checked[1]
+            elif generated:
+                current_package = generated[1]
         if not pattern.search(line):
             continue
-        if current and not any(f"/elpa/{name}-" in current for name in names):
+        if current_package and current_package not in names:
             continue
         diagnostics.append(line)
     return diagnostics
 
 
-def verify(directory, emacs, targets, direct=False):
+def standard_archive_roots():
+    """Return the external package roots declared by the release selection."""
+    selection = json.loads((ROOT / "release-dependencies.json").read_text(encoding="utf-8"))
+    roots = []
+    for options in selection.get("packages", {}).values():
+        roots.extend(options.get("external", []))
+    return list(dict.fromkeys(roots))
+
+
+def verify_standard_archives(directory):
+    """Validate a prefetched standard-archive snapshot and return its manifest."""
+    manifest_path = directory / "manifest.json"
+    if not manifest_path.is_file():
+        raise ValueError(f"Prefetched standard archives have no manifest: {directory}")
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if manifest.get("schema") != 1:
+        raise ValueError("Expected a schema 1 prefetched standard archive manifest")
+    archives = {}
+    for entry in manifest.get("archives") or []:
+        name = entry.get("name")
+        if name not in {"gnu", "nongnu", "melpa"} or name in archives:
+            raise ValueError(f"Invalid or duplicate standard archive: {name!r}")
+        index = directory / name / "archive-contents"
+        expected = entry.get("sha256")
+        if not index.is_file() or hashlib.sha256(index.read_bytes()).hexdigest() != expected:
+            raise ValueError(f"Standard archive index checksum mismatch: {name}")
+        archives[name] = entry
+    missing = {"gnu", "nongnu", "melpa"} - set(archives)
+    if missing:
+        raise ValueError(f"Prefetched standard archives are missing: {sorted(missing)}")
+    for package in manifest.get("packages") or []:
+        name, version = package.get("name"), package.get("version")
+        archive, filename = package.get("archive"), package.get("file")
+        if (not isinstance(name, str) or not re.fullmatch(r"[a-z][a-z0-9-]*", name)
+                or not isinstance(version, str) or not re.fullmatch(r"[0-9]+(?:\.[0-9]+)*", version)
+                or archive not in archives or not isinstance(filename, str)
+                or not re.fullmatch(r"[a-z][a-z0-9-]*-[0-9.]+\.(?:tar|el)", filename)
+                or not filename.startswith(f"{name}-{version}")):
+            raise ValueError(f"Invalid prefetched package record: {package!r}")
+        path = directory / archive / filename
+        if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != package.get("sha256"):
+            raise ValueError(f"Prefetched package checksum mismatch: {archive}/{filename}")
+        if filename.endswith(".tar"):
+            try:
+                with tarfile.open(path) as stream:
+                    if not stream.getmembers():
+                        raise ValueError(f"Empty prefetched package archive: {archive}/{filename}")
+            except tarfile.TarError as error:
+                raise ValueError(f"Corrupt prefetched package archive: {archive}/{filename}: {error}") from error
+    return manifest
+
+
+@contextlib.contextmanager
+def serve_standard_archives(directory):
+    """Serve a validated prefetched snapshot on localhost for one verification."""
+    verify_standard_archives(directory)
+
+    class QuietHandler(http.server.SimpleHTTPRequestHandler):
+        def log_message(self, format, *args):
+            pass
+
+    server = http.server.ThreadingHTTPServer(
+        ("127.0.0.1", 0), functools.partial(QuietHandler, directory=str(directory)))
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield f"http://127.0.0.1:{server.server_port}/"
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+def prefetch(directory, emacs):
+    """Download one live standard-archive snapshot for the CI installation matrix.
+
+    A third-party archive can throttle a shared CI egress address.  Fetching its
+    index and the declared external dependency closure once per workflow run,
+    then serving that snapshot to every target, keeps installation correctness
+    independent of that archive's availability during the matrix.
+    """
+    roots = standard_archive_roots()
+    if not roots:
+        print("No external package roots are declared; nothing to prefetch")
+        return
+    script = ROOT / "scripts/prefetch-standard-archives.el"
+    directory.mkdir(parents=True, exist_ok=True)
+    env = dict(os.environ, ETAF_PREFETCH_OUTPUT=str(directory),
+               ETAF_PREFETCH_ROOTS=",".join(roots))
+    env.pop("EMACSLOADPATH", None)
+    env.pop("ETAF_INSTALL_STANDARD_ARCHIVES", None)
+    last = None
+    # A 429 window clears in tens of seconds; retry a few times with jitter so
+    # parallel workflow runs do not retry in lockstep.  Existing files are kept,
+    # so a retry only fetches what the previous attempt did not finish.
+    for attempt, delay in enumerate((0, 10, 30, 60), 1):
+        if delay:
+            time.sleep(delay + random.uniform(0, delay / 2))
+        try:
+            stdout, stderr = run([emacs, "-Q", "--batch", "-l", str(script)],
+                                 cwd=ROOT, env=env, timeout=300)
+            text = (stdout + b"\n" + stderr).decode(errors="replace").strip()
+            if text:
+                print(text)
+            manifest = verify_standard_archives(directory)
+            break
+        except (ValueError, OSError, subprocess.TimeoutExpired) as error:
+            last = error
+            print(f"prefetch attempt {attempt} failed: {error}", file=sys.stderr)
+    else:
+        raise ValueError(
+            f"Standard archive prefetch failed after 4 attempts: {last}")
+    print(json.dumps({"directory": str(directory), "roots": roots,
+                      "packages": len(manifest["packages"])}, indent=2))
+
+
+def verify(directory, emacs, targets, direct=False, standard_archives=None):
     """Exercise entry and standard installs in separate disposable profiles.
 
     A failed attempt invalidates earlier success evidence, including failures
     before Emacs starts. Logs are diagnostic evidence, never publication inputs.
+    STANDARD_ARCHIVES serves a prefetched snapshot on localhost; without it the
+    installer uses the live archives, as a developer's focused check does.
     """
     report = directory / "installation.json"
     report.unlink(missing_ok=True)
     manifest = package_archive.verify(directory)
     names = [item["name"] for item in manifest["packages"]]
     manifest_digest = hashlib.sha256((directory / "manifest.json").read_bytes()).hexdigest()
+    standard_digest = None
+    if standard_archives:
+        verify_standard_archives(standard_archives)
+        standard_digest = hashlib.sha256(
+            (standard_archives / "manifest.json").read_bytes()).hexdigest()
     smoke = ROOT / "scripts/install-smoke.el"
     results = []
-    for target in dict.fromkeys(targets):
-        for direct_mode in ((True,) if direct else (False, True)):
-            with tempfile.TemporaryDirectory(prefix="etaf-install-") as profile:
-                env = dict(os.environ, ETAF_INSTALL_ARCHIVE=str(directory),
-                           ETAF_INSTALL_PROFILE=profile, ETAF_INSTALL_TARGET=target)
-                env.pop("EMACSLOADPATH", None)
-                env.pop("ETAF_INSTALL_DIRECT", None)
-                if direct_mode:
-                    env["ETAF_INSTALL_DIRECT"] = "1"
-                entry = "package-install" if direct_mode else "etaf-install"
-                started = time.monotonic()
-                log = directory / f"installation-{target}-{'direct' if direct_mode else 'entry'}.log"
-                stdout, stderr = run([emacs, "-Q", "--batch", "-l", str(smoke)],
-                                     cwd=profile, env=env, timeout=180, log_file=log)
-                text = (stdout + b"\n" + stderr).decode(errors="replace")
-                diagnostics = scan_diagnostics(text, names)
-                if diagnostics:
-                    raise ValueError(f"Installation diagnostics for {target}:\n"
-                                     + "\n".join(diagnostics[:12]) + f"\nlog={log}")
-                result = json.loads(stdout)
-                if (result.get("status") != "ok" or result.get("target") != target
-                        or result.get("entry") != entry or not result.get("emacs")
-                        or not result.get("system")):
-                    raise ValueError(f"Installation did not verify {target} through {entry}")
-                result["seconds"] = round(time.monotonic() - started, 3)
-                results.append(result)
-                print(f"Verified {target} through {entry}: Emacs {result['emacs']} on {result['system']}; {result['seconds']} s", flush=True)
+    snapshot = serve_standard_archives(standard_archives) if standard_archives else contextlib.nullcontext(None)
+    with snapshot as standard_base:
+        for target in dict.fromkeys(targets):
+            for direct_mode in ((True,) if direct else (False, True)):
+                with tempfile.TemporaryDirectory(prefix="etaf-install-") as profile:
+                    env = dict(os.environ, ETAF_INSTALL_ARCHIVE=str(directory),
+                               ETAF_INSTALL_PROFILE=profile, ETAF_INSTALL_TARGET=target)
+                    env.pop("EMACSLOADPATH", None)
+                    env.pop("ETAF_INSTALL_DIRECT", None)
+                    env.pop("ETAF_INSTALL_STANDARD_ARCHIVES", None)
+                    if standard_base:
+                        env["ETAF_INSTALL_STANDARD_ARCHIVES"] = standard_base
+                    if direct_mode:
+                        env["ETAF_INSTALL_DIRECT"] = "1"
+                    entry = "package-install" if direct_mode else "etaf-install"
+                    started = time.monotonic()
+                    log = directory / f"installation-{target}-{'direct' if direct_mode else 'entry'}.log"
+                    stdout, stderr = run([emacs, "-Q", "--batch", "-l", str(smoke)],
+                                         cwd=profile, env=env, timeout=300, log_file=log)
+                    text = (stdout + b"\n" + stderr).decode(errors="replace")
+                    diagnostics = scan_diagnostics(text, names)
+                    if diagnostics:
+                        raise ValueError(f"Installation diagnostics for {target}:\n"
+                                         + "\n".join(diagnostics[:12]) + f"\nlog={log}")
+                    result = json.loads(stdout)
+                    if (result.get("status") != "ok" or result.get("target") != target
+                            or result.get("entry") != entry or not result.get("emacs")
+                            or not result.get("system")):
+                        raise ValueError(f"Installation did not verify {target} through {entry}")
+                    result["seconds"] = round(time.monotonic() - started, 3)
+                    results.append(result)
+                    print(f"Verified {target} through {entry}: Emacs {result['emacs']} on {result['system']}; {result['seconds']} s", flush=True)
     evidence = {"schema": 1, "manifest_sha256": manifest_digest,
                 "validator_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
                 "smoke_sha256": hashlib.sha256(smoke.read_bytes()).hexdigest(),
                 "installations": results}
+    if standard_digest:
+        evidence["standard_archives_sha256"] = standard_digest
     report.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n")
     print(f"evidence={report}")
 
@@ -328,7 +473,7 @@ def stage(directory, output):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command")
-    for name in ("build", "verify", "stage", "publish", "published"):
+    for name in ("build", "verify", "stage", "publish", "published", "prefetch"):
         command = sub.add_parser(name)
         if name != "published":
             command.add_argument("--directory", type=Path, required=True)
@@ -336,6 +481,10 @@ def main():
             command.add_argument("--emacs", default="emacs")
             command.add_argument("--direct", action="store_true", help="Only verify package-install (default: both installation paths)")
             command.add_argument("--target", action="append")
+            command.add_argument("--standard-archives", type=Path,
+                                 help="Serve a prefetched standard archive snapshot instead of live archives")
+        elif name == "prefetch":
+            command.add_argument("--emacs", default="emacs")
         elif name == "stage":
             command.add_argument("--output", type=Path, required=True)
         elif name == "published":
@@ -349,8 +498,11 @@ def main():
     args = parser.parse_args(arguments)
     if args.command == "build":
         build(args.directory.resolve())
+    elif args.command == "prefetch":
+        prefetch(args.directory.resolve(), args.emacs)
     elif args.command == "verify":
-        verify(args.directory.resolve(), args.emacs, args.target or release_targets(), args.direct)
+        verify(args.directory.resolve(), args.emacs, args.target or release_targets(), args.direct,
+               args.standard_archives.resolve() if args.standard_archives else None)
     elif args.command == "stage":
         stage(args.directory.resolve(), args.output.resolve())
     elif args.command == "published":
