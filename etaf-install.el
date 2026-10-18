@@ -817,7 +817,12 @@ installed.  With NO-CONFIRM, skip the prompt."
       (etaf-install--manage-mode)
       (setq etaf-install--manage-cache nil)
       (tabulated-list-print t))
-    (pop-to-buffer buffer)
+    ;; The manager owns the whole frame: a split next to the user's editing
+    ;; window leaves too little room for the seven-column table.  Display it
+    ;; full-frame, then split that frame into the header strip and the table.
+    (let ((window (display-buffer buffer '(display-buffer-full-frame))))
+      (when (window-live-p window)
+        (select-window window)))
     (let ((table-window (get-buffer-window buffer)))
       (let ((existing (get-buffer-window header)))
         (when (and existing (window-live-p existing))
