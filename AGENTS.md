@@ -163,6 +163,9 @@ to every repository changed from this workspace.
   only.  Catalog components with a selected state suppress their hover
   fill, and application rows apply hover only when they are not the
   current or selected one.
+  A state style declares the paint it changes, typically the fill; the engine
+  restates the label's own ink, weight and decoration in the native hover face.
+  Components must not carry per-theme text colours to survive a hover.
 - State colours must come from the Theme.  A hover, selected or active fill
   reads a theme token or is derived from the theme's own surface and text
   colours; never use a fixed light-only literal, because a dark application
