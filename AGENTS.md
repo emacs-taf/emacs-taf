@@ -188,6 +188,14 @@ to every repository changed from this workspace.
   acceptance. A mockup is not an implemented interface or acceptance evidence.
   Changes to an approved visual design require renewed approval; fixes that
   preserve it use the existing design as their reference.
+- Implementation draws UI decoration with text properties, not with images:
+  icons, borders, dividers, progress and badges use faces and etaf-ui
+  components, and application code never builds SVG markup or calls
+  `create-image` to replace a control. Reaching for an image is right only for
+  shapes no font can draw (make it one etaf-ui component, not one per app) or
+  for content that is itself an image, such as covers, avatars and inline
+  figures. The detailed decision table, with the reasons it holds, lives in the
+  `etaf-app-dev` skill under `guide layout`.
 - Application layouts, including games, must have a coherent content grid,
   aligned region boundaries, intentional spacing and a clear visual hierarchy.
   Avoid large empty panels created merely by stretching containers.
