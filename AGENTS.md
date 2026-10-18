@@ -442,6 +442,13 @@ unrelated root files) instead of the child's sealed tree.
   an unpushed commit is backed up remotely.
 - The root workspace uses the same `origin`, `aliyun` and `laycat` remotes as the
   modules; move its `main` bookmark with `jj bookmark set main -r @-` before pushing.
+- A change users install from the ETAF package archive (`https://etaf.top/packages/`)
+  is not delivered until that archive serves it: bump the package `Version`, publish
+  the provider, record it in `workspace.json`, then build, gate and publish the
+  archive and read the published `manifest.json` back. `pi-skill etaf-archive-release
+  release <package> --yes` runs that sequence and refuses to publish unless every
+  install target passes the archive gate. Do not leave a package fix reachable only
+  from the repositories.
 
 ### Cross-repository revisions
 
