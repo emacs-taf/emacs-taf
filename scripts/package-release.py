@@ -308,7 +308,7 @@ def prefetch(directory, emacs):
                       "packages": len(manifest["packages"])}, indent=2))
 
 
-def verify(directory, emacs, targets, direct=False, standard_archives=None):
+def verify(directory, emacs, targets, direct=False, standard_archives=None, scope="full"):
     """Exercise entry and standard installs in separate disposable profiles.
 
     A failed attempt invalidates earlier success evidence, including failures
@@ -360,7 +360,8 @@ def verify(directory, emacs, targets, direct=False, standard_archives=None):
                     result["seconds"] = round(time.monotonic() - started, 3)
                     results.append(result)
                     print(f"Verified {target} through {entry}: Emacs {result['emacs']} on {result['system']}; {result['seconds']} s", flush=True)
-    evidence = {"schema": 1, "manifest_sha256": manifest_digest,
+    evidence = {"schema": 1, "scope": scope, "targets": list(dict.fromkeys(targets)),
+                "manifest_sha256": manifest_digest,
                 "validator_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
                 "smoke_sha256": hashlib.sha256(smoke.read_bytes()).hexdigest(),
                 "installations": results}
@@ -434,8 +435,21 @@ def stage(directory, output):
     # The installer is the entry under test, not a target, and dependencies such
     # as ebox are not installed directly: the sealed selection names the targets.
     declare = selection.get("targets") or [item["name"] for item in manifest["packages"]]
-    expected = {(name, entry) for name in declare if name != "etaf-install"
-                for entry in ("etaf-install", "package-install")}
+    declared = [name for name in declare if name != "etaf-install"]
+    scope = report.get("scope", "full")
+    if scope == "full":
+        expected = {(name, entry) for name in declared
+                    for entry in ("etaf-install", "package-install")}
+    elif scope == "presentation":
+        # A presentation-only release names the changed targets explicitly; the
+        # release tool only chooses this scope after diffing the shipped files.
+        scoped = report.get("targets") or []
+        if not scoped or any(name not in declared for name in scoped):
+            raise ValueError("Presentation evidence names no declared target")
+        expected = {(name, entry) for name in scoped
+                    for entry in ("etaf-install", "package-install")}
+    else:
+        raise ValueError(f"Unknown installation scope: {scope}")
     installations = report.get("installations", [])
     if (len(installations) != len(expected)
             or {(item.get("target"), item.get("entry")) for item in installations} != expected
@@ -444,7 +458,7 @@ def stage(directory, output):
             or len({(item["emacs"], item["system"]) for item in installations}) != 1
             or not re.fullmatch(r"[0-9]+(?:\.[0-9]+)+", installations[0]["emacs"])
             or tuple(map(int, installations[0]["emacs"].split("."))) < (29, 1)):
-        raise ValueError("Publication requires every target through both installation paths")
+        raise ValueError("Publication requires the recorded targets through both installation paths")
     sources = {name: checkpoint[name]["revision"] for name in selection["packages"]}
     sources["etaf-install"] = revision
     if (manifest.get("sources") != sources
@@ -481,6 +495,8 @@ def main():
             command.add_argument("--emacs", default="emacs")
             command.add_argument("--direct", action="store_true", help="Only verify package-install (default: both installation paths)")
             command.add_argument("--target", action="append")
+            command.add_argument("--scope", choices=("full", "presentation"), default="full",
+                                 help="Record a full gate or a scoped presentation-only gate")
             command.add_argument("--standard-archives", type=Path,
                                  help="Serve a prefetched standard archive snapshot instead of live archives")
         elif name == "prefetch":
@@ -502,7 +518,8 @@ def main():
         prefetch(args.directory.resolve(), args.emacs)
     elif args.command == "verify":
         verify(args.directory.resolve(), args.emacs, args.target or release_targets(), args.direct,
-               args.standard_archives.resolve() if args.standard_archives else None)
+               args.standard_archives.resolve() if args.standard_archives else None,
+               args.scope)
     elif args.command == "stage":
         stage(args.directory.resolve(), args.output.resolve())
     elif args.command == "published":
