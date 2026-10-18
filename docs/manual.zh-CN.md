@@ -246,6 +246,21 @@ buffer 快照开始的第二轮不计时样本。场景文件在字节编译副�
 快照上计时第二轮的 `:invoke`，因此该操作必须作用于当前 buffer。退出码 0 表示通过，
 1 表示预算、验证或孪生检查失败，2 表示报告不完整。
 
+## 截取一次终端会话
+
+`scripts/tui-capture.py` 在真实的伪终端里运行一条命令并保存最终屏幕，因此终端（TUI）布局以终端显示为准，而不是以 GUI frame 为准。它需要 `pyte` 和 `Pillow`（`pip install pyte pillow`）。
+
+```sh
+python3 scripts/tui-capture.py --cols 80 --rows 24 --out /tmp/app.png -- \
+  /opt/homebrew/bin/emacs -nw -Q -l /tmp/probe.el
+python3 scripts/tui-capture.py --cols 120 --rows 40 --out /tmp/app-wide.png -- \
+  /opt/homebrew/bin/emacs -nw -Q -l /tmp/probe.el
+```
+
+`--` 之后的命令在 `--cols` x `--rows` 格的 pty 中运行，带 `TERM=xterm-256color` 和真彩色支持。`--out` 得到 PNG，`<out>.txt` 得到同一屏幕的文本：每行一行、去掉行尾空白，宽字符保留屏幕上的那一个字符。图像在存在时用 Sarasa Mono SC 绘制，其次 Menlo，再次 DejaVu Sans Mono；`--font PATH[:INDEX]` 选择其它字体（INDEX 从字体集合中取面）。
+
+文本文件供断言读取；图像供检查对齐、边框、图标与浮层。窄窗口拍 80x24，普通窗口拍 120x40，每个尺寸各拍一张，而不是缩放一张。工具最后打印一行 `exit=`，带着命令自己的状态；`--timeout`（90 秒）仍然写出已捕获的屏幕并以 124 退出。失败或超时的运行也会写出两个文件；缺少模块、字体不可读或命令不存在都只报告一行，而不是抛回溯。
+
 ## 在真实 GUI 中验证隔离检出
 
 `jj workspace add` 检出必须在完整用户配置里运行，且绝不能加载主检出的代码代。用户 init 会从

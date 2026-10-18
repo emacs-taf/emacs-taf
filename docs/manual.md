@@ -432,6 +432,36 @@ the selected window, so its operation must act on the current buffer. Exit
 status is 0 for a pass, 1 for a failed budget, verification or twin, and 2 for
 an incomplete report.
 
+## Capture a terminal session
+
+`scripts/tui-capture.py` runs a command in a real pseudo-terminal and saves the
+final screen, so terminal (TUI) layout is judged from what the terminal shows
+instead of from a GUI frame. It needs `pyte` and `Pillow`
+(`pip install pyte pillow`).
+
+```sh
+python3 scripts/tui-capture.py --cols 80 --rows 24 --out /tmp/app.png -- \
+  /opt/homebrew/bin/emacs -nw -Q -l /tmp/probe.el
+python3 scripts/tui-capture.py --cols 120 --rows 40 --out /tmp/app-wide.png -- \
+  /opt/homebrew/bin/emacs -nw -Q -l /tmp/probe.el
+```
+
+The command after `--` runs with `TERM=xterm-256color` and truecolor support in
+a pty of `--cols` x `--rows` cells. `--out` receives a PNG and `<out>.txt` the
+same screen as text: one line per row, without trailing blanks, a wide
+character kept as the single character the screen holds. The image is drawn
+with Sarasa Mono SC when present, then Menlo, then DejaVu Sans Mono, and
+`--font PATH[:INDEX]` selects another face (INDEX picks a face from a font
+collection).
+
+The text file is what assertions read; the image is what alignment, borders,
+icons and overlays are checked in. Capture 80x24 for a narrow window and 120x40
+for an ordinary one, one image per size rather than a scaled copy. The tool
+ends with an `exit=` line carrying the command's own status, and `--timeout`
+(90 s) still writes the screen captured so far and exits 124. Both files are
+written after a failed or timed-out run; a missing module, an unreadable font or
+an absent command is reported in one line instead of a traceback.
+
 ## Validate an isolated checkout in a real GUI
 
 A `jj workspace add` checkout must be exercised in the full user configuration
