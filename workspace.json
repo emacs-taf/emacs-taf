@@ -43,7 +43,7 @@
     },
     "etaf-desktop": {
       "url": "https://github.com/emacs-taf/etaf-desktop.git",
-      "revision": "2aa7090012d15a50e5e11f8c9565f6e2cab6866f",
+      "revision": "678910e928a06f43b59c99f81ef825da35884af9",
       "branch": "main"
     },
     "etaf-manual": {
@@ -70,12 +70,12 @@
     },
     "etaf-gamekit": {
       "url": "https://github.com/emacs-taf/etaf-gamekit.git",
-      "revision": "28bdc48c281c7323227ed177061443be3d2f1ac9",
+      "revision": "5aa05109864ac33064f81822b6e5440fb4601c04",
       "branch": "main"
     },
     "etaf-xiangqi": {
       "url": "https://github.com/emacs-taf/etaf-xiangqi.git",
-      "revision": "298831dff4bfa6b8b2c88ce59d486bcd0b592ec1",
+      "revision": "0c58da8115044db91491b6c8a26a401e0a09da22",
       "branch": "main"
     },
     "etaf-weread": {
@@ -90,7 +90,7 @@
     },
     "etaf-tanks": {
       "url": "https://github.com/emacs-taf/etaf-tanks.git",
-      "revision": "b23bd3ed55296d935e5f590bf2fab8a80a0c8b95",
+      "revision": "6f99d5236199d83223de37dc476bc2ca328af5a6",
       "branch": "main"
     }
   }
