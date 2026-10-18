@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# etaf-clean-emacs.sh --- open a clean Emacs for manual ETAF installation.
+# etaf-isolated-emacs.sh --- start an isolated Emacs for manual ETAF installation.
 #
 # Creates a disposable profile, points package.el at ETAF/GNU/NonGNU/MELPA,
-# refreshes the package list and opens it.  Nothing is installed for you:
-# install etaf-install from the list, then M-x etaf-install-manage.
+# refreshes the package list and opens it.  It installs nothing: choose
+# etaf-install from the list, then M-x etaf-install-manage.
 
 set -euo pipefail
 
-PROFILE=${ETAF_CLEAN_PROFILE:-$(mktemp -d "${TMPDIR:-/tmp}/etaf-clean-emacs.XXXXXX")}
+PROFILE=${ETAF_ISOLATED_PROFILE:-$(mktemp -d "${TMPDIR:-/tmp}/etaf-isolated-emacs.XXXXXX")}
 ARCHIVE=${ETAF_INSTALL_ARCHIVE:-https://etaf.top/packages/}
 APP=${ETAF_EMACS_APP:-/Applications/Emacs.app}
 
@@ -33,13 +33,13 @@ elisp=$(cat <<ELISP
           ("etaf" . "$ARCHIVE")))
   (package-initialize)
   (package-refresh-contents)
-  (message "Clean profile: %s" "$PROFILE")
+  (message "Isolated profile: %s" "$PROFILE")
   (package-list-packages))
 ELISP
 )
 
-printf 'Clean profile: %s\n' "$PROFILE"
-printf 'Archive:       %s\n' "$ARCHIVE"
+printf 'Isolated profile: %s\n' "$PROFILE"
+printf 'Archive:          %s\n' "$ARCHIVE"
 printf 'Remove when done: rm -rf %q\n' "$PROFILE"
 
 open -n -a "$APP" --args -Q --eval "$elisp"
