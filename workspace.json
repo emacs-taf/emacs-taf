@@ -75,7 +75,7 @@
     },
     "etaf-xiangqi": {
       "url": "https://github.com/emacs-taf/etaf-xiangqi.git",
-      "revision": "2f563f29231129993663f0dcbcf90d8c880f7559",
+      "revision": "298831dff4bfa6b8b2c88ce59d486bcd0b592ec1",
       "branch": "main"
     },
     "etaf-weread": {
