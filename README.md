@@ -36,7 +36,12 @@ games (`etaf-xiangqi`, `etaf-tanks`). Each entry reports what is missing before
 opening. SQLite needs an Emacs build with SQLite support;
 `M-x etaf-install-doctor` reports required and optional capabilities without
 installing anything. External service accounts and media programs are detected,
-not installed; an application's own backend ships in its package.
+not installed; an application's own backend ships in its package.  For Telega
+the installer installs the Emacs `telega` package but not the native
+`telega-server`: install TDLib, run `M-x telega-server-build` (or follow the
+Telega installation guide), and put `telega-server` on `exec-path`.  The
+install message, `M-x etaf-install-doctor` and the `?` key in
+`M-x etaf-install-manage` print this remedy.
 
 Use `M-x etaf-install-manage` for the supported targets and `M-x list-packages`
 for advanced or third-party packages; restart Emacs after updates. Removal keeps

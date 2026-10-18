@@ -17,6 +17,11 @@
 
 ### Fixed
 
+- `etaf-install` 0.2.1 reports a missing runtime tool with its first remedy
+  and no longer overwrites it with a "ready" message.  `etaf-install-manage`
+  echoes the remedy in the selected-target line and `?` opens the full doctor.
+  `etaf-telega` 0.1.3 points at TDLib installation and
+  `M-x telega-server-build`.
 - `etaf-install` 0.1.7 registers GNU ELPA for targets whose dependency closure
   uses it, and lets a dependency upgrade a loaded built-in package instead of
   aborting before installation. Installing `etaf-telega` on Emacs 29/30 now

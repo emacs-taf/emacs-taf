@@ -37,6 +37,13 @@ class InstallTests(unittest.TestCase):
                         '  (interactive) (with-current-buffer (get-buffer-create "*archive-fixture*")\n'
                         '    (erase-buffer) (insert "Installed gallery")))\n'),
             "ekp": ("1.0.0", '((emacs "29.1"))', ""),
+            "etaf-telega": (
+                "0.1.0", '((emacs "29.1") (etaf "0.2.1"))',
+                "(require 'etaf)\n"
+                "(defun etaf-telega-doctor ()\n"
+                '  (list :required (list (list "telega-server" nil '
+                '"Install TDLib, then run M-x telega-server-build."))))\n'
+                "(defun etaf-telega-open () (interactive))\n"),
         }
         for name, (version, requirements, body) in packages.items():
             source = self.sources / name
@@ -271,6 +278,38 @@ class InstallTests(unittest.TestCase):
   (unless (derived-mode-p 'tabulated-list-mode) (error "Manage buffer is not a tabulated list"))
   (unless (string-match-p "etaf-ui" (buffer-string)) (error "Installed target missing from manage buffer"))
   (unless (string-match-p "Installed" (buffer-string)) (error "Installed status missing from manage buffer")))
+""")
+
+    def test_missing_runtime_reports_remedy_without_claiming_ready(self):
+        self.run_lisp("""
+(let (messages)
+  (cl-letf (((symbol-function 'message)
+             (lambda (format-string &rest args)
+               (push (apply #'format format-string args) messages))))
+    (etaf-install 'etaf-telega t))
+  (unless (cl-some (lambda (message) (string-match-p "telega-server" message)) messages)
+    (error "Missing runtime was not reported"))
+  (unless (cl-some (lambda (message) (string-match-p "telega-server-build" message)) messages)
+    (error "Runtime remedy was not reported"))
+  (when (cl-some (lambda (message) (string-match-p "is ready" message)) messages)
+    (error "Missing runtime was reported as ready")))
+(let ((status (etaf-install-status 'etaf-telega)))
+  (unless (equal (plist-get status :runtime) "telega-server missing")
+    (error "Wrong runtime status: %S" (plist-get status :runtime)))
+  (unless (string-match-p "telega-server-build" (or (plist-get status :remedy) ""))
+    (error "Status has no remedy")))
+(etaf-install-manage)
+(with-current-buffer "*ETAF Packages*"
+  (goto-char (point-min))
+  (unless (search-forward "etaf-telega" nil t) (error "Target missing from manage buffer"))
+  (beginning-of-line)
+  (let (messages)
+    (cl-letf (((symbol-function 'message)
+               (lambda (format-string &rest args)
+                 (push (apply #'format format-string args) messages))))
+      (run-hooks 'post-command-hook))
+    (unless (cl-some (lambda (message) (string-match-p "telega-server-build" message)) messages)
+      (error "Manage echo has no remedy: %S" messages))))
 """)
 
     def test_update_upgrades_an_installed_target_from_the_archive(self):

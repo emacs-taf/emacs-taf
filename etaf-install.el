@@ -1,7 +1,7 @@
 ;;; -*- lexical-binding: t; -*-
 ;;; etaf-install.el --- Install ETAF with the Emacs package manager
 
-;; Version: 0.2.0
+;; Version: 0.2.1
 ;; Package-Requires: ((emacs "29.1"))
 ;; URL: https://github.com/emacs-taf/emacs-taf
 ;; Keywords: convenience
@@ -22,7 +22,9 @@
 ;; installed package symbol.  Already installed targets can be opened offline.
 ;; Missing mandatory Emacs capabilities or a conflicting source checkout signal
 ;; user-error before installation.  An upgrade of a loaded dependency also
-;; requires a restart before installation. On failure, remove only packages added
+;; requires a restart before installation.  A target's runtime tools are
+;; reported after installation; the install message names the first remedy and
+;; `etaf-install-doctor' lists all of them.  On failure, remove only packages added
 ;; by this attempt, preserving older installations and unrelated packages. Report
 ;; cleanup failures without hiding the installation error. Restart before retrying
 ;; because partially loaded Lisp cannot be safely rolled back in this process.
@@ -359,13 +361,13 @@ INSTALLED-ONLY checks offline reopening without computing an upgrade plan."
     (require package)
     (let ((missing (cl-remove-if #'cadr (plist-get (etaf-install-doctor package) :required))))
       (if missing
-          (message "ETAF: %s is installed. Missing for use: %s"
+          (message "ETAF: %s is installed; missing for use: %s. %s Run M-x etaf-install-doctor for all details."
                    package
-                   (mapconcat (lambda (fact) (format "%s (%s)" (car fact) (nth 2 fact)))
-                              missing "; "))
+                   (mapconcat (lambda (fact) (car fact)) missing ", ")
+                   (nth 2 (car missing)))
         (when (and (not no-open) (nth 3 target))
-          (call-interactively (nth 3 target)))))
-    (message "ETAF: %s is ready.  M-x etaf-install opens installed targets; M-x etaf-install-manage updates or removes them." package)
+          (call-interactively (nth 3 target)))
+        (message "ETAF: %s is ready.  M-x etaf-install opens installed targets; M-x etaf-install-manage updates or removes them." package)))
     package))
 
 ;;; Target management
@@ -406,14 +408,12 @@ dependencies rather than only direct requirements."
               (when dependency (push dependency pending)))))))
     (nreverse names)))
 
-(defun etaf-install--target-runtime (package)
-  "Return PACKAGE's runtime readiness label."
+(defun etaf-install--target-runtime-fact (package)
+  "Return PACKAGE's first missing required fact, or nil."
   (let* ((facts (etaf-install-doctor package))
          (missing (cl-find-if (lambda (fact) (not (cadr fact)))
                               (plist-get facts :required))))
-    (if missing
-        (format "%s missing" (car missing))
-      "Ready")))
+    missing))
 
 (defun etaf-install--target-status (package)
   "Return a status plist for PACKAGE."
@@ -422,7 +422,11 @@ dependencies rather than only direct requirements."
          (available (etaf-install--available-version package))
          (installed-p (not (null installed)))
          (update (and installed available (version-list-< installed available)))
-         (runtime (if installed-p (etaf-install--target-runtime package) "—"))
+         (runtime-fact (and installed-p (etaf-install--target-runtime-fact package)))
+         (runtime (cond ((not installed-p) "—")
+                        (runtime-fact (format "%s missing" (car runtime-fact)))
+                        (t "Ready")))
+         (remedy (nth 2 runtime-fact))
          (descriptor (or (cadr (assq package package-archive-contents))
                          (cadr (assq package package-alist)))))
     (list :package package
@@ -432,8 +436,9 @@ dependencies rather than only direct requirements."
           :available (etaf-install--version-string available)
           :installed-p installed-p
           :update update
-          :ready (and installed-p (equal runtime "Ready"))
+          :ready (and installed-p (null runtime-fact))
           :runtime runtime
+          :remedy remedy
           :dependencies (and descriptor (etaf-install--dependency-names descriptor)))))
 
 ;;;###autoload
@@ -676,11 +681,14 @@ installed.  With NO-CONFIRM, skip the prompt."
       (let ((status (cl-find package (etaf-install--manage-statuses)
                              :key (lambda (item) (plist-get item :package)))))
         (when status
-          (message "%s — %s%s"
+          (message "%s — %s%s%s"
                    (plist-get status :label)
                    (plist-get status :runtime)
+                   (if (plist-get status :remedy)
+                       (format " · %s" (plist-get status :remedy))
+                     "")
                    (if (plist-get status :dependencies)
-                       (format " · %s"
+                       (format " · depends: %s"
                                (mapconcat #'symbol-name
                                           (plist-get status :dependencies) " · "))
                      "")))))))

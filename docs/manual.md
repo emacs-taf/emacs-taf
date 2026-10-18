@@ -261,6 +261,13 @@ package.el-backed install, update, remove, open and doctor actions.
 `etaf-install-update`, `etaf-install-remove` and `etaf-install-status` expose the
 same lifecycle to callers; removal keeps application data and logins.
 
+A missing runtime tool is part of the installation report, not a silent
+success: the install message names the first remedy and the doctor lists every
+required and optional fact, while the manage echo repeats the selected target's
+remedy. `etaf-telega` installs the Emacs `telega` package, but its native
+`telega-server` is a TDLib build supplied by the user; that remedy names
+`M-x telega-server-build` and the Telega installation guide.
+
 Never edit files under `/srv/etaf.top` by hand: the deployer owns locking,
 immutable versions, checksum verification and rollback.
 
