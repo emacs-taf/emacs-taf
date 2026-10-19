@@ -13,15 +13,37 @@ import sys
 import tempfile
 from urllib.parse import unquote
 
-POLICY_VERSION = 9
+POLICY_VERSION = 12
 DOC_NAMES = {'README.md', 'README.zh-CN.md', 'CHANGELOG.md', 'CHANGELOG.zh-CN.md',
              'AGENTS.md', 'docs/manual.md', 'docs/manual.zh-CN.md',
              'docs/architecture.md', 'docs/architecture.zh-CN.md'}
+WORKSPACE_DOC_NAMES = {'docs/keyboard-navigation.zh-CN.md'}
 DIRS = {'lisp', 'tests', 'examples', 'benchmarks', 'scripts', 'docs', 'native',
-        'dictionaries', 'design', '.github', '.gitea', '.githooks'}
+        'dictionaries', 'design', 'book', 'site', 'backends', '.github', '.gitea', '.githooks'}
+# A reference book is product content rendered by its package: one Markdown
+# chapter per file under book/<language>/, with the same link checks as docs.
+BOOK_CHAPTER = re.compile(r'book/[a-z]{2}(?:-[A-Z][A-Za-z]+)?/[a-z0-9]+(?:-[a-z0-9]+)*\.md')
 SKIP = {'.git', '.jj', '__pycache__', 'target', '.omx', '.worktrees', '.claude'}
 SHARED = ('scripts/check-api.py', 'scripts/check-api.el', 'scripts/api-workspace.json', '.editorconfig', 'scripts/check-repository.py', 'scripts/run-acceptance.py', '.githooks/pre-commit', '.githooks/commit-msg', 'scripts/check-commit-message.py',
-          '.github/workflows/structure.yml')
+          '.github/workflows/structure.yml', 'scripts/package_archive.py')
+
+
+def provider_directory(root):
+    """Return the checkout directory holding the sibling provider repositories.
+
+    Providers normally sit beside the repository.  A nested application
+    workspace keeps them one level above its own checkout, so accept the
+    nearest ancestor that holds a provider named by the API registry.
+    """
+    try:
+        names = json.loads((Path(__file__).resolve().parent / 'api-workspace.json').read_text())
+    except (OSError, ValueError):
+        names = {}
+    providers = Path(root).resolve().parent
+    if not any((providers / name).is_dir() for name in names) and any(
+            (providers.parent / name).is_dir() for name in names):
+        providers = providers.parent
+    return providers
 
 
 def git_checkout_p(root):
@@ -54,12 +76,41 @@ def inventory(root):
                   and p.suffix not in {'.elc', '.pyc', '.o', '.so', '.dylib', '.dll'})
 
 
+def generated_book_chapters(root):
+    """Return book/<language>/<id>.md names that book.json declares as generated.
+
+    A generated appendix or index has no chapter file; the package builds the
+    chapter from the book model, so links to it are valid without one.
+    """
+    description = Path(root) / 'book/book.json'
+    if not description.is_file():
+        return set()
+    try:
+        book = json.loads(description.read_text())
+    except (OSError, ValueError):
+        return set()
+    names = set()
+    for spec in list(book.get('appendices') or []) + list(book.get('indices') or []):
+        if isinstance(spec, dict) and spec.get('id') and spec.get('generate'):
+            for language in book.get('languages') or []:
+                names.add(f'book/{language}/{spec["id"]}.md')
+    return names
+
+
 def check(root, files=None):
     files = inventory(root) if files is None else files
     errors = []
+    generated_chapters = generated_book_chapters(root)
     workspace = (root / 'workspace.json').exists()
+    doc_names = DOC_NAMES | (WORKSPACE_DOC_NAMES if workspace else set())
     allowed_dirs = DIRS | (set(__import__('json').loads((root / 'workspace.json').read_text())['repositories']) if workspace else set())
     def fail(path, message): errors.append(f'{path}: {message}')
+    if workspace:
+        # One workspace owns every checkout: a nested workspace root would fork
+        # the registry, its shared tooling and its integration checkpoint again.
+        for name in sorted(allowed_dirs - DIRS):
+            if (root / name / 'workspace.json').exists():
+                fail(name, 'nested workspace root; register its checkouts in the workspace registry instead')
     for required in ['README.md', 'Makefile', 'scripts/check-repository.py',
                      '.githooks/pre-commit', '.githooks/commit-msg', 'scripts/check-commit-message.py', '.github/workflows/structure.yml',
                      'scripts/check-api.py', 'scripts/check-api.el', 'scripts/api-workspace.json']:
@@ -83,7 +134,7 @@ def check(root, files=None):
             if old != spelling: fail(f, f'case collision with {old}')
         if len(parts) > 1 and parts[0] not in allowed_dirs:
             fail(f, 'unapproved top-level directory')
-        if len(parts) == 1 and f not in DOC_NAMES and f not in {
+        if len(parts) == 1 and f not in doc_names and f not in {
                 'Makefile', 'LICENSE', 'COPYING', 'NOTICE', '.gitignore',
                 '.gitattributes', '.editorconfig', 'workspace.json',
                 'release-dependencies.json'} and not f.endswith('.el'):
@@ -93,9 +144,12 @@ def check(root, files=None):
                 fail(f, 'delete native internal unit tests; validate through public package APIs')
         # Preserve upstream dictionary/vendor licensing and resource names.
         external = parts[0] == 'dictionaries' or f.startswith('native/vendor/')
-        if f.endswith('.md') and f not in DOC_NAMES and not external and not instructions:
+        chapter = parts[0] == 'book' and f.endswith('.md')
+        if chapter and not BOOK_CHAPTER.fullmatch(f):
+            fail(f, 'book chapters are book/<language>/<lowercase-kebab-slug>.md')
+        if f.endswith('.md') and f not in doc_names and not external and not instructions and not chapter:
             fail(f, 'use README, CHANGELOG, docs/manual or docs/architecture; merge or delete other documents')
-        if f.startswith('docs/') and not instructions and (len(parts) != 2 or f not in DOC_NAMES):
+        if f.startswith('docs/') and not instructions and (len(parts) != 2 or f not in doc_names):
             fail(f, 'documentation must be flat and use the fixed document names')
         if re.search(r'(^|/)(?:\.DS_Store|[^/]+\.(?:elc|eln|pyc|o|so|dylib|dll))$', f) or 'target' in parts or '__pycache__' in parts:
             fail(f, 'generated artifact must not be tracked')
@@ -105,8 +159,10 @@ def check(root, files=None):
             fail(f, 'correctness tests belong in tests/; tool tests belong in tests/tools/')
         if external or not f.endswith('.md'): continue
         text = (root / f).read_text()
-        # Validate inline and reference-style Markdown links outside fenced code.
+        # Validate inline and reference-style Markdown links outside fenced and
+        # inline code; a code span may show link syntax without being a link.
         plain = re.sub(r'^(`{3,}|~{3,}).*?^\1\s*$', '', text, flags=re.M | re.S)
+        plain = re.sub(r'(?<!`)(`+)(?!`).+?(?<!`)\1(?!`)', '', plain)
         links = re.findall(r'\]\(<?([^\s)>]+)>?(?:\s+"[^"]*")?\)', plain)
         links += re.findall(r'^\s*\[[^\]]+\]:\s*<?([^\s>]+)>?', plain, re.M)
         for link in links:
@@ -116,7 +172,9 @@ def check(root, files=None):
             target = Path(os.path.normpath(str(Path(f).parent / rel)))
             if '..' in target.parts:
                 fail(f, f'cross-repository link must use the provider URL: {link}')
-            elif target.as_posix() != '.' and target.as_posix() not in files and not any(name.startswith(target.as_posix().rstrip('/') + '/') for name in files):
+            elif (target.as_posix() != '.' and target.as_posix() not in files
+                  and target.as_posix() not in generated_chapters
+                  and not any(name.startswith(target.as_posix().rstrip('/') + '/') for name in files)):
                 fail(f, f'broken local link (including exact case): {link}')
     makefile = root / 'Makefile'
     if makefile.exists():
@@ -199,11 +257,19 @@ def main():
             subprocess.run(['git', '-C', str(args.root), 'checkout-index', '--all',
                             '--prefix', directory + os.sep], check=True)
             snapshot = Path(directory)
+            # Intent-to-add entries (`git add -N`, and the new files of a
+            # colocated jj working copy) are not part of the commit, but
+            # checkout-index writes them as empty files.
+            status = subprocess.check_output(['git', '-C', str(args.root), 'status', '--porcelain=v2',
+                                              '-z', '--untracked-files=no']).decode()
+            for entry in status.split('\0'):
+                if entry.startswith('1 .A '):
+                    (snapshot / entry.split(' ', 8)[8]).unlink(missing_ok=True)
             files = sorted(str(p.relative_to(snapshot)) for p in snapshot.rglob('*') if p.is_file())
             errors = check(snapshot, files)
             if not errors and not (snapshot / 'workspace.json').exists():
                 result = subprocess.run([sys.executable, str(snapshot/'scripts/check-api.py'),
-                                         '--root', str(snapshot), '--providers-dir', str(args.root.resolve().parent)],
+                                         '--root', str(snapshot), '--providers-dir', str(provider_directory(args.root))],
                                         capture_output=True, text=True)
                 if result.returncode: errors.append(result.stderr.strip())
     else:
@@ -211,7 +277,9 @@ def main():
         if not errors:
             mode = '--workspace' if (args.root/'workspace.json').exists() else '--root'
             result = subprocess.run([sys.executable, str(args.root/'scripts/check-api.py'),
-                                     mode, str(args.root.resolve())], capture_output=True, text=True)
+                                     mode, str(args.root.resolve()),
+                                     '--providers-dir', str(provider_directory(args.root))],
+                                    capture_output=True, text=True)
             if result.returncode: errors.append(result.stderr.strip())
     if errors:
         print('\n'.join(errors), file=sys.stderr)

@@ -117,7 +117,12 @@ def package(root):
     if len(entries) != 1: raise ValueError(f'{root}: expected one root entry')
     entry = entries[0]
     files = [entry] + sorted((root/'lisp').glob('*.el'))
-    diagnostic_files = [p for d in ('scripts', 'benchmarks', 'examples') for p in (root/d).rglob('*.el')]
+    example_roots = sorted(p for p in (root/'examples').glob('*')
+                           if p.is_dir() and (p/(p.name+'.el')).is_file())
+    examples = {p.name: package(p) for p in example_roots}
+    diagnostic_files = [p for d in ('scripts', 'benchmarks', 'examples')
+                        for p in (root/d).rglob('*.el')
+                        if not any(p.is_relative_to(example) for example in example_roots)]
     defined = set(); features = set()
     for p in files + diagnostic_files:
         text = p.read_text()
@@ -128,10 +133,22 @@ def package(root):
         defined.update(struct_symbols(text))
         features.update(re.findall(r"\(provide\s+'([^\s()]+)", text))
     api, errors = declarations(entry)
-    return {'root':root, 'entry':entry, 'files':files, 'defined':defined, 'features':features, 'api':api, 'errors':errors}
+    return {'root':root, 'entry':entry, 'files':files, 'defined':defined, 'features':features,
+            'api':api, 'errors':errors, 'examples':examples}
 
 
 def check(packages, selected=None):
+    packages = dict(packages)
+    selected = set(selected) if selected is not None else None
+    pending = list(packages)
+    while pending:
+        parent = pending.pop()
+        for name, example in packages[parent]['examples'].items():
+            name = parent + '/examples/' + name
+            packages[name] = example
+            pending.append(name)
+            if selected is not None and parent in selected:
+                selected.add(name)
     errors = []
     owners = {}
     feature_owners = {}
@@ -146,7 +163,9 @@ def check(packages, selected=None):
         if selected and name not in selected: continue
         errors.extend(pkg['errors'])
         tests = sorted(p for p in (pkg['root']/'tests').rglob('*.el') if 'fixtures' not in p.relative_to(pkg['root']).parts)
-        files = pkg['files'] + sorted((pkg['root']/'examples').rglob('*.el')) + tests
+        example_roots = [example['root'] for example in pkg['examples'].values()]
+        files = pkg['files'] + [p for p in sorted((pkg['root']/'examples').rglob('*.el'))
+                               if not any(p.is_relative_to(root) for root in example_roots)] + tests
         for file in files:
             source = file.read_text()
             for symbol in set(tokens(source)):
