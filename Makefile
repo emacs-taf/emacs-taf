@@ -1,7 +1,8 @@
 .DEFAULT_GOAL := check
 .NOTPARALLEL:
 EMACS ?= emacs
-MODULE_DIRS := ecss ekp ebox etaf etaf-ui etaf-db etaf-desktop ebox-playground etaf-playground etaf-manual
+# Single source: the checkout list and its dependency order come from the registry.
+MODULE_DIRS := $(shell python3 -c 'import json; print(" ".join(json.load(open("workspace.json"))["repositories"]))')
 .PHONY: compile test check clean structure-check setup-hooks sync-policy
 structure-check:
 	python3 scripts/workspace.py check

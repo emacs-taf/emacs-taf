@@ -34,12 +34,12 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def checkpoint_sources(document):
-    """Return every pinned repository, framework providers and applications.
+    """Return every pinned repository in the workspace registry.
 
-    Framework providers and applications live in two workspaces with their own
-    checkpoints; a release pins both, so provenance is read from either section.
+    One workspace owns every checkout, so the release pins one section; a
+    provenance entry is keyed by the package name the archive installs.
     """
-    return {**document.get("repositories", {}), **document.get("applications", {})}
+    return document.get("repositories", {})
 def release_targets():
     """Return the installation targets a release must verify.
 

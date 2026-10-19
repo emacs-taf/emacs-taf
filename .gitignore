@@ -1,6 +1,4 @@
 # Independent sibling repositories.
-/etaf-apps/
-/etaf-games/
 /ebox/
 /ebox-playground/
 /ecss/
@@ -31,6 +29,7 @@
 /etaf-xiangqi/
 /etaf-tanks/
 /etaf-salvage/
+/etaf-browser/
 
 *.elc
 *.eln

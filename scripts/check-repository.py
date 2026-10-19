@@ -19,7 +19,7 @@ DOC_NAMES = {'README.md', 'README.zh-CN.md', 'CHANGELOG.md', 'CHANGELOG.zh-CN.md
              'docs/architecture.md', 'docs/architecture.zh-CN.md'}
 WORKSPACE_DOC_NAMES = {'docs/keyboard-navigation.zh-CN.md'}
 DIRS = {'lisp', 'tests', 'examples', 'benchmarks', 'scripts', 'docs', 'native',
-        'dictionaries', 'design', 'book', 'site', '.github', '.gitea', '.githooks'}
+        'dictionaries', 'design', 'book', 'site', 'backends', '.github', '.gitea', '.githooks'}
 # A reference book is product content rendered by its package: one Markdown
 # chapter per file under book/<language>/, with the same link checks as docs.
 BOOK_CHAPTER = re.compile(r'book/[a-z]{2}(?:-[A-Z][A-Za-z]+)?/[a-z0-9]+(?:-[a-z0-9]+)*\.md')
@@ -105,6 +105,12 @@ def check(root, files=None):
     doc_names = DOC_NAMES | (WORKSPACE_DOC_NAMES if workspace else set())
     allowed_dirs = DIRS | (set(__import__('json').loads((root / 'workspace.json').read_text())['repositories']) if workspace else set())
     def fail(path, message): errors.append(f'{path}: {message}')
+    if workspace:
+        # One workspace owns every checkout: a nested workspace root would fork
+        # the registry, its shared tooling and its integration checkpoint again.
+        for name in sorted(allowed_dirs - DIRS):
+            if (root / name / 'workspace.json').exists():
+                fail(name, 'nested workspace root; register its checkouts in the workspace registry instead')
     for required in ['README.md', 'Makefile', 'scripts/check-repository.py',
                      '.githooks/pre-commit', '.githooks/commit-msg', 'scripts/check-commit-message.py', '.github/workflows/structure.yml',
                      'scripts/check-api.py', 'scripts/check-api.el', 'scripts/api-workspace.json']:

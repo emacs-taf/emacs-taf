@@ -25,11 +25,12 @@ class SealSyncTests(unittest.TestCase):
         self.env = dict(os.environ, JJ_CONFIG=str(base / 'jj.toml'))
         self.root = base / 'workspace'
         self.child = self.root / 'pkg'
-        for rel in ('scripts/workspace.py', *WORKSPACE.SHARED):
+        for rel in ('scripts/workspace.py', *WORKSPACE.SHARED, *WORKSPACE.FRAMEWORK_SHARED):
             self.write(self.root / rel, (ROOT / rel).read_text())
         self.write(self.root / '.gitignore', '/pkg/\n')
         self.write(self.root / 'workspace.json', json.dumps({'repositories': {'pkg': {
-            'url': 'https://example.invalid/pkg.git', 'revision': '0', 'branch': 'main'}}}))
+            'url': 'https://example.invalid/pkg.git', 'revision': '0', 'branch': 'main',
+            'role': 'framework'}}}))
         self.write(self.child / '.gitignore', '*.elc\n__pycache__/\n')
         self.write(self.child / 'README.md', '# Package\n')
         self.write(self.child / 'package.el', ";;; Commentary:\n;; Function: package-open ()\n;; Return the package value.\n;;; Code:\n(defun package-open () t)\n(provide 'package)\n")

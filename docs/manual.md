@@ -498,7 +498,7 @@ forms also add `~/emacs-taf` paths, and an added path wins the resolution.
 When writers change the primary checkout, snapshot the measured source generation to avoid
 `UNVERIFIED: Workspace sources changed during measurement`:
 copy `workspace.json` and each loaded repository (ecss, ekp, ebox, etaf,
-etaf-ui, and etaf-gamekit/etaf-games or the app) with `rsync -a --exclude .jj
+etaf-ui, and etaf-gamekit or the app) with `rsync -a --exclude .jj
 --exclude .git ~/emacs-taf/<repo> /tmp/<snapshot>/`, substituting a `jj workspace
 add` checkout where a repository change is not in the primary tree. Apply the same
 site-start redirection and start file with `--root /private/tmp/<snapshot>` and

@@ -2,7 +2,7 @@
 
 [English](README.md)
 
-本仓库管理 Emacs TAF 生态的统一规范和本地构建入口：框架包、应用工作区与各个应用；各仓库保留自己的 Git 历史、公共接口和发布流程。
+本仓库管理 Emacs TAF 生态的统一规范和本地构建入口：框架包、应用与游戏。每个仓库都是本目录下的独立检出，登记在 `workspace.json`；各自保留自己的 Git 历史、公共接口与发布流程。
 
 ## 在已有 Emacs 中安装
 
@@ -41,16 +41,13 @@ Emacs 包会自动安装，但原生 `telega-server` 不会：先安装 TDLib，
 | [etaf-ui](https://github.com/emacs-taf/etaf-ui) | 通用 UI 组件 | etaf |
 | [etaf-gamekit](https://github.com/emacs-taf/etaf-gamekit) | 游戏定义、独立运行实例、动作与后端适配器 | etaf |
 | [etaf-db](https://github.com/emacs-taf/etaf-db) | ETAF 数据库后端；目前支持 SQLite | etaf |
-| [etaf-apps](https://github.com/emacs-taf/etaf-apps) | 应用工作区：各应用的集成检查点与共享工具 | etaf、etaf-ui、etaf-db |
-| [etaf-games](https://github.com/emacs-taf/etaf-games) | 游戏应用工作区：共同开发契约与集成命令 | etaf、etaf-ui；游戏使用 etaf-gamekit |
 | [ebox-playground](https://github.com/emacs-taf/ebox-playground) | Ebox 布局示例 | ebox |
 | [etaf-playground](https://github.com/emacs-taf/etaf-playground) | ETAF/UI 集成示例与验收入口 | etaf、etaf-ui、etaf-db、etaf-desktop |
 | [etaf-manual](https://github.com/emacs-taf/etaf-manual) | 核心包的《ETAF 参考手册》，中英双语，对照公共接口检查；发布于 <https://etaf.top> | etaf、etaf-ui；门禁还读取 ecss、ekp、ebox 和 etaf-db |
 
 [etaf-gamekit](https://github.com/emacs-taf/etaf-gamekit) 提供游戏定义，
 以及 Godot、boardgame.io、OpenSpiel 共用的动作、观察结果和
-实例生命周期。游戏应用拥有规则与呈现，位于
-[etaf-games](https://github.com/emacs-taf/etaf-games) 工作区，不属于框架核心；
+实例生命周期。游戏应用拥有规则与呈现，与框架包同级，不属于框架核心；
 核心不依赖它们的组件。
 运行游戏只需安装所选后端；开发时先运行
 `make -C etaf-gamekit engine-all GAMEKIT_PYTHON=python3.11`，再运行完整的
@@ -60,30 +57,31 @@ Emacs 包会自动安装，但原生 `telega-server` 不会：先安装 TDLib，
 
 应用与游戏是构建在框架之上的两类程序，每一个都是独立仓库，有各自的历史和检查。
 
-### 应用
+每个应用都是登记在 `workspace.json` 里的同级检出，表里列出它使用的框架仓库：
 
-[etaf-desktop](https://github.com/emacs-taf/etaf-desktop) 在本工作区开发，其余在 [etaf-apps](https://github.com/emacs-taf/etaf-apps) 工作区，其 README 维护依赖清单：
-
-| 应用 | 职责 |
-| --- | --- |
-| [etaf-desktop](https://github.com/emacs-taf/etaf-desktop) | 基于 ETAF 与 ETAF UI 的 Emacs 桌面窗口管理应用 |
-| [etaf-ncm](https://github.com/emacs-taf/etaf-ncm) | 网易云音乐播放器：曲库浏览、播放控制、歌词与队列 |
-| [etaf-weread](https://github.com/emacs-taf/etaf-weread) | 微信读书客户端：书架、笔记本、划线、书店搜索与统计 |
-| [etaf-md-preview](https://github.com/emacs-taf/etaf-md-preview) | Markdown 阅读视图：居中版心、标题、表格、提示块、代码与媒体卡片 |
-| [etaf-rss](https://github.com/emacs-taf/etaf-rss) | RSS 阅读器：订阅、分组、未读与收藏、阅读栏、搜索与 OPML |
-| [etaf-reader](https://github.com/emacs-taf/etaf-reader) | 本地电子书阅读器：EPUB/TXT/Markdown/HTML/FB2/PDF 导入、翻页阅读、标注与进度 |
-| [etaf-pi](https://github.com/emacs-taf/etaf-pi) | 原生 Pi 代理客户端：流式对话、工具输出、会话恢复与多行输入 |
-| [etaf-telega](https://github.com/emacs-taf/etaf-telega) | 基于 Telega TDLib 的 Telegram 客户端：会话、实时消息、就地编辑与消息操作 |
-| [etaf-ascii-video](https://github.com/emacs-taf/etaf-ascii-video) | 在 Emacs buffer 里用纯字符播放视频与 HTTP(S) 流 |
-| [etaf-video-player](https://github.com/emacs-taf/etaf-video-player) | 在 Emacs 里以清晰图像帧加声音播放本地视频与流 |
-| [etaf-video-studio](https://github.com/emacs-taf/etaf-video-studio) | 通过 video-project 技能录制、剪辑并发布软件教程：录屏、非破坏性剪辑、后台预览/导出与两步发布 |
-| [etaf-algo-lab](https://github.com/emacs-taf/etaf-algo-lab) | 在 Emacs 里观看、操控并比较算法运行 |
-| [etaf-screensaver](https://github.com/emacs-taf/etaf-screensaver) | 空闲屏保：纯画布动画、输入唤回、组合播放与适配的外部录制动画 |
+| 应用 | 职责 | 框架依赖 |
+| --- | --- | --- |
+| [etaf-desktop](https://github.com/emacs-taf/etaf-desktop) | 基于 ETAF 与 ETAF UI 的 Emacs 桌面窗口管理应用 | etaf、etaf-ui、ebox |
+| [etaf-ncm](https://github.com/emacs-taf/etaf-ncm) | 网易云音乐播放器：曲库浏览、播放控制、歌词与队列 | etaf、etaf-ui、ebox |
+| [etaf-weread](https://github.com/emacs-taf/etaf-weread) | 微信读书客户端：书架、笔记本、划线、书店搜索与统计 | etaf、etaf-ui、etaf-db、ebox |
+| [etaf-md-preview](https://github.com/emacs-taf/etaf-md-preview) | Markdown 阅读视图：居中版心、标题、表格、提示块、代码与媒体卡片 | etaf、etaf-ui、ebox |
+| [etaf-rss](https://github.com/emacs-taf/etaf-rss) | RSS 阅读器：订阅、分组、未读与收藏、阅读栏、搜索与 OPML | etaf、etaf-ui、ebox |
+| [etaf-reader](https://github.com/emacs-taf/etaf-reader) | 本地电子书阅读器：EPUB/TXT/Markdown/HTML/FB2/PDF 导入、翻页阅读、标注与进度 | etaf、etaf-ui、etaf-db、ebox |
+| [etaf-pi](https://github.com/emacs-taf/etaf-pi) | 原生 Pi 代理客户端：流式对话、工具输出、会话恢复与多行输入 | etaf、etaf-ui、ebox |
+| [etaf-telega](https://github.com/emacs-taf/etaf-telega) | 基于 Telega TDLib 的 Telegram 客户端：会话、实时消息、就地编辑与消息操作 | etaf、etaf-ui、ebox |
+| [etaf-ascii-video](https://github.com/emacs-taf/etaf-ascii-video) | 在 Emacs buffer 里用纯字符播放视频与 HTTP(S) 流 | etaf、etaf-ui、ebox |
+| [etaf-video-player](https://github.com/emacs-taf/etaf-video-player) | 在 Emacs 里以清晰图像帧加声音播放本地视频与流 | etaf、etaf-ui、ebox |
+| [etaf-video-studio](https://github.com/emacs-taf/etaf-video-studio) | 通过 video-project 技能录制、剪辑并发布软件教程：录屏、非破坏性剪辑、后台预览/导出与两步发布 | etaf、etaf-ui、ebox |
+| [etaf-bili](https://github.com/emacs-taf/etaf-bili) | B 站客户端：热门、排行榜与搜索，可在 buffer 内直接播放 | etaf、etaf-ui、ebox |
+| [etaf-youtube](https://github.com/emacs-taf/etaf-youtube) | YouTube 客户端：账号订阅流、搜索、频道、播放列表与画布内播放 | etaf、etaf-ui、etaf-db、ebox |
+| [etaf-miniflux](https://github.com/emacs-taf/etaf-miniflux) | 自建 Miniflux 订阅源的客户端 | etaf、etaf-ui、ebox |
+| [etaf-browser](https://github.com/emacs-taf/etaf-browser) | 带地址栏与状态栏外壳的浏览器客户端，界面画在 ETAF 画布里 | etaf、etaf-ui |
+| [etaf-algo-lab](https://github.com/emacs-taf/etaf-algo-lab) | 在 Emacs 里观看、操控并比较算法运行 | etaf、etaf-ui、ebox |
+| [etaf-screensaver](https://github.com/emacs-taf/etaf-screensaver) | 空闲屏保：纯画布动画、输入唤回、组合播放与适配的外部录制动画 | etaf、ebox |
 
 ### 游戏
 
-游戏应用位于 [etaf-games](https://github.com/emacs-taf/etaf-games) 工作区，其 README
-维护依赖清单与共同验收契约。它们基于 [etaf-gamekit](https://github.com/emacs-taf/etaf-gamekit)
+游戏应用同样是同级检出。它们基于 [etaf-gamekit](https://github.com/emacs-taf/etaf-gamekit)
 提供游戏定义、独立运行实例、动作与后端适配器，规则、呈现和资源保存在各自的仓库：
 
 | 游戏 | 说明 | 后端 |

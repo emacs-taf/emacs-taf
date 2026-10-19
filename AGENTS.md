@@ -483,3 +483,148 @@ unrelated root files) instead of the child's sealed tree.
 - Undo the last operation with `jj undo`, or restore an earlier state from
   `jj op log` with `jj op restore <operation>`. `jj evolog -p -r <rev>` shows how a
   single change was rewritten, not a file's history.
+
+## Applications and games
+
+Framework packages, applications and games are sibling checkouts registered in
+`workspace.json`, with `role` set to `framework`, `application` or `game`. The
+root is the only workspace: do not create a nested workspace root, and do not
+clone a second checkout of a registered repository. Everything that needs an
+isolated tree (a release, a benchmark, an acceptance run) creates a disposable
+workspace and removes it.
+
+Application and game Makefiles resolve providers as siblings (`../etaf`); they
+keep the `../..` fallback only so a standalone clone still builds. A new
+application is added to `workspace.json`, the README tables, and (only if the
+archive ships it) `release-dependencies.json` in the same change.
+
+### Emacs 29 compatibility
+
+The providers keep Emacs 29.1 as their baseline and CI runs Ubuntu's
+`emacs-nox`; breakage from newer Emacs versions or a graphics-less build only
+surfaces there. Three patterns cover everything seen so far:
+
+- **Emacs 30+ APIs**: a direct `(string-pixel-width string buffer)` call fails
+  every mount on 29 with `wrong-number-of-arguments`. Probe the arity and fall
+  back (see `ebox--string-pixel-width-in`).
+- **C-implemented graphics functions**: `image-size` and `image-flush` are C
+  functions on 29, so `require`ing `image` gives the byte compiler no definition
+  and `byte-compile-error-on-warn` fails the compile. Declare them near the
+  requires: `(declare-function image-size "image.c" (spec &optional pixels frame))`
+  and `(declare-function image-flush "image.c" (image &optional frame))`.
+- **Graphics-only scenarios** cannot run without a display; guard them with
+  `(skip-unless (and (display-graphic-p) (image-type-available-p 'png)))`.
+
+Reproduce all three in batch without a second Emacs: `fmakunbound` the C
+functions before a `byte-compile-error-on-warn` compile, and run the suite in
+batch where `display-graphic-p` is nil.
+
+### Measuring interaction stalls
+
+- Measure, never guess: schedule a repeating 50 ms timer that records
+  `(- (float-time) (+ start (* n 0.05)))` and report the maximum plus the counts
+  over 20 ms and 100 ms. A healthy idle application stays at 1-6 ms; a
+  whole-view publication per second reaches 200-500 ms.
+- Attribute without editing code: point the retained Host the application uses
+  at a missing symbol, run the same probe, then restore it.
+- Compare interleaved rounds with medians; a single pass on a loaded GUI varies
+  by more than 50%.
+- Timers only run while Emacs waits: drive them in batch with `sleep-for`, never
+  `accept-process-output` or `sit-for`.
+- Measure rendered height with `window-text-pixel-size`, not buffer lines;
+  `posn-at-point` on a line boundary reports the wrong row.
+
+### UI acceptance
+
+Every interaction a person can perform is verified in a real graphical session
+before a change is complete. Provider unit scenarios, batch rendering and README
+screenshots are not application acceptance.
+
+- Drive the controls, not the model API: send documented keys through the
+  command loop (`execute-kbd-macro`) or activate through ETAF focus
+  (`etaf-focus` + RET). OS-level synthetic clicks do not reach Emacs text areas,
+  so the native activation path stands in for a click; record which path each
+  step used.
+- Mount through the application's offline harness for capture passes; a session
+  against the real backend keeps the canvas blank until its service answers.
+  Close the verification instance when the pass ends, including a failed one.
+- Verify against the signed-in account before claiming completion: scripted
+  scenarios are the regression gate, not the acceptance result.
+- Walk every affordance the buffer exposes. An affordance without a scenario is
+  an untested affordance.
+- Verify the layout matrix (wide, medium, narrow, short), asserting the resolved
+  layout state and each column's content, then review the captures.
+- Keep every row within the frame line height; a font fallback or a variation
+  selector (U+FE0E) clips the bottom rows.
+- Assertions and visual review are separate steps: a green run certifies
+  behavior, not appearance.
+- Record every problem a pass finds in one list, fix them one by one with
+  regression coverage, then re-run the affected scenarios. Run evidence stays
+  outside version control.
+
+Maintain scenarios as `scripts/<application>-gui-scenarios.el` on the shared
+`emacs-gui-verifier` engine; its action, checkpoint, evidence and timing
+contract lives in `etaf`'s manual under GUI verification tools.
+
+### View width discipline
+
+- In ETAF/Ebox views, `width: stretch` fills its containing block, not remaining
+  space. For remaining space use `flex-basis (ch 0)` with `flex-grow 1`; never
+  add `flex-shrink 0`, which overflows the container.
+- An over-wide canvas pushes centered blocks aside; clicking its right edge can
+  horizontally scroll the overflow. Compare each line's `window-text-pixel-size`
+  with `(window-body-width win t)`.
+- Indent Chinese paragraphs with ordinary spaces, never U+3000; a missing glyph
+  renders it as an underlined escape glyph.
+
+### Provider integration pitfalls
+
+- `call-process` takes a *file name* for stderr, never a buffer. Pass
+  `(list OUTPUT-BUFFER STDERR-FILE)` with `make-temp-file`, read the file back on
+  failure, and delete it in `unwind-protect`.
+- `json-parse-string` signals `json-trailing-content` on a trailing newline;
+  trim the CLI's stdout first, or use `json-parse-buffer`.
+- `json-encode` guesses alist versus plist from the first element, so a *list of
+  plists* encodes as an alist. Store nested values through a small recursive
+  encoder that keeps keyword-keyed plists as JSON objects, and parse them back
+  with `:object-type 'plist`.
+- In an `etaf-view` body a helper call in a child position must be wrapped:
+  `(expr (my-view ...))`. A bare call is rejected with "must be inside (expr FORM)".
+- When a view wraps text itself, count every prefix (indent, quote bar) in the
+  wrap width; leave one cell of slack in the column width.
+
+### Runtime-only defects
+
+These are green in batch while broken in a real session:
+
+- A View or mount path must not touch storage, create Data Controllers or call
+  the network; ETAF rejects it as `etaf-render-side-effect-error`. Views read
+  refs and cached values; data access belongs before mounting or inside commands
+  and events.
+- The renderer's minor-mode map owns `SPC`, `S-SPC`, `DEL`, `C-v`, `M-v`, `RET`,
+  wheel and `n`/`q`. An application replacing them installs a buffer-local
+  `emulation-mode-map-alists` entry keyed by the buffer-local session variable (a
+  wrong or void key silently disables the whole map); `RET` dispatches between
+  the application action and `etaf-activate` so focused controls keep working.
+  Check with `(key-binding (kbd KEY))` in the application buffer.
+- `(setf (plist-get plist :key) value)` only writes in place when the key exists;
+  create every hot field with the session, or use `plist-put`.
+- A hand-written `'(.body . nil)` reads as the symbol `.body`, not
+  `(body . nil)`; every `eq` comparison against it silently fails.
+- Retained Host updates take a **symbol** ref (a string signals "Unknown
+  committed Host"), the node needs both `:ref` and `:id`, and one missing target
+  rejects the whole batch.
+
+### Retained Host updates
+
+- A scoped update through ETAF's retained Host boundary stays scoped: the update
+  report reads `strategy owner-rerender` or `span-patch`, `dirty 1`, `patch 1`,
+  with a `projection-kind` of `span-patch` or `owner-scoped`.
+- Its cost follows the changed subset, not the view. A per-second scoped update
+  is affordable; re-measure after a provider change.
+- Publishing out of band is only safe while the controlled state stays
+  authoritative: publish the local effect eagerly so an interaction never waits
+  for a later publication.
+- A mount can precede the window manager's resize, leaving the canvas at the old
+  viewport; repaint once at a neighbouring width and once at the real width when
+  a settled window grew across a layout boundary.

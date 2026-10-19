@@ -8,8 +8,16 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-SHARED = ('scripts/check-api.py', 'scripts/check-api.el', 'scripts/api-workspace.json', '.editorconfig', 'scripts/check-repository.py', 'scripts/run-acceptance.py', '.githooks/pre-commit', '.githooks/commit-msg', 'scripts/check-commit-message.py',
+SHARED = ('scripts/check-api.py', 'scripts/check-api.el', '.editorconfig', 'scripts/check-repository.py', 'scripts/run-acceptance.py', '.githooks/pre-commit', '.githooks/commit-msg', 'scripts/check-commit-message.py',
           '.github/workflows/structure.yml', 'scripts/package_archive.py')
+# The provider registry is generated for the framework. An application or game
+# declares the providers its own boundary check may see, so it keeps its copy.
+FRAMEWORK_SHARED = ('scripts/api-workspace.json',)
+
+
+def shared_files(entry):
+    """Return the shared files a registered checkout receives."""
+    return SHARED + (FRAMEWORK_SHARED if entry.get('role') == 'framework' else ())
 SEAL_TITLE = 'chore(scripts): sync shared workspace tooling'
 
 
@@ -110,11 +118,14 @@ def main():
         return seal(repos, args.remote, args.dry_run)
     api_registry = {}
     for name, entry in repos.items():
+        if entry.get('role') != 'framework':
+            continue
         entries = list((ROOT/name).glob('*.el'))
         if len(entries) == 1:
             api_registry[name] = {'entry': entries[0].stem, 'url': entry['url']}
     registry_path = ROOT/'scripts/api-workspace.json'
-    if args.action == 'sync' and len(api_registry) == len(repos):
+    framework = [name for name, entry in repos.items() if entry.get('role') == 'framework']
+    if args.action == 'sync' and len(api_registry) == len(framework):
         registry_path.write_text(json.dumps(api_registry, indent=2, sort_keys=True) + '\n')
     failed = False
     if args.action == 'check' and json.loads(registry_path.read_text()) != api_registry:
@@ -128,7 +139,7 @@ def main():
             failed = True
             continue
         if args.action == 'sync':
-            for rel in SHARED:
+            for rel in shared_files(entry):
                 target = repo / rel
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(ROOT / rel, target)
@@ -155,7 +166,7 @@ def main():
                     text=True).strip()
             else:
                 try:
-                    actual = subprocess.check_output(['git', '-C', str(repo), 'rev-parse', f'refs/heads/{branch}'], text=True).strip()
+                    actual = subprocess.check_output(['git', '-C', str(repo), 'rev-parse', f'refs/heads/{branch}'], text=True, stderr=subprocess.DEVNULL).strip()
                 except subprocess.CalledProcessError:
                     actual = subprocess.check_output(['git', '-C', str(repo), 'rev-parse', 'HEAD'], text=True).strip()
             line = f'{name}: {actual}' + (' (matches recorded revision)' if actual==entry['revision'] else ' (different from recorded revision)')
@@ -170,7 +181,7 @@ def main():
                     pass
             print(line)
         else:
-            for rel in SHARED:
+            for rel in shared_files(entry):
                 if not (repo / rel).exists() or (repo / rel).read_bytes() != (ROOT / rel).read_bytes():
                     print(f'{name}/{rel}: shared tooling drift; run workspace.py sync', file=sys.stderr)
                     failed = True

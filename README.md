@@ -3,9 +3,10 @@
 [中文](README.zh-CN.md)
 
 This repository owns the shared development policy and local orchestration for
-the Emacs TAF ecosystem: its framework packages, the etaf-apps application
-workspace and the applications built on them. Each repository retains its own Git
-history, public interfaces, releases and behavior checks.
+the Emacs TAF ecosystem: its framework packages, applications and games. Every
+repository is an independent checkout beside this one, registered in
+`workspace.json`; each retains its own Git history, public interfaces, releases
+and behavior checks.
 
 ## Install in an existing Emacs
 
@@ -66,17 +67,15 @@ Framework packages and workspace tooling developed in this checkout:
 | [etaf-ui](https://github.com/emacs-taf/etaf-ui) | Reusable UI components | etaf |
 | [etaf-gamekit](https://github.com/emacs-taf/etaf-gamekit) | Game definitions, independent instances, actions and backend adapters | etaf |
 | [etaf-db](https://github.com/emacs-taf/etaf-db) | Database backends for ETAF; currently SQLite | etaf |
-| [etaf-apps](https://github.com/emacs-taf/etaf-apps) | Application workspace: their integration checkpoints and shared tooling | etaf, etaf-ui, etaf-db |
-| [etaf-games](https://github.com/emacs-taf/etaf-games) | Game application workspace: their common contract and integration commands | etaf, etaf-ui; games use etaf-gamekit |
 | [ebox-playground](https://github.com/emacs-taf/ebox-playground) | Runnable Ebox layout examples | ebox |
 | [etaf-playground](https://github.com/emacs-taf/etaf-playground) | ETAF/UI integration examples and acceptance surfaces | etaf, etaf-ui, etaf-db, etaf-desktop |
 | [etaf-manual](https://github.com/emacs-taf/etaf-manual) | The ETAF Reference Manual for the core packages, in English and Chinese, checked against their public interfaces; published at <https://etaf.top> | etaf, etaf-ui; its gate reads ecss, ekp, ebox and etaf-db |
 
 [etaf-gamekit](https://github.com/emacs-taf/etaf-gamekit) provides game
 definitions and a common action/observation lifecycle over Godot, boardgame.io
-and OpenSpiel. Game applications own their rules and presentation and live in
-the [etaf-games](https://github.com/emacs-taf/etaf-games) workspace,
-outside the framework core; the core does not depend on their components.
+and OpenSpiel. Game applications own their rules and presentation and live
+beside the framework packages, outside the framework core; the core does not
+depend on their components.
 Install the backend needed by your game, or use
 `make -C etaf-gamekit engine-all GAMEKIT_PYTHON=python3.11` before running the
 complete `make -C etaf-gamekit check`. Its README and manual describe standalone
@@ -89,33 +88,35 @@ an independent repository with its own history and checks.
 
 ### Applications
 
-[etaf-desktop](https://github.com/emacs-taf/etaf-desktop) is developed in this
-workspace; the others live in the [etaf-apps](https://github.com/emacs-taf/etaf-apps)
-workspace, whose README owns their dependency lists:
+Every application is a sibling checkout registered in `workspace.json`; the
+table names the framework repositories each one uses:
 
-| Application | Responsibility |
-| --- | --- |
-| [etaf-desktop](https://github.com/emacs-taf/etaf-desktop) | Desktop window-management application built from ETAF and ETAF UI |
-| [etaf-ncm](https://github.com/emacs-taf/etaf-ncm) | NetEase Cloud Music player: library browsing, playback control, lyrics and queue |
-| [etaf-weread](https://github.com/emacs-taf/etaf-weread) | WeChat Reading client: shelf, notebook, highlights, store search and statistics |
-| [etaf-md-preview](https://github.com/emacs-taf/etaf-md-preview) | Markdown reading view: centered measure, headings, tables, callouts, code and media cards |
-| [etaf-rss](https://github.com/emacs-taf/etaf-rss) | RSS reader: subscriptions, folders, unread and starred scopes, reading pane, search and OPML |
-| [etaf-reader](https://github.com/emacs-taf/etaf-reader) | Local ebook reader: EPUB/TXT/Markdown/HTML/FB2/PDF import, paged reading, annotations and progress |
-| [etaf-pi](https://github.com/emacs-taf/etaf-pi) | Native Pi agent client: streamed conversations, tool output, session recovery and multiline input |
-| [etaf-telega](https://github.com/emacs-taf/etaf-telega) | Telegram client on Telega's TDLib backend: chats, live message stream, composer and message actions |
-| [etaf-ascii-video](https://github.com/emacs-taf/etaf-ascii-video) | Video and HTTP(S) streams inside an Emacs buffer as pure characters |
-| [etaf-video-player](https://github.com/emacs-taf/etaf-video-player) | Local video and streams as sharp image frames with sound |
-| [etaf-video-studio](https://github.com/emacs-taf/etaf-video-studio) | Record, edit and publish software tutorials through the video-project skill: recording, non-destructive edits, background previews/exports and a two-step publish flow |
-| [etaf-algo-lab](https://github.com/emacs-taf/etaf-algo-lab) | Learn algorithms by watching, steering and comparing them inside Emacs |
-| [etaf-screensaver](https://github.com/emacs-taf/etaf-screensaver) | Idle screensavers: canvas-only animation, input dismissal, grouped playback and adapted recorded animations |
+| Application | Responsibility | Framework dependencies |
+| --- | --- | --- |
+| [etaf-desktop](https://github.com/emacs-taf/etaf-desktop) | Desktop window-management application built from ETAF and ETAF UI | etaf, etaf-ui, ebox |
+| [etaf-ncm](https://github.com/emacs-taf/etaf-ncm) | NetEase Cloud Music player: library browsing, playback control, lyrics and queue | etaf, etaf-ui, ebox |
+| [etaf-weread](https://github.com/emacs-taf/etaf-weread) | WeChat Reading client: shelf, notebook, highlights, store search and statistics | etaf, etaf-ui, etaf-db, ebox |
+| [etaf-md-preview](https://github.com/emacs-taf/etaf-md-preview) | Markdown reading view: centered measure, headings, tables, callouts, code and media cards | etaf, etaf-ui, ebox |
+| [etaf-rss](https://github.com/emacs-taf/etaf-rss) | RSS reader: subscriptions, folders, unread and starred scopes, reading pane, search and OPML | etaf, etaf-ui, ebox |
+| [etaf-reader](https://github.com/emacs-taf/etaf-reader) | Local ebook reader: EPUB/TXT/Markdown/HTML/FB2/PDF import, paged reading, annotations and progress | etaf, etaf-ui, etaf-db, ebox |
+| [etaf-pi](https://github.com/emacs-taf/etaf-pi) | Native Pi agent client: streamed conversations, tool output, session recovery and multiline input | etaf, etaf-ui, ebox |
+| [etaf-telega](https://github.com/emacs-taf/etaf-telega) | Telegram client on Telega's TDLib backend: chats, live message stream, composer and message actions | etaf, etaf-ui, ebox |
+| [etaf-ascii-video](https://github.com/emacs-taf/etaf-ascii-video) | Video and HTTP(S) streams inside an Emacs buffer as pure characters | etaf, etaf-ui, ebox |
+| [etaf-video-player](https://github.com/emacs-taf/etaf-video-player) | Local video and streams as sharp image frames with sound | etaf, etaf-ui, ebox |
+| [etaf-video-studio](https://github.com/emacs-taf/etaf-video-studio) | Record, edit and publish software tutorials through the video-project skill: recording, non-destructive edits, background previews/exports and a two-step publish flow | etaf, etaf-ui, ebox |
+| [etaf-bili](https://github.com/emacs-taf/etaf-bili) | Bilibili client: popular feed, ranking and search with in-buffer playback | etaf, etaf-ui, ebox |
+| [etaf-youtube](https://github.com/emacs-taf/etaf-youtube) | YouTube client: account feeds, search, channels, playlists and in-canvas video playback | etaf, etaf-ui, etaf-db, ebox |
+| [etaf-miniflux](https://github.com/emacs-taf/etaf-miniflux) | Miniflux client for a self-hosted feed server | etaf, etaf-ui, ebox |
+| [etaf-browser](https://github.com/emacs-taf/etaf-browser) | Browser client with an address and status shell in the ETAF canvas | etaf, etaf-ui |
+| [etaf-algo-lab](https://github.com/emacs-taf/etaf-algo-lab) | Learn algorithms by watching, steering and comparing them inside Emacs | etaf, etaf-ui, ebox |
+| [etaf-screensaver](https://github.com/emacs-taf/etaf-screensaver) | Idle screensavers: canvas-only animation, input dismissal, grouped playback and adapted recorded animations | etaf, ebox |
 
 ### Games
 
-Game applications live in the [etaf-games](https://github.com/emacs-taf/etaf-games)
-workspace, whose README owns their dependency lists and shared acceptance contract.
-They build on [etaf-gamekit](https://github.com/emacs-taf/etaf-gamekit) for game
-definitions, independent instances, actions and backend adapters, and keep their
-rules, presentation and resources in their own repositories:
+Game applications are sibling checkouts too. They build on
+[etaf-gamekit](https://github.com/emacs-taf/etaf-gamekit) for game definitions,
+independent instances, actions and backend adapters, and keep their rules,
+presentation and resources in their own repositories:
 
 | Game | Description | Backend |
 | --- | --- | --- |
