@@ -1,7 +1,9 @@
 .DEFAULT_GOAL := check
 .NOTPARALLEL:
 EMACS ?= emacs
-PROVIDER_ROOT := $(if $(wildcard ../etaf/etaf.el),..,../..)
+# Providers are siblings in the workspace and in a standalone clone;
+# override PROVIDER_ROOT to pin another checkout.
+PROVIDER_ROOT ?= ..
 LOAD_PATH = -L . -L lisp -L tests -L $(PROVIDER_ROOT)/etaf -L $(PROVIDER_ROOT)/etaf-ui
 LOAD_PATH += -L $(PROVIDER_ROOT)/ebox -L $(PROVIDER_ROOT)/ecss -L $(PROVIDER_ROOT)/etaf-db
 SOURCES = lisp/etaf-youtube-theme.el lisp/etaf-youtube-service.el

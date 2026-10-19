@@ -1,170 +1,170 @@
 {
- "schema": 1,
- "load_path": [
-  ".",
-  "tests",
-  "../../etaf",
-  "../../etaf-ui",
-  "../../ebox",
-  "../../ecss",
-  "../../etaf-db"
- ],
- "support": [],
- "cases": [
-  {
-   "name": "etaf-youtube-header-keeps-its-slot-across-updates",
-   "file": "tests/etaf-youtube-tests.el",
-   "purpose": "The complete header stays visible while content scrolls, account data arrives, the palette switches and the viewport resizes."
-  },
-  {
-   "name": "etaf-youtube-navigation-selection-suppresses-hover",
-   "file": "tests/etaf-youtube-tests.el",
-   "purpose": "Expanded and compact navigation keep the selected surface without an overriding hover fill."
-  },
-  {
-   "name": "etaf-youtube-grouped-cards-activate-the-original-video",
-   "file": "tests/etaf-youtube-tests.el",
-   "purpose": "Separating portrait Shorts and landscape cards preserves each card's original activation target."
-  },
-  {
-   "name": "etaf-youtube-check-records-account",
-   "file": "tests/etaf-youtube-tests.el",
-   "purpose": "Opening a session asks the skill for the account and records its name and sign-in state."
-  },
-  {
-   "name": "etaf-youtube-home-feed-loads-cards",
-   "file": "tests/etaf-youtube-tests.el",
-   "purpose": "The home route loads list items, a title and a pagination cursor into the state."
-  },
-  {
-   "name": "etaf-youtube-load-more-appends-items",
-   "file": "tests/etaf-youtube-tests.el",
-   "purpose": "Load-more reads the cursor and appends the next page without replacing the first."
-  },
-  {
-   "name": "etaf-youtube-search-sends-the-selected-filter",
-   "file": "tests/etaf-youtube-tests.el",
-   "purpose": "Search sends the query and the selected filter to the skill and shows the search route."
-  },
-  {
-   "name": "etaf-youtube-watch-loads-video-comments-and-source",
-   "file": "tests/etaf-youtube-tests.el",
-   "purpose": "Opening a video reads its details, comments and a resolved media source with split audio, headers and proxy."
-  },
-  {
-   "name": "etaf-youtube-stale-feed-reply-is-dropped",
-   "file": "tests/etaf-youtube-tests.el",
-   "purpose": "A reply from a route the user has left never replaces the newest list."
-  },
-  {
-   "name": "etaf-youtube-player-commands-update-state",
-   "file": "tests/etaf-youtube-tests.el",
-   "purpose": "Seek, speed, volume, mute and quality update the session and re-resolve the source at the new quality."
-  },
-  {
-   "name": "etaf-youtube-captions-follow-the-playback-position",
-   "file": "tests/etaf-youtube-tests.el",
-   "purpose": "Turning captions on loads the track's cues and reports the cue covering the current playback position."
-  },
-  {
-   "name": "etaf-youtube-regions-declare-navigable-areas",
-   "file": "tests/etaf-youtube-tests.el",
-   "purpose": "The mounted shell declares the sidebar, content and comment regions so M-g and the direct focus keys can reach them."
-  },
-  {
-   "name": "etaf-youtube-resume-round-trip",
-   "file": "tests/etaf-youtube-tests.el",
-   "purpose": "Leaving a watch page records the playback position in the local store and reopening the video restores it."
-  },
-  {
-   "name": "etaf-youtube-writes-need-explicit-confirmation",
-   "file": "tests/etaf-youtube-tests.el",
-   "purpose": "A write is previewed without confirmation and submitted only with it, then reported with its certainty."
-  },
-  {
-   "name": "etaf-youtube-comment-submitted-unverified-is-a-warning",
-   "file": "tests/etaf-youtube-tests.el",
-   "purpose": "A submitted but unverified comment is shown as a warning and is never retried automatically."
-  },
-  {
-   "name": "etaf-youtube-selection-and-activation",
-   "file": "tests/etaf-youtube-tests.el",
-   "purpose": "Selection moves within the list and activation opens the selected video route."
-  },
-  {
-   "name": "etaf-youtube-back-retraces-history",
-   "file": "tests/etaf-youtube-tests.el",
-   "purpose": "Back returns to the previous route and reloads its list."
-  },
-  {
-   "name": "etaf-youtube-chips-switch-channel-tabs",
-   "file": "tests/etaf-youtube-tests.el",
-   "purpose": "A channel tab chip browses the same channel with its parameters."
-  },
-  {
-   "name": "etaf-youtube-replies-load-per-comment",
-   "file": "tests/etaf-youtube-tests.el",
-   "purpose": "Replies load through the comment's own cursor and appear in the reply map."
-  },
-  {
-   "name": "etaf-youtube-theme-sidebar-and-theater",
-   "file": "tests/etaf-youtube-tests.el",
-   "purpose": "Appearance and layout choices change the reported state and the palette."
-  },
-  {
-   "name": "etaf-youtube-thumbnails-load-through-the-injected-fetcher",
-   "file": "tests/etaf-youtube-tests.el",
-   "purpose": "Requesting a thumbnail stores a descriptor, bumps the version and does not repeat the request."
-  },
-  {
-   "name": "etaf-youtube-view-mounts-with-list-content",
-   "file": "tests/etaf-youtube-tests.el",
-   "purpose": "The mounted shell renders the loaded list inside an ETAF buffer."
-  },
-  {
-   "name": "etaf-youtube-destroy-releases-the-session",
-   "file": "tests/etaf-youtube-tests.el",
-   "purpose": "Destroy cancels the session and leaves a destroyed model safe to destroy again."
-  },
-  {
-   "name": "etaf-youtube-process-runner-reads-skill-json",
-   "file": "tests/etaf-youtube-tests.el",
-   "purpose": "The default process runner drains a real child process and parses its protocol JSON without a browser."
-  },
-  {
-   "name": "etaf-youtube-thumbnails-strip-signed-query",
-   "file": "tests/etaf-youtube-tests.el",
-   "purpose": "Signed YouTube thumbnail tokens are dropped before downloading so the CDN serves the decodable JPEG while the cache still keys the original URL."
-  },
-  {
-   "name": "etaf-youtube-thumbnail-404-falls-back-on-the-working-route",
-   "file": "tests/etaf-youtube-tests.el",
-   "purpose": "A missing custom thumbnail falls back to a JPEG on the same route without inheriting proxy variables."
-  },
-  {
-   "name": "etaf-youtube-shorts-and-search-follow-the-application-theme",
-   "file": "tests/etaf-youtube-tests.el",
-   "purpose": "Shorts do not show a false zero duration, and search colors match the application palette."
-  },
-  {
-   "name": "etaf-youtube-refresh-retries-failed-artwork",
-   "file": "tests/etaf-youtube-tests.el",
-   "purpose": "Refreshing a feed retries failed artwork instead of leaving permanent placeholders."
-  },
-  {
-   "name": "etaf-youtube-open-follows-the-usable-window",
-   "file": "tests/etaf-youtube-tests.el",
-   "purpose": "Opening and hiding navigation preserve the renderer's usable window viewport rather than overriding it with raw pixels."
-  },
-  {
-   "name": "etaf-youtube-open-hides-the-native-caret",
-   "file": "tests/etaf-youtube-tests.el",
-   "purpose": "The application buffer keeps the native point caret off so focused controls paint their own cue; text fields keep their own caret."
-  },
-  {
-   "name": "etaf-youtube-thumbnail-disk-cache-survives-reopen",
-   "file": "tests/etaf-youtube-tests.el",
-   "purpose": "A cached thumbnail file survives a later session that reuses the same thumbnail directory."
-  }
- ]
+  "schema": 1,
+  "load_path": [
+    ".",
+    "tests",
+    "../etaf",
+    "../etaf-ui",
+    "../ebox",
+    "../ecss",
+    "../etaf-db"
+  ],
+  "support": [],
+  "cases": [
+    {
+      "name": "etaf-youtube-header-keeps-its-slot-across-updates",
+      "file": "tests/etaf-youtube-tests.el",
+      "purpose": "The complete header stays visible while content scrolls, account data arrives, the palette switches and the viewport resizes."
+    },
+    {
+      "name": "etaf-youtube-navigation-selection-suppresses-hover",
+      "file": "tests/etaf-youtube-tests.el",
+      "purpose": "Expanded and compact navigation keep the selected surface without an overriding hover fill."
+    },
+    {
+      "name": "etaf-youtube-grouped-cards-activate-the-original-video",
+      "file": "tests/etaf-youtube-tests.el",
+      "purpose": "Separating portrait Shorts and landscape cards preserves each card's original activation target."
+    },
+    {
+      "name": "etaf-youtube-check-records-account",
+      "file": "tests/etaf-youtube-tests.el",
+      "purpose": "Opening a session asks the skill for the account and records its name and sign-in state."
+    },
+    {
+      "name": "etaf-youtube-home-feed-loads-cards",
+      "file": "tests/etaf-youtube-tests.el",
+      "purpose": "The home route loads list items, a title and a pagination cursor into the state."
+    },
+    {
+      "name": "etaf-youtube-load-more-appends-items",
+      "file": "tests/etaf-youtube-tests.el",
+      "purpose": "Load-more reads the cursor and appends the next page without replacing the first."
+    },
+    {
+      "name": "etaf-youtube-search-sends-the-selected-filter",
+      "file": "tests/etaf-youtube-tests.el",
+      "purpose": "Search sends the query and the selected filter to the skill and shows the search route."
+    },
+    {
+      "name": "etaf-youtube-watch-loads-video-comments-and-source",
+      "file": "tests/etaf-youtube-tests.el",
+      "purpose": "Opening a video reads its details, comments and a resolved media source with split audio, headers and proxy."
+    },
+    {
+      "name": "etaf-youtube-stale-feed-reply-is-dropped",
+      "file": "tests/etaf-youtube-tests.el",
+      "purpose": "A reply from a route the user has left never replaces the newest list."
+    },
+    {
+      "name": "etaf-youtube-player-commands-update-state",
+      "file": "tests/etaf-youtube-tests.el",
+      "purpose": "Seek, speed, volume, mute and quality update the session and re-resolve the source at the new quality."
+    },
+    {
+      "name": "etaf-youtube-captions-follow-the-playback-position",
+      "file": "tests/etaf-youtube-tests.el",
+      "purpose": "Turning captions on loads the track's cues and reports the cue covering the current playback position."
+    },
+    {
+      "name": "etaf-youtube-regions-declare-navigable-areas",
+      "file": "tests/etaf-youtube-tests.el",
+      "purpose": "The mounted shell declares the sidebar, content and comment regions so M-g and the direct focus keys can reach them."
+    },
+    {
+      "name": "etaf-youtube-resume-round-trip",
+      "file": "tests/etaf-youtube-tests.el",
+      "purpose": "Leaving a watch page records the playback position in the local store and reopening the video restores it."
+    },
+    {
+      "name": "etaf-youtube-writes-need-explicit-confirmation",
+      "file": "tests/etaf-youtube-tests.el",
+      "purpose": "A write is previewed without confirmation and submitted only with it, then reported with its certainty."
+    },
+    {
+      "name": "etaf-youtube-comment-submitted-unverified-is-a-warning",
+      "file": "tests/etaf-youtube-tests.el",
+      "purpose": "A submitted but unverified comment is shown as a warning and is never retried automatically."
+    },
+    {
+      "name": "etaf-youtube-selection-and-activation",
+      "file": "tests/etaf-youtube-tests.el",
+      "purpose": "Selection moves within the list and activation opens the selected video route."
+    },
+    {
+      "name": "etaf-youtube-back-retraces-history",
+      "file": "tests/etaf-youtube-tests.el",
+      "purpose": "Back returns to the previous route and reloads its list."
+    },
+    {
+      "name": "etaf-youtube-chips-switch-channel-tabs",
+      "file": "tests/etaf-youtube-tests.el",
+      "purpose": "A channel tab chip browses the same channel with its parameters."
+    },
+    {
+      "name": "etaf-youtube-replies-load-per-comment",
+      "file": "tests/etaf-youtube-tests.el",
+      "purpose": "Replies load through the comment's own cursor and appear in the reply map."
+    },
+    {
+      "name": "etaf-youtube-theme-sidebar-and-theater",
+      "file": "tests/etaf-youtube-tests.el",
+      "purpose": "Appearance and layout choices change the reported state and the palette."
+    },
+    {
+      "name": "etaf-youtube-thumbnails-load-through-the-injected-fetcher",
+      "file": "tests/etaf-youtube-tests.el",
+      "purpose": "Requesting a thumbnail stores a descriptor, bumps the version and does not repeat the request."
+    },
+    {
+      "name": "etaf-youtube-view-mounts-with-list-content",
+      "file": "tests/etaf-youtube-tests.el",
+      "purpose": "The mounted shell renders the loaded list inside an ETAF buffer."
+    },
+    {
+      "name": "etaf-youtube-destroy-releases-the-session",
+      "file": "tests/etaf-youtube-tests.el",
+      "purpose": "Destroy cancels the session and leaves a destroyed model safe to destroy again."
+    },
+    {
+      "name": "etaf-youtube-process-runner-reads-skill-json",
+      "file": "tests/etaf-youtube-tests.el",
+      "purpose": "The default process runner drains a real child process and parses its protocol JSON without a browser."
+    },
+    {
+      "name": "etaf-youtube-thumbnails-strip-signed-query",
+      "file": "tests/etaf-youtube-tests.el",
+      "purpose": "Signed YouTube thumbnail tokens are dropped before downloading so the CDN serves the decodable JPEG while the cache still keys the original URL."
+    },
+    {
+      "name": "etaf-youtube-thumbnail-404-falls-back-on-the-working-route",
+      "file": "tests/etaf-youtube-tests.el",
+      "purpose": "A missing custom thumbnail falls back to a JPEG on the same route without inheriting proxy variables."
+    },
+    {
+      "name": "etaf-youtube-shorts-and-search-follow-the-application-theme",
+      "file": "tests/etaf-youtube-tests.el",
+      "purpose": "Shorts do not show a false zero duration, and search colors match the application palette."
+    },
+    {
+      "name": "etaf-youtube-refresh-retries-failed-artwork",
+      "file": "tests/etaf-youtube-tests.el",
+      "purpose": "Refreshing a feed retries failed artwork instead of leaving permanent placeholders."
+    },
+    {
+      "name": "etaf-youtube-open-follows-the-usable-window",
+      "file": "tests/etaf-youtube-tests.el",
+      "purpose": "Opening and hiding navigation preserve the renderer's usable window viewport rather than overriding it with raw pixels."
+    },
+    {
+      "name": "etaf-youtube-open-hides-the-native-caret",
+      "file": "tests/etaf-youtube-tests.el",
+      "purpose": "The application buffer keeps the native point caret off so focused controls paint their own cue; text fields keep their own caret."
+    },
+    {
+      "name": "etaf-youtube-thumbnail-disk-cache-survives-reopen",
+      "file": "tests/etaf-youtube-tests.el",
+      "purpose": "A cached thumbnail file survives a later session that reuses the same thumbnail directory."
+    }
+  ]
 }

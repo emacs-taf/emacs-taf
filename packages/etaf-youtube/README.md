@@ -48,7 +48,7 @@ releases the session, its requests and its player.
 ## Requirements
 
 - Emacs 29.1 or newer with the ETAF, ETAF UI, Ebox, ECSS and ETAF DB
-  checkouts beside this repository (or `../../etaf` and so on from a nested
+  checkouts beside this repository (or `../etaf` and so on from a nested
   checkout).
 - `ffmpeg` and `ffplay` for video and sound.
 - The shared `youtube` skill available through `pi-skill`, plus its controlled
