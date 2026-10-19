@@ -81,7 +81,7 @@
     },
     "etaf-bili": {
       "url": "https://github.com/emacs-taf/etaf-bili.git",
-      "revision": "eaa69db77b2e0a92663e65a07657432234192282",
+      "revision": "ce2dd39372b5f4ecdc0125a1e12a0e8f7df96b7e",
       "branch": "main",
       "role": "application"
     },
@@ -135,7 +135,7 @@
     },
     "etaf-telega": {
       "url": "https://github.com/emacs-taf/etaf-telega.git",
-      "revision": "d81b76c484ca1df8d2e8ad025e4c662ef31ea6a4",
+      "revision": "b90b83505db473bb6e0e31f17b4babd415c57eb7",
       "branch": "main",
       "role": "application"
     },
@@ -159,7 +159,7 @@
     },
     "etaf-youtube": {
       "url": "https://github.com/emacs-taf/etaf-youtube.git",
-      "revision": "b31eee2bb38c28512712f0063a7fedff681323af",
+      "revision": "bb1df27101bf2981a6b3989355f7b6c0c5a5d630",
       "branch": "main",
       "role": "application"
     },
