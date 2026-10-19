@@ -26,10 +26,14 @@ def jj(repo, *args):
     return subprocess.run(['jj', *args], cwd=repo, text=True, capture_output=True, check=True).stdout
 
 
-def changed_shared(repo):
-    """Return the shared paths that the working-copy commit of REPO changes."""
+def changed_shared(repo, entry=None):
+    """Return the shared paths that the working-copy commit of REPO changes.
+
+    An entry limits the answer to the files that checkout receives, so the
+    root-only provider registry is not treated as shared tooling.
+    """
     names = set(jj(repo, 'diff', '-r', '@', '--name-only').split())
-    return [rel for rel in SHARED if rel in names]
+    return [rel for rel in shared_files(entry or {}) if rel in names]
 
 
 def seal(repos, remote, dry_run):
@@ -48,19 +52,19 @@ def seal(repos, remote, dry_run):
         return 1
     failed = False
     for name in repos:
-        for rel in SHARED:
+        for rel in shared_files(repos[name]):
             if not (ROOT / name / rel).exists() or (ROOT / name / rel).read_bytes() != (ROOT / rel).read_bytes():
                 print(f'{name}/{rel}: shared tooling drift; run workspace.py sync', file=sys.stderr)
                 failed = True
     if failed:
         print('nothing sealed', file=sys.stderr)
         return 1
-    paths = ' | '.join(f'"{rel}"' for rel in SHARED)
+    paths = ' | '.join(f'"{rel}"' for rel in SHARED)  # root tooling sets the seal source
     source = jj(ROOT, 'log', '--no-graph', '-r', f'latest(::@- & files({paths}))',
                 '-T', 'commit_id.short() ++ " " ++ description.first_line()').strip()
     for name, entry in repos.items():
         repo = ROOT / name
-        rels = changed_shared(repo)
+        rels = changed_shared(repo, entry)
         if not rels:
             print(f'{name}: shared tooling already sealed')
         elif dry_run:
