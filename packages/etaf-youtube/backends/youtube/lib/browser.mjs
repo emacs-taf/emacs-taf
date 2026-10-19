@@ -103,3 +103,21 @@ export async function session({ login = false, timeout = 25000 } = {}) {
     };
   } catch (error) { cdp.close(); throw error; }
 }
+
+/** Sign out of YouTube by clearing the site's own storage in the browser. */
+export async function signOut({ timeout = 25000 } = {}) {
+  let targets;
+  try { targets = await channel.listTargets(); }
+  catch (error) { fail('deps', '受控浏览器未启动', 'M-x etaf-youtube-login'); }
+  const target = targets.find(t => t.type === 'page' && /^https:\/\/www\.youtube\.com\//.test(t.url));
+  if (!target) return { signed_in: false, state: 'already-out' };
+  const { cdp } = await channel.connectPage(null, target.id);
+  try {
+    await cdp.send('Storage.clearDataForOrigin', {
+      origin: ORIGIN,
+      storageTypes: 'cookies,local_storage,indexeddb,service_workers,cache_storage',
+    }, { timeoutMs: timeout });
+    await cdp.send('Page.navigate', { url: 'https://www.youtube.com/' }, { timeoutMs: timeout });
+  } finally { cdp.close?.(); }
+  return { signed_in: false, state: 'signed-out' };
+}

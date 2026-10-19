@@ -53,8 +53,8 @@ releases the session, its requests and its player.
 - `ffmpeg` and `ffplay` for video and sound.
 - Node.js for the backend bundled in `backends/youtube/`; it talks to the
   controlled Chrome page that keeps the account session. No external skill is
-  needed: sign in from Emacs with `M-x etaf-youtube-login` (and check with
-  `M-x etaf-youtube-account`).
+  needed: sign in from Emacs with `M-x etaf-youtube-login`, check with
+  `M-x etaf-youtube-account`, and sign out with `M-x etaf-youtube-logout`.
 
 ## Start
 

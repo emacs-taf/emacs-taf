@@ -11,7 +11,8 @@ project uses [Semantic Versioning](https://semver.org/).
 - `M-x etaf-youtube-login` signs in from Emacs: it opens the controlled browser,
   waits for the page to report a session, then reloads the open sessions;
   `M-x etaf-youtube-account` reports the account. The client runs the YouTube
-  backend bundled in `backends/youtube/` instead of calling `pi-skill`.
+  backend bundled in `backends/youtube/` instead of calling `pi-skill`, and
+  `M-x etaf-youtube-logout` clears this site's session in that browser.
 
 - A native YouTube client as one ETAF text application: home, Shorts,
   subscriptions, history, playlists, watch later, liked and live feeds;

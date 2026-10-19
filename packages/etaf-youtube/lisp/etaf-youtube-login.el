@@ -101,6 +101,27 @@ credential."
     nil))
 
 ;;;###autoload
+(defun etaf-youtube-logout (&optional model)
+  "Sign out of YouTube in the controlled browser.
+The bundled backend clears this site's cookies and storage, then reloads the
+open sessions so the signed-out account shows immediately."
+  (interactive)
+  (when (yes-or-no-p "退出 YouTube 登录（清除受控浏览器里的 YouTube 会话）？")
+    (etaf-youtube-service-call
+     (etaf-youtube--account-service model)
+     '("logout")
+     (lambda (result)
+       (if (eq 'ok (plist-get result :status))
+           (progn
+             (message "已退出 YouTube 登录")
+             (if model
+                 (condition-case nil (etaf-youtube-check model) (error nil))
+               (etaf-youtube--refresh-open-sessions)))
+         (message "退出失败：%s" (or (plist-get result :message) "后端没有返回原因"))))
+     'etaf-youtube-logout))
+  nil)
+
+;;;###autoload
 (defun etaf-youtube-account (&optional model)
   "Report the YouTube account the controlled browser is signed in to.
 MODEL selects a session's transport; without one the standalone transport is

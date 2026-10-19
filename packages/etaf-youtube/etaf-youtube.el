@@ -292,6 +292,10 @@
 ;; account for up to `etaf-youtube-login-timeout' seconds and reports the
 ;; signed-in name; the browser keeps the session, Emacs stores no credential.
 ;;
+;; Function: etaf-youtube-logout (&optional model)
+;; Ask for confirmation, then clear this site's cookies and storage in the
+;; controlled browser and reload the open sessions.
+;;
 ;; Function: etaf-youtube-account (&optional model)
 ;; Report the account the controlled browser is signed in to, or why not.
 ;;

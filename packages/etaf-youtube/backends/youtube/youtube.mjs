@@ -11,7 +11,7 @@ const usage = command => {
   const commands = command ? iface.commands.filter(x => x.name === command) : iface.commands;
   return `youtube — ${iface.summary}\n\n用法：node backends/youtube/youtube.mjs <命令> [参数] [--json] [--timeout 秒]\n\n${commands.map(x => `  ${x.usage || x.name}\n    ${x.summary}`).join('\n')}\n  help [命令]  查看用法\n\n首次使用：node backends/youtube/youtube.mjs login；检查：node backends/youtube/youtube.mjs check\n写入默认预览，--yes 提交，--dry-run 强制预览。verified=false 不可自动重发。\n`;
 };
-const specs = { check: {}, login: {}, feed: {}, search: { filter: 'string' }, browse: { params: 'string' },
+const specs = { check: {}, login: {}, logout: {}, feed: {}, search: { filter: 'string' }, browse: { params: 'string' },
   video: {}, comments: {}, more: {}, source: { quality: 'string' }, captions: { language: 'string' },
   action: { playlist: 'string', text: 'string' }, watch: { notify: 'bool' } };
 
@@ -21,7 +21,7 @@ async function main(argv) {
   if (!Object.hasOwn(specs, command)) fail('usage', `未知命令 ${command}`, 'node backends/youtube/youtube.mjs help');
   const { flags, positional } = parseFlags(argv.slice(1), specs[command], { skill: 'youtube', command });
   if (flags.help) { console.log(usage(command)); return; }
-  const needed = !['check', 'login', 'watch'].includes(command);
+  const needed = !['check', 'login', 'logout', 'watch'].includes(command);
   if (needed && !positional.length) fail('usage', '缺少参数', `node backends/youtube/youtube.mjs help ${command}`);
   if (command === 'action' && positional.length !== 2) fail('usage', '动作需要名称和目标', 'node backends/youtube/youtube.mjs help action');
   if (!['search', 'action'].includes(command) && positional.length > (needed ? 1 : 0)) fail('usage', '位置参数过多', `node backends/youtube/youtube.mjs help ${command}`);
@@ -42,6 +42,9 @@ async function main(argv) {
       const source = await import('./lib/source.mjs');
       result = command === 'source' ? await source.media(id, flags.quality || '720', timeout * 1000)
         : await source.caption(id, flags.language, '360', timeout * 1000);
+    } else if (command === 'logout') {
+      const browser = await import('./lib/browser.mjs');
+      result = await browser.signOut({ timeout: timeout * 1000 });
     } else if (command === 'action' && (!flags.yes || flags['dry-run'])) {
       result = await service.action(null, positional[0], positional[1], flags);
     } else {
