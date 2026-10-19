@@ -19,6 +19,7 @@
 (require 'etaf)
 (require 'etaf-ui)
 (require 'etaf-youtube-theme)
+(require 'etaf-youtube-login)
 (require 'etaf-youtube-model)
 (declare-function image-size "image.c" (spec &optional pixels frame))
 
@@ -397,9 +398,9 @@ renderer payloads use; anything else is zero."
                       :padding '((lh 0.5) (ch 1))
                       :on-press (lambda () (etaf-youtube-cycle-theme model))
            (etaf-ui-icon :name 'settings :set 'svg :color (plist-get colors :ink)))
-         (etaf-youtube-account :account (etaf-value account) :colors colors))))))
+         (etaf-youtube--account-avatar :account (etaf-value account) :colors colors))))))
 
-(etaf-define-component etaf-youtube-account (&key account colors)
+(etaf-define-component etaf-youtube--account-avatar (&key account colors)
   "Render a compact circular account avatar, or a sign-in hint."
   :render
   (if (and account (plist-get account :signed_in))
@@ -410,8 +411,8 @@ renderer payloads use; anything else is zero."
     (etaf-view
      (box :role 'button :tab-index 0 :padding-inline '(ch 1)
           :color (plist-get colors :link)
-          :help-echo "在浏览器中登录 YouTube 后重试"
-          :on-press (lambda () (message "运行 pi-skill youtube login 登录"))
+          :help-echo "在受控浏览器中登录 YouTube 后刷新"
+          :on-press (lambda () (etaf-youtube-login))
        (text "登录")))))
 
 (etaf-define-component etaf-youtube-sidebar (&key model colors columns active)

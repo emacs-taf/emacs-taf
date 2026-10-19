@@ -21,11 +21,34 @@
 (require 'json)
 (require 'subr-x)
 
-(defcustom etaf-youtube-program "pi-skill"
-  "Program that dispatches skill commands.
-The youtube skill is invoked as PROGRAM youtube COMMAND ... --json."
+(defcustom etaf-youtube-node-program "node"
+  "Node.js executable that runs the bundled backend."
   :type 'string
   :group 'etaf-youtube)
+
+(defcustom etaf-youtube-backend-directory
+  (expand-file-name "backends/youtube"
+                    (file-name-directory (or (locate-library "etaf-youtube")
+                                             load-file-name
+                                             buffer-file-name)))
+  "Directory holding this package's bundled YouTube backend.
+The backend speaks the versioned protocol 1 JSON interface and needs only
+Node.js; nothing here calls an external skill."
+  :type 'directory
+  :group 'etaf-youtube)
+
+(defcustom etaf-youtube-command nil
+  "Command prefix that runs the backend, or nil for the bundled one.
+A list replaces the whole prefix, which the public suite uses to inject a
+stand-in script."
+  :type '(repeat string)
+  :group 'etaf-youtube)
+
+(defun etaf-youtube--command ()
+  "Return the command prefix that runs the bundled backend."
+  (or etaf-youtube-command
+      (list etaf-youtube-node-program
+            (expand-file-name "youtube.mjs" etaf-youtube-backend-directory))))
 
 (defcustom etaf-youtube-request-timeout 95
   "Seconds before an unfinished skill request is cancelled.
@@ -175,8 +198,7 @@ Return the opaque call id."
       (etaf-youtube-service-cancel service key))
     (let* ((call (etaf-youtube--call--make :id id :key key :callback callback))
            (runner (etaf-youtube-service-runner service))
-           (argv (cons etaf-youtube-program
-                       (append (list "youtube") args (list "--json")))))
+           (argv (append (etaf-youtube--command) args (list "--json"))))
       (puthash id call (etaf-youtube-service-calls service))
       (setf (etaf-youtube--call-cancel call)
             (condition-case error

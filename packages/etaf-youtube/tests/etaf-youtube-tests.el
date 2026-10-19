@@ -51,9 +51,13 @@ Return PREDICATE's final value."
     (funcall predicate)))
 
 (defun etaf-youtube-tests--args (argv)
-  "Return ARGV's skill arguments, without the program and --json."
-  (cl-remove-if (lambda (argument) (equal argument "--json"))
-                (cdr (member "youtube" argv))))
+  "Return ARGV's backend arguments, without the command prefix and --json.
+The prefix is the program plus, when present, the bundled backend script."
+  (let* ((words (cl-remove-if (lambda (argument) (equal argument "--json")) argv))
+         (words (if (and (cdr words) (string-suffix-p ".mjs" (cadr words)))
+                    (cddr words)
+                  (cdr words))))
+    words))
 
 (defun etaf-youtube-tests--runner (fixtures &optional log)
   "Return a runner answering from FIXTURES and appending calls to LOG.
@@ -525,7 +529,7 @@ FIXTURES-SYM is bound to the fixture table and LOG-SYM to the call log."
 The fake skill is an executable script, so this exercises process creation,
 pipe draining, exit-status handling and JSON decoding without a browser."
   (let* ((service (etaf-youtube-service-create :timeout 10))
-         (etaf-youtube-program etaf-youtube-tests--fake-skill)
+         (etaf-youtube-command (list etaf-youtube-tests--fake-skill))
          (result nil))
     (etaf-youtube-service-call service '("check")
                                (lambda (value) (setq result value))
@@ -534,6 +538,21 @@ pipe draining, exit-status handling and JSON decoding without a browser."
     (should (eq 'ok (plist-get result :status)))
     (should (equal "Process Runner" (plist-get (plist-get result :value) :name)))
     (etaf-youtube-service-close service)))
+
+(ert-deftest etaf-youtube-login-reports-the-account-from-the-backend ()
+  "Signing in goes through the bundled backend and reloads the session.
+The fixture answers `check' with a signed-in account, so this covers the
+command wiring, the login-then-check order and the refresh without a browser."
+  (let* ((log (list nil))
+         (app (etaf-youtube-tests--app :log log)))
+    (etaf-youtube-login app)
+    (should (etaf-youtube-tests--wait
+             (lambda () (plist-get (plist-get (etaf-youtube-state app) :account) :name))))
+    (should (member '("login") (car log)))
+    (should (member '("check") (car log)))
+    (should (equal "测试用户"
+                   (plist-get (plist-get (etaf-youtube-state app) :account) :name)))
+    (etaf-youtube-destroy app)))
 
 (ert-deftest etaf-youtube-thumbnails-strip-signed-query ()
   "Signed YouTube thumbnail tokens are dropped before downloading.

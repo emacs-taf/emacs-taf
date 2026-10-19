@@ -1,0 +1,48 @@
+{
+  "summary": "读取和操作已登录的 YouTube：推荐、搜索、频道、播放列表、评论与播放源",
+  "useWhen": "用户要看 YouTube 推荐、搜索视频、查订阅和播放列表、读评论、取播放源，或明确要求点赞、订阅、保存和评论时使用。ETAF YouTube 客户端也使用此数据接口。",
+  "dryRun": true,
+  "probeUnknownCommand": true,
+  "dependsOn": [
+    {"skill": "cdp-page-control", "commands": ["launch", "eval", "targets"], "note": "复用 CDP 通道与浏览器 profile；不复制凭据"},
+    {"skill": "skill-interface", "note": "参数、输出、状态和通知原语"}
+  ],
+  "requires": [
+    {"kind": "runtime", "name": "node", "min": "22", "check": "node --version"},
+    {"kind": "binary", "name": "yt-dlp", "check": "yt-dlp --version", "install": "brew install yt-dlp", "note": "仅 source/captions 需要"},
+    {"kind": "binary", "name": "curl", "check": "curl --version", "note": "播放源线路探测与字幕"},
+    {"kind": "account", "name": "YouTube", "check": "pi-skill youtube check", "install": "pi-skill youtube login"}
+  ],
+  "tier": 1,
+  "entry": {
+    "path": "scripts/youtube.mjs"
+  },
+  "aliases": [
+    "youtube"
+  ],
+  "commands": [
+    {"name": "check", "summary": "真正请求账号菜单，网络失败与未登录分别报告"},
+    {"name": "login", "summary": "复用受控浏览器登录；缺页面时后台打开，登录完成后重跑"},
+    {"name": "feed", "usage": "feed <home|subscriptions|history|playlists|watch-later|liked|shorts|live>", "summary": "读取账号列表；next 是分页标记"},
+    {"name": "search", "usage": "search <关键词> [--filter all|videos|channels|playlists|live]", "summary": "搜索视频、频道或播放列表"},
+    {"name": "browse", "usage": "browse <频道ID|@handle|播放列表ID> [--params TAB_PARAMS]", "summary": "浏览频道或播放列表；切标签使用返回的 id 与 params"},
+    {"name": "video", "usage": "video <视频ID|链接>", "summary": "视频详情、点赞/订阅状态、推荐与评论入口"},
+    {"name": "comments", "usage": "comments <视频ID|链接>", "summary": "评论、排序与回复分页；requires_channel 表示账号尚需创建频道"},
+    {"name": "more", "usage": "more <next标记>", "summary": "读取下一页、评论回复或排序后的列表"},
+    {"name": "source", "usage": "source <视频ID|链接> [--quality 360|480|720|1080|1440|2160|best]", "summary": "只解析不下载；返回临时影音 URL、请求头、线路与字幕语言"},
+    {"name": "captions", "usage": "captions <视频ID|链接> --language <语言码>", "summary": "取带时间戳的字幕 cues；语言码来自 source"},
+    {"name": "action", "usage": "action <like|dislike|unrate|subscribe|unsubscribe|save|comment> <ID> [--playlist ID] [--text TEXT] [--yes]", "summary": "默认只预览；显式提交后回读，不自动重发", "destructive": true},
+    {"name": "watch", "usage": "watch [--notify]", "summary": "真验账号；正常安静退 0，异常非零，--notify 才推送异常"}
+  ],
+  "errors": [
+    "usage",
+    "deps",
+    "auth",
+    "notfound",
+    "blocked",
+    "timeout",
+    "external",
+    "internal"
+  ],
+  "helpListsCommands": true
+}

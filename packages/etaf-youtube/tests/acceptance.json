@@ -165,6 +165,11 @@
       "name": "etaf-youtube-thumbnail-disk-cache-survives-reopen",
       "file": "tests/etaf-youtube-tests.el",
       "purpose": "A cached thumbnail file survives a later session that reuses the same thumbnail directory."
+    },
+    {
+      "name": "etaf-youtube-login-reports-the-account-from-the-backend",
+      "file": "tests/etaf-youtube-tests.el",
+      "purpose": "Signing in through the bundled backend reports the account it found"
     }
   ]
 }

@@ -51,8 +51,10 @@ releases the session, its requests and its player.
   checkouts beside this repository (or `../etaf` and so on from a nested
   checkout).
 - `ffmpeg` and `ffplay` for video and sound.
-- The shared `youtube` skill available through `pi-skill`, plus its controlled
-  Chrome profile. See the skill's own documentation for the one-time login.
+- Node.js for the backend bundled in `backends/youtube/`; it talks to the
+  controlled Chrome page that keeps the account session. No external skill is
+  needed: sign in from Emacs with `M-x etaf-youtube-login` (and check with
+  `M-x etaf-youtube-account`).
 
 ## Start
 

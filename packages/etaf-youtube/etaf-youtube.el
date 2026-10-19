@@ -36,8 +36,8 @@
 ;; retried automatically; a comment on an account without a YouTube channel
 ;; reports the blocked state instead of pretending to succeed.
 ;;
-;; Two external programs matter.  `pi-skill' runs the youtube skill commands
-;; named by `etaf-youtube-program'; ffmpeg and ffplay decode the resolved
+;; Two external programs matter.  Node.js runs the bundled backend in
+;; `backends/youtube'; ffmpeg and ffplay decode the resolved
 ;; media through the ETAF native video Component.  Thumbnails download in the
 ;; background through `curl', honoring the proxy route the skill recorded.
 ;;
@@ -286,8 +286,26 @@
 ;; Variable: etaf-youtube-theme-mode
 ;; Appearance a new session uses, `dark' (default) or `light'.
 ;;
-;; Variable: etaf-youtube-program
-;; Program that dispatches skill commands, `"pi-skill"' by default.
+;; Function: etaf-youtube-login (&optional model)
+;; Sign in to YouTube in the controlled browser and refresh open sessions.
+;; Opens (or reuses) the page through the bundled backend, then polls the
+;; account for up to `etaf-youtube-login-timeout' seconds and reports the
+;; signed-in name; the browser keeps the session, Emacs stores no credential.
+;;
+;; Function: etaf-youtube-account (&optional model)
+;; Report the account the controlled browser is signed in to, or why not.
+;;
+;; Variable: etaf-youtube-node-program
+;; Node.js executable that runs the bundled backend, `"node"' by default.
+;;
+;; Variable: etaf-youtube-backend-directory
+;; Directory of the bundled YouTube backend (`backends/youtube' in this
+;; repository); the backend speaks the versioned protocol 1 JSON interface
+;; and needs only Node.js, so no external skill is involved.
+;;
+;; Variable: etaf-youtube-command
+;; Command prefix overriding the bundled backend, nil by default; the public
+;; suite injects a stand-in script through it.
 ;;
 ;; Variable: etaf-youtube-request-timeout
 ;; Seconds before an unfinished skill request is cancelled, 95 by default.
@@ -317,6 +335,7 @@
 
 (require 'etaf-youtube-app)
 (require 'etaf-youtube-images)
+(require 'etaf-youtube-login)
 (require 'etaf-youtube-model)
 (require 'etaf-youtube-service)
 (require 'etaf-youtube-store)
