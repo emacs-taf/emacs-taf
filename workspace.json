@@ -93,7 +93,7 @@
     },
     "etaf-md-preview": {
       "url": "https://github.com/emacs-taf/etaf-md-preview.git",
-      "revision": "b68d3250c5dfdb99bda3b1484f0eae757e6005f9",
+      "revision": "2e61fc8868350e26d493a3f70160acde03c0527c",
       "branch": "main",
       "role": "application"
     },
@@ -117,13 +117,13 @@
     },
     "etaf-reader": {
       "url": "https://github.com/emacs-taf/etaf-reader.git",
-      "revision": "0aaf15e49b6fd336a91f929f582e278ac4fcb81e",
+      "revision": "fb6008e017b0c4c23c144afe4ce27b199859cd3e",
       "branch": "main",
       "role": "application"
     },
     "etaf-rss": {
       "url": "https://github.com/emacs-taf/etaf-rss.git",
-      "revision": "23fa4b9e881ab8a4773f8d304d3f69f2047eb6ec",
+      "revision": "2dcf7bee597a6d8bd3692eba1baad98df7565dbd",
       "branch": "main",
       "role": "application"
     },
@@ -153,7 +153,7 @@
     },
     "etaf-weread": {
       "url": "https://github.com/emacs-taf/etaf-weread.git",
-      "revision": "40b6c2fda09e2bd660a97c5f23866c1380a2156f",
+      "revision": "5d1a3083e25921676a57a07bfa0ca79cde3cfdb0",
       "branch": "main",
       "role": "application"
     },
@@ -177,7 +177,7 @@
     },
     "etaf-tanks": {
       "url": "https://github.com/emacs-taf/etaf-tanks.git",
-      "revision": "a7089ea9e9831cc0a2f1ef1732c26ae2915f3eca",
+      "revision": "38f4dd244d397decc0a3e95d3f03737a2b76e318",
       "branch": "main",
       "role": "game"
     },
