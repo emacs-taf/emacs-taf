@@ -93,7 +93,7 @@
     },
     "etaf-md-preview": {
       "url": "https://github.com/emacs-taf/etaf-md-preview.git",
-      "revision": "360bb1b6a8b54ef39fabd346353bc3fb86008e7d",
+      "revision": "b68d3250c5dfdb99bda3b1484f0eae757e6005f9",
       "branch": "main",
       "role": "application"
     },
@@ -135,7 +135,7 @@
     },
     "etaf-telega": {
       "url": "https://github.com/emacs-taf/etaf-telega.git",
-      "revision": "5c4ea46566e6d50d20104235fda33846d9ef7d41",
+      "revision": "d81b76c484ca1df8d2e8ad025e4c662ef31ea6a4",
       "branch": "main",
       "role": "application"
     },
@@ -171,7 +171,7 @@
     },
     "etaf-solitaire": {
       "url": "https://github.com/emacs-taf/etaf-solitaire.git",
-      "revision": "089d12dd5950dc7db4931f27ae8f4be9ef8086b1",
+      "revision": "599b2c1476314a5d4b35c4c043c09f114828f8dc",
       "branch": "main",
       "role": "game"
     },
