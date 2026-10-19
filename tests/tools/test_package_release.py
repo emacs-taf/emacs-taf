@@ -342,7 +342,9 @@ class PackageReleaseStageTests(unittest.TestCase):
                 else:
                     for row in rows:
                         row["emacs"] = "28.2"
-                self.assertIn("every target", self.stage(success=False).stderr)
+                # b983b8a reworded the refusal; the check is the same gate.
+                self.assertIn("recorded targets through both installation paths",
+                              self.stage(success=False).stderr)
 
     def test_publisher_refuses_partial_evidence_before_building_or_connecting(self):
         self.report["installations"].pop()
