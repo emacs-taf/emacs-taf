@@ -3,37 +3,37 @@
   "repositories": {
     "ecss": {
       "url": "https://github.com/emacs-taf/ecss.git",
-      "revision": "c432d608394b5400afa906d6075e758b0d68651d",
+      "revision": "846e1bedb9b139d8a4bfe100046988f5f4b155a2",
       "branch": "main",
       "role": "framework"
     },
     "ekp": {
       "url": "https://github.com/emacs-taf/ekp.git",
-      "revision": "428867db6c6d63f1ff9ef6143ba7ff2457a05fc0",
+      "revision": "c3389d683d166bfc19a7988275a1cc70ba34f70d",
       "branch": "main",
       "role": "framework"
     },
     "ebox": {
       "url": "https://github.com/emacs-taf/ebox.git",
-      "revision": "ebd5f7d01cc19c1ad6525c7e4078d5dfd2f639ed",
+      "revision": "11d3243807d619c0d26b4b4cebb438487ea3f46a",
       "branch": "main",
       "role": "framework"
     },
     "etaf": {
       "url": "https://github.com/emacs-taf/etaf.git",
-      "revision": "faf548338b97d8cfbbde18e697787e1a9a7db740",
+      "revision": "eeee5876d0b53d8106147959eae0d22b7fb01b61",
       "branch": "main",
       "role": "framework"
     },
     "etaf-ui": {
       "url": "https://github.com/emacs-taf/etaf-ui.git",
-      "revision": "698a14630b9d23ad181ee66f3450e7fc67d19a40",
+      "revision": "3d789a77fc220b464b475df2ef834d57f4ad3938",
       "branch": "main",
       "role": "framework"
     },
     "etaf-gamekit": {
       "url": "https://github.com/emacs-taf/etaf-gamekit.git",
-      "revision": "5aa05109864ac33064f81822b6e5440fb4601c04",
+      "revision": "2c8b9437e422e6fb605c3ee1b473eafbdb1f6102",
       "branch": "main",
       "role": "framework"
     },
@@ -45,13 +45,13 @@
     },
     "etaf-desktop": {
       "url": "https://github.com/emacs-taf/etaf-desktop.git",
-      "revision": "0834f4a483b5f3820a7146d14b3a7c078171ff3e",
+      "revision": "11e70d8948a5bc1ec5206aa00c5e0a47162bfa83",
       "branch": "main",
       "role": "framework"
     },
     "etaf-manual": {
       "url": "https://github.com/emacs-taf/etaf-manual.git",
-      "revision": "0c84053d00898da3faa59dc966520192a23065e4",
+      "revision": "fbfc88767b3398f71d2694d50ec17cc53716da9f",
       "branch": "main",
       "role": "framework"
     },
@@ -63,127 +63,127 @@
     },
     "etaf-playground": {
       "url": "https://github.com/emacs-taf/etaf-playground.git",
-      "revision": "1e65ba64743efc31545ec481894d668a2651049a",
+      "revision": "b5cde3392d18b38c72ba06baea04202016295050",
       "branch": "main",
       "role": "framework"
     },
     "etaf-algo-lab": {
       "url": "https://github.com/emacs-taf/etaf-algo-lab.git",
-      "revision": "5ec3f2a47c14b96ba49632da819f291b94c96964",
+      "revision": "647659340eccc0f40fab7c01af645288f483bd33",
       "branch": "main",
       "role": "application"
     },
     "etaf-ascii-video": {
       "url": "https://github.com/emacs-taf/etaf-ascii-video.git",
-      "revision": "5a2499147220d0166a40e470591724eae26e543c",
+      "revision": "a1a4ffa5758a4a61aab99555431d1270b2d13273",
       "branch": "main",
       "role": "application"
     },
     "etaf-bili": {
       "url": "https://github.com/emacs-taf/etaf-bili.git",
-      "revision": "8a7d4266995e828eccc6989ce14fdaec00d7ff27",
+      "revision": "8a9d53555592362d461c641487685fca834750ad",
       "branch": "main",
       "role": "application"
     },
     "etaf-browser": {
       "url": null,
-      "revision": "7d86149e08868d40c584e9f35e7f386b9f4cd894",
+      "revision": "2a0ad665b363001adb675059ff65d1d133a1fdb3",
       "branch": "main",
       "role": "application"
     },
     "etaf-md-preview": {
       "url": "https://github.com/emacs-taf/etaf-md-preview.git",
-      "revision": "32e1ccf62d6f0a3a6407a96bb3962edb63a73ae3",
+      "revision": "03a5b7920decdd06fc4fb6938212b84962d7c1e3",
       "branch": "main",
       "role": "application"
     },
     "etaf-miniflux": {
       "url": null,
-      "revision": "701f5f93005fd9133bf9728756319c120802cc0c",
+      "revision": "d9adefe54b34f91e4a5e5285d1dd10b9c0079bc4",
       "branch": "main",
       "role": "application"
     },
     "etaf-ncm": {
       "url": "https://github.com/emacs-taf/etaf-ncm.git",
-      "revision": "a4a88e1215f967cf6e1081bdb0f4c8efb338b49a",
+      "revision": "d96aedec955bdd1c81353392b81b5dd011e3c471",
       "branch": "main",
       "role": "application"
     },
     "etaf-pi": {
       "url": "https://github.com/emacs-taf/etaf-pi.git",
-      "revision": "44eaa648cc48410c33c47dfc14b6267818da2dd0",
+      "revision": "0e731d7c1b9a51cd9e596810d8f215e884bb907d",
       "branch": "main",
       "role": "application"
     },
     "etaf-reader": {
       "url": "https://github.com/emacs-taf/etaf-reader.git",
-      "revision": "1003c46d0622e39f54c72f6c46afd2577c5fb6b6",
+      "revision": "c87fc798878fbb0a8b41b85f833c40e5c8342bf4",
       "branch": "main",
       "role": "application"
     },
     "etaf-rss": {
       "url": "https://github.com/emacs-taf/etaf-rss.git",
-      "revision": "4618a7f0f3f5cf89a3aa8afef302354484443b54",
+      "revision": "23fa4b9e881ab8a4773f8d304d3f69f2047eb6ec",
       "branch": "main",
       "role": "application"
     },
     "etaf-screensaver": {
       "url": "https://github.com/emacs-taf/etaf-screensaver.git",
-      "revision": "b6fd959836bf04fe23ecb2ad48b64f0cff10ee2b",
+      "revision": "c28f9053c07d122201838ca08ff49c036fb5886f",
       "branch": "main",
       "role": "application"
     },
     "etaf-telega": {
       "url": "https://github.com/emacs-taf/etaf-telega.git",
-      "revision": "4fe72439b55e42ebe37a16f0415cc66dd77f4e3d",
+      "revision": "5c4ea46566e6d50d20104235fda33846d9ef7d41",
       "branch": "main",
       "role": "application"
     },
     "etaf-video-player": {
       "url": "https://github.com/emacs-taf/etaf-video-player.git",
-      "revision": "56ad6721ad7c4f47e9505adf45919d6d4109f5a5",
+      "revision": "fe4b798049ac63cb9aee63dad7782c120e452295",
       "branch": "main",
       "role": "application"
     },
     "etaf-video-studio": {
       "url": "https://github.com/emacs-taf/etaf-video-studio.git",
-      "revision": "69c3e6ca8e1a597112eab95dc286c3aa21ebf717",
+      "revision": "29fdc7c232df5928ce9eb89a64bcab57fffc5571",
       "branch": "main",
       "role": "application"
     },
     "etaf-weread": {
       "url": "https://github.com/emacs-taf/etaf-weread.git",
-      "revision": "06843c81d443f6744ae9ec7ce268843946e06cd9",
+      "revision": "40b6c2fda09e2bd660a97c5f23866c1380a2156f",
       "branch": "main",
       "role": "application"
     },
     "etaf-youtube": {
       "url": "https://github.com/emacs-taf/etaf-youtube.git",
-      "revision": "0278d23cf1eb30826b9a8b73ae30468ff3e48b0b",
+      "revision": "93f919381bfb2c9e20cc5d964945abe51713559a",
       "branch": "main",
       "role": "application"
     },
     "etaf-salvage": {
       "url": "https://github.com/emacs-taf/etaf-salvage.git",
-      "revision": "2e6dc7796c66c119d1e46d0ebcd9e3f9530a26e0",
+      "revision": "9bd8f2369cd064351216dfc60bf62300c434e2e6",
       "branch": "main",
       "role": "game"
     },
     "etaf-solitaire": {
       "url": "https://github.com/emacs-taf/etaf-solitaire.git",
-      "revision": "1d18580f96c241300e7e7f352405f5b480cdce35",
+      "revision": "089d12dd5950dc7db4931f27ae8f4be9ef8086b1",
       "branch": "main",
       "role": "game"
     },
     "etaf-tanks": {
       "url": "https://github.com/emacs-taf/etaf-tanks.git",
-      "revision": "6f99d5236199d83223de37dc476bc2ca328af5a6",
+      "revision": "3f4e89b9cb34ec6aaddf309b08950ebdc7903f9c",
       "branch": "main",
       "role": "game"
     },
     "etaf-xiangqi": {
       "url": "https://github.com/emacs-taf/etaf-xiangqi.git",
-      "revision": "0c58da8115044db91491b6c8a26a401e0a09da22",
+      "revision": "95c0e65eb3d041dd074273c1683423b52387b4f1",
       "branch": "main",
       "role": "game"
     }
