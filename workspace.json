@@ -153,7 +153,7 @@
     },
     "etaf-weread": {
       "url": "https://github.com/emacs-taf/etaf-weread.git",
-      "revision": "81dcdf80ba27933cfc9c96b8105e04994e0a426f",
+      "revision": "486321a6226e104c2f2e04968167084c66382adf",
       "branch": "main",
       "role": "application"
     },
