@@ -111,7 +111,7 @@
     },
     "etaf-rss": {
       "url": "https://github.com/emacs-taf/etaf-rss.git",
-      "revision": "3df2fdf9974bca542f2b549311e81a489bdcfef0",
+      "revision": "01de7d3d6c77377f6e21070986b96f86ee9f3241",
       "branch": "main",
       "role": "application"
     },
