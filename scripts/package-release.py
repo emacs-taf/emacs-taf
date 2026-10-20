@@ -33,6 +33,13 @@ import package_archive
 ROOT = Path(__file__).resolve().parents[1]
 
 
+# An install smoke compiles the target's dependencies from source; a large
+# package (telega pulls about two hundred files from MELPA) needs more than
+# five minutes on a quiet machine, and this gate decides correctness, not
+# latency.
+INSTALL_TIMEOUT = 900
+
+
 def checkpoint_sources(document):
     """Return every pinned repository in the workspace registry.
 
@@ -346,7 +353,8 @@ def verify(directory, emacs, targets, direct=False, standard_archives=None, scop
                     started = time.monotonic()
                     log = directory / f"installation-{target}-{'direct' if direct_mode else 'entry'}.log"
                     stdout, stderr = run([emacs, "-Q", "--batch", "-l", str(smoke)],
-                                         cwd=profile, env=env, timeout=300, log_file=log)
+                                         cwd=profile, env=env,
+                                         timeout=INSTALL_TIMEOUT, log_file=log)
                     text = (stdout + b"\n" + stderr).decode(errors="replace")
                     diagnostics = scan_diagnostics(text, names)
                     if diagnostics:
