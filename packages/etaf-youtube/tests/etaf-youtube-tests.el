@@ -862,5 +862,35 @@ instead of deleting the target it just found."
                                               (get-buffer etaf-youtube-buffer-name))))
           (etaf-youtube-close))))))
 
+;; Requires etaf-app canvas painting: before it the canvas kept Emacs's
+;; default face around the View.
+(ert-deftest etaf-youtube-open-canvas-follows-the-appearance ()
+  "The canvas around the View uses the application's appearance and follows it."
+  (etaf-youtube-tests--with-app app _fixtures _log
+    (let ((etaf-youtube-buffer-name " *youtube-canvas-test*"))
+      (save-window-excursion
+        (unwind-protect
+            (cl-letf (((symbol-function 'etaf-youtube-create)
+                       (lambda (&rest _options) app)))
+              (let* ((buffer (etaf-youtube-open))
+                     (canvas
+                      (lambda ()
+                        (with-current-buffer buffer
+                          (plist-get (car (last (alist-get 'default
+                                                           face-remapping-alist)))
+                                     :background))))
+                     (expected
+                      (lambda ()
+                        (etaf-youtube-color
+                         :bg (etaf-value (plist-get app :theme-mode)))))
+                     (before (funcall canvas)))
+                (should (equal before (funcall expected)))
+                (etaf-youtube-cycle-theme app)
+                (etaf-runtime-flush (etaf-runtime-for-buffer buffer))
+                (let ((after (funcall canvas)))
+                  (should-not (equal after before))
+                  (should (equal after (funcall expected))))))
+          (etaf-youtube-close))))))
+
 (provide 'etaf-youtube-tests)
 ;;; etaf-youtube-tests.el ends here

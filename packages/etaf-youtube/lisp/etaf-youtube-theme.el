@@ -13,6 +13,7 @@
 ;;; Code:
 
 (require 'etaf)
+(require 'etaf-ui)
 
 (define-error 'etaf-youtube-error "YouTube application error")
 
@@ -85,37 +86,22 @@ same colors as the application's own Views."
          (warn-border (if dark "#6B5423" "#E0C48A"))
          (info-bg (if dark "#14232F" "#E4F0FA"))
          (info-border (if dark "#2C4E66" "#A8CBE6")))
-    (list
-     :ink ink :paper bg :panel panel :line line :muted muted
-     :accent accent :accent-soft accent-soft
-     :ui-fg ink :ui-bg bg :ui-border line :ui-muted-fg muted
-     :ui-disabled-fg muted :ui-disabled-bg panel :ui-disabled-border line
-     :ui-accent accent :ui-accent-fg "#FFFFFF" :ui-accent-soft-bg accent-soft
-     :ui-button-primary-fg "#FFFFFF" :ui-button-primary-bg accent
-     :ui-button-secondary-fg ink :ui-button-secondary-bg panel
-     :ui-button-secondary-hover-bg (etaf-youtube-color :hover mode)
-     :ui-button-ghost-fg ink
-     :ui-button-ghost-hover-bg (etaf-youtube-color :hover mode)
-     :ui-search-bg panel :ui-search-fg ink
-     :ui-success-fg ok :ui-success-bg ok-bg :ui-success-border ok-border
-     :ui-danger-fg danger :ui-danger-bg danger-bg :ui-danger-border danger-border
-     :ui-warning-fg warn :ui-warning-bg warn-bg :ui-warning-border warn-border
-     :ui-info-fg link :ui-info-bg info-bg :ui-info-border info-border
-     :ui-panel-fg ink :ui-panel-bg panel :ui-panel-border line
-     :ui-divider-bg line
-     :ui-progress-track panel2 :ui-progress-value accent
-     :ui-table-border line :ui-table-selected-fg accent
-     :ui-table-selected-bg accent-soft
-     :ui-shell-bg panel :ui-shell-fg ink :ui-shell-muted-fg muted
-     :ui-shell-item-fg muted :ui-shell-item-minimized-fg muted
-     :ui-window-bg bg :ui-window-fg ink :ui-window-border line
-     :ui-window-title-bg panel :ui-window-title-fg muted
-     :ui-window-title-active-fg ink
-     :ui-picker-item-bg panel :ui-picker-item-fg ink
-     :ui-picker-item-muted-fg muted
-     :ui-pagination-muted-fg muted
-     :ui-data-grid-error-fg danger
-     :ui-checkbox-enabled-fg ink :ui-checkbox-disabled-fg muted)))
+    (append
+     (list :ink ink :paper bg :panel panel :line line :muted muted
+           :accent accent :accent-soft accent-soft
+           :ui-button-secondary-fg ink :ui-button-secondary-bg panel
+           :ui-button-secondary-hover-bg (etaf-youtube-color :hover mode)
+           :ui-button-ghost-fg ink
+           :ui-button-ghost-hover-bg (etaf-youtube-color :hover mode)
+           :ui-search-bg panel :ui-search-fg ink)
+     (etaf-ui-theme-tokens
+      (list :bg bg :fg ink :panel panel :track panel2 :border line
+            :muted muted :dim muted :accent accent :accent-fg "#FFFFFF"
+            :accent-soft accent-soft
+            :success ok :success-bg ok-bg :success-border ok-border
+            :warning warn :warning-bg warn-bg :warning-border warn-border
+            :danger danger :danger-bg danger-bg :danger-border danger-border
+            :info link :info-bg info-bg :info-border info-border)))))
 
 (defun etaf-youtube-colors (mode)
   "Return MODE's common palette as one plist for direct style use.

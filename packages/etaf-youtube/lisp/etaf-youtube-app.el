@@ -4,11 +4,11 @@
 
 ;;; Commentary:
 ;;
-;; The application layer owns the buffer, the keymap and the mount lifecycle.
-;; Closing the buffer releases the Runtime and the model, so reopening starts
-;; clean and no request, timer or store connection leaks.  The renderer's
-;; minor-mode map owns RET, q, Escape, Tab, `?', the arrows and M-g; this map
-;; only adds keys the application really owns.
+;; The application opens through `etaf-app-open', which owns the buffer,
+;; its canvas and the mount lifecycle; the shell View declares the keys the
+;; application owns as root `:keys'.  Closing the buffer releases the Runtime
+;; and the model, so reopening starts clean and no request, timer or store
+;; connection leaks.
 
 ;;; Code:
 
@@ -22,12 +22,9 @@
   :type 'string
   :group 'etaf-youtube)
 
-(defvar-local etaf-youtube--model nil
-  "Model shown by the current buffer's runtime.")
-
 (defun etaf-youtube--current-model ()
   "Return the model of the current buffer, or signal `user-error'."
-  (or etaf-youtube--model
+  (or (etaf-app-state)
       (user-error "Current buffer is not an etaf-youtube session")))
 
 (defun etaf-youtube-focus-search ()
@@ -140,47 +137,34 @@
 (defun etaf-youtube-open ()
   "Mount the application in its own buffer and return that buffer."
   (interactive)
-  (let ((buffer (get-buffer-create etaf-youtube-buffer-name)))
-    (with-current-buffer buffer
-      (unless etaf-youtube--model
-        (setq-local etaf-youtube--model (etaf-youtube-create)))
-      (setf (plist-get etaf-youtube--model :buffer) buffer)
-      (setq-local mode-line-format nil
-                  header-line-format nil
-                  auto-hscroll-mode nil
-                  truncate-lines t
-                  ;; The point caret is not the application's selection
-                  ;; indicator; focused controls paint their own cue.  Native
-                  ;; text input saves and restores this value while a field
-                  ;; is edited, so typing keeps its own caret.
-                  cursor-type nil)
-      ;; A canvas row that fills the window must not end in Emacs's
-      ;; truncation glyph, which shows as a stray `$' at the right edge.
-      (setq-local buffer-display-table
-                  (let ((table (copy-sequence (or standard-display-table
-                                                  (make-display-table)))))
-                    (set-display-table-slot table 'truncation ?\s)
-                    table)))
-    (switch-to-buffer buffer)
-    (set-window-hscroll (selected-window) 0)
-    (set-window-vscroll (selected-window) 0 t)
-    (set-window-start (selected-window) (point-min) t)
-    ;; Let ETAF measure and follow the usable window viewport, including
-    ;; the reserved truncation column.  Raw window pixels are not a canvas.
-    (etaf-mount buffer (etaf-youtube-view (buffer-local-value 'etaf-youtube--model
-                                                            buffer)))
-    (etaf-runtime-flush (etaf-runtime-for-buffer buffer))
-    buffer))
+  (if-let* ((buffer (etaf-app-buffer etaf-youtube-buffer-name)))
+      (progn (pop-to-buffer-same-window buffer) buffer)
+    (let* ((model (etaf-youtube-create))
+           (mode (plist-get model :theme-mode))
+           (buffer nil))
+      (setq model (plist-put model :buffer
+                             (get-buffer-create etaf-youtube-buffer-name)))
+      ;; The canvas outside the View follows the application's own
+      ;; appearance, which is independent of the Emacs theme.  The point
+      ;; caret is not the selection indicator: focused controls paint their
+      ;; own cue, and native text input brings its own caret while editing.
+      (setq buffer
+            (etaf-app-open etaf-youtube-buffer-name (etaf-youtube-view model)
+                           :state model
+                           :background (lambda ()
+                                         (etaf-youtube-color :bg (etaf-value mode)))
+                           :foreground (lambda ()
+                                         (etaf-youtube-color :ink (etaf-value mode)))
+                           :cursor nil))
+      (etaf-runtime-flush (etaf-runtime-for-buffer buffer))
+      buffer)))
 
 ;;;###autoload
 (defun etaf-youtube-close ()
   "Unmount the application buffer and kill it."
   (interactive)
-  (let ((buffer (get-buffer etaf-youtube-buffer-name)))
-    (when (and buffer (buffer-live-p buffer))
-      (when-let* ((runtime (etaf-runtime-for-buffer buffer)))
-        (etaf-unmount runtime))
-      (kill-buffer buffer))))
+  (when-let* ((buffer (etaf-app-buffer etaf-youtube-buffer-name)))
+    (etaf-app-close buffer)))
 
 (provide 'etaf-youtube-app)
 ;;; etaf-youtube-app.el ends here

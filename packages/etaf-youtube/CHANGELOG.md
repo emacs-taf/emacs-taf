@@ -6,6 +6,17 @@ project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- The client runs on the ETAF application runtime and requires etaf 0.3.0
+  and etaf-ui 0.2.0. Running `M-x etaf-youtube-open` again shows the open
+  session instead of mounting it a second time.
+
+### Fixed
+
+- The window area around the interface now uses the client's dark or light
+  appearance and follows `d`, instead of keeping the Emacs theme's background.
+
 ### Added
 
 - `M-x etaf-youtube-login` signs in from Emacs: it opens the controlled browser,

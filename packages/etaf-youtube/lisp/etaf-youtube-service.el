@@ -20,6 +20,7 @@
 (require 'cl-lib)
 (require 'json)
 (require 'subr-x)
+(require 'etaf)
 
 (defcustom etaf-youtube-node-program "node"
   "Node.js executable that runs the bundled backend."
@@ -125,53 +126,21 @@ RESULT is the raw runner plist `:exit', `:stdout' and `:stderr'."
 
 (defun etaf-youtube--run-process (argv callback)
   "Start ARGV and call CALLBACK with its `:exit', `:stdout' and `:stderr'.
-Return a cancel function that terminates the process.  This is the default
-runner; the public suite replaces it."
-  (let ((program (executable-find (car argv))))
-    (if (null program)
-        (progn
-          (funcall callback (list :exit 127 :stdout ""
-                                  :error (format "%s is not on PATH"
-                                                 (car argv))))
-          #'ignore)
-      (let* ((out (generate-new-buffer " *etaf-youtube stdout*"))
-             (err (generate-new-buffer " *etaf-youtube stderr*"))
-             (process (make-process
-                       :name "etaf-youtube"
-                       :command (cons program (cdr argv))
-                       :buffer out
-                       :stderr err
-                       :coding 'utf-8
-                       :connection-type 'pipe
-                       :noquery t))
-             (done nil))
-        ;; A stderr pipe needs its own sentinel, or Emacs queries about the
-        ;; unread output when the process exits.
-        (when-let* ((err-process (get-buffer-process err)))
-          (set-process-sentinel err-process #'ignore))
-        (set-process-sentinel
-         process
-         (lambda (proc _event)
-           (when (and (not done)
-                      (memq (process-status proc) '(exit signal failed)))
-             (setq done t)
-             ;; Drain both pipes before reading, or the tail of the output is
-             ;; still in flight when the sentinel runs.
-             (accept-process-output proc 0)
-             (when-let* ((err-process (get-buffer-process err)))
-               (accept-process-output err-process 0))
-             (let ((result (list :exit (process-exit-status proc)
-                                 :stdout (with-current-buffer out (buffer-string))
-                                 :stderr (with-current-buffer err (buffer-string)))))
-               (when (buffer-live-p out) (kill-buffer out))
-               (when (buffer-live-p err) (kill-buffer err))
-               (funcall callback result)))))
-        (lambda ()
-          (when (process-live-p process)
-            (setq done t)
-            (delete-process process)
-            (when (buffer-live-p out) (kill-buffer out))
-            (when (buffer-live-p err) (kill-buffer err))))))))
+A program that cannot start reports `:error' instead.  Return a cancel
+function that stops the process.  This is the default runner; the public
+suite replaces it."
+  (let ((job (etaf-process-run
+              argv :name "etaf-youtube"
+              :callback
+              (lambda (result)
+                (funcall callback
+                         (if (eq (plist-get result :status) 'failed)
+                             (list :exit 127 :stdout ""
+                                   :error (plist-get result :message))
+                           (list :exit (plist-get result :exit)
+                                 :stdout (or (plist-get result :output) "")
+                                 :stderr (plist-get result :stderr))))))))
+    (lambda () (etaf-process-cancel job))))
 
 (cl-defun etaf-youtube-service-create (&key runner timeout)
   "Create a skill transport.

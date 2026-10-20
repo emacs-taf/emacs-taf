@@ -69,68 +69,47 @@ state containing only the route and probe time."
             (plist-get (json-parse-buffer :object-type 'plist) :proxy))
         (error nil)))))
 
+(defconst etaf-youtube--proxy-variables
+  '("http_proxy" "https_proxy" "all_proxy" "no_proxy"
+    "HTTP_PROXY" "HTTPS_PROXY" "ALL_PROXY" "NO_PROXY")
+  "Environment variables unset for curl, which receives its route explicitly.")
+
 (defun etaf-youtube--curl-attempt (url file proxy callback)
   "Download URL into FILE through PROXY and call CALLBACK with error and status.
 PROXY may be nil for a direct request.  Status is the HTTP code, or zero
 on transport failure.  Return a cancel function."
-  (let* ((environment
-          (cl-remove-if
-           (lambda (entry)
-             (let ((case-fold-search t))
-               (string-match-p "\\`\\(https?_proxy\\|all_proxy\\|no_proxy\\)=" entry)))
-           process-environment))
-         (program (executable-find "curl")))
-    (if (null program)
-        (progn (funcall callback "curl is not on PATH") #'ignore)
-      (let* ((out (generate-new-buffer " *etaf-youtube curl*"))
-             (err (generate-new-buffer " *etaf-youtube curl err*"))
-             (process (let ((process-environment environment))
-                        (make-process
-                         :name "etaf-youtube-image"
-                         :command (append (list program "-fsSL" "--max-time"
-                                                (number-to-string etaf-youtube-image-timeout)
-                                                "--connect-timeout" "10")
-                                          (list "--noproxy" (if proxy "" "*")
-                                                "--proxy" (or proxy "")
-                                                "--write-out" "%{http_code}"
-                                                "-o" file url))
-                         :buffer out
-                         :stderr err
-                         :coding 'binary
-                         :connection-type 'pipe
-                         :noquery t)))
-             (done nil))
-        (when-let* ((err-process (get-buffer-process err)))
-          (set-process-sentinel err-process #'ignore))
-        (set-process-sentinel
-         process
-         (lambda (proc _event)
-           (when (and (not done)
-                      (memq (process-status proc) '(exit signal failed)))
-             (setq done t)
-             (while (accept-process-output proc 0))
-             (when-let* ((err-process (get-buffer-process err)))
-               (while (accept-process-output err-process 0)))
-             (let ((status (process-exit-status proc))
-                   (http-status (string-to-number
-                                 (with-current-buffer out (buffer-string))))
-                   (message (string-trim (with-current-buffer err (buffer-string)))))
-               (when (buffer-live-p out) (kill-buffer out))
-               (when (buffer-live-p err) (kill-buffer err))
-               (if (and (= status 0) (file-exists-p file)
-                        (> (or (nth 7 (file-attributes file)) 0) 0))
-                   (funcall callback nil http-status)
-                 (funcall callback
-                          (if (string-empty-p message)
-                              (format "curl exited with status %d" status)
-                            message)
-                          http-status))))))
-        (lambda ()
-          (when (process-live-p process)
-            (setq done t)
-            (delete-process process)
-            (when (buffer-live-p out) (kill-buffer out))
-            (when (buffer-live-p err) (kill-buffer err))))))))
+  (let ((job (etaf-process-run
+              (list "curl" "-fsSL" "--max-time"
+                    (number-to-string etaf-youtube-image-timeout)
+                    "--connect-timeout" "10"
+                    "--noproxy" (if proxy "" "*")
+                    "--proxy" (or proxy "")
+                    "--write-out" "%{http_code}"
+                    "-o" file url)
+              :name "etaf-youtube-image"
+              ;; An entry without `=' removes the variable for the child.
+              :environment etaf-youtube--proxy-variables
+              :callback
+              (lambda (result)
+                (let ((http-status (string-to-number
+                                    (or (plist-get result :output) "")))
+                      (message (string-trim (or (plist-get result :stderr) ""))))
+                  (cond
+                   ((and (eq (plist-get result :status) 'exit)
+                         (eql (plist-get result :exit) 0)
+                         (file-exists-p file)
+                         (> (or (file-attribute-size (file-attributes file)) 0) 0))
+                    (funcall callback nil http-status))
+                   ((eq (plist-get result :status) 'failed)
+                    (funcall callback (plist-get result :message) 0))
+                   (t
+                    (funcall callback
+                             (if (string-empty-p message)
+                                 (format "curl exited with status %s"
+                                         (plist-get result :exit))
+                               message)
+                             http-status))))))))
+    (lambda () (etaf-process-cancel job))))
 
 (defun etaf-youtube--default-fetcher (images url file callback)
   "Download URL into FILE for IMAGES and call CALLBACK with nil or an error.

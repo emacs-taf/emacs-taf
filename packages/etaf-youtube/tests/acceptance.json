@@ -162,6 +162,11 @@
       "purpose": "The application buffer keeps the native point caret off so focused controls paint their own cue; text fields keep their own caret."
     },
     {
+      "name": "etaf-youtube-open-canvas-follows-the-appearance",
+      "file": "tests/etaf-youtube-tests.el",
+      "purpose": "The canvas around the View uses the application's dark or light appearance and follows a switch."
+    },
+    {
       "name": "etaf-youtube-thumbnail-disk-cache-survives-reopen",
       "file": "tests/etaf-youtube-tests.el",
       "purpose": "A cached thumbnail file survives a later session that reuses the same thumbnail directory."
