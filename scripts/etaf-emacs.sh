@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# etaf-isolated-emacs.sh --- start an isolated Emacs for manual ETAF installation.
+# etaf-emacs.sh --- start a throwaway Emacs for manual ETAF installation.
 #
 # Creates a disposable profile, points package.el at ETAF/GNU/NonGNU/MELPA and
 # fetches their package lists in the background; the *Packages* buffer opens
@@ -12,9 +12,9 @@ set -euo pipefail
 
 usage() {
     cat <<'USAGE'
-etaf-isolated-emacs --- try ETAF in a throwaway Emacs
+etaf-emacs --- try ETAF in a throwaway Emacs
 
-Usage: etaf-isolated-emacs [-h|--help]
+Usage: etaf-emacs [-h|--help]
 
 Starts Emacs with a fresh profile (-Q, no init file), points package.el at
 GNU/NonGNU/MELPA and the ETAF archive, and opens *Packages* once the archives
@@ -34,7 +34,7 @@ case ${1:-} in
     *) printf 'unexpected argument: %s\n' "$1" >&2; usage >&2; exit 2 ;;
 esac
 
-PROFILE=${ETAF_ISOLATED_PROFILE:-$(mktemp -d "${TMPDIR:-/tmp}/etaf-isolated-emacs.XXXXXX")}
+PROFILE=${ETAF_ISOLATED_PROFILE:-$(mktemp -d "${TMPDIR:-/tmp}/etaf-emacs.XXXXXX")}
 ARCHIVE=${ETAF_INSTALL_ARCHIVE:-https://etaf.top/packages/}
 APP=${ETAF_EMACS_APP:-/Applications/Emacs.app}
 
