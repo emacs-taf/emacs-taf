@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Changed
+
+- `etaf-install` 0.2.5: the installer payload changed with the new package
+  versions, so the archive serves it under a new version instead of
+  overwriting 0.2.4.
+
 ### Added
 
 - `M-x etaf-install-manage` lists installed and available ETAF targets and
