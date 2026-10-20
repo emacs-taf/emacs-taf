@@ -65,16 +65,14 @@ Emacs 包会自动安装，但原生 `telega-server` 不会：先安装 TDLib，
 | [etaf-ncm](https://github.com/emacs-taf/etaf-ncm) | 网易云音乐播放器：曲库浏览、播放控制、歌词与队列 | etaf、etaf-ui、ebox |
 | [etaf-weread](https://github.com/emacs-taf/etaf-weread) | 微信读书客户端：书架、笔记本、划线、书店搜索与统计 | etaf、etaf-ui、etaf-db、ebox |
 | [etaf-md-preview](https://github.com/emacs-taf/etaf-md-preview) | Markdown 阅读视图：居中版心、标题、表格、提示块、代码与媒体卡片 | etaf、etaf-ui、ebox |
-| [etaf-rss](https://github.com/emacs-taf/etaf-rss) | RSS 阅读器：订阅、分组、未读与收藏、阅读栏、搜索与 OPML | etaf、etaf-ui、ebox |
+| [etaf-rss](https://github.com/emacs-taf/etaf-rss) | RSS 阅读器：订阅、分组、未读与收藏、阅读栏、搜索与 OPML，可读本地存储或 Miniflux 服务器 | etaf、etaf-ui、ebox |
 | [etaf-reader](https://github.com/emacs-taf/etaf-reader) | 本地电子书阅读器：EPUB/TXT/Markdown/HTML/FB2/PDF 导入、翻页阅读、标注与进度 | etaf、etaf-ui、etaf-db、ebox |
 | [etaf-pi](https://github.com/emacs-taf/etaf-pi) | 原生 Pi 代理客户端：流式对话、工具输出、会话恢复与多行输入 | etaf、etaf-ui、ebox |
 | [etaf-telega](https://github.com/emacs-taf/etaf-telega) | 基于 Telega TDLib 的 Telegram 客户端：会话、实时消息、就地编辑与消息操作 | etaf、etaf-ui、ebox |
-| [etaf-ascii-video](https://github.com/emacs-taf/etaf-ascii-video) | 在 Emacs buffer 里用纯字符播放视频与 HTTP(S) 流 | etaf、etaf-ui、ebox |
-| [etaf-video-player](https://github.com/emacs-taf/etaf-video-player) | 在 Emacs 里以清晰图像帧加声音播放本地视频与流 | etaf、etaf-ui、ebox |
+| [etaf-video-player](https://github.com/emacs-taf/etaf-video-player) | 在 Emacs 里播放本地视频与流：图像帧、密度字符或真彩半块，带声音 | etaf、etaf-ui、ebox |
 | [etaf-video-studio](https://github.com/emacs-taf/etaf-video-studio) | 通过 video-project 技能录制、剪辑并发布软件教程：录屏、非破坏性剪辑、后台预览/导出与两步发布 | etaf、etaf-ui、ebox |
 | [etaf-bili](https://github.com/emacs-taf/etaf-bili) | B 站客户端：热门、排行榜与搜索，可在 buffer 内直接播放 | etaf、etaf-ui、ebox |
 | [etaf-youtube](https://github.com/emacs-taf/etaf-youtube) | YouTube 客户端：账号订阅流、搜索、频道、播放列表与画布内播放 | etaf、etaf-ui、etaf-db、ebox |
-| [etaf-miniflux](https://github.com/emacs-taf/etaf-miniflux) | 自建 Miniflux 订阅源的客户端 | etaf、etaf-ui、ebox |
 | [etaf-browser](https://github.com/emacs-taf/etaf-browser) | 带地址栏与状态栏外壳的浏览器客户端，界面画在 ETAF 画布里 | etaf、etaf-ui |
 | [etaf-algo-lab](https://github.com/emacs-taf/etaf-algo-lab) | 在 Emacs 里观看、操控并比较算法运行 | etaf、etaf-ui、ebox |
 | [etaf-screensaver](https://github.com/emacs-taf/etaf-screensaver) | 空闲屏保：纯画布动画、输入唤回、组合播放与适配的外部录制动画 | etaf、ebox |

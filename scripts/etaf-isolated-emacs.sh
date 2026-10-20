@@ -10,6 +10,30 @@
 
 set -euo pipefail
 
+usage() {
+    cat <<'USAGE'
+etaf-isolated-emacs --- try ETAF in a throwaway Emacs
+
+Usage: etaf-isolated-emacs [-h|--help]
+
+Starts Emacs with a fresh profile (-Q, no init file), points package.el at
+GNU/NonGNU/MELPA and the ETAF archive, and opens *Packages* once the archives
+are downloaded.  Choose etaf-install there, then M-x etaf-install-manage.
+Nothing installed here touches your own configuration.
+
+Environment:
+  ETAF_ISOLATED_PROFILE  reuse this profile directory instead of a new one
+  ETAF_INSTALL_ARCHIVE   archive URL (default https://etaf.top/packages/)
+  ETAF_EMACS_APP         Emacs.app path (default /Applications/Emacs.app)
+USAGE
+}
+
+case ${1:-} in
+    -h|--help|help) usage; exit 0 ;;
+    '') ;;
+    *) printf 'unexpected argument: %s\n' "$1" >&2; usage >&2; exit 2 ;;
+esac
+
 PROFILE=${ETAF_ISOLATED_PROFILE:-$(mktemp -d "${TMPDIR:-/tmp}/etaf-isolated-emacs.XXXXXX")}
 ARCHIVE=${ETAF_INSTALL_ARCHIVE:-https://etaf.top/packages/}
 APP=${ETAF_EMACS_APP:-/Applications/Emacs.app}

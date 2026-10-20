@@ -15,13 +15,13 @@
     },
     "ebox": {
       "url": "https://github.com/emacs-taf/ebox.git",
-      "revision": "722b2d71162beb65f258a3b4c28a28338c4453c8",
+      "revision": "f035dfeb6270a96f4be53afb53471d058ddeb8ec",
       "branch": "main",
       "role": "framework"
     },
     "etaf": {
       "url": "https://github.com/emacs-taf/etaf.git",
-      "revision": "54ad44779c4f2d3a86d90443dd7fd6a819841ec8",
+      "revision": "1260843f1677c777daa7198ad6d8256b50fa9d45",
       "branch": "main",
       "role": "framework"
     },
@@ -73,12 +73,6 @@
       "branch": "main",
       "role": "application"
     },
-    "etaf-ascii-video": {
-      "url": "https://github.com/emacs-taf/etaf-ascii-video.git",
-      "revision": "4a52358050c0f4db21783dd89938437adf649335",
-      "branch": "main",
-      "role": "application"
-    },
     "etaf-bili": {
       "url": "https://github.com/emacs-taf/etaf-bili.git",
       "revision": "c4ff2e3c24e5ecfa9663d90eaaa751477e82f406",
@@ -94,12 +88,6 @@
     "etaf-md-preview": {
       "url": "https://github.com/emacs-taf/etaf-md-preview.git",
       "revision": "8f1792379df6e3d0097d65b0b8f6afa86173df79",
-      "branch": "main",
-      "role": "application"
-    },
-    "etaf-miniflux": {
-      "url": null,
-      "revision": "d9adefe54b34f91e4a5e5285d1dd10b9c0079bc4",
       "branch": "main",
       "role": "application"
     },
@@ -123,7 +111,7 @@
     },
     "etaf-rss": {
       "url": "https://github.com/emacs-taf/etaf-rss.git",
-      "revision": "cb83166817dfe9e12c14ce7dac0372e30de801db",
+      "revision": "3df2fdf9974bca542f2b549311e81a489bdcfef0",
       "branch": "main",
       "role": "application"
     },
@@ -141,7 +129,7 @@
     },
     "etaf-video-player": {
       "url": "https://github.com/emacs-taf/etaf-video-player.git",
-      "revision": "a9873ca29febecb5718cc5c7db329e205604d429",
+      "revision": "e7478ed20dfb0082bc3abd981fb457ea4c666373",
       "branch": "main",
       "role": "application"
     },
