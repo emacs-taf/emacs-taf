@@ -968,9 +968,13 @@ def main():
                      "diagnostic": diagnostic, "diagnostic_kind": kind}
                     for case in group for phase, count in phases for sample in range(count)]
             configuration = output / (label + "-configuration.json")
+            # A run needs only the files that define its own scenarios: loading
+            # every package's file would pull in unrelated packages, and a
+            # package that cannot load would pollute the run's library record.
+            run_entries = sorted({case["source"] for group in groups for case in group})
             write_json(configuration, {"output": str(output / (label + ".json")), "mode": args.mode,
                                        "run_id": uuid.uuid4().hex,
-                                       "scenario_files": list(map(str, entries)), "load_paths": list(map(str, paths)),
+                                       "scenario_files": run_entries, "load_paths": list(map(str, paths)),
                                        "code_roots": list(map(str, paths)), "jobs": jobs, "timeout": args.timeout,
                                        "require_foreground": settings["focus_policy"] == "foreground" and not diagnostic,
                                        "foreground": bool(args.foreground and kind == "latency" and number == 1)})
