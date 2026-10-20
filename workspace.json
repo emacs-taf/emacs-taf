@@ -15,13 +15,13 @@
     },
     "ebox": {
       "url": "https://github.com/emacs-taf/ebox.git",
-      "revision": "f035dfeb6270a96f4be53afb53471d058ddeb8ec",
+      "revision": "9079014e6b359a06e69d8cb500393871f6158d5d",
       "branch": "main",
       "role": "framework"
     },
     "etaf": {
       "url": "https://github.com/emacs-taf/etaf.git",
-      "revision": "1260843f1677c777daa7198ad6d8256b50fa9d45",
+      "revision": "5c91c1543c5b1440dd238c7beb0892a3af643304",
       "branch": "main",
       "role": "framework"
     },
