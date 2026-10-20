@@ -16,6 +16,21 @@ COMMAND = ROOT / "scripts/performance.py"
 FIXTURE = ROOT / "tests/fixtures/performance-scenarios.el"
 
 
+class BrokenScenarioFile(unittest.TestCase):
+    def test_a_scenario_file_that_cannot_load_is_reported_and_skipped(self):
+        with tempfile.TemporaryDirectory() as directory:
+            broken = Path(directory) / "blocked-scenarios.el"
+            broken.write_text('(error "Blocked provider is not merged yet")\n')
+            process = subprocess.run(
+                [sys.executable, str(COMMAND), "list", "--root", str(ROOT),
+                 "--scenario-file", str(FIXTURE), "--scenario-file", str(broken)],
+                capture_output=True, text=True, timeout=90)
+            self.assertEqual(0, process.returncode, process.stdout + process.stderr)
+            self.assertIn("fixture.counter", process.stdout)
+            self.assertIn(str(broken), process.stderr)
+            self.assertIn("Blocked provider is not merged yet", process.stderr)
+
+
 class ExitPublicationCommand(unittest.TestCase):
     def test_final_report_published_between_read_and_exit_poll_is_preserved(self):
         launcher = '''import runpy, subprocess, sys

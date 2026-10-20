@@ -48,6 +48,11 @@
 (defvar comp-eln-to-el-h)
 
 (defvar taf-benchmark--registry nil)
+
+(defvar taf-benchmark--scenario-failures nil
+  "Scenario files that could not load, as (:file PATH :error TEXT) plists.
+A package that cannot load contributes no scenarios; the catalog reports it
+instead of hiding every other package's scenarios.")
 (defvar taf-benchmark--scenario-cache (make-hash-table :test #'equal)
   "Registered scenarios per already loaded scenario entry set.
 GUI runs schedule one configuration per latency and diagnostic pass in the
@@ -558,7 +563,8 @@ cached evidence so lazy library loading is visible after an operation."
         (with-temp-buffer
           (insert-file-contents file)
           (json-parse-buffer :object-type 'plist :array-type 'list :null-object nil :false-object nil)))
-  (setq taf-benchmark--registry nil taf-benchmark--loaded-before (taf-benchmark--files)
+  (setq taf-benchmark--registry nil taf-benchmark--scenario-failures nil
+        taf-benchmark--loaded-before (taf-benchmark--files)
         taf-benchmark--library-history nil taf-benchmark--library-history-length nil
         taf-benchmark--runtime-libraries [] taf-benchmark--unmapped-native-libraries [])
   (dolist (directory (plist-get taf-benchmark--configuration :load_paths))
@@ -568,7 +574,15 @@ cached evidence so lazy library loading is visible after an operation."
          (cached (gethash identity taf-benchmark--scenario-cache)))
     (if cached
         (setq taf-benchmark--registry (copy-sequence cached))
-      (dolist (source sources) (taf-benchmark-load-scenarios source))
+      (dolist (source sources)
+        (condition-case problem
+            (taf-benchmark-load-scenarios source)
+          (error
+           (push (list :file source
+                       :error (error-message-string problem))
+                 taf-benchmark--scenario-failures)
+           (message "Scenario file skipped: %s: %s" source
+                    (error-message-string problem)))))
       (puthash identity (copy-sequence taf-benchmark--registry)
                taf-benchmark--scenario-cache))))
 
@@ -591,7 +605,9 @@ through ETAF's authoring-tool boundary; fixtures dispose their Runtimes."
   (taf-benchmark--load-configuration configuration-file)
   (taf-benchmark--json-write
    (plist-get taf-benchmark--configuration :output)
-   (vconcat (mapcar (lambda (entry)
+   (list :failures (vconcat (reverse taf-benchmark--scenario-failures))
+         :cases
+         (vconcat (mapcar (lambda (entry)
                      (let ((spec (cdr entry)))
                        (list :id (car entry) :source (plist-get spec :source)
                              :version (or (plist-get spec :version) 1)
@@ -600,8 +616,8 @@ through ETAF's authoring-tool boundary; fixtures dispose their Runtimes."
                              :impact (symbol-name (or (plist-get spec :impact) 'unspecified))
                              :required_providers (vconcat (mapcar #'symbol-name (plist-get spec :required-providers)))
                              :isolation (symbol-name (or (plist-get spec :isolation) 'fresh))
-                             :description (plist-get spec :description))))
-                   (reverse taf-benchmark--registry)))))
+                                  :description (plist-get spec :description))))
+                   (reverse taf-benchmark--registry))))))
 
 (defun taf-benchmark-probe (configuration-file)
   "Record the existing server and loaded libraries without mounting a scenario."

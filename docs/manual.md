@@ -400,7 +400,10 @@ Each sample times `:invoke` (the operation) and the following forced redisplay
 allocates, excluding the measurement's own. Timed samples run unobserved; a
 twin uses a second, untimed pass from a snapshot of the buffer. The
 scenario files load from their byte-compiled copies when those are current,
-because applications run compiled code. The
+because applications run compiled code.  A scenario file that cannot load, such
+as a package whose provider is not merged yet, contributes no scenarios and is
+named on stderr with its error; the other packages' scenarios still run, so one
+blocked package no longer hides the catalog. The
 scenario's `:gate` plist selects a class; a trailing numeric id component is the
 size, which `rows` uses as the row count unless `:rows` is given:
 

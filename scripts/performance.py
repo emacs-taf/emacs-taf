@@ -195,6 +195,9 @@ def native_preflight(args, paths, directory):
 
 
 def catalog(args, entries, paths, directory):
+    """Return (SCENARIOS, SKIPPED) for the selected scenario files.
+    SKIPPED names each scenario file that could not load, with its error, so a
+    package that cannot load reports itself instead of hiding the catalog."""
     output = directory / "catalog.json"
     configuration = directory / "catalog-configuration.json"
     write_json(configuration, {"output": str(output), "scenario_files": list(map(str, entries)),
@@ -205,7 +208,10 @@ def catalog(args, entries, paths, directory):
     (directory / "catalog.log").write_text(result.stdout + result.stderr, encoding="utf-8")
     if result.returncode or not output.exists():
         raise ValueError(f"Scenario catalog failed; see {directory / 'catalog.log'}")
-    return read_json(output)
+    catalogued = read_json(output)
+    for failure in catalogued.get("failures", []):
+        print(f"WARNING: scenario file skipped: {failure['file']}: {failure['error']}", file=sys.stderr)
+    return catalogued.get("cases", []), catalogued.get("failures", [])
 
 
 def percentile(values, fraction):
@@ -893,7 +899,7 @@ def main():
         parser.error("No benchmarks/performance-scenarios.el entries found")
     if args.command == "list":
         with tempfile.TemporaryDirectory(prefix="taf-perf-catalog-") as directory:
-            for case in catalog(args, entries, paths, Path(directory)):
+            for case in catalog(args, entries, paths, Path(directory))[0]:
                 if any(fnmatch.fnmatchcase(case["id"], pattern) for pattern in (args.scenario or ["*"])):
                     print(f"{case['id']:40} {','.join(case['modes']):10} {case['budget_ms']:5}ms {case['description']}")
         return 0
@@ -910,7 +916,7 @@ def main():
     if any(output.iterdir()):
         parser.error("Output directory must be empty; evidence is never overwritten")
     try:
-        descriptors = [case for case in catalog(args, entries, paths, output)
+        descriptors = [case for case in catalog(args, entries, paths, output)[0]
                        if args.mode in case["modes"] and any(fnmatch.fnmatchcase(case["id"], p) for p in args.scenario)]
     except (OSError, ValueError, subprocess.SubprocessError) as failure:
         report = {"schema": 1, "status": "unverified", "valid": False, "acceptance_eligible": False,
