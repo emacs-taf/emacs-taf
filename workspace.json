@@ -45,7 +45,7 @@
     },
     "etaf-desktop": {
       "url": "https://github.com/emacs-taf/etaf-desktop.git",
-      "revision": "79b60f712f519392032fece5c120dd19e13f3e06",
+      "revision": "73cc27540438048cbb61922e8459572c0459321b",
       "branch": "main",
       "role": "framework"
     },
