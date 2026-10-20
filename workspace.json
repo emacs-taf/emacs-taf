@@ -81,7 +81,7 @@
     },
     "etaf-bili": {
       "url": "https://github.com/emacs-taf/etaf-bili.git",
-      "revision": "0e27accd5095f9cf59777c26e499928f83a95283",
+      "revision": "c4ff2e3c24e5ecfa9663d90eaaa751477e82f406",
       "branch": "main",
       "role": "application"
     },
