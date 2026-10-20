@@ -17,6 +17,9 @@
 
 ### Fixed
 
+- The ETAF Packages table paints its key summary in the header strip instead of
+  right-aligning it on the mode line, where a frame narrower than the summary
+  pushed the keys off the right edge; `etaf-install` is 0.2.4.
 - `etaf-install` 0.2.1 reports a missing runtime tool with its first remedy
   and no longer overwrites it with a "ready" message.  `etaf-install-manage`
   echoes the remedy in the selected-target line and `?` opens the full doctor.

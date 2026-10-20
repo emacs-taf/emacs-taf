@@ -1,7 +1,7 @@
 ;;; -*- lexical-binding: t; -*-
 ;;; etaf-install.el --- Install ETAF with the Emacs package manager
 
-;; Version: 0.2.3
+;; Version: 0.2.4
 ;; Package-Requires: ((emacs "29.1"))
 ;; URL: https://github.com/emacs-taf/emacs-taf
 ;; Keywords: convenience
@@ -639,12 +639,20 @@ installed.  With NO-CONFIRM, skip the prompt."
          (title " ETAF Packages  ")
          (summary (format "%d targets · %d installed · %d updates"
                           (length statuses) installed updates))
-         (keys "i install · u update · U update all · d remove · RET open · ? doctor · g refresh · l list-packages · q quit")
-         (padding (max 2 (- (window-width) (length title) (length summary)
-                            (length keys) 2))))
-    (concat title (propertize summary 'face 'shadow)
-            (make-string padding ?\s)
-            (propertize keys 'face 'shadow) " ")))
+         (padding (max 2 (- (window-width) (length title) (length summary) 2))))
+    (concat title (propertize summary 'face 'shadow) (make-string padding ?\s))))
+
+(defconst etaf-install--manage-keys
+  (list (concat "i install · u update · U update all · d remove · RET open")
+        (concat "? doctor · g refresh · l list-packages · q quit"))
+  "Key summary painted above the ETAF Packages table.
+It lives in the header strip instead of the mode line so a narrow frame never
+clips the keys off the right edge.")
+
+(defconst etaf-install--manage-header-lines 8
+  "Lines reserved for the header strip.
+The title paints taller than a frame line, so the strip keeps one line of
+slack for it and one for the blank line above the key summary.")
 
 (define-derived-mode etaf-install--manage-header-mode special-mode "ETAF Header"
   "Major mode for the ETAF Packages header buffer."
@@ -664,7 +672,9 @@ installed.  With NO-CONFIRM, skip the prompt."
           (erase-buffer)
           (insert (etaf-install--manage-header-line) "\n"
                   (propertize "Install, update, remove and open ETAF targets · package.el owns dependencies and byte compilation" 'face 'shadow) "\n"
-                  (propertize "Remove deletes package files only; app data, logins and caches stay." 'face 'shadow)))))))
+                  (propertize "Remove deletes package files only; app data, logins and caches stay." 'face 'shadow) "\n\n"
+                  (mapconcat (lambda (line) (propertize line 'face 'shadow))
+                             etaf-install--manage-keys "\n")))))))
 
 (defun etaf-install--manage-refresh-from-header ()
   "Refresh archives from the header window."
@@ -826,9 +836,12 @@ installed.  With NO-CONFIRM, skip the prompt."
       (when (and (not noninteractive)
                  table-window
                  (>= (window-height table-window) 8)
-                 (>= (frame-height) 12))
+                 (>= (frame-height) 14))
         (let* ((first-window table-window)
-               (other-window (split-window first-window (- (frame-height) 4) 'above))
+               (other-window (split-window
+                              first-window
+                              (- (frame-height) etaf-install--manage-header-lines)
+                              'above))
                (header-window (if (< (window-height first-window) (window-height other-window))
                                   first-window other-window))
                (table-window (if (< (window-height first-window) (window-height other-window))

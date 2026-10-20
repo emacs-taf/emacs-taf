@@ -25,7 +25,9 @@ gallery is the default):
 
 Afterward, use `M-x etaf-install`; installed targets reopen offline. Use
 `M-x etaf-install-manage` to see installed and available versions, update,
-remove or open targets, and read the doctor; `M-x list-packages` remains the
+remove or open targets, and read the doctor; its header strip lists the keys
+(`i` install, `u` update, `U` update all, `d` remove, `RET` open, `?` doctor,
+`g` refresh, `l` list-packages, `q` quit). `M-x list-packages` remains the
 advanced package menu. Package.el owns dependency installation, local byte
 compilation, updates and removal. No Git, Python, system compiler, Pi or
 replacement Emacs configuration is required.
