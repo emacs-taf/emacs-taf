@@ -67,6 +67,16 @@ elisp=$(cat <<ELISP
                                   "melpa.org" "etaf.top")))
               (assoc-delete-all "no_proxy" url-proxy-services)))
   (package-initialize)
+  ;; Installing from a source archive makes package.el byte-compile in the main
+  ;; thread, and the stock 800 kB GC threshold thrashes while it does: etaf-ui
+  ;; took 8.2s with a 2.0s freeze, 6.4s with a 1.1s one.  A normal init raises
+  ;; it as well.
+  (setq gc-cons-threshold (* 256 1024 1024))
+  ;; Native-compiling the ~100 files an ETAF install brings in ran for minutes
+  ;; afterwards and kept the session unresponsive.  This is a throwaway trial
+  ;; profile, so it runs the byte-code the install already produced; delete this
+  ;; line to compile natively.
+  (setq native-comp-jit-compilation nil)
   ;; List the packages once every download reported back, or whatever arrived if
   ;; one never does; listing without NO-FETCH would download everything again.
   (when (boundp 'package--post-download-archives-hook)
