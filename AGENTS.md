@@ -602,11 +602,12 @@ These are green in batch while broken in a real session:
   refs and cached values; data access belongs before mounting or inside commands
   and events.
 - The renderer's minor-mode map owns `SPC`, `S-SPC`, `DEL`, `C-v`, `M-v`, `RET`,
-  wheel and `n`/`q`. An application replacing them installs a buffer-local
-  `emulation-mode-map-alists` entry keyed by the buffer-local session variable (a
-  wrong or void key silently disables the whole map); `RET` dispatches between
-  the application action and `etaf-activate` so focused controls keep working.
-  Check with `(key-binding (kbd KEY))` in the application buffer.
+  wheel and `n`/`q`. An application does not install its own mode map: its keys
+  are the root Host's `:keys` (`(KEY COMMAND LABEL)`), which outrank the buffer
+  keymap and stay inert during a native input session. A sequence cannot start
+  with a printable key, `RET` in an application's own list must keep focused
+  controls activating, and help reads the same labels. Verify by driving the
+  documented keys through `execute-kbd-macro`, never by calling the command.
 - `(setf (plist-get plist :key) value)` only writes in place when the key exists;
   create every hot field with the session, or use `plist-put`.
 - A hand-written `'(.body . nil)` reads as the symbol `.body`, not
