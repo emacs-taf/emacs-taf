@@ -27,13 +27,13 @@
     },
     "etaf-ui": {
       "url": "https://github.com/emacs-taf/etaf-ui.git",
-      "revision": "87e8f89dc2ffd32020f8eacb34f1bbfd4d51fc40",
+      "revision": "7c90895f961c7246ad76c8506e2dfb12b3c57e5b",
       "branch": "main",
       "role": "framework"
     },
     "etaf-gamekit": {
       "url": "https://github.com/emacs-taf/etaf-gamekit.git",
-      "revision": "9decfb59e12794ee82e8e46867b24f5f9d644632",
+      "revision": "94f1863fa03269347dc3514620fb705632bb4239",
       "branch": "main",
       "role": "framework"
     },
@@ -69,13 +69,13 @@
     },
     "etaf-algo-lab": {
       "url": "https://github.com/emacs-taf/etaf-algo-lab.git",
-      "revision": "647659340eccc0f40fab7c01af645288f483bd33",
+      "revision": "279fdbb7e0a0bfce45805ba852ba474583921f64",
       "branch": "main",
       "role": "application"
     },
     "etaf-ascii-video": {
       "url": "https://github.com/emacs-taf/etaf-ascii-video.git",
-      "revision": "a1a4ffa5758a4a61aab99555431d1270b2d13273",
+      "revision": "4a52358050c0f4db21783dd89938437adf649335",
       "branch": "main",
       "role": "application"
     },
@@ -93,7 +93,7 @@
     },
     "etaf-md-preview": {
       "url": "https://github.com/emacs-taf/etaf-md-preview.git",
-      "revision": "2e61fc8868350e26d493a3f70160acde03c0527c",
+      "revision": "8f1792379df6e3d0097d65b0b8f6afa86173df79",
       "branch": "main",
       "role": "application"
     },
@@ -105,61 +105,61 @@
     },
     "etaf-ncm": {
       "url": "https://github.com/emacs-taf/etaf-ncm.git",
-      "revision": "d96aedec955bdd1c81353392b81b5dd011e3c471",
+      "revision": "21dc8ab3ee068c3ebb5b018336797ab650ac3fa5",
       "branch": "main",
       "role": "application"
     },
     "etaf-pi": {
       "url": "https://github.com/emacs-taf/etaf-pi.git",
-      "revision": "7d64e4ec00ab35d2bd4cea97924044a7a0e75651",
+      "revision": "9db951a05989608fa8add68139d5215b9a125a6d",
       "branch": "main",
       "role": "application"
     },
     "etaf-reader": {
       "url": "https://github.com/emacs-taf/etaf-reader.git",
-      "revision": "fb6008e017b0c4c23c144afe4ce27b199859cd3e",
+      "revision": "7c1b0d2b0f3b621b3ac0686c2e0e3b15791df785",
       "branch": "main",
       "role": "application"
     },
     "etaf-rss": {
       "url": "https://github.com/emacs-taf/etaf-rss.git",
-      "revision": "2dcf7bee597a6d8bd3692eba1baad98df7565dbd",
+      "revision": "cb83166817dfe9e12c14ce7dac0372e30de801db",
       "branch": "main",
       "role": "application"
     },
     "etaf-screensaver": {
       "url": "https://github.com/emacs-taf/etaf-screensaver.git",
-      "revision": "f740ae2ec5446ea35a4176a2a14e3edd5e6082dd",
+      "revision": "4e6a74af064928a42a6c0c1db7b97226699c02a5",
       "branch": "main",
       "role": "application"
     },
     "etaf-telega": {
       "url": "https://github.com/emacs-taf/etaf-telega.git",
-      "revision": "b90b83505db473bb6e0e31f17b4babd415c57eb7",
+      "revision": "c9242fa6e58a2296d7f17b40a1899dd956e0f205",
       "branch": "main",
       "role": "application"
     },
     "etaf-video-player": {
       "url": "https://github.com/emacs-taf/etaf-video-player.git",
-      "revision": "bf2b820dd78dfe79351d3b96d84283b398a0911a",
+      "revision": "a9873ca29febecb5718cc5c7db329e205604d429",
       "branch": "main",
       "role": "application"
     },
     "etaf-video-studio": {
       "url": "https://github.com/emacs-taf/etaf-video-studio.git",
-      "revision": "29fdc7c232df5928ce9eb89a64bcab57fffc5571",
+      "revision": "3a3471cfa6f90ed98d9e5424e5bf53d6709941c3",
       "branch": "main",
       "role": "application"
     },
     "etaf-weread": {
       "url": "https://github.com/emacs-taf/etaf-weread.git",
-      "revision": "5d1a3083e25921676a57a07bfa0ca79cde3cfdb0",
+      "revision": "81dcdf80ba27933cfc9c96b8105e04994e0a426f",
       "branch": "main",
       "role": "application"
     },
     "etaf-youtube": {
       "url": "https://github.com/emacs-taf/etaf-youtube.git",
-      "revision": "bb1df27101bf2981a6b3989355f7b6c0c5a5d630",
+      "revision": "d775fbfb34402769f40b35f9245231cdb65541d4",
       "branch": "main",
       "role": "application"
     },
