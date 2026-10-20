@@ -15,7 +15,7 @@
     },
     "ebox": {
       "url": "https://github.com/emacs-taf/ebox.git",
-      "revision": "9fd7fb2525b442bed689f93c0241a77b97f8bde6",
+      "revision": "722b2d71162beb65f258a3b4c28a28338c4453c8",
       "branch": "main",
       "role": "framework"
     },
