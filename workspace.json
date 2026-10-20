@@ -177,7 +177,7 @@
     },
     "etaf-tanks": {
       "url": "https://github.com/emacs-taf/etaf-tanks.git",
-      "revision": "38f4dd244d397decc0a3e95d3f03737a2b76e318",
+      "revision": "178603ed2ae728de94f5f6768ae7984ca491378c",
       "branch": "main",
       "role": "game"
     },
