@@ -183,7 +183,7 @@
     },
     "maillist": {
       "url": "https://github.com/emacs-taf/maillist.git",
-      "revision": "09a057549f476db8773b48ca47c9c83220861bf2",
+      "revision": "06ebee8cd466493866e922c43a7e59b7fc8b546e",
       "branch": "main",
       "role": "application"
     },
