@@ -114,10 +114,11 @@ table names the framework repositories each one uses:
 
 ### Games
 
-Game applications are sibling checkouts too. They build on
+Game applications are sibling checkouts too. Most build on
 [etaf-gamekit](https://github.com/emacs-taf/etaf-gamekit) for game definitions,
 independent instances, actions and backend adapters, and keep their rules,
-presentation and resources in their own repositories:
+presentation and resources in their own repositories. Pure-canvas games such
+as Super Mario need only ETAF and its component catalog:
 
 | Game | Description | Backend |
 | --- | --- | --- |
@@ -125,6 +126,7 @@ presentation and resources in their own repositories:
 | [etaf-salvage](https://github.com/emacs-taf/etaf-salvage) | Salvage Station: real-time exploration and extraction | Godot |
 | [etaf-tanks](https://github.com/emacs-taf/etaf-tanks) | Iron Tide: real-time tank battle with a native arena | Godot |
 | [etaf-xiangqi](https://github.com/emacs-taf/etaf-xiangqi) | Chu He: xiangqi (Chinese chess) against the computer or hot-seat | OpenSpiel |
+| [etaf-mario](https://github.com/emacs-taf/etaf-mario) | Super Mario: four-stage text platformer built from character sprites, with items and enemies | ETAF canvas |
 
 ## Setup
 

@@ -601,7 +601,7 @@ GUI 保持实际运行时的 GC 策略与用户设置，测量工具不能额外
 | 层级 | 仓库 | 职责 |
 | --- | --- | --- |
 | 应用 | `etaf-ncm`、`etaf-weread` 及各应用 | 具体产品的界面、交互与业务模型 |
-| 游戏 | `etaf-tanks`、`etaf-xiangqi`、`etaf-solitaire`、`etaf-salvage` | 游戏身份、玩法配置、内容资源、界面、局部交互状态与启动命令 |
+| 游戏 | `etaf-tanks`、`etaf-xiangqi`、`etaf-solitaire`、`etaf-salvage`、`etaf-mario` | 游戏身份、玩法配置、内容资源、界面、局部交互状态与启动命令 |
 | 游戏框架 | `etaf-gamekit` | 游戏定义、独立运行实例、通用后端适配、动作与观察结果、生命周期 |
 | 组件 | `etaf-ui` | 可复用界面组件与主题 token |
 | 运行时 | `etaf` | 组件、状态与挂载运行环境 |

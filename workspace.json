@@ -189,7 +189,7 @@
     },
     "etaf-mario": {
       "url": "https://github.com/emacs-taf/etaf-mario.git",
-      "revision": "0000000000000000000000000000000000000000",
+      "revision": "540fd7be2ce890c358b0fb227f380b7da560f4b8",
       "branch": "main",
       "role": "game"
     }
