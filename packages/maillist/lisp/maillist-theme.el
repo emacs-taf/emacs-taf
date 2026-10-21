@@ -54,18 +54,28 @@ land here, so the palette never signals over a missing surface color."
                      (maillist--blend bg ink 0.85)))
          (select (or (maillist--face 'hl-line :background)
                      (maillist--blend bg ink 0.07))))
-    (list :bg bg
-          :ink ink
-          :muted muted
-          :dim (maillist--blend bg muted 0.55)
-          :line (maillist--blend bg ink 0.14)
-          :line-soft (maillist--blend bg ink 0.07)
-          :select select
-          :accent accent
-          :accent-soft (maillist--blend bg accent 0.18)
-          :ok (or (maillist--face 'success :foreground) "#4fbf67")
-          :danger (or (maillist--face 'error :foreground) "#ef5b5b")
-          :warning (or (maillist--face 'warning :foreground) "#e8a33d"))))
+    (let ((ok (or (maillist--face 'success :foreground) "#4fbf67"))
+          (danger (or (maillist--face 'error :foreground) "#ef5b5b")))
+      (list :bg bg
+            :ink ink
+            :muted muted
+            :dim (maillist--blend bg muted 0.55)
+            :line (maillist--blend bg ink 0.14)
+            :line-soft (maillist--blend bg ink 0.07)
+            :surface (maillist--blend bg ink 0.045)
+            :surface-soft (maillist--blend bg ink 0.085)
+            :quote-bg (maillist--blend bg ink 0.035)
+            :select select
+            :accent accent
+            :accent-soft (maillist--blend bg accent 0.18)
+            ;; The theme's link colour is often neon; dimming it toward the
+            ;; surface keeps a whole list of subjects calm to read.
+            :subject (maillist--blend bg accent 0.62)
+            :ok ok
+            :ok-soft (maillist--blend bg ok 0.14)
+            :danger danger
+            :danger-soft (maillist--blend bg danger 0.14)
+            :warning (or (maillist--face 'warning :foreground) "#e8a33d")))))
 
 (defun maillist-color (key)
   "Return the palette color named KEY.
@@ -86,22 +96,24 @@ surface, because a typo would otherwise be silent."
          (muted (plist-get palette :muted))
          (accent (plist-get palette :accent))
          (line (plist-get palette :line))
-         (select (plist-get palette :select)))
+         (select (plist-get palette :select))
+         (surface (plist-get palette :surface))
+         (surface-soft (plist-get palette :surface-soft)))
     (append
      (list :ui-panel-bg bg :ui-panel-fg ink :ui-panel-border line
            :ui-divider-bg line
            :ui-picker-item-bg select :ui-picker-item-fg ink
            :ui-picker-item-muted-fg muted
-           :ui-search-bg bg :ui-search-fg ink
+           :ui-search-bg surface-soft :ui-search-fg ink
            :ui-input-bg bg :ui-input-border line
            :ui-disabled-bg bg :ui-disabled-border line
-           :ui-button-secondary-bg (maillist--blend bg ink 0.08)
+           :ui-button-secondary-bg surface-soft
            :ui-button-ghost-bg bg
            :ui-success-bg bg :ui-danger-fg (plist-get palette :danger)
            :ui-danger-bg bg :ui-warning-fg (plist-get palette :warning)
            :ui-warning-bg bg)
      (etaf-ui-theme-tokens
-      (list :bg bg :fg ink :panel bg :track line :border line
+      (list :bg bg :fg ink :panel surface :track line :border line
             :muted muted :dim muted :accent accent :accent-fg bg
             :accent-soft (plist-get palette :accent-soft)
             :success (plist-get palette :ok) :success-bg bg

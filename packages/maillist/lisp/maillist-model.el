@@ -316,6 +316,16 @@ The choice survives a body reload because the session remembers it."
         :loading t
         :messages nil))
 
+(defun maillist--parent-author (message messages)
+  "Return the author MESSAGE replies to, or nil.
+The reader names the person a reply answers, which is the relationship a
+thread is actually about."
+  (when-let* ((parent (plist-get message :parent))
+              (found (cl-find parent messages
+                              :key (lambda (item) (plist-get item :id))
+                              :test #'equal)))
+    (plist-get found :author)))
+
 (defun maillist--thread-value (row messages &optional loading collapsed window)
   "Return the open-thread value of ROW built from MESSAGES.
 LOADING marks a thread whose full body is still being fetched; WINDOW limits
@@ -344,6 +354,8 @@ shows only its header."
                                    (list :collapsed (and collapsed
                                                          (member (plist-get message :id)
                                                                  collapsed))
+                                         :reply-to (maillist--parent-author
+                                                    message messages)
                                          :lines (maillist-classify-lines
                                                  (or (plist-get message :text) "")
                                                  (plist-get message :id))))))))

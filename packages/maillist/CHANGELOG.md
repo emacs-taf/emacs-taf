@@ -50,3 +50,10 @@ project uses [Semantic Versioning](https://semver.org/).
 
 - The thread list keeps one column grid: a buried sub-thread no longer shifts
   its author, count, time and subject by two cells.
+
+- Colour now follows roles instead of decorating: authors stay neutral (ink
+  when unread, muted when read), the list's unread subjects take the theme's
+  link colour softened toward the surface, a reply names the person it
+  answers in the theme's warm colour, and diff lines keep their green/red
+  pair.  Backgrounds stay reserved for state and reading aids: the selected
+  row, quoted and patch bands, and the floating notice.

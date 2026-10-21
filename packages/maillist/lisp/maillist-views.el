@@ -119,7 +119,9 @@
       (text (expr (let ((author (plist-get thread :author)))
                     (if (string-empty-p (or author "")) "…" author)))))
     (box :width '(ch 3) :height '(lh 1) :text-align 'right
-         :color (maillist-color :dim)
+         :color (if (plist-get thread :count)
+                    (maillist-color :muted)
+                  (maillist-color :dim))
       (text (expr (if (plist-get thread :count)
                       (number-to-string (plist-get thread :count))
                     ""))))
@@ -130,7 +132,7 @@
          :height '(lh 1) :overflow 'hidden
          :font-weight (if (plist-get thread :unread) 'bold 'normal)
          :color (if (plist-get thread :unread)
-                    (maillist-color :ink)
+                    (maillist-color :subject)
                   (maillist-color :muted))
       (text (expr (or (plist-get thread :subject) ""))))))
 
@@ -153,7 +155,12 @@
       (box :if (not (eq group (car groups))) :height '(lh 1))
       (flex :align-items 'center :height '(lh 1)
             :padding (list (list 'lh 0) (list 'ch 1))
-        (etaf-label :text (car group) :variant 'strong))
+            :gap (list (list 'lh 0) (list 'ch 1))
+        (box :height '(lh 1) :color (maillist-color :muted)
+          (text (expr (car group))))
+        (box :flex-grow 1 :flex-basis '(ch 0) :min-width '(ch 0)
+             :height '(lh 1)
+             :border-bottom (maillist--border (maillist-color :line-soft))))
       (maillist-thread-row :for (thread (cdr group))
                              :key (plist-get thread :id)
                              :thread thread
@@ -172,6 +179,12 @@
     (flex :if (not (equal (plist-get line :kind) "blank"))
           :width 'stretch :align-items 'flex-start
           :gap (list (list 'lh 0) (list 'ch 1))
+          :background-color
+          (pcase (plist-get line :kind)
+            ("quote" (maillist-color :quote-bg))
+            ("patch-add" (maillist-color :ok-soft))
+            ("patch-del" (maillist-color :danger-soft))
+            (_ nil))
       (box :if (equal (plist-get line :kind) "quote")
            :width '(ch 1) :height '(lh 1) :color (maillist-color :line)
         (text "|"))
@@ -203,6 +216,15 @@
       (box :flex-grow 1 :flex-basis '(ch 0) :min-width '(ch 0))
       (etaf-label :text (maillist-long-label (plist-get message :date))
                   :variant 'muted))
+    (flex :if (plist-get message :reply-to)
+          :width 'stretch :height '(lh 1) :align-items 'center
+          :gap (list (list 'lh 0) (list 'ch 1))
+      (box :height '(lh 1) :color (maillist-color :dim)
+        (text "↳"))
+      (box :height '(lh 1) :color (maillist-color :muted)
+        (text "reply to"))
+      (box :height '(lh 1) :color (maillist-color :warning)
+        (text (expr (plist-get message :reply-to)))))
     (column :if (not (plist-get message :collapsed))
             :width 'stretch :item-gap '(lh 0)
             :padding (list (list 'lh 0) (list 'ch 2))
@@ -306,6 +328,30 @@ semantic colour."
     (etaf-label :text (plist-get toast :text)
                 :width 'stretch :wrap-mode 'word)))
 
+(etaf-define-component maillist-hints (&key narrow)
+  "Render the key hints with the keys in the accent colour."
+  :view
+  (flex :width 'stretch :height '(lh 1) :align-items 'center
+        :gap (list (list 'lh 0) (list 'ch 1))
+    (maillist-hint :caps "j/k" :label "移动")
+    (maillist-hint :caps "RET" :label "打开")
+    (maillist-hint :caps "s" :label "收藏")
+    (maillist-hint :if (not narrow) :caps "r" :label "回复")
+    (maillist-hint :if (not narrow) :caps "c" :label "写新帖")
+    (maillist-hint :if (not narrow) :caps "e" :label "更早")
+    (maillist-hint :caps "/" :label "搜索")
+    (maillist-hint :if (not narrow) :caps "g" :label "刷新")
+    (maillist-hint :caps "?" :label "帮助")))
+
+(etaf-define-component maillist-hint (&key caps label)
+  "Render one KEY hint with its LABEL."
+  :view
+  (flex :height '(lh 1) :align-items 'center
+        :gap (list (list 'lh 0) (list 'ch 0.5))
+    (box :height '(lh 1) :color (maillist-color :subject)
+      (text (expr caps)))
+    (etaf-label :text label :variant 'muted)))
+
 (etaf-define-component maillist-footer (&key narrow)
   "Render the key hints of the client."
   :view
@@ -313,10 +359,7 @@ semantic colour."
     (etaf-divider)
     (flex :width 'stretch :height '(lh 1) :align-items 'center
           :padding (list (list 'lh 0) (list 'ch 2))
-      (etaf-label :text (if narrow
-                            "j/k 移动 · RET 打开 · s 收藏 · / 搜索 · ? 帮助"
-                          "j/k 移动    RET 打开    s 收藏    r 回复    c 写新帖    e 更早    / 搜索    g 刷新    ? 帮助")
-                  :variant 'muted))))
+      (maillist-hints :narrow narrow))))
 
 (etaf-define-component maillist-app
     (&key model viewport viewport-px list-width groups selected thread scope summary
