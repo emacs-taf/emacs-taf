@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed
+xmlns="http://www.w3.org/2005/Atom"
+xmlns:thr="http://purl.org/syndication/thread/1.0"><title>Widget default value</title><link
+rel="self"
+href="beta@example.com/t.atom"/><id>urn:uuid:thread-beta</id><updated>2026-10-20T18:30:00Z</updated><entry><author><name>Bob Example</name><email>bob@example.com</email></author><title>Widget default value</title><updated>2026-10-20T18:02:00Z</updated><link
+href="beta@example.com/"/><id>urn:uuid:beta-1</id><content
+type="xhtml"><div
+xmlns="http://www.w3.org/1999/xhtml"><pre
+style="white-space:pre-wrap">What should the widget default be?
+</pre></div></content></entry><entry><author><name>Carol Example</name><email>carol@example.com</email></author><title>Re: Widget default value</title><updated>2026-10-20T18:30:00Z</updated><link
+href="beta-reply@example.com/"/><id>urn:uuid:beta-2</id><thr:in-reply-to
+ref="urn:uuid:beta-1"
+href="beta@example.com/"/><content
+type="xhtml"><div
+xmlns="http://www.w3.org/1999/xhtml"><pre
+style="white-space:pre-wrap">I would keep it at 300.
+</pre></div></content></entry></feed>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed
+xmlns="http://www.w3.org/2005/Atom"
+xmlns:thr="http://purl.org/syndication/thread/1.0"><title>fixture mailing list</title><entry><author><name>Alice Example</name><email>alice@example.com</email></author><title>[PATCH] Fix the widget default</title><updated>2026-10-21T09:15:00Z</updated><link
+href="alpha@example.com/"/><id>urn:uuid:alpha</id></entry><entry><author><name>Bob Example</name><email>bob@example.com</email></author><title>Re: Widget default value</title><updated>2026-10-20T18:02:00Z</updated><link
+href="beta@example.com/"/><id>urn:uuid:beta</id></entry><entry><author><name>Carol Example</name><email>carol@example.com</email></author><title>Question about quoting replies</title><updated>2026-10-10T07:44:00Z</updated><link
+href="gamma@example.com/"/><id>urn:uuid:gamma</id></entry></feed>

@@ -1,0 +1,4 @@
+*.elc
+*.eln
+__pycache__/
+*.sqlite3

@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed
+xmlns="http://www.w3.org/2005/Atom"
+xmlns:thr="http://purl.org/syndication/thread/1.0"><title>[PATCH] Fix the widget default</title><link
+rel="self"
+href="alpha@example.com/t.atom"/><id>urn:uuid:thread-alpha</id><updated>2026-10-21T10:02:00Z</updated><entry><author><name>Alice Example</name><email>alice@example.com</email></author><title>[PATCH] Fix the widget default</title><updated>2026-10-21T09:15:00Z</updated><link
+href="alpha@example.com/"/><id>urn:uuid:alpha-1</id><content
+type="xhtml"><div
+xmlns="http://www.w3.org/1999/xhtml"><pre
+style="white-space:pre-wrap">The widget default should be 200, not 300:
+
+@@ -12,7 +12,7 @@
+ (defcustom widget-threshold 300
+-  "Default threshold."
++  "Default threshold in lines."
+   :type 'integer)
+
+With the patch applied the tests pass.
+</pre></div></content></entry><entry><author><name>Bob Example</name><email>bob@example.com</email></author><title>Re: [PATCH] Fix the widget default</title><updated>2026-10-21T09:48:00Z</updated><link
+href="alpha-reply@example.com/"/><id>urn:uuid:alpha-2</id><thr:in-reply-to
+ref="urn:uuid:alpha-1"
+href="alpha@example.com/"/><content
+type="xhtml"><div
+xmlns="http://www.w3.org/1999/xhtml"><pre
+style="white-space:pre-wrap">Alice Example &lt;alice@example.com&gt; writes:
+
+&gt; The widget default should be 200, not 300:
+&gt;
+&gt; @@ -12,7 +12,7 @@
+
+Thanks, applied.  I also lowered the second default.
+</pre></div></content></entry><entry><author><name>Alice Example</name><email>alice@example.com</email></author><title>Re: [PATCH] Fix the widget default</title><updated>2026-10-21T10:02:00Z</updated><link
+href="alpha-reply-2@example.com/"/><id>urn:uuid:alpha-3</id><thr:in-reply-to
+ref="urn:uuid:alpha-2"
+href="alpha-reply@example.com/"/><content
+type="xhtml"><div
+xmlns="http://www.w3.org/1999/xhtml"><pre
+style="white-space:pre-wrap">Bob Example &lt;bob@example.com&gt; writes:
+
+&gt; Thanks, applied.  I also lowered the second default.
+
+Great, thanks for the quick review.
+</pre></div></content></entry></feed>

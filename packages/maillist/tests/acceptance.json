@@ -1,0 +1,61 @@
+{
+  "schema": 1,
+  "load_path": [
+    ".",
+    "lisp",
+    "tests"
+  ],
+  "support": [],
+  "cases": [
+    {
+      "name": "maillist-tests-parse-index-reads-thread-rows",
+      "file": "tests/maillist-tests.el",
+      "purpose": "A public-inbox index becomes thread rows with date, size and nesting."
+    },
+    {
+      "name": "maillist-tests-parse-thread-keeps-messages-and-senders",
+      "file": "tests/maillist-tests.el",
+      "purpose": "A thread document yields its subject, senders and reply nesting."
+    },
+    {
+      "name": "maillist-tests-classify-lines-names-quotes-and-patches",
+      "file": "tests/maillist-tests.el",
+      "purpose": "Body classification marks quotes, diff hunks and prose with stable ids."
+    },
+    {
+      "name": "maillist-tests-parse-author-reads-the-from-header",
+      "file": "tests/maillist-tests.el",
+      "purpose": "A raw message's From header becomes the list's sender, decoded and unfolded."
+    },
+    {
+      "name": "maillist-tests-day-labels-follow-the-calendar",
+      "file": "tests/maillist-tests.el",
+      "purpose": "Timestamps read as a clock today and as yesterday before that."
+    },
+    {
+      "name": "maillist-tests-session-syncs-a-local-archive",
+      "file": "tests/maillist-tests.el",
+      "purpose": "A session lists a local archive's threads and opens one with its messages."
+    },
+    {
+      "name": "maillist-tests-read-and-star-survive-a-restart",
+      "file": "tests/maillist-tests.el",
+      "purpose": "An opened thread stays read and a starred thread stays starred after a restart."
+    },
+    {
+      "name": "maillist-tests-scope-shows-starred-and-unread-rows",
+      "file": "tests/maillist-tests.el",
+      "purpose": "The starred and unread scopes filter the rows the list shows."
+    },
+    {
+      "name": "maillist-tests-long-thread-shows-newest-messages-first",
+      "file": "tests/maillist-tests.el",
+      "purpose": "A thread starts with a window of new messages and grows on demand."
+    },
+    {
+      "name": "maillist-tests-open-mounts-and-close-releases",
+      "file": "tests/maillist-tests.el",
+      "purpose": "Opening mounts a live client with its chrome and closing kills the buffer."
+    }
+  ]
+}

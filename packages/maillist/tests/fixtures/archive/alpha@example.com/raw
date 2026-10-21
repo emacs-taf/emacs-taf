@@ -1,0 +1,11 @@
+From mboxrd@z Thu Jan  1 00:00:00 1970
+Return-Path: <alice@example.com>
+From: Alice Example <alice@example.com>
+To: fixture@example.org
+Subject: [PATCH] Fix the widget default
+Date: Wed, 21 Oct 2026 09:15:00 +0000
+Message-ID: <alpha@example.com>
+Mime-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+
+The widget default should be 200, not 300.
