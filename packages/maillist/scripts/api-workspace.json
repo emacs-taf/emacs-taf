@@ -1,0 +1,22 @@
+{
+  "ebox": {
+    "entry": "ebox",
+    "url": "https://github.com/emacs-taf/ebox.git"
+  },
+  "ecss": {
+    "entry": "ecss",
+    "url": "https://github.com/emacs-taf/ecss.git"
+  },
+  "etaf": {
+    "entry": "etaf",
+    "url": "https://github.com/emacs-taf/etaf.git"
+  },
+  "etaf-db": {
+    "entry": "etaf-db",
+    "url": "https://github.com/emacs-taf/etaf-db.git"
+  },
+  "etaf-ui": {
+    "entry": "etaf-ui",
+    "url": "https://github.com/emacs-taf/etaf-ui.git"
+  }
+}

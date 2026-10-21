@@ -2,8 +2,12 @@
   "schema": 1,
   "load_path": [
     ".",
-    "lisp",
-    "tests"
+    "tests",
+    "../etaf",
+    "../etaf-ui",
+    "../etaf-db",
+    "../ebox",
+    "../ecss"
   ],
   "support": [],
   "cases": [

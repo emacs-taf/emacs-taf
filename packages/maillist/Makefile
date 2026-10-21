@@ -13,7 +13,7 @@ LOAD_PATH = -L . -L lisp -L tests -L $(PROVIDER_ROOT)/etaf -L $(PROVIDER_ROOT)/e
 
 SOURCES = $(wildcard lisp/*.el) maillist.el
 
-.PHONY: compile load test check structure-check clean
+.PHONY: compile load test check structure-check acceptance api-check setup-hooks clean
 
 compile:
 	rm -f *.elc lisp/*.elc tests/*.elc
@@ -27,19 +27,26 @@ load: compile
 		--eval '(require (quote maillist))' \
 		--eval '(princ "maillist load OK\n")'
 
-test:
-	$(EMACS) -Q --batch $(LOAD_PATH) \
-		--eval '(setq load-prefer-newer t)' \
-		--eval '(require (quote maillist-tests))' \
-		--eval '(ert-run-tests-batch-and-exit)'
+acceptance:
+	python3 scripts/run-acceptance.py --emacs "$(EMACS)"
 
-check: structure-check compile test
+test: acceptance
+
+check: structure-check compile acceptance api-check
 
 structure-check:
 	@test -f maillist.el || { echo "缺少入口 maillist.el"; exit 1; }
 	@test -f tests/acceptance.json || { echo "缺少 tests/acceptance.json"; exit 1; }
 	@test -n "$(PROVIDER_ROOT)" || { echo "找不到 provider（../etaf 或 ../../etaf）"; exit 1; }
-	@echo "maillist structure OK"
+	python3 scripts/check-repository.py
+
+api-check:
+	$(EMACS) -Q --batch $(LOAD_PATH) \
+		--eval '(setq load-prefer-newer t)' \
+		-l scripts/check-api.el
+
+setup-hooks:
+	git config --local core.hooksPath .githooks
 
 clean:
 	rm -f *.elc lisp/*.elc tests/*.elc
