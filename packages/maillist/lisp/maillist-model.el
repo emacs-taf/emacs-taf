@@ -361,8 +361,11 @@ shows only its header."
                                                  (plist-get message :id))))))))
 
 (defun maillist--publish-thread (session row messages &optional loading)
-  "Publish MESSAGES as the open thread of SESSION for ROW."
+  "Publish MESSAGES as the open thread of SESSION for ROW.
+The message list is tagged with the row it belongs to, so an older list can
+never be replayed under another thread's header."
   (plist-put session :open-messages messages)
+  (plist-put session :open-messages-id (plist-get row :id))
   (etaf-set-value
    (plist-get session :open)
    (maillist--thread-value row messages loading
@@ -374,7 +377,12 @@ shows only its header."
   "Show another window of older messages in SESSION's open thread."
   (when-let* ((open (etaf-value (plist-get session :open)))
               (row (maillist-row session (plist-get open :id)))
-              (messages (plist-get session :open-messages)))
+              (messages (plist-get session :open-messages))
+              ;; A placeholder, a partial render or a stale fallback must not
+              ;; rebuild the reader from another thread's list.
+              ((equal (plist-get session :open-messages-id)
+                      (plist-get open :id)))
+              ((consp messages)))
     (plist-put session :message-window
                (+ (or (plist-get session :message-window) 0)
                   maillist-message-window))
@@ -399,6 +407,35 @@ shows only its header."
                              (etaf-value (plist-get session :threads))))
         (error nil)))))
 
+(defun maillist--open-thread (session row)
+  "Show ROW of SESSION, from cache when possible and from the archive after."
+  (let* ((token (cl-incf (plist-get session :token)))
+         (id (plist-get row :id))
+         (cached (and (plist-get session :store)
+                      (condition-case nil
+                          (maillist-store-thread-messages (plist-get session :store) id)
+                        (error nil)))))
+    (plist-put session :message-window maillist-message-window)
+    (cond
+     ((and cached
+           (maillist--thread-matches-subject-p cached (plist-get row :subject)))
+      (maillist--publish-thread session row cached t))
+     ;; A huge thread is megabytes; show its newest mail from the small
+     ;; search feed first, then replace it with the whole conversation.
+     ((and (integerp (plist-get row :count))
+           (>= (plist-get row :count) maillist-fast-open-threshold))
+      (etaf-set-value (plist-get session :open)
+                      (maillist--thread-placeholder row "正在加载最新一封…"))
+      (plist-put session :open-messages nil)
+      (plist-put session :open-messages-id nil)
+      (maillist--load-newest session row token))
+     (t
+      (etaf-set-value (plist-get session :open)
+                      (maillist--thread-placeholder row "正在加载线程…"))
+      (plist-put session :open-messages nil)
+      (plist-put session :open-messages-id nil)))
+    (maillist--load-thread session row token)))
+
 (defun maillist--load-thread (session row token)
   "Fetch the body of ROW for SESSION generation TOKEN."
   (let ((id (plist-get row :id))
@@ -411,7 +448,9 @@ shows only its header."
              (when (plist-get (etaf-value (plist-get session :open)) :loading)
                (etaf-set-value (plist-get session :open)
                                (plist-put (maillist--thread-placeholder row error)
-                                          :error t)))
+                                          :error t))
+               (plist-put session :open-messages nil)
+               (plist-put session :open-messages-id nil))
            (let ((thread (plist-get result :ok)))
              (if (and (cl-find id (plist-get thread :messages)
                                :key (lambda (message) (plist-get message :id))
@@ -485,17 +524,15 @@ Used when the thread document lost the message the index announced."
                   (cl-find (plist-get row :id) messages
                            :key (lambda (message) (plist-get message :id))
                            :test #'equal))
-             (let ((value (maillist--thread-value
-                           row messages nil
-                           (gethash (plist-get row :id)
-                                    (plist-get session :collapsed))
-                           (plist-get session :message-window))))
+             (progn
                (maillist--cache-thread session (plist-get row :id) messages)
                (maillist--update-row-from-thread
                 session (plist-get row :id)
                 (list :messages messages :participants (length messages)))
+               (maillist--publish-thread session row messages)
                (etaf-set-value (plist-get session :open)
-                               (plist-put value :meta
+                               (plist-put (etaf-value (plist-get session :open))
+                                          :meta
                                           (format "%d 封 · 档案把该线程并进了旧讨论，按标题显示"
                                                   (length messages))))
                (maillist--apply-view session))
@@ -508,39 +545,11 @@ Used when the thread document lost the message the index announced."
    (lambda (result)
      (when (maillist--current-p session token)
        (when-let* ((messages (plist-get (plist-get result :ok) :messages)))
-         (let ((value (maillist--thread-value
-                       row messages nil
-                       (gethash (plist-get row :id)
-                                (plist-get session :collapsed))
-                       (plist-get session :message-window))))
-           (etaf-set-value (plist-get session :open)
-                           (plist-put value :meta
-                                      "档案的线程数据不完整，只找到这一封（按 g 重试）"))))))))
-
-(defun maillist--open-thread (session row)
-  "Show ROW of SESSION, from cache when possible and from the archive after."
-  (let* ((token (cl-incf (plist-get session :token)))
-         (id (plist-get row :id))
-         (cached (and (plist-get session :store)
-                      (condition-case nil
-                          (maillist-store-thread-messages (plist-get session :store) id)
-                        (error nil)))))
-    (plist-put session :message-window maillist-message-window)
-    (cond
-     ((and cached
-           (maillist--thread-matches-subject-p cached (plist-get row :subject)))
-      (maillist--publish-thread session row cached t))
-     ;; A huge thread is megabytes; show its newest mail from the small
-     ;; search feed first, then replace it with the whole conversation.
-     ((and (integerp (plist-get row :count))
-           (>= (plist-get row :count) maillist-fast-open-threshold))
-      (etaf-set-value (plist-get session :open)
-                      (maillist--thread-placeholder row "正在加载最新一封…"))
-      (maillist--load-newest session row token))
-     (t
-      (etaf-set-value (plist-get session :open)
-                      (maillist--thread-placeholder row "正在加载线程…"))))
-    (maillist--load-thread session row token)))
+         (maillist--publish-thread session row messages)
+         (etaf-set-value (plist-get session :open)
+                         (plist-put (etaf-value (plist-get session :open))
+                                    :meta
+                                    "档案的线程数据不完整，只找到这一封（按 g 重试）")))))))
 
 (defun maillist--load-newest (session row token)
   "Show the newest mail of ROW for SESSION generation TOKEN while the thread loads."
@@ -548,19 +557,15 @@ Used when the thread document lost the message the index announced."
    (plist-get session :source) (plist-get row :id)
    (lambda (result)
      (when (maillist--current-p session token)
-       (when-let* ((thread (plist-get result :ok))
-                   (messages (plist-get thread :messages)))
+       (when-let* ((messages (plist-get (plist-get result :ok) :messages)))
          (let ((open (etaf-value (plist-get session :open))))
            ;; Only fill the gap: a finished thread is authoritative.
            (when (and (plist-get open :loading)
                       (equal (plist-get open :id) (plist-get row :id)))
-             (etaf-set-value
-              (plist-get session :open)
-              (plist-put (maillist--thread-value row messages t
-                                                 (gethash (plist-get row :id)
-                                                          (plist-get session :collapsed))
-                                                 1)
-                         :meta "正在加载完整线程…（先显示最新一封）")))))))))
+             (maillist--publish-thread session row messages t)
+             (etaf-set-value (plist-get session :open)
+                             (plist-put (etaf-value (plist-get session :open))
+                                        :meta "正在加载完整线程…（先显示最新一封）")))))))))
 
 ;;; ---------------------------------------------------------------------------
 ;;; Sync
@@ -767,6 +772,7 @@ Views read."
                         :collapsed (make-hash-table :test #'equal)
                         :message-window maillist-message-window
                         :open-messages nil
+                        :open-messages-id nil
                         :viewport (maillist--ref 160 'maillist-viewport)
                         :viewport-px (maillist--ref 0 'maillist-viewport-px)
                         :list-width (maillist--ref 0 'maillist-list-width))))
