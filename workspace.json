@@ -183,9 +183,15 @@
     },
     "maillist": {
       "url": "https://github.com/emacs-taf/maillist.git",
-      "revision": "3b3c663bbe535a08537048ba3f71a43bb6cb4cb6",
+      "revision": "09a057549f476db8773b48ca47c9c83220861bf2",
       "branch": "main",
       "role": "application"
+    },
+    "etaf-mario": {
+      "url": "https://github.com/emacs-taf/etaf-mario.git",
+      "revision": "0000000000000000000000000000000000000000",
+      "branch": "main",
+      "role": "game"
     }
   }
 }
