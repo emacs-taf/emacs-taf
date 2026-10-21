@@ -225,6 +225,10 @@ class PackageReleaseBuildTests(unittest.TestCase):
         manifest = json.loads((self.output / "manifest.json").read_text())
         self.assertEqual(manifest["workspace"], self.root_revision)
         self.assertEqual(manifest["sources"]["ecss"], self.provider_revision)
+        changed = subprocess.check_output(
+            ["git", "-C", str(self.provider), "log", "-1", "--format=%cI",
+             self.provider_revision, "--", "ecss.el", "data"], text=True).strip()
+        self.assertEqual(manifest["updated"]["ecss"], changed)
         with tarfile.open(self.output / "ecss-1.0.0.tar") as archive:
             self.assertEqual(archive.extractfile("ecss-1.0.0/data/fixture.txt").read(), b"pinned resource")
             self.assertIn(b"(provide 'ecss)", archive.extractfile("ecss-1.0.0/ecss.el").read())
@@ -320,7 +324,8 @@ class PackageReleaseStageTests(unittest.TestCase):
         manifest = json.loads((self.output / "manifest.json").read_text())
         self.assertEqual({path.name for path in self.output.iterdir()},
                          {"manifest.json", "archive-contents", *(item["file"] for item in manifest["packages"])})
-        self.assertEqual(set(manifest), {"schema", "workspace", "sources", "packages"})
+        self.assertEqual(set(manifest), {"schema", "workspace", "sources", "packages", "updated"})
+        self.assertEqual(set(manifest["updated"]), {item["name"] for item in manifest["packages"]})
         self.assertEqual((self.output / "archive-contents").read_bytes(), (self.archive / "archive-contents").read_bytes())
         for package in manifest["packages"]:
             self.assertEqual(self.digest(self.output / package["file"]), package["sha256"])

@@ -10,6 +10,14 @@
 
 ### Added
 
+- The published package archive states when each package last changed. The
+  release build records `updated` in `manifest.json`, the newest commit that
+  touched the files a package ships, so publishing a release or changing an
+  unrelated file in a repository does not move it. Each package page also shows
+  the newest `CHANGELOG.md` entries shipped with that version, the downloaded
+  size and file count, and the packages that require it, and the index can be
+  filtered by name, summary or requirement. `site/scripts/archive_pages.py`
+  generates these pages from an archive alone.
 - `M-x etaf-install-manage` lists installed and available ETAF targets and
   offers package.el-backed install, update, remove, open and doctor actions.
   `etaf-install-update`, `etaf-install-remove` and `etaf-install-status`

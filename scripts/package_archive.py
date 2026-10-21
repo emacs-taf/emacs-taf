@@ -20,6 +20,7 @@ import tempfile
 
 NAME = re.compile(r"[a-z][a-z0-9-]*\Z")
 VERSION = re.compile(r"[0-9]+(?:\.[0-9]+)*\Z")
+STAMP = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:[+-][0-9]{2}:[0-9]{2}|Z)\Z")
 GENERATED = {".elc", ".eln", ".pyc", ".o", ".so", ".dylib", ".dll", ".a"}
 
 
@@ -140,6 +141,13 @@ def verify(directory):
         archive = directory / package["file"]
         if archive.is_symlink() or hashlib.sha256(archive.read_bytes()).hexdigest() != package["sha256"]:
             raise ValueError(f"Archive checksum mismatch: {archive.name}")
+    updated = manifest.get("updated")
+    if updated is not None and (not isinstance(updated, dict) or set(updated) != seen
+                                or not all(isinstance(value, str) and STAMP.fullmatch(value)
+                                           for value in updated.values())):
+        # A partially dated archive would silently show a stale or missing
+        # "updated" value, so a date set must name exactly the served packages.
+        raise ValueError("Manifest update dates must be ISO 8601 and cover every package")
     with tempfile.TemporaryDirectory(prefix="package-index-") as temp:
         write_index(Path(temp), manifest["packages"])
         if (Path(temp) / "archive-contents").read_bytes() != (directory / "archive-contents").read_bytes():

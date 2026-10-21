@@ -101,6 +101,25 @@ class PackageArchiveTests(unittest.TestCase):
         self.assertIn("schema 2", result.stderr)
         self.assertIn("rebuild", result.stderr)
 
+    def test_update_dates_must_be_iso_and_cover_every_package(self):
+        output = self.base / "archive"
+        self.build(output)
+        path = output / "manifest.json"
+        manifest = json.loads(path.read_text())
+        for dates in ({"sample": "2026-10-20T22:40:00+08:00"},
+                      {"sample": "2026-10-20T14:40:00Z"}):
+            manifest["updated"] = dates
+            path.write_text(json.dumps(manifest))
+            self.call("verify", "--directory", output)
+        for dates in ({"sample": "2026-10-20"}, {"sample": "20 October 2026"},
+                      {"other": "2026-10-20T22:40:00+08:00"}, {},
+                      {"sample": 20261020}, ["2026-10-20T22:40:00+08:00"]):
+            with self.subTest(updated=dates):
+                manifest["updated"] = dates
+                path.write_text(json.dumps(manifest))
+                result = self.call("verify", "--directory", output, success=False)
+                self.assertIn("update dates", result.stderr)
+
     def test_unsafe_manifest_paths_are_rejected(self):
         output = self.base / "archive"
         self.build(output)

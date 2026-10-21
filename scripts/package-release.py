@@ -105,6 +105,24 @@ def export(source, revision, destination):
         archive.extractall(destination, filter="data")
 
 
+def last_change(checkout, revision, files):
+    """Return the committer date of the newest commit that changed shipped files.
+
+    The archive shows each package's freshness, so the date has to mean "this
+    package changed", not "something in its repository changed" and not "the
+    archive was rebuilt". Reading it from history at the sealed revision keeps
+    the value reproducible: rebuilding the same revision yields the same dates.
+    """
+    if not files:
+        raise ValueError("A package must ship at least its entry file")
+    raw, _ = run(["git", "--git-dir", git_directory(checkout), "log", "-1",
+                  "--format=%cI", revision, "--", *files])
+    value = raw.decode().strip()
+    if not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[+-][0-9]{2}:[0-9]{2}", value):
+        raise ValueError(f"Cannot date the newest change of {checkout.name}: {value!r}")
+    return value
+
+
 def build(directory):
     """Build from the sealed root and its recorded provider combination."""
     if directory.exists():
@@ -127,6 +145,7 @@ def build(directory):
         if selection.get("schema") != 1:
             raise ValueError("Unsupported release selection schema")
         sources, resources, provenance = {"etaf-install": root}, {}, {"etaf-install": revision}
+        checkouts = {"etaf-install": ROOT}
         for name, options in selection["packages"].items():
             if name not in checkpoint:
                 raise ValueError(f"{name}: not present in the integration checkpoint")
@@ -138,8 +157,13 @@ def build(directory):
             sources[name] = work / name
             resources[name] = options.get("resources", [])
             provenance[name] = entry["revision"]
+            checkouts[name] = source
         stage = work / "archive"
         manifest = package_archive.build(stage, sources, resources)
+        updated = {name: last_change(
+            checkouts[name], provenance[name],
+            package_archive.source_files(sources[name], name, resources.get(name, ())))
+            for name in sources}
         available = {item["name"]: item["version"] for item in manifest["packages"]}
         for package in manifest["packages"]:
             # A dependency outside the archive must be declared explicitly, so a
@@ -159,6 +183,7 @@ def build(directory):
                 if actual + (0,) * (length - len(actual)) < required + (0,) * (length - len(required)):
                     raise ValueError(f"{package['name']}: dependency {dependency} is too old")
         manifest["sources"] = provenance
+        manifest["updated"] = updated
         manifest["workspace"] = revision
         (stage / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
         stage.rename(directory)
@@ -475,6 +500,8 @@ def stage(directory, output):
     # Construct a public manifest rather than copying unknown fields, local
     # profiles, logs or future private evidence into the served directory.
     public = {"schema": 2, "workspace": revision, "sources": sources, "packages": []}
+    if manifest.get("updated"):
+        public["updated"] = manifest["updated"]
     for package in manifest["packages"]:
         public["packages"].append({key: package[key] for key in
                                   ("name", "version", "requirements", "summary", "file", "sha256")})

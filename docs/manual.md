@@ -79,6 +79,12 @@ pairs. Earlier Ebox-specific schema 1 reports used Lisp strings and are not
 accepted as equivalent evidence; rebuild them with this tool. This report-format
 change does not change package.el's archive or tar format.
 
+The release build adds two optional fields the builder alone does not produce:
+`sources`, the pinned revision of every provider, and `updated`, each package's
+newest shipped change as an ISO 8601 commit timestamp. `updated` must name exactly
+the served packages, and a verifier rejects a partial or non-ISO map rather than
+publish a package whose freshness or commit cannot be shown.
+
 ### Build and verify the official selection
 
 Maintainers use Python 3.12+, Git and Emacs for release verification. Users need
