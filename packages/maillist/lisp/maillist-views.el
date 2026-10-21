@@ -111,7 +111,6 @@
       (text (expr (cond ((plist-get thread :starred) "+")
                         ((plist-get thread :unread) "*")
                         (t " ")))))
-    (box :width (list 'ch (if (eq 1 (or (plist-get thread :depth) 0)) 1 0)))
     (box :width '(ch 18) :height '(lh 1) :overflow 'hidden
          :color (cond ((string-empty-p (or (plist-get thread :author) ""))
                        (maillist-color :dim))

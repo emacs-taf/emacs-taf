@@ -272,6 +272,9 @@ so it can be cached and classified again on load."
                      :author name
                      :email (string-trim (maillist--plain (maillist--node 'email author)))
                      :date (maillist--plain (maillist--node 'updated entry))
+                     :parent (maillist--message-id
+                              (maillist--attribute
+                               (car (xml-get-children entry 'thr:in-reply-to)) 'href))
                      :depth depth
                      :subject (string-trim (maillist--plain (maillist--node 'title entry)))
                      :text (string-trim (maillist--plain pre) "\n" "\n"))))
@@ -482,6 +485,34 @@ SUBJECT names the thread when its feed does not."
   (maillist--on-body (maillist--url source (concat id "/t.atom"))
                      callback
                      (lambda (body) (maillist-parse-thread body subject))))
+
+(defun maillist-thread-subject (subject)
+  "Return SUBJECT without the reply prefixes a thread accumulates."
+  (let ((text (string-trim (or subject ""))))
+    (while (string-match "\\`re\\[[0-9]+\\]:[ \t]*\\|\\`re:[ \t]*" text)
+      (setq text (string-trim (substring text (match-end 0)))))
+    text))
+
+(defun maillist-fetch-subject (source subject callback)
+  "Fetch every message whose subject matches SUBJECT.
+A merged or truncated thread document can lose the messages the index
+announced; the subject feed still answers with them."
+  (maillist--on-body
+   (maillist--url source
+                  (concat "?q="
+                          (url-hexify-string
+                           (format "s:\"%s\"" (maillist-thread-subject subject)))
+                          "&x=A"))
+   callback #'maillist-parse-thread))
+
+(defun maillist-fetch-message (source id callback)
+  "Fetch message ID alone and call CALLBACK with (:ok THREAD).
+The search Atom feed answers with one entry, so this is a few kilobytes even
+when the whole thread is huge; it lets the newest mail show while the rest
+downloads."
+  (maillist--on-body
+   (maillist--url source (concat "?q=mid%3A" (url-hexify-string id) "&x=A"))
+   callback #'maillist-parse-thread))
 
 (defun maillist-fetch-author (source id callback)
   "Fetch the sender of message ID and call CALLBACK with (:ok AUTHOR)."

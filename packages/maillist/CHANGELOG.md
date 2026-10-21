@@ -38,3 +38,15 @@ project uses [Semantic Versioning](https://semver.org/).
 - Sync state, errors and search feedback appear as a floating notice at the
   top right and leave on their own, so a message never moves the list or the
   reader.
+
+- Opening a thread larger than `maillist-fast-open-threshold` shows its newest
+  mail from the small search feed at once, then replaces it with the whole
+  conversation; a 72-message thread shows content in 0.4s instead of 3.2s.
+
+- When the archive merges a thread into an older discussion (a reply with a
+  broken References header), the reader keeps the conversation the index
+  named: it shows the subject's messages and says the archive merged the
+  thread, instead of a thousand old mails under the new subject.
+
+- The thread list keeps one column grid: a buried sub-thread no longer shifts
+  its author, count, time and subject by two cells.

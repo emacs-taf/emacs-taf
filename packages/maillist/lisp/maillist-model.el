@@ -29,6 +29,14 @@
   :type 'string
   :group 'maillist)
 
+(defcustom maillist-fast-open-threshold 40
+  "Thread size from which the newest mail is shown before the whole thread.
+A public-inbox thread document carries every message, so a thousand-message
+conversation is megabytes; one search feed answers with the newest mail in a
+few kilobytes.  Below this size the whole thread arrives just as fast."
+  :type 'integer
+  :group 'maillist)
+
 (defcustom maillist-message-window 20
   "How many of the newest messages a thread shows at first.
 Long archive threads reach a thousand messages; a window keeps the canvas
@@ -303,6 +311,9 @@ The choice survives a body reload because the session remembers it."
   (list :id (plist-get row :id)
         :subject (or (plist-get row :subject) "")
         :meta text
+        :total nil
+        :hidden 0
+        :loading t
         :messages nil))
 
 (defun maillist--thread-value (row messages &optional loading collapsed window)
@@ -396,10 +407,95 @@ shows only its header."
                     store id (plist-get thread :messages))
                  (error (message "maillist: 无法缓存线程正文：%s"
                                  (error-message-string err)))))
-             (maillist--update-row-from-thread session id thread)
-             (maillist--publish-thread session row (plist-get thread :messages))
-             (maillist--apply-view session)))))
+             (if (and (cl-find id (plist-get thread :messages)
+                               :key (lambda (message) (plist-get message :id))
+                               :test #'equal)
+                      (maillist--thread-matches-subject-p
+                       (plist-get thread :messages) subject))
+                 (progn
+                   (maillist--update-row-from-thread session id thread)
+                   (maillist--publish-thread session row (plist-get thread :messages))
+                   (maillist--apply-view session))
+               ;; The archive can merge a thread into an older discussion;
+               ;; its document then stops at the entry cap and misses the mail
+               ;; the index named.  The subject feed still has them.
+               (maillist--load-by-subject session row token))))))
      subject)))
+
+(defun maillist--thread-matches-subject-p (messages subject)
+  "Return non-nil when most MESSAGES share SUBJECT.
+A public-inbox thread can be merged into an older discussion by a reply with
+broken References; the merged document then carries dozens of subjects while
+the index names this one."
+  (let* ((wanted (maillist-thread-subject subject))
+         (total (length messages))
+         (matching (seq-count
+                    (lambda (message)
+                      (equal wanted
+                             (maillist-thread-subject
+                              (plist-get message :subject))))
+                    messages)))
+    (or (zerop total) (>= (* matching 2) total))))
+
+(defun maillist--chronological (messages)
+  "Return MESSAGES oldest first with their reply depth recomputed.
+The search feed answers newest first, while the thread view needs the archive's
+reading order."
+  (let* ((sorted (sort (copy-sequence messages)
+                       (lambda (first second)
+                         (string< (or (plist-get first :date) "")
+                                  (or (plist-get second :date) "")))))
+         (depths (make-hash-table :test #'equal)))
+    (dolist (message sorted)
+      (let* ((id (plist-get message :id))
+             (parent (plist-get message :parent))
+             (depth (if (and parent (gethash parent depths))
+                        (1+ (gethash parent depths))
+                      0)))
+        (puthash id depth depths)
+        (plist-put message :depth depth)))
+    sorted))
+
+(defun maillist--load-by-subject (session row token)
+  "Show ROW's messages by subject for SESSION generation TOKEN.
+Used when the thread document lost the message the index announced."
+  (maillist-fetch-subject
+   (plist-get session :source) (plist-get row :subject)
+   (lambda (result)
+     (when (maillist--current-p session token)
+       (let ((messages (maillist--chronological
+                        (plist-get (plist-get result :ok) :messages))))
+         (if (and messages
+                  (cl-find (plist-get row :id) messages
+                           :key (lambda (message) (plist-get message :id))
+                           :test #'equal))
+             (let ((value (maillist--thread-value
+                           row messages nil
+                           (gethash (plist-get row :id)
+                                    (plist-get session :collapsed))
+                           (plist-get session :message-window))))
+               (etaf-set-value (plist-get session :open)
+                               (plist-put value :meta
+                                          (format "%d 封 · 档案把该线程并进了旧讨论，按标题显示"
+                                                  (length messages))))
+               (maillist--apply-view session))
+           (maillist--load-newest-fallback session row token)))))))
+
+(defun maillist--load-newest-fallback (session row token)
+  "Show only the newest mail of ROW when no thread document has it."
+  (maillist-fetch-message
+   (plist-get session :source) (plist-get row :id)
+   (lambda (result)
+     (when (maillist--current-p session token)
+       (when-let* ((messages (plist-get (plist-get result :ok) :messages)))
+         (let ((value (maillist--thread-value
+                       row messages nil
+                       (gethash (plist-get row :id)
+                                (plist-get session :collapsed))
+                       (plist-get session :message-window))))
+           (etaf-set-value (plist-get session :open)
+                           (plist-put value :meta
+                                      "档案的线程数据不完整，只找到这一封（按 g 重试）"))))))))
 
 (defun maillist--open-thread (session row)
   "Show ROW of SESSION, from cache when possible and from the archive after."
@@ -410,11 +506,40 @@ shows only its header."
                           (maillist-store-thread-messages (plist-get session :store) id)
                         (error nil)))))
     (plist-put session :message-window maillist-message-window)
-    (if cached
-        (maillist--publish-thread session row cached t)
+    (cond
+     (cached
+      (maillist--publish-thread session row cached t))
+     ;; A huge thread is megabytes; show its newest mail from the small
+     ;; search feed first, then replace it with the whole conversation.
+     ((and (integerp (plist-get row :count))
+           (>= (plist-get row :count) maillist-fast-open-threshold))
       (etaf-set-value (plist-get session :open)
-                      (maillist--thread-placeholder row "正在加载线程…")))
+                      (maillist--thread-placeholder row "正在加载最新一封…"))
+      (maillist--load-newest session row token))
+     (t
+      (etaf-set-value (plist-get session :open)
+                      (maillist--thread-placeholder row "正在加载线程…"))))
     (maillist--load-thread session row token)))
+
+(defun maillist--load-newest (session row token)
+  "Show the newest mail of ROW for SESSION generation TOKEN while the thread loads."
+  (maillist-fetch-message
+   (plist-get session :source) (plist-get row :id)
+   (lambda (result)
+     (when (maillist--current-p session token)
+       (when-let* ((thread (plist-get result :ok))
+                   (messages (plist-get thread :messages)))
+         (let ((open (etaf-value (plist-get session :open))))
+           ;; Only fill the gap: a finished thread is authoritative.
+           (when (and (plist-get open :loading)
+                      (equal (plist-get open :id) (plist-get row :id)))
+             (etaf-set-value
+              (plist-get session :open)
+              (plist-put (maillist--thread-value row messages t
+                                                 (gethash (plist-get row :id)
+                                                          (plist-get session :collapsed))
+                                                 1)
+                         :meta "正在加载完整线程…（先显示最新一封）")))))))))
 
 ;;; ---------------------------------------------------------------------------
 ;;; Sync
