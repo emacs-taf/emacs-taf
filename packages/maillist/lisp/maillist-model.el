@@ -413,18 +413,13 @@ shows only its header."
                                (plist-put (maillist--thread-placeholder row error)
                                           :error t)))
            (let ((thread (plist-get result :ok)))
-             (when-let* ((store (plist-get session :store)))
-               (condition-case err
-                   (maillist-store-save-thread-messages
-                    store id (plist-get thread :messages))
-                 (error (message "maillist: 无法缓存线程正文：%s"
-                                 (error-message-string err)))))
              (if (and (cl-find id (plist-get thread :messages)
                                :key (lambda (message) (plist-get message :id))
                                :test #'equal)
                       (maillist--thread-matches-subject-p
                        (plist-get thread :messages) subject))
                  (progn
+                   (maillist--cache-thread session id (plist-get thread :messages))
                    (maillist--update-row-from-thread session id thread)
                    (maillist--publish-thread session row (plist-get thread :messages))
                    (maillist--apply-view session))
@@ -433,6 +428,15 @@ shows only its header."
                ;; the index named.  The subject feed still has them.
                (maillist--load-by-subject session row token))))))
      subject)))
+
+(defun maillist--cache-thread (session id messages)
+  "Cache MESSAGES as thread ID of SESSION, replacing any older copy.
+An archive merge or a truncated feed must never keep a body that does not
+belong to the row the list shows."
+  (when-let* ((store (plist-get session :store)))
+    (condition-case err
+        (maillist-store-save-thread-messages store id messages)
+      (error (message "maillist: 无法缓存线程正文：%s" (error-message-string err))))))
 
 (defun maillist--thread-matches-subject-p (messages subject)
   "Return non-nil when most MESSAGES share SUBJECT.
@@ -486,6 +490,10 @@ Used when the thread document lost the message the index announced."
                            (gethash (plist-get row :id)
                                     (plist-get session :collapsed))
                            (plist-get session :message-window))))
+               (maillist--cache-thread session (plist-get row :id) messages)
+               (maillist--update-row-from-thread
+                session (plist-get row :id)
+                (list :messages messages :participants (length messages)))
                (etaf-set-value (plist-get session :open)
                                (plist-put value :meta
                                           (format "%d 封 · 档案把该线程并进了旧讨论，按标题显示"
@@ -519,7 +527,8 @@ Used when the thread document lost the message the index announced."
                         (error nil)))))
     (plist-put session :message-window maillist-message-window)
     (cond
-     (cached
+     ((and cached
+           (maillist--thread-matches-subject-p cached (plist-get row :subject)))
       (maillist--publish-thread session row cached t))
      ;; A huge thread is megabytes; show its newest mail from the small
      ;; search feed first, then replace it with the whole conversation.
