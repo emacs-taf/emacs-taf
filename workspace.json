@@ -180,6 +180,12 @@
       "revision": "d8059d67e79d1c13a653af08bf897430a90a72b3",
       "branch": "main",
       "role": "application"
+    },
+    "maillist": {
+      "url": "https://github.com/emacs-taf/maillist.git",
+      "revision": "3b3c663bbe535a08537048ba3f71a43bb6cb4cb6",
+      "branch": "main",
+      "role": "application"
     }
   }
 }
