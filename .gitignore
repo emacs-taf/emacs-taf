@@ -30,6 +30,8 @@
 /etaf-tanks/
 /etaf-salvage/
 /etaf-browser/
+/etaf-speech-log/
+/maillist/
 
 *.elc
 *.eln
