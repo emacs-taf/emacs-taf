@@ -176,7 +176,7 @@
       "role": "game"
     },
     "etaf-speech-log": {
-      "url": "https://github.com/emacs-taf/etaf-speech-log.git",
+      "url": "https://forgejo.vhkd.top/emacs-taf/etaf-speech-log.git",
       "revision": "d8059d67e79d1c13a653af08bf897430a90a72b3",
       "branch": "main",
       "role": "application"
