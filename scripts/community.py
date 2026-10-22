@@ -25,7 +25,7 @@ import tempfile
 import package_archive
 
 ROOT = Path(__file__).resolve().parents[1]
-REGISTRY = ROOT / "community.json"
+REGISTRY = ROOT / "scripts" / "community.json"
 CACHE = Path(os.environ.get("ETAF_COMMUNITY_CACHE", Path.home() / ".cache" / "etaf-community"))
 COMMIT = re.compile(r"[0-9a-f]{40}\Z")
 NOTICE_PATHS = ["*.el", "README*", "Readme*", "LICENSE*", "License*", "LICENCE*", "Licence*",

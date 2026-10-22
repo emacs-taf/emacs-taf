@@ -87,7 +87,7 @@ publish a package whose freshness or commit cannot be shown.
 
 ### Publish a package another author wrote
 
-`community.json` lists packages built with ETAF that this archive redistributes
+`scripts/community.json` lists packages built with ETAF that this archive redistributes
 but does not own. Each entry pins one revision of the author's repository, the
 globs to ship, the dependencies this archive guarantees, the license and the
 maintainer. `scripts/community.py add URL [--path GLOB] [--requires NAME=VERSION]`

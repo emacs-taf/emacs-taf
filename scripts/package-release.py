@@ -136,7 +136,7 @@ def community_packages():
     the archive serves their bytes but never owns them. The registry states the
     files to ship, the dependencies this archive guarantees and the license.
     """
-    path = ROOT / "community.json"
+    path = ROOT / "scripts" / "community.json"
     if not path.exists():
         return {}
     return community_module().registry()["packages"]
