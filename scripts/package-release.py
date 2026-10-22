@@ -155,7 +155,6 @@ def build(directory):
             raise ValueError("Commit the workspace change before building a release")
         revision = run(["git", "rev-parse", "HEAD"], cwd=ROOT)[0].decode().strip()
     directory.parent.mkdir(parents=True, exist_ok=True)
-    community = community_module()
     with tempfile.TemporaryDirectory(prefix=".etaf-release-", dir=directory.parent) as work:
         work = Path(work)
         root = work / "workspace"
@@ -179,6 +178,10 @@ def build(directory):
             provenance[name] = entry["revision"]
             checkouts[name] = source
         community_pins = community_packages()
+        # A release without community packages must not need the registry helper:
+        # a checkout that carries the release tooling but not this archive's
+        # community registry still builds.
+        community = community_module() if community_pins else None
         paths, declared_require, git_dirs = {}, {}, {}
         for name, record in community_pins.items():
             if name in sources:
