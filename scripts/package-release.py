@@ -123,6 +123,12 @@ def last_change(git_dir, revision, files):
     return value
 
 
+def community_module():
+    """Import the registry helper; a release without community packages needs none."""
+    import community as module
+    return module
+
+
 def community_packages():
     """Return the packages other authors publish through this archive.
 
@@ -133,8 +139,7 @@ def community_packages():
     path = ROOT / "community.json"
     if not path.exists():
         return {}
-    import community  # optional: a release without community packages needs no registry
-    return community.registry()["packages"]
+    return community_module().registry()["packages"]
 
 
 def build(directory):
@@ -150,6 +155,7 @@ def build(directory):
             raise ValueError("Commit the workspace change before building a release")
         revision = run(["git", "rev-parse", "HEAD"], cwd=ROOT)[0].decode().strip()
     directory.parent.mkdir(parents=True, exist_ok=True)
+    community = community_module()
     with tempfile.TemporaryDirectory(prefix=".etaf-release-", dir=directory.parent) as work:
         work = Path(work)
         root = work / "workspace"

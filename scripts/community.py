@@ -32,9 +32,9 @@ NOTICE_PATHS = ["*.el", "README*", "Readme*", "LICENSE*", "License*", "LICENCE*"
                 "COPYING*", "NOTICE*", "CHANGELOG*", "Changelog*"]
 
 
-def run(args, *, cwd=None, timeout=180):
+def run(args, *, cwd=None, timeout=180, check=True):
     result = subprocess.run(args, cwd=cwd, capture_output=True, timeout=timeout)
-    if result.returncode:
+    if result.returncode and check:
         raise ValueError(f"Command failed ({result.returncode}): {' '.join(args)}\n"
                          + result.stderr.decode(errors="replace").strip()[-800:])
     return result.stdout.decode(errors="replace")
@@ -71,8 +71,11 @@ def fetch(url, name, revision):
     if not COMMIT.fullmatch(revision):
         raise ValueError(f"{name}: revision must be a full Git commit ID")
     repository = mirror(url, name)
-    run(["git", "--git-dir", str(repository), "fetch", "-q", "--no-tags", "--depth=1",
-         "origin", revision])
+    if not run(["git", "--git-dir", str(repository), "cat-file", "-e", f"{revision}^{{commit}}"],
+               check=False):
+        # A cached revision makes a rebuild work offline; only a new pin fetches.
+        run(["git", "--git-dir", str(repository), "fetch", "-q", "--no-tags", "--depth=1",
+             "origin", revision])
     run(["git", "--git-dir", str(repository), "rev-parse", "--verify", "--quiet",
          f"{revision}^{{commit}}"])
     return repository
