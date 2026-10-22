@@ -71,8 +71,9 @@ def fetch(url, name, revision):
     if not COMMIT.fullmatch(revision):
         raise ValueError(f"{name}: revision must be a full Git commit ID")
     repository = mirror(url, name)
-    if not run(["git", "--git-dir", str(repository), "cat-file", "-e", f"{revision}^{{commit}}"],
-               check=False):
+    cached = subprocess.run(["git", "--git-dir", str(repository), "cat-file", "-e",
+                             f"{revision}^{{commit}}"], capture_output=True)
+    if cached.returncode:
         # A cached revision makes a rebuild work offline; only a new pin fetches.
         run(["git", "--git-dir", str(repository), "fetch", "-q", "--no-tags", "--depth=1",
              "origin", revision])
