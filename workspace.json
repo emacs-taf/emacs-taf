@@ -87,7 +87,7 @@
     },
     "etaf-md-preview": {
       "url": "https://github.com/emacs-taf/etaf-md-preview.git",
-      "revision": "e1cda848587261b10b0aaf23a5f49e6b0322912c",
+      "revision": "c79a56f35329316f5110017742fff650e41530b5",
       "branch": "main",
       "role": "application"
     },
@@ -123,13 +123,13 @@
     },
     "etaf-telega": {
       "url": "https://github.com/emacs-taf/etaf-telega.git",
-      "revision": "2356f04f5b19078774520a69dd5e5cb7aeb52525",
+      "revision": "94f53bffa3a2062a6ada2c622408e553696b34d3",
       "branch": "main",
       "role": "application"
     },
     "etaf-video-player": {
       "url": "https://github.com/emacs-taf/etaf-video-player.git",
-      "revision": "7a2d8046db69f6b54acf3dc9434b1d938eb2d82d",
+      "revision": "d5acafe98976b0fd680742e74e1323cfd4817131",
       "branch": "main",
       "role": "application"
     },
@@ -165,13 +165,13 @@
     },
     "etaf-tanks": {
       "url": "https://github.com/emacs-taf/etaf-tanks.git",
-      "revision": "45292dfb1ee11e3363cbe4e8b92efec08b769138",
+      "revision": "607a06e7eed2f8febbfedc3a3762bb0ca3dd56b5",
       "branch": "main",
       "role": "game"
     },
     "etaf-xiangqi": {
       "url": "https://github.com/emacs-taf/etaf-xiangqi.git",
-      "revision": "b47419a28bf19aac0f4994676f59a04dcb82921c",
+      "revision": "44beca7def743fc1efa4b85f8ef8e68d96cef5d9",
       "branch": "main",
       "role": "game"
     },
