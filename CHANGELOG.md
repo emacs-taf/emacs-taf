@@ -4,6 +4,10 @@
 
 ### Changed
 
+- `etaf-install` 0.2.6: the installer payload changed with the archive's new
+  package list, so the archive serves it under a new version instead of
+  overwriting 0.2.5.
+
 - `etaf-install` 0.2.5: the installer payload changed with the new package
   versions, so the archive serves it under a new version instead of
   overwriting 0.2.4.
