@@ -4,6 +4,11 @@
 
 ### Changed
 
+- `etaf-install` 0.2.7 offers the packages other authors publish through the
+  archive beside its own targets, in the group and under the label the
+  archive states. Its own table now names every package this project
+  ships, so no framework or game is filed under applications.
+
 - `etaf-install` 0.2.6: the installer payload changed with the archive's new
   package list, so the archive serves it under a new version instead of
   overwriting 0.2.5.
