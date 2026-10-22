@@ -547,6 +547,13 @@ def stage(directory, output):
         raise ValueError("Publication requires the recorded targets through both installation paths")
     sources = {name: checkpoint[name]["revision"] for name in selection["packages"]}
     sources["etaf-install"] = revision
+    registry = community_packages()
+    for name in manifest.get("community", {}):
+        # A community package is served from the revision the registry pins, not
+        # from the workspace checkpoint, so publication checks that pin.
+        if name not in registry:
+            raise ValueError(f"{name}: community package is missing from community.json")
+        sources[name] = registry[name]["revision"]
     if (manifest.get("sources") != sources
             or set(sources) != {item["name"] for item in manifest["packages"]}):
         raise ValueError("Package provenance does not match the recorded workspace checkpoint")
