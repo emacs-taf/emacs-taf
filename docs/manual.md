@@ -363,6 +363,12 @@ activates the current frame once and requires focus during latency samples;
 `--focus-policy foreground` requires focus without activating it. Diagnostic
 passes always allow background execution and retain their actual focus state.
 Window-scoped screenshots and recordings do not require foreground activation.
+
+Evidence records a source snapshot of the workspace root and of every load path
+the run uses. A file that changes there while samples run turns the report into
+`UNVERIFIED: Workspace sources changed during measurement`, so finish edits in
+those checkouts before a measured run: that verdict means the code moved during
+the measurement, not that the machine was slow.
 On macOS, App Nap can throttle a background Emacs, so background samples then
 measure the throttle instead of the code. Confirm a dedicated measurement Emacs
 is not throttled by running a pure Lisp loop there and in batch Emacs. If it is,

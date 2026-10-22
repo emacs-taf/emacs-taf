@@ -186,6 +186,11 @@ python3 scripts/performance.py run --mode gui --scenario gallery.selection.mouse
 `--focus-policy foreground` 只要求前台而不激活窗口。诊断采样始终允许后台运行并记录
 实际焦点状态。按窗口截图和录屏本身不要求前台激活。
 
+证据会记录工作区根目录与本次每个 load path 的源码快照；采样期间那里有文件变化，
+报告就变成
+`UNVERIFIED: Workspace sources changed during measurement`。测之前先把这些检出里的
+编辑收尾：这条判定说明测量期间代码动了，不是机器慢。
+
 先完成编译，再进行 GUI 验收。预检记录进程、加载来源和库文件；如果加载自另一份
 checkout、已有 profiler 正在运行，或已加载包在 Emacs 启动后被修改或重编译，则拒绝
 验收。保存工作、重启同一个原生 Emacs，再执行 `M-x server-start`，可建立新的代码代。
