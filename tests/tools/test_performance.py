@@ -19,16 +19,26 @@ FIXTURE = ROOT / "tests/fixtures/performance-scenarios.el"
 class BrokenScenarioFile(unittest.TestCase):
     def test_a_scenario_file_that_cannot_load_is_reported_and_skipped(self):
         with tempfile.TemporaryDirectory() as directory:
+            # A dedicated root keeps a test off the live workspace: the run's
+            # source digest covers whatever the root registers.
+            root = self.fixture_root(Path(directory))
             broken = Path(directory) / "blocked-scenarios.el"
             broken.write_text('(error "Blocked provider is not merged yet")\n')
             process = subprocess.run(
-                [sys.executable, str(COMMAND), "list", "--root", str(ROOT),
+                [sys.executable, str(COMMAND), "list", "--root", str(root),
                  "--scenario-file", str(FIXTURE), "--scenario-file", str(broken)],
                 capture_output=True, text=True, timeout=90)
             self.assertEqual(0, process.returncode, process.stdout + process.stderr)
             self.assertIn("fixture.counter", process.stdout)
             self.assertIn(str(broken), process.stderr)
             self.assertIn("Blocked provider is not merged yet", process.stderr)
+
+    def fixture_root(self, directory):
+        """Return an empty workspace root, so no checkout is digested."""
+        root = Path(directory) / "workspace"
+        root.mkdir()
+        (root / "workspace.json").write_text(json.dumps({"schema": 1, "repositories": {}}) + "\n")
+        return root
 
 
 class ExitPublicationCommand(unittest.TestCase):
@@ -44,15 +54,19 @@ subprocess.Popen = ExitAfterPublication
 sys.argv = sys.argv[1:]
 runpy.run_path(sys.argv[0], run_name="__main__")
 '''
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory() as base:
+            root = Path(base) / "workspace"
+            root.mkdir()
+            (root / "workspace.json").write_text(json.dumps({"schema": 1, "repositories": {}}) + "\n")
+            directory = Path(base) / "evidence"
             process = subprocess.run(
-                [sys.executable, '-c', launcher, str(COMMAND), 'run', '--root', str(ROOT),
+                [sys.executable, '-c', launcher, str(COMMAND), 'run', '--root', str(root),
                  '--scenario-file', str(FIXTURE), '--mode', 'batch',
                  '--scenario', 'fixture.counter', '--sets', '1', '--samples', '2',
-                 '--warmups', '0', '--output-dir', directory],
+                 '--warmups', '0', '--output-dir', str(directory)],
                 capture_output=True, text=True, timeout=25)
             self.assertEqual(0, process.returncode, process.stdout + process.stderr)
-            report = json.loads((Path(directory)/'result.json').read_text())
+            report = json.loads((directory/'result.json').read_text())
             self.assertTrue(report['valid'])
             self.assertEqual(2, report['cases']['fixture.counter']['count'])
             self.assertNotIn('Batch exited', process.stdout + process.stderr)
@@ -63,6 +77,14 @@ class PerformanceTool(unittest.TestCase):
     def setUpClass(cls):
         cls.directory = tempfile.TemporaryDirectory(prefix="taf-perf-tests-")
         cls.base = Path(cls.directory.name)
+        # These scenarios load no workspace package, so an empty root keeps the
+        # run's source digest off the live checkouts.  A concurrent edit there
+        # used to turn every measurement UNVERIFIED; the digest itself is still
+        # covered by SourceProvenance.
+        cls.workspace = cls.base / "workspace"
+        cls.workspace.mkdir()
+        (cls.workspace / "workspace.json").write_text(
+            json.dumps({"schema": 1, "repositories": {}}) + "\n")
         cls.good = cls.run_case("valid", "fixture.counter", "--diagnose", "--diagnostic-samples", "1")
 
     @classmethod
@@ -73,7 +95,7 @@ class PerformanceTool(unittest.TestCase):
     def run_case(cls, name, scenario, *extra, warmups=0):
         output = cls.base / name
         process = subprocess.run(
-            [sys.executable, str(COMMAND), "run", "--root", str(ROOT),
+            [sys.executable, str(COMMAND), "run", "--root", str(cls.workspace),
              "--scenario-file", str(FIXTURE), "--mode", "batch", "--scenario", scenario,
              "--samples", "2", "--sets", "1", "--output-dir", str(output),
              *([] if warmups is None else ["--warmups", str(warmups)]), *extra],
@@ -352,7 +374,7 @@ class PerformanceTool(unittest.TestCase):
             with self.subTest(count=count):
                 output = self.base / f"warmup-bounds-{count}"
                 process = subprocess.run(
-                    [sys.executable, str(COMMAND), "run", "--root", str(ROOT),
+                    [sys.executable, str(COMMAND), "run", "--root", str(self.workspace),
                      "--scenario-file", str(FIXTURE), "--mode", "batch", "--scenario", "fixture.counter",
                      "--warmups", str(count), "--output-dir", str(output)],
                     capture_output=True, text=True, timeout=5)
@@ -434,7 +456,8 @@ class PerformanceTool(unittest.TestCase):
                   :cleanup (lambda () (kill-buffer buffer))))))
 '''.replace("FAILURE", failure).replace("REPORT", json.dumps(str(report))))
         process = subprocess.run(
-            [sys.executable, str(COMMAND), "run", "--root", str(ROOT),
+            [sys.executable, str(COMMAND), "run", "--root", str(self.workspace),
+             "--load-path", str(ROOT / "ecss"), "--load-path", str(ROOT / "ebox"),
              "--scenario-file", str(scenario), "--scenario", "fixture.journal",
              "--mode", "batch", "--sets", "1", "--samples", "4", "--warmups", "0",
              "--output-dir", str(output)], capture_output=True, text=True, timeout=25)
