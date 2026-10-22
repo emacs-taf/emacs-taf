@@ -127,28 +127,29 @@ so the ETAF manager and later upgrades through `M-x list-packages` resolve them.
   "Community packages read from the archive manifest, or nil when unread.")
 
 (defun etaf-install--community ()
-  "Return the archive's community records, reading the manifest at most once.
+  "Return the community records cached by an interactive run, or nil.
 
-  The registry states each package's group, label and open command, so nothing
-  is guessed from the archive index. A missing manifest leaves the curated
-  targets working and adds nothing."
+  Reading them costs a request to the archive, so it happens only when the user
+  runs the installer, never on a package.el installation path: a gate or a
+  batch installation must not wait on the network."
   (or etaf-install-community-cache
       (setq etaf-install-community-cache
-            (condition-case nil
-                (let ((buffer (url-retrieve-synchronously
-                               (concat (or (cdr (assoc "etaf" package-archives))
-                                           etaf-install-archive-url)
-                                       "manifest.json")
-                               t t 2)))
-                  (prog1 (when buffer
-                           (with-current-buffer buffer
-                             (goto-char (point-min))
-                             (when (search-forward "\n\n" nil t)
-                               (gethash "community"
-                                        (json-parse-buffer :object-type 'hash-table
-                                                           :null-object nil)))))
-                    (when (buffer-live-p buffer) (kill-buffer buffer))))
-              (error nil)))))
+            (when (called-interactively-p 'any)
+              (condition-case nil
+                  (let ((buffer (url-retrieve-synchronously
+                                 (concat (or (cdr (assoc "etaf" package-archives))
+                                             etaf-install-archive-url)
+                                         "manifest.json")
+                                 t t 3)))
+                    (prog1 (when buffer
+                             (with-current-buffer buffer
+                               (goto-char (point-min))
+                               (when (search-forward "\n\n" nil t)
+                                 (gethash "community"
+                                          (json-parse-buffer :object-type 'hash-table
+                                                             :null-object nil)))))
+                      (when (buffer-live-p buffer) (kill-buffer buffer))))
+                (error nil))))))
 
 (defun etaf-install--archive-targets ()
   "Return community packages this table does not curate.
