@@ -10,6 +10,15 @@
 
 ### Added
 
+- The archive can carry packages other authors build with ETAF. `community.json`
+  pins one revision of each author's repository with the files to ship, the
+  dependencies this archive guarantees and the license; `scripts/community.py
+  add`/`update` maintain that registry. `exc` (a spreadsheet inside Emacs, by
+  yibie) is the first entry. Community packages are filed under Community on the
+  archive page, and every package row now names its author, linking the
+  organization or the author's GitHub account.
+### Added
+
 - The published package archive states when each package last changed. The
   release build records `updated` in `manifest.json`, the newest commit that
   touched the files a package ships, so publishing a release or changing an

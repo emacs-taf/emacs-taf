@@ -105,7 +105,7 @@ def export(source, revision, destination):
         archive.extractall(destination, filter="data")
 
 
-def last_change(checkout, revision, files):
+def last_change(git_dir, revision, files):
     """Return the committer date of the newest commit that changed shipped files.
 
     The archive shows each package's freshness, so the date has to mean "this
@@ -115,12 +115,26 @@ def last_change(checkout, revision, files):
     """
     if not files:
         raise ValueError("A package must ship at least its entry file")
-    raw, _ = run(["git", "--git-dir", git_directory(checkout), "log", "-1",
+    raw, _ = run(["git", "--git-dir", str(git_dir), "log", "-1",
                   "--format=%cI", revision, "--", *files])
     value = raw.decode().strip()
     if not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[+-][0-9]{2}:[0-9]{2}", value):
-        raise ValueError(f"Cannot date the newest change of {checkout.name}: {value!r}")
+        raise ValueError(f"Cannot date the newest change of {revision[:12]}: {value!r}")
     return value
+
+
+def community_packages():
+    """Return the packages other authors publish through this archive.
+
+    They are redistributed from their own repositories at a pinned revision, so
+    the archive serves their bytes but never owns them. The registry states the
+    files to ship, the dependencies this archive guarantees and the license.
+    """
+    path = ROOT / "community.json"
+    if not path.exists():
+        return {}
+    import community  # optional: a release without community packages needs no registry
+    return community.registry()["packages"]
 
 
 def build(directory):
@@ -158,12 +172,27 @@ def build(directory):
             resources[name] = options.get("resources", [])
             provenance[name] = entry["revision"]
             checkouts[name] = source
+        community_pins = community_packages()
+        paths, declared_require, git_dirs = {}, {}, {}
+        for name, record in community_pins.items():
+            if name in sources:
+                raise ValueError(f"{name}: a community package cannot shadow a workspace package")
+            repository = community.fetch(record["url"], name, record["revision"])
+            community.export(repository, record["revision"], work / name)
+            sources[name] = work / name
+            paths[name] = record.get("paths", ())
+            if record.get("requires"):
+                declared_require[name] = record["requires"]
+            provenance[name] = record["revision"]
+            git_dirs[name] = repository
         stage = work / "archive"
-        manifest = package_archive.build(stage, sources, resources)
-        updated = {name: last_change(
-            checkouts[name], provenance[name],
-            package_archive.source_files(sources[name], name, resources.get(name, ())))
-            for name in sources}
+        manifest = package_archive.build(stage, sources, resources, paths, declared_require)
+        updated = {}
+        for name in sources:
+            shipped = package_archive.source_files(sources[name], name, resources.get(name, ()),
+                                                  paths.get(name, ()))
+            updated[name] = last_change(git_dirs.get(name) or git_directory(checkouts[name]),
+                                        provenance[name], shipped)
         available = {item["name"]: item["version"] for item in manifest["packages"]}
         for package in manifest["packages"]:
             # A dependency outside the archive must be declared explicitly, so a
@@ -184,6 +213,11 @@ def build(directory):
                     raise ValueError(f"{package['name']}: dependency {dependency} is too old")
         manifest["sources"] = provenance
         manifest["updated"] = updated
+        if community_pins:
+            manifest["community"] = {name: {"url": record["url"],
+                                            "license": record.get("license", "unspecified"),
+                                            "maintainer": record.get("maintainer", "")}
+                                     for name, record in community_pins.items()}
         manifest["workspace"] = revision
         (stage / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
         stage.rename(directory)
@@ -362,8 +396,13 @@ def verify(directory, emacs, targets, direct=False, standard_archives=None, scop
     results = []
     snapshot = serve_standard_archives(standard_archives) if standard_archives else contextlib.nullcontext(None)
     with snapshot as standard_base:
-        for target in dict.fromkeys(targets):
-            for direct_mode in ((True,) if direct else (False, True)):
+        # A community package is not an ETAF target: this installer does not
+        # open it and cannot check its capabilities, so it is verified through
+        # package.el only, which is how a visitor installs it.
+        community_only = set(manifest.get("community", {}))
+        for target in dict.fromkeys([*targets, *community_only]):
+            modes = (True,) if direct or target in community_only else (False, True)
+            for direct_mode in modes:
                 with tempfile.TemporaryDirectory(prefix="etaf-install-") as profile:
                     env = dict(os.environ, ETAF_INSTALL_ARCHIVE=str(directory),
                                ETAF_INSTALL_PROFILE=profile, ETAF_INSTALL_TARGET=target)
@@ -468,19 +507,23 @@ def stage(directory, output):
     # The installer is the entry under test, not a target, and dependencies such
     # as ebox are not installed directly: the sealed selection names the targets.
     declare = selection.get("targets") or [item["name"] for item in manifest["packages"]]
+    community_only = set(manifest.get("community", {}))
     declared = [name for name in declare if name != "etaf-install"]
+    declared += sorted(community_only - set(declared))
     scope = report.get("scope", "full")
+    def entries(name):
+        # Community packages have no ETAF entry; only package.el installs them.
+        return ("package-install",) if name in community_only else ("etaf-install", "package-install")
+
     if scope == "full":
-        expected = {(name, entry) for name in declared
-                    for entry in ("etaf-install", "package-install")}
+        expected = {(name, entry) for name in declared for entry in entries(name)}
     elif scope == "presentation":
         # A presentation-only release names the changed targets explicitly; the
         # release tool only chooses this scope after diffing the shipped files.
         scoped = report.get("targets") or []
         if not scoped or any(name not in declared for name in scoped):
             raise ValueError("Presentation evidence names no declared target")
-        expected = {(name, entry) for name in scoped
-                    for entry in ("etaf-install", "package-install")}
+        expected = {(name, entry) for name in scoped for entry in entries(name)}
     else:
         raise ValueError(f"Unknown installation scope: {scope}")
     installations = report.get("installations", [])
@@ -502,6 +545,8 @@ def stage(directory, output):
     public = {"schema": 2, "workspace": revision, "sources": sources, "packages": []}
     if manifest.get("updated"):
         public["updated"] = manifest["updated"]
+    if manifest.get("community"):
+        public["community"] = manifest["community"]
     for package in manifest["packages"]:
         public["packages"].append({key: package[key] for key in
                                   ("name", "version", "requirements", "summary", "file", "sha256")})

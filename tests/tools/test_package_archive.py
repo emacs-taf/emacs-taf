@@ -69,6 +69,26 @@ class PackageArchiveTests(unittest.TestCase):
             self.assertIn("sample-1.2.3/dictionaries/zh-CN/rules.txt", archive.getnames())
             self.assertNotIn("sample-1.2.3/dictionaries/.private", archive.getnames())
 
+    def test_ship_globs_and_declared_dependencies_cover_a_foreign_layout(self):
+        sys.path.insert(0, str(ROOT / "scripts"))
+        import package_archive
+        plugins = self.source / "plugins"
+        plugins.mkdir()
+        (plugins / "sample-plugin.el").write_text(";;; -*- lexical-binding: t; -*-\n(provide 'sample-plugin)\n")
+        (self.source / "sample-extra.el").write_text(";;; -*- lexical-binding: t; -*-\n(provide 'sample-extra)\n")
+        (self.source / "private.txt").write_text("not shipped\n")
+        output = self.base / "archive"
+        manifest = package_archive.build(
+            output, {"sample": self.source}, {},
+            {"sample": ["*.el", "plugins/*.el"]}, {"sample": [["emacs", "29.1"], ["etaf", "0.3.0"]]})
+        package = manifest["packages"][0]
+        self.assertEqual(package["requirements"], [["emacs", "29.1"], ["etaf", "0.3.0"]])
+        with tarfile.open(output / "sample-1.2.3.tar") as archive:
+            names = sorted(archive.getnames())
+        self.assertEqual(names, ["sample-1.2.3/plugins/sample-plugin.el",
+                                 "sample-1.2.3/sample-extra.el", "sample-1.2.3/sample-pkg.el",
+                                 "sample-1.2.3/sample.el"])
+
     def test_existing_output_is_never_replaced(self):
         output = self.base / "archive"
         self.build(output)

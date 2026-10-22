@@ -1,0 +1,35 @@
+{
+  "packages": {
+    "exc": {
+      "license": "GPL-3.0-or-later",
+      "maintainer": "yibie",
+      "paths": [
+        "*.el",
+        "README*",
+        "Readme*",
+        "LICENSE*",
+        "License*",
+        "LICENCE*",
+        "Licence*",
+        "COPYING*",
+        "NOTICE*",
+        "CHANGELOG*",
+        "Changelog*",
+        "plugins/*.el"
+      ],
+      "requires": [
+        [
+          "emacs",
+          "29.1"
+        ],
+        [
+          "etaf",
+          "0.3.0"
+        ]
+      ],
+      "revision": "bc989cb8bb973ff4e1aeb3e6efdf26303db146d5",
+      "url": "https://github.com/yibie/exc.el"
+    }
+  },
+  "schema": 1
+}

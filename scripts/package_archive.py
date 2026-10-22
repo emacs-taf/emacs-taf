@@ -22,6 +22,9 @@ NAME = re.compile(r"[a-z][a-z0-9-]*\Z")
 VERSION = re.compile(r"[0-9]+(?:\.[0-9]+)*\Z")
 STAMP = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:[+-][0-9]{2}:[0-9]{2}|Z)\Z")
 GENERATED = {".elc", ".eln", ".pyc", ".o", ".so", ".dylib", ".dll", ".a"}
+# An upstream README or license travels with the source whatever it is called;
+# third-party packages name it `License`, `LICENSE.txt` or `COPYING`.
+NOTICE = ("readme", "license", "licence", "copying", "notice", "changelog")
 
 
 def metadata(root, name):
@@ -43,8 +46,28 @@ def metadata(root, name):
             "summary": summary[1].strip() if summary else name}
 
 
-def source_files(root, name, resources=()):
-    """Select runtime inputs, refusing symlinks and missing resource directories."""
+def normalize_requirements(name, require):
+    """Accept declared dependencies as name/minimum pairs and rehearse them."""
+    if not isinstance(require, list) or not require:
+        raise ValueError(f"{name}: declared dependencies must be a nonempty list")
+    pairs = []
+    for entry in require:
+        if (not isinstance(entry, list) or len(entry) != 2
+                or not NAME.fullmatch(str(entry[0])) or not VERSION.fullmatch(str(entry[1]))):
+            raise ValueError(f"{name}: invalid declared dependency: {entry!r}")
+        pairs.append([entry[0], entry[1]])
+    if len({key for key, _ in pairs}) != len(pairs):
+        raise ValueError(f"{name}: duplicate declared dependency")
+    return pairs
+
+
+def source_files(root, name, resources=(), paths=()):
+    """Select runtime inputs, refusing symlinks and missing resource directories.
+
+    PATHS selects the shipped files by glob and replaces the layout rules; the
+    layout of a package written elsewhere is its own. The entry file must still
+    be among the selected files.
+    """
     if (root / "lisp").is_symlink():
         raise ValueError(f"{name}: Lisp implementation directory cannot be a symlink")
     for resource in resources:
@@ -54,6 +77,25 @@ def source_files(root, name, resources=()):
                 or not (root / resource).is_dir()):
             raise ValueError(f"{name}: invalid or missing resource directory: {resource}")
     files = {}
+    if paths:
+        for pattern in paths:
+            path = PurePosixPath(pattern)
+            if not pattern or path.is_absolute() or ".." in path.parts:
+                raise ValueError(f"{name}: invalid ship path: {pattern}")
+        selected = set()
+        for pattern in paths:
+            for candidate in root.glob(pattern):
+                selected.add(candidate.relative_to(root))
+        for relative in sorted(selected):
+            path = root / relative
+            if path.is_symlink() or not path.is_file():
+                raise ValueError(f"{name}: ship paths must name regular files: {relative}")
+            if path.suffix in GENERATED or any(part.startswith(".") for part in relative.parts):
+                continue
+            files[relative.as_posix()] = path.read_bytes()
+        if f"{name}.el" not in files:
+            raise ValueError(f"{name}: package entry missing")
+        return files
     resource_paths = tuple(PurePosixPath(resource) for resource in resources)
     for parent, directories, names in os.walk(root):
         relative_parent = Path(parent).relative_to(root)
@@ -68,8 +110,8 @@ def source_files(root, name, resources=()):
             relative = path.relative_to(root)
             parts = relative.parts
             top = len(parts) == 1
-            include = top and (filename == f"{name}.el" or filename.startswith(
-                ("README", "LICENSE", "COPYING", "NOTICE", "CHANGELOG")))
+            include = top and (filename == f"{name}.el"
+                               or filename.lower().startswith(NOTICE))
             include = include or (parts[0] == "lisp" and path.suffix == ".el")
             # Compare POSIX spellings: a Path is a WindowsPath on Windows, and
             # it never equals the PurePosixPath resource names, which silently
@@ -88,12 +130,19 @@ def source_files(root, name, resources=()):
     return files
 
 
-def write_package(output, root, name, resources=()):
-    """Write one deterministic source archive; byte compilation is installation-local."""
+def write_package(output, root, name, resources=(), paths=(), require=None):
+    """Write one deterministic source archive; byte compilation is installation-local.
+
+    REQUIRE replaces the header's dependencies when this archive knows better
+    than the upstream header, as with a package whose optional ETAF renderer is
+    compiled and therefore needs ETAF installed first.
+    """
     info = metadata(root, name)
     version = info["version"]
+    if require is not None:
+        info["requirements"] = normalize_requirements(name, require)
     requirements = "(" + " ".join(f'({key} "{minimum}")' for key, minimum in info["requirements"]) + ")"
-    files = source_files(root, name, resources)
+    files = source_files(root, name, resources, paths)
     # JSON string escaping is also valid for these package summary strings in Lisp.
     files[f"{name}-pkg.el"] = (
         f';;; -*- lexical-binding: t; -*-\n'
@@ -141,6 +190,14 @@ def verify(directory):
         archive = directory / package["file"]
         if archive.is_symlink() or hashlib.sha256(archive.read_bytes()).hexdigest() != package["sha256"]:
             raise ValueError(f"Archive checksum mismatch: {archive.name}")
+    community = manifest.get("community")
+    if community is not None and (not isinstance(community, dict) or not set(community) <= seen
+                                  or not all(isinstance(value, dict)
+                                             and re.fullmatch(r"https://[^\s]+", str(value.get("url", "")))
+                                             and isinstance(value.get("license"), str)
+                                             and isinstance(value.get("maintainer"), str)
+                                             for value in community.values())):
+        raise ValueError("Community origins must name served packages with an https URL and a license")
     updated = manifest.get("updated")
     if updated is not None and (not isinstance(updated, dict) or set(updated) != seen
                                 or not all(isinstance(value, str) and STAMP.fullmatch(value)
@@ -155,17 +212,21 @@ def verify(directory):
     return manifest
 
 
-def build(directory, sources, resources):
+def build(directory, sources, resources, paths=None, require=None):
     """Publish a complete local archive atomically, without replacing existing output."""
     if directory.exists():
         raise ValueError(f"Refusing to replace existing output: {directory}")
-    if not sources or set(resources) - set(sources):
-        raise ValueError("At least one package is required; resources must name selected packages")
+    paths, require = paths or {}, require or {}
+    if (not sources or set(resources) - set(sources) or set(paths) - set(sources)
+            or set(require) - set(sources)):
+        raise ValueError("At least one package is required; resources, paths and declared "
+                         "dependencies must name selected packages")
     directory.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix=".package-build-", dir=directory.parent) as work:
         stage = Path(work) / "archive"
         stage.mkdir()
-        packages = [write_package(stage, source, name, resources.get(name, ()))
+        packages = [write_package(stage, source, name, resources.get(name, ()),
+                                  paths.get(name, ()), require.get(name))
                     for name, source in sorted(sources.items())]
         manifest = write_index(stage, packages)
         verify(stage)

@@ -85,6 +85,21 @@ newest shipped change as an ISO 8601 commit timestamp. `updated` must name exact
 the served packages, and a verifier rejects a partial or non-ISO map rather than
 publish a package whose freshness or commit cannot be shown.
 
+### Publish a package another author wrote
+
+`community.json` lists packages built with ETAF that this archive redistributes
+but does not own. Each entry pins one revision of the author's repository, the
+globs to ship, the dependencies this archive guarantees, the license and the
+maintainer. `scripts/community.py add URL [--path GLOB] [--requires NAME=VERSION]`
+fetches the revision into a cache, validates the entry header and rewrites the
+registry; `update NAME` moves an entry to the author's current revision and
+refuses when the package version did not change, because a published version may
+not change bytes. The release build reads the same cache, so a release never
+depends on what the remote serves that day, and records the origin in the
+manifest's `community` map. The archive page files those packages under
+Community and links the author's account; the gate installs them through
+package.el only, since `M-x etaf-install` does not own them.
+
 ### Build and verify the official selection
 
 Maintainers use Python 3.12+, Git and Emacs for release verification. Users need
