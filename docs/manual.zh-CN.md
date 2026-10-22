@@ -84,6 +84,43 @@ make release-tool-tests
 
 只在 POSIX 上通过会掩盖两类失败：遍历目录的工具里路径风格比较错误（Windows 上的 `Path` 不等于 `PurePosixPath`），以及已安装包的 autoload 文件通过宿主的 `load-path` 而不是包自身根目录解析。Windows 格子是这两类问题的平台证据；格子失败时读日志，不要只看退出码猜。
 
+## 封口并发布一次跨仓改动
+
+提供方的改动通常要和消费方、以及记录它们的检查点一起落地。手工做这件事意味着
+同一条消息要写进好几个仓库、顺序靠记、pin 忘了更新。`scripts/changes.py` 按依赖
+顺序把这条序列跑一次：
+
+```sh
+python3 scripts/changes.py status
+python3 scripts/changes.py commit -F /tmp/message.txt
+python3 scripts/changes.py publish
+```
+
+顺序来自数据而不是工具里的清单：每个入口在 `Package-Requires` 里声明自己的提供方，
+所以提供方先封口，消费它的包后封口，根仓库最后，因为根仓库记录它们的版本。
+
+- `status` 依次打印：有未封口改动的仓库、各仓库超出 `main@origin` 的提交（按上次抓取）、
+  `workspace.json` 里 pin 与封口版本不一致的仓库、持有未封口共享工具副本的仓库，以及
+  `commit` 会采用的封口顺序。它不抓取也不写入。
+- 消息文件只有一行不带 scope 的 Conventional Commits 标题，以及解释这次改动的正文。
+  工具补上仓库名（`feat(etaf): ...`），再追加 `Repo: <仓库>` 和写明实际跑了哪些门禁的
+  `Validation:` 行，然后对每条结果运行 `scripts/check-commit-message.py`。正文里不要
+  自己写这两行。
+- 所有门禁都在第一次封口之前跑完，任一失败则所有仓库保持原样。包运行自己的
+  `make -C <包> structure-check`，有 `tests/tools` 时再跑这套测试；根仓库运行
+  `python3 scripts/check-repository.py` 和根测试套件。`--full` 改为运行每个包的完整
+  `check` 目标，即发布前的门禁。
+- 根仓库最后封口，把每个封口版本写进 `workspace.json`。`--only CHECKOUT...` 把一次运行
+  限制在指定仓库（可重复或用逗号分隔；`workspace` 指根仓库）。没点名根仓库的改动仍会
+  记录 pin：此时根仓库只提交 `workspace.json`，别处未完成的工作保持未封口。共享工具的
+  未封口副本一律拒绝封口，那些文件归 `workspace.py seal-sync`。
+- `publish` 抓取两个镜像，并拒绝以下仓库：任一镜像上无法快进、pin 指向别的版本、提交
+  过不了消息或结构检查。所有判定到齐之前不推任何仓库；推不了的仓库同时阻塞依赖它的
+  消费方。远端分支就是账本：推送失败后重跑会跳过已在封口版本上的仓库，只推剩下的；
+  远端已走在前面的仓库会被报出来，而不是强推。
+- `publish --dry-run` 抓取并验证但不移动分支，有仓库被阻塞时退出码为 1；`--remote`
+  限制镜像，`--only` 限制仓库。新仓库先在镜像上建好分支；本工具不会替你创建。
+
 ## 发布一个安装目标
 
 用户看到的入口只有 `M-x etaf-install`，`package.el` 是它下面的机制。引导代码里的

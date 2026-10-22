@@ -203,6 +203,58 @@ packages whose autoloaded files are resolved through the host's `load-path`
 instead of the package's own root. The Windows cell is the platform proof for
 both; when a cell fails, read its log rather than guessing from the exit code.
 
+## Seal and publish one cross-repository change
+
+A provider change usually lands with its consumers and the checkpoint that
+records them, and doing that by hand means the same message on several
+checkouts, a manual order, and a pin nobody remembers to update.
+`scripts/changes.py` runs that sequence once, in dependency order:
+
+```sh
+python3 scripts/changes.py status
+python3 scripts/changes.py commit -F /tmp/message.txt
+python3 scripts/changes.py publish
+```
+
+The order is data, not a list in the tool: each entry declares its providers in
+`Package-Requires`, so a provider is sealed before the consumers that now call
+it, and the workspace root last because it records their revisions.
+
+- `status` prints the checkouts with unsealed changes, the commits each one has
+  beyond `main@origin` (as last fetched), the checkouts whose `workspace.json`
+  pin names another revision, the checkouts holding unsealed copies of the
+  shared tooling, and the order `commit` would use. It fetches and writes
+  nothing.
+- The message file holds one Conventional Commit title without a scope and the
+  body that explains the change. The tool adds the checkout name -
+  `feat(etaf): ...` - and appends `Repo: <checkout>` and a `Validation:` line
+  naming the gates it actually ran, then runs
+  `scripts/check-commit-message.py` on each result. A body must not carry those
+  two lines itself.
+- Every gate runs before the first seal, and one failing gate leaves every
+  checkout as it was. A package runs its own `make -C <package>
+  structure-check` and, when it keeps any, its `tests/tools` suite; the root runs
+  `python3 scripts/check-repository.py` and the root suite. `--full` runs each
+  package's whole `check` target instead, which is the pre-release run.
+- The root is sealed last and records each sealed revision in `workspace.json`.
+  `--only CHECKOUT...` limits a run to the named checkouts (repeatable or comma
+  separated; `workspace` names the root). A change sealed without naming the
+  root still records its pins: the root then commits `workspace.json` alone, so
+  work in progress elsewhere stays unsealed. Unsealed copies of the shared
+  tooling always refuse the seal, because `workspace.py seal-sync` owns those
+  files.
+- `publish` fetches both mirrors and refuses a checkout that is not
+  fast-forward on either one, whose pin names another revision, or whose
+  commits fail the message or structure check. It pushes nothing until every
+  verdict is in, and a checkout it cannot publish also blocks the consumers
+  depending on it. The remote bookmarks are the ledger: a rerun after a failed
+  push skips what already sits at its sealed revision and pushes the rest, and
+  a mirror that moved ahead is reported instead of forced.
+- `publish --dry-run` fetches and verifies without moving a branch, and exits 1
+  when a checkout it would publish is blocked. `--remote` limits the mirrors and
+  `--only` limits the checkouts. For a new repository create its branch on the
+  mirrors first; the tool will not create one.
+
 ## Publish an install target
 
 `M-x etaf-install` is the single entry users see; `package.el` is the mechanism

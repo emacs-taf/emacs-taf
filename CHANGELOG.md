@@ -19,6 +19,15 @@
 
 ### Added
 
+- `scripts/changes.py` seals and publishes one cross-repository change.
+  `status` reports the checkouts with unsealed work, the commits beyond
+  `main@origin` and the stale `workspace.json` pins; `commit -F FILE` runs each
+  checkout's own checks, then seals providers before the consumers that call
+  them and records the sealed revisions in the root; `publish` verifies
+  fast-forward on both mirrors before moving any branch, blocks the consumers
+  of a checkout it cannot publish, and resumes with only what a failed push
+  left behind.
+
 - The archive can carry packages other authors build with ETAF. `community.json`
   pins one revision of each author's repository with the files to ship, the
   dependencies this archive guarantees and the license; `scripts/community.py
