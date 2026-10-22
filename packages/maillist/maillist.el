@@ -77,7 +77,11 @@
 ;;
 ;; Function: maillist-search (session text)
 ;; Search the archive for TEXT, or return to the archive's own index when TEXT
-;; is empty.  The query runs remotely.
+;; is empty.  TEXT may name `from:', `to:', `subject:', `body:' and `message:',
+;; a date range with `after:' and `before:', and the reader's own marks with
+;; `is:unread' or `is:starred'; `maillist-compile-query' turns it into the
+;; archive's query and the local filters.  A query naming only local marks
+;; filters the rows already shown and contacts nothing.
 ;;
 ;; Function: maillist-rows (session)
 ;; Return the rows SESSION shows, in list order, honouring `:scope'.
@@ -129,6 +133,16 @@
 ;;
 ;; Function: maillist-fetch-search (source query callback)
 ;; Search SOURCE for QUERY and call CALLBACK with (:ok ROWS) or (:error MSG).
+;; QUERY is the archive's own syntax; `maillist-compile-query' builds it.
+;;
+;; Function: maillist-compile-query (text)
+;; Compile the reader's search TEXT for a public-inbox archive.  Fields
+;; `from:', `to:', `subject:', `body:' and `message:' become the archive's own
+;; prefixes, `after:' and `before:' become one date range, and bare words or
+;; quoted phrases stay terms.  `is:unread' and `is:starred' are returned as
+;; local filters, because the archive does not know this reader's marks.
+;; Return (:query REMOTE :filters (unread starred)); REMOTE is empty when TEXT
+;; only names local filters.
 ;;
 ;; Function: maillist-fetch-recent (source callback)
 ;; Fetch SOURCE's newest messages and call CALLBACK with (:ok HINTS).
@@ -143,8 +157,10 @@
 ;; Function: maillist-long-label (stamp)
 ;; Return STAMP as a readable date for the reader header.
 ;;
-;; Function: maillist-reply (session)
-;; Reply to SESSION's open thread in a `message-mode' buffer.
+;; Function: maillist-reply (session &optional private)
+;; Reply to SESSION's open thread in a `message-mode' buffer.  A private reply
+;; goes to the last message's author instead of the list; both forms keep the
+;; thread's `In-Reply-To' and `References'.
 ;;
 ;; Function: maillist-compose (session)
 ;; Write a new post to SESSION's list in a `message-mode' buffer.

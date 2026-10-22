@@ -57,6 +57,26 @@
       "purpose": "Threads are stored per archive, so another list does not show them."
     },
     {
+      "name": "maillist-tests-compile-query-maps-fields-and-marks",
+      "file": "tests/maillist-tests.el",
+      "purpose": "Reader search syntax becomes an archive query plus local mark filters."
+    },
+    {
+      "name": "maillist-tests-local-mark-filters-narrow-the-list",
+      "file": "tests/maillist-tests.el",
+      "purpose": "is:unread and is:starred filter the visible rows without a request."
+    },
+    {
+      "name": "maillist-tests-failed-search-keeps-the-open-thread",
+      "file": "tests/maillist-tests.el",
+      "purpose": "A search the archive cannot answer reports and leaves the reader alone."
+    },
+    {
+      "name": "maillist-tests-reply-targets-the-list-or-the-author",
+      "file": "tests/maillist-tests.el",
+      "purpose": "A reply addresses the list; a private reply addresses the last sender."
+    },
+    {
       "name": "maillist-tests-scope-shows-starred-and-unread-rows",
       "file": "tests/maillist-tests.el",
       "purpose": "The starred and unread scopes filter the rows the list shows."

@@ -552,9 +552,94 @@ downloads."
                      callback #'maillist-parse-recent))
 
 (defun maillist-fetch-search (source query callback)
-  "Search SOURCE for QUERY and call CALLBACK with (:ok ROWS)."
+  "Search SOURCE for QUERY and call CALLBACK with (:ok ROWS).
+QUERY is the archive's own syntax, which `maillist-compile-query' builds
+from what the reader types."
   (maillist--on-body (maillist--url source (concat "?q=" (url-hexify-string query)))
                      callback #'maillist-parse-index))
+
+;;; ---------------------------------------------------------------------------
+;;; Query syntax
+;;; ---------------------------------------------------------------------------
+
+(defconst maillist-query-fields
+  '(("from" . "f") ("to" . "t") ("subject" . "s") ("body" . "b")
+    ("message" . "mid"))
+  "Fields this client compiles into the archive's own query prefixes.")
+
+(defun maillist--query-tokens (text)
+  "Split TEXT into search tokens, keeping a quoted phrase together.
+A token ends at whitespace outside quotes; the quotes stay in the token, so
+`maillist--query-term' can decide whether it is a phrase."
+  (let ((index 0)
+        (length (length text))
+        tokens)
+    (while (< index length)
+      (if (memq (aref text index) '(?\s ?\t ?\n))
+          (cl-incf index)
+        (let ((start index)
+              (quoted nil))
+          ;; Consume characters until whitespace outside a quoted phrase.
+          (while
+              (let ((char (and (< index length) (aref text index))))
+                (cond
+                 ((null char) nil)
+                 ((eq char ?\")
+                  (setq quoted (not quoted))
+                  (cl-incf index)
+                  t)
+                 ((and (not quoted) (memq char '(?\s ?\t ?\n))) nil)
+                 (t (cl-incf index) t))))
+          (push (substring text start index) tokens))))
+    (nreverse tokens)))
+
+(defun maillist--query-term (value)
+  "Return VALUE as one archive term, quoted when it is a phrase.
+The archive's search engine takes a quoted string as a phrase and a bare word
+as one term; an empty value contributes nothing."
+  (let ((text (string-trim (string-trim value) "\"" "\"")))
+    (cond
+     ((string-empty-p text) nil)
+     ((string-match-p "[ \t\"]" text)
+      (format "\"%s\"" (replace-regexp-in-string "\"" "" text)))
+     (t text))))
+
+(defun maillist--query-date-p (value)
+  "Return non-nil when VALUE is an ISO date the archive's range accepts."
+  (string-match-p "\\`[0-9]\\{4\\}-[0-9][0-9]-[0-9][0-9]\\'" value))
+
+(defun maillist-compile-query (text)
+  "Compile the reader's search TEXT for a public-inbox archive.
+Fields `from:', `to:', `subject:', `body:' and `message:' become the archive's
+own prefixes, `after:' and `before:' become one date range, and bare words or
+quoted phrases stay terms.  `is:unread' and `is:starred' are kept apart as
+local filters: the archive does not know this reader's marks.
+Return (:query REMOTE :filters (unread starred)); REMOTE is empty when TEXT
+only names local filters."
+  (let ((remote nil)
+        (filters nil))
+    (dolist (token (maillist--query-tokens (or text "")))
+      (let* ((colon (string-match "\\`\\([a-zA-Z]+\\):" token))
+             (field (and colon (downcase (match-string 1 token))))
+             (value (and colon (substring token (match-end 0)))))
+        (cond
+         ((and field (equal field "is"))
+          (pcase (downcase (string-trim (string-trim value) "\"" "\""))
+            ("unread" (cl-pushnew 'unread filters))
+            ("starred" (cl-pushnew 'starred filters))))
+         ((and field (equal field "after") (maillist--query-date-p value))
+          (push (format "d:%s.." value) remote))
+         ((and field (equal field "before") (maillist--query-date-p value))
+          (push (format "d:..%s" value) remote))
+         ((and field (assoc field maillist-query-fields))
+          (when-let* ((term (maillist--query-term value)))
+            (push (format "%s:%s" (cdr (assoc field maillist-query-fields)) term)
+                  remote)))
+         (t
+          (when-let* ((term (maillist--query-term token)))
+            (push term remote))))))
+    (list :query (string-join (nreverse remote) " ")
+          :filters (nreverse filters))))
 
 (provide 'maillist-service)
 ;;; maillist-service.el ends here

@@ -210,11 +210,25 @@ FIELDS wins; every other PLIST entry keeps its order after them."
 
 (defun maillist-rows (session)
   "Return the visible rows of SESSION in list order.
-The open row stays visible while it is read even under the unread scope, so a
-row never disappears under the pointer that selected it."
+A local filter from the current query (`is:unread', `is:starred') hides rows
+that do not match it.  Under a scope, the open row stays visible while it is
+read, so a row never disappears under the pointer that selected it."
   (let* ((rows (etaf-value (plist-get session :threads)))
+         (filters (etaf-value (plist-get session :filters)))
          (scope (etaf-value (plist-get session :scope)))
-         (selected (etaf-value (plist-get session :selected))))
+         (selected (etaf-value (plist-get session :selected)))
+         (open (plist-get (etaf-value (plist-get session :open)) :id)))
+    (when filters
+      (setq rows
+            (seq-filter (lambda (row)
+                          (or (equal (plist-get row :id) open)
+                              (cl-every
+                               (lambda (filter)
+                                 (pcase filter
+                                   ('unread (plist-get row :unread))
+                                   ('starred (plist-get row :starred))))
+                               filters)))
+                        rows)))
     (if (eq scope 'all)
         rows
       (seq-filter (lambda (row)
@@ -253,22 +267,31 @@ row never disappears under the pointer that selected it."
 (defun maillist--summary (session)
   "Return the status line text of SESSION."
   (let* ((query (etaf-value (plist-get session :query)))
+         (filters (etaf-value (plist-get session :filters)))
          (rows (etaf-value (plist-get session :threads)))
          (sync (plist-get session :last-sync)))
     (if (not (string-empty-p query))
-        (format "搜索结果 %d 个线程" (length rows))
+        (format "搜索结果 %d 个线程%s"
+                (length (maillist-rows session))
+                (if filters "（按已读或收藏本地筛选）" ""))
       (concat (format "%d 个线程 · %d 未读" (length rows) (maillist--unread-count rows))
               (if sync (format " · %s 同步" (format-time-string "%H:%M" sync)) "")))))
 
-(defun maillist--apply-view (session)
-  "Publish the groups, summary and selection SESSION's rows imply."
+(defun maillist--apply-view (session &optional open-p)
+  "Publish the groups, summary and selection SESSION's rows imply.
+OPEN-P opens the row selected when the previous one is no longer visible;
+without it the selection moves without fetching anything, so filtering a list
+never marks mail read just by being displayed."
   (let ((rows (maillist-rows session)))
     (etaf-set-value (plist-get session :groups) (maillist--grouped rows))
     (etaf-set-value (plist-get session :summary) (maillist--summary session))
     (when (and (maillist--alive-p session)
                rows
                (not (maillist-selected-row session)))
-      (maillist-select session (plist-get (car rows) :id)))))
+      (if open-p
+          (maillist-select session (plist-get (car rows) :id))
+        (etaf-set-value (plist-get session :selected)
+                        (plist-get (car rows) :id))))))
 
 ;;; ---------------------------------------------------------------------------
 ;;; Selection and state
@@ -295,6 +318,16 @@ row unread."
       (maillist--persist-mark session id)
       (maillist--apply-view session))))
 
+(defun maillist--clear-open (session)
+  "Close SESSION's open thread and drop its selection.
+A new query shows a different set of rows, so the reader starts empty rather
+than showing a thread the list no longer contains."
+  (etaf-set-value (plist-get session :open) nil)
+  (etaf-set-value (plist-get session :reading) nil)
+  (etaf-set-value (plist-get session :selected) nil)
+  (plist-put session :open-messages nil)
+  (plist-put session :open-messages-id nil))
+
 (defun maillist--archive-list-p (session)
   "Return non-nil when SESSION shows the archive's list, not search results.
 Only that list may write the thread table: search results carry another
@@ -316,10 +349,12 @@ its body has been shown, not when the row was selected."
   "Move the selection of SESSION by DELTA rows and open the new row."
   (let* ((rows (maillist-rows session))
          (current (etaf-value (plist-get session :selected)))
-         (index (or (cl-position current rows
-                                 :key (lambda (row) (plist-get row :id))
-                                 :test #'equal)
-                    0))
+         (found (cl-position current rows
+                             :key (lambda (row) (plist-get row :id))
+                             :test #'equal))
+         ;; A filtered list can lack the old selection; the first move then
+         ;; starts at the first row in that direction.
+         (index (or found (if (< delta 0) (length rows) -1)))
          (next (nth (max 0 (min (1- (length rows)) (+ index delta))) rows)))
     (when next (maillist-select session (plist-get next :id)))))
 
@@ -770,7 +805,7 @@ FAILURES counts sender requests an earlier batch could not complete."
                                (maillist--window-rows (plist-get result :ok) session))
                (plist-put session :last-sync (current-time))
                (maillist--store-rows session)
-               (maillist--apply-view session)
+               (maillist--apply-view session t)
                (maillist--status session 'idle "")
                (maillist--fetch-authors session token)
                (maillist--prefetch session token)))))))))
@@ -782,30 +817,49 @@ FAILURES counts sender requests an earlier batch could not complete."
 
 (defun maillist-search (session text)
   "Search SESSION's archive for TEXT.
-An empty TEXT returns to the archive's own thread index."
-  (let ((query (string-trim (or text ""))))
+An empty TEXT returns to the archive's own thread index.  TEXT may name
+fields (from:, to:, subject:, body:, message:), a date range (after:,
+before:) and local marks (is:unread, is:starred); `maillist-compile-query'
+builds the archive's query and the local filters from it.  A query naming
+only local marks filters the rows already shown and contacts nothing."
+  (let* ((query (string-trim (or text "")))
+         (compiled (maillist-compile-query query))
+         (remote (plist-get compiled :query))
+         (filters (plist-get compiled :filters)))
     (etaf-set-value (plist-get session :query) query)
+    (etaf-set-value (plist-get session :filters) filters)
     (etaf-set-value (plist-get session :scope) 'all)
-    (if (string-empty-p query)
-        (progn
-          (plist-put session :last-sync nil)
-          (maillist-refresh session))
+    (cond
+     ((string-empty-p query)
+      (plist-put session :last-sync nil)
+      (maillist-refresh session))
+     ((string-empty-p remote)
+      ;; Only local filters: no request, filter what the reader has.
+      (maillist--clear-open session)
+      (maillist--apply-view session)
+      (maillist--status session 'idle "")
+      (when (null (maillist-rows session))
+        (maillist--toast session 'info "当前列表没有符合条件的线程" 5)))
+     (t
       (let ((token (cl-incf (plist-get session :sync-token))))
         (maillist--status session 'loading (format "正在搜索「%s」…" query))
         (maillist-fetch-search
-         (plist-get session :source) query
+         (plist-get session :source) remote
          (lambda (result)
            (when (maillist--current-sync-p session token)
              (if-let* ((error (plist-get result :error)))
                  (maillist--status session 'error
                                    (format "搜索失败：%s · 按 g 重试" error))
                (let ((rows (maillist--merge-rows (plist-get result :ok) session)))
+                 ;; The reader starts empty for a new result set; a failed
+                 ;; request leaves the thread the reader already had.
+                 (maillist--clear-open session)
                  (etaf-set-value (plist-get session :threads) rows)
                  (maillist--apply-view session)
                  (maillist--status session 'idle "")
-                 (when (null rows)
+                 (when (null (maillist-rows session))
                    (maillist--toast session 'info
-                                    "没有匹配的线程，清空搜索框回到列表" 5)))))))))))
+                                    "没有匹配的线程，清空搜索框回到列表" 5))))))))))))
 
 (defun maillist-dispose (session)
   "Release SESSION's store and ignore late archive answers."
@@ -857,6 +911,7 @@ Views read."
                         :selected (maillist--ref nil 'maillist-selected)
                         :scope (maillist--ref 'all 'maillist-scope)
                         :query (maillist--ref "" 'maillist-query)
+                        :filters (maillist--ref nil 'maillist-filters)
                         :summary (maillist--ref "" 'maillist-summary)
                         :status (maillist--ref (list :kind 'idle :text "") 'maillist-status)
                         :toast (maillist--ref nil 'maillist-toast)

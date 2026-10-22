@@ -8,6 +8,15 @@ project uses [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Search takes mail-client syntax: `from:`, `to:`, `subject:`, `body:`,
+  `message:`, `after:` and `before:` compile into the archive's own query,
+  while `is:unread` and `is:starred` filter the rows locally without a
+  request.  A query naming only local marks filters the current list.
+
+- `C-u r` replies to the last message's author instead of the list, keeping
+  the thread's `In-Reply-To` and `References`.
+
+
 - Read a public-inbox archive as a mail client: date-grouped thread list,
   unread and starred scopes, remote search, and a reader that keeps the
   thread header fixed while the body scrolls inside its own box.
@@ -60,6 +69,13 @@ project uses [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- A search no longer opens its first result, so running a query cannot mark a
+  thread read.  A search that the archive cannot answer reports the error and
+  leaves the
+  thread the reader had open, instead of emptying the reader while the
+  request is in flight.  Reading a thread under `is:unread` or `is:starred`
+  keeps that row visible while it is open.
+
 - A refresh no longer shortens the list.  The archive's index page names only
   recent threads, so its rows now merge into the stored list instead of
   replacing it: a thread the page no longer lists keeps its row, its author and
@@ -95,6 +111,10 @@ project uses [Semantic Versioning](https://semver.org/).
   visible list and then failed to save it.
 
 ### Changed
+
+- Composing a reply or a new post no longer needs a stored SMTP password up
+  front.  The password is read from auth-source when the mail goes out, so a
+  reply can be written before the account is configured.
 
 - The thread cache is kept per archive.  Rows stored before this change are
 tagged with the first list opened, and rows of another list never appear in

@@ -427,6 +427,105 @@ must stay visible, together with the mark the reader put on it."
                 (maillist-dispose session)))))
       (ignore-errors (delete-file file)))))
 
+(ert-deftest maillist-tests-compile-query-maps-fields-and-marks ()
+  "Reader search syntax becomes an archive query plus local mark filters."
+  (should (equal "f:alice s:widget"
+                 (plist-get (maillist-compile-query "from:alice subject:widget")
+                            :query)))
+  (should (equal "d:2026-10-01.. d:..2026-10-10"
+                 (plist-get (maillist-compile-query
+                             "after:2026-10-01 before:2026-10-10")
+                            :query)))
+  (should (equal "\"widget default\""
+                 (plist-get (maillist-compile-query "\"widget default\"")
+                            :query)))
+  (should (equal "foo:bar"
+                 (plist-get (maillist-compile-query "foo:bar") :query)))
+  (let ((compiled (maillist-compile-query "is:unread patch")))
+    (should (equal "patch" (plist-get compiled :query)))
+    (should (equal '(unread) (plist-get compiled :filters))))
+  (let ((compiled (maillist-compile-query "is:starred is:unread")))
+    (should (string-empty-p (plist-get compiled :query)))
+    (should (equal '("starred" "unread")
+                   (sort (mapcar #'symbol-name (plist-get compiled :filters))
+                         #'string<)))))
+
+(ert-deftest maillist-tests-local-mark-filters-narrow-the-list ()
+  "is:unread and is:starred filter the rows without asking the archive."
+  (maillist-tests--with-session session
+    (maillist-refresh session)
+    (maillist-tests--wait session)
+    (maillist-select session "alpha@example.com")
+    (maillist-tests--open session)
+    (maillist-search session "is:unread")
+    (should (eq 'idle (plist-get (etaf-value (plist-get session :status)) :kind)))
+    (let ((rows (maillist-rows session)))
+      (should (= 3 (length rows)))
+      (should-not (cl-find "alpha@example.com" rows
+                           :key (lambda (row) (plist-get row :id))
+                           :test #'equal)))
+    ;; The reader closes, because the thread it showed is not in this set.
+    (should-not (etaf-value (plist-get session :open)))
+    (should (equal "beta@example.com"
+                   (etaf-value (plist-get session :selected))))
+    ;; Reading a thread under the filter keeps it visible while it is open.
+    (maillist-select session "beta@example.com")
+    (maillist-tests--open session)
+    (let ((rows (maillist-rows session)))
+      (should (= 3 (length rows)))
+      (should (cl-find "beta@example.com" rows
+                       :key (lambda (row) (plist-get row :id))
+                       :test #'equal)))
+    (maillist-toggle-star session)
+    (maillist-search session "is:starred")
+    (let ((rows (maillist-rows session)))
+      (should (= 1 (length rows)))
+      (should (plist-get (car rows) :starred)))
+    ;; An empty search returns to the archive's own list again.
+    (maillist-search session "")
+    (maillist-tests--wait session)
+    (should (= 4 (length (maillist-rows session))))))
+
+(ert-deftest maillist-tests-failed-search-keeps-the-open-thread ()
+  "A search the archive cannot answer reports and leaves the reader alone."
+  (maillist-tests--with-session session
+    (maillist-refresh session)
+    (maillist-tests--wait session)
+    (maillist-select session "alpha@example.com")
+    (maillist-tests--open session)
+    (maillist-search session "widget")
+    (let ((status (maillist-tests--wait session)))
+      (should (eq 'error (plist-get status :kind))))
+    (should (equal "alpha@example.com"
+                   (plist-get (etaf-value (plist-get session :open)) :id)))))
+
+(ert-deftest maillist-tests-reply-targets-the-list-or-the-author ()
+  "A reply addresses the list; a private reply addresses the last sender."
+  (let ((maillist-mail-address "reader@example.org"))
+    (maillist-tests--with-session session
+      (maillist-refresh session)
+      (maillist-tests--wait session)
+      (maillist-select session "beta@example.com")
+      (maillist-tests--open session)
+      (let ((buffer (maillist-reply session)))
+        (unwind-protect
+            (with-current-buffer buffer
+              (should (equal "fixture@example.org"
+                             (message-fetch-field "To")))
+              (should (equal "Re: Widget default value"
+                             (message-fetch-field "Subject")))
+              (should (message-fetch-field "In-Reply-To")))
+          (with-current-buffer buffer (set-buffer-modified-p nil))
+          (kill-buffer buffer)))
+      (let ((buffer (maillist-reply session t)))
+        (unwind-protect
+            (with-current-buffer buffer
+              (should (equal "carol@example.com"
+                             (message-fetch-field "To")))
+              (should (message-fetch-field "References")))
+          (with-current-buffer buffer (set-buffer-modified-p nil))
+          (kill-buffer buffer))))))
+
 (ert-deftest maillist-tests-scope-shows-starred-and-unread-rows ()
   "The scope selector filters the rows the list shows."
   (maillist-tests--with-session session

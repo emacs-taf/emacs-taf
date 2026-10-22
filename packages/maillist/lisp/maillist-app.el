@@ -95,7 +95,8 @@
                     (maillist--reveal id)))
               "上一线程")
         (list "s" (lambda () (maillist-toggle-star session)) "收藏或取消收藏")
-        (list "r" (lambda () (maillist-reply session)) "回复线程")
+        (list "r" (lambda () (maillist-reply session current-prefix-arg))
+              "回复线程（C-u 私回）")
         (list "c" (lambda () (maillist-compose session)) "写新帖")
         (list "e" (lambda () (maillist-load-earlier session)) "展开更早的邮件")
         (list "g" (lambda () (maillist--reload session)) "刷新")
@@ -164,7 +165,7 @@ embedded hosts and tests use."
                           :viewport-height (window-body-height window))))))
     (with-current-buffer buffer
       (setq-local maillist--session session))
-    (maillist--apply-view session)
+    (maillist--apply-view session t)
     (when sync (maillist-refresh session))
     buffer))
 

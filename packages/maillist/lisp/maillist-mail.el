@@ -69,13 +69,6 @@ MAILLIST-SMTP-SERVER and this address."
     (let ((secret (plist-get found :secret)))
       (if (functionp secret) (funcall secret) secret))))
 
-(defun maillist-mail--require-secret (address)
-  "Return ADDRESS's application password, or explain how to store one."
-  (or (maillist-mail--secret address)
-      (user-error
-       "没有 %s 的 smtpmail 凭据；先运行 M-x maillist-mail-configure 保存应用专用密码"
-       address)))
-
 ;;;###autoload
 (defun maillist-mail--authinfo-file ()
   "Return the auth-source file the client writes its password to."
@@ -155,9 +148,12 @@ address is replaced, so running this twice does not duplicate it."
   "Open a message buffer of SESSION sending TO with SUBJECT.
 HEADERS is an alist of extra headers, BODY the initial body and REFERENCES
 the thread's message ids for the References header, which message mode only
-generates for its own reply command, so it is inserted here."
+generates for its own reply command, so it is inserted here.  A stored
+password is installed for clients that read `smtpmail-auth-credentials', but
+composing works without one: the password is only needed when the mail goes
+out."
   (let* ((address (maillist-mail--account))
-         (secret (maillist-mail--require-secret address))
+         (secret (maillist-mail--secret address))
          buffer)
     (message-mail to subject (append (list (cons 'From address)) headers))
     (setq buffer (current-buffer))
@@ -176,9 +172,10 @@ generates for its own reply command, so it is inserted here."
     ;; Emacs 29+ reads the password from auth-source; older releases also
     ;; consult this list, so fill it only where it exists.
     (when (boundp 'smtpmail-auth-credentials)
-      (setq-local smtpmail-auth-credentials
-                  (list (list maillist-smtp-server maillist-smtp-service
-                              address secret))))
+      (when secret
+        (setq-local smtpmail-auth-credentials
+                    (list (list maillist-smtp-server maillist-smtp-service
+                                address secret)))))
     (setq-local message-send-mail-function #'smtpmail-send-it)
     (setq-local message-signature (or message-signature t))
     (add-hook 'message-sent-hook
@@ -189,7 +186,6 @@ generates for its own reply command, so it is inserted here."
                                  (maillist-refresh session)))))
               nil t)
     (goto-char (point-min))
-    (message "回信地址是 %s；列表外地址发帖会进入审核队列" to)
     (pop-to-buffer buffer)
     buffer))
 
@@ -201,28 +197,41 @@ generates for its own reply command, so it is inserted here."
       (user-error "不在邮件列表缓冲区中")))
 
 ;;;###autoload
-(defun maillist-reply (session)
-  "Reply to SESSION's open thread."
-  (interactive (list (maillist-mail--session)))
+(defun maillist-reply (session &optional private)
+  "Reply to SESSION's open thread.
+With PRIVATE non-nil the reply goes to the last message's author instead of
+the list, which is how a mailing-list reader answers someone directly.  Both
+forms keep `In-Reply-To' and `References', so the mail stays in the thread."
+  (interactive (list (maillist-mail--session) current-prefix-arg))
   (let ((thread (etaf-value (plist-get session :open))))
     (unless (and thread (plist-get thread :messages))
       (user-error "没有可回复的线程"))
     (let* ((messages (plist-get session :open-messages))
            (last-message (car (last messages)))
+           (author (or (plist-get last-message :email) ""))
+           (source (plist-get session :source))
+           (list-address (plist-get source :address))
            (ids (maillist--message-ids messages))
            (references (mapconcat #'identity (last ids 10) " "))
-           (source (plist-get session :source)))
-      (maillist--prepare
-       session
-       (plist-get source :address)
-       (maillist--reply-subject (plist-get thread :subject))
-       (append (list (cons 'In-Reply-To (car (last ids))))
-               (unless (string-empty-p references)
-                 (list (cons 'References references))))
-       (concat (maillist--attribution last-message)
-               (maillist--quote (plist-get last-message :text))
-               "\n\n")
-       references))))
+           buffer)
+      (when (and private (string-empty-p author))
+        (user-error "这一封没有发件人地址，无法私回"))
+      (setq buffer
+            (maillist--prepare
+             session (if private author list-address)
+             (maillist--reply-subject (plist-get thread :subject))
+             (append (list (cons 'In-Reply-To (car (last ids))))
+                     (unless (string-empty-p references)
+                       (list (cons 'References references))))
+             (concat (maillist--attribution last-message)
+                     (maillist--quote (plist-get last-message :text))
+                     "\n\n")
+             references))
+      (message "%s" (if private
+                        (format "私回 %s，不发到列表" author)
+                      (format "回信地址是 %s；列表外地址发帖会进入审核队列"
+                              list-address)))
+      buffer)))
 
 ;;;###autoload
 (defun maillist-compose (session)
@@ -232,7 +241,11 @@ generates for its own reply command, so it is inserted here."
          (subject (read-string "新帖主题: ")))
     (when (string-empty-p (string-trim subject))
       (user-error "主题不能为空"))
-    (maillist--prepare session (plist-get source :address) subject nil "\n")))
+    (let ((buffer (maillist--prepare
+                   session (plist-get source :address) subject nil "\n")))
+      (message "新帖发到 %s；未订阅的地址会进入审核队列"
+               (plist-get source :address))
+      buffer)))
 
 (provide 'maillist-mail)
 ;;; maillist-mail.el ends here
