@@ -1,8 +1,11 @@
 {
   "packages": {
     "exc": {
+      "group": "application",
+      "label": "Spreadsheet inside Emacs",
       "license": "GPL-3.0-or-later",
       "maintainer": "yibie",
+      "open": "exc-open",
       "paths": [
         "*.el",
         "README*",

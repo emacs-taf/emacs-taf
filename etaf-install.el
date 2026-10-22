@@ -81,7 +81,11 @@
   :group 'etaf-install)
 
 (defconst etaf-install--targets
-  '((etaf-ui "ETAF components and gallery" framework etaf-ui-gallery-open)
+  '((etaf-install "Install ETAF" framework etaf-install)
+    (ebox "Box model renderer" framework nil)
+    (ecss "CSS cascade engine" framework nil)
+    (etaf-gamekit "Game runtime for Godot battles" framework nil)
+    (etaf-ui "ETAF components and gallery" framework etaf-ui-gallery-open)
     (etaf "ETAF framework" framework nil)
     (etaf-db "ETAF SQLite backend" framework nil sqlite)
     (ekp "Knuth-Plass paragraph layout" framework nil)
@@ -119,9 +123,63 @@ so the ETAF manager and later upgrades through `M-x list-packages` resolve them.
   (unless (assoc "etaf" package-archives)
     (add-to-list 'package-archives '("etaf" . "https://etaf.top/packages/"))))
 
+(defvar etaf-install-community-cache nil
+  "Community packages read from the archive manifest, or nil when unread.")
+
+(defun etaf-install--community ()
+  "Return the archive's community records, reading the manifest at most once.
+
+  The registry states each package's group, label and open command, so nothing
+  is guessed from the archive index. A missing manifest leaves the curated
+  targets working and adds nothing."
+  (or etaf-install-community-cache
+      (setq etaf-install-community-cache
+            (condition-case nil
+                (let ((buffer (url-retrieve-synchronously
+                               (concat (or (cdr (assoc "etaf" package-archives))
+                                           etaf-install-archive-url)
+                                       "manifest.json")
+                               t t 2)))
+                  (prog1 (when buffer
+                           (with-current-buffer buffer
+                             (goto-char (point-min))
+                             (when (search-forward "\n\n" nil t)
+                               (gethash "community"
+                                        (json-parse-buffer :object-type 'hash-table
+                                                           :null-object nil)))))
+                    (when (buffer-live-p buffer) (kill-buffer buffer))))
+              (error nil)))))
+
+(defun etaf-install--archive-targets ()
+  "Return community packages this table does not curate.
+
+  They are installed the same way as a curated target, in the group and under
+  the label the archive states. The open command and the capability checks
+  belong to whoever wrote such a package, so its row carries neither."
+  (let ((records (etaf-install--community))
+        extra)
+    (when (hash-table-p records)
+      (maphash (lambda (name record)
+                 (when (and (not (assq (intern name) etaf-install--targets))
+                            (assq (intern name) package-archive-contents))
+                   (push (list (intern name)
+                               (or (gethash "label" record) name)
+                               (or (intern-soft (or (gethash "group" record) "application"))
+                                   'application)
+                               (intern-soft (or (gethash "open" record) "")))
+                         extra)))
+               records))
+    (nreverse extra)))
+
+(defun etaf-install--available-targets ()
+  "Return the curated targets followed by the archive's other packages."
+  (append etaf-install--targets
+          (and (boundp 'package-archive-contents)
+               (etaf-install--archive-targets))))
+
 (defun etaf-install--target (package)
   "Return the supported target description for PACKAGE."
-  (or (assq package etaf-install--targets)
+  (or (assq package (etaf-install--available-targets))
       (user-error "Unsupported target %s; run M-x etaf-install to choose one" package)))
 
 (defconst etaf-install--group-labels
@@ -133,7 +191,7 @@ so the ETAF manager and later upgrades through `M-x list-packages` resolve them.
   (let (choices)
     (dolist (group '(framework application game))
       (dolist (target (cl-remove-if-not (lambda (entry) (eq (nth 2 entry) group))
-                                  etaf-install--targets))
+                                  (etaf-install--available-targets)))
         (push (cons (format "%s — %s (%s)"
                             (car target) (nth 1 target)
                             (cdr (assq group etaf-install--group-labels)))
@@ -208,7 +266,7 @@ so the ETAF manager and later upgrades through `M-x list-packages` resolve them.
 
 (defun etaf-install--register-installed-archives ()
   "Register standard archives for every installed ETAF target."
-  (dolist (target etaf-install--targets)
+  (dolist (target (etaf-install--available-targets))
     (when (package-installed-p (car target))
       (etaf-install--register-target-archives (car target)))))
 
@@ -229,11 +287,11 @@ PACKAGES may include the installer itself; only supported targets contribute
 extra archives.  Refresh stays scoped so unrelated sources are untouched."
   (etaf-install--archive)
   (dolist (package packages)
-    (when (assq package etaf-install--targets)
+    (when (assq package (etaf-install--available-targets))
       (etaf-install--register-target-archives package)))
   (let* ((needed (cons "etaf"
                        (cl-loop for package in packages
-                                when (assq package etaf-install--targets)
+                                when (assq package (etaf-install--available-targets))
                                 append (cl-loop for capability in (nthcdr 4 (etaf-install--target package))
                                                 for archive = (assq capability etaf-install--extra-archives)
                                                 when archive collect (symbol-name (car archive))))))
@@ -389,7 +447,7 @@ INSTALLED-ONLY checks offline reopening without computing an upgrade plan."
 
 (defun etaf-install--installed-targets ()
   "Return installed supported targets in menu order."
-  (cl-loop for target in etaf-install--targets
+  (cl-loop for target in (etaf-install--available-targets)
            when (package-installed-p (car target))
            collect (car target)))
 
@@ -450,7 +508,7 @@ Each plist has :package, :label, :group, :installed, :available,
   (if package
       (etaf-install--target-status package)
     (mapcar #'etaf-install--target-status
-            (mapcar #'car etaf-install--targets))))
+            (mapcar #'car (etaf-install--available-targets)))))
 
 (defun etaf-install--read-installed-target (&optional prompt)
   "Read an installed target with completion."

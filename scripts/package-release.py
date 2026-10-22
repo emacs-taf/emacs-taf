@@ -222,7 +222,10 @@ def build(directory):
         if community_pins:
             manifest["community"] = {name: {"url": record["url"],
                                             "license": record.get("license", "unspecified"),
-                                            "maintainer": record.get("maintainer", "")}
+                                            "maintainer": record.get("maintainer", ""),
+                                            "group": record.get("group", "application"),
+                                            "label": record.get("label", name),
+                                            "open": record.get("open", "")}
                                      for name, record in community_pins.items()}
         manifest["workspace"] = revision
         (stage / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
