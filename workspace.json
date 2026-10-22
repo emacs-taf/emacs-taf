@@ -51,7 +51,7 @@
     },
     "etaf-manual": {
       "url": "https://github.com/emacs-taf/etaf-manual.git",
-      "revision": "8d25d911075f97bcb517457e8017050882870205",
+      "revision": "39c02769174305ac6a1c6127ee5a10296526cdd1",
       "branch": "main",
       "role": "framework"
     },
@@ -189,7 +189,7 @@
     },
     "etaf-mario": {
       "url": "https://github.com/emacs-taf/etaf-mario.git",
-      "revision": "540fd7be2ce890c358b0fb227f380b7da560f4b8",
+      "revision": "7295635e892ff249c589c7b30aacb8fb20007df4",
       "branch": "main",
       "role": "game"
     }
