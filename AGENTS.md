@@ -278,6 +278,11 @@ to every repository changed from this workspace.
   false `Unmatched bracket or quote` reports.
 - From this directory, use `make -C <package> structure-check` and affected tests
   while developing; run `make -C <package> check` before completing a package change.
+  That target runs the checkout's own copy of `scripts/check-repository.py`, so
+  a copy that lags `workspace.py sync` accepts what
+  `python3 scripts/workspace.py check` rejects; read the workspace verdict,
+  whose unprefixed error lines belong to the checkout named by the prefixed
+  lines above them.
   Workspace changes run `python3 scripts/workspace.py check`; integrated changes
   run workspace `make check`, including affected consumers in dependency order.
 - Validate each complete feature change through the affected examples' data flow,
