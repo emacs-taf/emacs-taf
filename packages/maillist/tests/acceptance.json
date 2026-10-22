@@ -52,6 +52,11 @@
       "purpose": "An archive answer without thread rows fails the sync and keeps the stored list."
     },
     {
+      "name": "maillist-tests-lists-do-not-share-stored-threads",
+      "file": "tests/maillist-tests.el",
+      "purpose": "Threads are stored per archive, so another list does not show them."
+    },
+    {
       "name": "maillist-tests-scope-shows-starred-and-unread-rows",
       "file": "tests/maillist-tests.el",
       "purpose": "The starred and unread scopes filter the rows the list shows."
@@ -60,6 +65,26 @@
       "name": "maillist-tests-long-thread-shows-newest-messages-first",
       "file": "tests/maillist-tests.el",
       "purpose": "A thread starts with a window of new messages and grows on demand."
+    },
+    {
+      "name": "maillist-tests-refresh-keeps-threads-the-index-dropped",
+      "file": "tests/maillist-tests.el",
+      "purpose": "A refresh merges the index page into the stored list, keeping older threads and their marks."
+    },
+    {
+      "name": "maillist-tests-read-mark-waits-for-the-body",
+      "file": "tests/maillist-tests.el",
+      "purpose": "A thread whose body never arrives stays unread after it was selected."
+    },
+    {
+      "name": "maillist-tests-search-rows-stay-out-of-the-cache",
+      "file": "tests/maillist-tests.el",
+      "purpose": "Opening a search result leaves the archive cache's stored facts unchanged."
+    },
+    {
+      "name": "maillist-tests-incompatible-cache-is-rebuilt",
+      "file": "tests/maillist-tests.el",
+      "purpose": "An unreadable cache file is moved aside and rebuilt, so persistence keeps working."
     },
     {
       "name": "maillist-tests-open-mounts-and-close-releases",

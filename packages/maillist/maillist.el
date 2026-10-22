@@ -10,9 +10,10 @@
 ;;; Commentary:
 
 ;; maillist reads a public-inbox archive as a mail client: the thread list,
-;; the open conversation and the client's own read and starred marks.  Threads
-;; and cached bodies live in one SQLite file, so a restart shows the list
-;; before the archive answers.  A reply or a new post opens in `message-mode'
+;; the open conversation and the client's own read and starred marks.  The
+;; archive cache, cached bodies and marks live in one SQLite file, so a restart
+;; shows the list before the archive answers; the marks sit in their own table,
+;; so a refresh cannot lose them.  A reply or a new post opens in `message-mode'
 ;; with the thread's message ids in `In-Reply-To' and `References', and leaves
 ;; through smtpmail with an application password from auth-source.
 ;;
@@ -49,11 +50,14 @@
 ;;
 ;; Function: maillist-refresh (session)
 ;; Reload SESSION's thread list from its archive; the request is asynchronous
-;; and `:status' carries `loading', `idle' or `error' while it runs.
+;; and `:status' carries `loading', `idle' or `error' while it runs.  The index
+;; page lists recent threads only, so its rows merge into the stored list: a
+;; thread the page no longer names keeps its row and its marks.
 ;;
 ;; Function: maillist-select (session id &optional no-mark)
-;; Open the thread ID of SESSION, fetch its body when uncached, and mark it
-;; read unless NO-MARK.  Return the open-thread value.
+;; Open the thread ID of SESSION, fetching its body when uncached, and return
+;; the open-thread value.  Unless NO-MARK is non-nil, the thread becomes read
+;; once its body is on screen: a fetch that never answers leaves it unread.
 ;;
 ;; Function: maillist-move (session delta)
 ;; Move the selection by DELTA rows and open the new row.

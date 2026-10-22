@@ -60,8 +60,47 @@ project uses [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- A refresh no longer shortens the list.  The archive's index page names only
+  recent threads, so its rows now merge into the stored list instead of
+  replacing it: a thread the page no longer lists keeps its row, its author and
+  its marks.  Before, threads older than the first page vanished from the list
+  until the next restart.
+
+- Opening a thread marks it read only once its body is on screen.  An archive
+  that never answered, or a row only passed through with `j`/`k`, keeps the
+  thread unread; before, selecting the row marked it read before the fetch.
+
+- A displayed search result can no longer become the stored fact of a thread.
+  The search row's date, count and subject are no longer written back to the
+  archive cache while a query is active.
+
+- A buried reply no longer climbs above the message it answers after a
+  restart.  The thread table now keeps the archive's depth, and a reply sorts
+  after its parent when both carry one timestamp.
+
+- A thread document the archive will not serve no longer leaves the reader on
+  a loading placeholder and then a bare error.  The client shows the newest
+  message it can reach from the archive's search feed, says the thread data is
+  incomplete, and reports only when even that message is unavailable.
+
+- A cache file written by an incompatible earlier version is moved aside and
+  rebuilt at startup, with a notice naming the backup file, instead of leaving
+  the client with no persistence.  `threads`, `messages` and the new `marks`
+  table are created together.
+
 - An archive answer that carries no thread row is no longer taken as an empty
   list.  Such an answer is fetched once more; if it stays unanswered the sync
   fails with a notice and the client keeps the list and the stored rows it
   already has.  Before, an empty body after a dropped connection wiped the
   visible list and then failed to save it.
+
+### Changed
+
+- The thread cache is kept per archive.  Rows stored before this change are
+tagged with the first list opened, and rows of another list never appear in
+the current one.
+
+- Read and starred marks now live in their own `marks` table, written only when
+  the reader changes them.  A refresh rewrites the archive cache and cannot
+  lose them.  The first start after upgrading reads old files with the new
+  schema, so previously read threads show as unread once.

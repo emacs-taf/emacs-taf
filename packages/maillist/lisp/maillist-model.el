@@ -11,9 +11,15 @@
 ;; :loading :error); Views only project those values.
 ;;
 ;; Reading is a two-stage load.  Cached rows appear immediately, the archive
-;; index replaces them when it arrives, and thread bodies are fetched when a
-;; row is opened.  Every asynchronous answer carries a generation number so a
-;; slow reply for a previously selected row never overwrites the current one.
+;; index merges into them when it arrives, and thread bodies are fetched when a
+;; row is opened.  The list is a window over everything the client has stored
+;; for that archive: an index page names recent threads only, so a cached
+;; thread it no longer lists stays visible instead of vanishing on refresh.
+;; Read and starred are the reader's own state and live beside, not inside,
+;; the archive cache.
+;;
+;; Every asynchronous answer carries a generation number so a slow reply for a
+;; previously selected row never overwrites the current one.
 
 ;;; Code:
 
@@ -116,17 +122,19 @@ uses; a finished notice leaves on its own."
 ;;; Rows
 ;;; ---------------------------------------------------------------------------
 
-(defun maillist--row-from-record (record)
-  "Return the visible row described by the stored RECORD."
+(defun maillist--row-from-record (record mark)
+  "Return the visible row described by the stored RECORD and MARK.
+MARK is the reader's own state of the thread, or nil for a thread never
+opened or starred."
   (list :id (plist-get record :id)
         :subject (or (plist-get record :subject) "")
         :date (plist-get record :date)
         :count (plist-get record :count)
-        :depth 0
+        :depth (or (plist-get record :depth) 0)
         :author (or (plist-get record :author) "")
         :participants (plist-get record :participants)
-        :unread (not (eq 1 (plist-get record :read)))
-        :starred (eq 1 (plist-get record :starred))))
+        :unread (not (and mark (plist-get mark :read)))
+        :starred (and (plist-get mark :starred) t)))
 
 (defun maillist--merge-rows (fetched session)
   "Return FETCHED rows carrying the read, starred and author state of SESSION.
@@ -134,9 +142,6 @@ FETCHED order is the archive's order and is kept."
   (let ((known (make-hash-table :test #'equal)))
     (dolist (row (etaf-value (plist-get session :threads)))
       (puthash (plist-get row :id) row known))
-    (dolist (record (or (maillist-store-threads (plist-get session :store)) '()))
-      (unless (gethash (plist-get record :id) known)
-        (puthash (plist-get record :id) (maillist--row-from-record record) known)))
     (mapcar
      (lambda (row)
        (let ((old (gethash (plist-get row :id) known)))
@@ -150,6 +155,41 @@ FETCHED order is the archive's order and is kept."
                :unread (if old (plist-get old :unread) t)
                :starred (and old (plist-get old :starred)))))
      fetched)))
+
+(defun maillist--by-date (rows)
+  "Return ROWS newest first, keeping their given order where dates are equal.
+A buried reply keeps the archive's depth, and a reply sorts after the message
+it answers when both carry one date, so the list keeps the thread's shape."
+  (let* ((indexed (cl-loop for row in rows
+                           for index from 0
+                           collect (cons index row)))
+         (sorted (sort indexed
+                       (lambda (first second)
+                         (let ((left (or (plist-get (cdr first) :date) ""))
+                               (right (or (plist-get (cdr second) :date) ""))
+                               (left-depth (or (plist-get (cdr first) :depth) 0))
+                               (right-depth (or (plist-get (cdr second) :depth) 0)))
+                           (cond
+                            ((not (equal left right)) (string> left right))
+                            ((/= left-depth right-depth) (< left-depth right-depth))
+                            (t (< (car first) (car second)))))))))
+    (mapcar #'cdr sorted)))
+
+(defun maillist--window-rows (fetched session)
+  "Return FETCHED rows plus the stored rows SESSION already knows, newest first.
+The archive's index page lists recent threads only.  A cached thread the page
+no longer names stays in the list, so a refresh never shortens what the
+reader had before."
+  (let ((seen (make-hash-table :test #'equal))
+        (all nil))
+    (dolist (row (maillist--merge-rows fetched session))
+      (puthash (plist-get row :id) t seen)
+      (push row all))
+    (dolist (row (etaf-value (plist-get session :threads)))
+      (unless (gethash (plist-get row :id) seen)
+        (puthash (plist-get row :id) t seen)
+        (push row all)))
+    (maillist--by-date (nreverse all))))
 
 (defun maillist--plist-merge (plist fields)
   "Return PLIST with FIELDS applied, keeping one entry per key.
@@ -234,23 +274,40 @@ row never disappears under the pointer that selected it."
 ;;; Selection and state
 ;;; ---------------------------------------------------------------------------
 
-(defun maillist--persist-state (session id fields)
-  "Persist FIELDS of thread ID in SESSION's store."
-  (when-let* ((store (plist-get session :store)))
+(defun maillist--persist-mark (session id)
+  "Persist the current read and starred state of thread ID in SESSION."
+  (when-let* ((store (plist-get session :store))
+              (row (maillist-row session id)))
     (condition-case err
-        (maillist-store-set-thread-state store id fields)
-      (error (message "maillist: 无法保存线程状态：%s" (error-message-string err))))))
+        (maillist-store-save-mark store id
+                                  (not (plist-get row :unread))
+                                  (and (plist-get row :starred) t))
+      (error (message "maillist: 无法保存线程标记：%s" (error-message-string err))))))
+
+(defun maillist--mark-read (session id)
+  "Mark thread ID of SESSION read and persist the mark.
+Called once its body is on screen, so a fetch that never answered leaves the
+row unread."
+  (when-let* ((row (maillist-row session id)))
+    (when (plist-get row :unread)
+      (etaf-set-value (plist-get session :threads)
+                      (maillist--replace-row session id (list :unread nil)))
+      (maillist--persist-mark session id)
+      (maillist--apply-view session))))
+
+(defun maillist--archive-list-p (session)
+  "Return non-nil when SESSION shows the archive's list, not search results.
+Only that list may write the thread table: search results carry another
+source's view of a row and must not become the stored fact."
+  (string-empty-p (etaf-value (plist-get session :query))))
 
 (defun maillist-select (session id &optional no-mark)
   "Open the row ID of SESSION.
-NO-MARK leaves the read state alone; otherwise opening a thread marks it
-read and persists that."
+NO-MARK leaves the read state alone; otherwise the thread is marked read once
+its body has been shown, not when the row was selected."
   (when-let* ((row (maillist-row session id)))
     (etaf-set-value (plist-get session :selected) id)
-    (when (and (not no-mark) (plist-get row :unread))
-      (etaf-set-value (plist-get session :threads)
-                      (maillist--replace-row session id (list :unread nil)))
-      (maillist--persist-state session id (list :read t)))
+    (plist-put session :mark-on-render (not no-mark))
     (maillist--open-thread session row)
     (maillist--apply-view session)
     (etaf-value (plist-get session :open))))
@@ -298,7 +355,7 @@ The choice survives a body reload because the session remembers it."
       (etaf-set-value (plist-get session :threads)
                       (maillist--replace-row session (plist-get row :id)
                                              (list :starred starred)))
-      (maillist--persist-state session (plist-get row :id) (list :starred starred))
+      (maillist--persist-mark session (plist-get row :id))
       (maillist--apply-view session)
       starred)))
 
@@ -363,7 +420,8 @@ shows only its header."
 (defun maillist--publish-thread (session row messages &optional loading)
   "Publish MESSAGES as the open thread of SESSION for ROW.
 The message list is tagged with the row it belongs to, so an older list can
-never be replayed under another thread's header."
+never be replayed under another thread's header.  Showing the body is what
+marks the thread read."
   (plist-put session :open-messages messages)
   (plist-put session :open-messages-id (plist-get row :id))
   (etaf-set-value
@@ -371,7 +429,9 @@ never be replayed under another thread's header."
    (maillist--thread-value row messages loading
                            (gethash (plist-get row :id)
                                     (plist-get session :collapsed))
-                           (plist-get session :message-window))))
+                           (plist-get session :message-window)))
+  (when (and (plist-get session :mark-on-render) messages)
+    (maillist--mark-read session (plist-get row :id))))
 
 (defun maillist-load-earlier (session)
   "Show another window of older messages in SESSION's open thread."
@@ -389,6 +449,10 @@ never be replayed under another thread's header."
     (maillist--publish-thread session row messages)
     (plist-get session :message-window)))
 
+(defun maillist--list-name (session)
+  "Return the name of the archive SESSION reads."
+  (plist-get (plist-get session :source) :name))
+
 (defun maillist--update-row-from-thread (session id thread)
   "Copy the author facts of THREAD onto row ID of SESSION."
   (let* ((messages (plist-get thread :messages))
@@ -401,11 +465,13 @@ never be replayed under another thread's header."
     (etaf-set-value (plist-get session :groups)
                     (maillist--grouped (maillist-rows session)))
     (when-let* ((store (plist-get session :store)))
-      (condition-case nil
-          (maillist-store-save-threads
-           store (seq-filter (lambda (row) (equal id (plist-get row :id)))
-                             (etaf-value (plist-get session :threads))))
-        (error nil)))))
+      (when (maillist--archive-list-p session)
+        (condition-case nil
+            (maillist-store-save-threads
+             store (maillist--list-name session)
+             (seq-filter (lambda (row) (equal id (plist-get row :id)))
+                         (etaf-value (plist-get session :threads))))
+          (error nil))))))
 
 (defun maillist--open-thread (session row)
   "Show ROW of SESSION, from cache when possible and from the archive after."
@@ -445,12 +511,10 @@ never be replayed under another thread's header."
      (lambda (result)
        (when (maillist--current-p session token)
          (if-let* ((error (plist-get result :error)))
-             (when (plist-get (etaf-value (plist-get session :open)) :loading)
-               (etaf-set-value (plist-get session :open)
-                               (plist-put (maillist--thread-placeholder row error)
-                                          :error t))
-               (plist-put session :open-messages nil)
-               (plist-put session :open-messages-id nil))
+             ;; A thread document the archive will not serve still has its
+             ;; newest mail in the search feed; show that instead of a dead
+             ;; reader, and only report when neither answers.
+             (maillist--load-newest-fallback session row token error)
            (let ((thread (plist-get result :ok)))
              (if (and (cl-find id (plist-get thread :messages)
                                :key (lambda (message) (plist-get message :id))
@@ -538,18 +602,31 @@ Used when the thread document lost the message the index announced."
                (maillist--apply-view session))
            (maillist--load-newest-fallback session row token)))))))
 
-(defun maillist--load-newest-fallback (session row token)
-  "Show only the newest mail of ROW when no thread document has it."
+(defun maillist--load-newest-fallback (session row token &optional reason)
+  "Show only the newest mail of ROW when no thread document has it.
+REASON is what the reader says when even that message is unavailable; a
+thread the archive will not serve then reports instead of staying on a
+loading placeholder."
   (maillist-fetch-message
    (plist-get session :source) (plist-get row :id)
    (lambda (result)
      (when (maillist--current-p session token)
-       (when-let* ((messages (plist-get (plist-get result :ok) :messages)))
-         (maillist--publish-thread session row messages)
-         (etaf-set-value (plist-get session :open)
-                         (plist-put (etaf-value (plist-get session :open))
-                                    :meta
-                                    "档案的线程数据不完整，只找到这一封（按 g 重试）")))))))
+       (if-let* ((messages (plist-get (plist-get result :ok) :messages)))
+           (progn
+             (maillist--publish-thread session row messages)
+             (etaf-set-value (plist-get session :open)
+                             (plist-put (etaf-value (plist-get session :open))
+                                        :meta
+                                        "档案的线程数据不完整，只找到这一封（按 g 重试）")))
+         (when (plist-get (etaf-value (plist-get session :open)) :loading)
+           (etaf-set-value
+            (plist-get session :open)
+            (plist-put
+             (maillist--thread-placeholder
+              row (or reason "档案没有返回这个线程的邮件，按 g 重试"))
+             :error t))
+           (plist-put session :open-messages nil)
+           (plist-put session :open-messages-id nil)))))))
 
 (defun maillist--load-newest (session row token)
   "Show the newest mail of ROW for SESSION generation TOKEN while the thread loads."
@@ -575,7 +652,8 @@ Used when the thread document lost the message the index announced."
   "Persist SESSION's current rows when it has a store."
   (when-let* ((store (plist-get session :store)))
     (condition-case err
-        (maillist-store-save-threads store (etaf-value (plist-get session :threads)))
+        (maillist-store-save-threads store (maillist--list-name session)
+                                     (etaf-value (plist-get session :threads)))
       (error (message "maillist: 无法保存线程列表：%s" (error-message-string err))))))
 
 (defun maillist--merge-authors (rows hints)
@@ -611,11 +689,13 @@ Used when the thread document lost the message the index announced."
   (etaf-set-value (plist-get session :groups)
                   (maillist--grouped (maillist-rows session)))
   (when-let* ((store (plist-get session :store)))
-    (condition-case nil
-        (maillist-store-save-threads
-         store (seq-filter (lambda (row) (equal id (plist-get row :id)))
-                           (etaf-value (plist-get session :threads))))
-      (error nil))))
+    (when (maillist--archive-list-p session)
+      (condition-case nil
+          (maillist-store-save-threads
+           store (maillist--list-name session)
+           (seq-filter (lambda (row) (equal id (plist-get row :id)))
+                       (etaf-value (plist-get session :threads))))
+        (error nil)))))
 
 (defun maillist--prefetch-continue (session token rest failures batch-failures size)
   "Continue the sender prefetch of SESSION after one batch.
@@ -687,7 +767,7 @@ FAILURES counts sender requests an earlier batch could not complete."
                                  (format "同步失败：%s · 按 g 重试" error))
              (progn
                (etaf-set-value (plist-get session :threads)
-                               (maillist--merge-rows (plist-get result :ok) session))
+                               (maillist--window-rows (plist-get result :ok) session))
                (plist-put session :last-sync (current-time))
                (maillist--store-rows session)
                (maillist--apply-view session)
@@ -747,18 +827,30 @@ Rows come from the local cache first and from the archive after
 Views read."
   (let* ((source (maillist-source list))
          (store (maillist-store-open))
+         (marks (and store
+                     (condition-case nil
+                         (maillist-store-marks store)
+                       (error nil))))
          (cached (or (and store
                           (condition-case nil
-                              (maillist-store-threads store)
+                              (progn
+                                (maillist-store-adopt-threads
+                                 store (plist-get source :name))
+                                (maillist-store-threads store (plist-get source :name)))
                             (error nil)))
                      '()))
-         (rows (mapcar #'maillist--row-from-record cached))
+         (rows (maillist--by-date
+                (mapcar (lambda (record)
+                          (maillist--row-from-record
+                           record (cdr (assoc (plist-get record :id) marks))))
+                        cached)))
          (session (list :source source
                         :store store
                         :alive t
                         :token 0
                         :sync-token 0
                         :last-sync nil
+                        :mark-on-render nil
                         :threads (maillist--ref rows 'maillist-threads)
                         :groups (maillist--ref (maillist--grouped rows) 'maillist-groups)
                         :open (maillist--ref nil 'maillist-open)
@@ -777,6 +869,11 @@ Views read."
                         :viewport-px (maillist--ref 0 'maillist-viewport-px)
                         :list-width (maillist--ref 0 'maillist-list-width))))
     (etaf-set-value (plist-get session :summary) (maillist--summary session))
+    (when-let* ((backup (and store (maillist-store-rebuilt store))))
+      (maillist--toast session 'info
+                       (format "缓存格式已更新，列表已重建（旧文件 %s）"
+                               (file-name-nondirectory backup))
+                       12))
     session))
 
 (provide 'maillist-model)
