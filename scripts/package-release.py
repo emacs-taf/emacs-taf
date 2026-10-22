@@ -230,7 +230,7 @@ def build(directory):
     print(f"Built {len(manifest['packages'])} packages from sealed workspace {revision[:12]}\narchive={directory}")
 
 
-def scan_diagnostics(text, names):
+def scan_diagnostics(text, names, warnings=True):
     """Return diagnostics attributable to the packages this archive publishes.
 
     package.el demotes reload errors to messages without failing the process, so
@@ -239,7 +239,9 @@ def scan_diagnostics(text, names):
     must not block a release. Track the package whose compilation or activation
     section is current; a diagnostic from another package is not evidence about
     this archive. Lines before any package context remain visible, so a startup
-    error is not hidden.
+    error is not hidden. WARNINGS is false for a package another author owns:
+    its byte-compiler warnings are theirs to fix, and this archive may not patch
+    their code, but a real error still blocks the release.
     """
     diagnostics, current_package = [], None
     pattern = re.compile(
@@ -257,6 +259,8 @@ def scan_diagnostics(text, names):
             elif generated:
                 current_package = generated[1]
         if not pattern.search(line):
+            continue
+        if not warnings and "Warning" in line and "Error" not in line:
             continue
         if current_package and current_package not in names:
             continue
@@ -426,7 +430,7 @@ def verify(directory, emacs, targets, direct=False, standard_archives=None, scop
                                          cwd=profile, env=env,
                                          timeout=INSTALL_TIMEOUT, log_file=log)
                     text = (stdout + b"\n" + stderr).decode(errors="replace")
-                    diagnostics = scan_diagnostics(text, names)
+                    diagnostics = scan_diagnostics(text, names, target not in community_only)
                     if diagnostics:
                         raise ValueError(f"Installation diagnostics for {target}:\n"
                                          + "\n".join(diagnostics[:12]) + f"\nlog={log}")
