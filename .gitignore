@@ -32,6 +32,7 @@
 /etaf-browser/
 /etaf-speech-log/
 /maillist/
+/etaf-mario/
 
 *.elc
 *.eln
