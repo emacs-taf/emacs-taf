@@ -47,6 +47,11 @@
       "purpose": "An opened thread stays read and a starred thread stays starred after a restart."
     },
     {
+      "name": "maillist-tests-unanswered-index-keeps-the-list",
+      "file": "tests/maillist-tests.el",
+      "purpose": "An archive answer without thread rows fails the sync and keeps the stored list."
+    },
+    {
       "name": "maillist-tests-scope-shows-starred-and-unread-rows",
       "file": "tests/maillist-tests.el",
       "purpose": "The starred and unread scopes filter the rows the list shows."

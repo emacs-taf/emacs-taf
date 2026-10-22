@@ -102,21 +102,24 @@ The database file is created together with its tables on first use."
                      (or (plist-get second :date) ""))))))
 
 (defun maillist-store-save-threads (store rows)
-  "Write ROWS to the thread table in one transaction and return the result."
-  (when-let* ((controller (and store (maillist-store-thread-controller store))))
-    (etaf-data-mutate-many
-     controller
-     (mapcar (lambda (row)
-               (list 'upsert
-                     (list :id (plist-get row :id)
-                           :subject (or (plist-get row :subject) "")
-                           :date (plist-get row :date)
-                           :count (plist-get row :count)
-                           :author (or (plist-get row :author) "")
-                           :participants (plist-get row :participants)
-                           :read (if (plist-get row :unread) 0 1)
-                           :starred (if (plist-get row :starred) 1 0))))
-             rows))))
+  "Write ROWS to the thread table in one transaction and return the result.
+An empty ROWS list writes nothing: a caller that filtered every row out (or a
+sync that reported no threads) must not reach the controller as an empty
+batch, which it rejects."
+  (when-let* ((controller (and store (maillist-store-thread-controller store)))
+              (operations
+               (mapcar (lambda (row)
+                         (list 'upsert
+                               (list :id (plist-get row :id)
+                                     :subject (or (plist-get row :subject) "")
+                                     :date (plist-get row :date)
+                                     :count (plist-get row :count)
+                                     :author (or (plist-get row :author) "")
+                                     :participants (plist-get row :participants)
+                                     :read (if (plist-get row :unread) 0 1)
+                                     :starred (if (plist-get row :starred) 1 0))))
+                       rows)))
+    (etaf-data-mutate-many controller operations)))
 
 (defun maillist-store-set-thread-state (store id fields)
   "Update the state FIELDS of thread ID and return the mutation result.

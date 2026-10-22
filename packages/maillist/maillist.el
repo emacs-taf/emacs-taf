@@ -115,6 +115,10 @@
 ;;
 ;; Function: maillist-fetch-index (source callback)
 ;; Fetch SOURCE's thread list and call CALLBACK with (:ok ROWS) or (:error MSG).
+;; An answer that carries no thread row is fetched once more, then reported as
+;; an error, not as an empty list: a mirror always lists its threads, so a
+;; body-less answer or a page that is not the index means the archive did not
+;; answer, and the caller keeps the rows it already has.
 ;;
 ;; Function: maillist-fetch-thread (source id callback &optional subject)
 ;; Fetch thread ID and call CALLBACK with (:ok THREAD) or (:error MSG).

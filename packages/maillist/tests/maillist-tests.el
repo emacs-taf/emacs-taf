@@ -198,6 +198,53 @@ session is disposed afterwards."
               (maillist-dispose session))))
       (ignore-errors (delete-file file)))))
 
+(ert-deftest maillist-tests-unanswered-index-keeps-the-list ()
+  "An archive that answers without threads is a failed sync, not an empty list."
+  (let* ((file (maillist-tests--store))
+         (mirror (make-temp-file "maillist-answer" t))
+         (index (expand-file-name "index.html" mirror))
+         (maillist-store-file file)
+         (maillist-prefetch-threads 0)
+         (fixture (maillist-tests--source))
+         (answer (list :name "answer"
+                       :base (concat "file://" mirror "/")
+                       :index "index.html"
+                       :address "answer@example.org")))
+    (unwind-protect
+        (progn
+          ;; One real sync fills the store the next start reads.
+          (let ((maillist-sources (list fixture)))
+            (let ((session (maillist-create :list "fixture")))
+              (unwind-protect
+                  (progn
+                    (maillist-refresh session)
+                    (maillist-tests--wait session)
+                    (should (= 4 (length (etaf-value (plist-get session :threads))))))
+                (maillist-dispose session))))
+          (let ((maillist-sources (list answer)))
+            (let ((session (maillist-create :list "answer")))
+              (unwind-protect
+                  (progn
+                    (should (= 4 (length (etaf-value (plist-get session :threads)))))
+                    ;; A body-less answer and a page that is not a thread index
+                    ;; both leave the list the client already has.
+                    (dolist (body '("" "<html><body>503 Service Unavailable</body></html>"))
+                      (write-region body nil index nil 'silent)
+                      (maillist-refresh session)
+                      (let ((status (maillist-tests--wait session)))
+                        (should (eq 'error (plist-get status :kind)))
+                        (should (string-match-p "同步失败" (plist-get status :text))))
+                      (should (= 4 (length (etaf-value (plist-get session :threads)))))))
+                (maillist-dispose session))))
+          ;; The stored rows survive the failed syncs.
+          (let ((maillist-sources (list fixture)))
+            (let ((session (maillist-create :list "fixture")))
+              (unwind-protect
+                  (should (= 4 (length (etaf-value (plist-get session :threads)))))
+                (maillist-dispose session)))))
+      (ignore-errors (delete-directory mirror t))
+      (ignore-errors (delete-file file)))))
+
 (ert-deftest maillist-tests-scope-shows-starred-and-unread-rows ()
   "The scope selector filters the rows the list shows."
   (maillist-tests--with-session session

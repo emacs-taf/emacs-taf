@@ -57,3 +57,11 @@ project uses [Semantic Versioning](https://semver.org/).
   answers in the theme's warm colour, and diff lines keep their green/red
   pair.  Backgrounds stay reserved for state and reading aids: the selected
   row, quoted and patch bands, and the floating notice.
+
+### Fixed
+
+- An archive answer that carries no thread row is no longer taken as an empty
+  list.  Such an answer is fetched once more; if it stays unanswered the sync
+  fails with a notice and the client keeps the list and the stored rows it
+  already has.  Before, an empty body after a dropped connection wiped the
+  visible list and then failed to save it.

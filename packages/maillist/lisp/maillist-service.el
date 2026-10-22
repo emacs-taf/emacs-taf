@@ -474,10 +474,37 @@ for the first attempt of `maillist-network-route'."
   "Return the thread-list URL of SOURCE."
   (maillist--url source (or (plist-get source :index) "")))
 
+(defun maillist--index-answer (body)
+  "Return the (:ok ROWS) or (:error MSG) answer of index BODY.
+A public-inbox mirror always lists its threads, so a body that carries none is
+no index: an empty body after a dropped connection, or a page that is not the
+thread index.  Answering (:ok nil) would trade the client's rows for nothing."
+  (if-let* ((rows (maillist-parse-index body)))
+      (list :ok rows)
+    (list :error (if (string-empty-p (string-trim (or body "")))
+                     "档案返回了空响应"
+                   "档案没有返回线程索引"))))
+
 (defun maillist-fetch-index (source callback)
-  "Fetch SOURCE's thread list and call CALLBACK with (:ok ROWS)."
-  (maillist--on-body (maillist--index-url source)
-                     callback #'maillist-parse-index))
+  "Fetch SOURCE's thread list and call CALLBACK with (:ok ROWS) or (:error MSG).
+An answer carrying no thread row is fetched once more before it becomes an
+error: the archive sometimes drops the connection after the status line, and
+the retry is what tells a flake from a failure.  A failed answer stays an
+error, so the caller keeps the rows it already has."
+  (cl-labels
+      ((attempt
+        (retry)
+        (maillist--request
+         (maillist--index-url source)
+         (lambda (result)
+           (if-let* ((error (plist-get result :error)))
+               (funcall callback (list :error error))
+             (let ((answer (maillist--index-answer (plist-get result :body))))
+               (cond
+                ((eq (car answer) :ok) (funcall callback answer))
+                (retry (run-at-time 1 nil (lambda () (attempt nil))))
+                (t (funcall callback answer)))))))))
+    (attempt t)))
 
 (defun maillist-fetch-thread (source id callback &optional subject)
   "Fetch thread ID of SOURCE and call CALLBACK with (:ok THREAD).
