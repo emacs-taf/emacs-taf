@@ -33,6 +33,17 @@ class BoundaryTests(unittest.TestCase):
     def test_public_calls_and_function_references_pass(self):
         self.assertEqual('', self.check("(require 'provider)\n(provider-open)\n(mapcar #'provider-open nil)"))
 
+    def test_declared_dependencies_match_the_sources(self):
+        entry = self.root/'consumer/consumer.el'
+        body = (";;; Commentary:\n;; Function: consumer-open ()\n;; Return a new instance.\n"
+                ";;; Code:\n(defun consumer-open () t)\n(provide 'consumer)\n")
+        header = ';; Package-Requires: ((emacs "29.1") (provider "1.0.0"))\n'
+        entry.write_text(header + body)
+        self.assertEqual('', self.check("(require 'provider)\n(provider-open)"))
+        self.assertIn('declares provider, which no source uses', self.check("(defun unrelated () t)"))
+        entry.write_text(';; Package-Requires: ((emacs "29.1"))\n' + body)
+        self.assertIn('Package-Requires omits provider', self.check('(provider-open)'))
+
     def test_own_package_private_calls_in_test_helpers_are_rejected(self):
         tests = self.root/'provider/tests'
         tests.mkdir()

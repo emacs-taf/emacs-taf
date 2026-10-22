@@ -8,6 +8,8 @@ import sys
 import subprocess
 
 API = re.compile(r'^;; (Function|Macro|Variable|Hook|Error|Component): ([^\s()]+)(.*)$', re.M)
+REQUIRES = re.compile(r'^;; Package-Requires: (.+)$', re.M)
+REQUIREMENT = re.compile(r'\(([a-z][a-z0-9-]*) "[0-9]+(?:\.[0-9]+)*"\)')
 DEFINITION = re.compile(r"(?<!['`])\((?:defun|cl-defun|defmacro|cl-defmacro|defsubst|defvar|defconst|defcustom|defvar-local|define-minor-mode|define-derived-mode|etaf-ui--define-component|etaf-define-component)\s+([^\s()]+)")
 
 
@@ -137,7 +139,17 @@ def package(root):
             'api':api, 'errors':errors, 'examples':examples}
 
 
-def check(packages, selected=None):
+def required(entry):
+    """Return the package names the entry's Package-Requires header names.
+
+    None means the entry states no requirement at all, which leaves the
+    declaration contract unenforced rather than guessed.
+    """
+    header = REQUIRES.search(entry.read_text())
+    return REQUIREMENT.findall(header[1]) if header else None
+
+
+def check(packages, selected=None, known_providers=()):
     packages = dict(packages)
     selected = set(selected) if selected is not None else None
     pending = list(packages)
@@ -186,6 +198,29 @@ def check(packages, selected=None):
                 provider = feature_owners.get(feature)
                 if provider and (provider != name or file in tests) and feature != packages[provider]['entry'].stem:
                     errors.append(f'{file}: require {packages[provider]["entry"].stem}, not internal feature {feature}')
+        # A declared dependency names what the package itself consumes: the
+        # archive resolves the closure, so a transitive provider stays out and a
+        # declaration no source uses goes away.
+        owner_of = {**feature_owners, **owners}
+        declared = required(pkg['entry'])
+        known = ({owner for owner in owner_of.values() if '/examples/' not in owner}
+                 | set(known_providers))
+        runtime, anywhere = set(), set()
+        for file in pkg['files'] + files:
+            consumed = set()
+            for symbol in set(tokens(file.read_text())):
+                provider = owner_of.get(symbol)
+                if provider and provider != name and '/examples/' not in provider:
+                    consumed.add(provider)
+            anywhere.update(consumed)
+            if file in pkg['files']:
+                runtime.update(consumed)
+        if declared is not None:
+            declared = set(declared) - {'emacs'}
+            for missing in sorted(runtime - declared):
+                errors.append(f'{pkg["entry"]}: Package-Requires omits {missing}, whose API its sources use')
+            for unused in sorted((declared & known) - anywhere):
+                errors.append(f'{pkg["entry"]}: Package-Requires declares {unused}, which no source uses')
     return sorted(set(errors))
 
 
@@ -238,7 +273,7 @@ def main():
                 packages[dependency] = package(path)
                 pending.append(dependency)
         selected = {name}
-    errors = check(packages, selected)
+    errors = check(packages, selected, registry)
     if errors:
         print('\n'.join(errors), file=sys.stderr)
         return 1

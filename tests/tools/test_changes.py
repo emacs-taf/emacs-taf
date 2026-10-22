@@ -28,7 +28,7 @@ class ChangesTests(unittest.TestCase):
         self.root = self.base / 'workspace'
         self.copy_root_tooling()
         self.write_child('base', '')
-        self.write_child('app', ' (base "0.1.0")')
+        self.write_child('app', ' (base "0.1.0")', requires=('base',))
         # An application keeps the provider registry its own boundary check sees.
         self.write(self.root / 'app/scripts/api-workspace.json', json.dumps({
             'base': {'entry': 'base', 'url': 'https://example.invalid/base.git'}},
@@ -66,7 +66,7 @@ class ChangesTests(unittest.TestCase):
                     *WORKSPACE.SHARED, *WORKSPACE.FRAMEWORK_SHARED):
             self.write(self.root / rel, (ROOT / rel).read_text())
 
-    def write_child(self, name, requirement):
+    def write_child(self, name, requirement, requires=()):
         child = self.root / name
         self.write(child / f'{name}.el',
                    f';;; {name}.el --- the {name} package  -*- lexical-binding: t; -*-\n\n'
@@ -76,6 +76,7 @@ class ChangesTests(unittest.TestCase):
                    f';; Function: {name}-value ()\n'
                    f';; Return the value of {name}.\n'
                    ';;; Code:\n\n'
+                   + ''.join(f"(require '{provider})\n" for provider in requires) + '\n'
                    f'(defun {name}-value () :{name})\n'
                    f"(provide '{name})\n"
                    f';;; {name}.el ends here\n')

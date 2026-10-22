@@ -17,6 +17,13 @@
   versions, so the archive serves it under a new version instead of
   overwriting 0.2.4.
 
+### Changed
+
+- `Package-Requires` states direct dependencies only, and `scripts/check-api.py`
+  enforces it: a declaration no source uses, or a provider whose API the
+  sources call without declaring it, fails `make check`. Fourteen entries were
+  corrected; the archive's Requires column follows their next release.
+
 ### Added
 
 - `scripts/changes.py` seals and publishes one cross-repository change.
