@@ -8,6 +8,12 @@ project uses [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `maillist-proxy` names the proxy archive requests use, so a client can reach
+  the archive through its own proxy without exporting a proxy variable for
+  every Emacs request.  An `auto` route whose direct attempt stops answering
+  now retries through that proxy after 10 seconds instead of waiting for the
+  45-second request timeout.
+
 - Search takes mail-client syntax: `from:`, `to:`, `subject:`, `body:`,
   `message:`, `after:` and `before:` compile into the archive's own query,
   while `is:unread` and `is:starred` filter the rows locally without a

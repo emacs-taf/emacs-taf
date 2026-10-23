@@ -363,20 +363,41 @@ and decoded."
 (defconst maillist-request-timeout 45
   "Seconds after which a stalled archive request is abandoned.")
 
+(defcustom maillist-direct-attempt-timeout 10
+  "Seconds a direct attempt may stall before `auto' retries through the proxy.
+A host that drops the connection instead of refusing it would otherwise hold
+the request until `maillist-request-timeout' and never reach the proxy."
+  :type 'number
+  :group 'maillist)
+
+(defcustom maillist-proxy nil
+  "Proxy address used for archive requests, as HOST:PORT.
+Empty means the request takes the proxy from `url-proxy-services' or from the
+environment."
+  :type '(choice (const :tag "Not set" nil) string)
+  :group 'maillist)
+
 (defcustom maillist-network-route 'auto
   "How archive requests reach the network.
-`auto' tries a direct connection first and falls back to the proxy named by
-the environment when the direct attempt cannot connect; `direct' never uses a
-proxy and `proxy' always does."
-  :type '(choice (const :tag "Direct, then the environment proxy" auto)
+`auto' tries a direct connection first and falls back to the proxy when the
+direct attempt cannot connect; `direct' never uses a proxy and `proxy' always
+does.  The proxy is `maillist-proxy' when set, otherwise the one named by
+`url-proxy-services' or the environment."
+  :type '(choice (const :tag "Direct, then the proxy" auto)
                  (const :tag "Always direct" direct)
-                 (const :tag "Use the environment proxy" proxy))
+                 (const :tag "Use the proxy" proxy))
   :group 'maillist)
+
+(defun maillist--configured-proxy ()
+  "Return proxy services of `maillist-proxy', or nil."
+  (let ((value (string-trim (or maillist-proxy ""))))
+    (unless (string-empty-p value)
+      (list (cons "https" value) (cons "http" value)))))
 
 (defun maillist--env-proxy-services ()
   "Return proxy services built from the environment, or nil.
-url.el honours `url-proxy-services' rather than `NO_PROXY', so the client
-chooses the route itself instead of inheriting an unreachable proxy."
+The client decides its own route instead of inheriting whichever hosts the
+environment tells url.el to send around a proxy."
   (when-let* ((value (or (getenv "HTTPS_PROXY") (getenv "https_proxy")
                          (getenv "HTTP_PROXY") (getenv "http_proxy")
                          (getenv "ALL_PROXY") (getenv "all_proxy")))
@@ -385,12 +406,27 @@ chooses the route itself instead of inheriting an unreachable proxy."
     (when (string-match-p ":" host)
       (list (cons "https" host) (cons "http" host)))))
 
+(defconst maillist--no-bypass (cons "no_proxy" "\\`\\'")
+  "Bypass entry that matches no host.
+url.el builds a bypass from the environment's NO_PROXY the first time a
+request runs, so an explicit proxy attempt carries its own entry, which both
+shadows an inherited bypass and keeps url.el from adding one.")
+
 (defun maillist--proxy-services ()
-  "Return the proxy services a request may use, or nil."
-  (or (and (bound-and-true-p url-proxy-services)
-           (consp (bound-and-true-p url-proxy-services))
-           (bound-and-true-p url-proxy-services))
-      (maillist--env-proxy-services)))
+  "Return the proxy services of an explicit proxy attempt, or nil."
+  (when-let* ((services
+               (or (maillist--configured-proxy)
+                   (and (bound-and-true-p url-proxy-services)
+                        (consp (bound-and-true-p url-proxy-services))
+                        (bound-and-true-p url-proxy-services))
+                   (maillist--env-proxy-services))))
+    (cons maillist--no-bypass services)))
+
+(defun maillist--kill-buffer (buffer)
+  "Kill BUFFER without asking whether its running request may be stopped."
+  (when (buffer-live-p buffer)
+    (let ((kill-buffer-query-functions nil))
+      (kill-buffer buffer))))
 
 (defun maillist--response-body ()
   "Return the response body of the current url buffer.
@@ -405,10 +441,13 @@ A response without a header block (a local `file:' mirror) is all body."
 Only the first completion is delivered: a timeout or a killed buffer after
 the response never calls CALLBACK twice.  ROUTE is `direct', `proxy' or nil
 for the first attempt of `maillist-network-route'."
-  (let* ((services (pcase route
+  (let* ((attempt (or route maillist-network-route))
+         (services (pcase attempt
                      ('proxy (maillist--proxy-services))
-                     ('direct nil)
                      (_ nil)))
+         (fallback (and (null route)
+                        (eq maillist-network-route 'auto)
+                        (maillist--proxy-services)))
          (state (list :done nil :timer nil :buffer nil))
          (finish (lambda (result)
                    (unless (plist-get state :done)
@@ -430,8 +469,7 @@ for the first attempt of `maillist-network-route'."
             (let ((failure (plist-get status :error))
                   (code (plist-get status :http-code))
                   (body (ignore-errors (maillist--response-body))))
-              (let ((current (current-buffer)))
-                (when (buffer-live-p current) (kill-buffer current)))
+              (maillist--kill-buffer (current-buffer))
               (cond
                ((and failure (null code) (null route)
                      (eq maillist-network-route 'auto)
@@ -452,11 +490,18 @@ for the first attempt of `maillist-network-route'."
                (not (plist-get state :done)))
       (plist-put state :timer
                  (run-at-time
-                  maillist-request-timeout nil
+                  (if fallback maillist-direct-attempt-timeout
+                    maillist-request-timeout)
+                  nil
                   (lambda ()
-                    (funcall finish (list :error "请求超时，按 g 重试"))
                     (let ((buffer (plist-get state :buffer)))
-                      (when (buffer-live-p buffer) (kill-buffer buffer)))))))))
+                      (if fallback
+                          (progn
+                            (funcall abandon)
+                            (maillist--kill-buffer buffer)
+                            (maillist--request url callback 'proxy))
+                        (funcall finish (list :error "请求超时，按 g 重试"))
+                        (maillist--kill-buffer buffer)))))))))
 
 (defun maillist--on-body (url callback parse)
   "Fetch URL, call PARSE on the body, and pass the result to CALLBACK."

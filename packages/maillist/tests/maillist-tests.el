@@ -259,6 +259,110 @@ session is disposed afterwards."
       (ignore-errors (delete-directory mirror t))
       (ignore-errors (delete-file file)))))
 
+;;; ---------------------------------------------------------------------------
+;;; Network route
+;;; ---------------------------------------------------------------------------
+
+(defvar maillist-tests--proxy-body ""
+  "Body the fake proxy answers every request with.")
+
+(defvar maillist-tests--proxy-hits 0
+  "Requests the fake proxy answered in the current scenario.")
+
+(defun maillist-tests--read-literal (name)
+  "Return fixture file NAME as unibyte text."
+  (with-temp-buffer
+    (set-buffer-multibyte nil)
+    (insert-file-contents-literally
+     (expand-file-name name maillist-tests--fixtures))
+    (buffer-string)))
+
+(defun maillist-tests--proxy-answer (process chunk)
+  "Answer the request PROCESS receives with `maillist-tests--proxy-body'."
+  (let ((request (concat (or (process-get process :request) "") chunk)))
+    (process-put process :request request)
+    (when (string-match-p "\r\n\r\n" request)
+      (setq maillist-tests--proxy-hits (1+ maillist-tests--proxy-hits))
+      (process-send-string
+       process
+       (concat "HTTP/1.1 200 OK\r\n"
+               "Content-Type: text/html\r\n"
+               (format "Content-Length: %d\r\n"
+                       (length maillist-tests--proxy-body))
+               "Connection: close\r\n\r\n"
+               maillist-tests--proxy-body))
+      (delete-process process))))
+
+(defun maillist-tests--server (&optional filter)
+  "Start a local TCP server using FILTER; return (PORT . PROCESS).
+A nil FILTER accepts connections and never answers, which is how a blocked
+host looks from the client: the connection stays open without a reply."
+  (let ((server (make-network-process
+                 :name "maillist-test-server"
+                 :server t
+                 :host "127.0.0.1"
+                 :service t
+                 :family 'ipv4
+                 :coding 'binary
+                 :noquery t
+                 :filter filter)))
+    (cons (process-contact server :service) server)))
+
+(defun maillist-tests--answer (callback)
+  "Run a fetch that calls CALLBACK and return its answer."
+  (let ((answer nil) (tries 0))
+    (funcall callback (lambda (result) (setq answer result)))
+    (while (and (< tries 200) (null answer))
+      (sleep-for 0.05)
+      (setq tries (1+ tries)))
+    answer))
+
+(ert-deftest maillist-tests-proxy-route-answers-through-the-configured-proxy ()
+  "A `proxy' route fetches through `maillist-proxy'.
+The source names a host that does not resolve, so only the proxy can answer."
+  (let* ((server (maillist-tests--server #'maillist-tests--proxy-answer))
+         (maillist-tests--proxy-body (maillist-tests--read-literal "index.html"))
+         (maillist-tests--proxy-hits 0)
+         (maillist-proxy (format "127.0.0.1:%d" (car server)))
+         (maillist-network-route 'proxy)
+         (url-proxy-services nil)
+         (source (list :name "proxy"
+                       :base "http://archive.invalid/"
+                       :address "proxy@example.org")))
+    (unwind-protect
+        (let ((answer (maillist-tests--answer
+                       (lambda (callback)
+                         (maillist-fetch-index source callback)))))
+          (should (eq :ok (car answer)))
+          (should (= 4 (length (cadr answer))))
+          (should (= 1 maillist-tests--proxy-hits)))
+      (delete-process (cdr server)))))
+
+(ert-deftest maillist-tests-auto-retries-a-stalled-direct-attempt ()
+  "A direct attempt that stops answering retries through the proxy.
+The direct host accepts the connection and never replies, so the attempt can
+only end at the direct attempt timeout."
+  (let* ((proxy (maillist-tests--server #'maillist-tests--proxy-answer))
+         (stalled (maillist-tests--server))
+         (maillist-tests--proxy-body (maillist-tests--read-literal "index.html"))
+         (maillist-tests--proxy-hits 0)
+         (maillist-direct-attempt-timeout 0.5)
+         (maillist-proxy (format "127.0.0.1:%d" (car proxy)))
+         (maillist-network-route 'auto)
+         (url-proxy-services nil)
+         (source (list :name "stalled"
+                       :base (format "http://127.0.0.1:%d/" (car stalled))
+                       :address "proxy@example.org")))
+    (unwind-protect
+        (let ((answer (maillist-tests--answer
+                       (lambda (callback)
+                         (maillist-fetch-index source callback)))))
+          (should (eq :ok (car answer)))
+          (should (= 4 (length (cadr answer))))
+          (should (= 1 maillist-tests--proxy-hits)))
+      (delete-process (cdr proxy))
+      (delete-process (cdr stalled)))))
+
 (ert-deftest maillist-tests-refresh-keeps-threads-the-index-dropped ()
   "A refresh merges the index page into the stored list instead of replacing it.
 An index page names recent threads only, so a thread the page no longer lists

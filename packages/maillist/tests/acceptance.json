@@ -52,6 +52,16 @@
       "purpose": "An archive answer without thread rows fails the sync and keeps the stored list."
     },
     {
+      "name": "maillist-tests-proxy-route-answers-through-the-configured-proxy",
+      "file": "tests/maillist-tests.el",
+      "purpose": "A proxy route sends the archive request to the proxy named by maillist-proxy."
+    },
+    {
+      "name": "maillist-tests-auto-retries-a-stalled-direct-attempt",
+      "file": "tests/maillist-tests.el",
+      "purpose": "A direct attempt that never answers retries through the proxy instead of waiting for the request timeout."
+    },
+    {
       "name": "maillist-tests-lists-do-not-share-stored-threads",
       "file": "tests/maillist-tests.el",
       "purpose": "Threads are stored per archive, so another list does not show them."
