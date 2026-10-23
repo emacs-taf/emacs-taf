@@ -192,6 +192,12 @@
       "revision": "7295635e892ff249c589c7b30aacb8fb20007df4",
       "branch": "main",
       "role": "game"
+    },
+    "etaf-posframe": {
+      "url": "https://github.com/emacs-taf/etaf-posframe.git",
+      "revision": "b4bb9ffd09b037dec3b6eb1bb09577600e0a869b",
+      "branch": "main",
+      "role": "framework"
     }
   }
 }

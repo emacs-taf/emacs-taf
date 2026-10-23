@@ -68,6 +68,7 @@ Framework packages and workspace tooling developed in this checkout:
 | [etaf](https://github.com/emacs-taf/etaf) | Components, state and application runtime | ebox |
 | [etaf-ui](https://github.com/emacs-taf/etaf-ui) | Reusable UI components | etaf |
 | [etaf-gamekit](https://github.com/emacs-taf/etaf-gamekit) | Game definitions, independent instances, actions and backend adapters | etaf |
+| [etaf-posframe](https://github.com/emacs-taf/etaf-posframe) | Floating child-frame panels for any ETAF View | etaf |
 | [etaf-db](https://github.com/emacs-taf/etaf-db) | Database backends for ETAF; currently SQLite | etaf |
 | [ebox-playground](https://github.com/emacs-taf/ebox-playground) | Runnable Ebox layout examples | ebox |
 | [etaf-playground](https://github.com/emacs-taf/etaf-playground) | ETAF/UI integration examples and acceptance surfaces | etaf, etaf-ui, etaf-db, etaf-desktop |

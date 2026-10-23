@@ -39,6 +39,10 @@
     "entry": "etaf-playground",
     "url": "https://github.com/emacs-taf/etaf-playground.git"
   },
+  "etaf-posframe": {
+    "entry": "etaf-posframe",
+    "url": "https://github.com/emacs-taf/etaf-posframe.git"
+  },
   "etaf-ui": {
     "entry": "etaf-ui",
     "url": "https://github.com/emacs-taf/etaf-ui.git"
