@@ -43,9 +43,16 @@
 (defcustom etaf-youtube-theme-mode 'dark
   "Appearance used by a new application session.
 `dark' (default) renders the video site's dark surface and `light' the light
-one; this is independent of the active Emacs theme."
+one; this is independent of the active Emacs theme.  The running choice is
+the session's mode cell, which the title-bar menu and a panel's switch write."
   :type '(choice (const :tag "Dark" dark) (const :tag "Light" light))
   :group 'etaf-youtube)
+
+(defconst etaf-youtube--surface-modes
+  '((light . "亮") (dark . "暗"))
+  "Appearance modes the client offers its host, in display order.
+The client has two maintained palettes, so a panel's title bar offers these
+two segments instead of the standard three.")
 
 (defun etaf-youtube-color (key &optional mode)
   "Return the palette color named KEY.

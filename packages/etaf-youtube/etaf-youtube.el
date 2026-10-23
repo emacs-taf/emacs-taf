@@ -284,7 +284,9 @@
 ;; Record POSITION seconds as STORE's resume point for VIDEO-ID.
 ;;
 ;; Variable: etaf-youtube-theme-mode
-;; Appearance a new session uses, `dark' (default) or `light'.
+;; Appearance a new session uses, `dark' (default) or `light'.  The running
+;; choice is the session's mode cell, which the title-bar menu and a panel's
+;; title-bar switch both write; the option only seeds it.
 ;;
 ;; Function: etaf-youtube-login (&optional model)
 ;; Sign in to YouTube in the controlled browser and refresh open sessions.

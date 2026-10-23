@@ -112,6 +112,11 @@
       "purpose": "Appearance and layout choices change the reported state and the palette."
     },
     {
+      "name": "etaf-youtube-declares-its-surface-to-a-host",
+      "file": "tests/etaf-youtube-tests.el",
+      "purpose": "A host frames the client from the palette, mode cell and modes it declares, so a panel's title-bar switch repaints the video page instead of only the frame chrome."
+    },
+    {
       "name": "etaf-youtube-thumbnails-load-through-the-injected-fetcher",
       "file": "tests/etaf-youtube-tests.el",
       "purpose": "Requesting a thumbnail stores a descriptor, bumps the version and does not repeat the request."

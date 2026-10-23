@@ -472,6 +472,61 @@ FIXTURES-SYM is bound to the fixture table and LOG-SYM to the call log."
     (should (equal (etaf-youtube-color :bg 'light)
                    (plist-get (etaf-youtube-theme-defaults 'light) :paper)))))
 
+(etaf-define-component etaf-youtube-tests--framing-host (&key surface app)
+  "Provide SURFACE to the client APP and render it below."
+  :setup (etaf-surface-provide surface)
+  :render (etaf-youtube-view app))
+
+(defun etaf-youtube-tests--row-painting (buffer color)
+  "Return the first position in BUFFER whose face paints COLOR as background."
+  (with-current-buffer buffer
+    (let ((pos (point-min))
+          found)
+      (while (and (< pos (point-max)) (not found))
+        (when (equal color
+                     (plist-get (get-text-property pos 'face) :background))
+          (setq found pos))
+        (setq pos (1+ pos)))
+      found)))
+
+(defun etaf-youtube-tests--painted-background (buffer position)
+  "Return the background BUFFER paints at POSITION."
+  (with-current-buffer buffer
+    (plist-get (get-text-property position 'face) :background)))
+
+(ert-deftest etaf-youtube-declares-its-surface-to-a-host ()
+  "A host frames the client from the surface the client declares.
+The panel's title-bar switch writes the session's mode cell, so the video page
+repaints instead of only the frame chrome."
+  (etaf-youtube-tests--with-app app fixtures log
+    (let* ((surface (etaf-surface-create))
+           (buffer (generate-new-buffer " *etaf-youtube framing host*")))
+      (unwind-protect
+          (progn
+            (etaf-mount buffer
+                        (etaf-view (etaf-youtube-tests--framing-host
+                                    :surface surface :app app))
+                        (list :viewport-width 1200 :viewport-height 40))
+            (etaf-runtime-flush (etaf-runtime-for-buffer buffer))
+            (should (equal '((light . "亮") (dark . "暗"))
+                           (etaf-surface-modes surface)))
+            (let* ((before (plist-get (etaf-value (etaf-surface-theme surface))
+                                      :paper))
+                   (pos (etaf-youtube-tests--row-painting buffer before)))
+              (should pos)
+              (etaf-set-value (etaf-surface-mode surface) 'light)
+              (etaf-runtime-flush (etaf-runtime-for-buffer buffer))
+              (should (eq 'light (etaf-value (etaf-surface-mode surface))))
+              (should-not (equal before
+                                 (plist-get (etaf-value (etaf-surface-theme surface))
+                                            :paper)))
+              (should (equal (plist-get (etaf-value (etaf-surface-theme surface))
+                                        :paper)
+                             (etaf-youtube-tests--painted-background buffer pos)))))
+        (when-let* ((runtime (etaf-runtime-for-buffer buffer)))
+          (etaf-unmount runtime))
+        (kill-buffer buffer)))))
+
 (ert-deftest etaf-youtube-thumbnails-load-through-the-injected-fetcher ()
   "Requesting a thumbnail stores a descriptor and bumps the version."
   (skip-unless (and (display-graphic-p) (image-type-available-p 'png)))

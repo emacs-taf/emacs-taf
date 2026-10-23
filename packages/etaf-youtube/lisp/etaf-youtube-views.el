@@ -279,6 +279,17 @@ renderer payloads use; anything else is zero."
   :setup
   (progn
     (etaf-theme-provide palette)
+    ;; One appearance state: a host's title-bar switch writes the mode cell
+    ;; and the palette follows it, so the client and its panel paint the same
+    ;; choice instead of only the frame chrome changing.
+    (etaf-watch mode
+                (lambda (mode _old)
+                  (etaf-youtube--write model :palette
+                                       (etaf-youtube-theme-defaults mode)))
+                :immediate t :name 'etaf-youtube-palette)
+    (when-let* ((surface (etaf-surface-host)))
+      (etaf-surface-declare surface :theme palette :mode mode
+                            :modes etaf-youtube--surface-modes))
     (etaf-on-mounted
      (lambda ()
        (etaf-youtube--start-player-timer model)

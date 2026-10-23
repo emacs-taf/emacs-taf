@@ -29,6 +29,8 @@ releases the session, its requests and its player.
   opening.
 - Appearance: dark and light palettes independent of the Emacs theme,
   a fixed search/account bar, rounded filter buttons and SVG navigation.
+  A floating panel's title-bar switch drives the session's mode cell, so the
+  video page repaints with the panel.
   Video cards put titles ahead of channel and view metadata; durations sit
   on the thumbnail and Shorts use a separate portrait grid.
 - Layout: the shell adapts from wide windows down to a compact one. The
