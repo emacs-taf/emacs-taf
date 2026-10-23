@@ -49,6 +49,7 @@ independent repositories listed in `workspace.json`.
   publish scripts are maintained files; dependencies, generated content and
   the build output stay untracked. A repository that publishes a site provides
   one command that regenerates the content and deploys the current build.
+- 群邀请链接在 `etaf-manual` 的 `site/src/data/landing.mjs`（中英两处）；改完 `make site-publish` 发布 etaf.top。
 - Share directory meanings and command interfaces across repositories. Create only
   the directories a repository needs; do not impose identical empty skeletons.
 - Create directories only when they contain maintained files. Use lowercase kebab-case
