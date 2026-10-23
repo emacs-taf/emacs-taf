@@ -195,7 +195,7 @@
     },
     "etaf-posframe": {
       "url": "https://github.com/emacs-taf/etaf-posframe.git",
-      "revision": "61187ea9a742a22e02c30c7159b02d34206933f4",
+      "revision": "82cc03703a27724a2aba0f6f8ee2a713521cf816",
       "branch": "main",
       "role": "framework"
     }
