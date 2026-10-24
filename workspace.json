@@ -51,7 +51,7 @@
   },
   "etaf-manual": {
    "url": "https://github.com/emacs-taf/etaf-manual.git",
-   "revision": "3b39f78477cba3fa4f7929a92d40b55c52c76ede",
+   "revision": "d62ced2147fcd51ea1aaf630d4a28594b6c13915",
    "branch": "main",
    "role": "framework"
   },
@@ -195,7 +195,7 @@
   },
   "etaf-posframe": {
    "url": "https://github.com/emacs-taf/etaf-posframe.git",
-   "revision": "bacf85624b0fe5a2a25e79d288b3a674a5e17a94",
+   "revision": "99c3e3a1024b083c36f1b4dcc9fc4cadfa04ce35",
    "branch": "main",
    "role": "framework"
   },
