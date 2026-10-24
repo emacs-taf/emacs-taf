@@ -21,7 +21,7 @@
   },
   "etaf": {
    "url": "https://github.com/emacs-taf/etaf.git",
-   "revision": "acd78a1ee83a3e147727c13de8637fa71aabd605",
+   "revision": "8ab04f1646f23f266b66ad569e321831ec86b077",
    "branch": "main",
    "role": "framework"
   },
@@ -51,7 +51,7 @@
   },
   "etaf-manual": {
    "url": "https://github.com/emacs-taf/etaf-manual.git",
-   "revision": "c4efd7842adb180e4cf627b06eb9a27857a0fd44",
+   "revision": "a9e67bb8bc82bd885861dd6100e4d139600966f7",
    "branch": "main",
    "role": "framework"
   },
@@ -93,7 +93,7 @@
   },
   "etaf-ncm": {
    "url": "https://github.com/emacs-taf/etaf-ncm.git",
-   "revision": "13594dfefd3b08b2316bd97197d8c2c3150190df",
+   "revision": "03551e98ceaca0763c2b0183318a8fa559daa660",
    "branch": "main",
    "role": "application"
   },
@@ -141,7 +141,7 @@
   },
   "etaf-weread": {
    "url": "https://github.com/emacs-taf/etaf-weread.git",
-   "revision": "fe73d6931acfb5e01c8832db8e5152bbd23be1bb",
+   "revision": "a5f4500a96fbdb788778893be46c7c6f4b46d7a5",
    "branch": "main",
    "role": "application"
   },
@@ -195,7 +195,7 @@
   },
   "etaf-posframe": {
    "url": "https://github.com/emacs-taf/etaf-posframe.git",
-   "revision": "eb392b5a534eaf4010177f23509d811e660c5966",
+   "revision": "bacf85624b0fe5a2a25e79d288b3a674a5e17a94",
    "branch": "main",
    "role": "framework"
   },
