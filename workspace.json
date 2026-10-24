@@ -27,7 +27,7 @@
   },
   "etaf-ui": {
    "url": "https://github.com/emacs-taf/etaf-ui.git",
-   "revision": "9d1e9e33e55efb999c7a4da1b7ec72ea732199c7",
+   "revision": "eb5f6bab567e7321ea74f0bab10819d0461d0f88",
    "branch": "main",
    "role": "framework"
   },
@@ -51,7 +51,7 @@
   },
   "etaf-manual": {
    "url": "https://github.com/emacs-taf/etaf-manual.git",
-   "revision": "cef6f0093c5824c8ae5910d1dae32bdb12ad47e7",
+   "revision": "3b39f78477cba3fa4f7929a92d40b55c52c76ede",
    "branch": "main",
    "role": "framework"
   },
