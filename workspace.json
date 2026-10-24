@@ -165,7 +165,7 @@
   },
   "etaf-tanks": {
    "url": "https://github.com/emacs-taf/etaf-tanks.git",
-   "revision": "607a06e7eed2f8febbfedc3a3762bb0ca3dd56b5",
+   "revision": "a47a2a836d3b8c92ac1bf647b04ed717423a483c",
    "branch": "main",
    "role": "game"
   },
@@ -201,7 +201,7 @@
   },
   "etaf-pomodoro": {
    "url": "https://github.com/emacs-taf/etaf-pomodoro.git",
-   "revision": "102ea533efbd9fa4fd9f16cb7b564f9767415b60",
+   "revision": "a0c815524b0e0dde5e5f9a47033faaf5f7404690",
    "branch": "main",
    "role": "application"
   }
