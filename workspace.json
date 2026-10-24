@@ -141,7 +141,7 @@
   },
   "etaf-weread": {
    "url": "https://github.com/emacs-taf/etaf-weread.git",
-   "revision": "a5f4500a96fbdb788778893be46c7c6f4b46d7a5",
+   "revision": "c1f44cf7ab82281f2eec5a4975084b35dccf29da",
    "branch": "main",
    "role": "application"
   },
@@ -195,7 +195,7 @@
   },
   "etaf-posframe": {
    "url": "https://github.com/emacs-taf/etaf-posframe.git",
-   "revision": "99c3e3a1024b083c36f1b4dcc9fc4cadfa04ce35",
+   "revision": "b5d45aff9100ec20fc0bd36172e21f673ea069b6",
    "branch": "main",
    "role": "framework"
   },
