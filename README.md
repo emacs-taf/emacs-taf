@@ -34,7 +34,8 @@ replacement Emacs configuration is required.
 
 The installer groups its targets: framework (`etaf-ui` gallery, `etaf`,
 `etaf-db`, `ekp`), applications (`etaf-md-preview`, `etaf-video-player`,
-`etaf-desktop`, `etaf-manual`, `etaf-telega`, `etaf-weread`, `etaf-ncm`) and
+`etaf-desktop`, `etaf-manual`, `etaf-telega`, `etaf-weread`, `etaf-ncm`,
+`etaf-pomodoro`) and
 games (`etaf-xiangqi`, `etaf-tanks`). Each entry reports what is missing before
 opening. SQLite needs an Emacs build with SQLite support;
 `M-x etaf-install-doctor` reports required and optional capabilities without
@@ -104,6 +105,7 @@ table names the framework repositories each one uses:
 | [maillist](https://github.com/emacs-taf/maillist) | Mailing-list client: public-inbox thread list with unread and starred scopes, a fixed-header reader, local read/star state and replies through smtpmail | etaf, etaf-ui, etaf-db, ebox |
 | [etaf-reader](https://github.com/emacs-taf/etaf-reader) | Local ebook reader: EPUB/TXT/Markdown/HTML/FB2/PDF import, paged reading, annotations and progress | etaf, etaf-ui, etaf-db, ebox |
 | [etaf-pi](https://github.com/emacs-taf/etaf-pi) | Native Pi agent client: streamed conversations, tool output, session recovery and multiline input | etaf, etaf-ui, ebox |
+| [etaf-pomodoro](https://github.com/emacs-taf/etaf-pomodoro) | Focus timer as an application and as a floating panel: reactive countdown, three styles and a host-following palette | etaf, etaf-ui, ebox |
 | [etaf-telega](https://github.com/emacs-taf/etaf-telega) | Telegram client on Telega's TDLib backend: chats, live message stream, composer and message actions | etaf, etaf-ui, ebox |
 | [etaf-video-player](https://github.com/emacs-taf/etaf-video-player) | Local video and streams as image frames, density characters or true-color half blocks, with sound | etaf, etaf-ui, ebox |
 | [etaf-video-studio](https://github.com/emacs-taf/etaf-video-studio) | Record, edit and publish software tutorials through the video-project skill: recording, non-destructive edits, background previews/exports and a two-step publish flow | etaf, etaf-ui, ebox |

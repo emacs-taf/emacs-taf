@@ -62,6 +62,9 @@
       "resources": [
         "native"
       ]
+    },
+    "etaf-pomodoro": {
+      "resources": []
     }
   },
   "targets": [
