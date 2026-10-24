@@ -621,6 +621,12 @@ These are green in batch while broken in a real session:
 - Retained Host updates take a **symbol** ref (a string signals "Unknown
   committed Host"), the node needs both `:ref` and `:id`, and one missing target
   rejects the whole batch.
+- A per-frame face query must not pass an explicit nil INHERIT:
+  `(face-attribute 'default :background nil FRAME)` answers for the selected
+  frame when FRAME is not selected, and an alias face such as `link` signals
+  `Invalid face: <frame>`. A panel that held the keyboard therefore derived its
+  palette from its own frame, so a theme switch recoated it in a wrong mixed
+  surface. Query with `(face-attribute 'default :background FRAME)`.
 
 ### Retained Host updates
 
