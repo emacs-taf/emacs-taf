@@ -465,7 +465,12 @@ unrelated root files) instead of the child's sealed tree.
   archive and read the published `manifest.json` back. `pi-skill etaf-archive-release
   release <package> --yes` runs that sequence and refuses to publish unless every
   install target passes the archive gate. Do not leave a package fix reachable only
-  from the repositories.
+  from the repositories. The gate fetches MELPA through Emacs' own `url.el`, which
+  ignores `NO_PROXY`, so run it with the proxy variables unset
+  (`env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u http_proxy -u https_proxy -u all_proxy`);
+  the lane's `jj git fetch`/`push` to `origin` still needs the proxy, which belongs in
+  git config rather than the environment (`git config --global
+  http.https://github.com.proxy http://127.0.0.1:7890`).
 
 ### Cross-repository revisions
 
