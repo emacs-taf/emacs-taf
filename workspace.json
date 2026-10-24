@@ -51,7 +51,7 @@
     },
     "etaf-manual": {
       "url": "https://github.com/emacs-taf/etaf-manual.git",
-      "revision": "d38476cceb60c3cd36c9190ab5f6967cb97dc2ab",
+      "revision": "d3928ef1f73476e865c96b96770502ded573b753",
       "branch": "main",
       "role": "framework"
     },
