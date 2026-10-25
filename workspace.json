@@ -201,7 +201,7 @@
     },
     "etaf-pomodoro": {
       "url": "https://github.com/emacs-taf/etaf-pomodoro.git",
-      "revision": "8ab9a77232b91ae0c54bd34d7b10bf9d8cabec27",
+      "revision": "ab0dee3db4ab099197ee8d77768ad08743e5853b",
       "branch": "main",
       "role": "application"
     }
