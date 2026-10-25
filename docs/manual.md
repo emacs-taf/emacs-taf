@@ -316,9 +316,11 @@ Adding a package to the archive is a fixed sequence; do not invent another route
 3. Implement `<package>-doctor` returning `(LABEL AVAILABLE REMEDY)` facts, and
    mark blocking versus degraded capabilities; the installer aggregates them.
 4. Add the target to `etaf-install--targets` with its group and open command so
-   the menu shows its status before installation. Add the same package to the
-   application or game list in `scripts/install-smoke.el`, which reopens and
-   diagnoses it as an installed package during the release gate.
+   the menu shows its status before installation. A target the menu does not
+   list is not installable at all: `etaf-install` answers
+   `Unsupported target`. Add the same package to the application or game list
+   in `scripts/install-smoke.el`, or give a framework its own functional check
+   there, so the release gate reopens and diagnoses the installed package.
 5. Run the package's `make check`, then the dev-lane install on Emacs 29.1, 30.2
    and 31.1 (29.1 lives on `lightos`, see the host notes).
 6. Commit and publish the provider, record it in `workspace.json`, build the
