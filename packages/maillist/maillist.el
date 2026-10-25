@@ -190,15 +190,16 @@
 ;; Viewport width below which the client shows one column.
 ;;
 ;; Variable: maillist-network-route
-;; `auto' (direct, then the proxy), `direct' or `proxy'; a proxy attempt
-;; never falls back to the direct connection.
+;; `auto' (direct, then the proxy), `proxy' (the proxy, then direct) or
+;; `direct' (no proxy); a route that cannot connect hands the request to the
+;; other one.
 ;;
 ;; Variable: maillist-proxy
 ;; Proxy address (HOST:PORT) of archive requests; empty takes it from
 ;; `url-proxy-services' or the environment.
 ;;
-;; Variable: maillist-direct-attempt-timeout
-;; Seconds a direct attempt may stall before `auto' retries through the proxy.
+;; Variable: maillist-route-attempt-timeout
+;; Seconds the leading route may stall before the other one answers.
 ;;
 ;; Variable: maillist-mail-address
 ;; Address the client sends from; its password comes from auth-source under

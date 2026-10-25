@@ -277,21 +277,27 @@ session is disposed afterwards."
      (expand-file-name name maillist-tests--fixtures))
     (buffer-string)))
 
-(defun maillist-tests--proxy-answer (process chunk)
-  "Answer the request PROCESS receives with `maillist-tests--proxy-body'."
+(defun maillist-tests--answer-with (process chunk body &optional status)
+  "Answer the request PROCESS receives with BODY and close the connection.
+STATUS is the response status line, 200 by default."
   (let ((request (concat (or (process-get process :request) "") chunk)))
     (process-put process :request request)
     (when (string-match-p "\r\n\r\n" request)
-      (setq maillist-tests--proxy-hits (1+ maillist-tests--proxy-hits))
       (process-send-string
        process
-       (concat "HTTP/1.1 200 OK\r\n"
+       (concat "HTTP/1.1 " (or status "200 OK") "\r\n"
                "Content-Type: text/html\r\n"
-               (format "Content-Length: %d\r\n"
-                       (length maillist-tests--proxy-body))
+               (format "Content-Length: %d\r\n" (length body))
                "Connection: close\r\n\r\n"
-               maillist-tests--proxy-body))
+               body))
       (delete-process process))))
+
+(defun maillist-tests--proxy-answer (process chunk)
+  "Answer the request PROCESS receives with `maillist-tests--proxy-body'."
+  (when (string-match-p
+         "\r\n\r\n" (concat (or (process-get process :request) "") chunk))
+    (setq maillist-tests--proxy-hits (1+ maillist-tests--proxy-hits)))
+  (maillist-tests--answer-with process chunk maillist-tests--proxy-body))
 
 (defun maillist-tests--server (&optional filter)
   "Start a local TCP server using FILTER; return (PORT . PROCESS).
@@ -307,6 +313,12 @@ host looks from the client: the connection stays open without a reply."
                  :noquery t
                  :filter filter)))
     (cons (process-contact server :service) server)))
+
+(defun maillist-tests--closed-port ()
+  "Return a local port nothing listens on."
+  (let ((server (maillist-tests--server)))
+    (prog1 (car server)
+      (delete-process (cdr server)))))
 
 (defun maillist-tests--answer (callback)
   "Run a fetch that calls CALLBACK and return its answer."
@@ -346,7 +358,7 @@ only end at the direct attempt timeout."
          (stalled (maillist-tests--server))
          (maillist-tests--proxy-body (maillist-tests--read-literal "index.html"))
          (maillist-tests--proxy-hits 0)
-         (maillist-direct-attempt-timeout 0.5)
+         (maillist-route-attempt-timeout 0.5)
          (maillist-proxy (format "127.0.0.1:%d" (car proxy)))
          (maillist-network-route 'auto)
          (url-proxy-services nil)
@@ -362,6 +374,69 @@ only end at the direct attempt timeout."
           (should (= 1 maillist-tests--proxy-hits)))
       (delete-process (cdr proxy))
       (delete-process (cdr stalled)))))
+
+(ert-deftest maillist-tests-dead-proxy-route-still-reaches-the-archive ()
+  "A `proxy' route falls back to the archive when the proxy is not running.
+A local proxy client that is not running leaves its port closed, which is what
+the leading route meets; the archive itself answers."
+  (let* ((server (maillist-tests--server
+                  (lambda (process chunk)
+                    (maillist-tests--answer-with
+                     process chunk (maillist-tests--read-literal "index.html")))))
+         (maillist-proxy (format "127.0.0.1:%d" (maillist-tests--closed-port)))
+         (maillist-network-route 'proxy)
+         (url-proxy-services nil)
+         (source (list :name "fallback"
+                       :base (format "http://127.0.0.1:%d/" (car server))
+                       :address "fallback@example.org")))
+    (unwind-protect
+        (let ((answer (maillist-tests--answer
+                       (lambda (callback)
+                         (maillist-fetch-index source callback)))))
+          (should (eq :ok (car answer)))
+          (should (= 4 (length (cadr answer)))))
+      (delete-process (cdr server)))))
+
+(ert-deftest maillist-tests-failed-routes-name-every-endpoint ()
+  "A request that reaches nothing names each endpoint that did not answer.
+url.el reports the refused connection as an `error' whose data is a property
+list, so its own text is a `peculiar error' naming no host."
+  (let* ((archive (maillist-tests--closed-port))
+         (proxy (maillist-tests--closed-port))
+         (maillist-proxy (format "127.0.0.1:%d" proxy))
+         (maillist-network-route 'proxy)
+         (url-proxy-services nil)
+         (source (list :name "down"
+                       :base (format "http://127.0.0.1:%d/" archive)
+                       :address "down@example.org")))
+    (let ((answer (maillist-tests--answer
+                   (lambda (callback)
+                     (maillist-fetch-index source callback)))))
+      (should (eq :error (car answer)))
+      (should (string-match-p (format "代理 127.0.0.1:%d" proxy) (cadr answer)))
+      (should (string-match-p (format "档案 127.0.0.1:%d" archive) (cadr answer)))
+      (should-not (string-match-p "peculiar" (cadr answer))))))
+
+(ert-deftest maillist-tests-http-error-answer-is-readable ()
+  "An archive that refuses the request reports the status it answered with.
+url.el reports that as `(error http 403)', which `error-message-string' prints
+as a `peculiar error' carrying the number."
+  (let* ((server (maillist-tests--server
+                  (lambda (process chunk)
+                    (maillist-tests--answer-with
+                     process chunk "" "403 Forbidden"))))
+         (url-proxy-services nil)
+         (source (list :name "forbidden"
+                       :base (format "http://127.0.0.1:%d/" (car server))
+                       :address "forbidden@example.org")))
+    (unwind-protect
+        (let ((answer (maillist-tests--answer
+                       (lambda (callback)
+                         (maillist-fetch-index source callback)))))
+          (should (eq :error (car answer)))
+          (should (string-match-p "HTTP 403" (cadr answer)))
+          (should-not (string-match-p "peculiar" (cadr answer))))
+      (delete-process (cdr server)))))
 
 (ert-deftest maillist-tests-refresh-keeps-threads-the-index-dropped ()
   "A refresh merges the index page into the stored list instead of replacing it.

@@ -62,6 +62,21 @@
       "purpose": "A direct attempt that never answers retries through the proxy instead of waiting for the request timeout."
     },
     {
+      "name": "maillist-tests-dead-proxy-route-still-reaches-the-archive",
+      "file": "tests/maillist-tests.el",
+      "purpose": "A proxy route whose endpoint is not running still reaches the archive directly."
+    },
+    {
+      "name": "maillist-tests-failed-routes-name-every-endpoint",
+      "file": "tests/maillist-tests.el",
+      "purpose": "A request that reaches nothing names the proxy and the archive it could not connect to."
+    },
+    {
+      "name": "maillist-tests-http-error-answer-is-readable",
+      "file": "tests/maillist-tests.el",
+      "purpose": "An archive that answers with an HTTP error reports that status instead of url.el's error shape."
+    },
+    {
       "name": "maillist-tests-lists-do-not-share-stored-threads",
       "file": "tests/maillist-tests.el",
       "purpose": "Threads are stored per archive, so another list does not show them."

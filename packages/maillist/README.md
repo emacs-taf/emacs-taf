@@ -83,9 +83,12 @@ M-x maillist-open
   没有作者的显示为 `…`。
 - 搜索结果是另一份视图，不会写回档案缓存：在搜索结果里打开线程，不会把
   搜索页的日期、人数或标题存成线程的事实。
-- 网络默认先直连，失败才用代理（`maillist-network-route`）；代理地址用
-  `maillist-proxy`，没设时取 `url-proxy-services` 或环境里的那个。直连被
-  静默丢包时，10 秒后就改走代理，不再空等到 45 秒超时。
+- 网络先按 `maillist-network-route` 选一条路：`auto` 先直连、再代理，`proxy`
+  先代理、再直连，`direct` 只用直连。领先的那条连不上或 10 秒不应答就换另一条
+  （`maillist-route-attempt-timeout`），所以代理客户端没开着时照样能取档案，
+  直连被挡时也还有代理可用。代理地址用 `maillist-proxy`，没设时取
+  `url-proxy-services` 或环境里的那个。取不到时报的是具体地址，例如
+  「无法连接代理 127.0.0.1:7890；无法连接档案 yhetil.org:443」。
 
 ## 开发
 

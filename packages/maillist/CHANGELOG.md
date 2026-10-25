@@ -75,6 +75,17 @@ project uses [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- A proxy route no longer takes the client offline when the proxy is not
+  running.  The route that leads hands the request to the other one when it
+  cannot connect or stops answering, so `proxy' falls back to the direct
+  connection and `auto' still reaches the archive when the direct path is
+  blocked.  A request that reaches nothing now names what it could not
+  connect to (`无法连接代理 127.0.0.1:7890；无法连接档案 yhetil.org:443`)
+  instead of url.el's `peculiar error` carrying a property list.
+
+  `maillist-direct-attempt-timeout` is now `maillist-route-attempt-timeout`,
+  because it bounds whichever route leads.
+
 - A search no longer opens its first result, so running a query cannot mark a
   thread read.  A search that the archive cannot answer reports the error and
   leaves the
