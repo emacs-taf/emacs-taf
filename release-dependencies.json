@@ -16,6 +16,9 @@
     "etaf-posframe": {
       "resources": [
         "examples"
+      ],
+      "external": [
+        "posframe"
       ]
     },
     "etaf-db": {},
