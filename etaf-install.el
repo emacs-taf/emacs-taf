@@ -1,7 +1,7 @@
 ;;; -*- lexical-binding: t; -*-
 ;;; etaf-install.el --- Install ETAF with the Emacs package manager
 
-;; Version: 0.2.11
+;; Version: 0.2.12
 ;; Package-Requires: ((emacs "29.1"))
 ;; URL: https://github.com/emacs-taf/emacs-taf
 ;; Keywords: convenience
@@ -100,6 +100,7 @@
     (etaf-telega "Telegram client" application etaf-telega-open melpa gnu)
     (etaf-weread "WeChat Reading" application etaf-weread-open)
     (etaf-ncm "NetEase Cloud Music" application etaf-ncm-open)
+    (etaf-pomodoro "Focus timer" application etaf-pomodoro-open)
     (etaf-xiangqi "Xiangqi" game etaf-xiangqi-open)
     (etaf-tanks "Tank battle" game etaf-tanks-open))
   "Installable targets as (PACKAGE LABEL GROUP OPEN &rest CAPABILITIES).

@@ -195,7 +195,7 @@ report it immediately instead of retrying and hiding it."
         (with-current-buffer buffer (etaf-unmount))
         (kill-buffer buffer))))
   (when (memq target '(etaf-md-preview etaf-video-player etaf-desktop etaf-telega
-                   etaf-xiangqi etaf-tanks etaf-weread etaf-ncm))
+                   etaf-xiangqi etaf-tanks etaf-weread etaf-ncm etaf-pomodoro))
     ;; Applications install and load like any package; their external tools are
     ;; runtime capabilities, so a missing ffmpeg must not fail the install gate.
     (require target)

@@ -315,19 +315,27 @@ Adding a package to the archive is a fixed sequence; do not invent another route
    `Cannot open load file` for the modules.
 3. Implement `<package>-doctor` returning `(LABEL AVAILABLE REMEDY)` facts, and
    mark blocking versus degraded capabilities; the installer aggregates them.
+   An application also presents itself through `<package>-open`: the install
+   gate requires that name before it accepts the target, and the menu's Open
+   action runs it.
 4. Add the target to `etaf-install--targets` with its group and open command so
    the menu shows its status before installation. A target the menu does not
    list is not installable at all: `etaf-install` answers
    `Unsupported target`. Add the same package to the application or game list
    in `scripts/install-smoke.el`, or give a framework its own functional check
    there, so the release gate reopens and diagnoses the installed package.
-5. Run the package's `make check`, then the dev-lane install on Emacs 29.1, 30.2
+5. Place the package in the archive page's section list, `GROUPS` in
+   `etaf-manual/site/scripts/archive_pages.py`. The page writer reports every
+   package no section places and the publisher refuses to deploy such a page,
+   so an unplaced package stops the release instead of reaching readers as a
+   nameless `Other` entry.
+6. Run the package's `make check`, then the dev-lane install on Emacs 29.1, 30.2
    and 31.1 (29.1 lives on `lightos`, see the host notes).
-6. Commit and publish the provider, record it in `workspace.json`, build the
+7. Commit and publish the provider, record it in `workspace.json`, build the
    sealed archive and run `make release-check`; commit and publish the root.
-7. Publish with `make release-publish`, then read back `archive-contents` and the
+8. Publish with `make release-publish`, then read back `archive-contents` and the
    package page over HTTPS.
-8. Republish the site when pages or the book changed, and let every cell of the
+9. Republish the site when pages or the book changed, and let every cell of the
    six-cell installation workflow pass on the published commit.
 
 Future installer commands use the `etaf-install-` package prefix; `etaf-` is

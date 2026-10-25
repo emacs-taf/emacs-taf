@@ -574,8 +574,8 @@ GUI 保持实际运行时的 GC 策略与用户设置，测量工具不能额外
 
 ### 13.7 当前差距
 
-- 归档的安装目标覆盖框架、应用与游戏三段：框架 8 个包（`etaf-install`、`etaf-ui`、`etaf-posframe`、`etaf`、`ebox`、`ecss`、`ekp`、`etaf-db`），应用 7 个（`etaf-manual`、`etaf-md-preview`、`etaf-video-player`、`etaf-desktop`、`etaf-telega`、`etaf-weread`、`etaf-ncm`），游戏 2 个（`etaf-xiangqi`、`etaf-tanks`）。`etaf-gamekit` 随归档发布并由两个游戏声明为依赖，但不是独立安装目标。
-- `etaf-posframe` 是框架包：应用只暴露 View，浮动面板由它承载，所以归档必须先能装上它，应用的“作为面板打开”才成立。它依赖的窗口管理器 `posframe` 来自 GNU ELPA，因此该目标的能力清单声明 `gnu`，安装器才会注册那个归档。`etaf-pomodoro` 已随归档发布（在 `packages` 里），但还不是安装目标：它没有 `<包>-open` 形式的展示命令，装入器菜单与门禁都按那个约定检查。
+- 归档的安装目标覆盖框架、应用与游戏三段：框架 8 个包（`etaf-install`、`etaf-ui`、`etaf-posframe`、`etaf`、`ebox`、`ecss`、`ekp`、`etaf-db`），应用 8 个（`etaf-manual`、`etaf-md-preview`、`etaf-video-player`、`etaf-desktop`、`etaf-telega`、`etaf-weread`、`etaf-ncm`、`etaf-pomodoro`），游戏 2 个（`etaf-xiangqi`、`etaf-tanks`）。`etaf-gamekit` 随归档发布并由两个游戏声明为依赖，但不是独立安装目标。
+- `etaf-posframe` 是框架包：应用只暴露 View，浮动面板由它承载，所以归档必须先能装上它，应用的“作为面板打开”才成立。它依赖的窗口管理器 `posframe` 来自 GNU ELPA，因此该目标的能力清单声明 `gnu`，安装器才会注册那个归档。应用以 `<包>-open` 展示自己，安装器菜单与发布门禁都按这个约定检查；`etaf-pomodoro` 因此在 0.2.0 把 `etaf-pomodoro-start` 改名为 `etaf-pomodoro-open`，成为安装目标。
 - `etaf-telega` 通过声明 `telega` 与注册 MELPA 自动装齐依赖；`telega-server` 与账号仍未纳入（只检测）。
 - `etaf-weread` 与 `etaf-ncm` 的后端已随应用仓发布，提示、数据目录与检测都指向包内后端；系统侧只检测 Node.js、mpv 等程序。
 - `etaf-salvage` 与 `etaf-solitaire` 尚未纳入检查点，也没有引擎检测；`etaf-gamekit` 的引擎仍由用户在源码侧 `make` 构建。

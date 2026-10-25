@@ -8,12 +8,16 @@
   can install the floating panel host that an application's panels need; the
   menu lists it under Framework and the release gate installs it both ways and
   checks that it can derive a panel palette.
+- The archive ships `etaf-pomodoro` as an application target, so the focus timer
+  installs and opens from `M-x etaf-install` like every other application.
+  `etaf-pomodoro` 0.2.0 renames its opening command to `etaf-pomodoro-open` for
+  that; bindings that call `etaf-pomodoro-start` need updating.
 
 ### Changed
 
-- `etaf-install` 0.2.11: the shipped files changed with the archive's package
+- `etaf-install` 0.2.12: the shipped files changed with the archive's package
   list, so the archive serves it under a new version instead of overwriting
-  0.2.10.
+  0.2.11.
 
 - `etaf-install` 0.2.8: the shipped files changed with the archive's package
   list, so the archive serves it under a new version instead of overwriting
