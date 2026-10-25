@@ -465,7 +465,8 @@ GROUPS = {
     "Applications": {"etaf-md-preview", "etaf-rss", "etaf-reader", "etaf-algo-lab", "etaf-screensaver",
                      "etaf-desktop", "etaf-miniflux", "etaf-ncm", "etaf-weread", "etaf-bili",
                      "etaf-youtube", "etaf-pi", "etaf-telega", "etaf-ascii-video",
-                     "etaf-video-player", "etaf-video-studio", "etaf-manual", "etaf-telega"},
+                     "etaf-video-player", "etaf-video-studio", "etaf-manual", "etaf-telega",
+                     "etaf-pomodoro"},
     "Games": {"etaf-gamekit", "etaf-solitaire", "etaf-xiangqi", "etaf-tanks", "etaf-salvage"},
 }
 
@@ -483,7 +484,15 @@ def published(url):
         raise ValueError("The archive does not serve a schema 2 manifest")
     print(f"archive={url}\nworkspace={manifest.get('workspace', '')[:12]}")
     seen = set()
-    for group, members in GROUPS.items():
+    # A package published for another author states its own group in the
+    # manifest, so the listing places it exactly where the page does.
+    groups = {label: set(members) for label, members in GROUPS.items()}
+    labels = {"framework": "Framework", "application": "Applications", "game": "Games"}
+    for name, record in (manifest.get("community") or {}).items():
+        label = labels.get(record.get("group", "application"))
+        if label:
+            groups[label].add(name)
+    for group, members in groups.items():
         rows = sorted((item for item in manifest["packages"] if item["name"] in members),
                       key=lambda item: item["name"])
         seen.update(item["name"] for item in rows)
