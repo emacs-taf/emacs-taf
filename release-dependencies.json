@@ -13,6 +13,11 @@
         "examples"
       ]
     },
+    "etaf-posframe": {
+      "resources": [
+        "examples"
+      ]
+    },
     "etaf-db": {},
     "ekp": {
       "resources": [
@@ -69,6 +74,7 @@
   },
   "targets": [
     "etaf-ui",
+    "etaf-posframe",
     "etaf",
     "etaf-manual",
     "etaf-db",

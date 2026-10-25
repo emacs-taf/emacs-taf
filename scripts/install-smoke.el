@@ -211,6 +211,13 @@ report it immediately instead of retrying and hiding it."
   (when (eq target 'etaf-manual)
     (unless (plist-get (etaf-manual-book "en") :chapters)
       (error "Installed reference manual has no book data")))
+  (when (eq target 'etaf-posframe)
+    ;; A panel cannot open without a display, but its palette must resolve from
+    ;; the frame it would be placed on: that is what the package is for.
+    (let ((theme (etaf-posframe-theme (selected-frame))))
+      (unless (and (stringp (plist-get theme :ui-panel-bg))
+                   (stringp (plist-get theme :ui-panel-fg)))
+        (error "Installed panel host cannot derive a palette: %S" theme))))
   (when (eq target 'ekp)
     (unless (ekp-hyphen-create "en")
       (error "Installed paragraph layout has no English dictionary")))

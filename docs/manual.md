@@ -281,6 +281,11 @@ A component's source lives in the application repository, never in another
 repository or a skill directory, so one version bump publishes the Lisp and the
 component together.
 
+A framework target that depends on a standard archive names it in its
+capability list: the installer keeps only the archives a target asks for when
+it refreshes for installation, so `etaf-posframe` names `gnu` for the
+`posframe` window manager it builds on.
+
 Two lanes keep development fast without risking a stale archive:
 
 ```sh

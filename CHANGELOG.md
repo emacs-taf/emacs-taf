@@ -2,7 +2,18 @@
 
 ## Unreleased
 
+### Added
+
+- The archive ships `etaf-posframe` as a framework target, so `M-x etaf-install`
+  can install the floating panel host that an application's panels need; the
+  menu lists it under Framework and the release gate installs it both ways and
+  checks that it can derive a panel palette.
+
 ### Changed
+
+- `etaf-install` 0.2.11: the shipped files changed with the archive's package
+  list, so the archive serves it under a new version instead of overwriting
+  0.2.10.
 
 - `etaf-install` 0.2.8: the shipped files changed with the archive's package
   list, so the archive serves it under a new version instead of overwriting

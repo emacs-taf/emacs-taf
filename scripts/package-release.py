@@ -460,7 +460,8 @@ def verify(directory, emacs, targets, direct=False, standard_archives=None, scop
 
 
 GROUPS = {
-    "Framework": {"etaf-install", "etaf-ui", "etaf", "ebox", "ecss", "ekp", "etaf-db"},
+    "Framework": {"etaf-install", "etaf-ui", "etaf-posframe", "etaf", "ebox", "ecss", "ekp",
+                  "etaf-db"},
     "Applications": {"etaf-md-preview", "etaf-rss", "etaf-reader", "etaf-algo-lab", "etaf-screensaver",
                      "etaf-desktop", "etaf-miniflux", "etaf-ncm", "etaf-weread", "etaf-bili",
                      "etaf-youtube", "etaf-pi", "etaf-telega", "etaf-ascii-video",
