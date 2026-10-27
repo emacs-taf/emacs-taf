@@ -33,7 +33,7 @@
     },
     "etaf-gamekit": {
       "url": "https://github.com/emacs-taf/etaf-gamekit.git",
-      "revision": "94f1863fa03269347dc3514620fb705632bb4239",
+      "revision": "451392c4733c8d512e1e2091e98b42aeb363aa32",
       "branch": "main",
       "role": "framework"
     },
