@@ -12,6 +12,9 @@
   installs and opens from `M-x etaf-install` like every other application.
   `etaf-pomodoro` 0.2.0 renames its opening command to `etaf-pomodoro-open` for
   that; bindings that call `etaf-pomodoro-start` need updating.
+- `etaf-emacs` installs `etaf-install` and opens its manager once the archives
+  are down, so trying ETAF no longer starts by picking the installer out of a
+  package list.
 
 ### Changed
 

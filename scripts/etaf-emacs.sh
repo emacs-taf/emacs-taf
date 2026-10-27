@@ -2,11 +2,10 @@
 # etaf-emacs.sh --- start a throwaway Emacs for manual ETAF installation.
 #
 # Creates a disposable profile, points package.el at ETAF/GNU/NonGNU/MELPA and
-# fetches their package lists in the background; the *Packages* buffer opens
-# once the archives are down.  The frame stays usable meanwhile: a synchronous
-# fetch blocks the command loop, so typing and completion stall for as long as
-# the downloads take.  It installs nothing: choose etaf-install from the list,
-# then M-x etaf-install-manage.
+# fetches their package lists in the background; once they are down it installs
+# etaf-install and opens its manager.  The frame stays usable meanwhile: a
+# synchronous fetch blocks the command loop, so typing and completion stall for
+# as long as the downloads take.  Only that throwaway profile is touched.
 
 set -euo pipefail
 
@@ -17,9 +16,9 @@ etaf-emacs --- try ETAF in a throwaway Emacs
 Usage: etaf-emacs [-h|--help]
 
 Starts Emacs with a fresh profile (-Q, no init file), points package.el at
-GNU/NonGNU/MELPA and the ETAF archive, and opens *Packages* once the archives
-are downloaded.  Choose etaf-install there, then M-x etaf-install-manage.
-Nothing installed here touches your own configuration.
+GNU/NonGNU/MELPA and the ETAF archive, then installs etaf-install and opens
+M-x etaf-install-manage once the archives are downloaded.  Nothing installed
+here touches your own configuration.
 
 Environment:
   ETAF_ISOLATED_PROFILE  reuse this profile directory instead of a new one
@@ -77,27 +76,34 @@ elisp=$(cat <<ELISP
   ;; profile, so it runs the byte-code the install already produced; delete this
   ;; line to compile natively.
   (setq native-comp-jit-compilation nil)
-  ;; List the packages once every download reported back, or whatever arrived if
-  ;; one never does; listing without NO-FETCH would download everything again.
-  ;; The list is shown once.  The hook comes out after it fires, because a
-  ;; later refresh, such as the ETAF manager's g key, would otherwise pop a
-  ;; package list over whatever page is open in the selected window.
-  (defvar etaf-trial--listed nil)
-  (defvar etaf-trial--list-timer nil)
-  (defun etaf-trial--list-packages-once ()
-    (unless etaf-trial--listed
-      (setq etaf-trial--listed t)
-      (remove-hook 'package--post-download-archives-hook
-                   #'etaf-trial--list-packages-once)
-      (when (timerp etaf-trial--list-timer)
-        (cancel-timer etaf-trial--list-timer))
-      (package-list-packages t)))
+  ;; Install the installer and show its manager once the archives are down, or
+  ;; once the fallback deadline passes with whatever arrived.  This happens once:
+  ;; the hook removes itself afterwards, because a later refresh, such as the
+  ;; manager's g key, must not take over whatever page is open.
+  (defvar etaf-trial--started nil)
+  (defvar etaf-trial--start-timer nil)
+  (defun etaf-trial--start ()
+    (unless etaf-trial--started
+      (setq etaf-trial--started t)
+      (remove-hook 'package--post-download-archives-hook #'etaf-trial--start)
+      (when (timerp etaf-trial--start-timer)
+        (cancel-timer etaf-trial--start-timer))
+      (condition-case failure
+          (progn
+            (unless (package-installed-p 'etaf-install)
+              (message "Installing etaf-install from the archive…")
+              (package-install 'etaf-install))
+            (require 'etaf-install)
+            (etaf-install-manage))
+        (error
+         (message "ETAF: could not install etaf-install: %s"
+                  (error-message-string failure))
+         (package-list-packages t)))))
   (when (boundp 'package--post-download-archives-hook)
-    (add-hook 'package--post-download-archives-hook
-              #'etaf-trial--list-packages-once))
-  (setq etaf-trial--list-timer
-        (run-with-timer 45 nil #'etaf-trial--list-packages-once))
-  (message "Fetching package archives (the *Packages* list opens when they are ready)")
+    (add-hook 'package--post-download-archives-hook #'etaf-trial--start))
+  (setq etaf-trial--start-timer
+        (run-with-timer 45 nil #'etaf-trial--start))
+  (message "Fetching package archives (the ETAF manager opens when they are ready)")
   (package-refresh-contents t))
 ELISP
 )
