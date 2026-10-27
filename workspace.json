@@ -45,7 +45,7 @@
     },
     "etaf-desktop": {
       "url": "https://github.com/emacs-taf/etaf-desktop.git",
-      "revision": "a88552d43f648350d338fba6e3ae2cace7ee72b5",
+      "revision": "beb92b3865893fd3e5b9458ffc87081501228562",
       "branch": "main",
       "role": "framework"
     },
@@ -87,7 +87,7 @@
     },
     "etaf-md-preview": {
       "url": "https://github.com/emacs-taf/etaf-md-preview.git",
-      "revision": "c1d05d72b08953af915f6df2dfeb06d10e0b2348",
+      "revision": "cebfc7722773c2ee1753c4b1fa7c9a81312b4986",
       "branch": "main",
       "role": "application"
     },
@@ -123,7 +123,7 @@
     },
     "etaf-telega": {
       "url": "https://github.com/emacs-taf/etaf-telega.git",
-      "revision": "94f53bffa3a2062a6ada2c622408e553696b34d3",
+      "revision": "a90988b4af615987fb561d1f51361ec2a36eadfb",
       "branch": "main",
       "role": "application"
     },
