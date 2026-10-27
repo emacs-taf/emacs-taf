@@ -278,12 +278,12 @@ class InstallTests(unittest.TestCase):
   (unless (derived-mode-p 'tabulated-list-mode) (error "Manage buffer is not a tabulated list"))
   (unless (string-match-p "etaf-ui" (buffer-string)) (error "Installed target missing from manage buffer"))
   (unless (string-match-p "Installed" (buffer-string)) (error "Installed status missing from manage buffer")))
-(with-current-buffer "*ETAF Packages Header*"
-  ;; The key summary lives in the header strip, not right-aligned on the mode
-  ;; line where a narrow frame clips it.
-  (unless (string-match-p "i install" (buffer-string)) (error "Install key missing from header"))
-  (unless (string-match-p "d remove" (buffer-string)) (error "Remove key missing from header"))
-  (unless (string-match-p "q quit" (buffer-string)) (error "Quit key missing from header")))
+;; One window holds the table: the summary and keys live on the mode line, so
+;; no second buffer and no frame split.
+(unless (null (get-buffer "*ETAF Packages Header*"))
+  (error "Manage interface opens a separate header buffer"))
+(unless (= 1 (length (get-buffer-window-list "*ETAF Packages*")))
+  (error "Manage buffer is not the only thing its window shows"))
 """)
 
     def test_manage_menu_opens_beside_the_manager(self):

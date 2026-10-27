@@ -1,7 +1,7 @@
 ;;; -*- lexical-binding: t; -*-
 ;;; etaf-install.el --- Install ETAF with the Emacs package manager
 
-;; Version: 0.2.13
+;; Version: 0.2.14
 ;; Package-Requires: ((emacs "29.1"))
 ;; URL: https://github.com/emacs-taf/emacs-taf
 ;; Keywords: convenience
@@ -662,90 +662,53 @@ installed.  With NO-CONFIRM, skip the prompt."
                    (etaf-install--manage-dependency-cell status))))
    (etaf-install--manage-statuses)))
 
-(defvar etaf-install--manage-header-keymap
-  (let ((map (make-sparse-keymap)))
-    (define-key map [mouse-1] #'etaf-install--manage-refresh-from-header)
-    (define-key map [header-line mouse-1] #'etaf-install--manage-refresh-from-header)
-    map)
-  "Mouse map for the ETAF Packages header button.")
+(defconst etaf-install--manage-key-hints
+  '((100 . "i install · u update · U update all · d remove · RET open · ? doctor · g refresh · l packages · q quit")
+    (72 . "i install · u update · U all · d remove · RET open · ? doctor · g refresh · q quit")
+    (0 . "C-h m shows the keys"))
+  "Key hints for the mode line, longest first.
+Each entry is (MINIMUM-WIDTH . TEXT) and applies when the window is at least
+MINIMUM-WIDTH columns wide, so a narrow frame keeps the summary readable.")
 
-(defun etaf-install--manage-header-line ()
-  "Return the header line for the ETAF Packages buffer."
+(defvar etaf-install--manage-refresh-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map [mode-line mouse-1] #'etaf-install--manage-refresh-archives)
+    map)
+  "Mouse map for the mode line's refresh button.")
+
+(defun etaf-install--manage-summary ()
+  "Return the one-line summary of ETAF targets for the mode line."
   (let* ((statuses (etaf-install--manage-statuses))
          (total (length statuses))
          (updates (cl-count-if (lambda (status) (plist-get status :update)) statuses))
          (installer (or (etaf-install--version-string
                          (etaf-install--installed-version 'etaf-install))
-                        "dev"))
-         (left (concat
-                (propertize " ETAF Packages " 'face '(:weight bold :height 1.35))
-                (propertize (format "  %d targets  " total) 'face 'shadow)
-                (propertize (format "installer %s  " installer) 'face 'shadow)
-                (if (> updates 0)
-                    (propertize (format "● %d updates available  " updates)
-                                'face 'font-lock-keyword-face)
-                  (propertize "No updates  " 'face 'shadow))
-                (when etaf-install--restart-needed
-                  (propertize "● Restart required  " 'face 'warning))))
-         (button (propertize " Refresh " 'face 'mode-line
-                             'mouse-face 'highlight
-                             'keymap etaf-install--manage-header-keymap
-                             'help-echo "Refresh package archives (g)"))
-         (padding (max 2 (- (window-width) (length left) (length button) 8))))
-    (concat left (make-string padding ?\s) button)))
+                        "dev")))
+    (concat (format " ETAF Packages · %d targets · installer %s" total installer)
+            (if (> updates 0)
+                (propertize (format " · %d updates available" updates)
+                            'face 'font-lock-keyword-face)
+              " · no updates")
+            (when etaf-install--restart-needed
+              (propertize " · restart required" 'face 'warning)))))
 
 (defun etaf-install--manage-mode-line ()
-  "Return the mode line for the ETAF Packages buffer."
-  (let* ((statuses (etaf-install--manage-statuses))
-         (installed (cl-count-if (lambda (status) (plist-get status :installed-p)) statuses))
-         (updates (cl-count-if (lambda (status) (plist-get status :update)) statuses))
-         (title " ETAF Packages  ")
-         (summary (format "%d targets · %d installed · %d updates"
-                          (length statuses) installed updates))
-         (padding (max 2 (- (window-width) (length title) (length summary) 2))))
-    (concat title (propertize summary 'face 'shadow) (make-string padding ?\s))))
-
-(defconst etaf-install--manage-keys
-  (list (concat "i install · u update · U update all · d remove · RET open")
-        (concat "? doctor · g refresh · l list-packages · q quit"))
-  "Key summary painted above the ETAF Packages table.
-It lives in the header strip instead of the mode line so a narrow frame never
-clips the keys off the right edge.")
-
-(defconst etaf-install--manage-header-lines 8
-  "Lines reserved for the header strip.
-The title paints taller than a frame line, so the strip keeps one line of
-slack for it and one for the blank line above the key summary.")
-
-(define-derived-mode etaf-install--manage-header-mode special-mode "ETAF Header"
-  "Major mode for the ETAF Packages header buffer."
-  (setq-local mode-line-format nil)
-  (setq-local header-line-format nil)
-  (setq-local truncate-lines t))
-
-(defun etaf-install--manage-update-header ()
-  "Refresh the header buffer from the ETAF Packages table."
-  (let ((header (get-buffer "*ETAF Packages Header*"))
-        (table (get-buffer "*ETAF Packages*")))
-    (when (and header table)
-      (with-current-buffer header
-        (setq etaf-install--manage-cache
-              (with-current-buffer table (etaf-install--manage-statuses)))
-        (let ((inhibit-read-only t))
-          (erase-buffer)
-          (insert (etaf-install--manage-header-line) "\n"
-                  (propertize "Install, update, remove and open ETAF targets · package.el owns dependencies and byte compilation" 'face 'shadow) "\n"
-                  (propertize "Remove deletes package files only; app data, logins and caches stay." 'face 'shadow) "\n\n"
-                  (mapconcat (lambda (line) (propertize line 'face 'shadow))
-                             etaf-install--manage-keys "\n")))))))
-
-(defun etaf-install--manage-refresh-from-header ()
-  "Refresh archives from the header window."
-  (interactive)
-  (let ((table (get-buffer "*ETAF Packages*")))
-    (when table
-      (with-current-buffer table
-        (etaf-install--manage-refresh-archives)))))
+  "Return the mode line for the ETAF Packages buffer.
+The buffer holds the table only: the summary, the keys and the refresh button
+sit on this line, so no second window is needed to show them."
+  (let* ((left (etaf-install--manage-summary))
+         (hints (cl-loop for (width . text) in etaf-install--manage-key-hints
+                         when (>= (window-width) width) return text))
+         (button (propertize " Refresh " 'face 'mode-line-highlight
+                             'mouse-face 'highlight
+                             'keymap etaf-install--manage-refresh-map
+                             'help-echo "Refresh package archives (g)"))
+         (padding (max 1 (- (window-width)
+                            (length left) (length hints) (length button) 4))))
+    (concat (propertize left 'face 'mode-line-buffer-id)
+            (make-string padding ?\s)
+            (when hints (concat (propertize hints 'face 'shadow) " "))
+            button)))
 
 (defun etaf-install--manage-show-current ()
   "Describe the target at point in the echo area."
@@ -833,18 +796,15 @@ slack for it and one for the blank line above the key summary.")
 
 (defun etaf-install--manage-list-packages ()
   "Open the standard package menu beside the ETAF list.
-`list-packages' otherwise claims this window, which leaves the header strip
-above an ELPA package list and hides the manager until it is reopened."
+`list-packages' otherwise claims this window and hides the manager until it is
+reopened."
   (interactive)
   (let ((display-buffer-overriding-action '((display-buffer-pop-up-window))))
     (list-packages)))
 
 (defun etaf-install--manage-quit ()
-  "Quit the ETAF Packages window and its header."
+  "Quit the ETAF Packages window."
   (interactive)
-  (let ((header-window (get-buffer-window "*ETAF Packages Header*")))
-    (when header-window
-      (delete-window header-window)))
   (quit-window))
 
 (defvar etaf-install--manage-mode-map
@@ -872,7 +832,6 @@ above an ELPA package list and hides the manager until it is reopened."
   (setq tabulated-list-padding 1)
   (setq tabulated-list-sort-key nil)
   (add-hook 'tabulated-list-revert-hook #'etaf-install--manage-invalidate nil t)
-  (add-hook 'tabulated-list-revert-hook #'etaf-install--manage-update-header nil t)
   (add-hook 'post-command-hook #'etaf-install--manage-show-current nil t)
   (setq-local mode-line-format '(:eval (etaf-install--manage-mode-line)))
   (hl-line-mode 1)
@@ -880,43 +839,23 @@ above an ELPA package list and hides the manager until it is reopened."
 
 ;;;###autoload
 (defun etaf-install-manage ()
-  "Show and manage installed and available ETAF targets."
+  "Show and manage installed and available ETAF targets.
+The buffer is the whole interface: a native tabulated list of every target with
+its status, versions, runtime and dependencies, plus the archive's community
+packages.  `i' installs, `u' updates, `U' updates all, `d' removes, RET
+opens, `?' reports capabilities, `g' refreshes the archives, `l' shows the
+standard package menu and `q' quits.  Removal deletes package files only;
+application data, logins and caches stay."
   (interactive)
   (unless package--initialized (package-initialize))
   (etaf-install--archive)
   (etaf-install--register-installed-archives)
-  (let ((header (get-buffer-create "*ETAF Packages Header*"))
-        (buffer (get-buffer-create "*ETAF Packages*")))
-    (with-current-buffer header
-      (etaf-install--manage-header-mode))
+  (let ((buffer (get-buffer-create "*ETAF Packages*")))
     (with-current-buffer buffer
       (etaf-install--manage-mode)
       (setq etaf-install--manage-cache nil)
       (tabulated-list-print t))
-    (delete-other-windows)
-    (switch-to-buffer buffer)
-    (let ((table-window (get-buffer-window buffer)))
-      (let ((existing (get-buffer-window header)))
-        (when (and existing (window-live-p existing))
-          (delete-window existing)))
-      (when (and (not noninteractive)
-                 table-window
-                 (>= (window-height table-window) 8)
-                 (>= (frame-height) 14))
-        (let* ((first-window table-window)
-               (other-window (split-window
-                              first-window
-                              (- (frame-height) etaf-install--manage-header-lines)
-                              'above))
-               (header-window (if (< (window-height first-window) (window-height other-window))
-                                  first-window other-window))
-               (table-window (if (< (window-height first-window) (window-height other-window))
-                                 other-window first-window)))
-          (set-window-buffer header-window header)
-          (set-window-buffer table-window buffer)
-          (set-window-parameter header-window 'mode-line-format 'none)
-          (select-window table-window))))
-    (etaf-install--manage-update-header)
+    (pop-to-buffer buffer)
     (etaf-install--manage-show-current)))
 
 (etaf-install--register-installed-archives)
