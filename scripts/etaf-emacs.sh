@@ -80,7 +80,7 @@ elisp=$(cat <<ELISP
   ;; List the packages once every download reported back, or whatever arrived if
   ;; one never does; listing without NO-FETCH would download everything again.
   ;; The list is shown once.  The hook comes out after it fires, because a
-  ;; later refresh, such as the ETAF manager's `g', would otherwise pop a
+  ;; later refresh, such as the ETAF manager's g key, would otherwise pop a
   ;; package list over whatever page is open in the selected window.
   (defvar etaf-trial--listed nil)
   (defvar etaf-trial--list-timer nil)
