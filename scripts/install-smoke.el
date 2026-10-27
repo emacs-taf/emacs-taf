@@ -94,6 +94,7 @@ report it immediately instead of retrying and hiding it."
 (declare-function etaf-sqlite-table "etaf-db" (id columns &optional primary-key))
 (declare-function etaf-sqlite-database "etaf-db" (file table))
 (declare-function etaf-sqlite-initialize "etaf-db" (database))
+(declare-function etaf-posframe-theme "etaf-posframe" (frame))
 
 (let* ((archive (getenv "ETAF_INSTALL_ARCHIVE"))
        (profile (getenv "ETAF_INSTALL_PROFILE"))
