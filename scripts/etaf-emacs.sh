@@ -38,7 +38,18 @@ case ${1:-} in
     *) printf 'unexpected argument: %s\n' "$1" >&2; usage >&2; exit 2 ;;
 esac
 
-WORKSPACE=$(cd "$(dirname "$0")/.." && pwd)
+# Resolve the script's own location through any symlink, so --dev finds the
+# workspace the link points at rather than the directory that holds the link.
+SCRIPT=$0
+while [ -L "$SCRIPT" ]; do
+    LINKED=$(cd "$(dirname "$SCRIPT")" && pwd -P)
+    SCRIPT=$(readlink "$SCRIPT")
+    case $SCRIPT in
+        /*) ;;
+        *) SCRIPT="$LINKED/$SCRIPT" ;;
+    esac
+done
+WORKSPACE=$(cd "$(dirname "$SCRIPT")/.." && pwd -P)
 PROFILE=${ETAF_ISOLATED_PROFILE:-$(mktemp -d "${TMPDIR:-/tmp}/etaf-emacs.XXXXXX")}
 ARCHIVE=${ETAF_INSTALL_ARCHIVE:-https://etaf.top/packages/}
 APP=${ETAF_EMACS_APP:-/Applications/Emacs.app}
@@ -46,6 +57,10 @@ APP=${ETAF_EMACS_APP:-/Applications/Emacs.app}
 mkdir -p "$PROFILE"
 
 if [ -n "$DEV" ]; then
+    if [ ! -f "$WORKSPACE/release-dependencies.json" ]; then
+        printf '--dev needs an ETAF checkout; %s is not one\n' "$WORKSPACE" >&2
+        exit 2
+    fi
     # The archive builder creates its own output directory, so this names one
     # inside a fresh parent; package.el needs the trailing slash.
     ARCHIVE_DIR=$(mktemp -d "${TMPDIR:-/tmp}/etaf-dev-archive.XXXXXX")/archive
@@ -68,7 +83,9 @@ for name, source in sources.items():
     command.extend(["--package", f"{name}={source}"])
     for resource in selection.get(name, {}).get("resources", []):
         command.extend(["--resource", f"{name}={resource}"])
-subprocess.run(command, check=True, cwd=workspace)
+# The archive tool reports its own error= and hint= lines; a traceback on top
+# would only bury them, so stop the script with that status instead.
+sys.exit(subprocess.run(command, cwd=workspace).returncode)
 PYTHON
     ARCHIVE="$ARCHIVE_DIR/"
     printf 'Trial archive:    %s\n' "$ARCHIVE"
