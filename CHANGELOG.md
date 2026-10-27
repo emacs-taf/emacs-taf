@@ -18,9 +18,10 @@
 
 ### Changed
 
-- `etaf-install` 0.2.14: `M-x etaf-install-manage` is one window. The
-  summary, the key hints and the refresh button moved to the mode line, so a
-  frame no longer splits into a header strip above the table.
+- `etaf-install` 0.2.14: `M-x etaf-install-manage` is one window that fills the
+  frame. The summary, the key hints and the refresh button moved to the mode
+  line, and the hints shorten or drop as the window narrows instead of being
+  clipped.
 
 - `etaf-install` 0.2.13: `l` opens the package menu beside the manager instead
   of replacing its window, so the ETAF header no longer ends up above an ELPA

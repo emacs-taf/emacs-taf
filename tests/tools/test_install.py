@@ -284,6 +284,8 @@ class InstallTests(unittest.TestCase):
   (error "Manage interface opens a separate header buffer"))
 (unless (= 1 (length (get-buffer-window-list "*ETAF Packages*")))
   (error "Manage buffer is not the only thing its window shows"))
+(unless (= 1 (length (window-list)))
+  (error "Manage interface left another window open beside the table"))
 """)
 
     def test_manage_menu_opens_beside_the_manager(self):

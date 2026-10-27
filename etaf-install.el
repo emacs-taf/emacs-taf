@@ -695,16 +695,20 @@ MINIMUM-WIDTH columns wide, so a narrow frame keeps the summary readable.")
 (defun etaf-install--manage-mode-line ()
   "Return the mode line for the ETAF Packages buffer.
 The buffer holds the table only: the summary, the keys and the refresh button
-sit on this line, so no second window is needed to show them."
+sit on this line, so no second window is needed to show them.  The summary and
+the button always stay whole; the key hints give way first, so a narrow frame
+drops them instead of clipping the line."
   (let* ((left (etaf-install--manage-summary))
-         (hints (cl-loop for (width . text) in etaf-install--manage-key-hints
-                         when (>= (window-width) width) return text))
          (button (propertize " Refresh " 'face 'mode-line-highlight
                              'mouse-face 'highlight
                              'keymap etaf-install--manage-refresh-map
                              'help-echo "Refresh package archives (g)"))
-         (padding (max 1 (- (window-width)
-                            (length left) (length hints) (length button) 4))))
+         (room (- (window-width) (length left) (length button) 2))
+         (hints (cl-loop for (minimum . text) in etaf-install--manage-key-hints
+                         when (and (>= (window-width) minimum) (<= (length text) room))
+                         return text))
+         (padding (max 1 (- (window-width) (length left) (length hints)
+                            (length button) (if hints 1 0)))))
     (concat (propertize left 'face 'mode-line-buffer-id)
             (make-string padding ?\s)
             (when hints (concat (propertize hints 'face 'shadow) " "))
@@ -855,7 +859,10 @@ application data, logins and caches stay."
       (etaf-install--manage-mode)
       (setq etaf-install--manage-cache nil)
       (tabulated-list-print t))
-    (pop-to-buffer buffer)
+    ;; The table is the whole interface: take the frame instead of leaving the
+    ;; previous buffer in a window above or below it.
+    (delete-other-windows)
+    (switch-to-buffer buffer)
     (etaf-install--manage-show-current)))
 
 (etaf-install--register-installed-archives)
