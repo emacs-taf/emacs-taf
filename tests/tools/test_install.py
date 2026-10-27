@@ -286,6 +286,25 @@ class InstallTests(unittest.TestCase):
   (unless (string-match-p "q quit" (buffer-string)) (error "Quit key missing from header")))
 """)
 
+    def test_manage_menu_opens_beside_the_manager(self):
+        self.run_lisp("""
+(etaf-install 'etaf-ui t)
+(etaf-install-manage)
+(let ((manager (get-buffer "*ETAF Packages*"))
+      (menu (get-buffer-create "*Packages*")))
+  ;; The archive fetch belongs to package.el; this scenario checks only that
+  ;; opening the package menu cannot take over the manager's window.
+  (cl-letf (((symbol-function 'list-packages)
+             (lambda (&optional _no-fetch) (pop-to-buffer menu))))
+    (execute-kbd-macro "l"))
+  (unless (get-buffer-window menu)
+    (error "The package menu did not open"))
+  (unless (get-buffer-window manager)
+    (error "The package menu replaced the ETAF manager window"))
+  (unless (eq (window-buffer (selected-window)) menu)
+    (error "The package menu did not get its own window")))
+""")
+
     def test_missing_runtime_reports_remedy_without_claiming_ready(self):
         self.run_lisp("""
 (let (messages)

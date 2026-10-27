@@ -15,6 +15,10 @@
 
 ### Changed
 
+- `etaf-install` 0.2.13: `l` opens the package menu beside the manager instead
+  of replacing its window, so the ETAF header no longer ends up above an ELPA
+  package list and `g` cannot refresh a page that looks like the manager.
+
 - `etaf-install` 0.2.12: the shipped files changed with the archive's package
   list, so the archive serves it under a new version instead of overwriting
   0.2.11.

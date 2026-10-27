@@ -1,7 +1,7 @@
 ;;; -*- lexical-binding: t; -*-
 ;;; etaf-install.el --- Install ETAF with the Emacs package manager
 
-;; Version: 0.2.12
+;; Version: 0.2.13
 ;; Package-Requires: ((emacs "29.1"))
 ;; URL: https://github.com/emacs-taf/emacs-taf
 ;; Keywords: convenience
@@ -832,9 +832,12 @@ slack for it and one for the blank line above the key summary.")
   (message "ETAF: package archives refreshed"))
 
 (defun etaf-install--manage-list-packages ()
-  "Open the standard package menu."
+  "Open the standard package menu beside the ETAF list.
+`list-packages' otherwise claims this window, which leaves the header strip
+above an ELPA package list and hides the manager until it is reopened."
   (interactive)
-  (call-interactively #'list-packages))
+  (let ((display-buffer-overriding-action '((display-buffer-pop-up-window))))
+    (list-packages)))
 
 (defun etaf-install--manage-quit ()
   "Quit the ETAF Packages window and its header."
