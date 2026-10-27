@@ -13,31 +13,66 @@ usage() {
     cat <<'USAGE'
 etaf-emacs --- try ETAF in a throwaway Emacs
 
-Usage: etaf-emacs [-h|--help]
+Usage: etaf-emacs [-h|--help] [--dev]
 
 Starts Emacs with a fresh profile (-Q, no init file), points package.el at
 GNU/NonGNU/MELPA and the ETAF archive, then installs etaf-install and opens
 M-x etaf-install-manage once the archives are downloaded.  Nothing installed
 here touches your own configuration.
 
+--dev builds the trial archive from this workspace instead of downloading it,
+so changes in the working copies show up without publishing a release.
+
 Environment:
   ETAF_ISOLATED_PROFILE  reuse this profile directory instead of a new one
-  ETAF_INSTALL_ARCHIVE   archive URL (default https://etaf.top/packages/)
+  ETAF_INSTALL_ARCHIVE   archive URL or directory (default https://etaf.top/packages/)
   ETAF_EMACS_APP         Emacs.app path (default /Applications/Emacs.app)
 USAGE
 }
 
+DEV=
 case ${1:-} in
     -h|--help|help) usage; exit 0 ;;
+    --dev) DEV=1 ;;
     '') ;;
     *) printf 'unexpected argument: %s\n' "$1" >&2; usage >&2; exit 2 ;;
 esac
 
+WORKSPACE=$(cd "$(dirname "$0")/.." && pwd)
 PROFILE=${ETAF_ISOLATED_PROFILE:-$(mktemp -d "${TMPDIR:-/tmp}/etaf-emacs.XXXXXX")}
 ARCHIVE=${ETAF_INSTALL_ARCHIVE:-https://etaf.top/packages/}
 APP=${ETAF_EMACS_APP:-/Applications/Emacs.app}
 
 mkdir -p "$PROFILE"
+
+if [ -n "$DEV" ]; then
+    # The archive builder creates its own output directory, so this names one
+    # inside a fresh parent; package.el needs the trailing slash.
+    ARCHIVE_DIR=$(mktemp -d "${TMPDIR:-/tmp}/etaf-dev-archive.XXXXXX")/archive
+    printf 'Building the trial archive from %s\n' "$WORKSPACE"
+    python3 - "$WORKSPACE" "$ARCHIVE_DIR" <<'PYTHON'
+import json
+from pathlib import Path
+import subprocess
+import sys
+
+workspace, target = (Path(argument) for argument in sys.argv[1:3])
+selection = json.loads((workspace / "release-dependencies.json").read_text())["packages"]
+sources = {name: workspace / name for name in selection}
+# The installer is not one of the registry's targets: the release builds it from
+# the workspace root, and a trial needs it to reach the manager.
+sources["etaf-install"] = workspace
+command = [sys.executable, str(workspace / "scripts/package_archive.py"),
+           "build", "--directory", str(target)]
+for name, source in sources.items():
+    command.extend(["--package", f"{name}={source}"])
+    for resource in selection.get(name, {}).get("resources", []):
+        command.extend(["--resource", f"{name}={resource}"])
+subprocess.run(command, check=True, cwd=workspace)
+PYTHON
+    ARCHIVE="$ARCHIVE_DIR/"
+    printf 'Trial archive:    %s\n' "$ARCHIVE"
+fi
 
 if [ ! -d "$APP" ]; then
     printf 'Emacs.app not found: %s\n' "$APP" >&2
