@@ -1,7 +1,7 @@
 ;;; -*- lexical-binding: t; -*-
 ;;; etaf-install.el --- Install ETAF with the Emacs package manager
 
-;; Version: 0.2.14
+;; Version: 0.2.15
 ;; Package-Requires: ((emacs "29.1"))
 ;; URL: https://github.com/emacs-taf/emacs-taf
 ;; Keywords: convenience
@@ -663,12 +663,13 @@ installed.  With NO-CONFIRM, skip the prompt."
    (etaf-install--manage-statuses)))
 
 (defconst etaf-install--manage-key-hints
-  '((100 . "i install · u update · U update all · d remove · RET open · ? doctor · g refresh · l packages · q quit")
-    (72 . "i install · u update · U all · d remove · RET open · ? doctor · g refresh · q quit")
-    (0 . "C-h m shows the keys"))
+  '("i install · u update · U update all · d remove · RET open · ? doctor · g refresh · l packages · q quit"
+    "i install · u update · d remove · RET open · g refresh · q quit"
+    "i · d · RET · g · q"
+    "C-h m keys")
   "Key hints for the mode line, longest first.
-Each entry is (MINIMUM-WIDTH . TEXT) and applies when the window is at least
-MINIMUM-WIDTH columns wide, so a narrow frame keeps the summary readable.")
+The longest one that fits next to the summary and the refresh button is shown,
+so a narrow frame never drops the keys entirely.")
 
 (defvar etaf-install--manage-refresh-map
   (let ((map (make-sparse-keymap)))
@@ -676,40 +677,49 @@ MINIMUM-WIDTH columns wide, so a narrow frame keeps the summary readable.")
     map)
   "Mouse map for the mode line's refresh button.")
 
-(defun etaf-install--manage-summary ()
-  "Return the one-line summary of ETAF targets for the mode line."
+(defun etaf-install--manage-summaries ()
+  "Return the mode-line summary in every length, longest first."
   (let* ((statuses (etaf-install--manage-statuses))
          (total (length statuses))
          (updates (cl-count-if (lambda (status) (plist-get status :update)) statuses))
          (installer (or (etaf-install--version-string
                          (etaf-install--installed-version 'etaf-install))
-                        "dev")))
-    (concat (format " ETAF Packages · %d targets · installer %s" total installer)
-            (if (> updates 0)
-                (propertize (format " · %d updates available" updates)
-                            'face 'font-lock-keyword-face)
-              " · no updates")
-            (when etaf-install--restart-needed
-              (propertize " · restart required" 'face 'warning)))))
+                        "dev"))
+         (change (if (> updates 0)
+                     (propertize (format " · %d updates available" updates)
+                                 'face 'font-lock-keyword-face)
+                   " · no updates"))
+         (restart (when etaf-install--restart-needed
+                    (propertize " · restart required" 'face 'warning))))
+    (list (concat (format " ETAF Packages · %d targets · installer %s" total installer)
+                  change restart)
+          (concat (format " %d targets · installer %s" total installer) change restart)
+          (concat (format " %d targets · installer %s" total installer) restart)
+          (format " %d targets" total))))
 
 (defun etaf-install--manage-mode-line ()
   "Return the mode line for the ETAF Packages buffer.
 The buffer holds the table only: the summary, the keys and the refresh button
-sit on this line, so no second window is needed to show them.  The summary and
-the button always stay whole; the key hints give way first, so a narrow frame
-drops them instead of clipping the line."
-  (let* ((left (etaf-install--manage-summary))
-         (button (propertize " Refresh " 'face 'mode-line-highlight
+sit on this line, so no second window is needed to show them.  The longest
+summary that still leaves room for a key hint wins, so the keys stay visible in
+a narrow window instead of being cut off."
+  (let* ((button (propertize " Refresh " 'face 'mode-line-highlight
                              'mouse-face 'highlight
                              'keymap etaf-install--manage-refresh-map
                              'help-echo "Refresh package archives (g)"))
-         (room (- (window-width) (length left) (length button) 2))
-         (hints (cl-loop for (minimum . text) in etaf-install--manage-key-hints
-                         when (and (>= (window-width) minimum) (<= (length text) room))
-                         return text))
-         (padding (max 1 (- (window-width) (length left) (length hints)
+         (fitted (cl-loop for summary in (reverse (etaf-install--manage-summaries))
+                          for room = (- (window-width) (length summary) (length button) 2)
+                          for hints = (cl-find-if (lambda (text) (<= (length text) room))
+                                                  etaf-install--manage-key-hints)
+                          when hints
+                          collect (cons summary hints) into found
+                          finally return (or (car (last found))
+                                             (cons (car (etaf-install--manage-summaries)) nil))))
+         (summary (car fitted))
+         (hints (cdr fitted))
+         (padding (max 1 (- (window-width) (length summary) (length hints)
                             (length button) (if hints 1 0)))))
-    (concat (propertize left 'face 'mode-line-buffer-id)
+    (concat (propertize summary 'face 'mode-line-buffer-id)
             (make-string padding ?\s)
             (when hints (concat (propertize hints 'face 'shadow) " "))
             button)))

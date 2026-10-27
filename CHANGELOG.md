@@ -18,6 +18,10 @@
 
 ### Changed
 
+- `etaf-install` 0.2.15: the manager's mode line always shows the keys. It
+  takes the longest summary that still leaves room for a hint, so a narrow
+  frame shortens the summary instead of dropping the keys.
+
 - `etaf-install` 0.2.14: `M-x etaf-install-manage` is one window that fills the
   frame. The summary, the key hints and the refresh button moved to the mode
   line, and the hints shorten or drop as the window narrows instead of being
