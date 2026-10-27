@@ -269,7 +269,7 @@ Dependencies split three ways, and each has one owner:
 | --- | --- | --- |
 | Emacs packages, ours or public (`etaf-db`, `telega`) | `Package-Requires` | `etaf-install` registers the archives its targets need (`etaf`, `gnu`, `nongnu`, `melpa`); `package.el` resolves them; signature checks stay enabled |
 | Our components (CLI, Node backend, buildable module) | the application repository | shipped in the same tar and checksum; installed into `package-user-dir/etaf/<package>/<version>/`; `npm ci` or `make` runs there with a log; the entry checks the component version at startup |
-| System programs and accounts (ffmpeg, mpv, node, TDLib, Godot, login) | the user | detected only; print one platform-specific command; never run `sudo`, `brew` or `apt` |
+| System programs and accounts (ffmpeg, mpv, node, TDLib, Godot, login) | the user | detected only; print one command; never run `sudo`, `brew` or `apt`. Game engines are the one exception: the package ships a pinned, checksum-verified setup script, and one command (`M-x etaf-gamekit-install-godot`) downloads that release into the ETAF cache |
 
 A target's standard-archive capabilities must cover its whole dependency
 closure, not only its direct archive. The installer keeps only the archives
@@ -354,7 +354,9 @@ success: the install message names the first remedy and the doctor lists every
 required and optional fact, while the manage echo repeats the selected target's
 remedy. `etaf-telega` installs the Emacs `telega` package, but its native
 `telega-server` is a TDLib build supplied by the user; that remedy names
-`M-x telega-server-build` and the Telega installation guide.
+`M-x telega-server-build` and the Telega installation guide. A Godot game names
+`M-x etaf-gamekit-install-godot`, which runs the packaged setup script in the
+background and keeps an already working runtime when it fails.
 
 Never edit files under `/srv/etaf.top` by hand: the deployer owns locking,
 immutable versions, checksum verification and rollback.

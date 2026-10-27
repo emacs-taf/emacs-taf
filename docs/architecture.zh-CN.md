@@ -545,9 +545,9 @@ GUI 保持实际运行时的 GC 策略与用户设置，测量工具不能额外
 | --- | --- | --- |
 | Emacs 包（自有或公共） | `etaf-db`、`telega` | 在 `Package-Requires` 声明；`etaf-install` 注册所需归档（`etaf`、`gnu`、`nongnu`、`melpa`），由 `package.el` 自动解析安装；不关闭签名校验、不改用户其它源。应用条目在 `workspace.json` 的 `applications` 段记录提交，框架提供方仍在 `repositories` 段 |
 | 自有组件（CLI、Node 后端、可编译模块） | `weread` 后端、`ebook-parse`、EKP C 模块 | 源码放在**应用仓内**，随包同一 tar 发布并计入 sha256；安装到 `package-user-dir/etaf/<包>/<版本>/`；需要 `npm ci` 或 `make` 时在该目录执行，输出进日志、失败可重试；启动时握手校验组件版本与包版本一致 |
-| 系统程序与账号 | ffmpeg、mpv、node、TDLib、Godot、OpenSpiel、平台登录 | 只检测，给出按平台生成的一条可复制命令；不代跑 `sudo`/`brew`/`apt`，不下载第三方二进制 |
+| 系统程序与账号 | ffmpeg、mpv、node、TDLib、Godot、OpenSpiel、平台登录 | 只检测，给出按平台生成的一条可复制命令；不代跑 `sudo`/`brew`/`apt`。游戏引擎是唯一例外：包内自带固定版本与校验值的安装脚本，用户显式执行一条命令时装进 ETAF 缓存目录；安装器与启动路径都不自行下载 |
 
-自有组件的源码必须跟随应用仓，不留在别的仓库或技能目录：一个版本一次提升，Lisp 与组件原子发布，避免跨仓版本对齐。
+自有组件的源码必须跟随应用仓，不留在别的仓库或技能目录：一个版本一次提升，Lisp 与组件原子发布，避免跨仓版本对齐。引擎安装脚本属于包内组件，随同一个 tar 发布并计入 sha256，所以归档安装也能执行它。
 
 ### 13.3 版本不可变与来源可复算
 
@@ -562,11 +562,11 @@ GUI 保持实际运行时的 GC 策略与用户设置，测量工具不能额外
 
 ### 13.5 缺依赖时怎么说
 
-菜单条目直接显示状态；缺自有组件给一键安装，缺系统程序给一条命令并提示“装完回来按 `r` 重新检测”，缺账号交给应用内的一次性配置。阻塞与降级分开：缺 ffmpeg 只影响视频，允许打开并提示受限；缺 `telega-server` 或游戏引擎就明确拒绝启动。错误必须是一句人话加可复制命令，不输出 Lisp 堆栈。
+菜单条目直接显示状态；缺自有组件给一键安装，缺系统程序给一条命令并提示“装完回来按 `r` 重新检测”，缺账号交给应用内的一次性配置。Godot 的那一条是 `M-x etaf-gamekit-install-godot`：后台执行包内脚本，进度写进 `*ETAF engine install*`，成败在 echo area 报告。阻塞与降级分开：缺 ffmpeg 只影响视频，允许打开并提示受限；缺 `telega-server` 或游戏引擎就明确拒绝启动。错误必须是一句人话加可复制命令，不输出 Lisp 堆栈。
 
 ### 13.6 明确不做
 
-不代跑系统包管理器或 `sudo`，不静默改写用户配置（归档注册除外，且只增不减、不禁用签名），不关闭 TLS 或签名校验，不替换同名版本，不发布未封口代码，不把第三方二进制塞进归档。
+不代跑系统包管理器或 `sudo`，不静默改写用户配置（归档注册除外，且只增不减、不禁用签名），不关闭 TLS 或签名校验，不替换同名版本，不发布未封口代码，不把第三方二进制塞进归档。不下载未固定版本或未通过校验值的第三方二进制：引擎运行时只能由用户显式执行的安装命令下载固定版本，写进 ETAF 缓存目录，不进归档。
 
 ### 13.6.1 发布清单的三层含义
 
@@ -578,7 +578,7 @@ GUI 保持实际运行时的 GC 策略与用户设置，测量工具不能额外
 - `etaf-posframe` 是框架包：应用只暴露 View，浮动面板由它承载，所以归档必须先能装上它，应用的“作为面板打开”才成立。它依赖的窗口管理器 `posframe` 来自 GNU ELPA，因此该目标的能力清单声明 `gnu`，安装器才会注册那个归档。应用以 `<包>-open` 展示自己，安装器菜单与发布门禁都按这个约定检查；`etaf-pomodoro` 因此在 0.2.0 把 `etaf-pomodoro-start` 改名为 `etaf-pomodoro-open`，成为安装目标。
 - `etaf-telega` 通过声明 `telega` 与注册 MELPA 自动装齐依赖；`telega-server` 与账号仍未纳入（只检测）。
 - `etaf-weread` 与 `etaf-ncm` 的后端已随应用仓发布，提示、数据目录与检测都指向包内后端；系统侧只检测 Node.js、mpv 等程序。
-- `etaf-salvage` 与 `etaf-solitaire` 尚未纳入检查点，也没有引擎检测；`etaf-gamekit` 的引擎仍由用户在源码侧 `make` 构建。
+- `etaf-salvage` 与 `etaf-solitaire` 尚未纳入检查点，也没有引擎检测。`etaf-gamekit` 的 Godot 运行时由归档内的安装脚本与 `M-x etaf-gamekit-install-godot` 提供，写进 `~/.cache/emacs-taf/game-engines`；`etaf-xiangqi` 的 OpenSpiel 环境仍只能由源码侧 `make engine-openspiel` 构建，归档安装拿不到。
 - 组件的托管目录安装（`npm ci`/`make` 到 `package-user-dir/etaf/<包>/<版本>/`）与版本握手仍未实现。当前归档内的后端都是纯源码（Node、Python、Shell），随 tar 解包即可运行，所以这两个应用的“装完即用”不依赖它；需要托管安装的是将来带构建步骤的组件。
 
 ### 13.8 新增应用上架
