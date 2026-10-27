@@ -27,7 +27,7 @@
     },
     "etaf-ui": {
       "url": "https://github.com/emacs-taf/etaf-ui.git",
-      "revision": "4415046fbfc67d6476b606926d8827e39d7b8224",
+      "revision": "5eb0e292a90f0169061255228d32e0912d1ff1f3",
       "branch": "main",
       "role": "framework"
     },
@@ -51,7 +51,7 @@
     },
     "etaf-manual": {
       "url": "https://github.com/emacs-taf/etaf-manual.git",
-      "revision": "d3928ef1f73476e865c96b96770502ded573b753",
+      "revision": "d2738462fcb7dfe320c35cf006189b2d8c080d2f",
       "branch": "main",
       "role": "framework"
     },
@@ -202,6 +202,12 @@
     "etaf-pomodoro": {
       "url": "https://github.com/emacs-taf/etaf-pomodoro.git",
       "revision": "ab0dee3db4ab099197ee8d77768ad08743e5853b",
+      "branch": "main",
+      "role": "application"
+    },
+    "etaf-agenda": {
+      "url": "https://forgejo.vhkd.top/emacs-taf/etaf-agenda.git",
+      "revision": "b87b14812cbc7e43bbfc7e98326342d577e84c01",
       "branch": "main",
       "role": "application"
     }
