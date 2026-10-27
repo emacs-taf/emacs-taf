@@ -79,12 +79,24 @@ elisp=$(cat <<ELISP
   (setq native-comp-jit-compilation nil)
   ;; List the packages once every download reported back, or whatever arrived if
   ;; one never does; listing without NO-FETCH would download everything again.
+  ;; The list is shown once.  The hook comes out after it fires, because a
+  ;; later refresh, such as the ETAF manager's `g', would otherwise pop a
+  ;; package list over whatever page is open in the selected window.
+  (defvar etaf-trial--listed nil)
+  (defvar etaf-trial--list-timer nil)
+  (defun etaf-trial--list-packages-once ()
+    (unless etaf-trial--listed
+      (setq etaf-trial--listed t)
+      (remove-hook 'package--post-download-archives-hook
+                   #'etaf-trial--list-packages-once)
+      (when (timerp etaf-trial--list-timer)
+        (cancel-timer etaf-trial--list-timer))
+      (package-list-packages t)))
   (when (boundp 'package--post-download-archives-hook)
     (add-hook 'package--post-download-archives-hook
-              (lambda () (package-list-packages t))))
-  (run-with-timer 45 nil
-                  (lambda () (unless (get-buffer "*Packages*")
-                               (package-list-packages t))))
+              #'etaf-trial--list-packages-once))
+  (setq etaf-trial--list-timer
+        (run-with-timer 45 nil #'etaf-trial--list-packages-once))
   (message "Fetching package archives (the *Packages* list opens when they are ready)")
   (package-refresh-contents t))
 ELISP
