@@ -65,13 +65,20 @@ def run(args, *, cwd=None, env=None, timeout=120, log_file=None):
                                stderr=subprocess.PIPE, start_new_session=os.name != "nt")
     try:
         stdout, stderr = process.communicate(timeout=timeout)
-    except (subprocess.TimeoutExpired, KeyboardInterrupt):
+    except (subprocess.TimeoutExpired, KeyboardInterrupt) as interrupted:
         if os.name == "nt":
             subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"],
                            capture_output=True, timeout=20, check=False)
         else:
             os.killpg(process.pid, signal.SIGKILL)
-        process.communicate()
+        stdout, stderr = process.communicate()
+        if log_file:
+            # A run that ran out of time still has output worth reading, and its
+            # log name is what says which target hung.
+            log_file.write_bytes(stdout + b"\n--- stderr ---\n" + stderr)
+        if isinstance(interrupted, subprocess.TimeoutExpired):
+            raise ValueError(f"Timed out after {timeout} s: {args[0]}\n"
+                             + (f"log={log_file}" if log_file else "")) from None
         raise
     if log_file:
         log_file.write_bytes(stdout + b"\n--- stderr ---\n" + stderr)
