@@ -15,7 +15,7 @@
     },
     "ebox": {
       "url": "https://github.com/emacs-taf/ebox.git",
-      "revision": "9079014e6b359a06e69d8cb500393871f6158d5d",
+      "revision": "163702de4943a196641e56199fe3b851ede0119a",
       "branch": "main",
       "role": "framework"
     },
@@ -207,7 +207,7 @@
     },
     "etaf-agenda": {
       "url": "https://forgejo.vhkd.top/emacs-taf/etaf-agenda.git",
-      "revision": "bb0c9bb38a8d0b26f32db8bc7459a6b6796ed09c",
+      "revision": "469bdf760e500a5cabf1051d973445de62bed413",
       "branch": "main",
       "role": "application"
     }
