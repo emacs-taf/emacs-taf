@@ -207,7 +207,7 @@
     },
     "etaf-agenda": {
       "url": "https://forgejo.vhkd.top/emacs-taf/etaf-agenda.git",
-      "revision": "2c6f2014afadacce33d1a146216a9454be1e88ed",
+      "revision": "bb0c9bb38a8d0b26f32db8bc7459a6b6796ed09c",
       "branch": "main",
       "role": "application"
     }
