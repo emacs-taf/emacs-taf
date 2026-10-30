@@ -219,10 +219,19 @@
 ;; Consumers that only add this repository root to `load-path' (the manual's
 ;; installation path) reach the submodules through this entry, so the `lisp/'
 ;; directory is added here instead of asking every caller for it.
-(add-to-list 'load-path
-             (expand-file-name "lisp"
-                               (file-name-directory (or load-file-name
-                                                        buffer-file-name))))
+(eval-and-compile
+  (add-to-list 'load-path
+               (expand-file-name
+                "lisp"
+                (file-name-directory
+                 (or (and load-file-name
+                          ;; A native-compiled file lives in `eln-cache', where
+                          ;; no sibling `lisp' directory exists.
+                          (not (string-suffix-p ".eln" load-file-name))
+                          load-file-name)
+                     (bound-and-true-p byte-compile-current-file)
+                     (locate-library "maillist")
+                     buffer-file-name)))))
 
 (require 'maillist-app)
 (require 'maillist-mail)
