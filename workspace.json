@@ -87,7 +87,7 @@
     },
     "etaf-md-preview": {
       "url": "https://github.com/emacs-taf/etaf-md-preview.git",
-      "revision": "1a9218df52195a3ca41acfd0dbeccf40d2746e2f",
+      "revision": "955be4d18ffbf6a50ad9357393fc24530a6095d2",
       "branch": "main",
       "role": "application"
     },
