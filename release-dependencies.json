@@ -76,6 +76,9 @@
     },
     "maillist": {
       "resources": []
+    },
+    "etaf-org-preview": {
+      "resources": []
     }
   },
   "targets": [
@@ -86,6 +89,7 @@
     "etaf-db",
     "ekp",
     "etaf-md-preview",
+    "etaf-org-preview",
     "etaf-video-player",
     "etaf-desktop",
     "etaf-telega",
