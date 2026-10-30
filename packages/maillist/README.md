@@ -7,12 +7,25 @@
 ## 要求
 
 - Emacs 29.1 或更新版本（需要内置 SQLite）。
-- 提供者检出：`etaf`、`etaf-ui`、`ebox`、`ecss`、`etaf-db`。放在本仓库旁边
-  （`../etaf` 等），或放进工作区的上级目录（`../../etaf` 等）。
+- 从 checkout 跑时还要提供者检出：`etaf`、`etaf-ui`、`ebox`、`ecss`、`etaf-db`。
+  放在本仓库旁边（`../etaf` 等），或放进工作区的上级目录（`../../etaf` 等）。
 
 ## 安装与运行
 
-把本仓库根和提供者的仓库根加进 `load-path`，然后：
+从归档安装（推荐）：
+
+```elisp
+(require 'package)
+(add-to-list 'package-archives '("etaf" . "https://etaf.top/packages/"))
+(package-initialize)
+(package-refresh-contents)
+(package-install 'etaf-install)
+```
+
+然后 `M-x etaf-install`，在列表里把 Maillist 装上；依赖的 ETAF、ETAF UI、
+ETAF DB 由安装器一起装。装好后 `M-x maillist-open` 打开。
+
+从 checkout 跑：把本仓库根和提供者的仓库根加进 `load-path`，然后：
 
 ```elisp
 (require 'maillist)
