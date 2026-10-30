@@ -101,6 +101,7 @@
     (etaf-weread "WeChat Reading" application etaf-weread-open)
     (etaf-ncm "NetEase Cloud Music" application etaf-ncm-open)
     (etaf-pomodoro "Focus timer" application etaf-pomodoro-open)
+    (maillist "Mailing-list archive client" application maillist-open sqlite)
     (etaf-xiangqi "Xiangqi" game etaf-xiangqi-open)
     (etaf-tanks "Tank battle" game etaf-tanks-open))
   "Installable targets as (PACKAGE LABEL GROUP OPEN &rest CAPABILITIES).

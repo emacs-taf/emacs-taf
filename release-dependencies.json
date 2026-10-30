@@ -73,6 +73,9 @@
     },
     "etaf-pomodoro": {
       "resources": []
+    },
+    "maillist": {
+      "resources": []
     }
   },
   "targets": [
@@ -90,6 +93,7 @@
     "etaf-weread",
     "etaf-ncm",
     "etaf-tanks",
-    "etaf-pomodoro"
+    "etaf-pomodoro",
+    "maillist"
   ]
 }
