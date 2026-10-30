@@ -1,6 +1,7 @@
 .DEFAULT_GOAL := check
 .NOTPARALLEL:
 EMACS ?= emacs
+EMACSCLIENT ?= emacsclient
 
 # Providers live beside the application (standalone) or two levels up (workspace).
 # Override on the command line to pin a stable checkout while a provider is
@@ -13,7 +14,7 @@ LOAD_PATH = -L . -L lisp -L tests -L $(PROVIDER_ROOT)/etaf -L $(PROVIDER_ROOT)/e
 
 SOURCES = $(wildcard lisp/*.el) maillist.el
 
-.PHONY: compile load test check structure-check acceptance api-check setup-hooks clean
+.PHONY: compile load test check structure-check acceptance api-check setup-hooks gui clean
 
 compile:
 	rm -f *.elc lisp/*.elc tests/*.elc
@@ -48,5 +49,10 @@ api-check:
 setup-hooks:
 	git config --local core.hooksPath .githooks
 
+# Run the maintained GUI scenario in an existing owned server and print a fresh
+# evidence directory; pass SERVER=<name> for a dedicated verification instance.
+gui:
+	$(EMACSCLIENT) $(if $(SERVER),--socket-name "$(SERVER)",) --eval '(progn (require (quote maillist)) (add-to-list (quote load-path) (expand-file-name "scripts" (file-name-directory (locate-library "etaf")))) (add-to-list (quote load-path) "$(CURDIR)/scripts") (load "$(CURDIR)/scripts/maillist-gui-scenarios.el" nil t) (let ((directory (make-temp-file "maillist-gui-" t))) (run-at-time 0.05 nil (function maillist-gui-run) directory t) directory))'
+
 clean:
-	rm -f *.elc lisp/*.elc tests/*.elc
+	rm -f *.elc lisp/*.elc tests/*.elc scripts/*.elc
