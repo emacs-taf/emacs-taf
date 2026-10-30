@@ -36,6 +36,7 @@
 /etaf-speech-log/
 /maillist/
 /etaf-mario/
+/etaf-org-preview/
 
 *.elc
 *.eln
