@@ -196,6 +196,8 @@ def verify(directory):
                                              and re.fullmatch(r"https://[^\s]+", str(value.get("url", "")))
                                              and isinstance(value.get("license"), str)
                                              and isinstance(value.get("maintainer"), str)
+                                             and all(isinstance(value.get(key, ""), str)
+                                                     for key in ("group", "label", "open"))
                                              for value in community.values())):
         raise ValueError("Community origins must name served packages with an https URL and a license")
     updated = manifest.get("updated")
