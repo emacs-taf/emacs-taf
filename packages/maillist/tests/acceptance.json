@@ -245,6 +245,11 @@
       "name": "maillist-tests-select-edge-reaches-both-ends",
       "file": "tests/maillist-tests.el",
       "purpose": "The list jumps to its first and last row and opens them."
+    },
+    {
+      "name": "maillist-tests-palette-is-shared-while-the-theme-holds",
+      "file": "tests/maillist-tests.el",
+      "purpose": "The palette is reused while the theme holds and follows a face it changes."
     }
   ]
 }

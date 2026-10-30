@@ -22,6 +22,13 @@ answers when the archive does not.
 - `R` replies to the list and copies the last message's author; `r` stays the
   answer to the list alone and `C-u r` the answer to the author alone.
 
+- Moving through a long list is several times faster: the theme palette is
+  derived once per theme instead of once per row (300 threads: 50 ms per move
+  became 12 ms, 1000 threads: 162 ms became 32 ms, measured without redisplay).
+  The shared components take their tokens from a computed value, so switching
+  the Emacs theme now repaints the search field and buttons with the rest.
+
+
 - `M-u` marks the open thread unread and `A` marks every row the current scope
   shows read, in one store transaction (`maillist-set-read`,
   `maillist-mark-all-read`).

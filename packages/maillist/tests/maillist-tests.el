@@ -1338,5 +1338,20 @@ Read rows in between are skipped, and the walk does not wrap around."
     (should (equal "alpha@example.com"
                    (plist-get (etaf-value (plist-get session :open)) :id)))))
 
+(ert-deftest maillist-tests-palette-is-shared-while-the-theme-holds ()
+  "The palette is derived once and follows a face the theme changes."
+  (let ((first (maillist-palette)))
+    (should (stringp (plist-get first :bg)))
+    (should (eq first (maillist-palette)))
+    (let ((before (and (facep 'shadow) (face-attribute 'shadow :foreground nil t))))
+      (unwind-protect
+          (progn
+            (set-face-attribute 'shadow nil :foreground "#123456")
+            (should (equal "#123456" (plist-get (maillist-palette) :muted)))
+            (should-not (eq first (maillist-palette))))
+        (set-face-attribute 'shadow nil :foreground (or before 'unspecified)))
+      (should (equal before (and (facep 'shadow)
+                                 (face-attribute 'shadow :foreground nil t)))))))
+
 (provide 'maillist-tests)
 ;;; maillist-tests.el ends here

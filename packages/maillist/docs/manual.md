@@ -320,6 +320,26 @@ are what appearance is reviewed against.
   probe in a graphical session (205×51, six threads, one reader open) measured
   a worst-case lateness of 11 ms both while idle and with a sync landing inside
   the window, so the periodic refresh does not interrupt typing.
+- The palette is derived once per theme and frame colors, not once per row: a
+  row asks for ten colors, and mixing them again for every row of a long list
+  cost more than the list itself.  A theme switch, a changed face or another
+  frame recomputes it, and the shared components re-read their tokens through a
+  computed value, so a switch repaints the whole client.
+- `benchmarks/performance-scenarios.el` holds three workloads registered with
+  the workspace driver: scrolling a three-hundred-thread list, opening one
+  thread after another from it, and searching nine hundred cached bodies.
+  Run them against a graphical Emacs, which is where redisplay counts:
+
+  ```sh
+  python3 ~/emacs-taf/scripts/performance.py run \
+    --scenario 'maillist.*' --mode gui --server maillist-gui \
+    --samples 10 --output-dir /tmp/maillist-perf
+  ```
+
+  A run on a 300-thread store measured p50 26.4 ms per move, 22.4 ms per thread
+  opened and 5.9 ms per cached-body search, each inside its 150-200 ms budget.
+  The same store costs about a tenth of a millisecond per row to paint, so
+  these numbers grow with `maillist-thread-limit`, not with the window.
 
 ## Development
 

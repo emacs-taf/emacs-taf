@@ -7,7 +7,10 @@
 ;; The client paints no surface of its own: every color is derived from the
 ;; active Emacs theme, so the buffer keeps the theme's background, foreground
 ;; and accent instead of importing a second palette.  `maillist-palette'
-;; reads the faces once per render pass; the Views never name a color literal.
+;; derives that palette once per theme and frame colors and hands the same
+;; value back while they stay put: a list row asks for ten colors, and mixing
+;; them again for every row made a long list cost tens of milliseconds per
+;; keystroke.  The Views never name a color literal.
 
 ;;; Code:
 
@@ -42,8 +45,28 @@ land here, so the palette never signals over a missing surface color."
         value
       fallback)))
 
-(defun maillist-palette ()
-  "Return the palette derived from the current Emacs theme."
+(defvar maillist--palette-cache nil
+  "Cached (KEY . PALETTE) of `maillist-palette', nil when unset.")
+
+(defun maillist--palette-key ()
+  "Return what the palette is derived from: frame colors, themes and faces.
+A cached palette stays valid only while every input keeps its value, so a
+theme switch, a changed face or another frame's colors recompute it."
+  (list (frame-parameter nil 'background-color)
+        (frame-parameter nil 'foreground-color)
+        custom-enabled-themes
+        (mapcar (lambda (face)
+                  (and (facep face) (face-attribute face :foreground nil t)))
+                '(shadow link hl-line))
+        (and (facep 'hl-line) (face-attribute 'hl-line :background nil t))))
+
+(add-hook 'enable-theme-functions
+          (lambda (&rest _)
+            "Drop the cached palette so the next render derives it again."
+            (setq maillist--palette-cache nil)))
+
+(defun maillist--derive-palette ()
+  "Derive the palette of the current theme and frame."
   (let* ((bg (or (face-attribute 'default :background) "#000000"))
          (ink (or (face-attribute 'default :foreground) "#ffffff"))
          (muted (or (maillist--face 'shadow :foreground)
@@ -76,6 +99,17 @@ land here, so the palette never signals over a missing surface color."
             :danger danger
             :danger-soft (maillist--blend bg danger 0.14)
             :warning (or (maillist--face 'warning :foreground) "#e8a33d")))))
+
+(defun maillist-palette ()
+  "Return the palette derived from the current Emacs theme.
+The value is computed once for a given theme and reused: the list asks for a
+color per node, and deriving the whole palette each time dominated rendering."
+  (let ((key (maillist--palette-key)))
+    (if (equal key (car-safe maillist--palette-cache))
+        (cdr maillist--palette-cache)
+      (let ((palette (maillist--derive-palette)))
+        (setq maillist--palette-cache (cons key palette))
+        palette))))
 
 (defun maillist-color (key)
   "Return the palette color named KEY.

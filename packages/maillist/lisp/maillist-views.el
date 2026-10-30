@@ -413,7 +413,14 @@ semantic colour."
           on-scope on-search on-back on-earlier on-resize)
   "Render the whole application, reading its reactive sources."
   :setup
-  (etaf-theme-provide (maillist-theme-defaults))
+  ;; A provided plain plist keeps the colors of the theme that was active at
+  ;; mount, so the shared components would stay dark in a light theme.  The
+  ;; computed reads the switch generation ETAF bumps after a theme change.
+  (etaf-theme-provide
+   (etaf-computed (lambda ()
+                    (etaf-theme-current-mode)
+                    (maillist-theme-defaults))
+                  :name 'maillist-theme-tokens))
   :render
   (let* ((width (etaf-value viewport))
          (pixels (etaf-value viewport-px))
