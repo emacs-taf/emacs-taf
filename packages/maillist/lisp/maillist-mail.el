@@ -69,7 +69,6 @@ MAILLIST-SMTP-SERVER and this address."
     (let ((secret (plist-get found :secret)))
       (if (functionp secret) (funcall secret) secret))))
 
-;;;###autoload
 (defun maillist-mail--authinfo-file ()
   "Return the auth-source file the client writes its password to."
   (if (file-exists-p (expand-file-name "~/.authinfo.gpg"))

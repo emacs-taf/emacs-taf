@@ -85,8 +85,7 @@
                            :on-change on-search))
       (flex :width 'stretch :height '(lh 1) :align-items 'center
             :padding (list (list 'lh 0) (list 'ch 2))
-        (etaf-label :text summary :variant 'muted)))
-    ))
+        (etaf-label :text summary :variant 'muted)))))
 
 ;;; ---------------------------------------------------------------------------
 ;;; Thread list

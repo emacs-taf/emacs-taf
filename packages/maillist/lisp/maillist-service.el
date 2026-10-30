@@ -252,7 +252,7 @@ so it can be cached and classified again on load."
                                  (error nil))))
                       (xml-get-children (car xml) 'entry))))
          (parents (make-hash-table :test #'equal))
-         (authors (make-hash-table :test #'equal))
+         (senders (make-hash-table :test #'equal))
          (messages
           (mapcar
            (lambda (entry)
@@ -267,7 +267,7 @@ so it can be cached and classified again on load."
                (when (not (string-empty-p id))
                  (puthash id depth parents))
                (when (not (string-empty-p name))
-                 (puthash name t authors))
+                 (puthash name t senders))
                (list :id id
                      :author name
                      :email (string-trim (maillist--plain (maillist--node 'email author)))
@@ -293,7 +293,7 @@ so it can be cached and classified again on load."
                            (plist-get (car messages) :subject)
                            "")
                      title)
-          :participants (hash-table-count authors)
+          :participants (hash-table-count senders)
           :messages messages)))
 
 (defun maillist-parse-recent (xml-text)
