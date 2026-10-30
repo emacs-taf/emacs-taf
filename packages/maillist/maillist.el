@@ -67,6 +67,18 @@
 ;; Function: maillist-move (session delta)
 ;; Move the selection by DELTA rows and open the new row.
 ;;
+;; Function: maillist-next-unread (session)
+;; Open the first unread row after SESSION's selection and return its id, or
+;; nil when nothing after it is unread.
+;;
+;; Function: maillist-select-edge (session edge)
+;; Open the first or the last row SESSION shows (`first' or `last') and return
+;; its id.
+;;
+;; Function: maillist-reply-all (session)
+;; Reply to SESSION's open thread with the last message's author in Cc, so the
+;; list and everybody the thread reached see the answer.
+;;
 ;; Function: maillist-toggle-star (session)
 ;; Star or unstar the selected row, persist the choice and return the new state.
 ;;

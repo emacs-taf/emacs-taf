@@ -202,35 +202,69 @@ With PRIVATE non-nil the reply goes to the last message's author instead of
 the list, which is how a mailing-list reader answers someone directly.  Both
 forms keep `In-Reply-To' and `References', so the mail stays in the thread."
   (interactive (list (maillist-mail--session) current-prefix-arg))
+  (let* ((parts (maillist--reply-parts session))
+         (author (or (plist-get (plist-get parts :last) :email) "")))
+    (when (and private (string-empty-p author))
+      (user-error "这一封没有发件人地址，无法私回"))
+    (let ((buffer (maillist--reply-buffer
+                   session parts
+                   (if private author (plist-get parts :list)) nil)))
+      (message "%s" (if private
+                        (format "私回 %s，不发到列表" author)
+                      (format "回信地址是 %s；列表外地址发帖会进入审核队列"
+                              (plist-get parts :list))))
+      buffer)))
+
+;;;###autoload
+(defun maillist-reply-all (session)
+  "Reply to SESSION's open thread and copy the last message's author.
+The list stays the recipient, so everybody the thread reached sees the answer;
+`maillist-reply' answers the list alone and `C-u r' the author alone."
+  (interactive (list (maillist-mail--session)))
+  (let* ((parts (maillist--reply-parts session))
+         (author (or (plist-get (plist-get parts :last) :email) ""))
+         (buffer (maillist--reply-buffer
+                  session parts (plist-get parts :list) author)))
+    (message "回信地址是 %s；%s 在 Cc 里"
+             (plist-get parts :list)
+             (if (string-empty-p author) "（这一封没有发件人地址）" author))
+    buffer))
+
+(defun maillist--reply-parts (session)
+  "Return what a reply to SESSION's open thread is built from.
+The plist carries `:thread', `:messages', `:last' (the message replied to),
+`:list' (the archive's address) and `:references' (the thread's message ids,
+newest last), so the three reply commands share one reading of the thread."
   (let ((thread (etaf-value (plist-get session :open))))
     (unless (and thread (plist-get thread :messages))
       (user-error "没有可回复的线程"))
     (let* ((messages (plist-get session :open-messages))
-           (last-message (car (last messages)))
-           (author (or (plist-get last-message :email) ""))
-           (source (plist-get session :source))
-           (list-address (plist-get source :address))
-           (ids (maillist--message-ids messages))
-           (references (mapconcat #'identity (last ids 10) " "))
-           buffer)
-      (when (and private (string-empty-p author))
-        (user-error "这一封没有发件人地址，无法私回"))
-      (setq buffer
-            (maillist--prepare
-             session (if private author list-address)
-             (maillist--reply-subject (plist-get thread :subject))
-             (append (list (cons 'In-Reply-To (car (last ids))))
-                     (unless (string-empty-p references)
-                       (list (cons 'References references))))
-             (concat (maillist--attribution last-message)
-                     (maillist--quote (plist-get last-message :text))
-                     "\n\n")
-             references))
-      (message "%s" (if private
-                        (format "私回 %s，不发到列表" author)
-                      (format "回信地址是 %s；列表外地址发帖会进入审核队列"
-                              list-address)))
-      buffer)))
+           (ids (maillist--message-ids messages)))
+      (list :thread thread
+            :messages messages
+            :last (car (last messages))
+            :list (plist-get (plist-get session :source) :address)
+            :ids ids
+            :references (mapconcat #'identity (last ids 10) " ")))))
+
+(defun maillist--reply-buffer (session parts to cc)
+  "Open the reply buffer of SESSION from PARTS, sending TO and copying CC.
+CC may be nil or empty, in which case the reply goes to TO alone."
+  (let* ((last-message (plist-get parts :last))
+         (references (plist-get parts :references))
+         (headers (append (list (cons 'In-Reply-To (car (last (plist-get parts :ids)))))
+                          (unless (string-empty-p references)
+                            (list (cons 'References references)))
+                          (unless (or (null cc) (string-empty-p cc))
+                            (list (cons 'Cc cc))))))
+    (maillist--prepare
+     session to
+     (maillist--reply-subject (plist-get (plist-get parts :thread) :subject))
+     headers
+     (concat (maillist--attribution last-message)
+             (maillist--quote (plist-get last-message :text))
+             "\n\n")
+     references)))
 
 ;;;###autoload
 (defun maillist-compose (session)

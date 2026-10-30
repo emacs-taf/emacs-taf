@@ -65,7 +65,8 @@ colour, a starred row carries `*`, an unread one `+`, and a row whose subject
 matched a local search carries the matched text beside it.
 
 `j`/`k` move the selection and open the row; `RET` opens the focused row; a
-pointer press opens the row it lands on. Below `maillist-narrow-width` the
+pointer press opens the row it lands on.  `n` opens the next unread thread
+after the selection and `G` the last row of the list. Below `maillist-narrow-width` the
 window shows the list alone until a row is opened, and the reader carries a
 `← 列表` row to go back (`u`).
 
@@ -164,6 +165,7 @@ to the session and is cancelled by `maillist-close`.
 | Key | Action |
 | --- | --- |
 | `r` | reply to the list |
+| `R` | reply to the list, copying the last message's author |
 | `C-u r` | reply to the last message's author |
 | `c` | post a new message |
 

@@ -1285,5 +1285,58 @@ the client must not answer that by giving up persistence silently."
       (dolist (backup (file-expand-wildcards (concat file ".rebuild-*")))
         (ignore-errors (delete-file backup))))))
 
+(ert-deftest maillist-tests-reply-all-copies-the-last-author ()
+  "A reply-all keeps the list as the recipient and copies the last sender.
+The plain reply addresses the list alone, which is why the other form exists."
+  (let ((maillist-mail-address "reader@example.org"))
+    (maillist-tests--with-session session
+      (maillist-refresh session)
+      (maillist-tests--wait session)
+      (maillist-select session "beta@example.com")
+      (maillist-tests--open session)
+      (let ((buffer (maillist-reply-all session)))
+        (unwind-protect
+            (with-current-buffer buffer
+              (should (equal "fixture@example.org"
+                             (message-fetch-field "To")))
+              (should (equal "carol@example.com"
+                             (message-fetch-field "Cc")))
+              (should (message-fetch-field "In-Reply-To"))
+              (should (message-fetch-field "References")))
+          (with-current-buffer buffer (set-buffer-modified-p nil))
+          (kill-buffer buffer)))
+      (let ((buffer (maillist-reply session)))
+        (unwind-protect
+            (with-current-buffer buffer
+              (should-not (message-fetch-field "Cc")))
+          (with-current-buffer buffer (set-buffer-modified-p nil))
+          (kill-buffer buffer))))))
+
+(ert-deftest maillist-tests-next-unread-visits-each-unread-thread-once ()
+  "`n` walks the unread rows after the selection and stops at the end.
+Read rows in between are skipped, and the walk does not wrap around."
+  (maillist-tests--with-session session
+    (maillist-refresh session)
+    (maillist-tests--wait session)
+    (maillist-select session "alpha@example.com")
+    (maillist-tests--open session)
+    ;; Three of the four fixture threads are unread; beta comes next.
+    (should (equal "beta@example.com" (maillist-next-unread session)))
+    (should (equal "beta-reply@example.com" (maillist-next-unread session)))
+    (should (equal "gamma@example.com" (maillist-next-unread session)))
+    (should-not (maillist-next-unread session))
+    (should (equal "gamma@example.com"
+                   (etaf-value (plist-get session :selected))))))
+
+(ert-deftest maillist-tests-select-edge-reaches-both-ends ()
+  "The list can be jumped to its first and its last row."
+  (maillist-tests--with-session session
+    (maillist-refresh session)
+    (maillist-tests--wait session)
+    (should (equal "gamma@example.com" (maillist-select-edge session 'last)))
+    (should (equal "alpha@example.com" (maillist-select-edge session 'first)))
+    (should (equal "alpha@example.com"
+                   (plist-get (etaf-value (plist-get session :open)) :id)))))
+
 (provide 'maillist-tests)
 ;;; maillist-tests.el ends here

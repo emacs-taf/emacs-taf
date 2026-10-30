@@ -230,6 +230,21 @@
       "name": "maillist-tests-torn-store-is-rebuilt",
       "file": "tests/maillist-tests.el",
       "purpose": "A store file a crash left unreadable is set aside and rebuilt instead of leaving the client without persistence."
+    },
+    {
+      "name": "maillist-tests-reply-all-copies-the-last-author",
+      "file": "tests/maillist-tests.el",
+      "purpose": "A reply-all keeps the list as recipient and copies the last message's author; the plain reply has no Cc."
+    },
+    {
+      "name": "maillist-tests-next-unread-visits-each-unread-thread-once",
+      "file": "tests/maillist-tests.el",
+      "purpose": "Next-unread walks the unread rows after the selection once and stops at the end."
+    },
+    {
+      "name": "maillist-tests-select-edge-reaches-both-ends",
+      "file": "tests/maillist-tests.el",
+      "purpose": "The list jumps to its first and last row and opens them."
     }
   ]
 }

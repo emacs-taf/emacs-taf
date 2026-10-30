@@ -150,6 +150,23 @@
                        (format "搜索「%s」" query))
                      4)))
 
+(defun maillist--next-unread (session)
+  "Open the next unread thread of SESSION and say so when there is none."
+  (if (maillist--reveal-selected (maillist-next-unread session))
+      (maillist--reader-top)
+    (maillist--toast session 'info "没有更多未读的线程" 4)))
+
+(defun maillist--select-edge (session edge)
+  "Move SESSION to its first or last row, and open it."
+  (when (maillist--reveal-selected (maillist-select-edge session edge))
+    (maillist--reader-top)))
+
+(defun maillist--reveal-selected (id)
+  "Scroll the list to row ID and return it."
+  (when id
+    (maillist--reveal id)
+    id))
+
 (defun maillist--keys (session)
   "Return the root key bindings for SESSION."
   (list (list "j" (lambda () (maillist-move session 1)
@@ -162,9 +179,12 @@
                     (maillist--reader-top)
                     (maillist--reveal id)))
               "上一线程")
+        (list "n" (lambda () (maillist--next-unread session)) "下一未读")
+        (list "G" (lambda () (maillist--select-edge session 'last)) "最后一个线程")
         (list "s" (lambda () (maillist-toggle-star session)) "收藏或取消收藏")
         (list "r" (lambda () (maillist-reply session current-prefix-arg))
               "回复线程（C-u 私回）")
+        (list "R" (lambda () (maillist-reply-all session)) "回复全部（抄送作者）")
         (list "c" (lambda () (maillist-compose session)) "写新帖")
         (list "e" (lambda () (maillist-load-earlier session)) "展开更早的邮件")
         (list "g" (lambda () (maillist--reload session)) "刷新")

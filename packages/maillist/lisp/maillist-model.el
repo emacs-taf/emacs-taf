@@ -420,6 +420,31 @@ its body has been shown, not when the row was selected."
          (next (nth (max 0 (min (1- (length rows)) (+ index delta))) rows)))
     (when next (maillist-select session (plist-get next :id)))))
 
+(defun maillist-next-unread (session)
+  "Open the first unread row after SESSION's selection and return its id.
+The walk starts at the row after the selected one, so pressing `n` repeatedly
+visits each unread thread once; past the last row it returns nil and leaves the
+selection where it was."
+  (let* ((rows (maillist-rows session))
+         (current (etaf-value (plist-get session :selected)))
+         (at (cl-position current rows :key (lambda (row) (plist-get row :id))
+                          :test #'equal))
+         (rest (nthcdr (if at (1+ at) 0) rows))
+         (unread (cl-find-if (lambda (row) (plist-get row :unread)) rest)))
+    (when unread
+      (maillist-select session (plist-get unread :id))
+      (plist-get unread :id))))
+
+(defun maillist-select-edge (session edge)
+  "Select the EDGE row of SESSION: `first' or `last'.
+Edge is the row the list starts or ends with; the reader opens it like any
+other row."
+  (let* ((rows (maillist-rows session))
+         (row (pcase edge ('last (car (last rows))) (_ (car rows)))))
+    (when row
+      (maillist-select session (plist-get row :id))
+      (plist-get row :id))))
+
 (defun maillist-toggle-message (session id)
   "Fold or unfold message ID in the open thread of SESSION.
 The choice survives a body reload because the session remembers it."

@@ -16,7 +16,11 @@ answers when the archive does not.
   opened last (`maillist-store-setting`), so the next start returns to it.
   `maillist-open` takes `:list`.
 
-- `1`, `2` and `3` switch between all threads, unread only and starred only.
+- `1`, `2` and `3` switch between all threads, unread only and starred only;
+  `n` opens the next unread thread and `G` the last row of the list.
+
+- `R` replies to the list and copies the last message's author; `r` stays the
+  answer to the list alone and `C-u r` the answer to the author alone.
 
 - `M-u` marks the open thread unread and `A` marks every row the current scope
   shows read, in one store transaction (`maillist-set-read`,

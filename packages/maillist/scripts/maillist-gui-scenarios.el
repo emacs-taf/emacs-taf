@@ -155,6 +155,16 @@ fails here instead of answering 404 for every request."
   "Return non-nil when CONTEXT's client displays TEXT."
   (string-match-p (regexp-quote text) (maillist-gui--text context)))
 
+(defun maillist-gui--open-id (context)
+  "Return the id of the thread CONTEXT's client shows, or nil.
+The list and the reader share the same text, so the assertion names the thread
+the client actually opened rather than a subject both columns show."
+  (with-current-buffer (maillist-gui--target context)
+    (let* ((state (etaf-app-state (buffer-name)))
+           (session (plist-get state :session))
+           (open (and session (etaf-value (plist-get session :open)))))
+      (plist-get open :id))))
+
 (defun maillist-gui--key (context keys)
   "Send documented KEYS through CONTEXT's client command loop."
   (with-current-buffer (maillist-gui--target context)
@@ -351,6 +361,14 @@ and leaves the client closed."
               (list
                (maillist-gui--assert "k returns to the first thread"
                                      (maillist-gui--shows context "3 封")))))
+           (maillist-gui--key-action
+            "next-unread" "n"
+            nil
+            (lambda (context)
+              (list
+               (maillist-gui--assert "n opens the next unread thread"
+                                     (equal "beta-reply@example.com"
+                                            (maillist-gui--open-id context))))))
            (etaf-gui-verifier-action-create
             :id "activate-with-ret"
             :execute
@@ -511,6 +529,14 @@ and leaves the client closed."
                                      (maillist-gui--shows context "Older discussion"))
                (maillist-gui--assert "the list counts the added rows"
                                      (maillist-gui--shows context "6 个线程")))))
+           (maillist-gui--key-action
+            "jump-last" "G"
+            nil
+            (lambda (context)
+              (list
+               (maillist-gui--assert "G opens the last thread of the list"
+                                     (equal "another@example.com"
+                                            (maillist-gui--open-id context))))))
            ;; --- Switching archives -------------------------------------
            (etaf-gui-verifier-action-create
             :id "switch-list"

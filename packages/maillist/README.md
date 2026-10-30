@@ -78,6 +78,8 @@ M-x maillist-open
 | `1` `2` `3` | all, unread only, starred only |
 | `M-u` | mark the open thread unread |
 | `A` | mark every shown row read |
+| `n` | open the next unread thread |
+| `G` | jump to the last row |
 | `s` | star or unstar |
 | `e` | expand the older messages a long thread holds back |
 | `o` | load mail older than the list |
@@ -86,7 +88,7 @@ M-x maillist-open
 | `g` | sync again (re-runs the open search when one is active) |
 | `C` | copy the archive page of the thread |
 | `B` | open that page in the browser |
-| `r` / `C-u r` | reply to the list / to the last message's author |
+| `r` / `R` / `C-u r` | reply to the list / reply-all / reply to the author |
 | `c` | post a new message |
 | `L` | switch archive |
 | `u` | back from the thread to the list (narrow layout) |
