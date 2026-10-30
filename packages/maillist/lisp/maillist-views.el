@@ -39,30 +39,39 @@
 ;;; ---------------------------------------------------------------------------
 
 (etaf-define-component maillist-appbar
-    (&key model scope summary query narrow search-width on-scope on-search)
+    (&key model scope summary query narrow columns search-width on-scope on-search)
   "Render the list name, the scopes and the search field."
   :view
   (column :width 'stretch :item-gap '(lh 0)
         :border-bottom (maillist--border (maillist-color :line))
-    (flex :if (not narrow) :width 'stretch :height '(lh 3)
-          :align-items 'center
-          :padding (list (list 'lh 0) (list 'ch 2))
-          :gap (list (list 'lh 0) (list 'ch 2))
-      (box :height '(lh 1) :font-weight 'bold :color (maillist-color :ink)
-        (text (expr (plist-get model :list-name))))
-      (etaf-segmented :value scope
-                      :options '((all . "全部")
-                                 (unread . "未读")
-                                 (starred . "已收藏"))
-                      :on-change on-scope)
-      (etaf-search-field :value query
-                         :icon t
-                         :ref 'maillist-search
-                         :placeholder "搜索标题或正文"
-                         :width (list 'ch search-width)
-                         :on-change on-search)
-      (box :flex-grow 1 :flex-basis '(ch 0) :min-width '(ch 0))
-      (etaf-label :text summary :variant 'muted))
+    ;; The controls take the room that is left after the summary keeps its
+    ;; own width: a spacer that grows first would push the summary past the
+    ;; canvas as soon as the window narrows.
+    (column :if (not narrow) :width 'stretch :height '(lh 3)
+      (flex :width 'stretch :height '(lh 3) :align-items 'center
+            :padding (list (list 'lh 0) (list 'ch 2))
+            :gap (list (list 'lh 0) (list 'ch 2))
+        (box :height '(lh 1) :font-weight 'bold :color (maillist-color :ink)
+          (text (expr (plist-get model :list-name))))
+        (etaf-segmented :value scope
+                        :options '((all . "全部")
+                                   (unread . "未读")
+                                   (starred . "已收藏"))
+                        :on-change on-scope)
+        (etaf-search-field :value query
+                           :icon t
+                           :ref 'maillist-search
+                           :placeholder "搜索标题或正文"
+                           :width (list 'ch search-width)
+                           :on-change on-search))
+      ;; The summary is placed on the row rather than joining the flex line:
+      ;; a growing spacer would push it past the canvas as the window
+      ;; narrows, and the field keeps the width it needs.
+      (box :position 'absolute :top (list 'lh 1)
+           :left (list 'ch (max 0 (- columns 2 (string-width summary))))
+           :width (list 'ch (string-width summary)) :height '(lh 1)
+           :overflow 'hidden
+        (etaf-label :text summary :variant 'muted)))
     (column :if narrow :width 'stretch :item-gap '(lh 0)
       (flex :width 'stretch :height '(lh 1) :align-items 'center
             :padding (list (list 'lh 0) (list 'ch 2))
@@ -130,15 +139,23 @@
     (box :flex-grow 1 :flex-basis '(ch 0) :min-width '(ch 0)
          :height '(lh 1) :overflow 'hidden
          :font-weight (if (plist-get thread :unread) 'bold 'normal)
-         :color (if (plist-get thread :unread)
-                    (maillist-color :subject)
-                  (maillist-color :muted))
-      (text (expr (or (plist-get thread :subject) ""))))))
+         :color (cond ((plist-get thread :new) (maillist-color :accent))
+                      ((plist-get thread :unread) (maillist-color :subject))
+                      (t (maillist-color :muted)))
+      (text (expr (or (plist-get thread :subject) ""))))
+    ;; A search that fell back to the cache matched the body, so the row
+    ;; names the text that matched beside the thread it belongs to.
+    (box :if (plist-get thread :snippet)
+         :flex-grow 1 :flex-basis '(ch 0) :min-width '(ch 0)
+         :height '(lh 1) :overflow 'hidden
+         :color (maillist-color :dim)
+      (text (expr (or (plist-get thread :snippet) ""))))))
 
 (etaf-define-component maillist-thread-list (&key groups selected searching on-press)
   "Render GROUPS of thread rows, each labelled by its date."
   :view
-  (column :width 'stretch :height 'stretch :overflow 'scroll
+  (column :width 'stretch :height 'stretch :min-height '(lh 0)
+          :overflow 'scroll
           :ref 'maillist-thread-list :role 'region :tab-index 0
           :aria-label "线程列表"
           :item-gap '(lh 0)
@@ -230,13 +247,36 @@
       (maillist-body-line :for (line (plist-get message :lines))
                             :key (plist-get line :id)
                             :line line)
-      (box :height '(lh 1)))))
+      (box :height '(lh 1))
+      (maillist-message-links :if (plist-get message :links)
+                              :links (plist-get message :links)))))
+
+(etaf-define-component maillist-message-links (&key links)
+  "Render the LINKS a message mentions, each opened by its own press."
+  :view
+  (column :width 'stretch :item-gap '(lh 0)
+          :padding (list (list 'lh 0.5) (list 'ch 2))
+    (etaf-label :text "链接" :variant 'muted)
+    (flex :for (link links)
+          :key link
+          :width 'stretch :height '(lh 1) :align-items 'center
+          :gap (list (list 'lh 0) (list 'ch 1))
+          :role 'button :tab-index 0 :pointer 'hand
+          :ref (intern (concat "maillist-link-" link))
+          :hover-style (maillist--hover)
+          :on-press (lambda () (browse-url link))
+      (box :width '(ch 1) :color (maillist-color :accent) (text "↗"))
+      (box :flex-grow 1 :flex-basis '(ch 0) :min-width '(ch 0)
+           :height '(lh 1) :overflow 'hidden
+           :color (maillist-color :accent)
+           :text-decoration-line 'underline
+        (text (expr link))))))
 
 (etaf-define-component maillist-reader (&key thread narrow on-message on-back on-earlier)
   "Render the open THREAD: a fixed header above a scrolling body."
   :view
   (flex :flex-direction 'column :width 'stretch :height 'stretch
-        :overflow 'hidden
+        :min-height '(lh 0) :overflow 'hidden
         :padding (list (list 'lh 1) (list 'ch 2))
     (column :width 'stretch :flex-shrink 0 :item-gap '(lh 0)
       (flex :if narrow :height '(lh 1) :align-items 'center
@@ -283,7 +323,7 @@
         :flex-grow 1 :flex-basis '(lh 0) :min-height '(lh 0)
     (flex :if show-list :flex-direction 'column
           :width (if narrow 'stretch (list 'px list-width))
-          :flex-shrink 0 :height 'stretch
+          :flex-shrink 0 :height 'stretch :min-height '(lh 0)
       (maillist-thread-list :groups groups :selected selected :searching searching
                               :on-press on-select))
     (etaf-pane-resizer :if (and show-list show-reader)
@@ -292,11 +332,13 @@
                        :min 240 :max max-list-width
                        :on-change on-resize)
     (flex :if show-reader :flex-direction 'column
-          :width (if narrow 'stretch 'stretch)
+          ;; Beside the list the reader takes the room that is left; `stretch'
+          ;; there would ask for the whole row and run under the canvas.
+          :width (if narrow 'stretch '(ch 0))
           :flex-grow 1 :flex-basis '(ch 0) :min-width '(ch 0)
-          :height 'stretch :overflow 'hidden
+          :height 'stretch :min-height '(lh 0) :overflow 'hidden
       (column :if (null thread) :width 'stretch :height 'stretch
-              :overflow 'scroll :ref 'maillist-reader
+              :min-height '(lh 0) :overflow 'scroll :ref 'maillist-reader
               :padding (list (list 'lh 3) (list 'ch 2))
         (etaf-empty :title "没有打开的线程"
                     :description "在左侧列表里选择一个线程，或用 j / k 移动。"))
@@ -335,10 +377,13 @@ semantic colour."
     (maillist-hint :caps "j/k" :label "移动")
     (maillist-hint :caps "RET" :label "打开")
     (maillist-hint :caps "s" :label "收藏")
+    (maillist-hint :caps "M-u" :label "未读")
+    (maillist-hint :caps "A" :label "已读")
+    (maillist-hint :caps "o" :label "更早")
+    (maillist-hint :caps "/" :label "搜索")
     (maillist-hint :if (not narrow) :caps "r" :label "回复")
     (maillist-hint :if (not narrow) :caps "c" :label "写新帖")
-    (maillist-hint :if (not narrow) :caps "e" :label "更早")
-    (maillist-hint :caps "/" :label "搜索")
+    (maillist-hint :if (not narrow) :caps "L" :label "列表")
     (maillist-hint :if (not narrow) :caps "g" :label "刷新")
     (maillist-hint :caps "?" :label "帮助")))
 
@@ -361,9 +406,9 @@ semantic colour."
       (maillist-hints :narrow narrow))))
 
 (etaf-define-component maillist-app
-    (&key model viewport viewport-px list-width groups selected thread scope summary
-          status toast query reading keys on-select on-message on-scope on-search
-          on-back on-earlier on-resize)
+    (&key model viewport viewport-px viewport-rows list-width groups selected thread
+          scope summary status toast query reading keys on-select on-message
+          on-scope on-search on-back on-earlier on-resize)
   "Render the whole application, reading its reactive sources."
   :setup
   (etaf-theme-provide (maillist-theme-defaults))
@@ -374,14 +419,28 @@ semantic colour."
          (thread-value (etaf-value thread))
          (show-reader (or (not narrow) (etaf-value reading))))
     (etaf-view
-     (flex :flex-direction 'column :width 'stretch :height 'stretch
+     ;; The canvas is exactly the window body the fit measured.  `vw 100' and
+     ;; `vh 100' count the viewport the mount was opened with: they keep the
+     ;; old size after a resize, one extra row scrolls the whole page, and the
+     ;; hint row runs under the canvas edge.
+     (flex :flex-direction 'column
+           :width (list 'px (max 240 (or pixels 0)))
+           :height (list 'lh (max 8 (etaf-value viewport-rows)))
+           :box-sizing 'border-box :overflow 'hidden
            :min-height '(lh 0) :keys keys
        (maillist-appbar :model model
                         :scope (etaf-value scope)
                         :summary (etaf-value summary)
                         :query (etaf-value query)
                         :narrow narrow
-                        :search-width (max 34 (min 56 (- width 78)))
+                        :columns width
+                        ;; The row holds the name, the scopes, the field and
+                        ;; the summary; the field gives way first so the
+                        ;; summary never runs past the canvas.
+                        ;; The field gives way before the summary: the row
+                        ;; holds the name, the scopes, the field and the
+                        ;; summary within one canvas width.
+                        :search-width (max 20 (min 56 (- width 88)))
                         :on-scope on-scope :on-search on-search)
        (maillist-pane :groups (etaf-value groups)
                       :selected (etaf-value selected)

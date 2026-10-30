@@ -29,18 +29,21 @@
 ;; list; implementations and precise docstrings remain beside their
 ;; definitions.
 ;;
-;; Function: maillist-open (&key (sync t))
+;; Function: maillist-open (&key (sync t) list)
 ;;;###autoload (autoload 'maillist-open "maillist" nil t)
 ;; Mount the client in its own buffer and return that buffer.  SYNC nil opens
-;; from the local cache without contacting the archive.
+;; from the local cache without contacting the archive, and LIST names the
+;; archive to read; without it the client opens the one it opened last.
 ;;
 ;; Function: maillist-close ()
 ;;;###autoload (autoload 'maillist-close "maillist" nil t)
 ;; Close the mounted client and kill its buffer.
 ;;
-;; Function: maillist-create (&key (list maillist-default-list))
+;; Function: maillist-create (&key list)
 ;; Create a client session over the archive LIST (a `maillist-sources' name)
-;; and return it.  The session is the value a View reads: `:threads', `:groups',
+;; and return it; without LIST it opens the archive this client opened last,
+;; then `maillist-default-list'.  The open also prunes what the store no
+;; longer needs.  The session is the value a View reads: `:threads', `:groups',
 ;; `:open', `:selected', `:scope', `:query', `:summary', `:status', `:reading'
 ;; and `:viewport' are reactive refs; `:source' and `:store' are plain values.
 ;;
@@ -48,11 +51,13 @@
 ;; Release SESSION's store and ignore late archive answers.  Closing the
 ;; mounted buffer does the same; use this with a session that has no buffer.
 ;;
-;; Function: maillist-refresh (session)
+;; Function: maillist-refresh (session &optional quiet)
 ;; Reload SESSION's thread list from its archive; the request is asynchronous
 ;; and `:status' carries `loading', `idle' or `error' while it runs.  The index
 ;; page lists recent threads only, so its rows merge into the stored list: a
-;; thread the page no longer names keeps its row and its marks.
+;; thread the page no longer names keeps its row and its marks.  QUIET keeps a
+;; background sync out of the notice area; a thread the archive added shows in
+;; the summary and in its own colour.
 ;;
 ;; Function: maillist-select (session id &optional no-mark)
 ;; Open the thread ID of SESSION, fetching its body when uncached, and return
@@ -64,6 +69,14 @@
 ;;
 ;; Function: maillist-toggle-star (session)
 ;; Star or unstar the selected row, persist the choice and return the new state.
+;;
+;; Function: maillist-set-read (session id read)
+;; Set thread ID read or unread, persist the mark and return the new state.
+;; Marking unread puts a thread back in the queue, and a sync does not undo it.
+;;
+;; Function: maillist-mark-all-read (session)
+;; Mark every row SESSION shows read in one store transaction and return how
+;; many changed.
 ;;
 ;; Function: maillist-toggle-message (session id)
 ;; Fold or unfold message ID of the open thread and return the new state.
@@ -82,6 +95,23 @@
 ;; `is:unread' or `is:starred'; `maillist-compile-query' turns it into the
 ;; archive's query and the local filters.  A query naming only local marks
 ;; filters the rows already shown and contacts nothing.
+;;
+;; Function: maillist-load-older (session)
+;; Add mail older than the rows SESSION holds.  The archive's index names only
+;; its newest page, so the next page comes from the archive's own date search,
+;; grouped by subject and capped at `maillist-older-batch'.  Each added row is
+;; a message; opening it fetches its thread.  The request is asynchronous and
+;; the notice names how many rows joined.
+;;
+;; Function: maillist-recall-query (session &optional forward)
+;; Search SESSION again with an older (FORWARD nil) or newer query from the
+;; history of what this client ran, and return the query now shown.  Past the
+;; oldest query the walk returns to the archive's own list, whose query is
+;; empty.
+;;
+;; Function: maillist-thread-url (session id)
+;; Return the archive's own page for thread ID of SESSION, the address a
+;; reader shares with someone who does not use this client.
 ;;
 ;; Function: maillist-rows (session)
 ;; Return the rows SESSION shows, in list order, honouring `:scope'.
@@ -102,6 +132,15 @@
 ;; (:id :subject :date :count :depth), newest first.  `:date' is an ISO-8601
 ;; UTC stamp and a buried sub-thread has `:depth' 1.
 ;;
+;; Function: maillist-decode-entities (text)
+;; Return TEXT with the HTML entities a public-inbox page emits, so a subject
+;; named `&amp;' reads as the character it stands for.
+;;
+;; Function: maillist-parse-search (html)
+;; Parse a public-inbox search page into message rows (:id :subject :date
+;; :author), newest first.  A search answers per message, so a row carries no
+;; `:count' or `:depth'; opening it fetches the thread the message belongs to.
+;;
 ;; Function: maillist-parse-thread (xml-text &optional fallback-subject)
 ;; Parse a public-inbox thread Atom document into
 ;; (:id :subject :participants :messages).  Each message is
@@ -120,6 +159,15 @@
 ;; Split a message body into (:id :kind :text) lines.  KIND is `body',
 ;; `blank', `quote', `patch-meta', `patch-add' or `patch-del'; PREFIX names
 ;; the message so every line keeps a stable key.
+;;
+;; Function: maillist-message-links (text)
+;; Return the web addresses of message TEXT that a reader can open, in the
+;; order they appear and without repeats.  Sentence punctuation after an
+;; address is not part of it.
+;;
+;; Function: maillist-thread-subject (subject)
+;; Return SUBJECT without the reply prefixes a thread accumulates, which is
+;; how two messages of one discussion are recognised as the same thread.
 ;;
 ;; Function: maillist-fetch-index (source callback)
 ;; Fetch SOURCE's thread list and call CALLBACK with (:ok ROWS) or (:error MSG).
@@ -143,6 +191,17 @@
 ;; local filters, because the archive does not know this reader's marks.
 ;; Return (:query REMOTE :filters (unread starred)); REMOTE is empty when TEXT
 ;; only names local filters.
+;;
+;; Function: maillist-fetch-subject (source subject callback)
+;; Fetch every message whose subject matches SUBJECT and call CALLBACK with
+;; (:ok THREAD).  The subject feed answers when a merged thread document lost
+;; messages the index announced.
+;;
+;; Function: maillist-fetch-message (source id callback)
+;; Fetch message ID alone and call CALLBACK with (:ok THREAD).
+;;
+;; Function: maillist-fetch-author (source id callback)
+;; Fetch the sender of message ID and call CALLBACK with (:ok AUTHOR).
 ;;
 ;; Function: maillist-fetch-recent (source callback)
 ;; Fetch SOURCE's newest messages and call CALLBACK with (:ok HINTS).
@@ -169,6 +228,66 @@
 ;;;###autoload (autoload 'maillist-mail-configure "maillist" nil t)
 ;; Store the SMTP application password of the sending account in auth-source.
 ;;
+;; Function: maillist-store-open ()
+;; Open the client's SQLite file and return its store, or nil without SQLite.
+;; The file is switched to WAL and an unreadable one is moved aside and
+;; rebuilt, so a reader never loses persistence silently.
+;;
+;; Function: maillist-store-close (store)
+;; Release STORE's Data Controllers.
+;;
+;; Function: maillist-store-adopt-threads (store list)
+;; Tag stored rows that carry no list name with LIST, so a store written before
+;; lists were separated keeps its threads under the archive they came from.
+;;
+;; Function: maillist-store-threads (store list)
+;; Return every stored row of LIST, newest first.
+;;
+;; Function: maillist-store-save-threads (store list rows)
+;; Write ROWS of LIST in one transaction; an empty ROWS writes nothing.
+;;
+;; Function: maillist-store-thread-messages (store id)
+;; Return the cached messages of thread ID, oldest first.
+;;
+;; Function: maillist-store-save-thread-messages (store id messages)
+;; Cache MESSAGES as thread ID in one transaction; empty MESSAGES is a no-op.
+;;
+;; Function: maillist-store-marks (store)
+;; Return the reader's marks as an alist of thread ID to (:read BOOLEAN
+;; :starred BOOLEAN).
+;;
+;; Function: maillist-store-save-mark (store id read starred)
+;; Store the whole mark of thread ID, so a toggle never clears the other flag.
+;;
+;; Function: maillist-store-save-marks (store marks)
+;; Store MARKS, a list of (ID READ STARRED), in one transaction and return how
+;; many rows it wrote.
+;;
+;; Function: maillist-store-prune (store list)
+;; Drop what LIST no longer needs: threads beyond `maillist-thread-limit' and
+;; bodies beyond `maillist-body-limit', newest kept, and return the removed
+;; counts.  Marks stay.
+;;
+;; Function: maillist-store-search-bodies (store text limit)
+;; Scan cached bodies for TEXT and return (THREAD-ID . SNIPPET) pairs, newest
+;; message first.  This answers when the archive does not.
+;;
+;; Function: maillist-store-setting (key)
+;; Return the value stored under KEY, or nil.
+;;
+;; Function: maillist-store-save-setting (key value)
+;; Store VALUE under KEY and return VALUE.
+;;
+;; Function: maillist-palette ()
+;; Return the palette derived from the active Emacs theme: surfaces, ink,
+;; muted text and the accents the views paint with.
+;;
+;; Function: maillist-color (key)
+;; Return the palette color named KEY; an unknown KEY signals `maillist-error'.
+;;
+;; Function: maillist-theme-defaults ()
+;; Return the ETAF UI token plist for the current theme.
+;;
 ;; Variable: maillist-sources
 ;; Archives the client can open; a source may name an `:index' file for a
 ;; local mirror.
@@ -176,9 +295,27 @@
 ;; Variable: maillist-default-list
 ;; Archive a new client opens, by default "emacs-devel".
 ;;
+;; Variable: maillist-auto-refresh
+;; Seconds between automatic syncs of an open client; nil syncs only on
+;; demand.  A quiet sync stays out of the notice area and reports the threads
+;; the archive added.
+;;
+;; Variable: maillist-older-batch
+;; How many older messages one `maillist-load-older' adds.
+;;
+;; Variable: maillist-local-search-limit
+;; How many cached threads a search reports when the archive cannot answer.
+;;
 ;; Variable: maillist-store-file
 ;; SQLite file holding the thread list, read and starred marks and cached
 ;; bodies.
+;;
+;; Variable: maillist-thread-limit
+;; How many threads of one list the client keeps; older rows are pruned and
+;; the archive can serve them again.
+;;
+;; Variable: maillist-body-limit
+;; How many threads keep a cached body.
 ;;
 ;; Variable: maillist-message-window
 ;; How many of the newest messages a thread shows at first.

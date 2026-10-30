@@ -666,13 +666,15 @@ must stay visible, together with the mark the reader put on it."
     (should (= 4 (length (maillist-rows session))))))
 
 (ert-deftest maillist-tests-failed-search-keeps-the-open-thread ()
-  "A search the archive cannot answer reports and leaves the reader alone."
+  "A search neither the archive nor the cache can answer leaves the reader alone.
+The query names nothing the cached bodies hold, so the fallback has nothing to
+show and the failure is reported instead of emptying the reader."
   (maillist-tests--with-session session
     (maillist-refresh session)
     (maillist-tests--wait session)
     (maillist-select session "alpha@example.com")
     (maillist-tests--open session)
-    (maillist-search session "widget")
+    (maillist-search session "term-the-cache-never-saw")
     (let ((status (maillist-tests--wait session)))
       (should (eq 'error (plist-get status :kind))))
     (should (equal "alpha@example.com"
@@ -776,6 +778,482 @@ must stay visible, together with the mark the reader put on it."
         (with-current-buffer buffer (maillist-close)))
       (should-not (buffer-live-p buffer))
       (ignore-errors (delete-file file)))))
+
+
+;;; ---------------------------------------------------------------------------
+;;; Search pages, older mail, marks, retention
+;;; ---------------------------------------------------------------------------
+
+(defun maillist-tests--older-page (rows)
+  "Return a search page naming ROWS as (ID SUBJECT DATE AUTHOR) lists."
+  (concat
+   "<html><body><form action=\"./\"><pre><a\nhref=\"?t=20261020220657\"><b>fixture</b></a></pre></form><pre>"
+   (mapconcat
+    (lambda (row)
+      (format "     %d. <b><a\nhref=\"%s/\">%s</a></b>\n        - by %s @ %s UTC [99%%]\n\n"
+              (1+ (cl-position row rows :test #'equal))
+              (nth 0 row) (nth 1 row) (nth 3 row) (nth 2 row)))
+    rows
+    "")
+   "</pre></body></html>"))
+
+(ert-deftest maillist-tests-parse-search-reads-message-rows ()
+  "A search page yields message rows, not thread rows.
+The archive answers a query with the messages that matched, in markup the
+index page does not share."
+  (let* ((page (maillist-tests--read "search.html"))
+         (rows (maillist-parse-search page))
+         (first (car rows)))
+    (should (= 8 (length rows)))
+    (should (equal "87ik2wrpq7.fsf@posteo.net" (plist-get first :id)))
+    (should (string-match-p "clutch" (plist-get first :subject)))
+    (should (equal "2026-10-20T22:06:00Z" (plist-get first :date)))
+    (should (equal "Philip Kaludercic" (plist-get first :author)))
+    (should-not (plist-get first :count))
+    ;; The same page is not a thread index, which is why the search parser is
+    ;; a separate reader instead of a mode of the index parser.
+    (should (zerop (length (maillist-parse-index page))))
+    (should (string-match-p
+             "The Kitty Keyboard Protocol and C-g"
+             (mapconcat (lambda (row) (plist-get row :subject)) rows " ")))))
+
+(ert-deftest maillist-tests-search-fetch-reads-the-archive-answer ()
+  "A search request reads the answer with the search parser."
+  (let* ((server (maillist-tests--server
+                  (lambda (process chunk)
+                    (maillist-tests--answer-with
+                     process chunk (maillist-tests--read-literal "search.html")))))
+         (maillist-network-route 'direct)
+         (url-proxy-services nil)
+         (source (list :name "search"
+                       :base (format "http://127.0.0.1:%d/" (car server))
+                       :address "search@example.org")))
+    (unwind-protect
+        (let ((answer (maillist-tests--answer
+                       (lambda (callback)
+                         (maillist-fetch-search source "widget" callback)))))
+          (should (eq :ok (car answer)))
+          (should (= 8 (length (cadr answer))))
+          (should (equal "Re: [ELPA] New package: emacs-reader"
+                         (plist-get (cadr (cadr answer)) :subject))))
+      (delete-process (cdr server)))))
+
+(ert-deftest maillist-tests-search-falls-back-to-cached-bodies ()
+  "A search the archive cannot answer reports from the cached bodies.
+The archive is down, so the reader still finds the thread whose body the
+client cached, and the row says which text matched."
+  (maillist-tests--with-session session
+    (maillist-refresh session)
+    (maillist-tests--wait session)
+    (maillist-select session "alpha@example.com")
+    (maillist-tests--open session)
+    (should (equal "alpha@example.com"
+                   (plist-get (etaf-value (plist-get session :open)) :id)))
+    (let ((dead (maillist-tests--closed-port)))
+      (plist-put (plist-get session :source) :base
+                 (format "http://127.0.0.1:%d/" dead))
+      (let ((maillist-network-route 'direct)
+            (url-proxy-services nil))
+        (maillist-search session "widget-threshold")
+        (let ((status (maillist-tests--wait session)))
+          (should (eq 'idle (plist-get status :kind))))
+        (let ((rows (maillist-rows session)))
+          (should (= 1 (length rows)))
+          (should (equal "alpha@example.com" (plist-get (car rows) :id)))
+          (should (string-match-p "widget-threshold" (plist-get (car rows) :snippet))))
+        (let ((toast (etaf-value (plist-get session :toast))))
+          (should (string-match-p "本地缓存" (plist-get toast :text))))))))
+
+(ert-deftest maillist-tests-unread-mark-survives-a-sync ()
+  "Marking a thread unread survives the next sync and the next start.
+Read state lives in the mark table, so the index page cannot undo it."
+  (maillist-tests--with-session session
+    (maillist-refresh session)
+    (maillist-tests--wait session)
+    (maillist-select session "alpha@example.com")
+    (maillist-tests--open session)
+    (should-not (plist-get (maillist-row session "alpha@example.com") :unread))
+    (should-not (maillist-set-read session "alpha@example.com" nil))
+    (should (plist-get (maillist-row session "alpha@example.com") :unread))
+    (maillist-refresh session)
+    (maillist-tests--wait session)
+    (should (plist-get (maillist-row session "alpha@example.com") :unread)))
+  ;; A fresh session reads the mark from the store.
+  (let* ((file (maillist-tests--store))
+         (maillist-store-file file)
+         (maillist-sources (list (maillist-tests--source)))
+         (maillist-prefetch-threads 0)
+         (first (maillist-create :list "fixture")))
+    (unwind-protect
+        (progn
+          (maillist-refresh first)
+          (maillist-tests--wait first)
+          (maillist-set-read first "beta@example.com" nil)
+          (maillist-dispose first)
+          (let ((second (maillist-create :list "fixture")))
+            (unwind-protect
+                (should (plist-get (maillist-row second "beta@example.com") :unread))
+              (maillist-dispose second))))
+      (ignore-errors (delete-file file)))))
+
+(ert-deftest maillist-tests-mark-all-read-covers-the-shown-rows ()
+  "Marking all read covers the scope the reader sees, and says how many.
+A scope other than the whole list is what the command applies to."
+  (maillist-tests--with-session session
+    (maillist-refresh session)
+    (maillist-tests--wait session)
+    (maillist-select session "gamma@example.com")
+    (maillist-tests--open session)
+    (maillist-set-scope session 'unread)
+    ;; The open thread stays in view under a scope, so the rows are not all
+    ;; unread: what the command reports is the unread ones it changed.
+    (let* ((shown (maillist-rows session))
+           (before (seq-count (lambda (row) (plist-get row :unread)) shown)))
+      (should (> before 0))
+      (should (= before (maillist-mark-all-read session)))
+      (should-not (seq-find (lambda (row) (plist-get row :unread))
+                            (etaf-value (plist-get session :threads)))))
+    ;; Nothing is unread now, so the command reports zero and changes nothing.
+    (should (zerop (maillist-mark-all-read session)))
+    (should-not (seq-find (lambda (row) (plist-get row :unread))
+                          (etaf-value (plist-get session :threads))))))
+
+(ert-deftest maillist-tests-older-mail-joins-the-list ()
+  "The next page of mail comes from the archive's date search.
+A search answers per message, so one discussion must not fill the list, and a
+message the list already holds must not appear twice."
+  (let* ((older (maillist-tests--older-page
+                 '(("old-root@example.com" "Old discussion" "2026-10-01 08:00"
+                    "Old Sender")
+                   ("old-reply@example.com" "Re: Old discussion"
+                    "2026-10-01 09:30" "Other Sender")
+                   ("another@example.com" "Another old thread" "2026-09-28 12:00"
+                    "Third Sender")
+                   ("gamma@example.com" "Question about quoting replies"
+                    "2026-10-10 09:00" "Gamma Sender")
+                   ("too-new@example.com" "Newer than the list" "2026-10-22 09:00"
+                    "Late Sender"))))
+         (server (maillist-tests--server
+                  (lambda (process chunk)
+                    (maillist-tests--answer-with process chunk older)))))
+    (unwind-protect
+        (maillist-tests--with-session session
+          (maillist-refresh session)
+          (maillist-tests--wait session)
+          (should (= 4 (length (maillist-rows session))))
+          (plist-put (plist-get session :source) :base
+                     (format "http://127.0.0.1:%d/" (car server)))
+          (let ((maillist-network-route 'direct)
+                (url-proxy-services nil))
+            (maillist-load-older session)
+            (maillist-tests--wait session)
+            (let* ((rows (maillist-rows session))
+                   (ids (mapcar (lambda (row) (plist-get row :id)) rows)))
+              (should (= 6 (length rows)))
+              ;; The newest of the discussion stands in for it, and the list
+              ;; stays newest first.
+              (should (equal "old-reply@example.com" (nth 4 ids)))
+              (should (equal "another@example.com" (nth 5 ids)))
+              (should (plist-get (nth 4 rows) :unread))
+              (should-not (plist-get (nth 4 rows) :new))
+              (should-not (cl-find "too-new@example.com" ids :test #'equal))
+              (should-not (cl-find "old-root@example.com" ids :test #'equal))
+              (should (= 1 (cl-count "old discussion" rows
+                                     :key (lambda (row)
+                                            (downcase
+                                             (maillist-thread-subject
+                                              (plist-get row :subject))))
+                                     :test #'equal)))))
+          (let ((toast (etaf-value (plist-get session :toast))))
+            (should (string-match-p "2 封更早" (plist-get toast :text)))))
+      (delete-process (cdr server)))))
+
+
+(defun maillist-tests--literal (path)
+  "Return the file at PATH as unibyte text."
+  (with-temp-buffer
+    (set-buffer-multibyte nil)
+    (insert-file-contents-literally path)
+    (buffer-string)))
+
+(defvar maillist-tests--requests 0
+  "Requests the fixture server answered in the current scenario.")
+
+(defun maillist-tests--archive-server (requests)
+  "Answer the fixture archive on every path and record each request.
+REQUESTS is a symbol whose value counts the requests answered; the count is
+what a sync or a refresh does to the network."
+  (maillist-tests--server
+   (lambda (process chunk)
+     (let ((request (concat (or (process-get process :request) "") chunk)))
+       (process-put process :request request)
+       (when (string-match-p "\r\n\r\n" request)
+         (set requests (1+ (symbol-value requests)))
+         (let* ((line (car (split-string request "\r\n")))
+                (target (nth 1 (split-string line " ")))
+                (path (url-unhex-string (or target "/")))
+                (file (cond ((string-match "/t\\.atom\\'" path)
+                             (expand-file-name
+                              (concat (car (split-string path "/" 'omit-nulls))
+                                      "/t.atom")
+                              maillist-tests--fixtures))
+                            ((string-match-p "raw\\'" path) nil)
+                            (t (expand-file-name "index.html"
+                                                 maillist-tests--fixtures)))))
+           (if (and file (file-exists-p file))
+               (maillist-tests--answer-with process "" (maillist-tests--literal file))
+             (maillist-tests--answer-with process "" "" "404 Not Found"))))))))
+
+;;; ---------------------------------------------------------------------------
+;;; Storage and continuous reading
+;;; ---------------------------------------------------------------------------
+
+(ert-deftest maillist-tests-store-answers-while-another-writer-holds-the-file ()
+  "A reader answers while another connection is mid-write.
+The file is in WAL mode, so a second Emacs that is saving a list does not
+block the one that is reading or searching."
+  (let* ((file (maillist-tests--store))
+         (maillist-store-file file)
+         (store (maillist-store-open)))
+    (unwind-protect
+        (let ((other (sqlite-open file)))
+          (unwind-protect
+              (progn
+                (should (equal "wal"
+                               (caar (sqlite-select other "PRAGMA journal_mode"))))
+                (sqlite-execute other "PRAGMA busy_timeout = 5000")
+                (sqlite-execute other "BEGIN IMMEDIATE")
+                (sqlite-execute other
+                                "INSERT INTO marks (id, read, starred)
+                                 VALUES ('held@example.com', 1, 0)")
+                ;; The store still reads: a `delete' journal would answer
+                ;; `database is locked' here instead of the marks.
+                (should (listp (maillist-store-marks store)))
+                (should (listp (maillist-store-threads store "fixture")))
+                (sqlite-execute other "COMMIT")
+                (should (assoc "held@example.com" (maillist-store-marks store))))
+            (ignore-errors (sqlite-close other))))
+      (maillist-store-close store)
+      (ignore-errors (delete-file file)))))
+
+(ert-deftest maillist-tests-store-prune-keeps-the-newest-rows-and-the-marks ()
+  "Retention keeps the newest rows, drops the bodies of the rest and keeps marks.
+The cache is rebuildable, so pruning it is safe; the reader's own read and
+starred state is not, so it survives a prune of the thread it belongs to."
+  (maillist-tests--with-session session
+    (maillist-refresh session)
+    (maillist-tests--wait session)
+    (maillist-select session "alpha@example.com")
+    (maillist-tests--open session)
+    (maillist-select session "gamma@example.com")
+    (maillist-tests--open session)
+    (should (maillist-store-thread-messages (plist-get session :store)
+                                            "gamma@example.com"))
+    (let ((store (plist-get session :store))
+          (before-rows (mapcar (lambda (row) (plist-get row :id))
+                               (maillist-rows session)))
+          (maillist-thread-limit 2)
+          (maillist-body-limit 1))
+      (let ((kept (maillist-store-prune store "fixture")))
+        (should (= 2 (plist-get kept :threads))))
+      (let* ((rows (maillist-store-threads store "fixture"))
+             (ids (mapcar (lambda (row) (plist-get row :id)) rows))
+             (newest (seq-take (sort before-rows
+                                     (lambda (a b)
+                                       (string> (plist-get (maillist-row session a) :date)
+                                                (plist-get (maillist-row session b) :date))))
+                               2)))
+        (should (= 2 (length rows)))
+        (should (equal (sort newest #'string<) (sort ids #'string<)))
+        ;; The newest thread keeps its body; the pruned one loses it.
+        (should (maillist-store-thread-messages store "alpha@example.com"))
+        (should-not (maillist-store-thread-messages store "gamma@example.com")))
+      ;; A mark outlives the row it marks: the archive can serve the thread
+      ;; again, and the reader's state comes back with it.
+      (should (plist-get (cdr (assoc "gamma@example.com"
+                                    (maillist-store-marks store)))
+                         :read)))))
+
+(ert-deftest maillist-tests-store-settings-round-trip ()
+  "A stored setting reads back, and a second write replaces it."
+  (let* ((file (maillist-tests--store))
+         (maillist-store-file file)
+         (store (maillist-store-open)))
+    (unwind-protect
+        (progn
+          (should-not (maillist-store-setting "last-list"))
+          (should (equal "emacs-user" (maillist-store-save-setting "last-list" "emacs-user")))
+          (should (equal "emacs-user" (maillist-store-setting "last-list")))
+          (maillist-store-save-setting "last-list" "emacs-bugs")
+          (should (equal "emacs-bugs" (maillist-store-setting "last-list"))))
+      (maillist-store-close store)
+      (ignore-errors (delete-file file)))))
+
+(ert-deftest maillist-tests-open-remembers-the-archive ()
+  "A client started without a list opens the one it opened last."
+  (let* ((file (maillist-tests--store))
+         (maillist-store-file file)
+         (maillist-prefetch-threads 0)
+         (first (list :name "first" :base "file:///tmp/nowhere/"
+                      :address "first@example.org"))
+         (second (list :name "second" :base "file:///tmp/nowhere/"
+                       :address "second@example.org")))
+    (unwind-protect
+        (progn
+          (let ((maillist-sources (list first second)))
+            (let ((session (maillist-create :list "second")))
+              (maillist-dispose session)))
+          (let ((maillist-sources (list first second)))
+            (let ((session (maillist-create)))
+              (unwind-protect
+                  (should (equal "second"
+                                 (plist-get (plist-get session :source) :name)))
+                (maillist-dispose session)))))
+      (ignore-errors (delete-file file)))))
+
+(ert-deftest maillist-tests-cached-body-search-names-the-match ()
+  "Cached bodies answer a search with the thread and the text that matched."
+  (maillist-tests--with-session session
+    (maillist-refresh session)
+    (maillist-tests--wait session)
+    ;; A refresh opens its first row, so the newest thread is cached already;
+    ;; a term no body holds still finds nothing.
+    (should-not (maillist-store-search-bodies
+                 (plist-get session :store) "term-no-body-holds" 10))
+    (maillist-select session "alpha@example.com")
+    (maillist-tests--open session)
+    (let* ((store (plist-get session :store))
+           (hits (maillist-store-search-bodies store "widget-threshold" 10)))
+      (should (= 1 (length hits)))
+      (should (equal "alpha@example.com" (car (car hits))))
+      (should (string-match-p "widget-threshold" (cdr (car hits))))
+      (should-not (maillist-store-search-bodies store "" 10)))))
+
+(ert-deftest maillist-tests-message-links-lists-addresses-in-order ()
+  "A message body yields the addresses a reader can open, without repeats."
+  (should (equal '("https://example.org/a" "http://example.net/b?x=1")
+                 (maillist-message-links
+                  "See https://example.org/a. Also <http://example.net/b?x=1>, and https://example.org/a again.")))
+  (should (equal '("https://example.org/patch")
+                 (maillist-message-links
+                  "Patch: https://example.org/patch)")))
+  (should-not (maillist-message-links "No links here, only mail@example.org.")))
+
+(ert-deftest maillist-tests-displayed-links-follow-the-message ()
+  "An open thread carries the addresses its messages mention.
+The reader acts on them from the same value the body renders from."
+  (maillist-tests--with-session session
+    (maillist-refresh session)
+    (maillist-tests--wait session)
+    (maillist-select session "alpha@example.com")
+    (let* ((open (maillist-tests--open session))
+           (links (mapcar (lambda (message) (plist-get message :links))
+                          (plist-get open :messages))))
+      (should (seq-some #'identity links))
+      (should (cl-every (lambda (link) (string-prefix-p "http" link))
+                        (seq-mapcat #'identity links))))))
+
+(ert-deftest maillist-tests-open-client-syncs-on-a-schedule ()
+  "An open client syncs every `maillist-auto-refresh' seconds.
+The timer belongs to the session: closing the client stops asking the archive."
+  (let* ((file (maillist-tests--store))
+         (maillist-store-file file)
+         (maillist-auto-refresh 0.3)
+         (maillist-prefetch-threads 0)
+         (maillist-network-route 'direct)
+         (url-proxy-services nil)
+         (server (maillist-tests--archive-server 'maillist-tests--requests))
+         (maillist-sources (list (list :name "fixture"
+                                       :base (format "http://127.0.0.1:%d/"
+                                                     (car server))
+                                       :address "fixture@example.org")))
+         (buffer nil))
+    (unwind-protect
+        (progn
+          (setq maillist-tests--requests 0)
+          (setq buffer (maillist-open :sync t :list "fixture"))
+          ;; Wait for the first sync the open itself starts.
+          (let ((tries 0))
+            (while (and (< tries 120) (zerop maillist-tests--requests))
+              (sleep-for 0.05)
+              (setq tries (1+ tries))))
+          (let ((first maillist-tests--requests))
+            (should (>= first 1))
+            ;; One idle period later the client asked again, without the
+            ;; reader pressing anything.
+            (sleep-for 1.2)
+            (should (> maillist-tests--requests first))
+            (with-current-buffer buffer (maillist-close))
+            (let ((closed maillist-tests--requests))
+              (sleep-for 0.8)
+              (should (= closed maillist-tests--requests)))))
+      (when (buffer-live-p buffer)
+        (with-current-buffer buffer (maillist-close)))
+      (delete-process (cdr server))
+      (ignore-errors (delete-file file)))))
+
+(ert-deftest maillist-tests-recall-query-walks-the-history ()
+  "The history walk returns the queries the client ran, newest first.
+Past the oldest query it comes back to the archive's own list, and the walk
+does not repeat a query the reader already ran."
+  (maillist-tests--with-session session
+    (maillist-search session "is:unread")
+    (maillist-search session "is:starred")
+    (should (equal '("is:starred" "is:unread")
+                   (plist-get session :query-history)))
+    ;; The newest query is the one on screen, so the walk starts before it.
+    (should (equal "is:unread" (maillist-recall-query session)))
+    (should (equal "" (maillist-recall-query session)))
+    ;; Past the oldest query the reader is back on the list; the next walk
+    ;; starts again at the newest query.
+    (should (equal "is:starred" (maillist-recall-query session)))
+    (should (equal "" (maillist-recall-query session t)))))
+
+(ert-deftest maillist-tests-thread-url-is-the-archive-page ()
+  "A thread's shareable address is the archive's own page for it."
+  (maillist-tests--with-session session
+    (should (equal (concat "file://" maillist-tests--fixtures "/alpha@example.com/")
+                   (maillist-thread-url session "alpha@example.com")))))
+
+(ert-deftest maillist-tests-first-sync-marks-nothing-new ()
+  "The sync that establishes the list reports no new thread.
+A thread the archive names for the first time is new only to a client that
+already had a list; otherwise a fresh start would call the whole archive new."
+  (maillist-tests--with-session session
+    (maillist-refresh session)
+    (maillist-tests--wait session)
+    (should (= 4 (length (maillist-rows session))))
+    (should-not (seq-find (lambda (row) (plist-get row :new))
+                          (maillist-rows session)))
+    ;; A later page that names a thread the client does not hold marks it.
+    (plist-put (plist-get session :source) :index "index-added.html")
+    (maillist-refresh session)
+    (maillist-tests--wait session)
+    (let ((new-row (maillist-row session "newcomer@example.com")))
+      (should new-row)
+      (should (plist-get new-row :new))
+      (should-not (plist-get (maillist-row session "alpha@example.com") :new))
+      (should (string-match-p "1 新"
+                              (etaf-value (plist-get session :summary)))))))
+
+(ert-deftest maillist-tests-file-archive-does-not-use-the-proxy ()
+  "A `file:' archive is read directly even when the route pins the proxy.
+A local mirror has no network path, so asking a proxy would only fail."
+  (let* ((proxy (maillist-tests--server #'maillist-tests--proxy-answer))
+         (maillist-tests--proxy-body (maillist-tests--read-literal "index.html"))
+         (maillist-tests--proxy-hits 0)
+         (maillist-proxy (format "127.0.0.1:%d" (car proxy)))
+         (maillist-network-route 'proxy)
+         (url-proxy-services nil)
+         (source (maillist-tests--source)))
+    (unwind-protect
+        (let ((answer (maillist-tests--answer
+                       (lambda (callback)
+                         (maillist-fetch-index source callback)))))
+          (should (eq :ok (car answer)))
+          (should (= 4 (length (cadr answer))))
+          (should (zerop maillist-tests--proxy-hits)))
+      (delete-process (cdr proxy)))))
 
 (provide 'maillist-tests)
 ;;; maillist-tests.el ends here

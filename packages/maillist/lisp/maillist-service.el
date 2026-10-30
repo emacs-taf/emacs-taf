@@ -149,8 +149,9 @@ NAME defaults to the first known archive; an unknown name is an error."
               (buffer-substring-no-properties (line-beginning-position) next-end)))))
 
 (defun maillist-parse-index (html)
-  "Parse a public-inbox index page into thread rows.
-Each row is (:id :subject :date :count :depth), newest first.  A buried
+  "Parse a public-inbox index page HTML into thread rows.
+Each row carries `:id', `:subject', `:date', `:count' and `:depth', newest
+first.  A buried
 sub-thread is marked with `:depth' 1 and keeps the archive's own subject."
   (let ((rows '()) (seen (make-hash-table :test #'equal)) (last-date nil))
     (with-temp-buffer
@@ -185,6 +186,50 @@ sub-thread is marked with `:depth' 1 and keeps the archive's own subject."
     (nreverse rows)))
 
 ;;; ---------------------------------------------------------------------------
+;;; Search results
+;;; ---------------------------------------------------------------------------
+
+(defconst maillist--search-row
+  (concat "<b><a[ \t\n]*href=\"\\([^\"]+\\)\"[^>]*>\\([^<]*\\)</a></b>"
+          "\\([ \t\n]*- by \\([^\n]*?\\) @ \\([0-9][0-9-]* [0-9][0-9:]* UTC\\)\\)?")
+  "One result of a public-inbox search page.
+The page lists messages, each as a permalink plus a `- by AUTHOR @ DATE UTC'
+line; the index page lists threads and looks nothing like it.")
+
+(defun maillist--search-stamp (stamp)
+  "Return STAMP of a search result as an ISO-8601 UTC timestamp, or nil."
+  (when (and (stringp stamp)
+             (string-match
+              "\\`\\([0-9]\\{4\\}-[0-9][0-9]-[0-9][0-9]\\) \\([0-9][0-9]:[0-9][0-9]\\) UTC"
+              stamp))
+    (format "%sT%s:00Z" (match-string 1 stamp) (match-string 2 stamp))))
+
+(defun maillist-parse-search (html)
+  "Parse a public-inbox search page HTML into message rows.
+Each row carries `:id', `:subject', `:date' and `:author', newest first; the
+archive answers a query with the messages that matched, not with threads, so a
+row carries no `:count' or `:depth'.  Opening a row asks the archive for that
+message's thread, which public-inbox serves from any message of it."
+  (let ((rows '()) (seen (make-hash-table :test #'equal)))
+    (with-temp-buffer
+      (insert (or html ""))
+      (goto-char (point-min))
+      (while (re-search-forward maillist--search-row nil t)
+        (let* ((id (file-name-nondirectory
+                    (directory-file-name (match-string 1))))
+               (subject (maillist-decode-entities
+                         (string-trim (match-string 2))))
+               (author (maillist-decode-entities
+                        (string-trim (or (match-string 4) ""))))
+               (date (maillist--search-stamp (match-string 5))))
+          (unless (or (string-empty-p id) (string-empty-p subject)
+                      (gethash id seen))
+            (puthash id t seen)
+            (push (list :id id :subject subject :date date :author author)
+                  rows)))))
+    (nreverse rows)))
+
+;;; ---------------------------------------------------------------------------
 ;;; Thread Atom
 ;;; ---------------------------------------------------------------------------
 
@@ -208,6 +253,19 @@ sub-thread is marked with `:depth' 1 and keeps the archive's own subject."
   "Return the message id named by HREF, or nil."
   (when (and (stringp href) (not (string-empty-p href)))
     (file-name-nondirectory (directory-file-name href))))
+
+(defun maillist-message-links (text)
+  "Return the web addresses a reader can act on from message TEXT.
+Trailing punctuation and the quote marker are not part of an address: a
+sentence that ends after a URL must still open the URL.  The result keeps
+the order the message mentions them, without repeats."
+  (let ((links '()) (start 0))
+    (while (string-match "https?://[^ \t\n\r\"'`<>|]+" text start)
+      (let ((link (string-trim-right (match-string 0 text) "[][.,;:!?)}]+")))
+        (setq start (match-end 0))
+        (when (and (> (length link) 8) (not (member link links)))
+          (setq links (append links (list link))))))
+    links))
 
 (defun maillist-classify-lines (text &optional prefix)
   "Split message TEXT into (:id :kind :text) lines.
@@ -241,10 +299,10 @@ their `>' depth as `quote', a diff hunk becomes `patch-meta', `patch-add' or
     (if parent (1+ (or (gethash parent parents) 0)) 0)))
 
 (defun maillist-parse-thread (xml-text &optional fallback-subject)
-  "Parse a public-inbox thread Atom document into a thread plist.
-FALLBACK-SUBJECT names the thread when the feed does not.  The result is
-(:id :subject :participants :messages); each message carries its raw `:text'
-so it can be cached and classified again on load."
+  "Parse a public-inbox thread Atom document XML-TEXT into a thread plist.
+FALLBACK-SUBJECT names the thread when the feed does not.  The result carries
+`:id', `:subject', `:participants' and `:messages'; each message keeps its
+raw `:text' so it can be cached and classified again on load."
   (let* ((entries (with-temp-buffer
                     (insert (or xml-text ""))
                     (let ((xml (condition-case nil
@@ -297,7 +355,7 @@ so it can be cached and classified again on load."
           :messages messages)))
 
 (defun maillist-parse-recent (xml-text)
-  "Parse a public-inbox new-messages feed into (MESSAGE-ID . AUTHOR) hints.
+  "Parse a public-inbox new-messages feed XML-TEXT into (MESSAGE-ID . AUTHOR).
 The feed names the sender of the newest messages only, which is enough to fill
 the author column before a thread is opened."
   (let* ((entries (with-temp-buffer
@@ -425,19 +483,22 @@ shadows an inherited bypass and keeps url.el from adding one.")
                    (maillist--env-proxy-services))))
     (cons maillist--no-bypass services)))
 
-(defun maillist--route-list (&optional route)
-  "Return the network routes to try for ROUTE, in order.
+(defun maillist--route-list (url &optional route)
+  "Return the network routes to try for URL, in order.
 ROUTE is `direct', `proxy' or nil, which means `maillist-network-route'.  The
 configured route leads and the other one follows, because an archive reachable
 one way must not stay unreachable while the endpoint of the other way is down.
 `direct' alone is one route: a reader who asks for it does not want the traffic
-sent around a proxy.  A proxy route is kept only while a proxy is known."
+sent around a proxy.  A proxy route is kept only while a proxy is known, and a
+`file:' archive has no proxy route at all."
   (let ((choice (or route maillist-network-route))
         (proxy (maillist--proxy-services)))
-    (pcase choice
-      ('direct '(direct))
-      ('proxy (if proxy '(proxy direct) '(direct)))
-      (_ (if proxy '(direct proxy) '(direct))))))
+    (if (string-prefix-p "file:" (or url ""))
+        '(direct)
+      (pcase choice
+        ('direct '(direct))
+        ('proxy (if proxy '(proxy direct) '(direct)))
+        (_ (if proxy '(direct proxy) '(direct)))))))
 
 (defun maillist--route-label (route)
   "Return ROUTE as the noun a failure message names."
@@ -483,7 +544,7 @@ Only the first completion is delivered: a timeout or a killed buffer after
 the response never calls CALLBACK twice.  ROUTE is `direct', `proxy' or nil,
 which means the configured route; the routes `maillist--route-list' returns
 for it are tried in order."
-  (maillist--attempt url callback (maillist--route-list route) nil))
+  (maillist--attempt url callback (maillist--route-list url route) nil))
 
 (defun maillist--attempt (url callback routes failures)
   "Fetch URL through the first of ROUTES and hand the result to CALLBACK.
@@ -618,7 +679,7 @@ SUBJECT names the thread when its feed does not."
     text))
 
 (defun maillist-fetch-subject (source subject callback)
-  "Fetch every message whose subject matches SUBJECT.
+  "Fetch from SOURCE every message whose subject matches SUBJECT.
 A merged or truncated thread document can lose the messages the index
 announced; the subject feed still answers with them."
   (maillist--on-body
@@ -630,7 +691,7 @@ announced; the subject feed still answers with them."
    callback #'maillist-parse-thread))
 
 (defun maillist-fetch-message (source id callback)
-  "Fetch message ID alone and call CALLBACK with (:ok THREAD).
+  "Fetch message ID of SOURCE alone and call CALLBACK with (:ok THREAD).
 The search Atom feed answers with one entry, so this is a few kilobytes even
 when the whole thread is huge; it lets the newest mail show while the rest
 downloads."
@@ -639,7 +700,7 @@ downloads."
    callback #'maillist-parse-thread))
 
 (defun maillist-fetch-author (source id callback)
-  "Fetch the sender of message ID and call CALLBACK with (:ok AUTHOR)."
+  "Fetch the sender of message ID from SOURCE and call CALLBACK with (:ok AUTHOR)."
   (maillist--on-body (maillist--url source (concat id "/raw"))
                      callback #'maillist-parse-author))
 
@@ -651,9 +712,10 @@ downloads."
 (defun maillist-fetch-search (source query callback)
   "Search SOURCE for QUERY and call CALLBACK with (:ok ROWS).
 QUERY is the archive's own syntax, which `maillist-compile-query' builds
-from what the reader types."
+from what the reader types; ROWS are the messages that matched, as
+`maillist-parse-search' reads them."
   (maillist--on-body (maillist--url source (concat "?q=" (url-hexify-string query)))
-                     callback #'maillist-parse-index))
+                     callback #'maillist-parse-search))
 
 ;;; ---------------------------------------------------------------------------
 ;;; Query syntax

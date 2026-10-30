@@ -15,6 +15,11 @@
 ;; and write through the functions below and never touch SQL.  Batches are
 ;; written in one transaction, so a refresh never rewrites the file per row.
 ;;
+;; The typed controllers answer equality queries only.  Retention deletes, a
+;; cached-body search and the file's own settings need range predicates and
+;; DDL, so those statements run on a connection this file opens itself; both
+;; paths address the same schema, and WAL lets them overlap with a reader.
+;;
 ;; The cache is rebuildable.  When an older file cannot be read with the
 ;; current columns, opening rebuilds it instead of leaving the client with no
 ;; persistence at all.
@@ -34,6 +39,42 @@
   "SQLite file holding the client's threads and cached bodies."
   :type 'file
   :group 'maillist)
+
+(defcustom maillist-thread-limit 2000
+  "How many threads of one list the client keeps.
+The thread list merges every sync into the stored rows, so without a limit it
+would grow with every page the archive ever showed.  A prune keeps the newest
+rows and their marks; the archive can serve an older thread again."
+  :type 'integer
+  :group 'maillist)
+
+(defcustom maillist-body-limit 400
+  "How many threads keep a cached body.
+Bodies are the bulk of the file.  The newest bodies stay, so a restart still
+shows the conversations a reader is following without downloading them again."
+  :type 'integer
+  :group 'maillist)
+
+(defconst maillist--settings-table
+  "CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)"
+  "Settings table created beside the typed tables.")
+
+(defun maillist--sqlite-available-p ()
+  "Return non-nil when this Emacs can open SQLite databases."
+  (and (fboundp 'sqlite-available-p) (sqlite-available-p)))
+
+(defmacro maillist--with-connection (&rest body)
+  "Run BODY with a connection to the store file bound as `connection'.
+The connection waits for a writer instead of failing at once, so two Emacs
+instances can prune or search while the other one saves a list."
+  (declare (indent 0) (debug t))
+  `(when (maillist--sqlite-available-p)
+     (let ((connection (sqlite-open maillist-store-file)))
+       (unwind-protect
+           (progn
+             (sqlite-execute connection "PRAGMA busy_timeout = 5000")
+             ,@body)
+         (sqlite-close connection)))))
 
 (cl-defstruct (maillist-store (:constructor maillist--store-create))
   "Open storage of the client: three databases and two controllers.
@@ -136,16 +177,107 @@ rebuild drops the marks stored in the old one."
       (progn
         (when-let* ((directory (file-name-directory maillist-store-file)))
           (make-directory directory t))
+        (maillist--prepare-file)
         (maillist--open-tables nil))
     (etaf-sqlite-schema-error
      (let ((backup (maillist--retire-cache)))
        (condition-case nil
-           (maillist--open-tables backup)
+           (progn (maillist--prepare-file)
+                  (maillist--open-tables backup))
          (error nil))))
     (error nil)))
 
+(defun maillist--prepare-file ()
+  "Set the store file up for concurrent use and return its journal mode.
+WAL is a property of the file, so one statement here covers every later
+connection, including the short ones the controllers open."
+  (maillist--with-connection
+    (sqlite-execute connection maillist--settings-table)
+    (car (car (sqlite-select connection "PRAGMA journal_mode = wal")))))
+
+(defun maillist-store-setting (key)
+  "Return the stored setting KEY, or nil."
+  (maillist--with-connection
+    (car (car (sqlite-select connection
+                             "SELECT value FROM settings WHERE key = ?"
+                             (list key))))))
+
+(defun maillist-store-save-setting (key value)
+  "Store VALUE as setting KEY and return VALUE."
+  (maillist--with-connection
+    (sqlite-execute connection
+                    "INSERT INTO settings (key, value) VALUES (?, ?)
+                     ON CONFLICT (key) DO UPDATE SET value = excluded.value"
+                    (list key value)))
+  value)
+
+(defun maillist-store-save-marks (store marks)
+  "Store MARKS of STORE in one transaction; return how many rows it wrote.
+MARKS is a list of (ID READ STARRED).  One transaction per command keeps a
+range-wide mark off the file's write path for each row."
+  (when (and store marks)
+    (maillist--with-connection
+      (sqlite-execute connection "BEGIN IMMEDIATE")
+      (condition-case err
+          (progn
+            (dolist (mark marks)
+              (sqlite-execute
+               connection
+               "INSERT INTO marks (id, read, starred) VALUES (?, ?, ?)
+                ON CONFLICT (id) DO UPDATE SET read = excluded.read,
+                                              starred = excluded.starred"
+               (list (nth 0 mark) (if (nth 1 mark) 1 0) (if (nth 2 mark) 1 0))))
+            (sqlite-execute connection "COMMIT")
+            (length marks))
+        (error (sqlite-execute connection "ROLLBACK")
+               (signal (car err) (cdr err)))))))
+
+(defun maillist-store-prune (store list)
+  "Drop what LIST no longer needs from STORE and return the removed row counts.
+Rows beyond `maillist-thread-limit' and bodies beyond `maillist-body-limit' go,
+newest kept, together with the bodies of threads no longer stored.  The marks
+stay: a pruned thread that comes back keeps the reader's state."
+  (when store
+    (maillist--with-connection
+      (let* ((threads (sqlite-execute
+                       connection
+                       "DELETE FROM threads WHERE list_name = ? AND id NOT IN
+                          (SELECT id FROM threads WHERE list_name = ?
+                           ORDER BY date DESC LIMIT ?)"
+                       (list list list maillist-thread-limit)))
+             ;; Bodies of threads that are not among the newest kept ones go,
+             ;; including the bodies of threads this prune just removed.
+             (bodies (sqlite-execute
+                      connection
+                      "DELETE FROM messages WHERE thread NOT IN
+                         (SELECT id FROM threads ORDER BY date DESC LIMIT ?)"
+                      (list maillist-body-limit))))
+        ;; A large delete leaves the pages in the file; reclaiming them once
+        ;; keeps the size in proportion to what the client still stores.
+        (when (> (+ threads bodies) 100)
+          (sqlite-execute connection "VACUUM"))
+        (list :threads threads :bodies bodies)))))
+
+(defun maillist-store-search-bodies (store text limit)
+  "Return up to LIMIT (THREAD-ID . SNIPPET) pairs from STORE matching TEXT.
+The scan is case-insensitive over the cached bodies only, so it answers when
+the archive does not; newest message first."
+  (when (and store (not (string-empty-p (or text ""))))
+    (maillist--with-connection
+      (let ((pattern (format "%%%s%%" (downcase text))))
+        (mapcar
+         (lambda (row) (cons (nth 0 row) (nth 1 row)))
+         (sqlite-select
+          connection
+          "SELECT thread, substr(body, max(1, instr(lower(body), ?) - 30), 90)
+             FROM messages
+            WHERE lower(body) LIKE ?
+            ORDER BY date DESC
+            LIMIT ?"
+          (list (downcase text) pattern (or limit 50))))))))
+
 (defun maillist-store-threads (store list)
-  "Return every stored row of LIST as a plist, newest first."
+  "Return every stored row of LIST in STORE as a plist, newest first."
   (when-let* ((controller (and store (maillist-store-thread-controller store))))
     (etaf-data-set-query controller (list :list list))
     (etaf-data-set-page controller 1)
@@ -156,7 +288,7 @@ rebuild drops the marks stored in the old one."
                      (or (plist-get second :date) ""))))))
 
 (defun maillist-store-adopt-threads (store list)
-  "Tag stored rows that carry no list name with LIST.
+  "Tag the rows of STORE that carry no list name with LIST.
 An earlier version kept one thread table for every archive, so its rows say
 nothing about the list they came from.  Tagging them costs one write and
 keeps the cache the reader already has; dropping them would empty it once."
@@ -176,11 +308,11 @@ keeps the cache the reader already has; dropping them would empty it once."
                  orphans))))))
 
 (defun maillist-store-save-threads (store list rows)
-  "Write ROWS of LIST to the thread table in one transaction and return it.
-An empty ROWS list writes nothing: a caller that filtered every row out (or a
-sync that reported no threads) must not reach the controller as an empty
-batch, which it rejects.  A row carries the archive's facts only; read and
-starred live in the mark table."
+  "Write ROWS of LIST to the thread table of STORE and return it.
+The batch is one transaction.  An empty ROWS list writes nothing: a caller
+that filtered every row out (or a sync that reported no threads) must not
+reach the controller as an empty batch, which it rejects.  A row carries the
+archive's facts only; read and starred live in the mark table."
   (when-let* ((controller (and store (maillist-store-thread-controller store)))
               (operations
                (mapcar (lambda (row)
@@ -197,7 +329,8 @@ starred live in the mark table."
     (etaf-data-mutate-many controller operations)))
 
 (defun maillist-store-marks (store)
-  "Return every stored mark as an alist of ID to (:read BOOLEAN :starred BOOLEAN)."
+  "Return every stored mark of STORE as an alist of ID to a mark plist.
+Each mark carries `:read' and `:starred' as booleans."
   (when-let* ((database (maillist-store-mark-database store)))
     (let* ((source (etaf-sqlite-source database))
            (page (funcall (plist-get source :load) nil 1 5000)))
@@ -208,7 +341,7 @@ starred live in the mark table."
               (plist-get page :items)))))
 
 (defun maillist-store-save-mark (store id read starred)
-  "Store the mark of thread ID: READ and STARRED as booleans.
+  "Store the mark of thread ID in STORE: READ and STARRED as booleans.
 The whole mark is written, so a toggle never clears the other flag."
   (when-let* ((database (maillist-store-mark-database store)))
     (funcall (plist-get (etaf-sqlite-source database) :mutate)
@@ -218,7 +351,7 @@ The whole mark is written, so a toggle never clears the other flag."
                    :starred (if starred 1 0)))))
 
 (defun maillist-store-thread-messages (store id)
-  "Return the cached messages of thread ID, oldest first."
+  "Return the messages of thread ID cached in STORE, oldest first."
   (when-let* ((controller (and store (maillist-store-message-controller store))))
     (etaf-data-set-query controller (list (cons :thread id)))
     (etaf-data-set-page controller 1)
@@ -229,7 +362,7 @@ The whole mark is written, so a toggle never clears the other flag."
                (or (plist-get second :position) 0))))))
 
 (defun maillist-store-save-thread-messages (store id messages)
-  "Cache MESSAGES as thread ID in one transaction.
+  "Cache MESSAGES as thread ID in STORE, in one transaction.
 An empty MESSAGES list writes nothing, so a failed fetch never replaces a
 cached body with nothing."
   (when-let* ((controller (and store (maillist-store-message-controller store)))

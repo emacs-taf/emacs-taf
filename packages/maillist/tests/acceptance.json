@@ -135,6 +135,96 @@
       "name": "maillist-tests-open-mounts-and-close-releases",
       "file": "tests/maillist-tests.el",
       "purpose": "Opening mounts a live client with its chrome and closing kills the buffer."
+    },
+    {
+      "name": "maillist-tests-parse-search-reads-message-rows",
+      "file": "tests/maillist-tests.el",
+      "purpose": "A public-inbox search page reads as message rows, which the index parser does not see."
+    },
+    {
+      "name": "maillist-tests-search-fetch-reads-the-archive-answer",
+      "file": "tests/maillist-tests.el",
+      "purpose": "A search request parses the archive's answer with the search reader."
+    },
+    {
+      "name": "maillist-tests-search-falls-back-to-cached-bodies",
+      "file": "tests/maillist-tests.el",
+      "purpose": "A search the archive cannot answer reports from the cached bodies and names the matched text."
+    },
+    {
+      "name": "maillist-tests-unread-mark-survives-a-sync",
+      "file": "tests/maillist-tests.el",
+      "purpose": "Marking a thread unread survives the next sync and the next start."
+    },
+    {
+      "name": "maillist-tests-mark-all-read-covers-the-shown-rows",
+      "file": "tests/maillist-tests.el",
+      "purpose": "Marking all read covers the rows the reader sees and reports how many changed."
+    },
+    {
+      "name": "maillist-tests-older-mail-joins-the-list",
+      "file": "tests/maillist-tests.el",
+      "purpose": "Mail older than the list comes from the archive's date search, grouped by subject and without repeats."
+    },
+    {
+      "name": "maillist-tests-store-answers-while-another-writer-holds-the-file",
+      "file": "tests/maillist-tests.el",
+      "purpose": "A reader answers while another connection to the store is mid-write."
+    },
+    {
+      "name": "maillist-tests-store-prune-keeps-the-newest-rows-and-the-marks",
+      "file": "tests/maillist-tests.el",
+      "purpose": "Retention keeps the newest rows and cached bodies and never drops the reader's marks."
+    },
+    {
+      "name": "maillist-tests-store-settings-round-trip",
+      "file": "tests/maillist-tests.el",
+      "purpose": "A stored setting reads back and a second write replaces it."
+    },
+    {
+      "name": "maillist-tests-open-remembers-the-archive",
+      "file": "tests/maillist-tests.el",
+      "purpose": "A client started without a list opens the archive it opened last."
+    },
+    {
+      "name": "maillist-tests-cached-body-search-names-the-match",
+      "file": "tests/maillist-tests.el",
+      "purpose": "Cached bodies answer a search with the thread and the text that matched."
+    },
+    {
+      "name": "maillist-tests-message-links-lists-addresses-in-order",
+      "file": "tests/maillist-tests.el",
+      "purpose": "A message body yields the addresses a reader can open, trimmed and without repeats."
+    },
+    {
+      "name": "maillist-tests-displayed-links-follow-the-message",
+      "file": "tests/maillist-tests.el",
+      "purpose": "An open thread carries the addresses its messages mention."
+    },
+    {
+      "name": "maillist-tests-open-client-syncs-on-a-schedule",
+      "file": "tests/maillist-tests.el",
+      "purpose": "An open client syncs on a schedule and stops asking the archive once it is closed."
+    },
+    {
+      "name": "maillist-tests-recall-query-walks-the-history",
+      "file": "tests/maillist-tests.el",
+      "purpose": "The search history walk returns the queries the client ran and ends at the archive's list."
+    },
+    {
+      "name": "maillist-tests-thread-url-is-the-archive-page",
+      "file": "tests/maillist-tests.el",
+      "purpose": "A thread's shareable address is the archive's own page for it."
+    },
+    {
+      "name": "maillist-tests-first-sync-marks-nothing-new",
+      "file": "tests/maillist-tests.el",
+      "purpose": "The sync that establishes the list reports no new thread, and a thread a later page adds is marked new."
+    },
+    {
+      "name": "maillist-tests-file-archive-does-not-use-the-proxy",
+      "file": "tests/maillist-tests.el",
+      "purpose": "A file: archive is read directly even when the configured route is the proxy."
     }
   ]
 }

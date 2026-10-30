@@ -15,7 +15,8 @@ style="white-space:pre-wrap">The widget default should be 200, not 300:
 +  "Default threshold in lines."
    :type 'integer)
 
-With the patch applied the tests pass.
+With the patch applied the tests pass.  Reported first at
+https://example.org/issues/42 so the backlog links to it.
 </pre></div></content></entry><entry><author><name>Bob Example</name><email>bob@example.com</email></author><title>Re: [PATCH] Fix the widget default</title><updated>2026-10-21T09:48:00Z</updated><link
 href="alpha-reply@example.com/"/><id>urn:uuid:alpha-2</id><thr:in-reply-to
 ref="urn:uuid:alpha-1"
