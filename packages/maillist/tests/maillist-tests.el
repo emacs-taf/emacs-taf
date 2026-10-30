@@ -1255,5 +1255,35 @@ A local mirror has no network path, so asking a proxy would only fail."
           (should (zerop maillist-tests--proxy-hits)))
       (delete-process (cdr proxy)))))
 
+(ert-deftest maillist-tests-torn-store-is-rebuilt ()
+  "A store file a crash left unreadable is set aside and rebuilt.
+SQLite refuses a truncated or half-written file on its first statement, and
+the client must not answer that by giving up persistence silently."
+  (let* ((file (maillist-tests--store))
+         (maillist-store-file file))
+    (unwind-protect
+        (progn
+          ;; A file with the right name and no database inside, which is what
+          ;; a write cut short by a full disk leaves behind.
+          (with-temp-file file
+            (insert "SQLite format 3\0")
+            (insert (make-string 200 0)))
+          (let ((store (maillist-store-open)))
+            (unwind-protect
+                (progn
+                  (should store)
+                  ;; The unreadable file is kept beside the store, so the
+                  ;; marks it held can still be recovered by hand.
+                  (should (file-expand-wildcards (concat file ".rebuild-*")))
+                  ;; The rebuilt file works: a mark written now comes back.
+                  (maillist-store-save-mark store "kept@example.com" t nil)
+                  (should (plist-get (cdr (assoc "kept@example.com"
+                                                 (maillist-store-marks store)))
+                                     :read)))
+              (maillist-store-close store))))
+      (ignore-errors (delete-file file))
+      (dolist (backup (file-expand-wildcards (concat file ".rebuild-*")))
+        (ignore-errors (delete-file backup))))))
+
 (provide 'maillist-tests)
 ;;; maillist-tests.el ends here

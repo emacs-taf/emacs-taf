@@ -1161,7 +1161,7 @@ whose refs the Views read."
     (etaf-set-value (plist-get session :summary) (maillist--summary session))
     (when-let* ((backup (and store (maillist-store-rebuilt store))))
       (maillist--toast session 'info
-                       (format "缓存格式已更新，列表已重建（旧文件 %s）"
+                       (format "缓存无法读取，列表已重建（旧文件 %s）"
                                (file-name-nondirectory backup))
                        12))
     session))

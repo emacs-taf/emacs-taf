@@ -78,7 +78,7 @@ instances can prune or search while the other one saves a list."
 
 (cl-defstruct (maillist-store (:constructor maillist--store-create))
   "Open storage of the client: three databases and two controllers.
-REBUILT is nil, or the path of the incompatible file set aside on open."
+REBUILT is nil, or the path of the unreadable file set aside on open."
   thread-database message-database mark-database
   thread-controller message-controller rebuilt)
 
@@ -166,26 +166,41 @@ but the marks in it cannot be refetched."
                      t)))
     backup))
 
+(defun maillist--unreadable-file-p (error)
+  "Return non-nil when ERROR says the store file cannot be read as a database.
+A file left half written by a crash, or truncated by a full disk, opens but
+fails its first statement; the archive cache in it is lost either way, so the
+file is rebuilt instead of leaving the client without persistence."
+  (let ((text (error-message-string error)))
+    (string-match-p "not a database\\|malformed\\|corrupt\\|disk image" text)))
+
 (defun maillist-store-open ()
   "Open the client's storage and return it, or nil when SQLite is missing.
 The file is created together with its tables on first use.  A file written by
-an incompatible earlier version is moved aside and rebuilt: the archive cache
-and cached bodies can be fetched again, so a reader keeps working instead of
-losing persistence silently.  The store reports the backup file, because a
-rebuild drops the marks stored in the old one."
-  (condition-case nil
+an incompatible earlier version, or one a crash left unreadable, is moved
+aside and rebuilt: the archive cache and cached bodies can be fetched again,
+so a reader keeps working instead of losing persistence silently.  The store
+reports the backup file, because a rebuild drops the marks stored in the old
+one."
+  (condition-case error
       (progn
         (when-let* ((directory (file-name-directory maillist-store-file)))
           (make-directory directory t))
         (maillist--prepare-file)
         (maillist--open-tables nil))
-    (etaf-sqlite-schema-error
-     (let ((backup (maillist--retire-cache)))
-       (condition-case nil
-           (progn (maillist--prepare-file)
-                  (maillist--open-tables backup))
-         (error nil))))
-    (error nil)))
+    (etaf-sqlite-schema-error (maillist--reopen))
+    (error (when (maillist--unreadable-file-p error)
+             (maillist--reopen)))))
+
+(defun maillist--reopen ()
+  "Move the store aside and open an empty one.
+The rebuilt store names the backup file, which still holds the marks, so the
+client can tell the reader what happened."
+  (let ((backup (maillist--retire-cache)))
+    (condition-case nil
+        (progn (maillist--prepare-file)
+               (maillist--open-tables backup))
+      (error nil))))
 
 (defun maillist--prepare-file ()
   "Set the store file up for concurrent use and return its journal mode.

@@ -61,6 +61,11 @@ answers when the archive does not.
 - A `file:` archive never takes a proxy route, so a local mirror is read even
   when the configured route is the proxy.
 
+- A store file a crash left unreadable — a write cut short by a full disk, or
+  a file truncated later — is moved aside and rebuilt, with a notice naming the
+  backup that still holds the marks.  Before, the client opened it, failed its
+  first statement and ran without persistence for the rest of the session.
+
 ### Changed
 
 - The store uses WAL with a busy timeout, so two Emacs instances can read and

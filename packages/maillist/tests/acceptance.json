@@ -225,6 +225,11 @@
       "name": "maillist-tests-file-archive-does-not-use-the-proxy",
       "file": "tests/maillist-tests.el",
       "purpose": "A file: archive is read directly even when the configured route is the proxy."
+    },
+    {
+      "name": "maillist-tests-torn-store-is-rebuilt",
+      "file": "tests/maillist-tests.el",
+      "purpose": "A store file a crash left unreadable is set aside and rebuilt instead of leaving the client without persistence."
     }
   ]
 }
