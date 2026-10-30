@@ -314,7 +314,10 @@ are what appearance is reviewed against.
 - Sender names are fetched only for threads that have none, three at a time,
   and are stored, so a second sync of the same page does no requests for them.
 - The scheduled sync sends one index request per period; it does not prefetch
-  bodies.
+  bodies.  Publishing the merged list costs a few milliseconds: a 50 ms timer
+  probe in a graphical session (205×51, six threads, one reader open) measured
+  a worst-case lateness of 11 ms both while idle and with a sync landing inside
+  the window, so the periodic refresh does not interrupt typing.
 
 ## Development
 
