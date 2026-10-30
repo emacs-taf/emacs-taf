@@ -1,18 +1,55 @@
 # maillist
 
-[ETAF](https://github.com/emacs-taf/etaf) 文本邮件列表客户端：读 public-inbox
-档案（线程列表、会话正文），并把「已读 / 收藏」存在本地；回信与新帖用
-`message-mode` + smtpmail 发出。
+[ETAF](https://github.com/emacs-taf/etaf) mailing-list client for Emacs. It
+reads public-inbox archives — the thread list, the conversation and each
+message — and keeps the reader's own read and starred marks, and the fetched
+bodies, in a local SQLite file. Replies and new posts open in `message-mode`
+and leave through smtpmail.
 
-## 要求
+At a wide frame the list and the open thread share the window; the divider
+between them is draggable:
 
-- Emacs 29.1 或更新版本（需要内置 SQLite）。
-- 从 checkout 跑时还要提供者检出：`etaf`、`etaf-ui`、`ebox`、`ecss`、`etaf-db`。
-  放在本仓库旁边（`../etaf` 等），或放进工作区的上级目录（`../../etaf` 等）。
+![The client at a wide frame](examples/maillist-wide.png)
 
-## 安装与运行
+Below `maillist-narrow-width` the two columns become one: the list first, then
+the open thread with a way back above it.
 
-从归档安装（推荐）：
+![The client at a narrow frame](examples/maillist-narrow.png)
+
+A short window keeps the header, the rows and the reader without stretching
+either column past the canvas:
+
+![The client in a short window](examples/maillist-short.png)
+
+## Capabilities
+
+- Thread list with the archive's own date grouping, unread and starred scopes,
+  and one row per discussion.
+- Reads the conversation message by message: quotes, patch hunks and the
+  addresses a message mentions are marked up, and a long thread opens with its
+  newest messages and grows on demand.
+- Search in the archive's own syntax (`from:`, `subject:`, dates) plus local
+  marks; a search the archive cannot answer is served from the cached bodies.
+- Read marks: opening a thread marks it read once its body is on screen,
+  `M-u` puts it back in the queue and `A` clears a scope.
+- Older mail than the archive's first page loads from its date search, one
+  batch per keypress.
+- Several archives (`emacs-devel`, `emacs-user`, `emacs-bugs`, list tangents)
+  switch from inside the client, which remembers the last one.
+- An open client syncs on a schedule; a thread the archive added is counted in
+  the summary and tinted in the list.
+- Reply to the list, reply to the author, or post anew, with `In-Reply-To` and
+  `References` filled in.
+
+## Requirements
+
+- Emacs 29.1 or newer, built with SQLite.
+- For a checkout, the provider repositories on `load-path`: `etaf`, `etaf-ui`,
+  `ebox`, `ecss`, `etaf-db`.
+
+## Install
+
+From the ETAF package archive:
 
 ```elisp
 (require 'package)
@@ -22,95 +59,102 @@
 (package-install 'etaf-install)
 ```
 
-然后 `M-x etaf-install`，在列表里把 Maillist 装上；依赖的 ETAF、ETAF UI、
-ETAF DB 由安装器一起装。装好后 `M-x maillist-open` 打开。
+Then `M-x etaf-install`, pick Maillist, and the installer brings ETAF, ETAF UI
+and ETAF DB with it. `M-x maillist-open` starts the client.
 
-从 checkout 跑：把本仓库根和提供者的仓库根加进 `load-path`，然后：
+From a checkout, add this repository and the provider roots to `load-path`:
 
 ```elisp
 (require 'maillist)
 M-x maillist-open
 ```
 
-## 用法
+## Keys
 
-| 按键 | 作用 |
+| Key | Action |
 | --- | --- |
-| `j` / `k` | 下一 / 上一线程 |
-| `RET` 或点击 | 打开线程 |
-| `s` | 收藏或取消收藏 |
-| `e` | 展开更早的邮件（长线程先显示最新 20 封） |
-| `r` / `C-u r` | 回信到列表 / 私回最后一封的作者 |
-| `c` | 写新帖 |
-| `/` | 搜索（档案字段、日期、本地已读与收藏） |
-| `g` | 刷新（搜索中则重跑搜索） |
-| `u` | 窄窗口下从正文返回列表 |
-| 拖动中缝 | 调整列表与正文的宽度（聚焦后左右方向键也能逐列调整） |
-| `n` / `p` / 滚轮 | 在列表或正文内部滚动，标题与人数信息固定 |
+| `j` / `k` | next / previous thread |
+| `RET` or a click | open the thread |
+| `1` `2` `3` | all, unread only, starred only |
+| `M-u` | mark the open thread unread |
+| `A` | mark every shown row read |
+| `s` | star or unstar |
+| `e` | expand the older messages a long thread holds back |
+| `o` | load mail older than the list |
+| `/` | search |
+| `M-p` / `M-n` | recall the previous / next search |
+| `g` | sync again (re-runs the open search when one is active) |
+| `C` | copy the archive page of the thread |
+| `B` | open that page in the browser |
+| `r` / `C-u r` | reply to the list / to the last message's author |
+| `c` | post a new message |
+| `L` | switch archive |
+| `u` | back from the thread to the list (narrow layout) |
+| drag the divider | resize the list (arrow keys move it once focused) |
+| `n` / `p` / wheel | scroll inside the list or the reader |
 
-顶部标签切换「全部 / 未读 / 已收藏」。阅读区标题固定，正文在盒子内滚动。
+## Search syntax
 
-## 搜索语法
-
-搜索框认这几个前缀，剩下的词和 `"带空格的短语"` 按普通全文条件发出：
-
-| 写法 | 作用 |
+| Form | Effect |
 | --- | --- |
-| `from:` `to:` `subject:` `body:` `message:` | 交给档案搜对应字段 |
-| `after:2026-10-01` `before:2026-10-10` | 日期范围 |
-| `is:unread` `is:starred` | 用本地已读、收藏筛选，不发请求 |
+| `from:` `to:` `subject:` `body:` `message:` | the matching archive field |
+| `after:2026-10-01` `before:2026-10-10` | date range |
+| `is:unread` `is:starred` | local marks, no request |
 
-只写 `is:unread` 这类本地条件时，筛的是当前列表，不会联网；`g` 重跑当前
-搜索，`is:` 条件继续生效。正在阅读的那一条会留在列表里，读完不消失，方便
-接着按 `j` 往下走。
+A query with only local conditions filters the list in place; `g` runs the
+current search again. The thread being read stays in the list, so `j` carries
+on from it.
 
-## 发信
+## Sending
 
-发信走 smtpmail，密码用 Gmail 应用专用密码存进 auth-source：
+Sending goes through smtpmail. Store the account's application password in
+auth-source once:
 
 ```elisp
 (setq maillist-mail-address "you@gmail.com")
-;; 然后 M-x maillist-mail-configure 输入应用专用密码（写入 ~/.authinfo）
+;; then M-x maillist-mail-configure and paste the application password
 ```
 
-默认 SMTP 端点 `smtp.gmail.com:465`（SSL）；换服务商时改
-`maillist-smtp-server`、`maillist-smtp-service`、`maillist-smtp-stream-type`。
-回信自动填 `In-Reply-To` / `References`。GNU 邮件列表会审核未订阅地址的帖子。
-密码只在发送时读取：没配密码也能先把回信写完，发不出去时再运行
-`M-x maillist-mail-configure`。`C-u r` 私回最后一封的作者，不进列表。
+The defaults are `smtp.gmail.com:465` with SSL; change
+`maillist-smtp-server`, `maillist-smtp-service` and
+`maillist-smtp-stream-type` for another provider. The password is read when
+the mail is sent, so a reply can be written before the account is configured.
+GNU lists hold posts from unsubscribed addresses for moderation.
 
-## 数据与网络
+## Data and network
 
-- 线程列表、已读 / 收藏状态和抓到的正文都存在
-  `~/.emacs.d/maillist/store.sqlite3`（`maillist-store-file`），所以启动先显示缓存，
-  再后台同步。线程按邮件列表分开存，换一个列表不会看到上一个列表的线程；
-  已读与收藏单独一张表，刷新档案缓存不会碰它们。
-- 刷新会把档案首页合并进列表，不会整页替换：首页只列最近的线程，更早的
-  线程留在列表里，不会因为一次 `g` 消失。
-- 只有正文真的显示出来才标记已读；抓失败、超时或只是按 `j` 扫过去，线程
-  仍然保持未读。
-- 缓存文件来自不兼容的旧版本时，启动会把它移到同目录的 `.rebuild-<时间>`
-  文件旁并重建，而不是静默失去持久化；提示里会写出那个文件名。
-- 索引页本身不带发件人，客户端会为每个还没作者的线程取一封原始邮件的
-  `From` 头（3 个并发，几秒补全整页）；作者存库后不再重复取。列表里暂时
-  没有作者的显示为 `…`。
-- 搜索结果是另一份视图，不会写回档案缓存：在搜索结果里打开线程，不会把
-  搜索页的日期、人数或标题存成线程的事实。
-- 网络先按 `maillist-network-route` 选一条路：`auto` 先直连、再代理，`proxy`
-  先代理、再直连，`direct` 只用直连。领先的那条连不上或 10 秒不应答就换另一条
-  （`maillist-route-attempt-timeout`），所以代理客户端没开着时照样能取档案，
-  直连被挡时也还有代理可用。代理地址用 `maillist-proxy`，没设时取
-  `url-proxy-services` 或环境里的那个。取不到时报的是具体地址，例如
-  「无法连接代理 127.0.0.1:7890；无法连接档案 yhetil.org:443」。
+- Threads, marks, cached bodies and the last archive live in
+  `~/.emacs.d/maillist/store.sqlite3` (`maillist-store-file`). The file uses
+  WAL, so a second Emacs can read while the first writes.
+- The cache is bounded: `maillist-thread-limit` threads per archive and
+  `maillist-body-limit` cached bodies; a prune keeps the newest of each and
+  never drops a mark.
+- `maillist-network-route` picks the leading route: `auto` tries direct first,
+  `proxy` tries the proxy first, `direct` never uses one. A route that cannot
+  connect or stops answering hands the request to the other one
+  (`maillist-route-attempt-timeout`), so a proxy client that is not running
+  does not take the archive offline, and a blocked direct path still has the
+  proxy. `maillist-proxy` names the proxy; empty takes it from
+  `url-proxy-services` or the environment. A failed request names what it
+  could not reach, for example
+  `无法连接代理 127.0.0.1:7890；无法连接档案 yhetil.org:443`.
+- `maillist-auto-refresh` (300 seconds by default) syncs an open client. Set
+  it to nil to sync only on demand.
 
-## 开发
+`docs/manual.md` covers the workflows, every configuration variable, the
+storage layout and what to do when a sync, a search or a send fails.
+
+## Development
 
 ```sh
-make check     # 结构 + 字节编译 + 验收场景
-make test      # 只跑验收场景
+make check     # structure, byte compilation, acceptance scenarios, public API
+make test      # acceptance scenarios only
+make gui       # drive the maintained GUI scenario on a running Emacs server
 make clean
 ```
 
-验收场景用 `tests/fixtures/archive` 里的本地镜像（`file:` URL）跑完整同步，
-不需要联网。界面改动必须真实 GUI 验收；清单与做法见
-`pi-skill etaf-app-dev guide verify`。
+The acceptance scenarios read the fixture archive under
+`tests/fixtures/archive` over `file:` URLs, so they need no network. `make gui`
+takes `SERVER=<name>` for a dedicated instance and prints the evidence
+directory of the run; the frames it saves are what a UI change is reviewed
+against.

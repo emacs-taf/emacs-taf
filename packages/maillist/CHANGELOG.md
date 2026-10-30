@@ -4,6 +4,75 @@ All notable user-visible changes to maillist are recorded here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project uses [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] - 2026-10-30
+
+Reading a mailing list continuously: several archives, scheduled syncs, read
+marks that go both ways, mail older than the index page, and a search that
+answers when the archive does not.
+
+### Added
+
+- `L` switches archive inside the client, and the client remembers the one it
+  opened last (`maillist-store-setting`), so the next start returns to it.
+  `maillist-open` takes `:list`.
+
+- `1`, `2` and `3` switch between all threads, unread only and starred only.
+
+- `M-u` marks the open thread unread and `A` marks every row the current scope
+  shows read, in one store transaction (`maillist-set-read`,
+  `maillist-mark-all-read`).
+
+- `o` loads mail older than the list: the archive's own date search answers
+  with the messages before the oldest date the client holds, which are grouped
+  by discussion and capped at `maillist-older-batch` (`maillist-load-older`).
+
+- An open client syncs every `maillist-auto-refresh` seconds. The scheduled
+  sync is quiet, counts the threads the archive added in the summary and tints
+  those rows; a failure still reports.
+
+- A search the archive cannot answer falls back to the cached bodies
+  (`maillist-local-search-limit`) and the row names the text that matched.
+
+- `M-p` and `M-n` walk the queries this client ran (`maillist-recall-query`),
+  ending at the archive's list.
+
+- `C` copies the archive's page of the thread and `B` opens it in the browser
+  (`maillist-thread-url`), so a discussion can be shared.
+
+- Every message lists the web addresses it mentions as links a reader can open
+  (`maillist-message-links`).
+
+- `make gui` runs `scripts/maillist-gui-scenarios.el` on the shared GUI
+  verifier: the documented keys, then the wide, narrow and short sizes, with
+  assertions and frame captures for each step.
+
+### Fixed
+
+- The client stays inside its window. The canvas took its width from the
+  viewport the mount was opened with, so after a resize the hint row and the
+  summary ran under the canvas edge; the appbar summary is now placed on its
+  row instead of being pushed out by a growing spacer, and the reader column
+  takes the room the list leaves instead of the whole row, which had clipped
+  its paragraphs.
+
+- The client no longer draws a text cursor on whatever cell the pointer last
+  landed on.
+
+- A `file:` archive never takes a proxy route, so a local mirror is read even
+  when the configured route is the proxy.
+
+### Changed
+
+- The store uses WAL with a busy timeout, so two Emacs instances can read and
+  write the same file. It gained a settings table, batch mark writes and a
+  retention pass: `maillist-thread-limit` threads per archive and
+  `maillist-body-limit` cached bodies, newest kept, marks always kept
+  (`maillist-store-prune`, `maillist-store-save-marks`,
+  `maillist-store-search-bodies`).
+
+- `README.md` and `docs/manual.md` cover the workflows, every variable, the
+  storage layout and what to do when a sync, a search or a send fails.
+
 ## [0.2.0] - 2026-10-30
 
 First release in the ETAF package archive
