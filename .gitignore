@@ -37,6 +37,7 @@
 /maillist/
 /etaf-mario/
 /etaf-org-preview/
+/etaf-diagram/
 
 *.elc
 *.eln
