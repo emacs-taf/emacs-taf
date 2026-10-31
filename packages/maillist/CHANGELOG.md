@@ -22,6 +22,10 @@ answers when the archive does not.
 - `R` replies to the list and copies the last message's author; `r` stays the
   answer to the list alone and `C-u r` the answer to the author alone.
 
+- `maillist-store-search-bodies`, `maillist-store-prune` and the mark writes
+  read the SQLite file the store was opened on rather than the default one, so
+  a caller that opens a store over another file gets that file's answers.
+
 - Moving through a long list is several times faster: the theme palette is
   derived once per theme instead of once per row (300 threads: 50 ms per move
   became 12 ms, 1000 threads: 162 ms became 32 ms, measured without redisplay).

@@ -1353,5 +1353,41 @@ Read rows in between are skipped, and the walk does not wrap around."
       (should (equal before (and (facep 'shadow)
                                  (face-attribute 'shadow :foreground nil t)))))))
 
+(ert-deftest maillist-tests-a-store-queries-its-own-file ()
+  "Search and marks answer from the file the store was opened on.
+A caller may open a store over a chosen file while another one is current;
+the quiet queries must read that file, not the default one."
+  (let* ((first-file (maillist-tests--store))
+         (second-file (maillist-tests--store))
+         (row (list :id "one@example.com" :subject "One" :date "2026-10-21"
+                    :count 1 :author "A" :depth 0 :participants 1))
+         (message (list :id "one@example.com.0" :author "A" :email "a@example.org"
+                        :date "2026-10-21" :depth 0 :position 0
+                        :subject "One" :text "Only the first store has this body.")))
+    (unwind-protect
+        (progn
+          (let ((maillist-store-file first-file))
+            (let ((store (maillist-store-open)))
+              (maillist-store-save-threads store "bench" (list row))
+              (maillist-store-save-thread-messages store "one@example.com"
+                                                   (list message))
+              (maillist-store-save-marks store '(("one@example.com" t nil)))
+              (maillist-store-close store)))
+          (let ((maillist-store-file second-file))
+            (let ((store (maillist-store-open)))
+              (should-not (maillist-store-search-bodies store "first store" 10))
+              (should-not (maillist-store-marks store))
+              (maillist-store-close store)))
+          (let ((maillist-store-file first-file))
+            (let ((store (maillist-store-open)))
+              (should (= 1 (length (maillist-store-search-bodies
+                                    store "first store" 10))))
+              (should (eq t (plist-get (cdr (assoc "one@example.com"
+                                                   (maillist-store-marks store)))
+                                       :read)))
+              (maillist-store-close store))))
+      (ignore-errors (delete-file first-file))
+      (ignore-errors (delete-file second-file)))))
+
 (provide 'maillist-tests)
 ;;; maillist-tests.el ends here

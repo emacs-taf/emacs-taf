@@ -78,9 +78,17 @@ instances can prune or search while the other one saves a list."
 
 (cl-defstruct (maillist-store (:constructor maillist--store-create))
   "Open storage of the client: three databases and two controllers.
+FILE is the SQLite file the store belongs to, so a short connection opened
+for marks, search or pruning reads that file rather than the default one.
 REBUILT is nil, or the path of the unreadable file set aside on open."
-  thread-database message-database mark-database
+  file thread-database message-database mark-database
   thread-controller message-controller rebuilt)
+
+(defun maillist--store-file (store)
+  "Return the SQLite file STORE reads and writes.
+A store carries its file because `maillist-store-file' is a dynamic variable:
+a caller holding a store opened over another file must still query that file."
+  (or (and store (maillist-store-file store)) maillist-store-file))
 
 (defun maillist--thread-database ()
   "Return the database descriptor of the thread table."
@@ -144,6 +152,7 @@ cache and is written only when the reader changes it."
     (etaf-sqlite-initialize messages)
     (etaf-sqlite-initialize marks)
     (maillist--store-create
+     :file maillist-store-file
      :thread-database threads
      :message-database messages
      :mark-database marks
@@ -231,21 +240,22 @@ connection, including the short ones the controllers open."
 MARKS is a list of (ID READ STARRED).  One transaction per command keeps a
 range-wide mark off the file's write path for each row."
   (when (and store marks)
-    (maillist--with-connection
-      (sqlite-execute connection "BEGIN IMMEDIATE")
-      (condition-case err
-          (progn
-            (dolist (mark marks)
-              (sqlite-execute
-               connection
-               "INSERT INTO marks (id, read, starred) VALUES (?, ?, ?)
-                ON CONFLICT (id) DO UPDATE SET read = excluded.read,
-                                              starred = excluded.starred"
-               (list (nth 0 mark) (if (nth 1 mark) 1 0) (if (nth 2 mark) 1 0))))
-            (sqlite-execute connection "COMMIT")
-            (length marks))
-        (error (sqlite-execute connection "ROLLBACK")
-               (signal (car err) (cdr err)))))))
+    (let ((maillist-store-file (maillist--store-file store)))
+      (maillist--with-connection
+        (sqlite-execute connection "BEGIN IMMEDIATE")
+        (condition-case err
+            (progn
+              (dolist (mark marks)
+                (sqlite-execute
+                 connection
+                 "INSERT INTO marks (id, read, starred) VALUES (?, ?, ?)
+                  ON CONFLICT (id) DO UPDATE SET read = excluded.read,
+                                                starred = excluded.starred"
+                 (list (nth 0 mark) (if (nth 1 mark) 1 0) (if (nth 2 mark) 1 0))))
+              (sqlite-execute connection "COMMIT")
+              (length marks))
+          (error (sqlite-execute connection "ROLLBACK")
+                 (signal (car err) (cdr err))))))))
 
 (defun maillist-store-prune (store list)
   "Drop what LIST no longer needs from STORE and return the removed row counts.
@@ -253,43 +263,45 @@ Rows beyond `maillist-thread-limit' and bodies beyond `maillist-body-limit' go,
 newest kept, together with the bodies of threads no longer stored.  The marks
 stay: a pruned thread that comes back keeps the reader's state."
   (when store
-    (maillist--with-connection
-      (let* ((threads (sqlite-execute
-                       connection
-                       "DELETE FROM threads WHERE list_name = ? AND id NOT IN
-                          (SELECT id FROM threads WHERE list_name = ?
-                           ORDER BY date DESC LIMIT ?)"
-                       (list list list maillist-thread-limit)))
-             ;; Bodies of threads that are not among the newest kept ones go,
-             ;; including the bodies of threads this prune just removed.
-             (bodies (sqlite-execute
-                      connection
-                      "DELETE FROM messages WHERE thread NOT IN
-                         (SELECT id FROM threads ORDER BY date DESC LIMIT ?)"
-                      (list maillist-body-limit))))
-        ;; A large delete leaves the pages in the file; reclaiming them once
-        ;; keeps the size in proportion to what the client still stores.
-        (when (> (+ threads bodies) 100)
-          (sqlite-execute connection "VACUUM"))
-        (list :threads threads :bodies bodies)))))
+    (let ((maillist-store-file (maillist--store-file store)))
+      (maillist--with-connection
+        (let* ((threads (sqlite-execute
+                         connection
+                         "DELETE FROM threads WHERE list_name = ? AND id NOT IN
+                            (SELECT id FROM threads WHERE list_name = ?
+                             ORDER BY date DESC LIMIT ?)"
+                         (list list list maillist-thread-limit)))
+               ;; Bodies of threads that are not among the newest kept ones go,
+               ;; including the bodies of threads this prune just removed.
+               (bodies (sqlite-execute
+                        connection
+                        "DELETE FROM messages WHERE thread NOT IN
+                           (SELECT id FROM threads ORDER BY date DESC LIMIT ?)"
+                        (list maillist-body-limit))))
+          ;; A large delete leaves the pages in the file; reclaiming them once
+          ;; keeps the size in proportion to what the client still stores.
+          (when (> (+ threads bodies) 100)
+            (sqlite-execute connection "VACUUM"))
+          (list :threads threads :bodies bodies))))))
 
 (defun maillist-store-search-bodies (store text limit)
   "Return up to LIMIT (THREAD-ID . SNIPPET) pairs from STORE matching TEXT.
 The scan is case-insensitive over the cached bodies only, so it answers when
 the archive does not; newest message first."
   (when (and store (not (string-empty-p (or text ""))))
-    (maillist--with-connection
-      (let ((pattern (format "%%%s%%" (downcase text))))
-        (mapcar
-         (lambda (row) (cons (nth 0 row) (nth 1 row)))
-         (sqlite-select
-          connection
-          "SELECT thread, substr(body, max(1, instr(lower(body), ?) - 30), 90)
-             FROM messages
-            WHERE lower(body) LIKE ?
-            ORDER BY date DESC
-            LIMIT ?"
-          (list (downcase text) pattern (or limit 50))))))))
+    (let ((maillist-store-file (maillist--store-file store)))
+      (maillist--with-connection
+        (let ((pattern (format "%%%s%%" (downcase text))))
+          (mapcar
+           (lambda (row) (cons (nth 0 row) (nth 1 row)))
+           (sqlite-select
+            connection
+            "SELECT thread, substr(body, max(1, instr(lower(body), ?) - 30), 90)
+               FROM messages
+              WHERE lower(body) LIKE ?
+              ORDER BY date DESC
+              LIMIT ?"
+            (list (downcase text) pattern (or limit 50)))))))))
 
 (defun maillist-store-threads (store list)
   "Return every stored row of LIST in STORE as a plist, newest first."

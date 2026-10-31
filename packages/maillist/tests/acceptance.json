@@ -250,6 +250,11 @@
       "name": "maillist-tests-palette-is-shared-while-the-theme-holds",
       "file": "tests/maillist-tests.el",
       "purpose": "The palette is reused while the theme holds and follows a face it changes."
+    },
+    {
+      "name": "maillist-tests-a-store-queries-its-own-file",
+      "file": "tests/maillist-tests.el",
+      "purpose": "Search and marks read the SQLite file the store was opened on, not the default one."
     }
   ]
 }
