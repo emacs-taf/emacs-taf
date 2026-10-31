@@ -158,6 +158,11 @@ to every repository changed from this workspace.
   that never grow the standard line height, consistent spacing and state styling
   through theme tokens. The catalog accumulates across applications so later
   text apps reuse it instead of rebuilding the same control.
+  Type size comes from the user's Emacs: a view or component never sets
+  `:font-size` or any equivalent shrinking, and hierarchy is expressed through
+  colour, weight, spacing and position. A short window drops a whole row rather
+  than shrinking text. `grep -rn ':font-size'` over the application should stay
+  empty; only an explicit user request changes a size.
 - Interactive states must not stack.  A control or row that is already
   active or selected keeps its selected presentation and takes no
   pointer-hover highlight; hover feedback belongs to unselected targets
