@@ -69,7 +69,7 @@
   },
   "etaf-diagram": {
    "url": "https://github.com/emacs-taf/etaf-diagram.git",
-   "revision": "0aa7e4fa5b2e1d192dfc2cc422494042705e24ee",
+   "revision": "97455cd27cf7cb02128b8b2dfe7643b4784146cd",
    "branch": "main",
    "role": "application"
   },
