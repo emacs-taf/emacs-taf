@@ -3,7 +3,7 @@
   "repositories": {
     "ebox": {
       "url": "https://github.com/emacs-taf/ebox.git",
-      "revision": "5f69eea9220866ff491713729eb8d7a46fb5e466",
+      "revision": "356e1ce46d2a57e1ee2c57d615501e3284acd57b",
       "branch": "main",
       "role": "framework"
     },
@@ -27,7 +27,7 @@
     },
     "etaf": {
       "url": "https://github.com/emacs-taf/etaf.git",
-      "revision": "717ba173496033ec662cbdbcf3e83829b55f5705",
+      "revision": "610af79e2d7920c09254235ba10a7948ca302135",
       "branch": "main",
       "role": "framework"
     },
@@ -93,7 +93,7 @@
     },
     "etaf-md-preview": {
       "url": "https://github.com/emacs-taf/etaf-md-preview.git",
-      "revision": "4d74a923cf3732530d2ba53d260829c216949440",
+      "revision": "023eda9b1a73bbc1352e79b89a4967f183175434",
       "branch": "main",
       "role": "application"
     },
