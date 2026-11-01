@@ -535,28 +535,45 @@ an incomplete report.
 
 A GUI scenario that presses keys must first let the command loop reach its
 waiting state. `(execute-kbd-macro KEYS)` evaluated synchronously through
-emacsclient runs while the loop is not reading input, so an application that
-takes the input channel at `input-method-function` never receives the keys and
-the evaluation blocks. Delay the injection instead, and the timer fires after
-the evaluation returned with the loop waiting:
+emacsclient runs while the loop is not reading input, so the keys never reach
+`read-event` and the evaluation blocks as soon as an application takes over the
+input path. Delay the injection instead, and the timer fires after the
+evaluation returned with the loop waiting:
 
 ```elisp
 (run-with-timer 0.35 nil (lambda () (execute-kbd-macro (kbd "C-e"))))
 ```
 
-That route proves the whole path: `read-event`, the application's input hook,
-the command the hook triggers and the repaint that follows. A keymap question
-is cheaper to answer by queueing the keys on the loop, which skips the input
-hook entirely:
+That route proves the whole path: `read-event`, dispatch through the active
+maps, the command and the repaint that follows. A keymap question is cheaper to
+answer by queueing the keys on the loop, which skips `read-event` entirely:
 
 ```elisp
 (setq unread-command-events (listify-key-sequence (kbd "C-e")))
 ```
 
-Both routes prove that binding resolution, dispatch and the resulting state
-agree with the scenario. Neither proves physical input latency, and neither is
-a user's own keystroke: the timer route shows that the handler runs, not that a
-person can reach it in time or that the terminal delivered the same key code.
+That route proves binding resolution and dispatch only; it never reaches a hook
+below the keymaps. An application that catches a system input method by
+remapping `self-insert-command` is verified by injecting the character as
+`last-command-event`, because a key sequence only reaches the remapped command
+after a keymap lookup:
+
+```elisp
+(let ((last-command-event ?中)) (call-interactively 'self-insert-command))
+```
+
+**Verify in a dedicated instance of the application, never in the Emacs you are
+using.** A key delivered into the wrong context does not fail cleanly: a path
+that blocks — an input method waiting for its candidate window, for example —
+spins at 100% CPU and leaves the instance frozen with no way out but a forced
+kill. Start a dedicated instance as described in
+[Validate an isolated checkout in a real GUI](#validate-an-isolated-checkout-in-a-real-gui)
+and close it by its recorded PID when the pass ends. Batch first, then the
+dedicated GUI instance, then a person's own keystrokes.
+
+None of the injected routes proves physical input latency, and none is a user's
+own keystroke: they show that the handler runs, not that a person can reach it
+in time or that the terminal delivered the same key code.
 
 ## Capture a terminal session
 
