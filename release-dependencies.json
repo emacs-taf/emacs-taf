@@ -73,12 +73,6 @@
     },
     "etaf-pomodoro": {
       "resources": []
-    },
-    "maillist": {
-      "resources": []
-    },
-    "etaf-org-preview": {
-      "resources": []
     }
   },
   "targets": [
