@@ -288,6 +288,28 @@ buffer 快照开始的第二轮不计时样本。场景文件在字节编译副�
 快照上计时第二轮的 `:invoke`，因此该操作必须作用于当前 buffer。退出码 0 表示通过，
 1 表示预算、验证或孪生检查失败，2 表示报告不完整。
 
+### 给运行中的应用投递按键
+
+GUI 场景要按真实按键时，先让命令循环进入等待输入的状态。用 emacsclient 同步求值
+`(execute-kbd-macro KEYS)` 时，命令循环并不在读输入；在 `input-method-function`
+上接管输入的应用收不到这些键，求值自己会卡住。把投递延后，定时器会在求值返回、
+命令循环开始等待之后触发：
+
+```elisp
+(run-with-timer 0.35 nil (lambda () (execute-kbd-macro (kbd "C-e"))))
+```
+
+这条路走完整条链路：`read-event`、应用自己的输入钩子、钩子触发的命令、之后的
+重新绘制。只关心 keymap 时，可以把键直接放进命令循环的队列，跳过输入钩子：
+
+```elisp
+(setq unread-command-events (listify-key-sequence (kbd "C-e")))
+```
+
+两条路都只证明绑定解析、命令分派和最终状态与场景一致。它们都不证明物理输入延迟，
+也都不是用户本人按键：定时器那条只说明处理函数会跑，不说明人来得及按下它，也不
+说明终端送来的键码相同。
+
 ## 截取一次终端会话
 
 `scripts/tui-capture.py` 在真实的伪终端里运行一条命令并保存最终屏幕，因此终端（TUI）布局以终端显示为准，而不是以 GUI frame 为准。它需要 `pyte` 和 `Pillow`（`pip install pyte pillow`）。

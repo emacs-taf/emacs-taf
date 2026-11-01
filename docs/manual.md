@@ -531,6 +531,33 @@ the selected window, so its operation must act on the current buffer. Exit
 status is 0 for a pass, 1 for a failed budget, verification or twin, and 2 for
 an incomplete report.
 
+### Deliver keys to a running application
+
+A GUI scenario that presses keys must first let the command loop reach its
+waiting state. `(execute-kbd-macro KEYS)` evaluated synchronously through
+emacsclient runs while the loop is not reading input, so an application that
+takes the input channel at `input-method-function` never receives the keys and
+the evaluation blocks. Delay the injection instead, and the timer fires after
+the evaluation returned with the loop waiting:
+
+```elisp
+(run-with-timer 0.35 nil (lambda () (execute-kbd-macro (kbd "C-e"))))
+```
+
+That route proves the whole path: `read-event`, the application's input hook,
+the command the hook triggers and the repaint that follows. A keymap question
+is cheaper to answer by queueing the keys on the loop, which skips the input
+hook entirely:
+
+```elisp
+(setq unread-command-events (listify-key-sequence (kbd "C-e")))
+```
+
+Both routes prove that binding resolution, dispatch and the resulting state
+agree with the scenario. Neither proves physical input latency, and neither is
+a user's own keystroke: the timer route shows that the handler runs, not that a
+person can reach it in time or that the terminal delivered the same key code.
+
 ## Capture a terminal session
 
 `scripts/tui-capture.py` runs a command in a real pseudo-terminal and saves the
