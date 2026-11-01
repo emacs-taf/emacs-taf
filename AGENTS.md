@@ -486,6 +486,10 @@ unrelated root files) instead of the child's sealed tree.
   (`jj log -r main --no-graph -T commit_id`) in workspace.json together with the
   checks. `python3 scripts/workspace.py status` compares that bookmark, not `@`.
   Never describe uncommitted trees or an unsealed `@` as a reproducible checkpoint.
+- Updating a pin replaces only the `revision` value of the affected entries.
+  Never rewrite the whole file: a full JSON dump re-indents every line, so a
+  three-revision checkpoint shows up as a few hundred changed lines and
+  reviewers cannot see which repositories moved.
 
 ### History and recovery
 
