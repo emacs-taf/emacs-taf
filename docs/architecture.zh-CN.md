@@ -136,6 +136,8 @@ ETAF Component 的静态声明片段是：
 
 区域导航、方向键、编辑状态、Escape 与原生中断、应用绑定和帮助的详细目标统一由[区域导航与键盘交互方案](keyboard-navigation.zh-CN.md)维护。本节规定其共享输入路径和分层边界。
 
+渲染页就地编辑的目标契约见 [渲染页就地编辑方案](rendered-page-editing.zh-CN.md)：页面是编辑前端，源文档是后端，一次按键只重画受影响的块。
+
 ```text
 Emacs 输入
   → Ebox 按 buffer 中已写入的节点与 keymap 确定目标、焦点和操作边界
