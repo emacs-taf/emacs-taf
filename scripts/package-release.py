@@ -9,6 +9,7 @@ profiles with no source load paths.  User Emacs profiles are never touched.
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import contextlib
 import functools
 import hashlib
@@ -397,14 +398,58 @@ def prefetch(directory, emacs):
                       "packages": len(manifest["packages"])}, indent=2))
 
 
+def installation_pairs(targets, paths, community):
+    """Return the (TARGET, ENTRY) installations a gate must run."""
+    pairs = []
+    for target in dict.fromkeys(targets):
+        wanted = ("package-install",) if target in community else tuple(paths)
+        pairs.extend((target, entry) for entry in wanted)
+    return pairs
+
+
+def check_installation(directory, emacs, target, entry, names, community, standard_base, smoke):
+    """Install TARGET through ENTRY in one fresh profile and return its result."""
+    with tempfile.TemporaryDirectory(prefix="etaf-install-") as profile:
+        env = dict(os.environ, ETAF_INSTALL_ARCHIVE=str(directory),
+                   ETAF_INSTALL_PROFILE=profile, ETAF_INSTALL_TARGET=target)
+        env.pop("EMACSLOADPATH", None)
+        env.pop("ETAF_INSTALL_DIRECT", None)
+        env.pop("ETAF_INSTALL_STANDARD_ARCHIVES", None)
+        if standard_base:
+            env["ETAF_INSTALL_STANDARD_ARCHIVES"] = standard_base
+        if entry == "package-install":
+            env["ETAF_INSTALL_DIRECT"] = "1"
+        started = time.monotonic()
+        log = directory / f"installation-{target}-{entry}.log"
+        stdout, stderr = run([emacs, "-Q", "--batch", "-l", str(smoke)],
+                             cwd=profile, env=env,
+                             timeout=INSTALL_TIMEOUT, log_file=log)
+        text = (stdout + b"\n" + stderr).decode(errors="replace")
+    diagnostics = scan_diagnostics(text, names, target not in community)
+    if diagnostics:
+        raise ValueError(f"Installation diagnostics for {target}:\n"
+                         + "\n".join(diagnostics[:12]) + f"\nlog={log}")
+    result = json.loads(stdout)
+    if (result.get("status") != "ok" or result.get("target") != target
+            or result.get("entry") != entry or not result.get("emacs")
+            or not result.get("system")):
+        raise ValueError(f"Installation did not verify {target} through {entry}")
+    result["seconds"] = round(time.monotonic() - started, 3)
+    print(f"Verified {target} through {entry}: Emacs {result['emacs']} on "
+          f"{result['system']}; {result['seconds']} s", flush=True)
+    return result
+
+
 def verify(directory, emacs, targets, paths=("etaf-install",), standard_archives=None,
-           scope="full"):
+           scope="full", jobs=None, reason=None):
     """Exercise PATHS in separate disposable profiles.
 
     `etaf-install' is the documented entry, and it installs through package.el,
     so it is the whole gate by default; `package-install' joins it only for
     community packages, which ETAF does not open, and when the installer itself
     changed and its own path is what needs proving.
+    Profiles are independent, so JOBS of them install at once; the work per
+    profile is byte-compiling the same dependency tree, which no profile shares.
     A failed attempt invalidates earlier success evidence, including failures
     before Emacs starts. Logs are diagnostic evidence, never publication inputs.
     STANDARD_ARCHIVES serves a prefetched snapshot on localhost; without it the
@@ -428,38 +473,20 @@ def verify(directory, emacs, targets, paths=("etaf-install",), standard_archives
         # open it and cannot check its capabilities, so it is verified through
         # package.el only, which is how a visitor installs it.
         community_only = set(manifest.get("community", {}))
-        for target in dict.fromkeys([*targets, *community_only]):
-            wanted = ("package-install",) if target in community_only else tuple(paths)
-            for entry in wanted:
-                with tempfile.TemporaryDirectory(prefix="etaf-install-") as profile:
-                    env = dict(os.environ, ETAF_INSTALL_ARCHIVE=str(directory),
-                               ETAF_INSTALL_PROFILE=profile, ETAF_INSTALL_TARGET=target)
-                    env.pop("EMACSLOADPATH", None)
-                    env.pop("ETAF_INSTALL_DIRECT", None)
-                    env.pop("ETAF_INSTALL_STANDARD_ARCHIVES", None)
-                    if standard_base:
-                        env["ETAF_INSTALL_STANDARD_ARCHIVES"] = standard_base
-                    if entry == "package-install":
-                        env["ETAF_INSTALL_DIRECT"] = "1"
-                    started = time.monotonic()
-                    log = directory / f"installation-{target}-{entry}.log"
-                    stdout, stderr = run([emacs, "-Q", "--batch", "-l", str(smoke)],
-                                         cwd=profile, env=env,
-                                         timeout=INSTALL_TIMEOUT, log_file=log)
-                    text = (stdout + b"\n" + stderr).decode(errors="replace")
-                    diagnostics = scan_diagnostics(text, names, target not in community_only)
-                    if diagnostics:
-                        raise ValueError(f"Installation diagnostics for {target}:\n"
-                                         + "\n".join(diagnostics[:12]) + f"\nlog={log}")
-                    result = json.loads(stdout)
-                    if (result.get("status") != "ok" or result.get("target") != target
-                            or result.get("entry") != entry or not result.get("emacs")
-                            or not result.get("system")):
-                        raise ValueError(f"Installation did not verify {target} through {entry}")
-                    result["seconds"] = round(time.monotonic() - started, 3)
-                    results.append(result)
-                    print(f"Verified {target} through {entry}: Emacs {result['emacs']} on {result['system']}; {result['seconds']} s", flush=True)
+        pairs = installation_pairs([*targets, *community_only], paths, community_only)
+        # Each profile byte-compiles the same tree, so a few at a time keeps
+        # the machine responsive; more workers mostly add contention.
+        workers = max(1, min(jobs or 4, len(pairs)))
+        with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = {pool.submit(check_installation, directory, emacs, target, entry,
+                                   names, community_only, standard_base, smoke): (target, entry)
+                       for target, entry in pairs}
+            for future in concurrent.futures.as_completed(futures):
+                # The first failure stops the gate: earlier successes are not
+                # evidence once one installation is known to be broken.
+                results.append(future.result())
     evidence = {"schema": 1, "scope": scope, "targets": list(dict.fromkeys(targets)),
+                "reason": reason,
                 "paths": list(dict.fromkeys(paths)),
                 "manifest_sha256": manifest_digest,
                 "validator_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
@@ -555,12 +582,13 @@ def stage(directory, output):
 
     if scope == "full":
         expected = {(name, entry) for name in declared for entry in entries(name)}
-    elif scope == "presentation":
-        # A presentation-only release names the changed targets explicitly; the
-        # release tool only chooses this scope after diffing the shipped files.
+    elif scope == "selected":
+        # A selected gate names the targets it verified: the release tool picks
+        # those whose shipped bytes changed plus the targets that install them,
+        # and an unchanged tarball cannot change under its version anyway.
         scoped = report.get("targets") or []
         if not scoped or any(name not in declared for name in scoped):
-            raise ValueError("Presentation evidence names no declared target")
+            raise ValueError("Selected evidence names no declared target")
         expected = {(name, entry) for name in scoped for entry in entries(name)}
     else:
         raise ValueError(f"Unknown installation scope: {scope}")
@@ -618,12 +646,15 @@ def main():
             command.add_argument("--directory", type=Path, required=True)
         if name == "verify":
             command.add_argument("--emacs", default="emacs")
+            command.add_argument("--jobs", type=int,
+                                 help="Installations to run at once (default: 4, capped by the target count)")
             command.add_argument("--paths", choices=("etaf-install", "package-install", "both"),
                                  default="etaf-install",
                                  help="Installation paths to verify (default: etaf-install)")
             command.add_argument("--target", action="append")
-            command.add_argument("--scope", choices=("full", "presentation"), default="full",
-                                 help="Record a full gate or a scoped presentation-only gate")
+            command.add_argument("--scope", choices=("full", "selected"), default="full",
+                                 help="Record a full gate or a gate of the named targets")
+            command.add_argument("--reason", help="Why a selected gate covers these targets")
             command.add_argument("--standard-archives", type=Path,
                                  help="Serve a prefetched standard archive snapshot instead of live archives")
         elif name == "prefetch":
@@ -647,7 +678,7 @@ def main():
         paths = ("etaf-install", "package-install") if args.paths == "both" else (args.paths,)
         verify(args.directory.resolve(), args.emacs, args.target or release_targets(), paths,
                args.standard_archives.resolve() if args.standard_archives else None,
-               args.scope)
+               args.scope, args.jobs, args.reason)
     elif args.command == "stage":
         stage(args.directory.resolve(), args.output.resolve())
     elif args.command == "published":

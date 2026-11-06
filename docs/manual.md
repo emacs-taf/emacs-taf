@@ -132,7 +132,10 @@ publisher refuses a changed versioned tarball.
 `release-check` runs each supported target through `etaf-install`, the documented
 entry, in independent `emacs -Q` profiles; `--paths both` adds an ordinary
 `package-install` run, which is how a community package without an ETAF entry is
-checked. It checks dependency origins,
+checked. Installations run in parallel (`--jobs`, default four), and
+`--scope selected --reason TEXT` records a gate that covered a named subset;
+`--standard-archives DIR` installs from one prefetched archive snapshot instead
+of the live hosts. It checks dependency origins,
 offline reopening, reactive rendering, the actual gallery entry, copying and
 running a gallery example, and book data.
 Compiler warnings and demoted loader errors fail the check even when Emacs exits

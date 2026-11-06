@@ -72,7 +72,7 @@ make release-tool-tests
 
 `release-build` 拒绝未封口的根目录、已有输出、缺失资源及不完整或版本过旧的依赖闭包。清单记录根仓库和提供方版本。同名同版本包文件不得被不同字节替换；新发布必须更新包的 `Version` 头。
 
-`release-check` 为每个受支持目标运行安装入口，每次使用独立的 `emacs -Q` 配置；`--paths both` 再跑一遍普通 `package-install`，没有 ETAF 入口的社区包就靠这条路径验证。它检查依赖来源、离线重开、响应式渲染、真实画廊入口、复制并运行画廊示例，以及手册数据。即使 Emacs 返回成功，编译警告和被降级为日志的加载错误也会阻止通过。新尝试会使旧的 `installation.json` 失效；成功报告记录清单、验证器摘要，以及 Emacs、平台和已测目标。日志和本机证据应保持私有，不放入公开包目录。每个受支持的 Emacs/平台组合须分别验证；一个平台的结果不证明另一个平台。GUI 渲染与交互另行实测。
+`release-check` 为每个受支持目标运行安装入口，每次使用独立的 `emacs -Q` 配置；`--paths both` 再跑一遍普通 `package-install`，没有 ETAF 入口的社区包就靠这条路径验证。安装并行执行（`--jobs`，默认四个）；`--scope selected --reason TEXT` 记录只覆盖指定目标的门禁；`--standard-archives DIR` 用一份预取的归档快照安装，不联网取各包索引。它检查依赖来源、离线重开、响应式渲染、真实画廊入口、复制并运行画廊示例，以及手册数据。即使 Emacs 返回成功，编译警告和被降级为日志的加载错误也会阻止通过。新尝试会使旧的 `installation.json` 失效；成功报告记录清单、验证器摘要，以及 Emacs、平台和已测目标。日志和本机证据应保持私有，不放入公开包目录。每个受支持的 Emacs/平台组合须分别验证；一个平台的结果不证明另一个平台。GUI 渲染与交互另行实测。
 
 定向诊断可运行 `scripts/package-release.py verify --directory DIR --target etaf-ui`；`--paths package-install` 只验证普通 package.el 安装。这类局部证据不证明省略的目标或安装路径。
 
