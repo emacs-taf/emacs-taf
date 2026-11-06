@@ -397,9 +397,14 @@ def prefetch(directory, emacs):
                       "packages": len(manifest["packages"])}, indent=2))
 
 
-def verify(directory, emacs, targets, direct=False, standard_archives=None, scope="full"):
-    """Exercise entry and standard installs in separate disposable profiles.
+def verify(directory, emacs, targets, paths=("etaf-install",), standard_archives=None,
+           scope="full"):
+    """Exercise PATHS in separate disposable profiles.
 
+    `etaf-install' is the documented entry, and it installs through package.el,
+    so it is the whole gate by default; `package-install' joins it only for
+    community packages, which ETAF does not open, and when the installer itself
+    changed and its own path is what needs proving.
     A failed attempt invalidates earlier success evidence, including failures
     before Emacs starts. Logs are diagnostic evidence, never publication inputs.
     STANDARD_ARCHIVES serves a prefetched snapshot on localhost; without it the
@@ -424,8 +429,8 @@ def verify(directory, emacs, targets, direct=False, standard_archives=None, scop
         # package.el only, which is how a visitor installs it.
         community_only = set(manifest.get("community", {}))
         for target in dict.fromkeys([*targets, *community_only]):
-            modes = (True,) if direct or target in community_only else (False, True)
-            for direct_mode in modes:
+            wanted = ("package-install",) if target in community_only else tuple(paths)
+            for entry in wanted:
                 with tempfile.TemporaryDirectory(prefix="etaf-install-") as profile:
                     env = dict(os.environ, ETAF_INSTALL_ARCHIVE=str(directory),
                                ETAF_INSTALL_PROFILE=profile, ETAF_INSTALL_TARGET=target)
@@ -434,11 +439,10 @@ def verify(directory, emacs, targets, direct=False, standard_archives=None, scop
                     env.pop("ETAF_INSTALL_STANDARD_ARCHIVES", None)
                     if standard_base:
                         env["ETAF_INSTALL_STANDARD_ARCHIVES"] = standard_base
-                    if direct_mode:
+                    if entry == "package-install":
                         env["ETAF_INSTALL_DIRECT"] = "1"
-                    entry = "package-install" if direct_mode else "etaf-install"
                     started = time.monotonic()
-                    log = directory / f"installation-{target}-{'direct' if direct_mode else 'entry'}.log"
+                    log = directory / f"installation-{target}-{entry}.log"
                     stdout, stderr = run([emacs, "-Q", "--batch", "-l", str(smoke)],
                                          cwd=profile, env=env,
                                          timeout=INSTALL_TIMEOUT, log_file=log)
@@ -456,6 +460,7 @@ def verify(directory, emacs, targets, direct=False, standard_archives=None, scop
                     results.append(result)
                     print(f"Verified {target} through {entry}: Emacs {result['emacs']} on {result['system']}; {result['seconds']} s", flush=True)
     evidence = {"schema": 1, "scope": scope, "targets": list(dict.fromkeys(targets)),
+                "paths": list(dict.fromkeys(paths)),
                 "manifest_sha256": manifest_digest,
                 "validator_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
                 "smoke_sha256": hashlib.sha256(smoke.read_bytes()).hexdigest(),
@@ -546,7 +551,7 @@ def stage(directory, output):
     scope = report.get("scope", "full")
     def entries(name):
         # Community packages have no ETAF entry; only package.el installs them.
-        return ("package-install",) if name in community_only else ("etaf-install", "package-install")
+        return ("package-install",) if name in community_only else ("etaf-install",)
 
     if scope == "full":
         expected = {(name, entry) for name in declared for entry in entries(name)}
@@ -567,7 +572,7 @@ def stage(directory, output):
             or len({(item["emacs"], item["system"]) for item in installations}) != 1
             or not re.fullmatch(r"[0-9]+(?:\.[0-9]+)+", installations[0]["emacs"])
             or tuple(map(int, installations[0]["emacs"].split("."))) < (29, 1)):
-        raise ValueError("Publication requires the recorded targets through both installation paths")
+        raise ValueError("Publication requires the recorded targets through etaf-install")
     sources = {name: checkpoint[name]["revision"] for name in selection["packages"]}
     sources["etaf-install"] = revision
     registry = community_packages()
@@ -613,7 +618,9 @@ def main():
             command.add_argument("--directory", type=Path, required=True)
         if name == "verify":
             command.add_argument("--emacs", default="emacs")
-            command.add_argument("--direct", action="store_true", help="Only verify package-install (default: both installation paths)")
+            command.add_argument("--paths", choices=("etaf-install", "package-install", "both"),
+                                 default="etaf-install",
+                                 help="Installation paths to verify (default: etaf-install)")
             command.add_argument("--target", action="append")
             command.add_argument("--scope", choices=("full", "presentation"), default="full",
                                  help="Record a full gate or a scoped presentation-only gate")
@@ -637,7 +644,8 @@ def main():
     elif args.command == "prefetch":
         prefetch(args.directory.resolve(), args.emacs)
     elif args.command == "verify":
-        verify(args.directory.resolve(), args.emacs, args.target or release_targets(), args.direct,
+        paths = ("etaf-install", "package-install") if args.paths == "both" else (args.paths,)
+        verify(args.directory.resolve(), args.emacs, args.target or release_targets(), paths,
                args.standard_archives.resolve() if args.standard_archives else None,
                args.scope)
     elif args.command == "stage":

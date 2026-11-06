@@ -72,15 +72,15 @@ make release-tool-tests
 
 `release-build` 拒绝未封口的根目录、已有输出、缺失资源及不完整或版本过旧的依赖闭包。清单记录根仓库和提供方版本。同名同版本包文件不得被不同字节替换；新发布必须更新包的 `Version` 头。
 
-`release-check` 为每个受支持目标分别运行安装入口和普通 `package-install`，每次使用独立的 `emacs -Q` 配置。它检查依赖来源、离线重开、响应式渲染、真实画廊入口、复制并运行画廊示例，以及手册数据。即使 Emacs 返回成功，编译警告和被降级为日志的加载错误也会阻止通过。新尝试会使旧的 `installation.json` 失效；成功报告记录清单、验证器摘要，以及 Emacs、平台和已测目标。日志和本机证据应保持私有，不放入公开包目录。每个受支持的 Emacs/平台组合须分别验证；一个平台的结果不证明另一个平台。GUI 渲染与交互另行实测。
+`release-check` 为每个受支持目标运行安装入口，每次使用独立的 `emacs -Q` 配置；`--paths both` 再跑一遍普通 `package-install`，没有 ETAF 入口的社区包就靠这条路径验证。它检查依赖来源、离线重开、响应式渲染、真实画廊入口、复制并运行画廊示例，以及手册数据。即使 Emacs 返回成功，编译警告和被降级为日志的加载错误也会阻止通过。新尝试会使旧的 `installation.json` 失效；成功报告记录清单、验证器摘要，以及 Emacs、平台和已测目标。日志和本机证据应保持私有，不放入公开包目录。每个受支持的 Emacs/平台组合须分别验证；一个平台的结果不证明另一个平台。GUI 渲染与交互另行实测。
 
-定向诊断可运行 `scripts/package-release.py verify --directory DIR --target etaf-ui`；`--direct` 仅验证普通 package.el 安装。这类局部证据不证明省略的目标或安装路径。
+定向诊断可运行 `scripts/package-release.py verify --directory DIR --target etaf-ui`；`--paths package-install` 只验证普通 package.el 安装。这类局部证据不证明省略的目标或安装路径。
 
 完成受支持环境的验证后，用 `make release-publish RELEASE_DIR=/path/to/release` 发布该归档。命令委托给手册站点的仅包发布器，不重新构建或改变页面。首次同时上线站点和包归档时，使用 `make -C etaf-manual site-publish PUBLISH_ARGS='--packages /path/to/release'`。传输、部署锁、版本不可变、历史下载和回滚的契约见[站点部署手册](https://github.com/emacs-taf/etaf-manual/blob/main/docs/manual.zh-CN.md#发布站点和包归档)。
 
-`package-release.py stage --directory DIR --output NEW` 是发布器调用的本地门禁。它要求封口工作区清单与记录的提供方版本一致，验证器、安装探针和清单摘要仍有效，并在同一记录的 Emacs/平台上完成全部五个目标的两条安装路径。局部证据会被拒绝；输出只含 `archive-contents`、公开清单及其中列出的源码 tar 包。报告是本地验证证据，不是签名；此门禁本身不认证其他 Emacs 版本、平台或 GUI 行为。
+`package-release.py stage --directory DIR --output NEW` 是发布器调用的本地门禁。它要求封口工作区清单与记录的提供方版本一致，验证器、安装探针和清单摘要仍有效，并在同一记录的 Emacs/平台上完成全部目标的安装入口验证。局部证据会被拒绝；输出只含 `archive-contents`、公开清单及其中列出的源码 tar 包。报告是本地验证证据，不是签名；此门禁本身不认证其他 Emacs 版本、平台或 GUI 行为。
 
-根仓库的 `Package installation` GitHub Actions 工作流定义 Linux、macOS、Windows 上 Emacs 29.1 和 30.2 的批处理矩阵。它只获取检查点记录的精确提供方提交，然后在无源码加载路径的环境中构建并验证所有目标的两条安装路径；矩阵中的失败不能忽略。成功作业仅把机器可读清单和安装报告保留为 CI 附件，不部署包、不上传安装日志。发布前须检查对应发布提交上的每一个作业。工作流文件本身不是通过证据，这些批处理检查也不认证 GUI 行为或本机使用的不同开发构建。
+根仓库的 `Package installation` GitHub Actions 工作流定义 Linux、macOS、Windows 上 Emacs 29.1 和 30.2 的批处理矩阵。它只获取检查点记录的精确提供方提交，然后在无源码加载路径的环境中构建并验证所有目标的安装入口；矩阵中的失败不能忽略。成功作业仅把机器可读清单和安装报告保留为 CI 附件，不部署包、不上传安装日志。发布前须检查对应发布提交上的每一个作业。工作流文件本身不是通过证据，这些批处理检查也不认证 GUI 行为或本机使用的不同开发构建。
 
 只在 POSIX 上通过会掩盖两类失败：遍历目录的工具里路径风格比较错误（Windows 上的 `Path` 不等于 `PurePosixPath`），以及已安装包的 autoload 文件通过宿主的 `load-path` 而不是包自身根目录解析。Windows 格子是这两类问题的平台证据；格子失败时读日志，不要只看退出码猜。
 

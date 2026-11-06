@@ -58,35 +58,43 @@ class PackageReleaseVerificationTests(unittest.TestCase):
         self.assertEqual(result.returncode == 0, success, result.stdout + result.stderr)
         return result
 
-    def test_verification_covers_entry_and_standard_install_in_separate_profiles(self):
+    def test_verification_proves_the_entry_path_by_default(self):
         self.build()
         self.verify()
         report = json.loads((self.archive / "installation.json").read_text())
         self.assertEqual(report["manifest_sha256"], hashlib.sha256(
             (self.archive / "manifest.json").read_bytes()).hexdigest())
-        self.assertEqual({item["entry"] for item in report["installations"]},
-                         {"etaf-install", "package-install"})
+        self.assertEqual(report["paths"], ["etaf-install"])
+        self.assertEqual({item["entry"] for item in report["installations"]}, {"etaf-install"})
         self.assertTrue(all(item["status"] == "ok" and item["emacs"] and item["system"]
                             for item in report["installations"]))
         self.assertEqual({item["target"] for item in report["installations"]}, {"ekp"})
 
+    def test_verification_covers_both_paths_when_asked(self):
+        self.build()
+        self.verify("--paths", "both")
+        report = json.loads((self.archive / "installation.json").read_text())
+        self.assertEqual(report["paths"], ["etaf-install", "package-install"])
+        self.assertEqual({item["entry"] for item in report["installations"]},
+                         {"etaf-install", "package-install"})
+
     def test_demoted_reload_errors_are_failures_even_when_emacs_exits_successfully(self):
         self.build('(message "Error in package--load-files-for-activation: fixture failure")')
-        result = self.verify("--direct", success=False)
+        result = self.verify("--paths", "package-install", success=False)
         self.assertIn("Installation diagnostics", result.stderr)
         self.assertIn("Error in package--load-files-for-activation", result.stderr)
         self.assertFalse((self.archive / "installation.json").exists())
-        self.assertTrue((self.archive / "installation-ekp-direct.log").is_file())
+        self.assertTrue((self.archive / "installation-ekp-package-install.log").is_file())
 
     def test_stdout_diagnostics_are_not_misreported_as_invalid_json(self):
         self.build('(princ "Warning: fixture diagnostic\\n")')
-        result = self.verify("--direct", success=False)
+        result = self.verify("--paths", "package-install", success=False)
         self.assertIn("Installation diagnostics", result.stderr)
         self.assertIn("Warning: fixture diagnostic", result.stderr)
 
     def test_real_compilation_warnings_block_verification(self):
         self.build('(defun ekp-release-fixture () (ekp-missing-function))')
-        result = self.verify("--direct", success=False)
+        result = self.verify("--paths", "package-install", success=False)
         self.assertIn("Installation diagnostics", result.stderr)
         self.assertIn("Warning:", result.stderr)
 
@@ -100,9 +108,10 @@ class PackageReleaseVerificationTests(unittest.TestCase):
 
     def test_entry_load_error_keeps_a_log_but_no_success_report(self):
         self.build('(error "Fixture entry failed")')
-        self.verify("--direct", success=False)
+        self.verify("--paths", "package-install", success=False)
         self.assertFalse((self.archive / "installation.json").exists())
-        self.assertIn("Fixture entry failed", (self.archive / "installation-ekp-direct.log").read_text())
+        self.assertIn("Fixture entry failed",
+                      (self.archive / "installation-ekp-package-install.log").read_text())
 
 
 class PackageReleaseDiagnosticAttributionTests(unittest.TestCase):
@@ -288,9 +297,9 @@ class PackageReleaseStageTests(unittest.TestCase):
         self.report = {"schema": 1, "manifest_sha256": self.digest(self.archive / "manifest.json"),
                        "validator_sha256": self.digest(self.root / "scripts/package-release.py"),
                        "smoke_sha256": self.digest(self.root / "scripts/install-smoke.el"),
-                       "installations": [{"target": target, "entry": entry, "status": "ok",
+                       "installations": [{"target": target, "entry": "etaf-install", "status": "ok",
                                           "emacs": "29.1", "system": "gnu/linux"}
-                                         for target in targets for entry in ("etaf-install", "package-install")]}
+                                         for target in targets]}
         self.output = self.base / "public"
 
     @staticmethod
@@ -348,7 +357,7 @@ class PackageReleaseStageTests(unittest.TestCase):
                     for row in rows:
                         row["emacs"] = "28.2"
                 # b983b8a reworded the refusal; the check is the same gate.
-                self.assertIn("recorded targets through both installation paths",
+                self.assertIn("recorded targets through etaf-install",
                               self.stage(success=False).stderr)
 
     def test_publisher_refuses_partial_evidence_before_building_or_connecting(self):

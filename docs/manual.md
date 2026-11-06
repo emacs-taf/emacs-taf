@@ -129,8 +129,10 @@ changes only one of those root files still changes the
 those files unchanged when publishing another package at the same version. The
 publisher refuses a changed versioned tarball.
 
-`release-check` runs each supported target through both the installer and ordinary
-`package-install`, in independent `emacs -Q` profiles. It checks dependency origins,
+`release-check` runs each supported target through `etaf-install`, the documented
+entry, in independent `emacs -Q` profiles; `--paths both` adds an ordinary
+`package-install` run, which is how a community package without an ETAF entry is
+checked. It checks dependency origins,
 offline reopening, reactive rendering, the actual gallery entry, copying and
 running a gallery example, and book data.
 Compiler warnings and demoted loader errors fail the check even when Emacs exits
@@ -180,7 +182,7 @@ alone does not certify other Emacs versions, platforms or GUI behavior.
 The root's `Package installation` GitHub Actions workflow defines batch checks
 for Emacs 29.1 and 30.2 on Linux, macOS and Windows. It fetches only the exact
 provider commits recorded in the checkpoint, then builds and verifies all targets
-through both installation paths without source load paths. It first prefetches
+through the installer entry without source load paths. It first prefetches
 one live standard-archive snapshot for the whole run; each matrix job installs
 from that snapshot over localhost, so a throttled archive fails once with its
 HTTP status instead of as a missing dependency in every target. The matrix
