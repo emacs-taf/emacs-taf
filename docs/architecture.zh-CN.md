@@ -580,7 +580,7 @@ GUI 保持实际运行时的 GC 策略与用户设置，测量工具不能额外
 - `etaf-posframe` 是框架包：应用只暴露 View，浮动面板由它承载，所以归档必须先能装上它，应用的“作为面板打开”才成立。它依赖的窗口管理器 `posframe` 来自 GNU ELPA，因此该目标的能力清单声明 `gnu`，安装器才会注册那个归档。应用以 `<包>-open` 展示自己，安装器菜单与发布门禁都按这个约定检查；`etaf-pomodoro` 因此在 0.2.0 把 `etaf-pomodoro-start` 改名为 `etaf-pomodoro-open`，成为安装目标。
 - `etaf-telega` 通过声明 `telega` 与注册 MELPA 自动装齐依赖；`telega-server` 与账号仍未纳入（只检测）。
 - `etaf-weread` 与 `etaf-ncm` 的后端已随应用仓发布，提示、数据目录与检测都指向包内后端；系统侧只检测 Node.js、mpv 等程序。
-- `etaf-salvage` 与 `etaf-solitaire` 尚未纳入检查点，也没有引擎检测。`etaf-gamekit` 的 Godot 运行时由归档内的安装脚本与 `M-x etaf-gamekit-install-godot` 提供，写进 `~/.cache/emacs-taf/game-engines`；`etaf-xiangqi` 的 OpenSpiel 环境仍只能由源码侧 `make engine-openspiel` 构建，归档安装拿不到。
+- `etaf-salvage` 与 `etaf-solitaire` 尚未纳入检查点，也没有引擎检测。`etaf-gamekit` 的 Godot 与 OpenSpiel 运行时由归档内的安装脚本提供，分别由 `M-x etaf-gamekit-install-godot` 与 `M-x etaf-gamekit-install-openspiel` 安装，写进 `~/.cache/emacs-taf/game-engines`；两者都不再要求源码检出。
 - 组件的托管目录安装（`npm ci`/`make` 到 `package-user-dir/etaf/<包>/<版本>/`）与版本握手仍未实现。当前归档内的后端都是纯源码（Node、Python、Shell），随 tar 解包即可运行，所以这两个应用的“装完即用”不依赖它；需要托管安装的是将来带构建步骤的组件。
 
 ### 13.8 新增应用上架
