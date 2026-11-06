@@ -3,7 +3,7 @@
   "repositories": {
     "ebox": {
       "url": "https://github.com/emacs-taf/ebox.git",
-      "revision": "cbae96ca7cc6ba312a3e4b739ba282efeb58706b",
+      "revision": "cfdb826e1d98980e3a0cc701586f3821aab3f2d0",
       "branch": "main",
       "role": "framework"
     },
