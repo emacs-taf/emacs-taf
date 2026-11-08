@@ -99,7 +99,7 @@
     },
     "etaf-ncm": {
       "url": "https://github.com/emacs-taf/etaf-ncm.git",
-      "revision": "1ae01ea737f2f4b56dd43e65f169cbbebdd65dab",
+      "revision": "838c8557b04cbe45c8a65b3c8371332dfb5c2ec0",
       "branch": "main",
       "role": "application"
     },
