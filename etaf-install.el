@@ -86,9 +86,9 @@
     (ecss "CSS cascade engine" framework nil)
     (etaf-gamekit "Game runtime for Godot battles" framework nil)
     (etaf-ui "ETAF components and gallery" framework etaf-ui-gallery-open)
-    ;; The window manager itself comes from GNU ELPA, which the installer only
+    ;; The window manager itself comes from MELPA, which the installer only
     ;; registers when a target asks for it.
-    (etaf-posframe "Floating panel host" framework nil gnu)
+    (etaf-posframe "Floating panel host" framework nil melpa)
     (etaf "ETAF framework" framework nil)
     (etaf-db "ETAF SQLite backend" framework nil sqlite)
     (ekp "Knuth-Plass paragraph layout" framework nil)
