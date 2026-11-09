@@ -67,12 +67,6 @@
       "branch": "main",
       "role": "framework"
     },
-    "etaf-diagram": {
-      "url": "https://github.com/emacs-taf/etaf-diagram.git",
-      "revision": "b4c2115099ad5164522ce01182b70dcd455352c4",
-      "branch": "main",
-      "role": "application"
-    },
     "etaf-gamekit": {
       "url": "https://github.com/emacs-taf/etaf-gamekit.git",
       "revision": "451392c4733c8d512e1e2091e98b42aeb363aa32",
