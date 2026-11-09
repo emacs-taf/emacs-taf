@@ -153,7 +153,7 @@
     },
     "etaf-slides": {
       "url": "https://github.com/emacs-taf/etaf-slides.git",
-      "revision": "8f3b8e682bf4d3d0751d6e4d01a489eced6d57f7",
+      "revision": "a9fe31f919b482ce1ad3c57999c0aec2fed81a71",
       "branch": "main",
       "role": "application"
     },
