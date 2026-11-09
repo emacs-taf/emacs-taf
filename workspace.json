@@ -151,6 +151,12 @@
       "branch": "main",
       "role": "application"
     },
+    "etaf-slides": {
+      "url": "https://github.com/emacs-taf/etaf-slides.git",
+      "revision": "8f3b8e682bf4d3d0751d6e4d01a489eced6d57f7",
+      "branch": "main",
+      "role": "application"
+    },
     "etaf-solitaire": {
       "url": "https://github.com/emacs-taf/etaf-solitaire.git",
       "revision": "f0a6da34ace6b3bb88dc6a8992fefd34d612ddc7",

@@ -115,6 +115,7 @@ table names the framework repositories each one uses:
 | [etaf-browser](https://github.com/emacs-taf/etaf-browser) | Browser client with an address and status shell in the ETAF canvas | etaf, etaf-ui |
 | [etaf-algo-lab](https://github.com/emacs-taf/etaf-algo-lab) | Learn algorithms by watching, steering and comparing them inside Emacs | etaf, etaf-ui, ebox |
 | [etaf-screensaver](https://github.com/emacs-taf/etaf-screensaver) | Idle screensavers: canvas-only animation, input dismissal, grouped playback and adapted recorded animations | etaf, ebox |
+| [etaf-slides](https://github.com/emacs-taf/etaf-slides) | Present a markdown deck as slides: an aspect-preserving 16:9 stage, speaker notes, a slide overview and a presentation clock | etaf, etaf-ui, ebox |
 
 ### Games
 
