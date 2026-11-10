@@ -1,7 +1,7 @@
 ;;; -*- lexical-binding: t; -*-
 ;;; etaf-install.el --- Install ETAF with the Emacs package manager
 
-;; Version: 0.2.17
+;; Version: 0.2.18
 ;; Package-Requires: ((emacs "29.1"))
 ;; URL: https://github.com/emacs-taf/emacs-taf
 ;; Keywords: convenience
@@ -93,6 +93,7 @@
     (etaf-db "ETAF SQLite backend" framework nil sqlite)
     (ekp "Knuth-Plass paragraph layout" framework nil)
     (etaf-md-preview "Markdown reading view" application etaf-md-preview-open)
+    (etaf-org-preview "Org reading view" application etaf-org-preview-open)
     (etaf-video-player "Video with sound in a buffer" application etaf-video-player-open)
     (etaf-desktop "Windows and workspaces" application etaf-desktop-open)
     (etaf-manual "ETAF reference manual" application etaf-manual-open)
