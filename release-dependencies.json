@@ -34,7 +34,9 @@
       ]
     },
     "etaf-md-preview": {
-      "resources": []
+      "resources": [
+        "scripts"
+      ]
     },
     "etaf-org-preview": {},
     "etaf-video-player": {
