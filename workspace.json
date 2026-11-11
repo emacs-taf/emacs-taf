@@ -99,7 +99,7 @@
     },
     "etaf-org-preview": {
       "url": "https://github.com/emacs-taf/etaf-org-preview.git",
-      "revision": "66b9025933c56804337fc75f4b837bb0ad147655",
+      "revision": "84a00986f0f4c7280919eec051b1714fc83191dd",
       "branch": "main",
       "role": "application"
     },
