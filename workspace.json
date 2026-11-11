@@ -85,8 +85,8 @@
       "branch": "main",
       "role": "game"
     },
-    "etaf-md-preview": {
-      "url": "https://github.com/emacs-taf/etaf-md-preview.git",
+    "etaf-md": {
+      "url": "https://github.com/emacs-taf/etaf-md.git",
       "revision": "2bae0a7571ff44b047c8a18c493929399c7dbd62",
       "branch": "main",
       "role": "application"

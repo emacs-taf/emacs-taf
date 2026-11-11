@@ -296,9 +296,9 @@ Two lanes keep development fast without risking a stale archive:
 ```sh
 # dev: build the working copies, verify installation, never publish
 python3 scripts/package_archive.py build --directory /tmp/dev-archive \
-  --package etaf-md-preview=etaf-md-preview
+  --package etaf-md=etaf-md
 ETAF_INSTALL_ARCHIVE=/tmp/dev-archive ETAF_INSTALL_PROFILE=/tmp/profile \
-  ETAF_INSTALL_TARGET=etaf-md-preview emacs -Q --batch -l scripts/install-smoke.el
+  ETAF_INSTALL_TARGET=etaf-md emacs -Q --batch -l scripts/install-smoke.el
 
 # release: sealed commits only, version bumped, full gate, explicit publish
 make release-build RELEASE_DIR=/tmp/release-next

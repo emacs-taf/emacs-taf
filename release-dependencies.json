@@ -33,7 +33,7 @@
         "book"
       ]
     },
-    "etaf-md-preview": {
+    "etaf-md": {
       "resources": [
         "scripts"
       ]
@@ -89,7 +89,7 @@
     "etaf-manual",
     "etaf-db",
     "ekp",
-    "etaf-md-preview",
+    "etaf-md",
     "etaf-org-preview",
     "etaf-video-player",
     "etaf-desktop",

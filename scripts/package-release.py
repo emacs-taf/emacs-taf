@@ -501,7 +501,7 @@ def verify(directory, emacs, targets, paths=("etaf-install",), standard_archives
 GROUPS = {
     "Framework": {"etaf-install", "etaf-ui", "etaf-posframe", "etaf", "ebox", "ecss", "ekp",
                   "etaf-db"},
-    "Applications": {"etaf-md-preview", "etaf-rss", "etaf-reader", "etaf-algo-lab", "etaf-screensaver",
+    "Applications": {"etaf-md", "etaf-rss", "etaf-reader", "etaf-algo-lab", "etaf-screensaver",
                      "etaf-desktop", "etaf-miniflux", "etaf-ncm", "etaf-weread", "etaf-bili",
                      "etaf-youtube", "etaf-pi", "etaf-telega", "etaf-ascii-video",
                      "etaf-video-player", "etaf-video-studio", "etaf-manual", "etaf-telega",

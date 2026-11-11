@@ -92,7 +92,7 @@
     (etaf "ETAF framework" framework nil)
     (etaf-db "ETAF SQLite backend" framework nil sqlite)
     (ekp "Knuth-Plass paragraph layout" framework nil)
-    (etaf-md-preview "Markdown reading view" application etaf-md-preview-open)
+    (etaf-md "Markdown reading view" application etaf-md-open)
     (etaf-org-preview "Org reading view" application etaf-org-preview-open)
     (etaf-video-player "Video with sound in a buffer" application etaf-video-player-open)
     (etaf-desktop "Windows and workspaces" application etaf-desktop-open)

@@ -143,9 +143,9 @@ Lisp 与组件。
 ```sh
 # dev：直接打包工作区，验证安装，产物不可发布
 python3 scripts/package_archive.py build --directory /tmp/dev-archive \
-  --package etaf-md-preview=etaf-md-preview
+  --package etaf-md=etaf-md
 ETAF_INSTALL_ARCHIVE=/tmp/dev-archive ETAF_INSTALL_PROFILE=/tmp/profile \
-  ETAF_INSTALL_TARGET=etaf-md-preview emacs -Q --batch -l scripts/install-smoke.el
+  ETAF_INSTALL_TARGET=etaf-md emacs -Q --batch -l scripts/install-smoke.el
 
 # release：只读封口提交，提升版本，跑完整门禁，再显式发布
 make release-build RELEASE_DIR=/tmp/release-next
