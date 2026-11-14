@@ -438,11 +438,15 @@ unrelated root files) instead of the child's sealed tree.
 - The published bookmark is the `branch` recorded in `workspace.json` (`main`).
   jj does not derive the push remote from tracking, and no `git.fetch` or
   `git.push` default is configured, so always name the remote and the bookmark.
-- The user authorizes automatic delivery to aliyun and origin: after completing a
-  coherent group of validated commits, publish `@-` to the same-named branch on
-  both. No repeated approval is needed. Leave laycat configured; the user handles
-  its availability and delivery manually. Do not retry it or block delivery on it.
-  Keep local commits timely and push at validated checkpoints.
+- Publishing is a user decision. Prepare and validate locally, commit locally,
+  then report the revision and the local render path and stop. Do not push to
+  aliyun, origin, laycat or any other remote, and do not deploy an archive or
+  site, until the user has rendered the result and explicitly accepted it.
+  Acceptance covers that one delivery only; do not carry it to the next package
+  or the next version. Leave laycat configured; the user handles its
+  availability and delivery manually. Do not retry it or block delivery on it.
+  Keep local commits timely, but keep publication behind the acceptance gate.
+  The commands below run only after that acceptance.
 
   ```sh
   jj git fetch --remote aliyun
@@ -464,10 +468,11 @@ unrelated root files) instead of the child's sealed tree.
   an unpushed commit is backed up remotely.
 - The root workspace uses the same `origin`, `aliyun` and `laycat` remotes as the
   modules; move its `main` bookmark with `jj bookmark set main -r @-` before pushing.
-- A change users install from the ETAF package archive (`https://etaf.top/packages/`)
-  is not delivered until that archive serves it: bump the package `Version`, publish
-  the provider, record it in `workspace.json`, then build, gate and publish the
-  archive and read the published `manifest.json` back. `pi-skill etaf-archive-release
+- After acceptance, a change users install from the ETAF package archive
+  (`https://etaf.top/packages/`) is not delivered until that archive serves it:
+  bump the package `Version`, publish the provider, record it in `workspace.json`,
+  then build, gate and publish the archive and read the published `manifest.json`
+  back. `pi-skill etaf-archive-release
   release <package> --yes` runs that sequence and refuses to publish unless every
   install target passes the archive gate. Do not leave a package fix reachable only
   from the repositories. The gate fetches MELPA through Emacs' own `url.el`, which
