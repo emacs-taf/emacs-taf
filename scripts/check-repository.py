@@ -16,7 +16,11 @@ from urllib.parse import unquote
 POLICY_VERSION = 12
 DOC_NAMES = {'README.md', 'README.zh-CN.md', 'CHANGELOG.md', 'CHANGELOG.zh-CN.md',
              'AGENTS.md', 'docs/manual.md', 'docs/manual.zh-CN.md',
-             'docs/architecture.md', 'docs/architecture.zh-CN.md'}
+             'docs/architecture.md', 'docs/architecture.zh-CN.md',
+             # A package's extension contract is a maintained interface document,
+             # like the workspace keyboard contract: the container syntax, its
+             # parameters and the rules a definition follows.
+             'docs/extensions.md', 'docs/extensions.zh-CN.md'}
 WORKSPACE_DOC_NAMES = {'docs/keyboard-navigation.zh-CN.md'}
 DIRS = {'lisp', 'tests', 'examples', 'benchmarks', 'scripts', 'docs', 'native',
         'dictionaries', 'design', 'book', 'site', 'backends', '.github', '.gitea', '.githooks'}

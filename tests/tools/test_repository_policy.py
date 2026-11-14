@@ -189,6 +189,11 @@ class PolicyTests(unittest.TestCase):
         self.write('docs/proposals/phase-two.md', '# Plan\n')
         self.assertIn('fixed document names', self.errors())
 
+    def test_extension_contract_documents_are_allowed(self):
+        self.write('docs/extensions.md', '# Extension syntax\n')
+        self.write('docs/extensions.zh-CN.md', '# 扩展语法\n')
+        self.assertEqual('', self.errors())
+
     def test_reference_book_chapters_are_content_with_checked_links(self):
         self.write('book/book.json', '{"parts": []}\n')
         self.write('book/en/views.md', '# Views\nSee [hosts](hosts.md#host-kinds).\n')
