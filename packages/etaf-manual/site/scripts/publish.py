@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import argparse
 from datetime import datetime, timezone
+import hashlib
+import json
 import os
 from pathlib import Path
 import re
@@ -56,12 +58,19 @@ def remote(command, **kwargs):
     return subprocess.run(ssh, check=True, timeout=1800, **kwargs)
 
 
-def add_tree(archive, directory, prefix=""):
-    """Send regular generated files only; never follow resource symlinks."""
+def add_tree(archive, directory, prefix="", skip=()):
+    """Send regular generated files only; never follow resource symlinks.
+
+    SKIP names files the archive already serves byte for byte.  The deployer
+    inherits untouched tarballs from the previous release, so sending them again
+    only spends the upload, which is the slowest part of a publication.
+    """
     for path in sorted(directory.rglob("*")):
         if path.is_symlink():
             raise ValueError(f"Publication input cannot be a symlink: {path}")
         if path.is_file():
+            if path.name in skip:
+                continue
             archive.add(path, arcname=prefix + path.relative_to(directory).as_posix(), recursive=False)
         elif not path.is_dir():
             raise ValueError(f"Publication input is not a regular file: {path}")
@@ -87,6 +96,31 @@ def pages_source(destination, source):
     for name in ("manifest.json", "archive-contents",
                  *(item["file"] for item in manifest["packages"])):
         shutil.copyfile(source / name, destination / name)
+
+
+def published_digests(url="https://etaf.top/packages/manifest.json", timeout=30):
+    """Return {file: sha256} for the archive URL serves, or {} when unreadable.
+
+    An unreadable manifest means nothing is reused: the deployment then behaves
+    exactly as it did before the manifest was consulted.
+    """
+    from urllib.request import urlopen
+    try:
+        with urlopen(url, timeout=timeout) as response:
+            manifest = json.loads(response.read())
+    except Exception:
+        return {}
+    return {item["file"]: item["sha256"] for item in manifest.get("packages", ())}
+
+
+def already_served(directory, served):
+    """Return the file names in DIRECTORY whose bytes SERVED already carries."""
+    reused = set()
+    for name, digest in served.items():
+        path = directory / name
+        if path.is_file() and hashlib.sha256(path.read_bytes()).hexdigest() == digest:
+            reused.add(name)
+    return reused
 
 
 def publish(args):
@@ -128,7 +162,13 @@ def publish(args):
             if mode != "packages":
                 add_tree(archive, SITE / "dist")
             if archive_input:
-                add_tree(archive, work / "packages", "packages/")
+                served = published_digests()
+                reused = already_served(work / "packages", served)
+                add_tree(archive, work / "packages", "packages/", skip=reused)
+                if reused:
+                    total = sum(1 for item in (work / "packages").iterdir() if item.is_file())
+                    print(f"Sending {total - len(reused)} of {total} file(s); "
+                          f"{len(reused)} already served")
         stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:8]
         staging = remote("mktemp -d /tmp/etaf-top.XXXXXXXX", capture_output=True, text=True).stdout.strip()
         if not re.fullmatch(r"/tmp/etaf-top\.[A-Za-z0-9]+", staging):

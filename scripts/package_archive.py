@@ -175,8 +175,13 @@ def write_index(output, packages):
     return manifest
 
 
-def verify(directory):
-    """Check manifest paths and bytes before an archive is installed or published."""
+def verify(directory, allow_missing=False):
+    """Check manifest paths and bytes before an archive is installed or published.
+
+    ALLOW_MISSING validates the files that are present and skips the ones a
+    publication inherits from the release it follows, which is how a deployment
+    can refuse a bad payload before completing it.
+    """
     manifest = json.loads((directory / "manifest.json").read_text(encoding="utf-8"))
     if manifest.get("schema") != 2 or not manifest.get("packages"):
         raise ValueError("Expected a nonempty schema 2 package manifest; rebuild older archives")
@@ -188,6 +193,8 @@ def verify(directory):
             raise ValueError("Invalid or duplicate package identity")
         seen.add(name)
         archive = directory / package["file"]
+        if allow_missing and not archive.exists():
+            continue
         if archive.is_symlink() or hashlib.sha256(archive.read_bytes()).hexdigest() != package["sha256"]:
             raise ValueError(f"Archive checksum mismatch: {archive.name}")
     community = manifest.get("community")

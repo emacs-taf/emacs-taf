@@ -64,11 +64,15 @@ def extract(archive, destination):
                 target.chmod(0o644)
 
 
-def packages(directory, *, historical=False):
-    """Validate the public allowlist; historical tarballs remain downloadable."""
+def packages(directory, *, historical=False, partial=False):
+    """Validate the public allowlist; historical tarballs remain downloadable.
+
+    PARTIAL accepts a payload that carries only the files it changes: the rest
+    arrive from the previous release before the archive is complete.
+    """
     if directory.is_symlink() or not directory.is_dir():
         raise ValueError("Invalid public package directory")
-    manifest = package_archive.verify(directory)
+    manifest = package_archive.verify(directory, allow_missing=partial)
     names = {item["name"] for item in manifest["packages"]}
 
     def only_pages(path, children=()):
@@ -114,9 +118,11 @@ def packages(directory, *, historical=False):
     present = {path.name for path in directory.iterdir()
                if not path.is_dir()}
     pages = {path.name for path in directory.iterdir() if path.is_dir()}
-    if not historical and not (
-            required <= present and present <= required | optional
-            and pages <= names):
+    # An unlisted file is never acceptable; a missing indexed one is exactly what
+    # a partial payload means, so completeness is the only relaxed condition.
+    if not historical and not (present <= required | optional
+                               and pages <= names
+                               and (partial or required <= present)):
         raise ValueError("A new package payload may contain only its indexed files")
     if set(manifest) - {"schema", "packages", "workspace", "sources", "updated", "community"}:
         raise ValueError("Package manifest contains non-public fields")
@@ -135,19 +141,29 @@ def preserve_packages(previous, candidate, mode):
         if old and old.exists():
             packages(old, historical=True)
             shutil.copytree(old, new)
-        return
-    fresh = packages(new)
+        return set()
+    # Read what the payload carries before inheriting.  Afterwards NEW holds the
+    # whole archive, so it can no longer describe which packages this release
+    # ships and which it merely carries forward.
+    # A payload may refuse itself before it is completed: nothing here reads the
+    # tarballs it leaves to its predecessor.
+    partial = packages(new, partial=True)
+    shipped = partial
     if old and old.exists():
         prior = packages(old, historical=True)
         versions = {item["name"]: item["version"] for item in prior["packages"]}
-        for item in fresh["packages"]:
+
+        def comparable(value, width):
+            parts = tuple(map(int, value.split(".")))
+            return parts + (0,) * (max(width, len(parts)) - len(parts))
+
+        for item in shipped["packages"]:
             before = versions.get(item["name"])
-            if before:
-                def version(value):
-                    parts = tuple(map(int, value.split(".")))
-                    return parts + (0,) * (max(len(before.split(".")), len(item["version"].split("."))) - len(parts))
-                if version(item["version"]) < version(before):
-                    raise ValueError(f"Package version downgrade refused: {item['name']}")
+            if not before:
+                continue
+            width = max(len(before.split(".")), len(item["version"].split(".")))
+            if comparable(item["version"], width) < comparable(before, width):
+                raise ValueError(f"Package version downgrade refused: {item['name']}")
         for path in old.glob("*.tar"):
             target = new / path.name
             if target.exists():
@@ -155,11 +171,22 @@ def preserve_packages(previous, candidate, mode):
                     raise ValueError(f"Immutable package differs: {path.name}; increment Version")
             else:
                 shutil.copyfile(path, target)
+    # Validate only once NEW is the complete archive a client would read.
     packages(new, historical=True)
+    return {item["file"] for item in shipped["packages"]} | {"archive-contents",
+                                                            "manifest.json"}
 
 
-def verify_http(release, url, stamp):
-    """Check served bytes, not merely a successful HTTP status or a stale page."""
+def verify_http(release, url, stamp, complete=()):
+    """Check served bytes, not merely a successful HTTP status or a stale page.
+
+    COMPLETE names the files this release ships.  Only they can differ from the
+    release it follows, so only they are read back in full: an inherited tarball
+    was already proven byte-identical before it was carried forward, and reading
+    eighteen megabytes of them again is what made a publication take ten minutes.
+    Every path is still requested, so a broken cascade fails here.
+    """
+    complete = set(complete)
     paths = [Path(page) for page in SITE_PAGES]
     if (release / "packages").is_dir():
         paths.extend(path.relative_to(release)
@@ -171,10 +198,14 @@ def verify_http(release, url, stamp):
         request = Request(url.rstrip("/") + route + "?deployment=" + stamp,
                           headers={"Cache-Control": "no-cache"})
         with urlopen(request, timeout=30) as response:
+            if response.status != 200:
+                raise ValueError(f"Published path is not served: {route}")
+            if path.name not in complete:
+                continue
             result = hashlib.sha256()
             for block in iter(lambda: response.read(1024 * 1024), b""):
                 result.update(block)
-            if response.status != 200 or result.hexdigest() != digest(release / path):
+            if result.hexdigest() != digest(release / path):
                 raise ValueError(f"Published bytes differ: {route}")
 
 
@@ -226,14 +257,14 @@ def deploy(args):
                         shutil.copyfile(path, candidate / path.name)
             if any(not (candidate / page).is_file() for page in SITE_PAGES):
                 raise ValueError("Site payload is missing an English/Chinese entry or reference page")
-            preserve_packages(previous, candidate, args.mode)
+            shipped = preserve_packages(previous, candidate, args.mode)
             # mkdtemp is private, but its moved child must be readable by Caddy.
             for path in [candidate, *candidate.rglob("*")]:
                 path.chmod(0o755 if path.is_dir() else 0o644)
             candidate.rename(release)
         try:
             switch(base, release)
-            verify_http(release, args.verify_url, args.release)
+            verify_http(release, args.verify_url, args.release, shipped)
         except BaseException:
             if previous:
                 switch(base, previous)
