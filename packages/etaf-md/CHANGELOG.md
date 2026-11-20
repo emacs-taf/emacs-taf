@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Fixed
+
+- The package loads twice without complaint.  A shipped node type used to
+  refuse its second registration, which `package.el' triggers when a file
+  that `require' already loaded is loaded again.
+
 ### Added
 
 - A page that holds many diagrams no longer pays for its generated mermaid
@@ -431,3 +437,9 @@ pixels below itself.  A picture now takes the size of the page it sits on.
 - The `etaf` dialect now paints `==highlighted==` runs, `::name::` icons,
   `:kbd[KEY+KEY]` key groups and `:badge[TEXT]` badges inline, through the
   shared renderer.
+
+### Fixed
+
+- The package loads twice without complaint.  A shipped node type used to
+  refuse its second registration, which `package.el' triggers when a file
+  that `require' already loaded is loaded again on activation.

@@ -324,7 +324,13 @@ error.  `:child-syntax' is `blocks' (the default, one `:::name' per child) or
 (defun etaf-md--define-shipped (type &rest args)
   "Register TYPE as a shipped definition and keep it as the :default target.
 Shipped definitions are the only ones with a snapshot, because `:default' means
-the built-in value and a user type has none."
+the built-in value and a user type has none.
+
+Loading this package twice runs these declarations twice, which happens when
+`require' has already loaded a file that `package.el' then loads again.  A
+shipped type therefore replaces its own earlier record instead of demanding
+`:replace' the way a user's second definition must."
+  (remhash type etaf-md-node-definitions)
   (let ((definition (apply #'etaf-md-define-node type args)))
     (setq definition (plist-put definition :shipped (etaf-md--shipped definition)))
     (puthash type definition etaf-md-node-definitions)
