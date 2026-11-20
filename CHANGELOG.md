@@ -4,6 +4,11 @@
 
 ### Changed
 
+- Reissued: the source had moved ahead of this version without a
+  release, so the published file no longer matched it.  Changed since
+  0.2.18 was cut: `CHANGELOG.md`, `README.md`, `README.zh-CN.md`, `etaf-install.el`.
+### Changed
+
 - Development now happens in one Jujutsu checkout: every package lives under
   `packages/` and one change can touch a provider and its consumers together,
   while a push still carries only the package it names. The published

@@ -4,6 +4,11 @@
 
 ### Changed
 
+- Reissued: the source had moved ahead of this version without a
+  release, so the published file no longer matched it.  Changed since
+  0.2.1 was cut: `lisp/etaf-video-player-app.el`, `lisp/etaf-video-player-views.el`.
+### Changed
+
 - The player opens as an ETAF application: its keys are root keys of the
   View, the canvas follows the appearance and refits once a window resize
   settles, and closing goes through the application lifecycle. It requires

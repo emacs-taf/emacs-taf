@@ -27,6 +27,21 @@ SITE = Path(__file__).resolve().parents[1]
 REPOSITORY = SITE.parent
 
 
+def tools_directory(repository):
+    """Return the directory that owns the shared archive scripts.
+
+    A package inside a shared container borrows them from the container root; a
+    standalone clone of the manual keeps its own copies.
+    """
+    for candidate in (repository, *repository.parents):
+        if (candidate / "workspace.json").is_file():
+            return candidate / "scripts"
+    return repository / "scripts"
+
+
+TOOLS = tools_directory(REPOSITORY)
+
+
 def remote(command, **kwargs):
     host = os.environ.get("ETAF_TOP_HOST", "root@aliyun-hk")
     route = os.environ.get("ETAF_TOP_ROOT", "lightos")
@@ -62,7 +77,7 @@ def pages_source(destination, source):
     every indexed tarball must verify first. Older tarballs stay in the previous
     release and the deployer carries them forward unchanged.
     """
-    sys.path.insert(0, str(REPOSITORY / "scripts"))
+    sys.path.insert(0, str(TOOLS))
     import package_archive
     manifest = package_archive.verify(source)
     destination.mkdir()
@@ -84,7 +99,7 @@ def publish(args):
         if package_input:
             # This command rejects partial/stale evidence and developer archives,
             # then copies an explicit public allowlist. Logs stay on this host.
-            subprocess.run([sys.executable, str(REPOSITORY.parent / "scripts/package-release.py"),
+            subprocess.run([sys.executable, str(TOOLS / "package-release.py"),
                             "stage", "--directory", str(package_input.resolve()),
                             "--output", str(work / "packages")], check=True, timeout=120)
         elif pages_input:
@@ -118,7 +133,7 @@ def publish(args):
         try:
             files = {"payload.tgz": payload,
                      "deploy-release.py": SITE / "scripts/deploy-release.py",
-                     "package_archive.py": REPOSITORY / "scripts/package_archive.py"}
+                     "package_archive.py": TOOLS / "package_archive.py"}
             for name, source in files.items():
                 with source.open("rb") as stream:
                     remote("cat > " + shlex.quote(staging + "/" + name), stdin=stream)

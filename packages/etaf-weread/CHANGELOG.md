@@ -4,6 +4,11 @@ All notable user-visible changes to ETAF Weread.
 
 ## Unreleased
 
+### Changed
+
+- Reissued: the source had moved ahead of this version without a
+  release, so the published file no longer matched it.  Changed since
+  0.2.5 was cut: `lisp/etaf-weread-views.el`.
 - The reader and a panel framing it share one appearance state: `T` and the
   panel's title-bar switch write the same mode cell, and the panel paints the
   reader's palette.  `etaf-weread-theme-mode` now seeds the live mode instead

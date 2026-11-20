@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Reissued: the source had moved ahead of this version without a
+  release, so the published file no longer matched it.  Changed since
+  0.3.5 was cut: `CHANGELOG.md`, `etaf.el`, `etaf-animation-example.el`, `etaf-help.el` and 3 more.
+
+
 ## [Unreleased]
 
 ### Removed

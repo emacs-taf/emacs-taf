@@ -2,6 +2,15 @@
 
 All notable changes to `ecss` are documented here.
 
+## Unreleased
+
+### Changed
+
+- Reissued: the source had moved ahead of this version without a
+  release, so the published file no longer matched it.  Changed since
+  0.1.0 was cut: `ecss.el`.
+
+
 ## 0.1.0 (Unreleased)
 
 ### Removed
