@@ -1,0 +1,998 @@
+{
+  "schema": 1,
+  "load_path": [
+    ".",
+    "tests",
+    "../ecss"
+  ],
+  "support": [
+    "tests/ebox-test-support.el"
+  ],
+  "cases": [
+    {
+      "name": "ebox-overlay-local-publication-respects-nested-hosts-and-stacking",
+      "file": "tests/ebox-update-tests.el",
+      "purpose": "Local publication of a nested root-layer descendant uses its actual host coordinates and preserves higher overlays; stacking changes still repaint the full affected coverage."
+    },
+    {
+      "name": "ebox-overlay-local-updates-publish-only-the-changed-row",
+      "file": "tests/ebox-update-tests.el",
+      "purpose": "A local paint or same-height text change in a stable overlay publishes only that row, regardless of the overlay's total height."
+    },
+    {
+      "name": "ebox-overlay-structural-updates-keep-the-surrounding-row-count",
+      "file": "tests/ebox-update-tests.el",
+      "purpose": "Overlay content growth, shrinkage, movement, resizing and clipping preserve the surrounding canvas's row count and fresh rendered output."
+    },
+    {
+      "name": "ebox-remount-handles-empty-growing-and-shrinking-content",
+      "file": "tests/ebox-mount-tests.el",
+      "purpose": "Whole publication exactly replaces arbitrary old content across zero, empty, growing and shrinking row counts."
+    },
+    {
+      "name": "ebox-remount-repairs-foreign-rows-and-retired-newline-properties",
+      "file": "tests/ebox-mount-tests.el",
+      "purpose": "Remount repairs foreign inserted and deleted rows, removes stale newline input and display properties and leaves later distant updates correctly located."
+    },
+    {
+      "name": "ebox-remount-widens-and-resets-all-displaying-windows",
+      "file": "tests/ebox-mount-tests.el",
+      "purpose": "Mounting into a narrowed populated buffer still owns its whole text and starts point and every displaying window at the top."
+    },
+    {
+      "name": "ebox-next-publication-repairs-foreign-text-and-properties",
+      "file": "tests/ebox-update-tests.el",
+      "purpose": "After initial and incremental publication, foreign text and property edits in a subsequently changed row are repaired from the retained tree."
+    },
+    {
+      "name": "ebox-restyle-preserves-characters-and-interior-markers",
+      "file": "tests/ebox-update-tests.el",
+      "purpose": "Restyling adjacent parts updates their faces without changing buffer characters or moving native markers inside unchanged text."
+    },
+    {
+      "name": "ebox-text-update-preserves-common-prefix-and-suffix-markers",
+      "file": "tests/ebox-update-tests.el",
+      "purpose": "Growing and shrinking a local text value preserves native markers in its common prefix and suffix and keeps neighboring content."
+    },
+    {
+      "name": "ebox-property-update-keeps-native-display-and-keymap-identity",
+      "file": "tests/ebox-update-tests.el",
+      "purpose": "Property updates retain separate adjacent native displays, publish the replacement keymap by identity and remove retired input properties."
+    },
+    {
+      "name": "ebox-focus-edge-respects-explicit-root-and-inner-groups",
+      "file": "tests/ebox-interaction-tests.el",
+      "purpose": "Explicit edge-navigation roots contain candidates and groups, work when focus starts outside, and reject detached roots."
+    },
+    {
+      "name": "ebox-remounted-subtree-restores-absolute-descendants",
+      "file": "tests/ebox-mount-tests.el",
+      "purpose": "Moving a retained tree into and out of a wrapper preserves its absolute descendants, native positions and subsequent child-list updates."
+    },
+    {
+      "name": "ebox-mount-observer-reports-first-flush-and-validates-before-replace",
+      "file": "tests/ebox-mount-tests.el",
+      "purpose": "Mount-time observation reports the first and subsequent writes, while invalid observer options preserve an existing mount."
+    },
+    {
+      "name": "ebox-backdrop-filter-keeps-overlay-input-and-blocks-underlay",
+      "file": "tests/ebox-backdrop-filter-tests.el",
+      "purpose": "Filtered overlays retain their native keymap, hover, help and hit ownership over borrowed background pixels without click-through."
+    },
+    {
+      "name": "ebox-focus-reaches-a-stop-scrolled-beneath-a-fixed-region",
+      "file": "tests/ebox-interaction-tests.el",
+      "purpose": "A tab stop scrolled out of a scroller stays focusable although its layout line lies under an unrelated overlay; focus reveals it."
+    },
+    {
+      "name": "ebox-rounded-frame-paints-only-its-outer-horizontal-edges",
+      "file": "tests/ebox-rounded-border-tests.el",
+      "purpose": "Horizontal border paint stays on the outer top and bottom edges rather than leaking into shared blank cells."
+    },
+    {
+      "name": "ebox-rounded-frame-preserves-content-geometry-and-activation",
+      "file": "tests/ebox-rounded-border-tests.el",
+      "purpose": "Changing frame radius preserves labels, geometry and keyboard activation; unmount detaches subsequent updates."
+    },
+    {
+      "name": "ebox-rounded-frame-never-removes-corner-glyphs",
+      "file": "tests/ebox-rounded-border-tests.el",
+      "purpose": "Unpadded corners keep native glyphs intact, including cuts through a wide glyph."
+    },
+    {
+      "name": "ebox-rounded-frame-keeps-nonuniform-borders-and-header-content",
+      "file": "tests/ebox-rounded-border-tests.el",
+      "purpose": "A rounded panel retains header and body content and fixed geometry when unequal borders require square fallback."
+    },
+    {
+      "name": "ebox-composition-occlusion-keeps-native-image-fragments",
+      "file": "tests/ebox-composition-tests.el",
+      "purpose": "Repeated partial occlusion retains the exposed parts of native image runs and raised image slices instead of blanking complete rows."
+    },
+    {
+      "name": "ebox-composition-moving-overflow-keeps-canvas-and-neighbors",
+      "file": "tests/ebox-composition-tests.el",
+      "purpose": "Moving and resizing overflowing windows clips text and image rows without shifting neighbors; retained output matches fresh paint."
+    },
+    {
+      "name": "ebox-composition-narrow-stack-keeps-padding-and-border",
+      "file": "tests/ebox-composition-tests.el",
+      "purpose": "A stacked child wider than its parent cannot displace the parent's padding and border."
+    },
+    {
+      "name": "ebox-hidden-node-releases-replaced-callbacks",
+      "file": "tests/ebox-lifetime-tests.el",
+      "purpose": "A live hidden node releases callbacks removed from its public authored properties."
+    },
+    {
+      "name": "ebox-detached-output-owns-callbacks-only-while-retained",
+      "file": "tests/ebox-lifetime-tests.el",
+      "purpose": "Rendered help remains usable while retained and releases callback resources after disposal."
+    },
+    {
+      "name": "ebox-disposed-buffer-releases-rendered-callbacks",
+      "file": "tests/ebox-lifetime-tests.el",
+      "purpose": "Unmounting and killing a buffer releases resources captured by rendered callbacks."
+    },
+    {
+      "name": "ebox-image-identical-preparation-reuses-a-screenful-of-images",
+      "file": "tests/ebox-image-file-tests.el",
+      "purpose": "A preparation stays cached while more distinct images than the old clear-all threshold are prepared."
+    },
+    {
+      "name": "ebox-image-cache-stays-bounded-and-usable-under-churn",
+      "file": "tests/ebox-image-file-tests.el",
+      "purpose": "Preparing many distinct images keeps the most recent preparations reusable."
+    },
+    {
+      "name": "ebox-image-placeholder-preparation-reports-size-and-content",
+      "file": "tests/ebox-image-file-tests.el",
+      "purpose": "Placeholder image preparation reports size and returns deterministic character content."
+    },
+    {
+      "name": "ebox-image-text-converter-result-is-renderable-image-node",
+      "file": "tests/ebox-image-file-tests.el",
+      "purpose": "Text converters produce prepared image content renderable through an image node."
+    },
+    {
+      "name": "ebox-node-set-image-repaints-mounted-image-node",
+      "file": "tests/ebox-image-file-tests.el",
+      "purpose": "Changing an image node repaints the mounted buffer to the new prepared content."
+    },
+    {
+      "name": "ebox-node-set-props-repaints-a-same-sized-image-with-other-pixels",
+      "file": "tests/ebox-image-file-tests.el",
+      "purpose": "A different, already laid out preparation of the same size replaces the shown image instead of comparing equal."
+    },
+    {
+      "name": "ebox-image-in-a-wider-box-paints-the-box-background-beside-it",
+      "file": "tests/ebox-image-file-tests.el",
+      "purpose": "An image narrower than its stretched box leaves no unpainted gap beside it."
+    },
+    {
+      "name": "ebox-image-slice-cut-at-a-box-edge-keeps-its-visible-part",
+      "file": "tests/ebox-image-file-tests.el",
+      "purpose": "An image row slice cut at a box edge shows its visible part instead of a blank."
+    },
+    {
+      "name": "ebox-image-prepare-rejects-invalid-protocol-inputs",
+      "file": "tests/ebox-image-file-tests.el",
+      "purpose": "Image preparation rejects invalid sizes, adapters and sources."
+    },
+    {
+      "name": "ebox-file-read-form-accepts-exactly-one-expression",
+      "file": "tests/ebox-image-file-tests.el",
+      "purpose": "Ebox file form reading accepts one expression and rejects empty or extra input."
+    },
+    {
+      "name": "ebox-file-evaluate-form-returns-renderable-dsl",
+      "file": "tests/ebox-image-file-tests.el",
+      "purpose": "Evaluated file forms return renderable inert DSL data."
+    },
+    {
+      "name": "ebox-file-evaluate-buffer-reads-current-buffer-source",
+      "file": "tests/ebox-image-file-tests.el",
+      "purpose": "Buffer evaluation reads and evaluates the current buffer source through the file API."
+    },
+    {
+      "name": "ebox-keymap-create-installs-activation-bindings",
+      "file": "tests/ebox-interaction-tests.el",
+      "purpose": "Public keymap creation installs activation bindings and ebox-activate invokes them."
+    },
+    {
+      "name": "ebox-help-create-runs-business-function-in-hovered-buffer",
+      "file": "tests/ebox-interaction-tests.el",
+      "purpose": "Help adapters run the business function in the hovered mounted buffer."
+    },
+    {
+      "name": "ebox-interaction-properties-cover-rendered-text",
+      "file": "tests/ebox-interaction-tests.el",
+      "purpose": "Help, pointer, keymap and hover style capabilities become native text properties."
+    },
+    {
+      "name": "ebox-clipped-overlay-keeps-interaction-on-blank-rows",
+      "file": "tests/ebox-interaction-tests.el",
+      "purpose": "A clipped interactive overlay keeps its keymap and pointer on blank rows and cut padding."
+    },
+    {
+      "name": "ebox-focus-first-next-previous-and-cycle-update-focused-node",
+      "file": "tests/ebox-interaction-tests.el",
+      "purpose": "Focus navigation updates the public focused node in document order with cycling."
+    },
+    {
+      "name": "ebox-keyboard-activation-belongs-to-focused-ancestor",
+      "file": "tests/ebox-interaction-tests.el",
+      "purpose": "A keyboard activation typed while point rests on a clickable descendant of the focused node activates the focused node."
+    },
+    {
+      "name": "ebox-tab-order-finishes-a-side-region-before-the-next",
+      "file": "tests/ebox-interaction-tests.el",
+      "purpose": "Tab order follows the tree, so a sidebar's stops all precede the region beside it even when they share screen rows."
+    },
+    {
+      "name": "ebox-focus-within-stays-inside-container",
+      "file": "tests/ebox-interaction-tests.el",
+      "purpose": "Focus-within navigation remains inside the requested container."
+    },
+    {
+      "name": "ebox-focus-change-functions-report-each-move",
+      "file": "tests/ebox-interaction-tests.el",
+      "purpose": "Explicit focus and Tab navigation report each change of focused node, including clearing, and not a repeated focus of the same node."
+    },
+    {
+      "name": "ebox-focus-group-is-one-tab-stop-roved-by-arrows",
+      "file": "tests/ebox-interaction-tests.el",
+      "purpose": "A focus group is one Tab stop entered at its selected or remembered member; arrows rove inside it, leave at its edges and Home reaches its first member."
+    },
+    {
+      "name": "ebox-focus-direction-moves-to-nearest-stop-and-enters-grids",
+      "file": "tests/ebox-interaction-tests.el",
+      "purpose": "Directional focus moves to the nearest stop in each direction and moves geometrically inside a grid group."
+    },
+    {
+      "name": "ebox-focus-direction-honours-a-root-boundary",
+      "file": "tests/ebox-interaction-tests.el",
+      "purpose": "A ROOT argument limits directional candidates to its subtree and reports the boundary with nil."
+    },
+    {
+      "name": "ebox-modal-focus-scope-confines-navigation",
+      "file": "tests/ebox-interaction-tests.el",
+      "purpose": "A visible modal focus scope confines Tab, arrow navigation and the listed focus stops until it is removed."
+    },
+    {
+      "name": "ebox-focus-reveals-node-inside-scroller",
+      "file": "tests/ebox-interaction-tests.el",
+      "purpose": "Focusing a node scrolls its Ebox scroller so the node and point show."
+    },
+    {
+      "name": "ebox-focus-navigation-resumes-near-a-removed-node",
+      "file": "tests/ebox-interaction-tests.el",
+      "purpose": "Navigation after the focused node disappears continues from its last position."
+    },
+    {
+      "name": "ebox-focus-shows-hover-content",
+      "file": "tests/ebox-interaction-tests.el",
+      "purpose": "Keyboard focus shows a node's hover content and restores it when focus leaves."
+    },
+    {
+      "name": "ebox-buffer-mode-arrows-move-focus-and-scroll-at-the-end",
+      "file": "tests/ebox-interaction-tests.el",
+      "purpose": "Mounted buffers bind arrows, C-n/C-p and Home/End to directional focus navigation."
+    },
+    {
+      "name": "ebox-overlays-cover-hits-positions-and-focus-in-paint-order",
+      "file": "tests/ebox-interaction-tests.el",
+      "purpose": "Overlapping overlays hit in paint order, and boxes covered by them have no position and refuse focus."
+    },
+    {
+      "name": "ebox-buffer-mode-keeps-paren-matching-off-painted-text",
+      "file": "tests/ebox-interaction-tests.el",
+      "purpose": "A mounted buffer turns off paren matching so it never tints layout cells, and leaving the mode restores the user's setting."
+    },
+    {
+      "name": "ebox-buffer-mode-shows-no-region-on-the-canvas",
+      "file": "tests/ebox-interaction-tests.el",
+      "purpose": "Setting the mark in a mounted canvas leaves no active region to paint, while the same buffer outside the mode keeps native region behavior."
+    },
+    {
+      "name": "ebox-node-at-resolves-padding-cells-to-their-box",
+      "file": "tests/ebox-interaction-tests.el",
+      "purpose": "A padding or indent cell resolves to the box that owns it rather than the root."
+    },
+    {
+      "name": "ebox-node-at-resolves-scrolled-padding-cells-to-their-box",
+      "file": "tests/ebox-interaction-tests.el",
+      "purpose": "Inside a scroll container, a child's padding cell resolves to that child rather than the scroller."
+    },
+    {
+      "name": "ebox-descendants-inherit-or-block-native-feedback",
+      "file": "tests/ebox-interaction-tests.el",
+      "purpose": "Descendants inherit an ancestor's help, pointer and hover feedback unless they set it to nil."
+    },
+    {
+      "name": "ebox-hover-tracks-the-pointer-only-inside-its-buffer",
+      "file": "tests/ebox-interaction-tests.el",
+      "purpose": "Mounting a hoverable tree never enables frame-wide mouse tracking; the painted help probe paints entry and starts the pointer guard, and motion resolved in another buffer releases the paint."
+    },
+    {
+      "name": "ebox-pointer-guard-reads-the-pointer-inside-its-frame",
+      "file": "tests/ebox-interaction-tests.el",
+      "purpose": "The pointer guard measures the pointer inside the window's own frame, so a child frame whose reported absolute origin omits its parent's does not follow the rows below the pointer."
+    },
+    {
+      "name": "ebox-hover-content-follows-pointer-entry-and-leave",
+      "file": "tests/ebox-interaction-tests.el",
+      "purpose": "Pointer entry through the painted help probe shows hover content, and leaving the target restores the resting text."
+    },
+    {
+      "name": "ebox-hover-probe-keeps-an-ancestors-help",
+      "file": "tests/ebox-interaction-tests.el",
+      "purpose": "A hover probe with no help of its own yields to an ancestor's help-echo, while an explicit nil or an inner help still blocks it."
+    },
+    {
+      "name": "ebox-hover-paints-over-a-nodes-own-background",
+      "file": "tests/ebox-interaction-tests.el",
+      "purpose": "Hover paint covers a node's own background too; suppressing hover for a selected item is application policy, not an engine guess."
+    },
+    {
+      "name": "ebox-hover-face-restates-the-nodes-own-paint",
+      "file": "tests/ebox-interaction-tests.el",
+      "purpose": "The native hover face keeps the node's own ink and decoration, so a background-only hover style cannot leave unreadable text, while an explicit hover colour still wins."
+    },
+    {
+      "name": "ebox-hover-spans-every-row-of-a-multiline-node",
+      "file": "tests/ebox-interaction-tests.el",
+      "purpose": "Hover feedback joins every row of a multirow element into one mouse-face run instead of highlighting only the pointer's row."
+    },
+    {
+      "name": "ebox-hover-highlights-disjoint-rows-without-painting-neighbours",
+      "file": "tests/ebox-interaction-tests.el",
+      "purpose": "Pointer motion repaints only the pointed element across all its rows, preserves neighbours and text, follows a publication and restores paint on leave."
+    },
+    {
+      "name": "ebox-hover-paints-the-padded-box-through-the-node-style",
+      "file": "tests/ebox-interaction-tests.el",
+      "purpose": "Hover paint covers the node's padding rows through its own computed paint, and leaving restores the resting paint everywhere."
+    },
+    {
+      "name": "ebox-hover-rests-at-an-explicit-nil-blocker",
+      "file": "tests/ebox-interaction-tests.el",
+      "purpose": "Pointer hover over an explicit nil blocker leaves the element resting, and moving to a sibling paints the ancestor's fill again."
+    },
+    {
+      "name": "ebox-hover-keeps-a-single-row-element-within-its-cells",
+      "file": "tests/ebox-interaction-tests.el",
+      "purpose": "Hover feedback never bleeds past an element's last row into the rest of the screen row."
+    },
+    {
+      "name": "ebox-render-carries-hover-across-rendered-rows",
+      "file": "tests/ebox-interaction-tests.el",
+      "purpose": "Rendered output carries hover feedback across rows exactly like a mounted buffer."
+    },
+    {
+      "name": "ebox-hidden-node-paints-no-interaction-feedback",
+      "file": "tests/ebox-interaction-tests.el",
+      "purpose": "A hidden element keeps its layout slot but paints no hover, pointer, help or activation feedback."
+    },
+    {
+      "name": "ebox-unanchored-overlay-has-no-position-or-focus",
+      "file": "tests/ebox-interaction-tests.el",
+      "purpose": "An overlay whose anchor is missing paints nothing, has no position and refuses focus."
+    },
+    {
+      "name": "ebox-node-bounds-spans-first-or-every-painted-row",
+      "file": "tests/ebox-interaction-tests.el",
+      "purpose": "Node bounds span a box's first painted row by default and all of its painted rows on request."
+    },
+    {
+      "name": "ebox-node-bounds-include-cells-under-own-overlays",
+      "file": "tests/ebox-interaction-tests.el",
+      "purpose": "A node's bounds start at its first cell even where its own positioned descendant paints over it."
+    },
+    {
+      "name": "ebox-node-bounds-keep-hidden-flow-slots",
+      "file": "tests/ebox-interaction-tests.el",
+      "purpose": "A visibility-hidden box in flow reports its blank slot as bounds, while a hidden overlay has none."
+    },
+    {
+      "name": "ebox-focus-derived-state-matches-selector-and-styles",
+      "file": "tests/ebox-interaction-tests.el",
+      "purpose": "Focused nodes expose :focus selectors and focus-dependent styles."
+    },
+    {
+      "name": "ebox-activate-noerror-returns-nil-without-command",
+      "file": "tests/ebox-interaction-tests.el",
+      "purpose": "Activation with noerror returns nil when no command is present."
+    },
+    {
+      "name": "ebox-next-and-previous-interaction-move-between-keymap-owners",
+      "file": "tests/ebox-interaction-tests.el",
+      "purpose": "Interaction navigation moves point between rendered keymap owners."
+    },
+    {
+      "name": "ebox-render-text-and-box-forms",
+      "file": "tests/ebox-rendering-tests.el",
+      "purpose": "Strings, text forms and fixed-width boxes render their observable text through the public renderer."
+    },
+    {
+      "name": "ebox-render-row-and-column-flow",
+      "file": "tests/ebox-rendering-tests.el",
+      "purpose": "Row and column layout order children with public gaps and line flow."
+    },
+    {
+      "name": "ebox-render-wraps-aligns-and-measures-cjk",
+      "file": "tests/ebox-rendering-tests.el",
+      "purpose": "Text wrapping, alignment and CJK measurement produce the documented visible lines."
+    },
+    {
+      "name": "ebox-render-keeps-punctuation-off-line-edges",
+      "file": "tests/ebox-rendering-tests.el",
+      "purpose": "Soft wraps keep closing punctuation off line starts and opening punctuation off line ends."
+    },
+    {
+      "name": "ebox-render-paints-face-and-display-spaces",
+      "file": "tests/ebox-rendering-tests.el",
+      "purpose": "Paint styles and pixel padding produce public face and display text properties."
+    },
+    {
+      "name": "ebox-render-keeps-neighbours-sharing-one-display",
+      "file": "tests/ebox-rendering-tests.el",
+      "purpose": "Adjacent characters sharing one display value keep every glyph on the line."
+    },
+    {
+      "name": "ebox-render-text-border-draws-rules-and-keeps-decorations",
+      "file": "tests/ebox-rendering-tests.el",
+      "purpose": "A text frame draws side borders as one-cell rules instead of filled cells, and keeps the overline and underline decorations on the row that carries them."
+    },
+    {
+      "name": "ebox-render-text-display-draws-a-box-frame",
+      "file": "tests/ebox-rendering-tests.el",
+      "purpose": "A blank top or bottom border row becomes a box-drawing frame of the same width on a text display; a content row keeps its decoration instead."
+    },
+    {
+      "name": "ebox-render-text-display-maps-a-font-size-increase-to-bold",
+      "file": "tests/ebox-rendering-tests.el",
+      "purpose": "A text terminal cannot render a larger font size, so a node that raises its size takes bold weight and its children inherit it, while a root-level size change stays unemphasized."
+    },
+    {
+      "name": "ebox-render-side-borders-paint-their-width",
+      "file": "tests/ebox-rendering-tests.el",
+      "purpose": "Left and right borders paint their declared pixel width; top and bottom borders are limited to 1px."
+    },
+    {
+      "name": "ebox-render-flex-wraps-and-gaps-items",
+      "file": "tests/ebox-rendering-tests.el",
+      "purpose": "Flex wrapping and gaps place items at observable public geometries."
+    },
+    {
+      "name": "ebox-render-flex-shrinks-whole-rows-from-the-start",
+      "file": "tests/ebox-rendering-tests.el",
+      "purpose": "Whole-line flex shrinkage removes complete rows from the first items instead of scattering gaps."
+    },
+    {
+      "name": "ebox-render-overflowing-items-keep-sibling-columns",
+      "file": "tests/ebox-rendering-tests.el",
+      "purpose": "Content wider than its box is cut at the box edge, so later siblings keep their columns on every line."
+    },
+    {
+      "name": "ebox-render-absolute-children-start-at-content-origin",
+      "file": "tests/ebox-rendering-tests.el",
+      "purpose": "Absolute children are offset from their host's content origin, inside its padding."
+    },
+    {
+      "name": "ebox-render-root-layer-boxes-cover-the-root-border-box",
+      "file": "tests/ebox-rendering-tests.el",
+      "purpose": "A root-layer absolute box is placed and sized from the root's border box, covering its padding."
+    },
+    {
+      "name": "ebox-render-relative-flow-paints-above-lower-overlays",
+      "file": "tests/ebox-rendering-tests.el",
+      "purpose": "Relatively positioned flow content with a higher z-index paints above lower absolute overlays and keeps their background."
+    },
+    {
+      "name": "ebox-render-grid-places-items-in-tracks",
+      "file": "tests/ebox-rendering-tests.el",
+      "purpose": "Grid tracks and placements expose expected public node geometries."
+    },
+    {
+      "name": "ebox-render-grid-auto-placement-fills-earliest-free-cells",
+      "file": "tests/ebox-rendering-tests.el",
+      "purpose": "Automatic grid items take the earliest free area in row or column flow, filling holes and using columns a definite-row item adds."
+    },
+    {
+      "name": "ebox-render-stretched-heights-fill-definite-areas",
+      "file": "tests/ebox-rendering-tests.el",
+      "purpose": "A stretched height fills its grid area and stays definite for stretched descendants."
+    },
+    {
+      "name": "ebox-render-visibility-hidden-preserves-layout-space",
+      "file": "tests/ebox-rendering-tests.el",
+      "purpose": "Hidden boxes suppress ink while preserving layout space in the rendered buffer."
+    },
+    {
+      "name": "ebox-backdrop-identity-preserves-partially-covered-glyphs",
+      "file": "tests/ebox-backdrop-filter-tests.el",
+      "purpose": "A uniform identity-filtered hit strip preserves whole straddling text glyphs, owns native activation, and restores underlying input after moving or hiding."
+    },
+    {
+      "name": "ebox-backdrop-filter-keeps-text-and-dims-colors",
+      "file": "tests/ebox-backdrop-filter-tests.el",
+      "purpose": "A filtered overlay keeps covered text visible and dims its foreground and background colors."
+    },
+    {
+      "name": "ebox-backdrop-filter-keeps-image-content-visible",
+      "file": "tests/ebox-backdrop-filter-tests.el",
+      "purpose": "A filtered overlay keeps the image cells behind it visible instead of blanking them."
+    },
+    {
+      "name": "ebox-backdrop-filter-dims-nested-inherited-faces",
+      "file": "tests/ebox-backdrop-filter-tests.el",
+      "purpose": "Nested inherited native face lists retain their effective foreground and background colors when dimmed."
+    },
+    {
+      "name": "ebox-backdrop-filter-svg-follows-native-current-color",
+      "file": "tests/ebox-backdrop-filter-tests.el",
+      "purpose": "Filtered currentColor SVG icons preserve each native face color instead of becoming black or reusing another palette."
+    },
+    {
+      "name": "ebox-backdrop-filter-reattaching-the-same-overlay-repaints",
+      "file": "tests/ebox-backdrop-filter-tests.el",
+      "purpose": "Repeatedly removing and reattaching the same filtered overlay repaints it even when its retained size and coordinates are unchanged."
+    },
+    {
+      "name": "ebox-backdrop-filter-dims-prepared-raster-and-restores-slices",
+      "file": "tests/ebox-backdrop-filter-tests.el",
+      "purpose": "Prepared raster images dim without reopening their source, preserve geometry and insets, reuse composites, and restore exactly."
+    },
+    {
+      "name": "ebox-backdrop-filter-dims-native-display-runs-and-blocks-input",
+      "file": "tests/ebox-backdrop-filter-tests.el",
+      "purpose": "Native SVG displays and partial slices dim while the covering node retains hit ownership and blocks covered focus and activation."
+    },
+    {
+      "name": "ebox-backdrop-filter-image-identity-nesting-theme-and-live-update",
+      "file": "tests/ebox-backdrop-filter-tests.el",
+      "purpose": "Image filtering respects identity brightness, nested overlays, palette changes and live source replacement."
+    },
+    {
+      "name": "ebox-backdrop-filter-partial-paint-preserves-source-and-input",
+      "file": "tests/ebox-backdrop-filter-tests.el",
+      "purpose": "Partial overlay updates and repeated dim/identity filters preserve the source paint and restore native input after removal."
+    },
+    {
+      "name": "ebox-backdrop-filter-keeps-overlay-content-crisp",
+      "file": "tests/ebox-backdrop-filter-tests.el",
+      "purpose": "An overlay's own content stays crisp while only the pixels behind its blank cells are dimmed."
+    },
+    {
+      "name": "ebox-backdrop-filter-keeps-covered-cells-out-of-flow-hit",
+      "file": "tests/ebox-backdrop-filter-tests.el",
+      "purpose": "A filtered overlay still owns the cells it covers, so covered nodes stay out of hit bounds."
+    },
+    {
+      "name": "ebox-backdrop-filter-brightness-range-and-invalid-values",
+      "file": "tests/ebox-backdrop-filter-tests.el",
+      "purpose": "Brightness 1 keeps colors, higher values clamp, and unsupported filters leave covered cells untouched."
+    },
+    {
+      "name": "ebox-node-constructors-build-detached-trees",
+      "file": "tests/ebox-rendering-tests.el",
+      "purpose": "Public node constructors, children, text predicates and copies build detached renderable trees."
+    },
+    {
+      "name": "ebox-build-rejects-invalid-author-forms",
+      "file": "tests/ebox-rendering-tests.el",
+      "purpose": "Invalid author forms and sizes signal public Ebox errors before rendering."
+    },
+    {
+      "name": "ebox-render-cuts-a-picture-to-its-content-box",
+      "file": "tests/ebox-rendering-tests.el",
+      "purpose": "An image node stretched narrower than its prepared picture cuts the painted slices to the content box, so the surplus no longer overruns the box and shifts whatever shares the line."
+    },
+    {
+      "name": "ebox-node-set-scroll-clamps-and-repaints-visible-lines",
+      "file": "tests/ebox-scroll-input-tests.el",
+      "purpose": "Programmatic scroll clamps the offset and repaints the visible lines."
+    },
+    {
+      "name": "ebox-scroll-offset-follows-content-that-shrinks-below-it",
+      "file": "tests/ebox-scroll-input-tests.el",
+      "purpose": "A scroller whose content shrinks below its offset reports the clamped offset it shows, and a scroll command moves from there without scrolling the window."
+    },
+    {
+      "name": "ebox-end-anchored-scroll-follows-growing-content-while-pinned",
+      "file": "tests/ebox-scroll-input-tests.el",
+      "purpose": "An end-anchored scroller starts at and follows its last line until scrolled away, and rejects unknown anchors."
+    },
+    {
+      "name": "ebox-scroll-into-view-moves-nested-scrollers-minimally",
+      "file": "tests/ebox-scroll-input-tests.el",
+      "purpose": "Scrolling a node into view moves each enclosing scroller by the least distance and leaves visible nodes alone."
+    },
+    {
+      "name": "ebox-horizontal-wheel-gesture-fires-one-swipe-on-the-nearest-handler",
+      "file": "tests/ebox-scroll-input-tests.el",
+      "purpose": "A horizontal two-finger gesture calls the nearest :swipe handler once with the finger direction, absorbs momentum and respects flipped wheels."
+    },
+    {
+      "name": "ebox-scroll-property-reports-changed-offsets",
+      "file": "tests/ebox-scroll-input-tests.el",
+      "purpose": "A scroller's :scroll function receives each changed offset from scroll commands and set-scroll, but not unchanged offsets or pinned end growth."
+    },
+    {
+      "name": "ebox-scroll-commands-use-node-at-point",
+      "file": "tests/ebox-scroll-input-tests.el",
+      "purpose": "Interactive line scroll commands operate on the scrollable node at point."
+    },
+    {
+      "name": "ebox-scroll-past-the-end-keeps-a-fitting-buffer-in-place",
+      "file": "tests/ebox-scroll-input-tests.el",
+      "purpose": "Scrolling past a scroller's end never scrolls a window that already shows the whole buffer."
+    },
+    {
+      "name": "ebox-wheel-over-chrome-keeps-a-fitting-canvas-in-place",
+      "file": "tests/ebox-scroll-input-tests.el",
+      "purpose": "A wheel turn that no scroll region consumes does not scroll the window of a mounted tree that already fits, so every region keeps its place."
+    },
+    {
+      "name": "ebox-page-scroll-commands-accept-explicit-line-counts",
+      "file": "tests/ebox-scroll-input-tests.el",
+      "purpose": "Page scroll commands accept explicit line counts and update visible content."
+    },
+    {
+      "name": "ebox-input-session-edits-the-value-inside-the-node-layout",
+      "file": "tests/ebox-scroll-input-tests.el",
+      "purpose": "Typed keys edit a session value inside its padded box, which wraps and grows with it; on-change reports each value and ending keeps it displayed."
+    },
+    {
+      "name": "ebox-input-session-reuses-caret-and-undo",
+      "file": "tests/ebox-scroll-input-tests.el",
+      "purpose": "A second session on unchanged text resumes the previous caret and undo history, and :caret places the caret explicitly."
+    },
+    {
+      "name": "ebox-input-session-runs-native-editing-commands-on-the-value",
+      "file": "tests/ebox-scroll-input-tests.el",
+      "purpose": "Word motion, kill and yank, undo and the region act on a session value like in an ordinary buffer."
+    },
+    {
+      "name": "ebox-input-session-keymap-separates-value-and-buffer-commands",
+      "file": "tests/ebox-scroll-input-tests.el",
+      "purpose": "Session keymap bindings run in the mounted buffer except value edits such as newline; up moves by painted rows."
+    },
+    {
+      "name": "ebox-input-session-pointer-places-caret-and-leaves-outside",
+      "file": "tests/ebox-scroll-input-tests.el",
+      "purpose": "Presses inside the node box place the caret, double presses select a word, and a press outside reports leaving."
+    },
+    {
+      "name": "ebox-input-session-shows-input-method-preedit-in-layout",
+      "file": "tests/ebox-scroll-input-tests.el",
+      "purpose": "Input method preedit wraps inside the node without changing the value and restores special events when sessions end."
+    },
+    {
+      "name": "ebox-input-session-follows-external-text",
+      "file": "tests/ebox-scroll-input-tests.el",
+      "purpose": "Setting a session node to its value is a no-op; another string replaces the value."
+    },
+    {
+      "name": "ebox-fixed-flex-text-growth-preserves-following-content",
+      "file": "tests/ebox-scroll-input-tests.el",
+      "purpose": "Growing and shrinking text in fixed-height flex containers preserves following content and matches a fresh render."
+    },
+    {
+      "name": "ebox-fixed-flex-native-multiline-edit-preserves-following-content",
+      "file": "tests/ebox-scroll-input-tests.el",
+      "purpose": "Multiline native input, clearing and undo preserve independently updated content below the editing container."
+    },
+    {
+      "name": "ebox-input-session-relayouts-during-editing",
+      "file": "tests/ebox-scroll-input-tests.el",
+      "purpose": "A viewport change lays out at once during a session and editing continues."
+    },
+    {
+      "name": "ebox-canvas-ignores-printing-keys-outside-input-sessions",
+      "file": "tests/ebox-scroll-input-tests.el",
+      "purpose": "Printing keys never edit a mounted canvas outside a session; a session receives them as value edits."
+    },
+    {
+      "name": "ebox-input-opening-click-is-not-an-outside-click",
+      "file": "tests/ebox-scroll-input-tests.el",
+      "purpose": "A complete button press and release opens editing without triggering on-leave; later outside clicks still end it, and reopening works."
+    },
+    {
+      "name": "ebox-input-session-validates-lifecycle",
+      "file": "tests/ebox-scroll-input-tests.el",
+      "purpose": "Input sessions reject non-text nodes, invalid keymaps and concurrent sessions; ending or unmounting releases them."
+    },
+    {
+      "name": "ebox-call-with-input-returns-reader-value-and-closes-session",
+      "file": "tests/ebox-scroll-input-tests.el",
+      "purpose": "call-with-input returns the reader value, focuses its target and closes the active session."
+    },
+    {
+      "name": "ebox-selector-query-finds-type-id-class-attribute-and-state",
+      "file": "tests/ebox-selector-style-tests.el",
+      "purpose": "Selector queries find nodes by type, id, class, attribute and author state."
+    },
+    {
+      "name": "ebox-node-set-states-updates-selector-matches-and-styles",
+      "file": "tests/ebox-selector-style-tests.el",
+      "purpose": "Changing public selector states updates matching and cascaded styles."
+    },
+    {
+      "name": "ebox-inline-ecss-cascades-to-descendants",
+      "file": "tests/ebox-selector-style-tests.el",
+      "purpose": "Inline ECSS rules cascade to matching descendants and produce observable faces."
+    },
+    {
+      "name": "ebox-style-scope-membership-controls-rule-visibility",
+      "file": "tests/ebox-selector-style-tests.el",
+      "purpose": "Shared style scope membership controls which scoped rules affect a node."
+    },
+    {
+      "name": "ebox-style-scope-with-rules-preserves-membership-identity",
+      "file": "tests/ebox-selector-style-tests.el",
+      "purpose": "Replacing scope rules preserves membership identity while changing visible style."
+    },
+    {
+      "name": "ebox-style-scope-create-rejects-invalid-rules-and-origins",
+      "file": "tests/ebox-selector-style-tests.el",
+      "purpose": "Invalid style scope selectors, declarations and origins are rejected."
+    },
+    {
+      "name": "ebox-inheritance-and-local-overrides-affect-faces",
+      "file": "tests/ebox-selector-style-tests.el",
+      "purpose": "Inherited text color and local overrides appear in rendered face properties."
+    },
+    {
+      "name": "ebox-disabled-property-derives-disabled-selector-state",
+      "file": "tests/ebox-selector-style-tests.el",
+      "purpose": "Disabled interaction state is observable through public selectors."
+    },
+    {
+      "name": "ebox-mount-exposes-root-buffer-and-viewport",
+      "file": "tests/ebox-update-tests.el",
+      "purpose": "Mounting exposes root, buffer and viewport state and viewport changes relayout the tree."
+    },
+    {
+      "name": "ebox-viewport-change-hook-reports-settled-size",
+      "file": "tests/ebox-update-tests.el",
+      "purpose": "A viewport size change runs the viewport hook once with the buffer after the new layout settled; an unchanged size runs nothing."
+    },
+    {
+      "name": "ebox-display-window-change-hook-follows-the-window",
+      "file": "tests/ebox-update-tests.el",
+      "purpose": "A settled window change runs the display-window hook once with the buffer and its window, also under a fixed viewport, and an unchanged window does not run it again."
+    },
+    {
+      "name": "ebox-mount-viewport-follows-displaying-window",
+      "file": "tests/ebox-update-tests.el",
+      "purpose": "A mount without a fixed viewport takes its width and height from the window displaying its buffer, including in batch, and the size is measurable before mounting."
+    },
+    {
+      "name": "ebox-first-content-keeps-point-and-window-start-at-top",
+      "file": "tests/ebox-update-tests.el",
+      "purpose": "Content written into an empty mounted buffer leaves point and the displaying window's start at the top instead of after the new lines."
+    },
+    {
+      "name": "ebox-refit-returns-a-fitting-tree-to-the-window-top",
+      "file": "tests/ebox-update-tests.el",
+      "purpose": "Refitting a mount whose whole tree fits its window restores the window start to the buffer top after a temporarily shorter window scrolled it."
+    },
+    {
+      "name": "ebox-mounted-rows-own-wrapping-and-restore-buffer-settings",
+      "file": "tests/ebox-update-tests.el",
+      "purpose": "Mounted output disables native continuation of engine-owned rows and restores the buffer's original wrapping setting on unmount."
+    },
+    {
+      "name": "ebox-buffer-background-follows-root-background",
+      "file": "tests/ebox-update-tests.el",
+      "purpose": "A mounted buffer's default background follows the root's background color, so window areas beyond the text match the root, and unmounting restores it."
+    },
+    {
+      "name": "ebox-node-set-text-updates-buffer-like-fresh-render",
+      "file": "tests/ebox-update-tests.el",
+      "purpose": "Text mutation updates the mounted buffer to match a fresh render of the retained tree."
+    },
+    {
+      "name": "ebox-node-put-and-set-props-restyle-visible-content",
+      "file": "tests/ebox-update-tests.el",
+      "purpose": "Property mutation updates visible faces and remains equivalent to a fresh render."
+    },
+    {
+      "name": "ebox-scope-root-rule-change-restyles-members",
+      "file": "tests/ebox-update-tests.el",
+      "purpose": "Replacing a scope root's rule snapshot restyles nested members to the new rules."
+    },
+    {
+      "name": "ebox-parent-restyle-updates-inheriting-descendants",
+      "file": "tests/ebox-update-tests.el",
+      "purpose": "Restyling a parent updates descendants that inherit its values, including explicit inherit declarations."
+    },
+    {
+      "name": "ebox-node-insert-remove-move-and-replace-children-update-order",
+      "file": "tests/ebox-update-tests.el",
+      "purpose": "Structural node mutations update child order and mounted text through public APIs."
+    },
+    {
+      "name": "ebox-shrunk-flex-item-update-keeps-following-siblings",
+      "file": "tests/ebox-update-tests.el",
+      "purpose": "Updating content of a flex item shrunk below its natural height leaves the buffer equal to a fresh render, including following siblings."
+    },
+    {
+      "name": "ebox-with-batch-flushes-mutated-mount-once",
+      "file": "tests/ebox-update-tests.el",
+      "purpose": "Batched mutations defer publication and flush the mounted buffer once at batch exit."
+    },
+    {
+      "name": "ebox-call-with-batch-returns-body-value",
+      "file": "tests/ebox-update-tests.el",
+      "purpose": "The functional batch API returns its body value while publishing queued mutations."
+    },
+    {
+      "name": "ebox-flush-reports-and-observers-describe-public-update",
+      "file": "tests/ebox-update-tests.el",
+      "purpose": "Flush observers and update reports describe the public line update that was written."
+    },
+    {
+      "name": "ebox-after-flush-hook-runs-with-updated-buffer",
+      "file": "tests/ebox-update-tests.el",
+      "purpose": "After-flush hooks run with the mounted buffer already updated."
+    },
+    {
+      "name": "ebox-unmount-runs-hook-and-releases-mount",
+      "file": "tests/ebox-update-tests.el",
+      "purpose": "Unmount hooks run and the buffer no longer has a live mount while keeping text."
+    },
+    {
+      "name": "ebox-kill-buffer-runs-unmount-hook",
+      "file": "tests/ebox-update-tests.el",
+      "purpose": "Killing a mounted buffer runs the unmount hooks with the buffer before it dies."
+    },
+    {
+      "name": "ebox-node-mutation-errors-leave-buffer-at-last-successful-render",
+      "file": "tests/ebox-update-tests.el",
+      "purpose": "Rejected public mutations leave the buffer equal to the last successful render."
+    },
+    {
+      "name": "ebox-file-load-companion-prefers-only-newer-bytecode",
+      "file": "tests/ebox-image-file-tests.el",
+      "purpose": "A .ebox companion loads its source unless its bytecode is newer."
+    },
+    {
+      "name": "ebox-text-scale-change-relayouts-its-mount-once",
+      "file": "tests/ebox-text-scale-tests.el",
+      "purpose": "A burst of scale steps settles into one whole relayout of the scaled mount."
+    },
+    {
+      "name": "ebox-text-scale-change-refreshes-only-the-scaled-mount",
+      "file": "tests/ebox-text-scale-tests.el",
+      "purpose": "Scaling one mounted buffer leaves another mount's output untouched."
+    },
+    {
+      "name": "ebox-text-scale-change-skips-buffers-without-a-live-mount",
+      "file": "tests/ebox-text-scale-tests.el",
+      "purpose": "A scale change is an intent only while a live mount owns the buffer."
+    },
+    {
+      "name": "ebox-display-metrics-are-owned-and-match-native-measurement",
+      "file": "tests/ebox-text-scale-tests.el",
+      "purpose": "Effective default-face metrics match native measurement across scaling and callers own their result."
+    },
+    {
+      "name": "ebox-drag-escape-cancels-and-is-consumed",
+      "file": "tests/ebox-drag-tests.el",
+      "purpose": "Escape ends a non-locked drag with a cancel whose reason is quit and leaves no Escape prefix for the release; unrelated input is preserved."
+    },
+    {
+      "name": "ebox-drag-other-input-cancels-and-is-preserved",
+      "file": "tests/ebox-drag-tests.el",
+      "purpose": "A key typed during a drag cancels it with reason input and remains available to Emacs."
+    },
+    {
+      "name": "ebox-drag-new-press-ends-a-drag-that-lost-its-release",
+      "file": "tests/ebox-drag-tests.el",
+      "purpose": "A new primary press during an unlocked drag ends it with end at the last position and is replayed to start its own gesture."
+    },
+    {
+      "name": "ebox-drag-follows-the-pointer-past-the-window",
+      "file": "tests/ebox-drag-tests.el",
+      "purpose": "A drag that leaves the text area over the mode line or past every window keeps tracking with :position clamped and :overshoot giving the distance, and a release there ends it."
+    },
+    {
+      "name": "ebox-drag-edge-reports-overshoot-and-elapsed-past-the-window",
+      "file": "tests/ebox-drag-tests.el",
+      "purpose": "Edge phases continue while the pointer is past the window, naming the passed edge with the overshoot and the seconds since the previous phase."
+    },
+    {
+      "name": "ebox-drag-hides-tooltips-and-help-while-tracking",
+      "file": "tests/ebox-drag-tests.el",
+      "purpose": "A drag in a graphic frame clears the shown help, suppresses help display while tracking and restores the help function afterwards."
+    },
+    {
+      "name": "ebox-drag-edge-reports-intent-on-each-window-edge",
+      "file": "tests/ebox-drag-tests.el",
+      "purpose": "An opted-in drag resting at each window edge receives repeating edge gestures naming that edge."
+    },
+    {
+      "name": "ebox-drag-edge-waits-for-motion",
+      "file": "tests/ebox-drag-tests.el",
+      "purpose": "A press that rests at an edge without moving reports no edge intent, so a click does not scroll."
+    },
+    {
+      "name": "ebox-drag-edge-requires-the-keymap-option",
+      "file": "tests/ebox-drag-tests.el",
+      "purpose": "Without :drag-edge a drag keeps its start, move and end phases and reports no edge intent."
+    },
+    {
+      "name": "ebox-image-canvas-preparation-ignores-its-live-pixels",
+      "file": "tests/ebox-image-file-tests.el",
+      "purpose": "A canvas keeps one preparation while its producer rewrites pixels."
+    },
+    {
+      "name": "ebox-image-canvas-preparation-distinguishes-ids",
+      "file": "tests/ebox-image-file-tests.el",
+      "purpose": "Two canvases with different ids stay distinct preparations."
+    },
+    {
+      "name": "ebox-body-text-rows-keep-the-line-height",
+      "file": "tests/ebox-line-height-tests.el",
+      "purpose": "Every published row measures one line height, so a CJK body font taller than the Latin one raises the line instead of shrinking Chinese text to fit it."
+    },
+    {
+      "name": "ebox-render-lines-carry-the-row-strut",
+      "file": "tests/ebox-line-height-tests.el",
+      "purpose": "A rendered string starts every line with the height carrier, so inserting it keeps every line's height."
+    },
+    {
+      "name": "ebox-full-width-rows-keep-the-line-height",
+      "file": "tests/ebox-line-height-tests.el",
+      "purpose": "A row reaching the window's right edge keeps the line height because the carrier starts the row."
+    },
+    {
+      "name": "ebox-overline-face-keeps-the-line-fit",
+      "file": "tests/ebox-line-height-tests.el",
+      "purpose": "An overline adds no height in a canvas, so a decorated glyph that fills its line is not scaled and the plain text after it keeps its own fit."
+    },
+    {
+      "name": "ebox-overline-fit-does-not-cross-overline-margins",
+      "file": "tests/ebox-line-height-tests.el",
+      "purpose": "A plain buffer counts an overline into the row height while a canvas does not, so the fitted scale does not pass between them."
+    },
+    {
+      "name": "ebox-plain-buffer-keeps-overline-and-plain-fits-apart",
+      "file": "tests/ebox-line-height-tests.el",
+      "purpose": "A plain buffer fits a decorated glyph into its taller row while the following plain glyph keeps its own fit."
+    },
+    {
+      "name": "ebox-canvas-owns-line-metrics",
+      "file": "tests/ebox-line-height-tests.el",
+      "purpose": "A canvas zeroes line spacing, line numbers and line and wrap prefixes so the display agrees with the measured rows, while default text properties and aliases stay available to measurement."
+    },
+    {
+      "name": "ebox-font-change-updates-cached-width",
+      "file": "tests/ebox-line-height-tests.el",
+      "purpose": "A frame font height change updates cached glyph widths because the frame and its font are part of the metric context."
+    },
+    {
+      "name": "ebox-larger-face-keeps-its-cjk-on-the-line",
+      "file": "tests/ebox-line-height-tests.el",
+      "purpose": "A face that raises the size probes the same body scripts as the default face, so a heading holds Chinese at the size the style asked for instead of reading the CJK font as an overflowing fallback glyph."
+    },
+    {
+      "name": "ebox-fitted-glyph-shrinks-from-its-own-size",
+      "file": "tests/ebox-line-height-tests.el",
+      "purpose": "A bare height display factor multiplies the default face, so a fitted glyph carries its own face height and a tall CJK font cannot drop a heading to the body size."
+    },
+    {
+      "name": "ebox-font-size-is-a-ratio-of-the-body-size",
+      "file": "tests/ebox-line-height-tests.el",
+      "purpose": "A style size is a multiple of the default face height, so the same heading keeps its relative size on every platform and reader default font."
+    },
+    {
+      "name": "ebox-text-scale-keeps-untouched-row-heights",
+      "file": "tests/ebox-text-scale-tests.el",
+      "purpose": "A text scale change raises every row, including rows the update did not rewrite."
+    }
+  ]
+}

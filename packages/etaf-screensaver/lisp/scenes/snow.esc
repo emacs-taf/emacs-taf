@@ -1,0 +1,28 @@
+;;; -*- mode: emacs-lisp; lexical-binding: t; -*-
+;; SPDX-License-Identifier: GPL-3.0-or-later
+;; Snow: drifting flakes that sway sideways and wrap around the canvas.
+
+(etaf-scene
+ :id snow
+ :title "雪夜"
+ :summary "雪花左右轻摆地落下，出屏后从另一侧绕回。"
+ :tags (weather particles)
+ :frame-rate 20
+ :background "#070B14"
+ :params ((:key speed :label "落速" :type number
+           :min 1 :max 12 :step 1 :default 4)
+          (:key count :label "雪花数" :type number
+           :min 20 :max 300 :step 20 :default 120)
+          (:key sway :label "摆动" :type number
+           :min 0 :max 10 :step 1 :default 4))
+ :layers ((:kind particles
+           :count count
+           :init ((x (* (rnd) w)) (y (* (rnd) h)) (phase (* (rnd) 6.283)))
+           :update ((y (+ y (* dt speed 2.0)))
+                    (phase (+ phase (* dt 1.5)))
+                    (x (+ x (* dt sway (sin phase)))))
+           :wrap ((y -2 (+ h 2))
+                  (x -2 (+ w 2)))
+           :draw ((:x x) (:y y)
+                  (:char (if (> (sin phase) 0.4) "*" "·"))
+                  (:color (if (> (sin phase) 0.4) "#EAF4FF" "#93A7C4"))))))

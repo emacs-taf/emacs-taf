@@ -1,0 +1,41 @@
+---
+// The manual uses the landing page's single theme button instead of Starlight's
+// three-way select. Both sides store the preference under `starlight-theme`,
+// so a choice on either page carries over to the other.
+---
+<button
+  class="theme-toggle"
+  type="button"
+  data-etaf-theme-toggle
+  aria-label={Astro.locals.t('themeSelect.accessibleLabel')}
+  title={Astro.locals.t('themeSelect.accessibleLabel')}
+>
+  <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true">
+    <circle cx="12" cy="12" r="4"></circle>
+    <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path>
+  </svg>
+  <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11Z"></path>
+  </svg>
+</button>
+
+<script>
+  // Starlight renders this component in the header and again in the mobile
+  // menu footer. A document-level listener bound once avoids toggling twice
+  // when both instances execute their script.
+  const root = document.documentElement;
+  if (!root.dataset.etafThemeBound) {
+    root.dataset.etafThemeBound = 'true';
+    document.addEventListener('click', (event) => {
+      if (!(event.target instanceof Element)) return;
+      if (!event.target.closest('[data-etaf-theme-toggle]')) return;
+      const next = root.dataset.theme === 'dark' ? 'light' : 'dark';
+      root.dataset.theme = next;
+      try {
+        localStorage.setItem('starlight-theme', next);
+      } catch (error) {
+        // A blocked storage does not prevent this page from switching.
+      }
+    });
+  }
+</script>

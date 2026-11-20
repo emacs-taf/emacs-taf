@@ -1,0 +1,16 @@
+---
+// The landing page links to the other language as a plain label; the manual
+// follows that instead of Starlight's select. Only the root and zh-cn locales
+// exist, so the alternate URL is the current path with the prefix swapped.
+import config from 'virtual:starlight/user-config';
+
+const path = Astro.url.pathname;
+const chinese = path === '/zh-cn' || path.startsWith('/zh-cn/');
+const other = chinese ? 'root' : 'zh-cn';
+const label = config.locales[other]?.label ?? (chinese ? 'English' : '简体中文');
+const lang = config.locales[other]?.lang;
+const href = chinese
+  ? path.replace(/^\/zh-cn(?=\/|$)/, '') || '/'
+  : `/zh-cn${path}`;
+---
+<a class="language-link" href={href} hreflang={lang}>{label}</a>

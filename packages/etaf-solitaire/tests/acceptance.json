@@ -1,0 +1,49 @@
+{
+  "schema": 1,
+  "load_path": [
+    ".",
+    "../etaf-gamekit",
+    "../etaf-ui",
+    "../etaf",
+    "../ebox",
+    "../ecss"
+  ],
+  "support": [],
+  "cases": [
+    {
+      "name": "etaf-solitaire-waste-activation-follows-the-displayed-card",
+      "file": "tests/etaf-solitaire-tests.el",
+      "purpose": "Browsing updates a retained waste control, whose activation selects the currently displayed card without submitting a native move."
+    },
+    {
+      "name": "etaf-solitaire-embedded-escape-releases-the-host-after-selection",
+      "file": "tests/etaf-solitaire-tests.el",
+      "purpose": "Embedded help and card selection each consume one Escape before the enclosing host receives dismissal, preserving the native deal."
+    },
+    {
+      "name": "etaf-solitaire-help-entries-preserve-the-selected-card",
+      "file": "tests/etaf-solitaire-tests.el",
+      "purpose": "All help entries share an in-buffer searchable modal, restore focus and keep the selected card usable without changing the deal."
+    },
+    {
+      "name": "etaf-solitaire-help-survives-native-move-publication",
+      "file": "tests/etaf-solitaire-tests.el",
+      "purpose": "An asynchronous OpenSpiel move publishes under help without replacing its snapshot or stealing focus; undo remains usable after closing."
+    },
+    {
+      "name": "etaf-solitaire-card-input-moves-native-cards-and-restores-history",
+      "file": "tests/etaf-solitaire-tests.el",
+      "purpose": "Card and foundation activation move native cards; undo/redo restore the same deal."
+    },
+    {
+      "name": "etaf-solitaire-themes-and-resize-preserve-the-deal",
+      "file": "tests/etaf-solitaire-tests.el",
+      "purpose": "Repeated keyboard and button theme switches and narrow layouts preserve the game, card dimensions and selected move."
+    },
+    {
+      "name": "etaf-solitaire-escape-dismisses-the-selection",
+      "file": "tests/etaf-solitaire-tests.el",
+      "purpose": "Framework Escape clears a picked card without changing the deal; the later target press stays inert."
+    }
+  ]
+}

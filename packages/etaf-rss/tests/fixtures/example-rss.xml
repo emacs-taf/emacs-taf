@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"
+     xmlns:content="http://purl.org/rss/1.0/modules/content/"
+     xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <channel>
+    <title>示例科技周刊</title>
+    <link>https://example.com/tech</link>
+    <description>每周的科技阅读</description>
+    <item>
+      <title>第一篇：增量渲染</title>
+      <link>https://example.com/tech/1</link>
+      <guid isPermaLink="false">tech-1</guid>
+      <dc:creator>作者甲</dc:creator>
+      <pubDate>Mon, 29 Sep 2025 08:30:00 GMT</pubDate>
+      <description>&lt;p&gt;摘要一段。&lt;/p&gt;</description>
+      <content:encoded><![CDATA[
+        <article>
+          <h1>增量渲染</h1>
+          <p>正文第一段，包含 <a href="https://example.com/ref">一个链接</a>。</p>
+          <ul><li>要点一</li><li>要点二</li></ul>
+          <pre>code line 1
+code line 2</pre>
+          <img src="https://example.com/pic.png" alt="示意图"/>
+        </article>
+      ]]></content:encoded>
+    </item>
+    <item>
+      <title>第二篇：无日期文章</title>
+      <link>https://example.com/tech/2</link>
+      <guid>tech-2</guid>
+      <description>只有摘要，没有正文。</description>
+    </item>
+  </channel>
+</rss>

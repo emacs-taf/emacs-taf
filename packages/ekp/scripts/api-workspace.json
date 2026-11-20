@@ -1,0 +1,46 @@
+{
+  "ebox": {
+    "entry": "ebox",
+    "url": "https://github.com/emacs-taf/ebox.git"
+  },
+  "ebox-playground": {
+    "entry": "ebox-playground",
+    "url": "https://github.com/emacs-taf/ebox-playground.git"
+  },
+  "ecss": {
+    "entry": "ecss",
+    "url": "https://github.com/emacs-taf/ecss.git"
+  },
+  "ekp": {
+    "entry": "ekp",
+    "url": "https://github.com/emacs-taf/ekp.git"
+  },
+  "etaf": {
+    "entry": "etaf",
+    "url": "https://github.com/emacs-taf/etaf.git"
+  },
+  "etaf-db": {
+    "entry": "etaf-db",
+    "url": "https://github.com/emacs-taf/etaf-db.git"
+  },
+  "etaf-desktop": {
+    "entry": "etaf-desktop",
+    "url": "https://github.com/emacs-taf/etaf-desktop.git"
+  },
+  "etaf-gamekit": {
+    "entry": "etaf-gamekit",
+    "url": "https://github.com/emacs-taf/etaf-gamekit.git"
+  },
+  "etaf-manual": {
+    "entry": "etaf-manual",
+    "url": "https://github.com/emacs-taf/etaf-manual.git"
+  },
+  "etaf-playground": {
+    "entry": "etaf-playground",
+    "url": "https://github.com/emacs-taf/etaf-playground.git"
+  },
+  "etaf-ui": {
+    "entry": "etaf-ui",
+    "url": "https://github.com/emacs-taf/etaf-ui.git"
+  }
+}

@@ -1,0 +1,52 @@
+# Interaction Overview
+
+A text application receives input through two cooperating layers. Ebox owns the native primitives: interaction capabilities retained on nodes, painted as Emacs text properties, hit testing, focus, pointer state and native input sessions. ETAF owns the callbacks: a Host's `:on-*` property is application code addressed by Host reference and run inside a reactive event batch. This chapter maps that path end to end — how an input reaches a callback, how hit testing chooses its target, and how interaction attributes inherit — before the following chapters define each part: [Events](events.md), [Focus](focus.md), [Keyboard](keyboard.md), [Region Navigation](region-navigation.md), [Dragging and Gestures](dragging-and-gestures.md), and [Text Input](text-input.md). [Hosts](hosts.md) defines the semantic and event properties themselves, and [Actions, Behaviors and Error Boundaries](actions-behaviors-and-error-boundaries.md) defines how a callback becomes a named business mutation or a reusable Behavior.
+
+## The interaction path
+
+<!-- index: interaction path; lowering; interaction boundary; event batch -->
+
+The split is deliberate: Ebox knows nothing about Components, Actions or reactive values, and ETAF never reads the buffer to find out what was clicked. Ebox answers what lies under the pointer and who owns a key; ETAF answers which application code runs.
+
+When a Host commits, the Runtime lowers its properties into the Ebox node that represents it. `:on-press` and `:on-drag` become one Ebox keymap created with `ebox-keymap-create`: its activation entry dispatches the Host's press, and its drag entry relays every gesture phase. `:on-swipe` and `:on-scroll` become stable relay functions installed as the node's own interaction callbacks. The pointer affordances `:help-echo`, `:pointer`, `:hover-style`, `:hover-content` and `:drag-lock-modifier` reach the node as authored, and `:disabled` and `:tab-index` join its interaction state. Keyboard declarations take a different route: `:keys`, `:region` and `:on-direction` stay on the Runtime's keyboard layer instead of the node.
+
+Only some Hosts become interaction boundaries. A Host that carries a press or drag callback becomes one; so does a Host that is disabled or declares a control role such as `button`, `link`, `option` or `slider`, because those facts concern targeting and accessibility even when no callback exists yet. Ordinary text with only a reference or an accessible label stays part of its parent. This is what keeps a paragraph of labeled prose from swallowing clicks meant for an enclosing row, while a real control keeps its own identity.
+
+Ebox then paints each node's capabilities as native text properties over everything it draws — content, padding and border, on the string for an inline node and on the cells for a box. A hidden node paints nothing, so it offers no interaction feedback. From that point on the buffer carries the interaction facts: Emacs resolves a click or a key to the nearest keymap property at that position, and the Ebox command wrapper runs with the pointer's buffer position or with the focused node.
+
+The last leg is the Runtime. The wrapper calls `etaf-dispatch-event`, which looks the handler up by Host reference in the mounted Runtime, establishes the event context (`etaf-current-runtime` and the event's kind, Host and target) and runs the callback inside a reactive event batch, so the writes it makes publish together at the batch boundary. A press whose callback succeeds then runs ancestor `:on-press-capture` callbacks from the nearest committed ancestor outward, which is how a shell observes a nested press without every leaf knowing about it. Drag, swipe and scroll callbacks receive their payload through the same path.
+
+Applications reach this path through five surfaces. A local `:on-*` callback is the direct one and fits a one-off interaction. `etaf-dispatch` runs a named Action when the interaction is a business mutation. A Behavior installed with `:use` packages the same attributes, and any resources they need, for reuse. `etaf-dispatch-event` dispatches explicitly, which tests and integrations use in place of a pointer. `etaf-activate` performs keyboard activation for whatever focus or point resolves to, exactly as RET and SPC do.
+
+The two layers divide ownership cleanly. Ebox owns targeting, focus, input-session lifetime, pointer state such as `:active` and `:disabled`, gesture recognition and keymap execution. ETAF owns callback identity, the registries that survive re-rendering, reactive batching and the public Lisp API. Because the lowered keymap is cached by the callback identities and the relay functions are stable, re-rendering a Host with the same handlers does not invalidate its layout, and a Host that is removed or unmounted receives no further application callbacks.
+
+## Hit testing
+
+<!-- index: hit testing; activation; disabled hit area; reference walk -->
+
+Hit testing turns a buffer position into the node that owns it. A position that holds an inline node's painted text is resolved through that node's property; otherwise the geometry decides. The geometry pass walks the tree in reverse paint order — a higher layer first, and among equal layers the later overlay — and returns the innermost node covering the cell. This is the rule that lets a click on a floating panel reach the panel even though another row lies under it, and it is the same rule that decides hover feedback.
+
+Activation uses the nearest node whose keymap covers the position. Pointer presses and the RET and SPC keys both invoke that keymap's activation entry, so pointer and keyboard activation meet at the same target; `ebox-activate` invokes the RET binding of the node at point, or of the focused node while point rests on its first painted character. `ebox-next-interaction` and `ebox-previous-interaction` move point between keymap owners, the primitive behind keyboard traversal of interactive areas.
+
+Because a keymap is inherited, an inner element that declares no callback of its own does not take the press away from its container: a label inside a pressable row still activates the row, and so does a callbackless control whose role gives it an identity but no handler. An element that declares its own press or drag callback does become the nearer owner and handles the press itself. A disabled element is the deliberate exception: it paints an empty keymap, claiming the position and stopping the search, so a disabled control never falls through to the row around it, even when their painted bounds coincide.
+
+ETAF expresses the same boundary with Host properties and adds the reference layer. `etaf-host-ref-at` walks from the innermost Host at a position outward and returns the first explicit `:ref`, optionally filtered by a predicate, so an application can ask which panel was pressed rather than which leaf. Generated references are never returned. `etaf-host-ref-bounds`, `etaf-host-ref-position` and `etaf-host-ref-size` expose the geometry of the target for direct-key and hit-test integration. A Host with a press or drag callback also receives the `hand` pointer automatically, unless it declares another shape.
+
+## Inheriting interaction attributes
+
+<!-- index: attribute inheritance; explicit nil; empty keymap; hover coverage -->
+
+Interaction capabilities are inherited down the node tree. Ebox paints an ancestor's value first and a descendant fills only the gaps, so a keymap, `help-echo` text, pointer shape or hover face on a container applies to everything drawn inside it. An explicit nil is a value too: it is painted as a present nil — an empty keymap in place of a keymap — and blocks the inherited capability for that subtree. This is how a row makes itself clickable without silently making every label a separate target, and how a child opts out of a hover effect it does not want.
+
+The keymap lookup stops at a disabled node, so a disabled container blocks the keymap behind it instead of exposing it. Hover feedback covers the whole painted area: the padding cells of an element and every row of a multi-row element join into one region, and the fill follows the element's own border radius. Side-by-side elements stay independent: pointing at one repaints only its box, so a neighbour and the gaps between them keep their resting paint. Motion within the same target changes nothing, and a publication keeps the active paint on the same target. A mounted buffer repaints the hovered node through its computed paint; rendered text carries the same declarations as a native mouse face. Leaving the buffer or unmounting restores the resting paint. A hidden element paints nothing at all, so it keeps its layout space but offers no hover, pointer shape, help text or activation.
+
+The inheritance of ETAF's semantic properties — identity, Behaviors, classes, accessible metadata and the rest — follows the [Hosts](hosts.md#values-and-conflicts) merge rules with their own explicit-nil blocking and their error on conflicting owned semantics. The interaction capabilities above are the Ebox-level facts that ETAF lowers into; their per-property descriptions live in the [Hosts](hosts.md) reference. Keyboard focus shows the same hover affordance as the pointer, so a control reveals its full label whether it is pointed at or reached from the keyboard.
+
+## Errors and recovery
+
+<!-- index: interaction errors; event context -->
+
+- Calling the event-context queries `etaf-event-pointer-p` or `etaf-event-target-within-p` outside an event callback signals `error→ etaf-event-error`; they describe the event in progress, not a global state.
+- Dispatching explicitly to a disabled Host, to a Host with no handler for the kind, or to a reference the Runtime does not know signals `error→ etaf-event-error`. Activating a position where no command exists signals `user-error` instead, because empty space is ordinary input rather than a broken dispatch.
+- Dispatching from rendering code is a side effect and signals `error→ etaf-render-side-effect-error` with data `(dispatch-event)`; event callbacks run only after a commit, as [Reactivity](reactivity.md#rendering-is-free-of-side-effects) defines.
+- A callback's own error propagates to the dispatch's caller after the event's batch drains; the remaining callbacks composed for that event do not run, and business writes already made are not rolled back. [Events](events.md) defines the composition order and the capture hooks in full.

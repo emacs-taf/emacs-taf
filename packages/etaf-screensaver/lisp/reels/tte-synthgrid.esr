@@ -1,0 +1,2 @@
+;;; -*- lisp-data -*-
+(:id tte-synthgrid :title "Terminal Text Effects: synthgrid" :summary "synthgrid (Terminal Text Effects) text recording, 80×24, 132 frames at 20 fps, MIT license" :tags (imported) :provider tte :recording "synthgrid.tterec" :kind text :width 80 :height 24 :frame-rate 20 :frame-count 132 :source "synthgrid" :license "MIT")

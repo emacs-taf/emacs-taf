@@ -1,0 +1,11 @@
+requirementDiagram
+  requirement speed {
+  id: 1
+  text: "一秒内渲染完成"
+  risk: low
+  verifymethod: test
+  }
+  element sim {
+  type: simulation
+  }
+  speed - satisfies -> sim

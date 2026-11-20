@@ -1,0 +1,2 @@
+;;; -*- lisp-data -*-
+(:id poem-mingyue :title "明月松间" :summary "王维《山居秋暝》 · 逐字排印" :tags (imported ink poem) :provider tte :recording "poem-mingyue.tterec" :kind text :width 80 :height 24 :frame-rate 20 :frame-count 78 :source "ink: 明月松间照" :license "MIT" :background "#F4F1EA")

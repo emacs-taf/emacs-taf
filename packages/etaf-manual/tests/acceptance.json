@@ -1,0 +1,220 @@
+{
+ "schema": 1,
+ "load_path": [
+  ".",
+  "tests",
+  "../ebox",
+  "../ecss",
+  "../ekp",
+  "../etaf",
+  "../etaf-ui"
+ ],
+ "support": [],
+ "cases": [
+  {
+   "name": "etaf-manual-book-numbers-parts-and-chapters",
+   "file": "tests/etaf-manual-tests.el",
+   "purpose": "Both languages read every chapter in book.json order with part and chapter numbers."
+  },
+  {
+   "name": "etaf-manual-book-translations-share-entries",
+   "file": "tests/etaf-manual-tests.el",
+   "purpose": "Translations list the same chapters and definition entries as English."
+  },
+  {
+   "name": "etaf-manual-definition-finds-entries-by-name-and-kind",
+   "file": "tests/etaf-manual-tests.el",
+   "purpose": "Definition lookup locates an entry by symbol and optional kind in either language."
+  },
+  {
+   "name": "etaf-manual-book-rejects-unknown-language",
+   "file": "tests/etaf-manual-tests.el",
+   "purpose": "A language the book does not provide signals etaf-manual-error."
+  },
+  {
+   "name": "etaf-manual-runnable-examples-mount",
+   "file": "tests/etaf-manual-tests.el",
+   "purpose": "Every runnable example evaluates to a View that mounts without warnings."
+  },
+  {
+   "name": "etaf-manual-example-view-reports-failures",
+   "file": "tests/etaf-manual-tests.el",
+   "purpose": "A failing example signals etaf-manual-error naming the example."
+  },
+  {
+   "name": "etaf-manual-generated-content-covers-the-book",
+   "file": "tests/etaf-manual-tests.el",
+   "purpose": "Every generated appendix and index carries content and links each interface or index term it promises."
+  },
+  {
+   "name": "etaf-manual-reader-create-reports-state",
+   "file": "tests/etaf-manual-reader-tests.el",
+   "purpose": "A new session reads the first chapter and exposes its outline."
+  },
+  {
+   "name": "etaf-manual-reader-accepts-a-chapter-name",
+   "file": "tests/etaf-manual-reader-tests.el",
+   "purpose": "A chapter named by its string name opens that chapter, and the same name works for a later jump."
+  },
+  {
+   "name": "etaf-manual-reader-rejects-an-unknown-chapter",
+   "file": "tests/etaf-manual-reader-tests.el",
+   "purpose": "An unknown chapter signals etaf-manual-error and leaves the reading position unchanged."
+  },
+  {
+   "name": "etaf-manual-reader-navigation-walks-sections-and-chapters",
+   "file": "tests/etaf-manual-reader-tests.el",
+   "purpose": "Next and previous move through sections and roll into other chapters."
+  },
+  {
+   "name": "etaf-manual-reader-up-follows-levels",
+   "file": "tests/etaf-manual-reader-tests.el",
+   "purpose": "Up moves a level-3 section to its level-2 parent and then to the top."
+  },
+  {
+   "name": "etaf-manual-reader-history-walks-both-ways",
+   "file": "tests/etaf-manual-reader-tests.el",
+   "purpose": "Back and forward move through the reading history."
+  },
+  {
+   "name": "etaf-manual-reader-language-switch-keeps-position",
+   "file": "tests/etaf-manual-reader-tests.el",
+   "purpose": "Switching language keeps the chapter and reads the other translation."
+  },
+  {
+   "name": "etaf-manual-reader-toggle-theme-switches-palette",
+   "file": "tests/etaf-manual-reader-tests.el",
+   "purpose": "Toggling the theme flips between the dark and light palettes."
+  },
+  {
+   "name": "etaf-manual-reader-toc-marks-the-current-chapter",
+   "file": "tests/etaf-manual-reader-tests.el",
+   "purpose": "The outline names the parts, chapters and current sections."
+  },
+  {
+   "name": "etaf-manual-reader-view-renders-chapter-and-example",
+   "file": "tests/etaf-manual-reader-tests.el",
+   "purpose": "The mounted reader shows the article, chrome and a runnable example."
+  },
+  {
+   "name": "etaf-manual-reader-example-runs-and-stops-in-place",
+   "file": "tests/etaf-manual-reader-tests.el",
+   "purpose": "The run control renders the real View; stop clears it again."
+  },
+  {
+   "name": "etaf-manual-reader-example-modes-switch",
+   "file": "tests/etaf-manual-reader-tests.el",
+   "purpose": "Source, preview and side-by-side modes switch per example."
+  },
+  {
+   "name": "etaf-manual-reader-shows-definition-cards",
+   "file": "tests/etaf-manual-reader-tests.el",
+   "purpose": "A chapter with definition entries renders their cards."
+  },
+  {
+   "name": "etaf-manual-reader-key-help-lists-reader-keys",
+   "file": "tests/etaf-manual-reader-tests.el",
+   "purpose": "The framework key help lists the reader's own keys with their labels."
+  },
+  {
+   "name": "etaf-manual-reader-page-keys-drive-navigation",
+   "file": "tests/etaf-manual-reader-tests.el",
+   "purpose": "The page Host's :keys dispatch the reader keys in the mounted runtime."
+  },
+  {
+   "name": "etaf-manual-concept-index-groups-terms-by-initial",
+   "file": "tests/etaf-manual-tests.el",
+   "purpose": "The concept index groups terms under symbols and A-Z, filing Han terms by the Pinyin of their first character."
+  },
+  {
+   "name": "etaf-manual-symbol-index-groups-symbols-by-package",
+   "file": "tests/etaf-manual-tests.el",
+   "purpose": "The symbol index opens with the packages in manual order and lists each prefixed symbol under its own package."
+  },
+  {
+   "name": "etaf-manual-reader-examples-follow-run-blocks",
+   "file": "tests/etaf-manual-reader-tests.el",
+   "purpose": "Only runnable blocks become example viewers, including runnable examples inside definition entries."
+  },
+  {
+   "name": "etaf-manual-lookup-reaches-the-end-of-a-long-chapter",
+   "file": "tests/etaf-manual-reader-tests.el",
+   "purpose": "Looking up the last entry of a long chapter shows its card immediately in the opened reader."
+  },
+  {
+   "name": "etaf-manual-reader-jump-targets-cover-the-book",
+   "file": "tests/etaf-manual-reader-tests.el",
+   "purpose": "The jump completion lists chapters, sections, definition entries and index terms with targets that resolve."
+  },
+  {
+   "name": "etaf-manual-reader-search-walks-matching-sections",
+   "file": "tests/etaf-manual-reader-tests.el",
+   "purpose": "Full-text search lands on matching sections and next/previous walk the result list."
+  },
+  {
+   "name": "etaf-manual-reader-inline-symbols-link-to-definitions",
+   "file": "tests/etaf-manual-reader-tests.el",
+   "purpose": "A code span naming a definition entry carries a definition help echo and RET jumps to its section."
+  },
+  {
+   "name": "etaf-manual-reader-page-outline-lists-sections",
+   "file": "tests/etaf-manual-reader-tests.el",
+   "purpose": "A wide reader frames the on-this-page column of the current chapter beside the article."
+  },
+  {
+   "name": "etaf-manual-reader-chapter-cards-open-neighbours",
+   "file": "tests/etaf-manual-reader-tests.el",
+   "purpose": "The end-of-chapter cards open the previous and next chapter."
+  },
+  {
+   "name": "etaf-manual-reader-remembers-the-reading-position",
+   "file": "tests/etaf-manual-reader-tests.el",
+   "purpose": "A remembered position restores its language, chapter and section, and a malformed file is ignored."
+  },
+  {
+   "name": "etaf-manual-reader-edits-and-reruns-an-example",
+   "file": "tests/etaf-manual-reader-tests.el",
+   "purpose": "Submitting the in-place example editor reruns the edited draft and w copies it."
+  },
+  {
+   "name": "etaf-manual-reader-copies-the-section-code",
+   "file": "tests/etaf-manual-reader-tests.el",
+   "purpose": "The w key copies the current section's code to the kill ring."
+  },
+  {
+   "name": "etaf-manual-reader-resizes-the-side-columns",
+   "file": "tests/etaf-manual-reader-tests.el",
+   "purpose": "The side columns report their widths, clamp the setters and step from the focused divider."
+  },
+  {
+   "name": "etaf-manual-reader-renders-inline-figures",
+   "file": "tests/etaf-manual-reader-tests.el",
+   "purpose": "An inline figure renders its View in the chapter with a caption and no run controls."
+  },
+  {
+   "name": "etaf-manual-reader-interactive-surfaces-hover",
+   "file": "tests/etaf-manual-reader-tests.el",
+   "purpose": "Clickable navigation rows and rendered links carry a pointer hover face."
+  },
+  {
+   "name": "etaf-manual-reader-declares-its-palette-to-a-host",
+   "file": "tests/etaf-manual-reader-tests.el",
+   "purpose": "A reader mounted under a host declares its palette, mode labels and palette mode there, and the host writing that mode repaints the reader's palette."
+  },
+  {
+   "name": "etaf-manual-reader-session-is-recorded-by-its-host",
+   "file": "tests/etaf-manual-reader-tests.el",
+   "purpose": "A host that mounts the reader records its session in the host buffer, so the reader's commands and Host keys find it there."
+  },
+  {
+   "name": "etaf-manual-reader-auto-follows-the-host-appearance",
+   "file": "tests/etaf-manual-reader-tests.el",
+   "purpose": "An `auto' reader paints with the appearance its host provides and repaints when the host switches it, so 随 follows the Emacs theme while 亮 and 暗 pin the palette."
+  },
+  {
+   "name": "etaf-manual-reader-mounted-by-a-host-saves-its-position",
+   "file": "tests/etaf-manual-reader-tests.el",
+   "purpose": "A reader mounted by a host resolves its own session for keys and saves the section it moved to when it closes."
+  }
+ ]
+}

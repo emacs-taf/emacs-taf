@@ -1,0 +1,353 @@
+{
+  "schema": 1,
+  "load_path": [
+    ".",
+    "tests",
+    "../etaf",
+    "../ebox",
+    "../ecss"
+  ],
+  "support": [],
+  "cases": [
+    {
+      "name": "etaf-screensaver-tests-playback-gc-threshold-restores",
+      "file": "tests/etaf-screensaver-tests.el",
+      "purpose": "Playback lowers the GC threshold for its lifetime and restores the caller value when it stops."
+    },
+    {
+      "name": "etaf-screensaver-tests-repeated-page-continues",
+      "file": "tests/etaf-screensaver-tests.el",
+      "purpose": "A repeated page keeps the running scene state, so a single-work loop continues its animation instead of restarting it."
+    },
+    {
+      "name": "etaf-screensaver-tests-flat-playlist",
+      "file": "tests/etaf-screensaver-tests.el",
+      "purpose": "A flat list of scene and pack names plays in order, and a per-scene option sets one work's presentation."
+    },
+    {
+      "name": "etaf-screensaver-reel-tests-scaled-transient-kept",
+      "file": "tests/etaf-screensaver-reel-tests.el",
+      "purpose": "An enlarged recorded subject keeps transient glyphs and still finds its subject when a blank loop frame closes the recording."
+    },
+    {
+      "name": "etaf-screensaver-tests-equalizer-color-bars",
+      "file": "tests/etaf-screensaver-tests.el",
+      "purpose": "The equalizer publishes colored bars, white peak caps and a baseline reflection."
+    },
+    {
+      "name": "etaf-screensaver-reel-tests-scaled-color-snapshots",
+      "file": "tests/etaf-screensaver-reel-tests.el",
+      "purpose": "A scaled recording's color-only update preserves the new color and leaves the earlier public buffer snapshot unchanged."
+    },
+    {
+      "name": "etaf-screensaver-reel-tests-concurrent-text-overview",
+      "file": "tests/etaf-screensaver-reel-tests.el",
+      "purpose": "Concurrent works preserve native text in automatic overview mode while honoring an explicit fixed text scale."
+    },
+    {
+      "name": "etaf-screensaver-reel-tests-text-scale-resize",
+      "file": "tests/etaf-screensaver-reel-tests.el",
+      "purpose": "Recorded block glyphs and wide Unicode text keep movement, snapshotted scale and exact row geometry through resize, with native fallback outside graphical SVG builds."
+    },
+    {
+      "name": "etaf-screensaver-reel-tests-invalid-text-scale",
+      "file": "tests/etaf-screensaver-reel-tests.el",
+      "purpose": "Invalid recorded-text scale values fail before window takeover and leave the caller buffer selected."
+    },
+    {
+      "name": "etaf-screensaver-presentation-tests-canvas-is-an-application",
+      "file": "tests/etaf-screensaver-presentation-tests.el",
+      "purpose": "The presentation mounts as an ETAF application whose canvas paints the mat, and killing its buffer releases the presentation."
+    },
+    {
+      "name": "etaf-screensaver-presentation-tests-card-mats-evenly",
+      "file": "tests/etaf-screensaver-presentation-tests.el",
+      "purpose": "The gallery card sits on an even mat of about three line heights on every side, keeps its title and summary at the lower left in ordinary text, and retains light and dark paper."
+    },
+    {
+      "name": "etaf-screensaver-reel-tests-images-preserve-native-size",
+      "file": "tests/etaf-screensaver-reel-tests.el",
+      "purpose": "Image works never upscale, retain native size when they fit and publish every image row without stretching or omitting the final slice."
+    },
+    {
+      "name": "etaf-screensaver-presentation-tests-sparse-frames-clear-cells",
+      "file": "tests/etaf-screensaver-presentation-tests.el",
+      "purpose": "Moving sparse DSL layers clear earlier wide glyphs and colors, preserve published snapshots, and keep row geometry through shrink and expansion."
+    },
+    {
+      "name": "etaf-screensaver-reel-tests-ansi-runs-keep-independent-attributes",
+      "file": "tests/etaf-screensaver-reel-tests.el",
+      "purpose": "Sequential 16-color, true-color and indexed SGR runs preserve prior colors and attributes across later changes and resets, including wide characters."
+    },
+    {
+      "name": "etaf-screensaver-presentation-tests-reused-mutable-rows",
+      "file": "tests/etaf-screensaver-presentation-tests.el",
+      "purpose": "Every layout publishes character and subsequent color-only changes when a scene reuses and mutates its own row string."
+    },
+    {
+      "name": "etaf-screensaver-reel-tests-queued-frame-errors-are-deferred",
+      "file": "tests/etaf-screensaver-reel-tests.el",
+      "purpose": "Missing, non-image and escaping next-page assets report only at selection, preserving the current work and releasing the animation on failure."
+    },
+    {
+      "name": "etaf-screensaver-reel-tests-queued-manifest-edits-and-snapshots",
+      "file": "tests/etaf-screensaver-reel-tests.el",
+      "purpose": "Selection revalidates changed manifests, including repaired failures, while retaining the original compiled scene registration."
+    },
+    {
+      "name": "etaf-screensaver-reel-tests-queued-mosaic-completes-all-works",
+      "file": "tests/etaf-screensaver-reel-tests.el",
+      "purpose": "A short outgoing dwell still validates and displays all four incoming image works in order."
+    },
+    {
+      "name": "etaf-screensaver-reel-tests-cancel-queued-read-releases-resources",
+      "file": "tests/etaf-screensaver-reel-tests.el",
+      "purpose": "Dismissal during a large queued read restores windows and releases buffers, timers and processes without admitting a partial playback cache result."
+    },
+    {
+      "name": "etaf-screensaver-reel-tests-custom-reader-runs-at-selection",
+      "file": "tests/etaf-screensaver-reel-tests.el",
+      "purpose": "Custom recording providers retain synchronous scene-start reads and observe file changes made during the preceding page."
+    },
+    {
+      "name": "etaf-screensaver-reel-tests-content-signatures-and-long-headers",
+      "file": "tests/etaf-screensaver-reel-tests.el",
+      "purpose": "Image bundles recognize PNG/JPEG content despite misleading suffixes, accept a bounded long SVG header, reject a signature beyond the bound and revalidate imports after playback."
+    },
+    {
+      "name": "etaf-screensaver-reel-tests-image-resize-recovers-clipped-canvas",
+      "file": "tests/etaf-screensaver-reel-tests.el",
+      "purpose": "Every layout continues publishing fitted images when the viewport shrinks below its minimum grid and expands again, including when old glyphs were clipped."
+    },
+    {
+      "name": "etaf-screensaver-presentation-tests-styled-blank-geometry",
+      "file": "tests/etaf-screensaver-presentation-tests.el",
+      "purpose": "Initial and animated publication preserve adjacent blank runs with different faces, their pixel widths, wide text and immutable source rows in all layouts."
+    },
+    {
+      "name": "etaf-screensaver-reel-tests-provider-image-formats",
+      "file": "tests/etaf-screensaver-reel-tests.el",
+      "purpose": "Image providers publish declared or detected formats and reject malformed format vectors before takeover."
+    },
+    {
+      "name": "etaf-screensaver-reel-tests-image-reveal-keeps-margins",
+      "file": "tests/etaf-screensaver-reel-tests.el",
+      "purpose": "All layouts retain image slice geometry and empty margins during reveal, remove outgoing images, and keep the incoming recording moving."
+    },
+    {
+      "name": "etaf-screensaver-reel-tests-replay-observes-recording-edits",
+      "file": "tests/etaf-screensaver-reel-tests.el",
+      "purpose": "Replaying a modified recording shows its new content while unchanged replays remain correct."
+    },
+    {
+      "name": "etaf-screensaver-presentation-tests-progressive-reveal",
+      "file": "tests/etaf-screensaver-presentation-tests.el",
+      "purpose": "Every layout progressively reveals a moving new page, retaining the outgoing colors and exact row geometry."
+    },
+    {
+      "name": "etaf-screensaver-presentation-tests-reveal-wake-and-options",
+      "file": "tests/etaf-screensaver-presentation-tests.el",
+      "purpose": "Wake during a reveal consumes the key and releases timers; invalid transition settings fail before takeover."
+    },
+    {
+      "name": "etaf-screensaver-presentation-tests-reveal-disabled-and-repeat",
+      "file": "tests/etaf-screensaver-presentation-tests.el",
+      "purpose": "Disabling reveals and repeating an identical page never introduce a transition."
+    },
+    {
+      "name": "etaf-screensaver-reel-tests-contained-frame-symlinks",
+      "file": "tests/etaf-screensaver-reel-tests.el",
+      "purpose": "Image import accepts contained symlinks through a canonical bundle alias and rejects links that escape it."
+    },
+    {
+      "name": "etaf-screensaver-tests-focus-recheck-keeps-preview",
+      "file": "tests/etaf-screensaver-tests.el",
+      "purpose": "A manual preview stays active when Emacs broadcasts a focus recheck without a transition."
+    },
+    {
+      "name": "etaf-screensaver-tests-field-invariant-axes",
+      "file": "tests/etaf-screensaver-tests.el",
+      "purpose": "Dense fields preserve both spatial axes and refresh time-dependent values on subsequent frames."
+    },
+    {
+      "name": "etaf-screensaver-tests-field-random-short-circuit",
+      "file": "tests/etaf-screensaver-tests.el",
+      "purpose": "Dense fields preserve seeded per-cell randomness and operand order in variadic expressions, skipping unselected branches."
+    },
+    {
+      "name": "etaf-screensaver-tests-field-arithmetic",
+      "file": "tests/etaf-screensaver-tests.el",
+      "purpose": "Public field scenes preserve unary, binary and variadic arithmetic, including floating division and order-sensitive rounding."
+    },
+    {
+      "name": "etaf-screensaver-tests-field-coordinate-precedence",
+      "file": "tests/etaf-screensaver-tests.el",
+      "purpose": "Field coordinates advance per cell and shadow same-named scene parameters."
+    },
+    {
+      "name": "etaf-screensaver-presentation-tests-preserves-source-faces",
+      "file": "tests/etaf-screensaver-presentation-tests.el",
+      "purpose": "Framed publication preserves the scene's shared exact-width source strings and their face properties."
+    },
+    {
+      "name": "etaf-screensaver-presentation-tests-color-only-animation",
+      "file": "tests/etaf-screensaver-presentation-tests.el",
+      "purpose": "A work changing only colors repaints after its first tick."
+    },
+    {
+      "name": "etaf-screensaver-presentation-tests-independent-wall",
+      "file": "tests/etaf-screensaver-presentation-tests.el",
+      "purpose": "Four independent works animate concurrently and a fifth plays on the next page without duplication."
+    },
+    {
+      "name": "etaf-screensaver-presentation-tests-styles-preserve-unicode",
+      "file": "tests/etaf-screensaver-presentation-tests.el",
+      "purpose": "All four styles preserve wide characters and exact viewport row/column budgets."
+    },
+    {
+      "name": "etaf-screensaver-presentation-tests-style-precedence",
+      "file": "tests/etaf-screensaver-presentation-tests.el",
+      "purpose": "Global presentation overrides pack suggestions while explicit group/item styles take priority."
+    },
+    {
+      "name": "etaf-screensaver-presentation-tests-full-default-catalog",
+      "file": "tests/etaf-screensaver-presentation-tests.el",
+      "purpose": "The default round includes every selected pack's works, including its tail."
+    },
+    {
+      "name": "etaf-screensaver-presentation-tests-resume-configuration",
+      "file": "tests/etaf-screensaver-presentation-tests.el",
+      "purpose": "Previews preserve the configured program's position and effective setting changes invalidate it."
+    },
+    {
+      "name": "etaf-screensaver-presentation-tests-wall-failure-rolls-back",
+      "file": "tests/etaf-screensaver-presentation-tests.el",
+      "purpose": "A broken mosaic tile leaves the editor and timer inventory unchanged."
+    },
+    {
+      "name": "etaf-screensaver-tests-restores-and-releases",
+      "file": "tests/etaf-screensaver-tests.el",
+      "purpose": "Repeated start and stop restore windows and release timers, input interception, tracking and buffers without starting processes."
+    },
+    {
+      "name": "etaf-screensaver-tests-key-wakes-without-editing",
+      "file": "tests/etaf-screensaver-tests.el",
+      "purpose": "A wake key restores the original buffer without editing it."
+    },
+    {
+      "name": "etaf-screensaver-tests-pointer-wakes",
+      "file": "tests/etaf-screensaver-tests.el",
+      "purpose": "Mouse movement, a complete click and wheel input dismiss the presentation."
+    },
+    {
+      "name": "etaf-screensaver-tests-mode-is-idempotent",
+      "file": "tests/etaf-screensaver-tests.el",
+      "purpose": "Automatic mode owns one idle watcher and disabling it releases both watcher and presentation."
+    },
+    {
+      "name": "etaf-screensaver-tests-program-order-and-options",
+      "file": "tests/etaf-screensaver-tests.el",
+      "purpose": "Nested groups preserve sequence boundaries and scene options merge with item settings."
+    },
+    {
+      "name": "etaf-screensaver-tests-shuffle-and-random",
+      "file": "tests/etaf-screensaver-tests.el",
+      "purpose": "Shuffle covers each bag once; random selection honors its count and seeded playback is repeatable."
+    },
+    {
+      "name": "etaf-screensaver-tests-timed-cycle",
+      "file": "tests/etaf-screensaver-tests.el",
+      "purpose": "Actual timer-driven playback advances scenes and repeats the configured program."
+    },
+    {
+      "name": "etaf-screensaver-tests-unicode-and-seeded-particles",
+      "file": "tests/etaf-screensaver-tests.el",
+      "purpose": "Canvas-only output preserves mixed Unicode text, color and repeatable particle initialization."
+    },
+    {
+      "name": "etaf-screensaver-tests-bundled-scenes-run",
+      "file": "tests/etaf-screensaver-tests.el",
+      "purpose": "Every bundled scene renders and advances autonomously without workspace controls."
+    },
+    {
+      "name": "etaf-screensaver-tests-packs-play-as-configured",
+      "file": "tests/etaf-screensaver-tests.el",
+      "purpose": "Pack items play their scenes in order, honor counts and reject unknown packs."
+    },
+    {
+      "name": "etaf-screensaver-tests-resumes-after-dismissal",
+      "file": "tests/etaf-screensaver-tests.el",
+      "purpose": "A later start of the configured program resumes at the work that was playing."
+    },
+    {
+      "name": "etaf-screensaver-tests-invalid-start-rolls-back",
+      "file": "tests/etaf-screensaver-tests.el",
+      "purpose": "Bad configuration and scene failures leave the editor and resource inventory unchanged."
+    },
+    {
+      "name": "etaf-screensaver-tests-external-buffer-kill-cleans-up",
+      "file": "tests/etaf-screensaver-tests.el",
+      "purpose": "Externally killing the presentation buffer restores windows and cancels animation."
+    },
+    {
+      "name": "etaf-screensaver-tests-loader-and-catalog",
+      "file": "tests/etaf-screensaver-tests.el",
+      "purpose": "Scene files replace registrations while a malformed file reports independently."
+    },
+    {
+      "name": "etaf-screensaver-reel-tests-playback-follows-recording",
+      "file": "tests/etaf-screensaver-reel-tests.el",
+      "purpose": "A registered reel plays frames in recording order, honors provider metadata and loops."
+    },
+    {
+      "name": "etaf-screensaver-reel-tests-wide-ansi-frames-keep-colors",
+      "file": "tests/etaf-screensaver-reel-tests.el",
+      "purpose": "ANSI recordings with wide characters publish centered colored canvas rows."
+    },
+    {
+      "name": "etaf-screensaver-reel-tests-imports-a-recording",
+      "file": "tests/etaf-screensaver-reel-tests.el",
+      "purpose": "Importing a Terminal Text Effects recording copies it, writes a reel spec and the reel plays."
+    },
+    {
+      "name": "etaf-screensaver-reel-tests-batch-report-classifies-files",
+      "file": "tests/etaf-screensaver-reel-tests.el",
+      "purpose": "Batch import reports compatible, unrecognized and invalid recordings separately."
+    },
+    {
+      "name": "etaf-screensaver-reel-tests-rejects-invalid-recordings",
+      "file": "tests/etaf-screensaver-reel-tests.el",
+      "purpose": "Wrong versions, truncated streams and invalid frames signal errors and write nothing."
+    },
+    {
+      "name": "etaf-screensaver-reel-tests-loader-skips-broken-reels",
+      "file": "tests/etaf-screensaver-reel-tests.el",
+      "purpose": "A reel spec with a missing recording is reported and skipped without disturbing other scenes."
+    },
+    {
+      "name": "etaf-screensaver-reel-tests-natural-duration",
+      "file": "tests/etaf-screensaver-reel-tests.el",
+      "purpose": "A reel with a recorded length uses it as the scene duration instead of the default."
+    },
+    {
+      "name": "etaf-screensaver-reel-tests-image-frames-advance",
+      "file": "tests/etaf-screensaver-reel-tests.el",
+      "purpose": "Baked image slices advance in every layout while earlier public buffer snapshots retain their original descriptors and geometry."
+    },
+    {
+      "name": "etaf-screensaver-reel-tests-imports-frame-bundle",
+      "file": "tests/etaf-screensaver-reel-tests.el",
+      "purpose": "Importing a frame bundle copies every file, writes the reel spec and plays it."
+    },
+    {
+      "name": "etaf-screensaver-reel-tests-bounded-frame-import",
+      "file": "tests/etaf-screensaver-reel-tests.el",
+      "purpose": "Escaping paths, symlinks and oversized manifests/declarations fail before writing an image bundle import."
+    },
+    {
+      "name": "etaf-screensaver-reel-tests-rejects-broken-frame-bundles",
+      "file": "tests/etaf-screensaver-reel-tests.el",
+      "purpose": "Missing frames, non-images and bad JSON signal and write nothing."
+    }
+  ]
+}

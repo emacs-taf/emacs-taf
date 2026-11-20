@@ -1,0 +1,1207 @@
+{
+  "schema": 1,
+  "load_path": [
+    ".",
+    "tests",
+    "../ebox",
+    "../ebox-playground",
+    "../ecss",
+    "../ekp",
+    "../etaf-db",
+    "../etaf-playground",
+    "../etaf-ui"
+  ],
+  "support": [],
+  "cases": [
+    {
+      "name": "etaf-keys-return-uses-live-focus-instead-of-displaced-point",
+      "file": "tests/etaf-keys-tests.el",
+      "purpose": "Native RET/return and explicit activation follow live focus when point moves across a local scope, without invoking the enclosing host or the control at point."
+    },
+    {
+      "name": "etaf-keys-focus-leave-redirection-stops-stale-entry",
+      "file": "tests/etaf-keys-tests.el",
+      "purpose": "A focus-leave callback can redirect focus without notifying the superseded destination."
+    },
+    {
+      "name": "etaf-keys-focus-leave-precedes-entry-and-excludes-shared-ancestors",
+      "file": "tests/etaf-keys-tests.el",
+      "purpose": "Focus movement notifies exited Hosts before entered Hosts, skips shared ancestors and exposes the accepted destination to callbacks."
+    },
+    {
+      "name": "etaf-keys-resolve-to-named-symbols-and-leave-this-command-a-symbol",
+      "file": "tests/etaf-keys-tests.el",
+      "purpose": "Every scoped key resolves to a named symbol that prints in a few characters, and executing one leaves this-command a symbol instead of a closure carrying the mounted Runtime."
+    },
+    {
+      "name": "etaf-key-scope-native-editing-keeps-draft-before-dismissal",
+      "file": "tests/etaf-key-scope-tests.el",
+      "purpose": "Native editing consumes the first Escape and preserves the draft before a subsequent Escape dismisses the local layer."
+    },
+    {
+      "name": "etaf-key-scope-nearest-boundary-stops-unhandled-dismissal",
+      "file": "tests/etaf-key-scope-tests.el",
+      "purpose": "Nested local boundaries stop unhandled Escape and help preparation from reaching an enclosing scope."
+    },
+    {
+      "name": "etaf-key-scope-isolates-siblings-and-unbound-letters",
+      "file": "tests/etaf-key-scope-tests.el",
+      "purpose": "Local scopes resolve shared letters independently and block unbound letters from reaching outer Host or buffer actions."
+    },
+    {
+      "name": "etaf-key-scope-confines-tab-directions-and-region-exits",
+      "file": "tests/etaf-key-scope-tests.el",
+      "purpose": "Tab, direction aliases, Home/End and region selection stay inside a local scope, including declared exits and outer direction handlers."
+    },
+    {
+      "name": "etaf-key-scope-confines-spatial-navigation-without-regions",
+      "file": "tests/etaf-key-scope-tests.el",
+      "purpose": "Spatial movement stays local without requiring regions, while explicit focus can leave the non-modal boundary."
+    },
+    {
+      "name": "etaf-key-scope-help-and-palette-expose-only-local-controls",
+      "file": "tests/etaf-key-scope-tests.el",
+      "purpose": "Read-only help and executable palette share local key and control ownership and help restores its opener."
+    },
+    {
+      "name": "etaf-key-scope-dismisses-one-layer-and-restores-region-entry",
+      "file": "tests/etaf-key-scope-tests.el",
+      "purpose": "Escape clears selection, dismisses a modal or returns from a local scope once per press; region reentry restores the last control."
+    },
+    {
+      "name": "etaf-key-scope-reactive-boundaries-and-lifetime",
+      "file": "tests/etaf-key-scope-tests.el",
+      "purpose": "Reactive boundary changes, subtree removal and unmount update keyboard ownership without a parallel mode state."
+    },
+    {
+      "name": "etaf-key-scope-rejects-unsupported-values",
+      "file": "tests/etaf-key-scope-tests.el",
+      "purpose": "Local keyboard metadata rejects unsupported values as renderer errors."
+    },
+    {
+      "name": "etaf-component-library-reload-retains-live-state",
+      "file": "tests/etaf-component-loading-tests.el",
+      "purpose": "Loading the same source and bytecode declaration keeps live state when a newly constructed View replaces the old call."
+    },
+    {
+      "name": "etaf-component-library-conflicts-preserve-the-definition",
+      "file": "tests/etaf-component-loading-tests.el",
+      "purpose": "Changed declarations and other libraries cannot replace an existing definition; deliberate replacement remains available."
+    },
+    {
+      "name": "etaf-component-evaluated-duplicates-retain-lexical-captures",
+      "file": "tests/etaf-component-loading-tests.el",
+      "purpose": "Ordinary evaluation rejects duplicate declarations rather than silently retaining or replacing different lexical captures."
+    },
+    {
+      "name": "etaf-help-opening-from-an-event-waits-for-preparation-publication",
+      "file": "tests/etaf-help-tests.el",
+      "purpose": "Button-triggered help waits for the event and preparation to publish, captures current notes and coalesces repeated requests."
+    },
+    {
+      "name": "etaf-help-opening-prepares-only-the-nearest-enabled-scope",
+      "file": "tests/etaf-help-tests.el",
+      "purpose": "A new help opening prepares only the nearest enabled scope, respects modal boundaries and never repeats preparation on reuse or close."
+    },
+    {
+      "name": "etaf-help-opening-failure-preserves-policy-state-and-permits-retry",
+      "file": "tests/etaf-help-tests.el",
+      "purpose": "Preparation failures leave no help surface, preserve application policy changes and permit retry with a post-preparation snapshot."
+    },
+    {
+      "name": "etaf-help-preserves-provider-observation-across-canvas-changes",
+      "file": "tests/etaf-help-tests.el",
+      "purpose": "Opening and closing help retain real engine flush reports inside the Runtime's observed operation, including canvas replacement."
+    },
+    {
+      "name": "etaf-help-renders-without-a-known-window-height",
+      "file": "tests/etaf-help-tests.el",
+      "purpose": "An undisplayed application with no definite canvas height still opens a readable modal and restores its original extent."
+    },
+    {
+      "name": "etaf-help-snapshot-respects-scope-shadowing-and-copy-ownership",
+      "file": "tests/etaf-help-tests.el",
+      "purpose": "Effective scoped keys hide shadowed bindings and defensive snapshots detach notes, strings and entries."
+    },
+    {
+      "name": "etaf-help-tracks-effective-local-maps-between-openings",
+      "file": "tests/etaf-help-tests.el",
+      "purpose": "Effective application keymaps supplement Host keys, stay stable while help is open and refresh on reopening."
+    },
+    {
+      "name": "etaf-help-covers-short-and-text-roots-without-changing-them",
+      "file": "tests/etaf-help-tests.el",
+      "purpose": "Short, text-only and multi-root applications show in-place help without creating buffers or changing their restored extent."
+    },
+    {
+      "name": "etaf-help-retains-scrolling-and-surviving-focus",
+      "file": "tests/etaf-help-tests.el",
+      "purpose": "Help preserves retained application geometry, scroll offsets and surviving focus."
+    },
+    {
+      "name": "etaf-help-survives-root-replacement-and-removed-opener",
+      "file": "tests/etaf-help-tests.el",
+      "purpose": "Background root replacement keeps the opening snapshot and permits closing after its original focus target disappears."
+    },
+    {
+      "name": "etaf-help-render-failure-leaves-application-usable",
+      "file": "tests/etaf-help-tests.el",
+      "purpose": "A failing custom help renderer leaves no partial modal and permits a successful retry."
+    },
+    {
+      "name": "etaf-help-isolates-mounts-and-releases-on-unmount",
+      "file": "tests/etaf-help-tests.el",
+      "purpose": "Independent help mounts do not share lifecycle state and unmount releases the old snapshot before remounting."
+    },
+    {
+      "name": "etaf-native-key-commands-do-not-retain-disposed-owners",
+      "file": "tests/etaf-key-lifetime-tests.el",
+      "purpose": "Native commands remain usable while mounted but retained history cannot keep disposed application resources alive."
+    },
+    {
+      "name": "etaf-async-resource-native-timer-refreshes-retained-value",
+      "file": "tests/etaf-async-tests.el",
+      "purpose": "Native completion replaces a retained value and releases it once."
+    },
+    {
+      "name": "etaf-async-resource-reject-cancel-timeout-and-retry",
+      "file": "tests/etaf-async-tests.el",
+      "purpose": "Failures retain optional old data, timeout cancels work, and reload retries."
+    },
+    {
+      "name": "etaf-async-resource-discards-old-and-duplicate-completions",
+      "file": "tests/etaf-async-tests.el",
+      "purpose": "Uncancellable old results cannot replace new data and transfer cleanup once."
+    },
+    {
+      "name": "etaf-async-validates-adapters-and-synchronous-page-preparation",
+      "file": "tests/etaf-async-tests.el",
+      "purpose": "Invalid adapters become errors; synchronous preparation never starts async IO."
+    },
+    {
+      "name": "etaf-async-data-native-search-keeps-only-current-result",
+      "file": "tests/etaf-async-tests.el",
+      "purpose": "A slow old search finishing after a new search cannot change the current page."
+    },
+    {
+      "name": "etaf-async-data-cancel-timeout-and-malformed-result-retain-items",
+      "file": "tests/etaf-async-tests.el",
+      "purpose": "Cancellation, timeout and invalid source pages preserve the accepted collection."
+    },
+    {
+      "name": "etaf-async-data-committed-write-retries-only-failed-refresh",
+      "file": "tests/etaf-async-tests.el",
+      "purpose": "An asynchronous committed write is never replayed when its refresh fails."
+    },
+    {
+      "name": "etaf-async-data-write-certainty-survives-cancel-and-rejection",
+      "file": "tests/etaf-async-tests.el",
+      "purpose": "Only explicit provider evidence means rollback; cancelled writes remain unknown."
+    },
+    {
+      "name": "etaf-async-mounted-owner-unmount-invalidates-late-work",
+      "file": "tests/etaf-async-tests.el",
+      "purpose": "Unmount cancels owned work; late success cleans up without reviving the UI."
+    },
+    {
+      "name": "etaf-async-resource-publication-error-is-not-loader-error",
+      "file": "tests/etaf-async-tests.el",
+      "purpose": "A completion preserves its accepted value when an observer fails."
+    },
+    {
+      "name": "etaf-async-resource-cleanup-cannot-revive-an-old-request",
+      "file": "tests/etaf-async-tests.el",
+      "purpose": "Cleanup may start a newer request or dispose the owner without stale publication."
+    },
+    {
+      "name": "etaf-async-cancellation-during-start-releases-returned-handle",
+      "file": "tests/etaf-async-tests.el",
+      "purpose": "Cancellation inside START still releases the handle returned afterward."
+    },
+    {
+      "name": "etaf-async-resource-example-renders-real-loading-and-cancellation",
+      "file": "tests/etaf-async-tests.el",
+      "purpose": "The shipped example handles asynchronous success, refresh, failure and cancel."
+    },
+    {
+      "name": "etaf-async-data-outcome-is-reactive-while-status-stays-loading",
+      "file": "tests/etaf-async-tests.el",
+      "purpose": "A pending write and its commit are observable even before first page completion."
+    },
+    {
+      "name": "etaf-component-lifecycle-hooks-run-in-order",
+      "file": "tests/etaf-component-tests.el",
+      "purpose": "Mounted hooks run children first; branch removal runs unmounted hooks."
+    },
+    {
+      "name": "etaf-component-tracked-props-update-without-setup",
+      "file": "tests/etaf-component-tests.el",
+      "purpose": "`etaf-prop' tracks inputs while setup and bindings run once."
+    },
+    {
+      "name": "etaf-component-validation-rejects-invalid-input",
+      "file": "tests/etaf-component-tests.el",
+      "purpose": "Invalid props signal and keep the last accepted render."
+    },
+    {
+      "name": "etaf-component-render-frontend-and-state",
+      "file": "tests/etaf-component-tests.el",
+      "purpose": "`:render' returns ordinary Views and setup state is readable."
+    },
+    {
+      "name": "etaf-component-context-reaches-descendants",
+      "file": "tests/etaf-component-tests.el",
+      "purpose": "Provided values reach rendered descendants; slot content keeps caller Context."
+    },
+    {
+      "name": "etaf-component-theme-tokens-follow-provided-theme",
+      "file": "tests/etaf-component-tests.el",
+      "purpose": "Theme tokens in Component rules resolve from the provided Theme."
+    },
+    {
+      "name": "etaf-component-hover-style-token-resolves-from-provided-theme",
+      "file": "tests/etaf-component-tests.el",
+      "purpose": "A Theme token nested in a :hover-style plist resolves to the provided colour in the painted mouse face."
+    },
+    {
+      "name": "etaf-component-local-ref-resolves-committed-host",
+      "file": "tests/etaf-component-tests.el",
+      "purpose": "A local Host reference supports focus and position queries."
+    },
+    {
+      "name": "etaf-component-output-shape-changes-keep-bindings",
+      "file": "tests/etaf-component-tests.el",
+      "purpose": "Output may switch between nil, one View and a fragment."
+    },
+    {
+      "name": "etaf-component-error-boundary-handles-errors",
+      "file": "tests/etaf-component-tests.el",
+      "purpose": "The error boundary returns the handler's value for signaled errors."
+    },
+    {
+      "name": "etaf-component-unknown-component-signals",
+      "file": "tests/etaf-component-tests.el",
+      "purpose": "Unknown Component tags are rejected at View construction."
+    },
+    {
+      "name": "etaf-data-source-capabilities-compose-async-storage-and-disposal",
+      "file": "tests/etaf-data-source-composition-tests.el",
+      "purpose": "An adapted source retains storage and lifecycle while Data publishes asynchronous results."
+    },
+    {
+      "name": "etaf-data-memory-source-loads-pages-and-query-forms",
+      "file": "tests/etaf-data-tests.el",
+      "purpose": "Memory sources support paging and all public query forms."
+    },
+    {
+      "name": "etaf-data-status-refreshing-retains-items",
+      "file": "tests/etaf-data-tests.el",
+      "purpose": "Refreshing keeps accepted items until the asynchronous completion lands."
+    },
+    {
+      "name": "etaf-data-async-load-success-error-cancel-and-timeout",
+      "file": "tests/etaf-data-tests.el",
+      "purpose": "Asynchronous loads publish success, error, cancellation and timeout states."
+    },
+    {
+      "name": "etaf-data-memory-source-mutations-publish-outcomes",
+      "file": "tests/etaf-data-tests.el",
+      "purpose": "Memory insert, update, delete, replace and reset reconcile the controller."
+    },
+    {
+      "name": "etaf-data-v2-certainty-outcomes-are-reported",
+      "file": "tests/etaf-data-tests.el",
+      "purpose": "V2 committed, rolled-back and unknown outcomes shape mutation envelopes."
+    },
+    {
+      "name": "etaf-data-async-mutation-publishes-pending-outcome",
+      "file": "tests/etaf-data-tests.el",
+      "purpose": "Asynchronous mutations expose pending and completed outcome envelopes."
+    },
+    {
+      "name": "etaf-data-mutate-many-reconciles-and-reports-prefix-failure",
+      "file": "tests/etaf-data-tests.el",
+      "purpose": "Mutate-many uses batch capabilities and records failure prefixes."
+    },
+    {
+      "name": "etaf-data-retry-reconciliation-reloads-without-replaying-mutation",
+      "file": "tests/etaf-data-tests.el",
+      "purpose": "Retry reloads a committed mutation after read-side failure only once."
+    },
+    {
+      "name": "etaf-data-selection-apis-and-selected-ref-stability",
+      "file": "tests/etaf-data-tests.el",
+      "purpose": "Selection helpers maintain stable per-identity refs."
+    },
+    {
+      "name": "etaf-data-stop-disposes-source-and-rejects-access",
+      "file": "tests/etaf-data-tests.el",
+      "purpose": "Stop returns cleanup errors, cancels work and rejects later operations."
+    },
+    {
+      "name": "etaf-data-initial-result-seeds-without-loading",
+      "file": "tests/etaf-data-tests.el",
+      "purpose": "Prepared initial results seed a successful controller."
+    },
+    {
+      "name": "etaf-data-owner-scope-disposes-controller",
+      "file": "tests/etaf-data-tests.el",
+      "purpose": "Owner scope disposal stops its child controller."
+    },
+    {
+      "name": "etaf-data-completion-publishes-atomically",
+      "file": "tests/etaf-data-tests.el",
+      "purpose": "Items, total and status change in one observer turn for a completion."
+    },
+    {
+      "name": "etaf-docs-readme-examples-mount-and-dispatch-in-fresh-emacs",
+      "file": "tests/etaf-docs-tests.el",
+      "purpose": "Both READMEs must work from their exact requires in isolated processes."
+    },
+    {
+      "name": "etaf-events-press-runs-callback-in-one-batch",
+      "file": "tests/etaf-events-tests.el",
+      "purpose": "A press callback runs in a batch and publishes its writes once."
+    },
+    {
+      "name": "etaf-events-press-uses-callback-over-equal-new-item",
+      "file": "tests/etaf-events-tests.el",
+      "purpose": "A new prop object replaces the committed press callback even when its contents are equal."
+    },
+    {
+      "name": "etaf-events-rejects-disabled-and-missing-handlers",
+      "file": "tests/etaf-events-tests.el",
+      "purpose": "Disabled Hosts and Hosts without a handler signal `etaf-event-error'."
+    },
+    {
+      "name": "etaf-events-press-capture-sees-target",
+      "file": "tests/etaf-events-tests.el",
+      "purpose": "Ancestor press-capture callbacks run after the target and see it."
+    },
+    {
+      "name": "etaf-events-pointer-p-separates-clicks-from-keys",
+      "file": "tests/etaf-events-tests.el",
+      "purpose": "A press reports a pointer source only for a mouse click."
+    },
+    {
+      "name": "etaf-events-actions-dispatch-through-runtime",
+      "file": "tests/etaf-events-tests.el",
+      "purpose": "Named Actions receive the Runtime and run in an event batch."
+    },
+    {
+      "name": "etaf-events-focus-navigation",
+      "file": "tests/etaf-events-tests.el",
+      "purpose": "Focus moves among tab stops and reports committed Host references."
+    },
+    {
+      "name": "etaf-events-activate-dispatches-press-at-point",
+      "file": "tests/etaf-events-tests.el",
+      "purpose": "Activation at point dispatches the enclosing Host's press callback."
+    },
+    {
+      "name": "etaf-selector-notifies-only-the-changed-keys",
+      "file": "tests/etaf-scope-tests.el",
+      "purpose": "Moving a keyed selection notifies only the previous and the new key's readers."
+    },
+    {
+      "name": "etaf-events-host-ref-at-maps-positions-to-rows",
+      "file": "tests/etaf-events-tests.el",
+      "purpose": "A buffer position resolves to the explicit ref of its innermost enclosing Host."
+    },
+    {
+      "name": "etaf-events-scroll-api-anchors-and-reveals-hosts",
+      "file": "tests/etaf-events-tests.el",
+      "purpose": "Hosts report and set scroll offsets, an end-anchored Host follows appended rows until scrolled away, and a row scrolls into view."
+    },
+    {
+      "name": "etaf-events-on-scroll-loads-older-rows-in-place",
+      "file": "tests/etaf-events-tests.el",
+      "purpose": "A scrolling Host's :on-scroll receives changed offsets, so a history can load older rows at offset 0 and, after etaf-next-tick, align its previous first row to the top to stay in place; scroll-into-view also aligns to the end."
+    },
+    {
+      "name": "etaf-events-swipe-reaches-the-nearest-handler-once",
+      "file": "tests/etaf-events-tests.el",
+      "purpose": "A horizontal trackpad gesture calls the nearest Host's :on-swipe once with the finger direction, without making the Host clickable."
+    },
+    {
+      "name": "etaf-events-behaviors-toggle-and-drag",
+      "file": "tests/etaf-events-tests.el",
+      "purpose": "Toggleable and draggable Behaviors update caller-owned refs."
+    },
+    {
+      "name": "etaf-events-native-input-session",
+      "file": "tests/etaf-events-tests.el",
+      "purpose": "Typed keys edit a text Host's value through a session; state echoing it is a no-op and another value replaces it."
+    },
+    {
+      "name": "etaf-events-host-queries",
+      "file": "tests/etaf-events-tests.el",
+      "purpose": "Host queries report committed props, handlers, bounds and size."
+    },
+    {
+      "name": "etaf-events-sticky-host-mirrors-header-line",
+      "file": "tests/etaf-events-tests.el",
+      "purpose": "A sticky Host mirrors its first row into the header line and header clicks run its press handler."
+    },
+    {
+      "name": "etaf-events-retained-host-updates",
+      "file": "tests/etaf-events-tests.el",
+      "purpose": "Retained content and geometry updates change one Host and bump the revision."
+    },
+    {
+      "name": "etaf-events-invalid-host-content-preserves-the-whole-batch",
+      "file": "tests/etaf-events-tests.el",
+      "purpose": "Invalid retained content signals the public runtime error without changing any target or revision, including on text-only Emacs builds; a valid retry succeeds."
+    },
+    {
+      "name": "etaf-events-performance-records-operations",
+      "file": "tests/etaf-events-tests.el",
+      "purpose": "The performance recorder captures observed event operations."
+    },
+    {
+      "name": "etaf-input-edit-commands-add-and-remove",
+      "file": "tests/etaf-events-tests.el",
+      "purpose": "The session text-editing command list changes through the public add and remove only."
+    },
+    {
+      "name": "etaf-keys-resolve-from-focus-outward-and-nearest-wins",
+      "file": "tests/etaf-keys-tests.el",
+      "purpose": "A Host's :keys work while focus is inside it and the nearest Host binding a key shadows outer ones."
+    },
+    {
+      "name": "etaf-keys-follow-point-moved-out-of-the-focus",
+      "file": "tests/etaf-keys-tests.el",
+      "purpose": "When a command moves point out of the focused Host, the keys of the Host at point answer."
+    },
+    {
+      "name": "etaf-keys-modal-scope-hides-outer-keys-and-escape-dismisses",
+      "file": "tests/etaf-keys-tests.el",
+      "purpose": "An open :focus-scope modal Host hides outer keys, ignores unbound letters, and Escape or C-g dispatch its :on-dismiss."
+    },
+    {
+      "name": "etaf-keys-behaviors-move-and-resize-from-the-keyboard",
+      "file": "tests/etaf-keys-tests.el",
+      "purpose": "Draggable and resizable Behaviors move with M-arrows and resize with M-S-arrows within their bounds."
+    },
+    {
+      "name": "etaf-keys-drag-step-and-arrows-step-a-focused-separator",
+      "file": "tests/etaf-keys-tests.el",
+      "purpose": "etaf-drag-step sends keyboard drag gestures and arrows along a focused separator's axis step it."
+    },
+    {
+      "name": "etaf-keys-sequences-are-scoped-and-share-prefixes",
+      "file": "tests/etaf-keys-tests.el",
+      "purpose": "A Host key sequence runs inside its Host, shares its prefix with buffer keymaps and falls back to them outside the Host."
+    },
+    {
+      "name": "etaf-keys-commands-act-on-hosts-they-reveal",
+      "file": "tests/etaf-keys-tests.el",
+      "purpose": "A Host key command runs like a keymap binding, so it can locate and focus a Host its own write just revealed."
+    },
+    {
+      "name": "etaf-keys-focus-enter-runs-when-focus-moves-into-a-host",
+      "file": "tests/etaf-keys-tests.el",
+      "purpose": "Tab and explicit focus run :on-focus-enter on each Host focus enters from outside, nearest first, and not for moves inside it."
+    },
+    {
+      "name": "etaf-keys-palette-lists-labelled-keys-and-controls",
+      "file": "tests/etaf-keys-tests.el",
+      "purpose": "The palette offers labelled keys and named controls, runs a key and focuses and presses a control; ? opens help instead."
+    },
+    {
+      "name": "etaf-keys-help-lists-effective-bindings",
+      "file": "tests/etaf-keys-tests.el",
+      "purpose": "Question mark opens read-only help listing scoped keys, framework entries and focusable controls."
+    },
+    {
+      "name": "etaf-keys-direction-handler-handles-hold-and-release",
+      "file": "tests/etaf-keys-tests.el",
+      "purpose": "A Host :on-direction handler receives the direction; handled and hold stop, release continues."
+    },
+    {
+      "name": "etaf-keys-arrows-cross-regions-at-their-boundary",
+      "file": "tests/etaf-keys-tests.el",
+      "purpose": "Arrow movement stays inside a region and enters the adjacent region at its edge."
+    },
+    {
+      "name": "etaf-keys-tab-traverses-and-cycles-focus-stops",
+      "file": "tests/etaf-keys-tests.el",
+      "purpose": "Tab and S-Tab walk the modal scope's focus stops in opposite order and wrap around."
+    },
+    {
+      "name": "etaf-keys-vim-scheme-dispatches-and-rejects-conflicts",
+      "file": "tests/etaf-keys-tests.el",
+      "purpose": "The Vim scheme dispatches h/j/k/l as directions and refuses a runtime with conflicting keys or hints."
+    },
+    {
+      "name": "etaf-keys-vim-scheme-rejects-vim-letter-declarations",
+      "file": "tests/etaf-keys-tests.el",
+      "purpose": "With the Vim scheme active, :keys and region hints using h/j/k/l are render errors."
+    },
+    {
+      "name": "etaf-keys-reject-invalid-bindings",
+      "file": "tests/etaf-keys-tests.el",
+      "purpose": "Malformed :keys, :focus-group and :focus-scope values signal render errors."
+    },
+    {
+      "name": "etaf-keys-keymap-reserved-events-scan",
+      "file": "tests/etaf-keys-tests.el",
+      "purpose": "The public keymap scanner reports framework-reserved events and accepts clean keymaps."
+    },
+    {
+      "name": "etaf-image-test-placeholder-grid-has-exact-cell-size",
+      "file": "tests/etaf-image-tests.el",
+      "purpose": "A placeholder image occupies exactly its columns by rows character cells."
+    },
+    {
+      "name": "etaf-image-test-missing-file-falls-back-to-placeholder",
+      "file": "tests/etaf-image-tests.el",
+      "purpose": "An unreadable image source becomes a placeholder instead of failing the render."
+    },
+    {
+      "name": "etaf-image-test-accepts-image-descriptors",
+      "file": "tests/etaf-image-tests.el",
+      "purpose": "An image descriptor is an image source; undecodable data becomes a placeholder."
+    },
+    {
+      "name": "etaf-image-test-inside-layout-keeps-its-grid",
+      "file": "tests/etaf-image-tests.el",
+      "purpose": "An image inside a Row keeps its own cell size next to ordinary text."
+    },
+    {
+      "name": "etaf-image-test-rejects-invalid-input",
+      "file": "tests/etaf-image-tests.el",
+      "purpose": "Invalid source, size, adapter and children are reported before publication."
+    },
+    {
+      "name": "etaf-list-cache-stores-rows-total-and-time",
+      "file": "tests/etaf-list-cache-tests.el",
+      "purpose": "Putting a list stores its rows, total and arrival time, and reads back per key."
+    },
+    {
+      "name": "etaf-list-cache-staleness-follows-the-interval",
+      "file": "tests/etaf-list-cache-tests.el",
+      "purpose": "An entry is fresh inside the interval, stale beyond it, and a missing entry is neither."
+    },
+    {
+      "name": "etaf-list-cache-detects-an-unchanged-reply",
+      "file": "tests/etaf-list-cache-tests.el",
+      "purpose": "A reply equal to the cached rows and total counts as unchanged; anything else does not."
+    },
+    {
+      "name": "etaf-list-cache-next-prefers-stale-then-missing",
+      "file": "tests/etaf-list-cache-tests.el",
+      "purpose": "Background work picks the stalest list first, warms the first unloaded list otherwise, and stays quiet while busy."
+    },
+    {
+      "name": "etaf-list-cache-arm-runs-and-disarm-stops",
+      "file": "tests/etaf-list-cache-tests.el",
+      "purpose": "Arming runs the refresh function on a timer, arming again replaces the timer, and disarming stops background work for good."
+    },
+    {
+      "name": "etaf-list-cache-backs-off-after-a-failure",
+      "file": "tests/etaf-list-cache-tests.el",
+      "purpose": "A failed background refresh waits longer before the next attempt (doubling), and a success clears the backoff."
+    },
+    {
+      "name": "etaf-list-cache-pauses-on-a-stop-code",
+      "file": "tests/etaf-list-cache-tests.el",
+      "purpose": "A failure whose code needs a human (auth/blocked) pauses background refreshes until a load succeeds again."
+    },
+    {
+      "name": "etaf-list-cache-touch-marks-a-not-modified-reply",
+      "file": "tests/etaf-list-cache-tests.el",
+      "purpose": "A version token is stored per entry and a not-modified answer refreshes only the check time and the token."
+    },
+    {
+      "name": "etaf-resource-loads-synchronous-value",
+      "file": "tests/etaf-resource-tests.el",
+      "purpose": "Expose successful loader output through the public Resource readers."
+    },
+    {
+      "name": "etaf-resource-captures-loader-error-state",
+      "file": "tests/etaf-resource-tests.el",
+      "purpose": "Capture synchronous loader failures without signaling them."
+    },
+    {
+      "name": "etaf-resource-reload-runs-cleanup-and-replaces-value",
+      "file": "tests/etaf-resource-tests.el",
+      "purpose": "Run loader cleanup on reload and disposal."
+    },
+    {
+      "name": "etaf-error-boundary-run-handles-body-error",
+      "file": "tests/etaf-resource-tests.el",
+      "purpose": "Convert an explicitly wrapped body error into a handler result."
+    },
+    {
+      "name": "etaf-error-boundary-run-preserves-unhandled-errors",
+      "file": "tests/etaf-resource-tests.el",
+      "purpose": "Do not swallow errors outside the wrapped body or inside the handler."
+    },
+    {
+      "name": "etaf-scope-stop-releases-effects-and-owned-children",
+      "file": "tests/etaf-scope-tests.el",
+      "purpose": "Standalone scopes release effects and children, reject reentry and dispose exactly once."
+    },
+    {
+      "name": "etaf-scope-stop-contains-cleanup-errors-and-quits",
+      "file": "tests/etaf-scope-tests.el",
+      "purpose": "Cleanup failures and quits are returned without preventing remaining teardown."
+    },
+    {
+      "name": "etaf-scope-rejects-cleanup-registration-after-stop",
+      "file": "tests/etaf-scope-tests.el",
+      "purpose": "Disposed scopes cannot acquire unreachable cleanup during a still-active call."
+    },
+    {
+      "name": "etaf-video-tests-renders-ascii-ramp-frames",
+      "file": "tests/etaf-video-tests.el",
+      "purpose": "Every canvas pixel is the ramp character of its grayscale byte, and the producer receives the documented gray scale and read rate."
+    },
+    {
+      "name": "etaf-video-tests-renders-color-half-blocks",
+      "file": "tests/etaf-video-tests.el",
+      "purpose": "Color mode maps two full-color pixels into one half-block cell with the fixture's foreground and background colors at double-height RGB24."
+    },
+    {
+      "name": "etaf-video-tests-image-canvas-uses-one-line-per-row",
+      "file": "tests/etaf-video-tests.el",
+      "purpose": "An image-mode canvas publishes one display slice per declared row, so chrome placed under the canvas stays inside the window instead of being pushed off by one tall image line."
+    },
+    {
+      "name": "etaf-video-tests-live-control-sources-survive-resize",
+      "file": "tests/etaf-video-tests.el",
+      "purpose": "Shared reactive volume, sound and speed sources retune a playing canvas and survive a size rebuild with its presentation-rate setting."
+    },
+    {
+      "name": "etaf-video-tests-image-mode-falls-back-on-terminal",
+      "file": "tests/etaf-video-tests.el",
+      "purpose": "Image mode renders ASCII when the buffer is not in a graphical frame and reports the effective mode and grayscale format."
+    },
+    {
+      "name": "etaf-video-tests-controls-pause-step-seek-speed",
+      "file": "tests/etaf-video-tests.el",
+      "purpose": "Pause freezes the position, step presents one more frame, a paused seek presents its target frame, and seek, playback and speed restart the producer with the documented arguments."
+    },
+    {
+      "name": "etaf-video-tests-finishes-and-restarts",
+      "file": "tests/etaf-video-tests.el",
+      "purpose": "A producer that runs out of frames ends the video, keeps its last picture, and plays again from the start."
+    },
+    {
+      "name": "etaf-video-tests-audio-sidecar-follows-playback",
+      "file": "tests/etaf-video-tests.el",
+      "purpose": "An audio source starts one ffplay sidecar with the documented arguments while playing and releases it on pause."
+    },
+    {
+      "name": "etaf-video-tests-streams-http-url",
+      "file": "tests/etaf-video-tests.el",
+      "purpose": "An HTTP URL reaches ffmpeg with reconnect options and presents a paused first frame while a non-HTTP scheme is rejected."
+    },
+    {
+      "name": "etaf-video-tests-normalizes-separate-audio-stream",
+      "file": "tests/etaf-video-tests.el",
+      "purpose": "A split audio stream keeps its URL as the audio target, a present audio URL implies audio, and ffprobe receives the source headers and proxy without probing the audio URL."
+    },
+    {
+      "name": "etaf-video-tests-streams-separate-audio-with-network-options",
+      "file": "tests/etaf-video-tests.el",
+      "purpose": "A split HTTP(S) source sends video to ffmpeg and audio to ffplay, both with the same User-Agent, headers and proxy, while the producer never opens the audio URL."
+    },
+    {
+      "name": "etaf-video-tests-restarts-on-input-change",
+      "file": "tests/etaf-video-tests.el",
+      "purpose": "A canvas size change republishes the canvas and rebuilds the session with the new scale at the same paused position."
+    },
+    {
+      "name": "etaf-video-tests-ended-video-redraws-at-new-size",
+      "file": "tests/etaf-video-tests.el",
+      "purpose": "Resizing an ended video presents its last frame at the new canvas size instead of keeping the old picture."
+    },
+    {
+      "name": "etaf-video-tests-unmount-releases-runtime-and-handle",
+      "file": "tests/etaf-video-tests.el",
+      "purpose": "Unmounting stops producer processes and makes the released handle unaddressable."
+    },
+    {
+      "name": "etaf-video-tests-expands-local-file-names",
+      "file": "tests/etaf-video-tests.el",
+      "purpose": "A local source named with ~ or relative to the default directory reaches ffprobe as an absolute file name."
+    },
+    {
+      "name": "etaf-video-tests-normalized-source-skips-second-probe",
+      "file": "tests/etaf-video-tests.el",
+      "purpose": "A metadata plist from etaf-video-source-info mounts with its values and without another ffprobe call."
+    },
+    {
+      "name": "etaf-video-tests-embeds-in-a-layout-and-drives-by-interaction",
+      "file": "tests/etaf-video-tests.el",
+      "purpose": "A video sits in a layout as one fixed box next to ordinary siblings, and the consumer's on-press gesture toggles playback through the handle."
+    },
+    {
+      "name": "etaf-video-tests-rejects-invalid-inputs",
+      "file": "tests/etaf-video-tests.el",
+      "purpose": "Invalid render props report a Component call error and unknown handles report a user error."
+    },
+    {
+      "name": "etaf-view-mounts-static-and-expression-text",
+      "file": "tests/etaf-view-tests.el",
+      "purpose": "A mounted View paints static text and updates an expression in place."
+    },
+    {
+      "name": "etaf-view-viewport-reads-follow-a-refit",
+      "file": "tests/etaf-view-tests.el",
+      "purpose": "Text expressions and Component renders that read the Runtime viewport show the new size after a refit."
+    },
+    {
+      "name": "etaf-view-transient-space-borrow-detection",
+      "file": "tests/etaf-view-tests.el",
+      "purpose": "A taller minibuffer marks the shortened window as borrowed so a caller keeps its committed rows; released lines, real shrinks and a missing commitment are not borrowed."
+    },
+    {
+      "name": "etaf-view-refit-nil-width-follows-the-display",
+      "file": "tests/etaf-view-tests.el",
+      "purpose": "A nil refit width returns that dimension to display tracking while the height stays fixed."
+    },
+    {
+      "name": "etaf-view-refit-advances-revision-only-on-layout-change",
+      "file": "tests/etaf-view-tests.el",
+      "purpose": "A refit that changes the viewport commits a revision; an equal one does not."
+    },
+    {
+      "name": "etaf-string-pixel-width-measures-the-first-line",
+      "file": "tests/etaf-view-tests.el",
+      "purpose": "The measurement adapter measures the first line, honors faces and rejects non-strings."
+    },
+    {
+      "name": "etaf-view-refit-reports-an-observed-operation",
+      "file": "tests/etaf-view-tests.el",
+      "purpose": "A refit reaches the mount observer as a refit operation together with its flush."
+    },
+    {
+      "name": "etaf-view-batches-writes-into-one-commit",
+      "file": "tests/etaf-view-tests.el",
+      "purpose": "Writes inside one batch become visible together in one revision."
+    },
+    {
+      "name": "etaf-view-updates-reactive-paint-properties",
+      "file": "tests/etaf-view-tests.el",
+      "purpose": "A reactive Host property changes the painted face without changing text."
+    },
+    {
+      "name": "etaf-view-switches-branches",
+      "file": "tests/etaf-view-tests.el",
+      "purpose": "Branch directives mount only the selected arm and switch when inputs change."
+    },
+    {
+      "name": "etaf-view-keyed-list-retains-instances",
+      "file": "tests/etaf-view-tests.el",
+      "purpose": "Keyed rows keep Component state across insertion, reordering and removal."
+    },
+    {
+      "name": "etaf-view-keyed-list-appends-and-clears",
+      "file": "tests/etaf-view-tests.el",
+      "purpose": "Appending to and clearing a keyed list matches a fresh render."
+    },
+    {
+      "name": "etaf-view-failed-update-keeps-committed-ui-until-retry",
+      "file": "tests/etaf-view-tests.el",
+      "purpose": "A failing site discards the whole update, keeping committed output, revision and mount callbacks, and the next write retries it."
+    },
+    {
+      "name": "etaf-view-rejects-duplicate-list-keys",
+      "file": "tests/etaf-view-tests.el",
+      "purpose": "Duplicate keys signal and keep the previous committed rows."
+    },
+    {
+      "name": "etaf-view-rejects-duplicate-keys-in-long-lists",
+      "file": "tests/etaf-view-tests.el",
+      "purpose": "A long keyed list rejects a repeated key and keeps its committed rows, while a different node kind may reuse the key."
+    },
+    {
+      "name": "etaf-view-projects-default-and-named-slots",
+      "file": "tests/etaf-view-tests.el",
+      "purpose": "Default and named slots project caller content; absent slots use fallback."
+    },
+    {
+      "name": "etaf-view-component-props-update-retained-instance",
+      "file": "tests/etaf-view-tests.el",
+      "purpose": "A changed business prop updates the instance without resetting bindings."
+    },
+    {
+      "name": "etaf-view-render-returns-detached-node",
+      "file": "tests/etaf-view-tests.el",
+      "purpose": "Pure rendering evaluates the View once without a Runtime."
+    },
+    {
+      "name": "etaf-view-node-builds-views-programmatically",
+      "file": "tests/etaf-view-tests.el",
+      "purpose": "`etaf-node' constructs the same Views as the DSL."
+    },
+    {
+      "name": "etaf-view-applies-component-styles",
+      "file": "tests/etaf-view-tests.el",
+      "purpose": "Component rules style owned Hosts and later rule changes repaint them."
+    },
+    {
+      "name": "etaf-view-unmount-and-kill-release-runtime",
+      "file": "tests/etaf-view-tests.el",
+      "purpose": "Unmounting releases the Runtime; killing a buffer unmounts it."
+    },
+    {
+      "name": "etaf-component-watcher-keeps-its-environment-on-rerun",
+      "file": "tests/etaf-component-tests.el",
+      "purpose": "A Component watcher reruns with its Context and Runtime still bound."
+    },
+    {
+      "name": "etaf-viewport-canvas-columns-follow-the-canvas-cell",
+      "file": "tests/etaf-viewport-tests.el",
+      "purpose": "A layout fitted with `etaf-canvas-columns` and `etaf-fit-columns` states the canvas's own cell, adds a column while items keep their minimum, and leaves a symmetric remainder."
+    },
+    {
+      "name": "etaf-viewport-region-publishes-its-committed-size",
+      "file": "tests/etaf-viewport-tests.el",
+      "purpose": "Content below a region reads the region's committed box, not the mount."
+    },
+    {
+      "name": "etaf-viewport-falls-back-to-the-runtime-viewport",
+      "file": "tests/etaf-viewport-tests.el",
+      "purpose": "Without a region the subtree reads the mounted Runtime's viewport."
+    },
+    {
+      "name": "etaf-viewport-region-reaches-slot-content",
+      "file": "tests/etaf-viewport-tests.el",
+      "purpose": "Content passed through a slot resolves the wrapping region."
+    },
+    {
+      "name": "etaf-viewport-region-republishes-after-a-region-resize",
+      "file": "tests/etaf-viewport-tests.el",
+      "purpose": "A region's own size change republishes it after the next flush."
+    },
+    {
+      "name": "etaf-viewport-region-follows-the-mount-refit",
+      "file": "tests/etaf-viewport-tests.el",
+      "purpose": "A stretched region republishes after the Runtime viewport changes."
+    },
+    {
+      "name": "etaf-viewport-nearest-region-wins",
+      "file": "tests/etaf-viewport-tests.el",
+      "purpose": "A nested region shadows the region around it."
+    },
+    {
+      "name": "etaf-viewport-region-stops-publishing-when-removed",
+      "file": "tests/etaf-viewport-tests.el",
+      "purpose": "Removing a region returns its subtree to the Runtime viewport."
+    },
+    {
+      "name": "etaf-viewport-window-metrics-need-a-live-window",
+      "file": "tests/etaf-viewport-tests.el",
+      "purpose": "The window viewport reads nil without a displaying window and signals when no Runtime is mounted."
+    },
+    {
+      "name": "etaf-viewport-window-metrics-read-a-text-window",
+      "file": "tests/etaf-viewport-tests.el",
+      "purpose": "On a text frame the window viewport reports the cell width the mount lays out against, so surfaces can center and clamp themselves."
+    },
+    {
+      "name": "etaf-viewport-callable-source-reads-its-own-region",
+      "file": "tests/etaf-viewport-tests.el",
+      "purpose": "A watcher whose source is a callable reads the enclosing region, not the Runtime canvas."
+    },
+    {
+      "name": "etaf-viewport-computed-keeps-its-component-environment",
+      "file": "tests/etaf-viewport-tests.el",
+      "purpose": "A computed created in a Component keeps resolving its own viewport region when it later runs outside rendering."
+    },
+    {
+      "name": "etaf-component-watch-callback-keeps-its-environment",
+      "file": "tests/etaf-component-tests.el",
+      "purpose": "A two-argument `etaf-watch' callback keeps its Context and Runtime on rerun."
+    },
+    {
+      "name": "etaf-component-computed-keeps-its-environment-on-rerun",
+      "file": "tests/etaf-component-tests.el",
+      "purpose": "A computed created in a Component keeps its Context and Runtime when it later refreshes outside rendering."
+    },
+    {
+      "name": "etaf-regions-select-focuses-hint-key-and-remembers-entry",
+      "file": "tests/etaf-regions-tests.el",
+      "purpose": "M-g plus a hint key focuses a region and restores its remembered entry."
+    },
+    {
+      "name": "etaf-regions-arrows-cross-siblings-and-climb-parent-exits",
+      "file": "tests/etaf-regions-tests.el",
+      "purpose": "Arrow selection crosses sibling regions and leaves nested regions through parent exits."
+    },
+    {
+      "name": "etaf-regions-declared-neighbor-overrides-geometry",
+      "file": "tests/etaf-regions-tests.el",
+      "purpose": "A `:neighbors' declaration reaches its named region even when geometry points the other way."
+    },
+    {
+      "name": "etaf-regions-unknown-keys-keep-state-and-c-g-quits",
+      "file": "tests/etaf-regions-tests.el",
+      "purpose": "Unknown selection keys change nothing, Escape cancels and C-g quits natively."
+    },
+    {
+      "name": "etaf-regions-modal-scope-confines-the-selector",
+      "file": "tests/etaf-regions-tests.el",
+      "purpose": "Region selection inside a modal scope reaches only its own regions."
+    },
+    {
+      "name": "etaf-regions-disabled-entry-falls-back-to-declared-and-first-stop",
+      "file": "tests/etaf-regions-tests.el",
+      "purpose": "A disabled remembered entry falls back to :enter and then the first eligible stop."
+    },
+    {
+      "name": "etaf-regions-reject-invalid-declarations-and-duplicates",
+      "file": "tests/etaf-regions-tests.el",
+      "purpose": "Malformed :region declarations and duplicate ids or hint keys are render errors."
+    },
+    {
+      "name": "etaf-animation-transition-interpolates-and-lands-exactly",
+      "file": "tests/etaf-animation-tests.el",
+      "purpose": "A transition samples between values, lands exactly and reports completion."
+    },
+    {
+      "name": "etaf-animation-transition-retargets-from-current-value",
+      "file": "tests/etaf-animation-tests.el",
+      "purpose": "Changing the target mid-run continues from the displayed value without jumping."
+    },
+    {
+      "name": "etaf-animation-stop-and-finish-freeze-or-land",
+      "file": "tests/etaf-animation-tests.el",
+      "purpose": "Stopping freezes the displayed value; finishing applies the target; later writes stay idle."
+    },
+    {
+      "name": "etaf-animation-scope-and-switch-control-the-clock",
+      "file": "tests/etaf-animation-tests.el",
+      "purpose": "Unmounting stops the Scope's animation without a clock, and disabling applies at once."
+    },
+    {
+      "name": "etaf-animation-clock-pause-and-speed",
+      "file": "tests/etaf-animation-tests.el",
+      "purpose": "Pausing freezes progress and resumes in place; the speed multiplier scales transitions."
+    },
+    {
+      "name": "etaf-animation-frames-cycle-and-finish",
+      "file": "tests/etaf-animation-tests.el",
+      "purpose": "A frame sequence cycles, freezes on stop and finishes on its last frame."
+    },
+    {
+      "name": "etaf-animation-new-runs-use-the-shared-time-base",
+      "file": "tests/etaf-animation-tests.el",
+      "purpose": "A frame sequence created during a paused, scaled clock starts from its first frame and completes after resuming."
+    },
+    {
+      "name": "etaf-animation-native-editing-and-other-buffers",
+      "file": "tests/etaf-animation-tests.el",
+      "purpose": "Animation publications preserve native text editing, empty values, undo, selection and unrelated buffers."
+    },
+    {
+      "name": "etaf-animation-theatre-multiline-edit-keeps-one-footer",
+      "file": "tests/etaf-animation-tests.el",
+      "purpose": "Multiline input, clearing and undo keep exactly one footer while the full theatre's animations continue."
+    },
+    {
+      "name": "etaf-animation-theatre-pad-stays-editable-in-small-windows",
+      "file": "tests/etaf-animation-tests.el",
+      "purpose": "The pad keeps focus, native input and its toolbar at narrow and short viewports, and a leaked session never blocks a new one."
+    },
+    {
+      "name": "etaf-animation-theatre-reflows-and-fills-its-viewport",
+      "file": "tests/etaf-animation-tests.el",
+      "purpose": "The animation rail spans the viewport and all twenty panels reflow between one and four columns while controls remain mounted."
+    },
+    {
+      "name": "etaf-animation-theatre-controls-and-edit-pad",
+      "file": "tests/etaf-animation-tests.el",
+      "purpose": "The twenty-panel theatre keeps stable gallery geometry and working pause, speed, frame-rate, theme and native editing controls."
+    },
+    {
+      "name": "etaf-animation-interpolation-easings-and-validation",
+      "file": "tests/etaf-animation-tests.el",
+      "purpose": "Values convert over registered easings; invalid inputs signal."
+    },
+    {
+      "name": "etaf-display-metrics-update-fixed-viewport-with-retained-state",
+      "file": "tests/etaf-display-tests.el",
+      "purpose": "Reactive display metrics update on zoom even with a fixed viewport without resetting Component state."
+    },
+    {
+      "name": "etaf-display-metrics-require-a-mounted-runtime",
+      "file": "tests/etaf-display-tests.el",
+      "purpose": "A metric query outside a mounted Runtime signals the documented lifecycle error."
+    },
+    {
+      "name": "etaf-help-closing-event-restores-after-publication",
+      "file": "tests/etaf-help-tests.el",
+      "purpose": "Closing help from its event callback restores surviving focus and native window scrolling after modal removal is published."
+    },
+    {
+      "name": "etaf-help-render-failure-restores-native-window-position",
+      "file": "tests/etaf-help-tests.el",
+      "purpose": "A rejected help renderer restores the prior native window start and point without leaving an active help surface."
+    },
+    {
+      "name": "etaf-help-deferred-close-respects-newer-lifecycles",
+      "file": "tests/etaf-help-tests.el",
+      "purpose": "Deferred close restoration respects a newer help opening and skips a Runtime unmounted in the same batch."
+    },
+    {
+      "name": "etaf-keys-return-keeps-a-focused-control-before-an-enclosing-binding",
+      "file": "tests/etaf-keys-tests.el",
+      "purpose": "RET activates a nearer enabled control with a press handler before an enclosing Host's RET entry, and reaches that entry when the focused Host has no press handler."
+    },
+    {
+      "name": "etaf-keys-pointer-events-resolve-from-the-host-under-the-pointer",
+      "file": "tests/etaf-keys-tests.el",
+      "purpose": "A wheel event runs the binding of the Host under the pointer, falling back to an enclosing Host's binding, independent of focus."
+    },
+    {
+      "name": "etaf-app-open-mounts-a-canvas-and-closes-once",
+      "file": "tests/etaf-app-tests.el",
+      "purpose": "etaf-app-open mounts the View on a canvas buffer with truncated lines, no mode line and a blank truncation glyph; etaf-app-close runs ON-CLOSE once while mounted and kills the buffer."
+    },
+    {
+      "name": "etaf-app-killing-the-buffer-or-reopening-closes-the-application",
+      "file": "tests/etaf-app-tests.el",
+      "purpose": "Reopening an application name and killing its buffer each run ON-CLOSE exactly once; closing a non-application buffer signals user-error."
+    },
+    {
+      "name": "etaf-app-open-failure-closes-and-propagates",
+      "file": "tests/etaf-app-tests.el",
+      "purpose": "A failing mount runs ON-CLOSE, kills the application buffer and propagates the error."
+    },
+    {
+      "name": "etaf-app-close-reports-the-close-error-after-teardown",
+      "file": "tests/etaf-app-tests.el",
+      "purpose": "An ON-CLOSE error still kills the buffer, then propagates from etaf-app-close."
+    },
+    {
+      "name": "etaf-app-canvas-follows-the-theme-source",
+      "file": "tests/etaf-app-tests.el",
+      "purpose": "Reactive BACKGROUND and FOREGROUND sources remap the default face and repaint on change; CURSOR sets the buffer cursor."
+    },
+    {
+      "name": "etaf-app-fits-after-a-settled-window-change",
+      "file": "tests/etaf-app-tests.el",
+      "purpose": "ON-FIT runs in the application buffer before mount and after a settled display-window change, not for an unchanged window and not after close."
+    },
+    {
+      "name": "etaf-process-run-reads-both-streams-after-exit",
+      "file": "tests/etaf-process-tests.el",
+      "purpose": "etaf-process-run reports the exit code and the complete stdout and stderr of a finished command, never calling back before it returns."
+    },
+    {
+      "name": "etaf-process-run-parses-json-output",
+      "file": "tests/etaf-process-tests.el",
+      "purpose": "JSON output arrives as plists and lists with null as nil and false as :false; invalid JSON arrives as nil."
+    },
+    {
+      "name": "etaf-process-run-applies-environment-and-directory",
+      "file": "tests/etaf-process-tests.el",
+      "purpose": "ENVIRONMENT entries override variables and DIRECTORY sets the working directory of the command."
+    },
+    {
+      "name": "etaf-process-run-times-out-and-reports-failures",
+      "file": "tests/etaf-process-tests.el",
+      "purpose": "A timeout stops the command and settles as timeout; a missing program settles as failed with a message."
+    },
+    {
+      "name": "etaf-process-cancel-never-calls-back",
+      "file": "tests/etaf-process-tests.el",
+      "purpose": "Cancelling a running or failed job returns non-nil once and suppresses its callback."
+    },
+    {
+      "name": "etaf-drag-edge-reaches-the-drag-handler",
+      "file": "tests/etaf-drag-edge-tests.el",
+      "purpose": "A Host with :drag-edge receives the engine's edge gesture through :on-drag while the pointer rests at a window edge."
+    },
+    {
+      "name": "etaf-drag-edge-without-the-property-keeps-old-phases",
+      "file": "tests/etaf-drag-edge-tests.el",
+      "purpose": "A Host without :drag-edge keeps the start, move and end phases and receives no edge gesture."
+    },
+    {
+      "name": "etaf-app-canvas-matches-the-window-after-hiding-the-mode-line",
+      "file": "tests/etaf-app-tests.el",
+      "purpose": "An application canvas takes the display window's body height after the mode line is hidden, so no row of the page can scroll the whole layout."
+    },
+    {
+      "name": "etaf-app-mount-options-function-follows-the-fit",
+      "file": "tests/etaf-app-tests.el",
+      "purpose": "A MOUNT-OPTIONS function runs after ON-FIT in the application buffer with the display window, and its viewport reaches the mounted Runtime."
+    },
+    {
+      "name": "etaf-component-appearance-follows-a-provided-ref",
+      "file": "tests/etaf-component-tests.el",
+      "purpose": "A Component reads the host-provided appearance and re-renders when the ref switches mode."
+    },
+    {
+      "name": "etaf-theme-mode-re-derives-after-a-theme-switch",
+      "file": "tests/etaf-component-tests.el",
+      "purpose": "A Theme computed that follows the frame re-derives once after a theme switch."
+    },
+    {
+      "name": "etaf-component-rejects-an-invalid-appearance",
+      "file": "tests/etaf-component-tests.el",
+      "purpose": "An appearance that is not light, dark, a ref or a computed signals etaf-context-error."
+    },
+    {
+      "name": "etaf-component-mode-follows-the-host-unless-overridden",
+      "file": "tests/etaf-component-tests.el",
+      "purpose": "A Component mode follows the host appearance and an app override ref wins."
+    },
+    {
+      "name": "etaf-surface-host-adopts-what-the-content-declares",
+      "file": "tests/etaf-component-tests.el",
+      "purpose": "A host reads the Theme, mode cell and mode labels a mounted content declares, and writing the mode cell re-renders that content."
+    },
+    {
+      "name": "etaf-surface-declaration-needs-a-host",
+      "file": "tests/etaf-component-tests.el",
+      "purpose": "Content outside a framing host finds no surface, declares nothing and keeps its own palette."
+    },
+    {
+      "name": "etaf-component-keyed-rows-repaint-one-row",
+      "file": "tests/etaf-component-tests.el",
+      "purpose": "A keyed list of Components repaints only the row whose input changed: replacing the collection with equal values renders no row, changing one label renders that row alone in one line patch, and inserting a row keeps every retained row's instance."
+    },
+    {
+      "name": "etaf-surface-declare-rejects-values-it-cannot-frame",
+      "file": "tests/etaf-component-tests.el",
+      "purpose": "A surface accept only reactive Theme and mode sources and labelled modes, and rejects a value that is not a host surface."
+    },
+    {
+      "name": "etaf-projection-maps-both-directions-through-public-api",
+      "file": "tests/etaf-projection-tests.el",
+      "purpose": "A registered Host maps painted cells to its source range and back."
+    },
+    {
+      "name": "etaf-projection-skips-entries-that-paint-nothing",
+      "file": "tests/etaf-projection-tests.el",
+      "purpose": "Entries without a mounted Host or with an empty source range are ignored."
+    },
+    {
+      "name": "etaf-projection-splits-a-wrapped-host-across-its-lines",
+      "file": "tests/etaf-projection-tests.el",
+      "purpose": "A wrapped Host spreads its source range over the lines it painted, without crossing runs."
+    },
+    {
+      "name": "etaf-projection-reports-a-caret-past-the-last-cell",
+      "file": "tests/etaf-projection-tests.el",
+      "purpose": "A source offset at the end of the document maps after the last painted cell."
+    },
+    {
+      "name": "etaf-help-panel-measures-the-canvas-face",
+      "file": "tests/etaf-help-tests.el",
+      "purpose": "The help panel sizes and centres itself in the cells the canvas draws, so a canvas font or text scale does not leave it off the centre it measured."
+    },
+    {
+      "name": "etaf-keys-drag-step-measures-the-canvas-face",
+      "file": "tests/etaf-keys-tests.el",
+      "purpose": "A keyboard drag step travels canvas cells rather than the frame's default face, so a text scale does not move a separator the wrong distance."
+    }
+  ]
+}

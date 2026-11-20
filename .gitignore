@@ -1,0 +1,7 @@
+# Build output, tool caches and local installs. Sources live under packages/.
+*.elc
+*.eln
+*.pyc
+__pycache__/
+.DS_Store
+node_modules/

@@ -1,0 +1,25 @@
+;;; -*- mode: emacs-lisp; lexical-binding: t; -*-
+;; SPDX-License-Identifier: GPL-3.0-or-later
+;; Plasma: a stateless color field.  The value is quantized into the palette,
+;; so adjacent cells usually share a color and the frame publishes as a few
+;; text-property runs per row instead of one per cell.
+
+(etaf-scene
+ :id plasma
+ :title "等离子"
+ :summary "四个正弦叠加的色场，颜色量化后相邻同色格合并成 run。"
+ :tags (color field)
+ :frame-rate 10
+ :background "#05070B"
+ :params ((:key speed :label "流动速度" :type number
+           :min 1 :max 10 :step 1 :default 3))
+ :layers ((:kind field
+           :value (+ (sin (+ (* 0.09 x) (* 0.4 speed t)))
+                     (sin (+ (* 0.06 y) (* 0.3 speed t)))
+                     (sin (+ (* 0.05 (+ x y)) (* 0.5 speed t)))
+                     (cos (* 0.08 (sqrt (+ (* (- x cx) (- x cx))
+                                           (* (- y cy) (- y cy)))))))
+           :range (-4 4)
+           :ramp " .:-=+*#%@"
+           :palette ("#06070B" "#101A3A" "#1B3A6E" "#1F6A9B" "#2E9E9B"
+                     "#67C89A" "#B3E3A0" "#F2F7C8" "#FFFFFF"))))

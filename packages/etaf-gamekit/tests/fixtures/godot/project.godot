@@ -1,0 +1,10 @@
+config_version=5
+
+[application]
+config/name="GameKit protocol fixture"
+
+[gamekit]
+game_script="res://game.gd"
+
+[rendering]
+renderer/rendering_method="gl_compatibility"

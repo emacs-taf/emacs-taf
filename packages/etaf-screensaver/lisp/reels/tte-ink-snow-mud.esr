@@ -1,0 +1,2 @@
+;;; -*- lisp-data -*-
+(:id tte-ink-snow-mud :title "雪泥鸿爪" :summary "苏轼《和子由渑池怀旧》 · 逐字排印" :tags (imported ink poem) :provider tte :recording "ink-snow-mud.tterec" :kind text :width 80 :height 24 :frame-rate 20 :frame-count 80 :source "ink: 应似飞鸿踏雪泥" :license "MIT" :background "#F4F1EA")

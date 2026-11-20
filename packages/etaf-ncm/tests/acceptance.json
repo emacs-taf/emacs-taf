@@ -1,0 +1,555 @@
+{
+  "schema": 1,
+  "load_path": [
+    ".",
+    "tests",
+    "../etaf",
+    "../etaf-ui",
+    "../ebox",
+    "../ecss",
+    "../etaf-db"
+  ],
+  "support": [],
+  "cases": [
+    {
+      "name": "etaf-ncm-tests-embedded-letters-and-layered-return",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "Embedded a appends a song without invoking its host; help and application Escape exit separately, and reentry restores the list focus and player state."
+    },
+    {
+      "name": "etaf-ncm-tests-help-is-modal-read-only-and-restores-selection",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "Native question mark opens same-buffer help with named effective bindings and aliases; browsing and searching preserve playback, selection and focus without backend actions."
+    },
+    {
+      "name": "etaf-ncm-tests-library-snapshot-survives-restart",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "Restore populated and empty sidebar snapshots without network calls; keep file private and reject another account."
+    },
+    {
+      "name": "etaf-ncm-tests-snapshot-failure-is-a-cache-miss",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "Corrupt, oversized and incompatible snapshots fail open without evaluating their contents."
+    },
+    {
+      "name": "etaf-ncm-tests-library-loads-are-deduplicated-and-isolated",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "Rapid navigation shares per-key requests; offline and disposed callbacks preserve visible cached data."
+    },
+    {
+      "name": "etaf-ncm-tests-background-diff-preserves-identities",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "An unchanged background reply leaves the GUI publication revision unchanged; changed replies and revisits preserve selected song and scroll anchor."
+    },
+    {
+      "name": "etaf-ncm-tests-new-session-is-headless",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "A session built without a buffer starts on the daily library, shows the lyric panel and sends no request."
+    },
+    {
+      "name": "etaf-ncm-tests-refresh-loads-library-and-playback",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "Refreshing loads the library rows, the account name, the playback truth with queue position and the visible page."
+    },
+    {
+      "name": "etaf-ncm-tests-refresh-keeps-selection-inside-the-list",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "Loading a library resets the selection to its first row."
+    },
+    {
+      "name": "etaf-ncm-tests-locate-rejects-unknown-library",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "An unknown library raises the package error and leaves the current library untouched."
+    },
+    {
+      "name": "etaf-ncm-tests-sections-inventory-is-navigable",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "Every section published in the sidebar inventory can be opened and titles itself."
+    },
+    {
+      "name": "etaf-ncm-tests-search-records-keyword-and-scope",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "Searching trims the keyword, shows the results, sends the scope, and rejects a blank keyword."
+    },
+    {
+      "name": "etaf-ncm-tests-play-uses-the-selected-row",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "Playing a song selection queues its current library, jumps to the selected full-list index, and reports the song it started."
+    },
+    {
+      "name": "etaf-ncm-tests-play-accepts-rows-ids-and-keywords",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "Song rows in a playable library preserve the library queue; bare ids, keywords and playlist rows retain their direct play targets."
+    },
+    {
+      "name": "etaf-ncm-tests-add-to-queue-takes-songs-only",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "Queueing appends a song row to the backend queue and rejects a playlist row."
+    },
+    {
+      "name": "etaf-ncm-tests-transport-commands-reach-the-backend",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "Transport, volume, seek, shuffle, list repeat, like and queue-jump commands send their existing requests; repeat reports \u5217\u8868\u5faa\u73af on and off."
+    },
+    {
+      "name": "etaf-ncm-tests-liked-table-decides-the-heart",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "The playing song's heart follows the liked-song id table, and liking a song keeps the session table in step."
+    },
+    {
+      "name": "etaf-ncm-tests-like-button-toggles-the-heart",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "A press on a liked heart sends an unlike and turns it hollow; a second press sends a like again."
+    },
+    {
+      "name": "etaf-ncm-tests-toggle-starts-the-selected-song-when-nothing-is-loaded",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "SPC with an empty queue plays the selected row instead of toggling a queue that has nothing to toggle."
+    },
+    {
+      "name": "etaf-ncm-tests-press-on-the-selected-row-plays-it",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "Pressing the selected song row plays its library and jumps to the row without a timing window."
+    },
+    {
+      "name": "etaf-ncm-tests-press-selects-another-row-before-playing",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "Pressing another row selects it; pressing it again plays its library then jumps to its loaded position."
+    },
+    {
+      "name": "etaf-ncm-tests-play-shows-the-picked-song-while-the-command-runs",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "A status poll answered while a slow play command still runs keeps the picked song's marker, title and queue count; a fresh reply after the command settles is the truth again."
+    },
+    {
+      "name": "etaf-ncm-tests-transport-effect-is-visible-before-the-reply",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "Pausing flips the displayed playback state before the backend answers, so a transport command shows its effect immediately."
+    },
+    {
+      "name": "etaf-ncm-tests-locate-shows-cached-rows-before-the-refresh",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "Revisiting a library shows its cached rows at once, refreshes in the background, and keeps the reader's selection."
+    },
+    {
+      "name": "etaf-ncm-tests-selection-clamps-at-both-ends",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "The list selection stops at the first and last loaded row."
+    },
+    {
+      "name": "etaf-ncm-tests-toggle-aside-switches-panels",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "The side panel alternates between the lyric and the queue."
+    },
+    {
+      "name": "etaf-ncm-tests-show-pane-selects-the-visible-pane",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "Showing a pane records it in the snapshot and an unknown pane signals while keeping the previous pane."
+    },
+    {
+      "name": "etaf-ncm-tests-wide-layout-remembers-the-pane",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "A pane chosen in a wide layout stays chosen instead of being reset by the player's own viewport sync."
+    },
+    {
+      "name": "etaf-ncm-tests-queue-and-lyric-follow-playback",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "The snapshot reports the queue around the playing entry and the lyric line of the elapsed position."
+    },
+    {
+      "name": "etaf-ncm-tests-parse-lyric-reads-lrc",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "LRC parsing keeps tagged lines in time order, splits repeated timestamps and ignores metadata and untagged lines."
+    },
+    {
+      "name": "etaf-ncm-tests-backend-failure-is-reported-not-signaled",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "A failing backend reply lands in the session error and message while the player stays usable."
+    },
+    {
+      "name": "etaf-ncm-tests-missing-backend-is-reported-not-signaled",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "A backend whose scripts are missing lands in the session error and message instead of signaling."
+    },
+    {
+      "name": "etaf-ncm-tests-backend-refusal-reports-its-own-message",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "A refused backend command surfaces its own stderr report (shell text lines or the mpv bridge's JSON) instead of the bare exit status; a crash without a report keeps the exit status."
+    },
+    {
+      "name": "etaf-ncm-tests-login-reads-phone-and-code-in-the-minibuffer",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "The login command asks for the phone number and the SMS code in the minibuffer, sends both login requests with the caller's values, and reloads the player on success."
+    },
+    {
+      "name": "etaf-ncm-tests-login-rejects-a-blank-phone",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "A blank phone number stops the login command before any backend request."
+    },
+    {
+      "name": "etaf-ncm-tests-login-runs-the-node-entry-not-a-shell",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "Both sign-in steps run the Node entry with the phone number and the code, on every system, so no shell is needed to send a code or finish the sign-in."
+    },
+    {
+      "name": "etaf-ncm-tests-failure-banner-outlives-status-polls",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "A failed action keeps its message on display through routine status polls, a successful action clears it, and an expired login names the in-player sign-in."
+    },
+    {
+      "name": "etaf-ncm-tests-error-banner-shows-the-whole-message",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "A long failure message is wrapped inside the banner and stays fully readable instead of being clipped to the bar's message slot."
+    },
+    {
+      "name": "etaf-ncm-tests-client-call-reaches-a-function-client",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "The documented client protocol drives a plain function client and cancels without error."
+    },
+    {
+      "name": "etaf-ncm-tests-theme-tokens-cover-both-palettes",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "Colours resolve per palette, an unknown colour raises the package error, and the UI tokens follow the mode."
+    },
+    {
+      "name": "etaf-ncm-tests-mount-renders-and-revives",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "Mounting paints the library into a buffer, and killing that buffer lets the same session mount again."
+    },
+    {
+      "name": "etaf-ncm-tests-open-and-close-own-a-buffer",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "Opening installs the player keymap, routes active wheel bindings above the renderer, hides the mode line, and closing kills the buffer."
+    },
+    {
+      "name": "etaf-ncm-tests-root-keys-own-the-canvas",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "The palette paints the canvas; T recolours it and q closes the player through root keys that beat the renderer's bindings."
+    },
+    {
+      "name": "etaf-ncm-tests-close-keeps-playing-and-quit-stops-it",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "Closing the window leaves the backend playing, while quitting the client sends the backend stop before the buffer is gone."
+    },
+    {
+      "name": "etaf-ncm-tests-exiting-emacs-stops-only-the-player-it-started",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "Exiting Emacs stops a player the app started, and an app that never played leaves another client's playback alone."
+    },
+    {
+      "name": "etaf-ncm-tests-open-fills-the-selected-window",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "Opening the player replaces the selected window instead of splitting the frame into a second pane."
+    },
+    {
+      "name": "etaf-ncm-tests-player-requests-run-the-node-entry",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "The requests a playing session makes reach netease-cli.mjs with the right arguments (play, play-ids with a start, jump, volume, seek, shuffle, cover), so one Node implementation serves every system without a shell."
+    },
+    {
+      "name": "etaf-ncm-tests-shell-entry-keeps-the-queue-snapshots",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "Queue snapshots still run the POSIX shell entry and carry the saved name through to it."
+    },
+    {
+      "name": "etaf-ncm-tests-browse-limit-covers-long-libraries",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "Browse loads beyond 100 rows, preserves the backend total, and takes the maximum of list-limit, fetch-limit and three pages."
+    },
+    {
+      "name": "etaf-ncm-tests-library-total-survives-cache-and-refresh",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "A partial library displays loaded and true totals, preserves them through cache hits, updates totals even with identical rows, reports zero loaded rows honestly, and preserves cached counts after a failed refresh."
+    },
+    {
+      "name": "etaf-ncm-tests-long-library-keys-show-one-based-ranges",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "Home, End, PageUp and PageDown navigate all 500 loaded rows and the footer shows one-based ranges with the true total."
+    },
+    {
+      "name": "etaf-ncm-tests-song-row-starts-in-one-command",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "Daily, liked and FM presses capture the loaded ids and starting index in one request; later selection changes cannot alter it."
+    },
+    {
+      "name": "etaf-ncm-tests-song-row-failure-and-supersession",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "Failed, superseded and late playback replies never issue a follow-up jump over another playback command."
+    },
+    {
+      "name": "etaf-ncm-tests-other-libraries-play-rows-directly",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "Recent, search, playlist, album, artist, chart and podcast rows keep their individual play targets without a library jump."
+    },
+    {
+      "name": "etaf-ncm-tests-sidebar-entry-click-switches-library",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "Sidebar labels and their blank cell rows switch libraries through mouse activation, and TAB/RET retains keyboard activation."
+    },
+    {
+      "name": "etaf-ncm-tests-sidebar-selection-highlights-one-line",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "A selected sidebar library paints one text line, not its whole two-line click cell."
+    },
+    {
+      "name": "etaf-ncm-tests-sidebar-current-entry-keeps-its-surface-on-hover",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "The active sidebar entry keeps its own surface on hover while an inactive entry declares the hover surface."
+    },
+    {
+      "name": "etaf-ncm-tests-sidebar-group-labels-leave-a-gap",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "A sidebar group label keeps a blank line between itself and its first entry."
+    },
+    {
+      "name": "etaf-ncm-tests-viewport-columns-follow-the-canvas-cell",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "Budget columns from the cell the canvas draws with, so a canvas font, a text scale or a foreign selected frame does not make the page draw narrower than the region it measured."
+    },
+    {
+      "name": "etaf-ncm-tests-viewport-width-uses-pixels",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "The initial canvas uses ETAF's display-safe pixel viewport and a subsequent window refit preserves that same width without discovering a different canvas."
+    },
+    {
+      "name": "etaf-ncm-tests-play-all-only-for-supported-origins",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "Wide and compact headers render \u64ad\u653e\u5168\u90e8 only for daily, liked and FM origins."
+    },
+    {
+      "name": "etaf-ncm-tests-queue-wheel-scrolls-only-the-event-panel",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "Active wheel bindings in all layouts reach every loaded queue entry, use the event window, leave the library selection and window alone outside the queue, display backend count, retain manual scrolling across unchanged polls, and recenter on track advance."
+    },
+    {
+      "name": "etaf-ncm-tests-library-wheel-scrolls-the-canvas",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "A wheel over the library scrolls its scrolling canvas by the shared step, clamps at both ends and leaves the selection alone."
+    },
+    {
+      "name": "etaf-ncm-tests-panel-budgets-fit-resized-windows",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "Queue and lyric budgets shrink with the displayed window; translated lyrics fit their budget and retain the current line."
+    },
+    {
+      "name": "etaf-ncm-tests-superseded-library-keeps-visible-total",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "A new uncached library clears old rows and totals; a late foreground reply cannot overwrite a revisited cached library."
+    },
+    {
+      "name": "etaf-ncm-tests-queue-entries-click-and-tab-activate",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "Queue entries reached by wheel still jump through mouse activation and TAB/RET without changing library selection."
+    },
+    {
+      "name": "etaf-ncm-tests-player-volume-drag-and-reply",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "Volume gestures publish the pointer value, show the new range immediately, reconcile the backend reply, clamp endpoints and ignore cancellation."
+    },
+    {
+      "name": "etaf-ncm-tests-stale-status-keeps-the-pointed-volume",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "A status reply older than the volume command keeps the pointed volume instead of snapping the percentage back."
+    },
+    {
+      "name": "etaf-ncm-tests-stale-status-keeps-the-pointed-position",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "A status reply older than a seek keeps the clicked position instead of snapping the progress bar back."
+    },
+    {
+      "name": "etaf-ncm-tests-player-progress-range-seeks-by-pointer",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "The progress range tracks the reported position and a seek gesture uses the pointed fraction."
+    },
+    {
+      "name": "etaf-ncm-tests-player-quality-and-compact-layouts",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "Only backend quality is badged; medium and narrow bars drop the cover and badge while retaining play, progress and volume controls."
+    },
+    {
+      "name": "etaf-ncm-tests-player-pane-buttons-preserve-state",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "Cover, lyric and queue controls reveal their panes across layouts while preserving the library selection."
+    },
+    {
+      "name": "etaf-ncm-tests-player-clock-moves-the-elapsed-label-and-meter",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "Playing seconds move the retained elapsed label and widen the shared range fill that carries the progress meter."
+    },
+    {
+      "name": "etaf-ncm-tests-keys-reach-the-player-around-the-renderer-map",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "The documented transport and page keys reach the player through the real command loop even though the renderer's minor-mode map binds the same keys, and RET falls back to the selected row."
+    },
+    {
+      "name": "etaf-ncm-tests-refresh-pauses-while-hidden",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "A player whose buffer no window shows pauses background library refreshes, and showing it again resumes them."
+    },
+    {
+      "name": "etaf-ncm-tests-library-failure-pauses-refresh",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "A background library refresh failing with an auth error pauses the warmer until a foreground load succeeds."
+    },
+    {
+      "name": "etaf-ncm-tests-refresh-marks-downloaded-rows",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "Refreshing asks the backend for the local download registry and folds it into the library rows."
+    },
+    {
+      "name": "etaf-ncm-tests-download-requests-the-row-and-marks-it",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "Downloading a row sends the song id, shows the pending message, then marks the row and records the file from the reply."
+    },
+    {
+      "name": "etaf-ncm-tests-download-refreshes-an-existing-file",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "A second download of a song that is already local asks the backend to refresh the file in place."
+    },
+    {
+      "name": "etaf-ncm-tests-row-action-dispatches-by-key",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "The row-menu action resolves the row when chosen and dispatches play, queue or download by key, rejecting bad input."
+    },
+    {
+      "name": "etaf-ncm-tests-download-key-uses-the-selection",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "The d key downloads the row the library selection points at through the mounted player."
+    },
+    {
+      "name": "etaf-ncm-tests-download-reply-survives-a-track-switch",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "A download reply that lands after the reader switched songs still registers the file by song id, marks the row and reports completion."
+    },
+    {
+      "name": "etaf-ncm-tests-lyric-cache-serves-a-restart",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "The first session stores a lyric in the SQLite media cache beside the snapshot and a fresh session publishes the same lines without asking the backend."
+    },
+    {
+      "name": "etaf-ncm-tests-child-environment-always-has-a-utf8-locale",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "The backend child environment always carries a UTF-8 locale, overriding a missing or non-UTF-8 parent locale."
+    },
+    {
+      "name": "etaf-ncm-tests-only-the-playing-row-shows-the-play-marker",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "Only the playing row shows the play marker while every other row keeps its number, covering both the computed-source read and the per-slot closure."
+    },
+    {
+      "name": "etaf-ncm-tests-cover-request-downloads-through-the-backend-entry",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "The cover request downloads the song's art to the caller's file through the backend entry."
+    },
+    {
+      "name": "etaf-ncm-tests-queue-tracks-keep-the-cover-url",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "Normalized queue tracks keep the backend cover URL and default it to an empty string."
+    },
+    {
+      "name": "etaf-ncm-tests-cover-follows-status-before-queue-replies",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "Playback status selects the correct artwork from the loaded tracks before another queue reply, correcting an earlier queue position and rejecting unrelated entries in stale replies."
+    },
+    {
+      "name": "etaf-ncm-tests-mounted-cover-follows-consecutive-track-changes",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "Consecutive track changes replace every displayed cover with the current song's same-size image, including cached return visits, without reopening the player."
+    },
+    {
+      "name": "etaf-ncm-tests-playing-song-cover-is-downloaded-to-the-state-directory",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "Refreshing downloads the playing song's cover into the local cache exactly once."
+    },
+    {
+      "name": "etaf-ncm-tests-cover-clears-when-the-playing-song-has-none",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "Moving to a song without a cover clears the previous art immediately without retrying."
+    },
+    {
+      "name": "etaf-ncm-tests-cover-index-serves-the-next-session",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "A downloaded cover is indexed with its URL, a changed URL misses, and a fresh session reuses the indexed file without downloading again."
+    },
+    {
+      "name": "etaf-ncm-tests-narrow-layout-keeps-names",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "A narrow frame keeps the playlist name and creator readable and fills the page with the rows the window budget leaves."
+    },
+    {
+      "name": "etaf-ncm-tests-palette-lists-and-runs-the-player-keys",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "? opens the ETAF palette with the player keys, libraries and controls, and choosing a key runs its player command."
+    },
+    {
+      "name": "etaf-ncm-tests-list-arrows-move-the-selection-and-tab-leaves",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "The focused library list moves its selection with arrows and C-n with the cursor on the selected row, while Tab and Shift-Tab leave and re-enter it."
+    },
+    {
+      "name": "etaf-ncm-tests-volume-and-seek-step-from-the-keyboard",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "A focused volume range steps by five with the arrow keys and sends the new volume to the backend."
+    },
+    {
+      "name": "etaf-ncm-tests-compact-pane-switch-moves-focus-into-the-pane",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "In a compact layout, switching to the aside moves keyboard focus into it and switching back returns focus to the library list."
+    },
+    {
+      "name": "etaf-ncm-tests-selection-bar-slides-across-rows",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "A selection move slides the overlay bar through an intermediate row on the shared animation clock."
+    },
+    {
+      "name": "etaf-ncm-tests-small-frames-use-the-card-family",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "A small frame uses the card family: the card keeps the cover band, one pane, the switch and the transport, the tile keeps only the track, the lyric and the transport, and neither draws the header, chip strip or player bar."
+    },
+    {
+      "name": "etaf-ncm-tests-card-tabs-open-a-library",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "A card names \u6536\u85cf and \u63a8\u8350 in its switch, opens either library in the list pane, returns to the panel through \u6b4c\u8bcd and still reaches the queue with i."
+    },
+    {
+      "name": "etaf-ncm-tests-declares-its-palette-to-a-host",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "A player mounted under a host declares its palette, mode labels and mode cell there, and the host writing that cell repaints the player's palette."
+    },
+    {
+      "name": "etaf-ncm-tests-reload-action-names-what-it-can-do",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "The header reload reads \u5237\u65b0 where the backend returns the same rows and \u6362\u4e00\u6279 only on private FM, which answers with a new batch."
+    },
+    {
+      "name": "etaf-ncm-tests-now-page-geometry-keeps-a-square-cover",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "Both page designs keep the sharp cover square in pixels, leave the text column room, and never let a part claim rows the panel does not have."
+    },
+    {
+      "name": "etaf-ncm-tests-now-page-sections-spend-the-panel",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "The lyric takes every row the fixed parts leave at each panel height, so no part of the page is clipped."
+    },
+    {
+      "name": "etaf-ncm-tests-now-page-opens-from-every-layout",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "The o key opens the full-page view from wide, medium, narrow, card and tile layouts, and a dismiss returns to the player."
+    },
+    {
+      "name": "etaf-ncm-tests-now-page-shows-track-lyric-and-spectrum",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "The page paints the playing track, its lyric, the spectrum, the progress and the back control."
+    },
+    {
+      "name": "etaf-ncm-tests-now-page-switches-its-design",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "m swaps the immersive page for the split one and back without leaving the page."
+    },
+    {
+      "name": "etaf-ncm-tests-spectrum-is-quiet-without-a-source",
+      "file": "tests/etaf-ncm-tests.el",
+      "purpose": "Without a playing source the meter reports silence, starts no decoder and never blocks the page."
+    }
+  ]
+}

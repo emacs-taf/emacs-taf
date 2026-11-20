@@ -1,0 +1,2 @@
+;;; -*- lisp-data -*-
+(:id poem-luoxia :title "落霞孤鹜" :summary "王勃《滕王阁序》 · 逐字排印" :tags (imported ink poem) :provider tte :recording "poem-luoxia.tterec" :kind text :width 80 :height 24 :frame-rate 20 :frame-count 80 :source "ink: 落霞与孤鹜齐飞" :license "MIT" :background "#F4F1EA")

@@ -1,0 +1,2 @@
+;;; -*- lisp-data -*-
+(:id poem-tiancai :title "天生我材" :summary "李白《将进酒》 · 逐字排印" :tags (imported ink poem) :provider tte :recording "poem-tiancai.tterec" :kind text :width 80 :height 24 :frame-rate 20 :frame-count 80 :source "ink: 天生我材必有用" :license "MIT" :background "#F4F1EA")

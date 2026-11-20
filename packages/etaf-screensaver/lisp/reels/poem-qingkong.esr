@@ -1,0 +1,2 @@
+;;; -*- lisp-data -*-
+(:id poem-qingkong :title "晴空一鹤" :summary "刘禹锡《秋词》 · 逐字排印" :tags (imported ink poem) :provider tte :recording "poem-qingkong.tterec" :kind text :width 80 :height 24 :frame-rate 20 :frame-count 80 :source "ink: 晴空一鹤排云上" :license "MIT" :background "#F4F1EA")

@@ -1,0 +1,104 @@
+{
+  "schema": 1,
+  "load_path": [
+    ".",
+    "tests",
+    "../etaf",
+    "../etaf-ui",
+    "../ebox",
+    "../ecss"
+  ],
+  "support": [],
+  "cases": [
+    {
+      "name": "etaf-bili-tests-popular-loads-rows-and-status",
+      "file": "tests/etaf-bili-tests.el",
+      "purpose": "Loading the popular feed replaces the rows with the parsed reply and reports the count on the status line."
+    },
+    {
+      "name": "etaf-bili-tests-search-carries-keyword-and-replaces-rows",
+      "file": "tests/etaf-bili-tests.el",
+      "purpose": "Searching sends the keyword to the backend, shows the reply, and ignores blank input without sending a request."
+    },
+    {
+      "name": "etaf-bili-tests-selection-moves-and-clamps",
+      "file": "tests/etaf-bili-tests.el",
+      "purpose": "Selection moves one row at a time and clamps at both ends of the list."
+    },
+    {
+      "name": "etaf-bili-tests-play-selected-delivers-stream-source",
+      "file": "tests/etaf-bili-tests.el",
+      "purpose": "Playing the selected row resolves the stream source (URL plus CDN headers) and hands it to the caller."
+    },
+    {
+      "name": "etaf-bili-tests-play-failure-only-changes-status",
+      "file": "tests/etaf-bili-tests.el",
+      "purpose": "A failed stream lookup reports on the status line and never calls the playback callback."
+    },
+    {
+      "name": "etaf-bili-tests-wbi-query-signs-encode-uri-component",
+      "file": "tests/etaf-bili-tests.el",
+      "purpose": "WBI signing sorts keys, encodes like encodeURIComponent and appends the documented w_rid; missing keys signal an error."
+    },
+    {
+      "name": "etaf-bili-tests-parse-videos-normalizes-rows",
+      "file": "tests/etaf-bili-tests.el",
+      "purpose": "Response parsing cleans search markup, converts string clocks to seconds and reads both the list and result array shapes."
+    },
+    {
+      "name": "etaf-bili-gallery-tests-catalog-controls-and-scrolling",
+      "file": "tests/etaf-bili-gallery-tests.el",
+      "purpose": "Scroll continuously from the first to the last mounted card and back, then open and close details through catalog targets."
+    },
+    {
+      "name": "etaf-bili-gallery-tests-search-editing-keeps-application-keys",
+      "file": "tests/etaf-bili-gallery-tests.el",
+      "purpose": "Type application shortcut characters in the inline search field and submit without triggering application commands."
+    },
+    {
+      "name": "etaf-bili-gallery-tests-empty-error-and-stale-results",
+      "file": "tests/etaf-bili-gallery-tests.el",
+      "purpose": "Empty successful results clear the old library and stale searches cannot restore it."
+    },
+    {
+      "name": "etaf-bili-gallery-tests-latest-play-request-wins",
+      "file": "tests/etaf-bili-gallery-tests.el",
+      "purpose": "Only the newest stream resolution reaches playback when replies arrive out of order."
+    },
+    {
+      "name": "etaf-bili-gallery-tests-close-ignores-pending-response",
+      "file": "tests/etaf-bili-gallery-tests.el",
+      "purpose": "Closing a loading gallery prevents a late callback from resurrecting it."
+    },
+    {
+      "name": "etaf-bili-gallery-tests-theme-preserves-frame-and-query",
+      "file": "tests/etaf-bili-gallery-tests.el",
+      "purpose": "Theme switching preserves the library and leaves frame decoration and the user theme unchanged."
+    },
+    {
+      "name": "etaf-bili-gallery-tests-cover-cache-and-transfer-failure",
+      "file": "tests/etaf-bili-gallery-tests.el",
+      "purpose": "The public cover operation downloads through an offline curl fixture, reuses cached files and removes failed partial transfers."
+    },
+    {
+      "name": "etaf-bili-tests-login-overlays-the-code-and-finishes-on-confirmation",
+      "file": "tests/etaf-bili-tests.el",
+      "purpose": "Signing in publishes the painted code in the session, closes the overlay once the phone confirms, and records the signed-in account without opening a second buffer."
+    },
+    {
+      "name": "etaf-bili-tests-logout-calls-the-backend-after-confirmation",
+      "file": "tests/etaf-bili-tests.el",
+      "purpose": "Signing out asks for confirmation and only then asks the backend to clear the cookies."
+    },
+    {
+      "name": "etaf-bili-tests-login-keeps-polling-until-the-phone-confirms",
+      "file": "tests/etaf-bili-tests.el",
+      "purpose": "A scanned code is polled again until the backend confirms it, so the panel closes."
+    },
+    {
+      "name": "etaf-bili-tests-view-mounts-in-a-host-buffer",
+      "file": "tests/etaf-bili-tests.el",
+      "purpose": "A host mounts the View in its own buffer, the client's keys reach the adopted session, and mounting the same session again keeps the loaded library instead of fetching it again."
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+ "version": 1,
+ "width": 40,
+ "height": 20,
+ "frame_rate": 10,
+ "source": "adapter fixture",
+ "license": "Test",
+ "frames": [
+  "frame-a.png",
+  "frame-b.png"
+ ]
+}

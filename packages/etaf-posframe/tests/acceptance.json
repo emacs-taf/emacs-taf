@@ -1,0 +1,320 @@
+{
+ "schema": 1,
+ "load_path": [
+  ".",
+  "tests",
+  "../etaf-ui",
+  "../ebox",
+  "../ecss",
+  "../ekp",
+  "../etaf"
+ ],
+ "support": [],
+ "cases": [
+  {
+   "name": "etaf-posframe-rejects-invalid-options",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "Unknown options, non-positive sizes, unsupported dismissal and anchors signal etaf-posframe-error with the offending option named."
+  },
+  {
+   "name": "etaf-posframe-theme-returns-frame-colors",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "A panel Theme derives every catalog token as an #RRGGBB color from the current frame."
+  },
+  {
+   "name": "etaf-posframe-live-p-rejects-non-panels",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "Lifecycle predicates accept only live panel objects and an empty panel list reports no panels."
+  },
+  {
+   "name": "etaf-posframe-show-owns-panel-lifecycle",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "Showing a View mounts one panel and hiding it releases the panel, its Runtime and its frame."
+  },
+  {
+   "name": "etaf-posframe-toggle-hides-the-open-panel",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "The toggle entry hides the current buffer's open panel instead of stacking a second one."
+  },
+  {
+   "name": "etaf-posframe-show-replaces-the-buffer-panel",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "A second show for the same buffer replaces the earlier panel instead of stacking two."
+  },
+  {
+   "name": "etaf-posframe-pinned-theme-reaches-the-content",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "A pinned :theme starts a content that owns its palette in that mode, and the content's later choice is not overridden."
+  },
+  {
+   "name": "etaf-posframe-resize-follows-an-outside-resize-by-default",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "A panel adopts a frame the user or a caller resized, which is what :resizable t means."
+  },
+  {
+   "name": "etaf-posframe-resizable-nil-refuses-an-outside-resize",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "`:resizable nil' puts the frame back to the size the panel allows after an outside resize."
+  },
+  {
+   "name": "etaf-posframe-a-narrower-frame-clips-instead-of-wrapping",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "A narrower frame keeps each canvas row on one line, so a panel clips what it cannot show instead of wrapping it."
+  },
+  {
+   "name": "etaf-posframe-resizable-list-limits-the-axes",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "A :resizable side list accepts the axes it names and restores the others."
+  },
+  {
+   "name": "etaf-posframe-timeout-closes-the-panel",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "A panel with :timeout hides by itself and releases its Runtime."
+  },
+  {
+   "name": "etaf-posframe-focusable-panel-takes-and-restores-focus",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "A focusable panel selects itself on open and returns focus to the previous frame on hide."
+  },
+  {
+   "name": "etaf-posframe-killing-the-parent-buffer-closes-the-panel",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "The panel owns a kill-buffer hook in its parent buffer, so killing that buffer releases the panel."
+  },
+  {
+   "name": "etaf-posframe-frame-is-as-wide-as-the-canvas",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "A panel frame is exactly as wide as its content columns, so no empty frame is left beside the canvas."
+  },
+  {
+   "name": "etaf-posframe-frame-is-not-taller-than-the-content",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "A one-line panel fits its frame and leaves no empty rows below the rendered content."
+  },
+  {
+   "name": "etaf-posframe-header-bar-paints-the-full-width",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "The title bar covers every panel column and keeps the panel's own palette in a theme whose header line is inverted."
+  },
+  {
+   "name": "etaf-posframe-frame-follows-an-outside-resize",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "A frame resized from outside becomes the panel width: the canvas and the title bar re-lay out at it and a later re-fit keeps it."
+  },
+  {
+   "name": "etaf-posframe-frame-adopts-a-shorter-height",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "A frame shortened below the rendered content becomes the new row budget, so a panel clips instead of growing back."
+  },
+  {
+   "name": "etaf-posframe-panel-prints-without-recursing",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "Printing a returned panel terminates, so evaluating an etaf-posframe-show call in a buffer cannot loop until memory runs out."
+  },
+  {
+   "name": "etaf-posframe-panels-coexist-by-key",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "Two panels with different keys stay open at the same time and hiding one leaves the other alive."
+  },
+  {
+   "name": "etaf-posframe-show-replaces-the-same-key",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "Showing a view again under the same key replaces only that panel, not the panels of other keys."
+  },
+  {
+   "name": "etaf-posframe-toggle-targets-its-key",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "Toggle hides the panel of its own key and leaves the panels of other keys open."
+  },
+  {
+   "name": "etaf-posframe-anchors-place-panels-in-the-grid",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "Frame and window anchors place a panel at the named corner, edge centre or centre of their rectangle."
+  },
+  {
+   "name": "etaf-posframe-cell-places-a-panel-at-character-cells",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "A :cell pair places the panel at the same character cell regardless of the panel size."
+  },
+  {
+   "name": "etaf-posframe-rejects-a-bad-placement",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "A placement that is not an anchor, a tagged pair or a function signals etaf-posframe-error naming the option."
+  },
+  {
+   "name": "etaf-posframe-panel-opened-in-a-panel-is-independent",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "A panel shown while another panel has focus belongs to the underlying buffer and survives that first panel."
+  },
+  {
+   "name": "etaf-posframe-hiding-a-focused-panel-returns-focus",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "Hiding a focused panel selects the frame it came from and a panel can be opened again immediately."
+  },
+  {
+   "name": "etaf-posframe-stacks-panels-at-the-same-anchor",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "Panels shown at one anchored place are stacked a gap apart at the same x, down to the last opened."
+  },
+  {
+   "name": "etaf-posframe-stacks-a-tall-panel-against-a-short-one",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "A panel taller than the one above it takes the next row of the stack instead of stepping by its own height and leaving a hole."
+  },
+  {
+   "name": "etaf-posframe-draws-a-theme-bordered-panel",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "A panel paints the requested border colour outside its text area, so the content keeps its exact width."
+  },
+  {
+   "name": "etaf-posframe-rejects-stack-without-an-anchor",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": ":stack with a cell or a pixel position signals etaf-posframe-error instead of silently ignoring it."
+  },
+  {
+   "name": "etaf-posframe-registered-apps-open-with-one-call",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "Two registered applications open in their own panels with one call each, keep their shortcut keys and close independently."
+  },
+  {
+   "name": "etaf-posframe-cycle-walks-panels-and-back",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "Cycling moves focus through the open panels in order and returns to the frame behind them."
+  },
+  {
+   "name": "etaf-posframe-focus-shows-in-the-border",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "The panel holding the input focus paints its border in the theme accent while the others keep the resting border colour."
+  },
+  {
+   "name": "etaf-posframe-fill-keeps-the-row-budget",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "A panel with :fill keeps the row budget it asked for although its content is shorter."
+  },
+  {
+   "name": "etaf-posframe-height-fits-the-parent-frame",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "A row budget taller than the parent frame is clamped so the panel stays on screen."
+  },
+  {
+   "name": "etaf-posframe-anchor-offset-shifts-the-anchor",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "An (ANCHOR ROWS COLS) placement shifts the panel by exactly its character offset."
+  },
+  {
+   "name": "etaf-posframe-hover-focuses-a-panel",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "A focusable panel under the mouse pointer takes the input focus on its own."
+  },
+  {
+   "name": "etaf-posframe-hides-panels-while-emacs-is-inactive",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "While Emacs has no focused frame the panels are invisible, and they reappear when Emacs is active again."
+  },
+  {
+   "name": "etaf-posframe-hover-paints-a-border-without-focus",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "A pointer over a panel paints its border in the hover colour while the keyboard stays where it was, and leaving restores it."
+  },
+  {
+   "name": "etaf-posframe-click-selects-a-panel",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "A mouse button anywhere in a panel raises it and gives it the keyboard, while a passive panel never takes the focus from a click."
+  },
+  {
+   "name": "etaf-posframe-theme-pins-a-mode",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "A Theme pinned to light or dark keeps that palette when the Emacs frame mode changes."
+  },
+  {
+   "name": "etaf-posframe-hover-is-dimmer-than-focus",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "A hovered border takes half the accent while the focused border paints it fully."
+  },
+  {
+   "name": "etaf-posframe-provides-the-panel-appearance",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "A View inside a panel reads the panel's light or dark appearance through etaf-appearance."
+  },
+  {
+   "name": "etaf-posframe-fraction-size-follows-the-frame",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "A (fraction 0.5) width takes about half of the parent frame's pixel width."
+  },
+  {
+   "name": "etaf-posframe-focus-on-open-controls-the-first-selection",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "A focusable panel selects itself on open only when :focus-on-open asks."
+  },
+  {
+   "name": "etaf-posframe-keep-alive-resumes-the-session",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "A :keep-alive app hides and resumes the same session, and quitting calls :on-stop once."
+  },
+  {
+   "name": "etaf-posframe-pointer-leaving-keeps-the-focus-border",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "Moving the pointer off a focused panel keeps the panel selected and its focused border."
+  },
+  {
+   "name": "etaf-posframe-theme-answers-for-its-own-frame",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "A frame's palette follows that frame, even while another frame, such as a focused panel, holds the keyboard."
+  },
+  {
+   "name": "etaf-posframe-theme-switch-lands-in-one-pass",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "A theme switch repaints a focused panel and its title bar from the parent frame's new palette in one pass."
+  },
+  {
+   "name": "etaf-posframe-title-bar-toggles-theme-mode",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "A title-bar segment click repaints the panel on that mode without changing the Emacs themes, and the selected segment takes no hover face."
+  },
+  {
+   "name": "etaf-posframe-title-bar-and-the-application-share-one-theme-state",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "A panel whose content declared its surface paints the content's palette and offers its modes, so the application's own switch repaints the panel and a title-bar click writes the application's mode cell."
+  },
+  {
+   "name": "etaf-posframe-tty-shows-a-panel-in-cells",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "A terminal panel keeps its column width and content rows on screen, and its buffer holds the rendered View."
+  },
+  {
+   "name": "etaf-posframe-tty-fill-keeps-the-row-budget",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "A terminal panel keeps the row budget it asked for, so a terminal's one-pixel cells do not cap it at a small frame."
+  },
+  {
+   "name": "etaf-posframe-tty-title-adds-only-the-header",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "A titled terminal panel is its header plus its content rows, with no empty row below the content."
+  },
+  {
+   "name": "etaf-posframe-tty-stack-leaves-one-cell",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "Terminal panels stacked at one anchor stay one cell apart and share the same column."
+  },
+  {
+   "name": "etaf-posframe-tty-anchors-keep-the-border-on-screen",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "Every frame anchor keeps a terminal panel and its border cell inside the terminal."
+  },
+  {
+   "name": "etaf-posframe-tty-refit-keeps-a-panel-inside",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "Re-placing a terminal panel after a terminal resize leaves the panel and its border on screen."
+  },
+  {
+   "name": "etaf-posframe-tty-hide-releases-the-frame",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "Hiding a terminal panel deletes its frame and releases its Runtime."
+  },
+  {
+   "name": "etaf-posframe-tty-move-keeps-the-place",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "Moving a terminal panel keeps its new place through a refresh."
+  }
+ ]
+}

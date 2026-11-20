@@ -1,0 +1,539 @@
+{
+ "schema": 1,
+ "load_path": [
+  ".",
+  "tests",
+  "../etaf",
+  "../etaf-ui",
+  "../ebox",
+  "../ecss"
+ ],
+ "support": [],
+ "cases": [
+  {
+   "name": "etaf-desktop-help-preserves-scoped-keys-and-window-state",
+   "file": "tests/etaf-desktop-help-tests.el",
+   "purpose": "Help shows effective child bindings in the same buffer, blocks business commands, and restores focus without changing desktop window geometry or identity."
+  },
+  {
+   "name": "etaf-desktop-help-dismisses-only-the-top-modal",
+   "file": "tests/etaf-desktop-help-tests.el",
+   "purpose": "Help opened above Settings closes independently; a later Escape dismisses Settings rather than closing both layers at once."
+  },
+  {
+   "name": "etaf-desktop-open-uses-current-window-without-splitting",
+   "file": "tests/etaf-desktop-tests.el",
+   "purpose": "Interactive Open stays in the selected Emacs window despite right-side display rules, preserving both a single-window frame and an existing split with its neighboring buffer."
+  },
+  {
+   "name": "etaf-desktop-image-cursor-is-window-local-and-restored",
+   "file": "tests/etaf-desktop-cursor-tests.el",
+   "purpose": "Application content never shows a native text cursor, image or text alike; the caret appears only while an ETAF text input edits, and window switches or closing restore visibility."
+  },
+  {
+   "name": "etaf-desktop-launcher-keeps-visible-keyboard-navigation",
+   "file": "tests/etaf-desktop-cursor-tests.el",
+   "purpose": "A opens the launcher, arrows move its focused row and RET opens the chosen app; the Desktop never paints a native text cursor over it."
+  },
+  {
+   "name": "etaf-desktop-settings-dismiss-restores-entry-focus",
+   "file": "tests/etaf-desktop-settings-tests.el",
+   "purpose": "Done and the installed Escape command restore focus to the Settings entry after editing Layout values, reopening the panel and resetting settings."
+  },
+  {
+   "name": "etaf-desktop-settings-tabs-retain-controls-and-active-fields",
+   "file": "tests/etaf-desktop-settings-tests.el",
+   "purpose": "All four Settings tabs preserve focus and usable shell controls, publish their selected state, height, hint and only active controls, keep desktop geometry unchanged, and release controls on close."
+  },
+  {
+   "name": "etaf-desktop-settings-reopen-retains-section-and-current-values",
+   "file": "tests/etaf-desktop-settings-tests.el",
+   "purpose": "Closing Settings removes its fields; reopening retains the selected tab with current controller values and working reset and close actions."
+  },
+  {
+   "name": "etaf-desktop-demo-body-scroll-keeps-header-footer-live",
+   "file": "tests/etaf-desktop-demo-tests.el",
+   "purpose": "The public six-app demo keeps Notes header and footer controls fixed while its bounded body scrolls, resizes, returns to the top and accepts edits; editing restores the navigation cursor on exit and closing cancels its mounted timers."
+  },
+  {
+   "name": "etaf-desktop-locked-resize-confirms-controlled-geometry",
+   "file": "tests/etaf-desktop-resize-lock-tests.el",
+   "purpose": "Configured resize gestures preserve the confirming position, focus and content."
+  },
+  {
+   "name": "etaf-desktop-locked-resize-cancel-restores-controlled-geometry",
+   "file": "tests/etaf-desktop-resize-lock-tests.el",
+   "purpose": "Escape restores the original rectangle for all resize handles."
+  },
+  {
+   "name": "etaf-desktop-window-lifecycle-and-state-isolation",
+   "file": "tests/etaf-desktop-tests.el",
+   "purpose": "Window operations preserve identity, raise order and immutable public snapshots."
+  },
+  {
+   "name": "etaf-desktop-geometry-limits-maximize-minimize-restore",
+   "file": "tests/etaf-desktop-tests.el",
+   "purpose": "Size limits and maximize/minimize/restore preserve a normal rectangle."
+  },
+  {
+   "name": "etaf-desktop-floating-window-overflows-canvas-but-stays-reachable",
+   "file": "tests/etaf-desktop-tests.el",
+   "purpose": "Floating windows cross the left, right and bottom canvas edges, are clipped and keep part of their title row reachable."
+  },
+  {
+   "name": "etaf-desktop-minimize-and-workspace-removal-preserve-focus",
+   "file": "tests/etaf-desktop-tests.el",
+   "purpose": "Minimizing or removing the active workspace selects a visible replacement window."
+  },
+  {
+   "name": "etaf-desktop-tiling-minimize-reflows-visible-leaves",
+   "file": "tests/etaf-desktop-tests.el",
+   "purpose": "Minimized tiled members leave the layout tree and visible windows reclaim their space until restore."
+  },
+  {
+   "name": "etaf-desktop-maximize-in-tiling-keeps-full-geometry",
+   "file": "tests/etaf-desktop-tests.el",
+   "purpose": "Maximizing a tiled window keeps the full canvas rectangle while new leaves join the layout, then returns to tiling on restore."
+  },
+  {
+   "name": "etaf-desktop-workspace-policy",
+   "file": "tests/etaf-desktop-tests.el",
+   "purpose": "Workspace selection and removal preserve window ownership and reject invalid changes."
+  },
+  {
+   "name": "etaf-desktop-mounted-window-and-taskbar",
+   "file": "tests/etaf-desktop-tests.el",
+   "purpose": "A mounted window remains in the retained application tree while its body is hidden and returns through taskbar restore; the desktop preserves native text cursor shape and global blink settings."
+  },
+  {
+   "name": "etaf-desktop-bars-follow-focus-and-membership",
+   "file": "tests/etaf-desktop-tests.el",
+   "purpose": "Window focus, minimization, taskbar activation and closing preserve bar selection, status and native targets."
+  },
+  {
+   "name": "etaf-desktop-mounted-buffer-uses-configured-local-shortcuts",
+   "file": "tests/etaf-desktop-tests.el",
+   "purpose": "Mounted Desktop buffers bind configured keys and key sequences, follow binding changes and reject printing-key prefixes and prefix conflicts."
+  },
+  {
+   "name": "etaf-desktop-view-installs-shortcuts-in-named-target-buffer",
+   "file": "tests/etaf-desktop-tests.el",
+   "purpose": "Mounting a Desktop View by target name installs local shortcuts in that target instead of the caller buffer."
+  },
+  {
+   "name": "etaf-desktop-view-direct-mount-resolves-current-runtime-for-gestures",
+   "file": "tests/etaf-desktop-tests.el",
+   "purpose": "A Playground-style direct View mount resolves the owning Runtime for title gestures and updates controlled geometry."
+  },
+  {
+   "name": "etaf-desktop-close-preserves-caller-owned-runtime-and-buffer",
+   "file": "tests/etaf-desktop-tests.el",
+   "purpose": "Closing a direct View preserves its caller-owned Runtime and buffer; a convenience mount releases only its own Runtime."
+  },
+  {
+   "name": "etaf-desktop-body-activation-raises-window",
+   "file": "tests/etaf-desktop-tests.el",
+   "purpose": "Pressing application content focuses and raises the corresponding desktop window."
+  },
+  {
+   "name": "etaf-desktop-nested-content-activation-raises-window",
+   "file": "tests/etaf-desktop-tests.el",
+   "purpose": "Pressing an interactive descendant bubbles to the window focus policy."
+  },
+  {
+   "name": "etaf-desktop-native-title-drag-converts-pixels-to-rows",
+   "file": "tests/etaf-desktop-tests.el",
+   "purpose": "A native title drag converts text-area pixel motion into one logical desktop row."
+  },
+  {
+   "name": "etaf-desktop-native-drag-keeps-behavior-origin-across-rerenders",
+   "file": "tests/etaf-desktop-tests.el",
+   "purpose": "A controlled title drag retains its origin while each motion publishes a new desktop generation."
+  },
+  {
+   "name": "etaf-desktop-gesture-retains-origin-through-multiple-motions",
+   "file": "tests/etaf-desktop-gesture-tests.el",
+   "purpose": "A mounted title gesture retains its origin through multiple move publications."
+  },
+  {
+   "name": "etaf-desktop-gesture-repeated-sequences-reset-origin",
+   "file": "tests/etaf-desktop-gesture-tests.el",
+   "purpose": "Repeated gestures begin from committed geometry after garbage collection."
+  },
+  {
+   "name": "etaf-desktop-gesture-close-and-reopen-releases-retained-component",
+   "file": "tests/etaf-desktop-gesture-tests.el",
+   "purpose": "Closing and reopening a window releases the old retained gesture component and starts cleanly."
+  },
+  {
+   "name": "etaf-desktop-gesture-resizes-every-enabled-edge-and-corner",
+   "file": "tests/etaf-desktop-gesture-tests.el",
+   "purpose": "All eight painted edges and corners expose directional pointers and publish cumulative geometry changes on only the controlled axes, preserving body content."
+  },
+  {
+   "name": "etaf-desktop-gesture-clamps-resize-at-desktop-origin",
+   "file": "tests/etaf-desktop-gesture-tests.el",
+   "purpose": "A left resize gesture overflows the canvas and a top one stops at its origin, each preserving its opposite edge."
+  },
+  {
+   "name": "etaf-desktop-gesture-divider-tracks-cumulative-displacement",
+   "file": "tests/etaf-desktop-gesture-tests.el",
+   "purpose": "A tiling divider drag follows the pointer displacement from the press and a cancelled drag restores the start ratio."
+  },
+  {
+   "name": "etaf-desktop-application-registry-and-lifecycle",
+   "file": "tests/etaf-desktop-tests.el",
+   "purpose": "An application manifest launches, suspends, restores and closes an isolated instance through public callbacks."
+  },
+  {
+   "name": "etaf-desktop-direct-window-close-syncs-app-lifecycle",
+   "file": "tests/etaf-desktop-tests.el",
+   "purpose": "Directly closing owned windows updates application ownership, closes the final instance and focuses the remaining window."
+  },
+  {
+   "name": "etaf-desktop-instance-status-follows-visible-focus",
+   "file": "tests/etaf-desktop-tests.el",
+   "purpose": "Application status follows visible focus across minimization, empty workspaces, restoration and closing."
+  },
+  {
+   "name": "etaf-desktop-launch-cleans-partial-window-creation",
+   "file": "tests/etaf-desktop-tests.el",
+   "purpose": "A failed multi-window launch rolls back already-created windows before installing its isolated error placeholder."
+  },
+  {
+   "name": "etaf-desktop-inactive-windows-show-gray-traffic-lights",
+   "file": "tests/etaf-desktop-tests.el",
+   "purpose": "A desktop window renders gray macOS traffic lights unless it is the active window; focusing another window swaps the colored lights."
+  },
+  {
+   "name": "etaf-desktop-confirm-close-asks-inside-the-desktop",
+   "file": "tests/etaf-desktop-tests.el",
+   "purpose": "With confirm-close enabled, pressing a window's Close control opens an in-desktop dialog instead of a minibuffer prompt; Cancel keeps the window and Close window removes it."
+  },
+  {
+   "name": "etaf-desktop-default-canvas-fills-the-render-window",
+   "file": "tests/etaf-desktop-tests.el",
+   "purpose": "An unconfigured desktop sizes its shell from the window it renders into, so a Playground-style preview fills its window without overflowing it."
+  },
+  {
+   "name": "etaf-desktop-canvas-follows-window-resize",
+   "file": "tests/etaf-desktop-tests.el",
+   "purpose": "A default desktop refits its shell, tiles, maximized and floating windows on every workspace to the Emacs window's new size through etaf-desktop-fit-canvas."
+  },
+  {
+   "name": "etaf-desktop-nested-bars-keep-their-own-controls",
+   "file": "tests/etaf-desktop-tests.el",
+   "purpose": "Every desktop's bars and modals carry their own Host references, so a layout press on the outer desktop never reaches the same control of a desktop nested in its window."
+  },
+  {
+   "name": "etaf-desktop-region-fit-follows-the-hosting-window",
+   "file": "tests/etaf-desktop-tests.el",
+   "purpose": "A desktop created with :fit 'region fills the window that renders it: maximizing or resizing the hosting window reflows the embedded desktop instead of leaving the canvas at its creation size."
+  },
+  {
+   "name": "etaf-desktop-instance-window-ids-stay-unique-across-desktops",
+   "file": "tests/etaf-desktop-tests.el",
+   "purpose": "Application window IDs carry the owning desktop's token, so two desktops hosting the same application keep distinct IDs and ETAF Host references."
+  },
+  {
+   "name": "etaf-desktop-nested-desktop-keeps-the-host-window-fit",
+   "file": "tests/etaf-desktop-tests.el",
+   "purpose": "A desktop embedded in another desktop's window shares its buffer without taking over the window fit: resizing still refits the outer desktop while the nested desktop keeps its explicit canvas."
+  },
+  {
+   "name": "etaf-desktop-application-errors-are-isolated",
+   "file": "tests/etaf-desktop-tests.el",
+   "purpose": "A failing application becomes an error placeholder while other desktop windows remain usable."
+  },
+  {
+   "name": "etaf-desktop-session-roundtrip-restores-app-state",
+   "file": "tests/etaf-desktop-tests.el",
+   "purpose": "A serializable desktop session invokes application restore callbacks and reapplies saved window geometry."
+  },
+  {
+   "name": "etaf-desktop-session-roundtrip-restores-layout-policy",
+   "file": "tests/etaf-desktop-tests.el",
+   "purpose": "Session restore preserves independent workspace layout modes, split topology and ratios."
+  },
+  {
+   "name": "etaf-desktop-session-unknown-app-isolated",
+   "file": "tests/etaf-desktop-tests.el",
+   "purpose": "A missing application during session restore becomes an error placeholder without aborting the desktop."
+  },
+  {
+   "name": "etaf-desktop-toggle-layout-mode-switches-the-workspace",
+   "file": "tests/etaf-desktop-tests.el",
+   "purpose": "The workspace layout control switches between floating and tiling, preserves the last rectangles when floating and returns other modes to tiling."
+  },
+  {
+   "name": "etaf-desktop-settings-layout-select-follows-workspace-mode",
+   "file": "tests/etaf-desktop-tests.el",
+   "purpose": "The settings Layout tab shows the active workspace's live layout mode after bar toggles, API changes and workspace switches, independent of the stored preference."
+  },
+  {
+   "name": "etaf-desktop-mounted-workspace-switch-is-retained",
+   "file": "tests/etaf-desktop-tests.el",
+   "purpose": "Switching workspaces on a mounted desktop, directly or by focusing another workspace's window, keeps the ETAF generation while hiding and showing the right windows, focusing the highest visible one, updating the layout label and listing every workspace's windows in the taskbar."
+  },
+  {
+   "name": "etaf-desktop-mounted-layout-toggle-rerenders-both-directions",
+   "file": "tests/etaf-desktop-tests.el",
+   "purpose": "The mounted Floating/Tiled control remains live and rerenders its label after both directions of a toggle."
+  },
+  {
+   "name": "etaf-desktop-mode-switch-reveals-tiles-after-maximize",
+   "file": "tests/etaf-desktop-tests.el",
+   "purpose": "The mounted layout control exits floating maximization and publishes both tiled window bodies."
+  },
+  {
+   "name": "etaf-desktop-close-tiled-window-keeps-other-workspace-isolated",
+   "file": "tests/etaf-desktop-tests.el",
+   "purpose": "Closing a tile and revisiting another workspace leaves only same-workspace content visible while an error placeholder remains isolated."
+  },
+  {
+   "name": "etaf-desktop-tiled-error-window-keeps-title-visible",
+   "file": "tests/etaf-desktop-tests.el",
+   "purpose": "An error placeholder joining a tiled workspace keeps its title row outside the divider gap."
+  },
+  {
+   "name": "etaf-desktop-shell-controls-and-live-tiling-refresh",
+   "file": "tests/etaf-desktop-tests.el",
+   "purpose": "The mounted shell exposes launcher and switcher controls and applies tiling to a newly opened window."
+  },
+  {
+   "name": "etaf-desktop-presses-outside-a-modal-dismiss-it",
+   "file": "tests/etaf-desktop-tests.el",
+   "purpose": "Pressing a window control while the launcher, switcher or settings dialog is open closes it, and a taskbar press that opens another modal closes the current one in the same press."
+  },
+  {
+   "name": "etaf-desktop-settings-modal-overlays-live-shell",
+   "file": "tests/etaf-desktop-tests.el",
+   "purpose": "Settings persist as desktop state and open as a modal over the retained window surface."
+  },
+  {
+   "name": "etaf-desktop-tiling-layout-and-split-resize",
+   "file": "tests/etaf-desktop-layout-tests.el",
+   "purpose": "Tiling assigns non-overlapping rectangles and applies an adjustable split ratio."
+  },
+  {
+   "name": "etaf-desktop-tiling-two-workspaces-publishes-both-trees",
+   "file": "tests/etaf-desktop-layout-tests.el",
+   "purpose": "Two tiled workspaces publish their own divider nodes in one canvas without key collisions."
+  },
+  {
+   "name": "etaf-desktop-divider-orientation-refreshes-rendered-input",
+   "file": "tests/etaf-desktop-layout-tests.el",
+   "purpose": "Changing an existing split between horizontal and vertical refreshes its visible accessible label, pointer, handle dimensions and subsequent controlled gesture."
+  },
+  {
+   "name": "etaf-desktop-nested-splitters-occupy-reserved-gaps",
+   "file": "tests/etaf-desktop-layout-tests.el",
+   "purpose": "Nested divider handles center in custom inner gaps and drag changes only the selected subtree ratio."
+  },
+  {
+   "name": "etaf-desktop-layout-floating-and-untile",
+   "file": "tests/etaf-desktop-layout-tests.el",
+   "purpose": "Untiling preserves a floating overlay and retile restores it to the tree."
+  },
+  {
+   "name": "etaf-desktop-layout-vertical-split-moves-one-row-per-step",
+   "file": "tests/etaf-desktop-layout-tests.el",
+   "purpose": "Resizing a vertical split by consecutive one-row ratio steps on an odd span moves the first pane and the second pane's origin by exactly one row per step, so a divider drag follows the pointer without sticking and jumping."
+  },
+  {
+   "name": "etaf-desktop-layout-horizontal-split-and-minimums",
+   "file": "tests/etaf-desktop-layout-tests.el",
+   "purpose": "Horizontal tiling respects minimum widths and preserves the split ratio."
+  },
+  {
+   "name": "etaf-desktop-layout-monocle-and-close-sync",
+   "file": "tests/etaf-desktop-layout-tests.el",
+   "purpose": "Monocle fills the inset canvas and closing a window removes its layout leaf."
+  },
+  {
+   "name": "etaf-desktop-layout-master-stack-reflows-new-windows",
+   "file": "tests/etaf-desktop-layout-tests.el",
+   "purpose": "Master-stack gives the first window a master region and reflows newly opened stack windows."
+  },
+  {
+   "name": "etaf-desktop-tile-spacing-defaults-and-reset",
+   "file": "tests/etaf-desktop-spacing-tests.el",
+   "purpose": "New and reset settings use detached one-cell outer and inner gap preferences and inset tiled geometry."
+  },
+  {
+   "name": "etaf-desktop-tile-spacing-custom-gaps",
+   "file": "tests/etaf-desktop-spacing-tests.el",
+   "purpose": "Zero and custom outer margins and nested inner gaps use character widths horizontally and text rows vertically, retaining the minimum horizontal divider width."
+  },
+  {
+   "name": "etaf-desktop-tile-spacing-reflows-active-workspace",
+   "file": "tests/etaf-desktop-spacing-tests.el",
+   "purpose": "Spacing changes immediately reflow active tiles without changing topology, ratios, focus or floating rectangles."
+  },
+  {
+   "name": "etaf-desktop-tile-spacing-validates-without-mutation",
+   "file": "tests/etaf-desktop-spacing-tests.el",
+   "purpose": "Spacing accepts all supported integers and rejects invalid types and bounds without changing settings, layout or geometry."
+  },
+  {
+   "name": "etaf-desktop-tile-spacing-outer-gaps-yield-to-minimums",
+   "file": "tests/etaf-desktop-spacing-tests.el",
+   "purpose": "Outer margins shrink independently on both axes to preserve pane minimum sizes and inner gaps on a tight canvas."
+  },
+  {
+   "name": "etaf-desktop-tile-spacing-monocle-preserves-outer-gap",
+   "file": "tests/etaf-desktop-spacing-tests.el",
+   "purpose": "Monocle preserves its outer margin whenever each overlaid pane fits, independently of the retained split tree's summed minimum sizes and inner gap."
+  },
+  {
+   "name": "etaf-desktop-tile-spacing-preserves-maximum-size",
+   "file": "tests/etaf-desktop-spacing-tests.el",
+   "purpose": "Custom inner gaps keep constrained panes within maximum width or height while their neighbors fill the remaining canvas."
+  },
+  {
+   "name": "etaf-desktop-tile-spacing-small-canvas-keeps-panes-inside",
+   "file": "tests/etaf-desktop-spacing-tests.el",
+   "purpose": "On a small canvas, nested panes remain positive, non-overlapping and in bounds as inner gaps shrink without changing saved preferences."
+  },
+  {
+   "name": "etaf-desktop-tile-spacing-applies-on-workspace-switch",
+   "file": "tests/etaf-desktop-spacing-tests.el",
+   "purpose": "Gap changes leave inactive workspace geometry untouched until selection applies the current global gap preferences."
+  },
+  {
+   "name": "etaf-desktop-tile-spacing-keeps-maximized-window-full-size",
+   "file": "tests/etaf-desktop-spacing-tests.el",
+   "purpose": "Changing tile gaps preserves full-canvas maximization and restoration returns the window to the current split geometry."
+  },
+  {
+   "name": "etaf-desktop-tile-spacing-settings-controls-reflow-live-tiles",
+   "file": "tests/etaf-desktop-spacing-tests.el",
+   "purpose": "Mounted settings tabs change tile spacing immediately, retain values across tab switches, reset defaults and close through Done."
+  },
+  {
+   "name": "etaf-desktop-tile-spacing-session-roundtrip",
+   "file": "tests/etaf-desktop-spacing-tests.el",
+   "purpose": "A saved session restores custom spacing, split topology and tiled and floating geometry over existing gap preferences."
+  },
+  {
+   "name": "etaf-desktop-tile-spacing-session-rejects-invalid-gaps",
+   "file": "tests/etaf-desktop-spacing-tests.el",
+   "purpose": "Session restore rejects persisted gaps outside the public integer ranges."
+  },
+  {
+   "name": "etaf-desktop-session-restores-fixed-floating-window",
+   "file": "tests/etaf-desktop-spacing-tests.el",
+   "purpose": "A non-resizable, non-movable floating window restores its saved rectangle and flags without aborting the rest of the session."
+  },
+  {
+   "name": "etaf-desktop-session-restores-floating-geometry-with-retained-tree",
+   "file": "tests/etaf-desktop-spacing-tests.el",
+   "purpose": "A workspace switched from tiling to floating restores manually edited window geometry while preserving its retained split tree and spacing."
+  },
+  {
+   "name": "etaf-desktop-session-retains-panes-smaller-than-minimums",
+   "file": "tests/etaf-desktop-spacing-tests.el",
+   "purpose": "A saved small-canvas layout restores every pane and its minimum-size policy even when the allocated tile dimensions are below those minimums."
+  },
+  {
+   "name": "etaf-desktop-geometry-queries-stay-reactive-and-atomic",
+   "file": "tests/etaf-desktop-tests.el",
+   "purpose": "Public reactive snapshots observe complete floating geometry and focus mutations, and invalid coordinates leave the previous snapshot intact."
+  },
+  {
+   "name": "etaf-desktop-mounted-geometry-survives-membership-and-settings",
+   "file": "tests/etaf-desktop-tests.el",
+   "purpose": "Mounted window geometry remains live across membership and settings changes while nested input and detached prior snapshots retain their behavior."
+  },
+  {
+   "name": "etaf-desktop-shortcuts-traverse-visible-windows-both-directions",
+   "file": "tests/etaf-desktop-shortcut-tests.el",
+   "purpose": "Repeated mounted next/previous shortcuts visit every visible same-workspace window independently of paint order."
+  },
+  {
+   "name": "etaf-desktop-shortcuts-split-skips-hidden-windows",
+   "file": "tests/etaf-desktop-shortcut-tests.el",
+   "purpose": "The mounted split shortcut selects a visible same-workspace neighbor without restoring minimized windows."
+  },
+  {
+   "name": "etaf-desktop-shortcuts-swap-tiled-leaves-retains-policy",
+   "file": "tests/etaf-desktop-shortcut-tests.el",
+   "purpose": "The mounted swap shortcut exchanges tiled leaves while retaining topology, ratios, focus and floating or minimized windows."
+  },
+  {
+   "name": "etaf-desktop-shortcuts-swap-floating-visible-rectangles",
+   "file": "tests/etaf-desktop-shortcut-tests.el",
+   "purpose": "The mounted floating swap shortcut exchanges visible rectangles without changing minimized windows."
+  },
+  {
+   "name": "etaf-desktop-master-stack-keeps-user-split-ratios",
+   "file": "tests/etaf-desktop-shortcut-tests.el",
+   "purpose": "Master-stack preserves resized horizontal and vertical splits across focus, refresh and workspace switches, and keeps its master ratio when adding a window."
+  },
+  {
+   "name": "etaf-desktop-shortcuts-close-observes-confirmation",
+   "file": "tests/etaf-desktop-shortcut-tests.el",
+   "purpose": "The mounted close key opens the configured confirmation card, cancel keeps the window, and confirming closes it."
+  },
+  {
+   "name": "etaf-desktop-dividers-drag-from-constrained-edges-on-both-axes",
+   "file": "tests/etaf-desktop-shortcut-tests.el",
+   "purpose": "Horizontal and vertical divider gestures start from the actual minimum/maximum-constrained edge and cancellation restores the accepted ratio."
+  },
+  {
+   "name": "etaf-desktop-keyboard-cycling-focuses-the-activated-window",
+   "file": "tests/etaf-desktop-shortcut-tests.el",
+   "purpose": "The next-window shortcut raises a covered window and moves keyboard focus into it, so window move keys act on that window."
+  },
+  {
+   "name": "etaf-desktop-keyboard-tab-activates-tiled-windows",
+   "file": "tests/etaf-desktop-shortcut-tests.el",
+   "purpose": "Tab traversal entering a tiled window activates it without a pointer press."
+  },
+  {
+   "name": "etaf-desktop-keyboard-steps-tiling-divider",
+   "file": "tests/etaf-desktop-shortcut-tests.el",
+   "purpose": "A tiling divider reached with Tab moves its split ratio with the arrow keys."
+  },
+  {
+   "name": "etaf-desktop-native-title-click-only-focuses",
+   "file": "tests/etaf-desktop-shortcut-tests.el",
+   "purpose": "A zero-displacement native title press/release focuses a normal or maximized window while preserving its coordinates, dimensions and mode."
+  },
+  {
+   "name": "etaf-desktop-font-default-overrides-and-reset",
+   "file": "tests/etaf-desktop-font-tests.el",
+   "purpose": "Desktop window typography defaults to Emacs inheritance, explicit title/body pixel sizes apply independently, and reset or nil restores inheritance."
+  },
+  {
+   "name": "etaf-desktop-font-settings-restore-inheritance",
+   "file": "tests/etaf-desktop-font-tests.el",
+   "purpose": "Appearance font controls display Emacs default and restore each existing explicit override independently or through Reset settings."
+  },
+  {
+   "name": "etaf-desktop-background-uses-arrow-and-dismisses-launcher",
+   "file": "tests/etaf-desktop-gesture-tests.el",
+   "purpose": "Desktop background uses an arrow while its press still dismisses the launcher."
+  },
+  {
+   "name": "etaf-desktop-view-declares-its-surface-to-a-host",
+   "file": "tests/etaf-desktop-tests.el",
+   "purpose": "A host frames the desktop from the palette, theme-mode cell and modes it declares; the host's switch and the settings dialog write the same cell and the shell repaints."
+  },
+  {
+   "name": "etaf-desktop-windows-receive-the-desktop-appearance",
+   "file": "tests/etaf-desktop-tests.el",
+   "purpose": "Applications mounted in desktop windows are provided the desktop's appearance, not the Emacs frame's polarity, so they repaint with the desktop theme."
+  },
+  {
+   "name": "etaf-desktop-app-body-instantiates-once",
+   "file": "tests/etaf-desktop-tests.el",
+   "purpose": "A launched application window sets up its body component once, and later desktop publications reuse that instance instead of recreating it."
+  },
+  {
+   "name": "etaf-desktop-app-body-animates-inside-its-window",
+   "file": "tests/etaf-desktop-tests.el",
+   "purpose": "A desktop window publishes the animation frames an embedded application produces on its own, so app-owned motion stays visible."
+  }
+ ]
+}

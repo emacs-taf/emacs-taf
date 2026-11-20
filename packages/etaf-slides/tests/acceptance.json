@@ -1,0 +1,64 @@
+{
+  "schema": 1,
+  "load_path": [
+    ".",
+    "tests",
+    "../etaf",
+    "../etaf-ui",
+    "../ebox",
+    "../ecss"
+  ],
+  "support": [],
+  "cases": [
+    {
+      "name": "etaf-slides-tests-deck-splits-front-matter-and-notes",
+      "file": "tests/etaf-slides-tests.el",
+      "purpose": "Front matter, slide separators and a notes block land in the deck title, the slide list and the current slide's notes."
+    },
+    {
+      "name": "etaf-slides-tests-layout-marks-cover-and-content",
+      "file": "tests/etaf-slides-tests.el",
+      "purpose": "A heading with a subtitle renders as a centered cover, while a heading with a list renders as a titled content slide."
+    },
+    {
+      "name": "etaf-slides-tests-invalid-decks-signal-an-error",
+      "file": "tests/etaf-slides-tests.el",
+      "purpose": "An unreadable deck file and a source without slides fail as slide errors instead of opening an empty presentation."
+    },
+    {
+      "name": "etaf-slides-tests-navigation-clamps-at-the-deck-edges",
+      "file": "tests/etaf-slides-tests.el",
+      "purpose": "Paging or jumping past either end keeps the first or last slide selected instead of wrapping."
+    },
+    {
+      "name": "etaf-slides-tests-theme-cycle-visits-light-dark-and-auto",
+      "file": "tests/etaf-slides-tests.el",
+      "purpose": "The theme key walks light, then dark, then the frame's own appearance and reports the resolved appearance."
+    },
+    {
+      "name": "etaf-slides-tests-stage-keeps-the-aspect-ratio-inside-the-viewport",
+      "file": "tests/etaf-slides-tests.el",
+      "purpose": "The stage stays inside the window's column and row budget at the slide aspect ratio, and reports clipping below the minimum usable size."
+    },
+    {
+      "name": "etaf-slides-tests-overflow-reports-slides-over-budget",
+      "file": "tests/etaf-slides-tests.el",
+      "purpose": "A slide whose estimated content exceeds the stage body is listed as overflow while a short slide is not."
+    },
+    {
+      "name": "etaf-slides-tests-mount-renders-the-current-slide",
+      "file": "tests/etaf-slides-tests.el",
+      "purpose": "A mounted deck shows only the current slide's title and body, and repaints to the next slide when the session moves."
+    },
+    {
+      "name": "etaf-slides-tests-notes-band-follows-the-toggle",
+      "file": "tests/etaf-slides-tests.el",
+      "purpose": "Turning the notes on adds the speaker notes above the footer, and the position line keeps reporting the slide."
+    },
+    {
+      "name": "etaf-slides-tests-application-keys-advance-the-slides",
+      "file": "tests/etaf-slides-tests.el",
+      "purpose": "A deck opens at presentation text size and SPC, DEL and o drive the mounted application through its declared root keys, moving between slides and the overview."
+    }
+  ]
+}

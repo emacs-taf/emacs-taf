@@ -1,0 +1,164 @@
+{
+  "schema": 1,
+  "load_path": [
+    ".",
+    "tests",
+    "../etaf",
+    "../etaf-ui",
+    "../ebox",
+    "../ecss"
+  ],
+  "support": [],
+  "cases": [
+    {
+      "name": "etaf-video-studio-tests-fractional-times-stay-with-their-labels",
+      "file": "tests/etaf-video-studio-tests.el",
+      "purpose": "Fractional-second in/out and split fields retain complete single-line values beside their labels in wide and short viewports; volume is readable as a percentage."
+    },
+    {
+      "name": "etaf-video-studio-tests-empty-workspace-has-one-material-prompt",
+      "file": "tests/etaf-video-studio-tests.el",
+      "purpose": "An empty wide project offers one material-onboarding region without reserving a duplicate empty clip panel."
+    },
+    {
+      "name": "etaf-video-studio-tests-wide-tool-switch-keeps-controls-live",
+      "file": "tests/etaf-video-studio-tests.el",
+      "purpose": "After switching a wide editor from clips to captions, the selected cue's visible delete control remains enabled and sends its exact operation."
+    },
+    {
+      "name": "etaf-video-studio-tests-paged-clips-remain-reachable",
+      "file": "tests/etaf-video-studio-tests.el",
+      "purpose": "Clip pages expose every entry; native activation selects it and selection reveals its page without losing the selected clip on paging."
+    },
+    {
+      "name": "etaf-video-studio-tests-empty-project-actions-are-safe",
+      "file": "tests/etaf-video-studio-tests.el",
+      "purpose": "Missing projects, empty exports, invalid navigation and unavailable playback fail with actionable user errors."
+    },
+    {
+      "name": "etaf-video-studio-tests-publish-changes-require-another-preview",
+      "file": "tests/etaf-video-studio-tests.el",
+      "purpose": "Changing a recipient, text or topic after preview cannot send an unreviewed publication."
+    },
+    {
+      "name": "etaf-video-studio-tests-edit-refreshes-form-from-result",
+      "file": "tests/etaf-video-studio-tests.el",
+      "purpose": "The next trim uses the accepted clip interval rather than stale form fields."
+    },
+    {
+      "name": "etaf-video-studio-tests-open-mounts-and-close-releases",
+      "file": "tests/etaf-video-studio-tests.el",
+      "purpose": "Opening mounts a live runtime with the workbench shell and closing unmounts and kills the buffer."
+    },
+    {
+      "name": "etaf-video-studio-tests-open-project-lists-clips-and-captions",
+      "file": "tests/etaf-video-studio-tests.el",
+      "purpose": "Opening a project shows its clips, captions and revision from the CLI in the shell."
+    },
+    {
+      "name": "etaf-video-studio-tests-import-files-send-files-and-revision",
+      "file": "tests/etaf-video-studio-tests.el",
+      "purpose": "Import sends every file name with the current revision and confirmation."
+    },
+    {
+      "name": "etaf-video-studio-tests-select-clip-prefills-and-trim-sends-edit",
+      "file": "tests/etaf-video-studio-tests.el",
+      "purpose": "Selecting a clip prefills the trim form and applying it sends the documented trim operation."
+    },
+    {
+      "name": "etaf-video-studio-tests-trim-input-editing-changes-operation",
+      "file": "tests/etaf-video-studio-tests.el",
+      "purpose": "Typing in the trim field changes the in point of the operation the CLI receives."
+    },
+    {
+      "name": "etaf-video-studio-tests-edit-commands-send-exact-operations",
+      "file": "tests/etaf-video-studio-tests.el",
+      "purpose": "Speed, gain, split, move and remove each send their documented JSON with --revision and --yes."
+    },
+    {
+      "name": "etaf-video-studio-tests-undo-and-redo-step-history",
+      "file": "tests/etaf-video-studio-tests.el",
+      "purpose": "Undo and redo send the history flag with the current revision and confirmation."
+    },
+    {
+      "name": "etaf-video-studio-tests-render-preview-starts-a-task",
+      "file": "tests/etaf-video-studio-tests.el",
+      "purpose": "Preview and screen requests start their background profile; the screen export resumes segments."
+    },
+    {
+      "name": "etaf-video-studio-tests-refresh-adopts-completed-preview",
+      "file": "tests/etaf-video-studio-tests.el",
+      "purpose": "A completed preview render becomes the project's playable preview without mounting a missing file."
+    },
+    {
+      "name": "etaf-video-studio-tests-task-panel-lists-tasks-and-cancel",
+      "file": "tests/etaf-video-studio-tests.el",
+      "purpose": "The tasks pane lists CLI tasks and cancel sends the cancel request with confirmation."
+    },
+    {
+      "name": "etaf-video-studio-tests-record-targets-and-toggle-record",
+      "file": "tests/etaf-video-studio-tests.el",
+      "purpose": "Recording targets come from the CLI and the toggle sends window, audio, duration and confirmation; stop follows."
+    },
+    {
+      "name": "etaf-video-studio-tests-publish-preview-then-confirm-with-revision",
+      "file": "tests/etaf-video-studio-tests.el",
+      "purpose": "Publishing previews silently with target, chat and text, then confirms with the previewed revision and --yes."
+    },
+    {
+      "name": "etaf-video-studio-tests-publish-confirm-before-preview-signals",
+      "file": "tests/etaf-video-studio-tests.el",
+      "purpose": "Confirming without a preview, or after the project changed, signals user-error instead of sending."
+    },
+    {
+      "name": "etaf-video-studio-tests-captions-add-update-delete",
+      "file": "tests/etaf-video-studio-tests.el",
+      "purpose": "Captions can be updated by id, removed and added from the form with final-timeline seconds."
+    },
+    {
+      "name": "etaf-video-studio-tests-documented-keys-drive-commands",
+      "file": "tests/etaf-video-studio-tests.el",
+      "purpose": "The documented pane, refresh, theme, undo and close keys drive the application through the command loop."
+    },
+    {
+      "name": "etaf-video-studio-tests-faces-hold-concrete-colors",
+      "file": "tests/etaf-video-studio-tests.el",
+      "purpose": "Every pane, in both themes and with preview sound toggled, paints concrete face colours and never a deferred Theme token."
+    },
+    {
+      "name": "etaf-video-studio-tests-canvas-and-help-follow-the-application",
+      "file": "tests/etaf-video-studio-tests.el",
+      "purpose": "The canvas surface follows the dark and light theme, help labels the playback, audio and close keys, and close outside a studio signals user-error."
+    },
+    {
+      "name": "etaf-video-studio-tests-layout-switches-and-keeps-drafts",
+      "file": "tests/etaf-video-studio-tests.el",
+      "purpose": "Refitting switches narrow and wide layouts and an already typed form draft still reaches the next edit."
+    },
+    {
+      "name": "etaf-video-studio-tests-invalid-input-signals-user-error",
+      "file": "tests/etaf-video-studio-tests.el",
+      "purpose": "Empty titles, missing selections and unparsable numbers signal user-error before any CLI request."
+    },
+    {
+      "name": "etaf-video-studio-tests-cli-errors-surface-in-status",
+      "file": "tests/etaf-video-studio-tests.el",
+      "purpose": "A CLI error object becomes a readable status message instead of a signal."
+    },
+    {
+      "name": "etaf-video-studio-tests-missing-executable-reports-deps",
+      "file": "tests/etaf-video-studio-tests.el",
+      "purpose": "A missing CLI reports deps in the status line and the application still closes cleanly."
+    },
+    {
+      "name": "etaf-video-studio-tests-state-is-detached-and-theme-toggles",
+      "file": "tests/etaf-video-studio-tests.el",
+      "purpose": "The reported state is detached plain data and the theme toggles dark to light and back."
+    },
+    {
+      "name": "etaf-video-studio-tests-stage-selected-clip-reports-missing-file",
+      "file": "tests/etaf-video-studio-tests.el",
+      "purpose": "Selecting a clip whose source file is gone reports it and mounts no decoder."
+    }
+  ]
+}

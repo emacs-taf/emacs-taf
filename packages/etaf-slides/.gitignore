@@ -1,0 +1,3 @@
+*.elc
+*.eln
+__pycache__/

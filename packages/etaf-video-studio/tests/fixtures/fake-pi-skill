@@ -1,0 +1,121 @@
+#!/usr/bin/env python3
+"""Fixture CLI standing in for `pi-skill video-project' in acceptance tests.
+
+Reads its canned response from $FAKE_PI_SKILL_ROOT/<command>.json, appends a
+JSON log line to $FAKE_PI_SKILL_LOG, and mirrors the real CLI's --json
+contract.  When a response file is missing it synthesizes a coherent reply
+from status.json, so a scenario can write only the fixtures its assertions
+need.  A response containing "ok": false exits 3 like a CLI error.  No
+network, no ffmpeg and no project store are touched.
+"""
+import json
+import os
+import sys
+
+argv = sys.argv[1:]
+
+
+def emit(payload, code=0):
+    print(json.dumps(payload, ensure_ascii=False))
+    sys.exit(code)
+
+
+log_path = os.environ.get("FAKE_PI_SKILL_LOG")
+if log_path:
+    with open(log_path, "a", encoding="utf-8") as handle:
+        handle.write(json.dumps(argv, ensure_ascii=False) + "\n")
+
+root = os.environ.get("FAKE_PI_SKILL_ROOT", "")
+
+
+def read_fixture(name):
+    path = os.path.join(root, name)
+    if not os.path.exists(path):
+        return None
+    with open(path, encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+def status():
+    return read_fixture("status.json") or {
+        "ok": True, "id": "video-1", "title": "教程样例",
+        "directory": os.path.join(root, "video-1"), "revision": 0,
+        "plan": {"version": 1, "clips": [], "captions": []},
+        "timeline": [], "duration": 0, "undo": False, "redo": False,
+        "history": [], "tasks": [],
+    }
+
+
+def flag(args, name, default=None):
+    return args[args.index(name) + 1] if name in args else default
+
+
+def synthesized(args, name):
+    base = status()
+    if name == "publish-preview.json":
+        return {
+            "ok": True, "status": "preview", "revision": base.get("revision", 0),
+            "output": os.path.join(base.get("directory", root), "exports", "screen.mp4"),
+            "target": flag(args, "--target", "telegram"), "chat": flag(args, "--chat"),
+            "topic": int(flag(args, "--topic", 0)) or None, "text": flag(args, "--text", base.get("title")),
+            "visibility": "public-link" if flag(args, "--target") == "share" else "target-chat",
+        }
+    if name in ("render-preview.json", "render-screen.json"):
+        profile = flag(args, "--profile", "screen")
+        task = {"id": f"task-{profile}", "kind": "render", "job": f"video-render-{profile}",
+                "status": "queued", "revision": base.get("revision", 0), "profile": profile,
+                "output": os.path.join(base.get("directory", root), "exports", f"r{base.get('revision', 0)}-{profile}.mp4"),
+                "created": "2026-10-13T00:00:00Z"}
+        return {**base, "task": task, "tasks": base.get("tasks", []) + [task]}
+    if name in ("record-start.json", "record-stop.json"):
+        task = {"id": "task-record", "kind": "record", "job": "video-record-auto",
+                "status": "recording" if name == "record-start.json" else "stopping",
+                "target": {"kind": "window", "id": int(flag(args, "--window", 0) or 0)},
+                "audio": flag(args, "--audio", "none"), "duration": int(flag(args, "--duration", 300)),
+                "created": "2026-10-13T00:00:00Z"}
+        return {**base, "task": task, "tasks": base.get("tasks", []) + [task]}
+    if name in ("edit.json", "history.json", "import.json", "cancel.json"):
+        return base
+    if name == "probe.json":
+        return {"ok": True, "duration": 5.0, "width": 1280, "height": 720}
+    if name == "targets.json":
+        return {"ok": True, "windows": [
+                    {"id": 101, "title": "Emacs", "app": "Emacs", "width": 1200, "height": 800}],
+                "displays": [{"id": 1, "name": "主屏幕", "width": 2560, "height": 1440}]}
+    return {"ok": True}
+
+
+def response_name(args):
+    command = args[0] if args else "help"
+    if command == "list":
+        return "list.json"
+    if command == "status":
+        return "status.json"
+    if command in ("create", "import", "edit", "history"):
+        return f"{command}.json"
+    if command == "render":
+        if "--cancel" in args:
+            return "cancel.json"
+        return "render-preview.json" if flag(args, "--profile") == "preview" else "render-screen.json"
+    if command == "record":
+        if args[1:2] == ["targets"]:
+            return "targets.json"
+        return "record-start.json" if args[1:2] == ["start"] else "record-stop.json"
+    if command == "publish":
+        return "publish-confirm.json" if "--yes" in args else "publish-preview.json"
+    emit({"ok": False, "error": "usage", "message": "unknown command %s" % command}, 2)
+
+
+if not argv or argv[0] == "video-project":
+    name = response_name(argv[1:])
+elif argv[0] == "video-edit":
+    name = "probe.json" if (len(argv) > 1 and argv[1] == "probe") else "video-edit.json"
+else:
+    emit({"ok": False, "error": "usage", "message": "unsupported argv"}, 2)
+
+payload = read_fixture(name)
+if payload is None:
+    payload = synthesized(argv[1:], name)
+if isinstance(payload, dict) and not payload.get("ok", True):
+    emit(payload, 3)
+emit(payload)

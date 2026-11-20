@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Atom 示例</title>
+  <link rel="alternate" href="https://atom.example"/>
+  <subtitle>一个 Atom 订阅</subtitle>
+  <entry>
+    <title>Atom 条目一</title>
+    <link href="https://atom.example/1"/>
+    <id>tag:atom.example,2025:1</id>
+    <updated>2025-09-28T10:00:00Z</updated>
+    <author><name>作者乙</name></author>
+    <summary>Atom 摘要</summary>
+    <content type="html">&lt;p&gt;Atom 正文&lt;/p&gt;</content>
+  </entry>
+</feed>

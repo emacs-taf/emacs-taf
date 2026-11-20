@@ -1,0 +1,2 @@
+;;; -*- lisp-data -*-
+(:id poem-chanjuan :title "千里婵娟" :summary "苏轼《水调歌头》 · 逐字排印" :tags (imported ink poem) :provider tte :recording "poem-chanjuan.tterec" :kind text :width 80 :height 24 :frame-rate 20 :frame-count 78 :source "ink: 千里共婵娟" :license "MIT" :background "#F4F1EA")

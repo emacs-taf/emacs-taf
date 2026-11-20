@@ -1,0 +1,2 @@
+;;; -*- lisp-data -*-
+(:id tte-blackhole :title "Terminal Text Effects: blackhole" :summary "blackhole (Terminal Text Effects) text recording, 80×24, 738 frames at 20 fps, MIT license" :tags (imported) :provider tte :recording "blackhole.tterec" :kind text :width 80 :height 24 :frame-rate 20 :frame-count 738 :source "blackhole" :license "MIT")

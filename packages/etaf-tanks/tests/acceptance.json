@@ -1,0 +1,104 @@
+{
+ "schema": 1,
+ "load_path": [
+  ".",
+  "../etaf-gamekit",
+  "../etaf-ui",
+  "../etaf",
+  "../ebox",
+  "../ecss"
+ ],
+ "support": [],
+ "cases": [
+  {
+   "name": "etaf-tanks-embedded-focus-exit-pauses-and-preserves-battle",
+   "file": "tests/etaf-tanks-tests.el",
+   "purpose": "Leaving an embedded game pauses the real Godot battle; reentry preserves the battlefield, while help, settings and host exits consume one Escape each."
+  },
+  {
+   "name": "etaf-tanks-embedded-publication-keeps-host-focus",
+   "file": "tests/etaf-tanks-tests.el",
+   "purpose": "An asynchronous backend screen publication preserves focus already moved to the enclosing host."
+  },
+  {
+   "name": "etaf-tanks-help-keeps-focus-during-screen-publication",
+   "file": "tests/etaf-tanks-tests.el",
+   "purpose": "An asynchronous backend screen change leaves the help focus and opening snapshot intact without a rejected background focus operation."
+  },
+  {
+   "name": "etaf-tanks-help-entries-pause-and-preserve-the-battle",
+   "file": "tests/etaf-tanks-tests.el",
+   "purpose": "Question mark, F1 and the help button open the same in-buffer modal, pause the real battlefield, block background keys and preserve paused state and focus after layered Escape."
+  },
+  {
+   "name": "etaf-tanks-maps-are-validated-before-play",
+   "file": "tests/etaf-tanks-tests.el",
+   "purpose": "Previews report map defects and an invalid or undersized map cannot start a battle."
+  },
+  {
+   "name": "etaf-tanks-settings-and-difficulty-are-validated",
+   "file": "tests/etaf-tanks-tests.el",
+   "purpose": "Out-of-range settings are rejected and difficulty sets the starting lives."
+  },
+  {
+   "name": "etaf-tanks-losing-the-base-ends-the-battle",
+   "file": "tests/etaf-tanks-tests.el",
+   "purpose": "A shell reaching the eagle base loses the battle."
+  },
+  {
+   "name": "etaf-tanks-armored-enemies-take-four-hits",
+   "file": "tests/etaf-tanks-tests.el",
+   "purpose": "An armored tank loses one armor per hit and is tallied only when destroyed."
+  },
+  {
+   "name": "etaf-tanks-world-runs-without-input-and-pauses-atomically",
+   "file": "tests/etaf-tanks-tests.el",
+   "purpose": "Enemies advance on the native clock without commands and freeze while paused."
+  },
+  {
+   "name": "etaf-tanks-snapshots-restore-paused-with-atomic-rejection",
+   "file": "tests/etaf-tanks-tests.el",
+   "purpose": "Snapshots restore the battle paused while malformed or missing files preserve it."
+  },
+  {
+   "name": "etaf-tanks-battles-are-independent",
+   "file": "tests/etaf-tanks-tests.el",
+   "purpose": "One running instance cannot advance a second paused battlefield."
+  },
+  {
+   "name": "etaf-tanks-keys-drive-aim-fire-and-pause-a-campaign",
+   "file": "tests/etaf-tanks-tests.el",
+   "purpose": "The game metadata and visible title identify 坦克大战; the stage select starts a campaign that documented keys drive, aim, fire, pause and leave."
+  },
+  {
+   "name": "etaf-tanks-editor-arrows-draw-and-shift-only-moves",
+   "file": "tests/etaf-tanks-tests.el",
+   "purpose": "Arrows paint every step of the move while the pen is on, so a held key draws a stroke; Shift with an arrow moves the cursor without painting."
+  },
+  {
+   "name": "etaf-tanks-editor-paints-saves-and-test-plays",
+   "file": "tests/etaf-tanks-tests.el",
+   "purpose": "The editor exposes key guidance, button and keyboard painting, undo and continuous-mode state, then saves a custom map used by test play and the catalog."
+  },
+  {
+   "name": "etaf-tanks-themes-and-resize-preserve-paused-battle",
+   "file": "tests/etaf-tanks-tests.el",
+   "purpose": "Appearance and resizing preserve the battlefield, state and keyboard focus."
+  },
+  {
+   "name": "etaf-tanks-text-scale-preserves-paused-battle-and-image-rows",
+   "file": "tests/etaf-tanks-tests.el",
+   "purpose": "Zoom repartitions native strips to the effective row height while retaining the paused battle, image content and focus."
+  },
+  {
+   "name": "etaf-tanks-appearance-follows-the-host",
+   "file": "tests/etaf-tanks-tests.el",
+   "purpose": "Switching the appearance a host provides repaints the battle surface in the new palette."
+  },
+  {
+   "name": "etaf-tanks-doctor-follows-the-configured-godot-runtime",
+   "file": "tests/etaf-tanks-tests.el",
+   "purpose": "The capability report follows the configured Godot program and names the install command when it is missing."
+  }
+ ]
+}

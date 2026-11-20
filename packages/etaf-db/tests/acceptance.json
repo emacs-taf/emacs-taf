@@ -1,0 +1,92 @@
+{
+  "schema": 1,
+  "load_path": [
+    ".",
+    "tests",
+    "../ebox",
+    "../ebox-playground",
+    "../ecss",
+    "../ekp",
+    "../etaf",
+    "../etaf-playground",
+    "../etaf-ui"
+  ],
+  "support": [],
+  "cases": [
+    {
+      "name": "etaf-sqlite-schema-rejects-unsafe-identifiers",
+      "file": "tests/etaf-sqlite-tests.el",
+      "purpose": "Identifiers are validated before they can reach SQL text."
+    },
+    {
+      "name": "etaf-sqlite-source-loads-and-filters-pages",
+      "file": "tests/etaf-sqlite-tests.el",
+      "purpose": "The source should implement ETAF Data's load capability."
+    },
+    {
+      "name": "etaf-sqlite-source-mutations-are-visible-to-data-controller",
+      "file": "tests/etaf-sqlite-tests.el",
+      "purpose": "Insert, update, and delete should share the Data source contract."
+    },
+    {
+      "name": "etaf-sqlite-source-declares-provider-identity",
+      "file": "tests/etaf-sqlite-tests.el",
+      "purpose": "Expose SQLite identity without depending on ETAF observer internals."
+    },
+    {
+      "name": "etaf-sqlite-v2-mutation-outcome-reports-commit",
+      "file": "tests/etaf-sqlite-tests.el",
+      "purpose": "The optional v2 capability reports a committed transaction and token."
+    },
+    {
+      "name": "etaf-sqlite-v2-mutation-outcome-reports-rollback",
+      "file": "tests/etaf-sqlite-tests.el",
+      "purpose": "A failed v2 mutation reports rollback and preserves the original error."
+    },
+    {
+      "name": "etaf-sqlite-v2-post-commit-signal-reports-unknown",
+      "file": "tests/etaf-sqlite-tests.el",
+      "purpose": "A signal after sqlite-commit must not claim the committed write rolled back."
+    },
+    {
+      "name": "etaf-sqlite-v2-close-after-commit-reports-unknown",
+      "file": "tests/etaf-sqlite-tests.el",
+      "purpose": "A close signal after commit is also external uncertainty."
+    },
+    {
+      "name": "etaf-sqlite-source-upsert-inserts-and-updates",
+      "file": "tests/etaf-sqlite-tests.el",
+      "purpose": "Upsert inserts or updates by primary key, reports the identity and changes, and does not duplicate the row."
+    },
+    {
+      "name": "etaf-sqlite-mutating-a-missing-row-signals",
+      "file": "tests/etaf-sqlite-tests.el",
+      "purpose": "Update and replace signal for a missing identity instead of silently reporting zero changes."
+    },
+    {
+      "name": "etaf-sqlite-source-exposes-primary-key-identity",
+      "file": "tests/etaf-sqlite-tests.el",
+      "purpose": "The source supplies the primary key as the Data Controller item identity without an explicit callback."
+    },
+    {
+      "name": "etaf-sqlite-mutate-batch-commits-atomically",
+      "file": "tests/etaf-sqlite-tests.el",
+      "purpose": "A batch commits every statement together and rolls back on a failure."
+    },
+    {
+      "name": "etaf-sqlite-source-supports-data-batch-reconciliation",
+      "file": "tests/etaf-sqlite-tests.el",
+      "purpose": "ETAF Data's batch API writes through SQLite and reloads the page once."
+    },
+    {
+      "name": "etaf-sqlite-initialize-adds-missing-nullable-columns",
+      "file": "tests/etaf-sqlite-tests.el",
+      "purpose": "An existing database gains a nullable descriptor column in place."
+    },
+    {
+      "name": "etaf-sqlite-initialize-rejects-non-nullable-addition",
+      "file": "tests/etaf-sqlite-tests.el",
+      "purpose": "A missing declared non-nullable column refuses to be added silently."
+    }
+  ]
+}

@@ -1,0 +1,2 @@
+;;; -*- lisp-data -*-
+(:id poem-genglou :title "更上层楼" :summary "王之涣《登鹳雀楼》 · 逐字排印" :tags (imported ink poem) :provider tte :recording "poem-genglou.tterec" :kind text :width 80 :height 24 :frame-rate 20 :frame-count 78 :source "ink: 更上一层楼" :license "MIT" :background "#F4F1EA")

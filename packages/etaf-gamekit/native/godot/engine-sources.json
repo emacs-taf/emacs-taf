@@ -1,0 +1,21 @@
+{
+  "version": "4.7.2",
+  "license": "https://github.com/godotengine/godot/blob/4.7.2-stable/LICENSE.txt",
+  "platforms": {
+    "macos-universal": {
+      "url": "https://github.com/godotengine/godot/releases/download/4.7.2-stable/Godot_v4.7.2-stable_macos.universal.zip",
+      "sha256": "c58a24e31d720be9d62f60cb5627c4e695fb72f21b0cfe1bc9ccaa9a3b3ba63e",
+      "executable": "Godot.app/Contents/MacOS/Godot"
+    },
+    "linux-x86_64": {
+      "url": "https://github.com/godotengine/godot/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip",
+      "sha256": "cadd3204e728a35d3f13adb7fd0d7902636b79f6b95c40c265eb73b6c35329e4",
+      "executable": "Godot_v4.7.2-stable_linux.x86_64"
+    },
+    "linux-arm64": {
+      "url": "https://github.com/godotengine/godot/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.arm64.zip",
+      "sha256": "5dd0d86405cf7e8adf79fb6377b38ba682a2846cb378ffe5364f38c01ad29b9d",
+      "executable": "Godot_v4.7.2-stable_linux.arm64"
+    }
+  }
+}

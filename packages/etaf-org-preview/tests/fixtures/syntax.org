@@ -1,0 +1,48 @@
+#+TITLE: 语法样例
+#+AUTHOR: 测试作者
+#+KEYWORDS: alpha beta
+#+FILETAGS: sample
+#+TODO: TODO NEXT | DONE
+
+* 第一节 标题 :work:
+  SCHEDULED: <2026-02-18 Wed>
+  DEADLINE: <2026-02-20 Fri>
+:PROPERTIES:
+:CUSTOM_ID: first
+:END:
+正文有 *粗体*、/斜体/、_下划线_、+删除线+、=逐字= 与 ~代码~。
+实体 \alpha，上下标 H_2O 与 x^2。
+一个 [[https://example.com][链接]]。
+
+** TODO [#A] 子节 :urgent:
+- 第一项
+- [X] 已完成
+- [ ] 未完成
+- [-] 做了一半
+- 术语 :: 说明
+
+| 名称 | 数值 |
+|------+------|
+| 甲   | 12   |
+| 乙   | 3    |
+
+#+BEGIN_SRC elisp
+(message "hi")
+#+END_SRC
+
+#+BEGIN_QUOTE
+引用内容
+-- 某人
+#+END_QUOTE
+
+#+BEGIN_WARNING
+警告内容
+#+END_WARNING
+
+* 第二节
+这里有一个脚注[fn:one]。
+
+[fn:one] 脚注正文。
+
+* COMMENT 注释节
+注释内容不应出现在初始视图。

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<opml version="2.0">
+  <head><title>示例订阅</title></head>
+  <body>
+    <outline text="技术" title="技术">
+      <outline type="rss" text="示例科技周刊" xmlUrl="https://example.com/tech/rss" htmlUrl="https://example.com/tech"/>
+    </outline>
+    <outline type="rss" text="独立博客" xmlUrl="https://blog.example/feed"/>
+  </body>
+</opml>

@@ -1,0 +1,412 @@
+{
+  "schema": 1,
+  "load_path": [
+    ".",
+    "tests",
+    "../ebox",
+    "../ebox-playground",
+    "../ekp",
+    "../etaf",
+    "../etaf-db",
+    "../etaf-playground",
+    "../etaf-ui"
+  ],
+  "support": [],
+  "cases": [
+    {
+      "name": "ecss-cascade-test-computed-style-copy-with-values-is-defensive",
+      "file": "tests/ecss-cascade-tests.el",
+      "purpose": "Copy computed STYLE while replacing values and preserving metadata."
+    },
+    {
+      "name": "ecss-cascade-test-computed-defaults-are-not-renormalized",
+      "file": "tests/ecss-cascade-tests.el",
+      "purpose": "ecss cascade test computed defaults are not renormalized"
+    },
+    {
+      "name": "ecss-cascade-test-merge-declarations-compacts-expanded-longhands",
+      "file": "tests/ecss-cascade-tests.el",
+      "purpose": "Later declaration groups should replace expanded longhands without loss."
+    },
+    {
+      "name": "ecss-cascade-test-merge-declarations-copies-caller-values",
+      "file": "tests/ecss-cascade-tests.el",
+      "purpose": "ecss cascade test merge declarations copies caller values"
+    },
+    {
+      "name": "ecss-cascade-test-shorthand-and-longhand-conflict-in-one-source",
+      "file": "tests/ecss-cascade-tests.el",
+      "purpose": "ecss cascade test shorthand and longhand conflict in one source"
+    },
+    {
+      "name": "ecss-cascade-test-rule-addition-is-atomic",
+      "file": "tests/ecss-cascade-tests.el",
+      "purpose": "ecss cascade test rule addition is atomic"
+    },
+    {
+      "name": "ecss-cascade-test-origin-importance-and-transition-order",
+      "file": "tests/ecss-cascade-tests.el",
+      "purpose": "ecss cascade test origin importance and transition order"
+    },
+    {
+      "name": "ecss-cascade-test-standard-origin-levels-are-complete",
+      "file": "tests/ecss-cascade-tests.el",
+      "purpose": "ecss cascade test standard origin levels are complete"
+    },
+    {
+      "name": "ecss-cascade-test-layer-order-reverses-for-important",
+      "file": "tests/ecss-cascade-tests.el",
+      "purpose": "ecss cascade test layer order reverses for important"
+    },
+    {
+      "name": "ecss-cascade-test-layer-order-is-independent-per-origin",
+      "file": "tests/ecss-cascade-tests.el",
+      "purpose": "ecss cascade test layer order is independent per origin"
+    },
+    {
+      "name": "ecss-cascade-test-specificity-source-order-and-selector-list",
+      "file": "tests/ecss-cascade-tests.el",
+      "purpose": "ecss cascade test specificity source order and selector list"
+    },
+    {
+      "name": "ecss-cascade-test-scope-proximity-follows-specificity",
+      "file": "tests/ecss-cascade-tests.el",
+      "purpose": "ecss cascade test scope proximity follows specificity"
+    },
+    {
+      "name": "ecss-cascade-test-inheritance-distinguishes-nil-from-absence",
+      "file": "tests/ecss-cascade-tests.el",
+      "purpose": "ecss cascade test inheritance distinguishes nil from absence"
+    },
+    {
+      "name": "ecss-cascade-test-css-wide-values-use-cascade-not-symbol-reservation",
+      "file": "tests/ecss-cascade-tests.el",
+      "purpose": "ecss cascade test css wide values use cascade not symbol reservation"
+    },
+    {
+      "name": "ecss-cascade-test-revert-and-revert-layer-select-lower-candidates",
+      "file": "tests/ecss-cascade-tests.el",
+      "purpose": "ecss cascade test revert and revert layer select lower candidates"
+    },
+    {
+      "name": "ecss-cascade-test-important-revert-removes-entire-origin",
+      "file": "tests/ecss-cascade-tests.el",
+      "purpose": "ecss cascade test important revert removes entire origin"
+    },
+    {
+      "name": "ecss-cascade-test-important-revert-layer-removes-entire-layer",
+      "file": "tests/ecss-cascade-tests.el",
+      "purpose": "ecss cascade test important revert layer removes entire layer"
+    },
+    {
+      "name": "ecss-cascade-test-custom-property-revert-removes-entire-origin",
+      "file": "tests/ecss-cascade-tests.el",
+      "purpose": "ecss cascade test custom property revert removes entire origin"
+    },
+    {
+      "name": "ecss-cascade-test-custom-properties-resolve-nested-values",
+      "file": "tests/ecss-cascade-tests.el",
+      "purpose": "ecss cascade test custom properties resolve nested values"
+    },
+    {
+      "name": "ecss-cascade-test-custom-properties-inherit-by-default",
+      "file": "tests/ecss-cascade-tests.el",
+      "purpose": "ecss cascade test custom properties inherit by default"
+    },
+    {
+      "name": "ecss-cascade-test-variable-cycle-uses-outer-fallback",
+      "file": "tests/ecss-cascade-tests.el",
+      "purpose": "ecss cascade test variable cycle uses outer fallback"
+    },
+    {
+      "name": "ecss-cascade-test-parent-plist-is-snapshotted",
+      "file": "tests/ecss-cascade-tests.el",
+      "purpose": "ecss cascade test parent plist is snapshotted"
+    },
+    {
+      "name": "ecss-cascade-test-invalid-winner-does-not-recascade",
+      "file": "tests/ecss-cascade-tests.el",
+      "purpose": "ecss cascade test invalid winner does not recascade"
+    },
+    {
+      "name": "ecss-cascade-test-literal-functions-remain-callable",
+      "file": "tests/ecss-cascade-tests.el",
+      "purpose": "ecss cascade test literal functions remain callable"
+    },
+    {
+      "name": "ecss-cascade-test-explicit-resolver-runs-once",
+      "file": "tests/ecss-cascade-tests.el",
+      "purpose": "ecss cascade test explicit resolver runs once"
+    },
+    {
+      "name": "ecss-cascade-test-resolver-never-runs-for-losing-sources",
+      "file": "tests/ecss-cascade-tests.el",
+      "purpose": "ecss cascade test resolver never runs for losing sources"
+    },
+    {
+      "name": "ecss-cascade-test-resolver-skips-reverted-origin-losers",
+      "file": "tests/ecss-cascade-tests.el",
+      "purpose": "ecss cascade test resolver skips reverted origin losers"
+    },
+    {
+      "name": "ecss-cascade-test-selected-resolver-errors-propagate",
+      "file": "tests/ecss-cascade-tests.el",
+      "purpose": "ecss cascade test selected resolver errors propagate"
+    },
+    {
+      "name": "ecss-cascade-test-rule-list-is-an-independent-snapshot",
+      "file": "tests/ecss-cascade-tests.el",
+      "purpose": "ecss cascade test rule list is an independent snapshot"
+    },
+    {
+      "name": "ecss-cascade-test-computed-boundaries-copy-mutable-values",
+      "file": "tests/ecss-cascade-tests.el",
+      "purpose": "ecss cascade test computed boundaries copy mutable values"
+    },
+    {
+      "name": "ecss-cascade-test-custom-getter-copies-mutable-values",
+      "file": "tests/ecss-cascade-tests.el",
+      "purpose": "ecss cascade test custom getter copies mutable values"
+    },
+    {
+      "name": "ecss-cascade-test-specified-properties-track-declaration-winners",
+      "file": "tests/ecss-cascade-tests.el",
+      "purpose": "ecss cascade test specified properties track declaration winners"
+    },
+    {
+      "name": "ecss-cascade-test-cross-property-projection-reuses-cascade-order",
+      "file": "tests/ecss-cascade-tests.el",
+      "purpose": "A consumer projection should choose among property winners without recascade."
+    },
+    {
+      "name": "ecss-cascade-test-cross-property-projection-skips-invalid-winner",
+      "file": "tests/ecss-cascade-tests.el",
+      "purpose": "An invalid declaration must not override a valid cross-property fact."
+    },
+    {
+      "name": "ecss-cascade-test-provenance-getter-copies-selector-data",
+      "file": "tests/ecss-cascade-tests.el",
+      "purpose": "ecss cascade test provenance getter copies selector data"
+    },
+    {
+      "name": "ecss-cascade-test-provenance-is-deterministic-and-defensive",
+      "file": "tests/ecss-cascade-tests.el",
+      "purpose": "ecss cascade test provenance is deterministic and defensive"
+    },
+    {
+      "name": "ecss-cascade-test-computation-never-mutates-a-buffer",
+      "file": "tests/ecss-cascade-tests.el",
+      "purpose": "ecss cascade test computation never mutates a buffer"
+    },
+    {
+      "name": "ecss-file-reads-one-rule-list",
+      "file": "tests/ecss-file-tests.el",
+      "purpose": "ecss file reads one rule list"
+    },
+    {
+      "name": "ecss-file-rejects-trailing-expression",
+      "file": "tests/ecss-file-tests.el",
+      "purpose": "ecss file rejects trailing expression"
+    },
+    {
+      "name": "ecss-package-test-independent-schema-and-stylesheet-state",
+      "file": "tests/ecss-package-tests.el",
+      "purpose": "ecss package test independent schema and stylesheet state"
+    },
+    {
+      "name": "ecss-schema-package-validates-identity-and-definitions",
+      "file": "tests/ecss-schema-tests.el",
+      "purpose": "Package and property identities have one strict grammar."
+    },
+    {
+      "name": "ecss-schema-set-compose-rejects-complete-collision-matrix",
+      "file": "tests/ecss-schema-tests.el",
+      "purpose": "Composition rejects package, canonical, and alias collisions atomically."
+    },
+    {
+      "name": "ecss-schema-shorthand-conflicts-with-owned-longhand",
+      "file": "tests/ecss-schema-tests.el",
+      "purpose": "One declaration source cannot produce the same canonical output twice."
+    },
+    {
+      "name": "ecss-scope-nested-cascade-and-boundaries",
+      "file": "tests/ecss-scope-tests.el",
+      "purpose": "Scopes combine by specificity then distance, without external traversal."
+    },
+    {
+      "name": "ecss-scope-root-state-and-has-anchor-are-independent",
+      "file": "tests/ecss-scope-tests.el",
+      "purpose": "Root references survive :has relative anchor rebinding."
+    },
+    {
+      "name": "ecss-scope-property-independent-cascade",
+      "file": "tests/ecss-scope-tests.el",
+      "purpose": "Every registered property uses specificity, proximity and source order."
+    },
+    {
+      "name": "ecss-scope-distinguishes-document-root-from-scope-root",
+      "file": "tests/ecss-scope-tests.el",
+      "purpose": "`:root' remains document-relative while `:scope' names a mounted root."
+    },
+    {
+      "name": "ecss-scope-freezes-stylesheet-at-mount-time",
+      "file": "tests/ecss-scope-tests.el",
+      "purpose": "A mounted scope is unaffected by later edits to its source stylesheet."
+    },
+    {
+      "name": "ecss-selector-test-parser-matches-compounds-and-combinators",
+      "file": "tests/ecss-selector-tests.el",
+      "purpose": "ecss selector test parser matches compounds and combinators"
+    },
+    {
+      "name": "ecss-selector-test-attribute-operators-and-flags",
+      "file": "tests/ecss-selector-tests.el",
+      "purpose": "ecss selector test attribute operators and flags"
+    },
+    {
+      "name": "ecss-selector-test-functional-pseudos-and-specificity",
+      "file": "tests/ecss-selector-tests.el",
+      "purpose": "ecss selector test functional pseudos and specificity"
+    },
+    {
+      "name": "ecss-selector-test-structural-child-pseudos",
+      "file": "tests/ecss-selector-tests.el",
+      "purpose": "Structural child pseudos inspect the subject's actual sibling position."
+    },
+    {
+      "name": "ecss-selector-test-complete-structural-pseudos",
+      "file": "tests/ecss-selector-tests.el",
+      "purpose": "Match positional, type-relative, root, empty, and only-child selectors."
+    },
+    {
+      "name": "ecss-selector-test-language-and-direction-pseudos",
+      "file": "tests/ecss-selector-tests.el",
+      "purpose": "Match :lang and :dir against subject metadata."
+    },
+    {
+      "name": "ecss-selector-test-nth-of-selector-filter",
+      "file": "tests/ecss-selector-tests.el",
+      "purpose": "Filter sibling positions before applying CSS AN+B arithmetic."
+    },
+    {
+      "name": "ecss-selector-test-inherited-language-and-direction",
+      "file": "tests/ecss-selector-tests.el",
+      "purpose": "Language and direction metadata inherit through the subject tree."
+    },
+    {
+      "name": "ecss-selector-test-scope-alias-is-local-root",
+      "file": "tests/ecss-selector-tests.el",
+      "purpose": "The standard :scope spelling addresses the mounted Ebox root."
+    },
+    {
+      "name": "ecss-selector-test-has-supports-relative-combinators",
+      "file": "tests/ecss-selector-tests.el",
+      "purpose": "ecss selector test has supports relative combinators"
+    },
+    {
+      "name": "ecss-selector-test-selector-lists-use-matching-branches",
+      "file": "tests/ecss-selector-tests.el",
+      "purpose": "ecss selector test selector lists use matching branches"
+    },
+    {
+      "name": "ecss-selector-test-structured-tokens-use-value-equality",
+      "file": "tests/ecss-selector-tests.el",
+      "purpose": "ecss selector test structured tokens use value equality"
+    },
+    {
+      "name": "ecss-selector-test-normalize-copies-structured-selector-data",
+      "file": "tests/ecss-selector-tests.el",
+      "purpose": "ecss selector test normalize copies structured selector data"
+    },
+    {
+      "name": "ecss-selector-test-subject-snapshots-mutable-fields",
+      "file": "tests/ecss-selector-tests.el",
+      "purpose": "ecss selector test subject snapshots mutable fields"
+    },
+    {
+      "name": "ecss-selector-test-caller-owned-subject-adapter",
+      "file": "tests/ecss-selector-tests.el",
+      "purpose": "ecss selector test caller owned subject adapter"
+    },
+    {
+      "name": "ecss-selector-test-invalid-input-is-rejected",
+      "file": "tests/ecss-selector-tests.el",
+      "purpose": "ecss selector test invalid input is rejected"
+    },
+    {
+      "name": "ecss-selector-test-reports-subject-local-dependencies",
+      "file": "tests/ecss-selector-tests.el",
+      "purpose": "Selector dependency classification distinguishes tree-sensitive forms."
+    },
+    {
+      "name": "ecss-selector-test-comments-escapes-and-quoted-attributes",
+      "file": "tests/ecss-selector-tests.el",
+      "purpose": "ecss selector test comments escapes and quoted attributes"
+    },
+    {
+      "name": "ecss-selector-test-subject-reparenting-detaches-old-parent",
+      "file": "tests/ecss-selector-tests.el",
+      "purpose": "ecss selector test subject reparenting detaches old parent"
+    },
+    {
+      "name": "ecss-selector-test-subject-parent-construction-is-bidirectional",
+      "file": "tests/ecss-selector-tests.el",
+      "purpose": "ecss selector test subject parent construction is bidirectional"
+    },
+    {
+      "name": "ecss-selector-test-nth-boundary-arithmetic",
+      "file": "tests/ecss-selector-tests.el",
+      "purpose": "Exercise keyword, zero and negative coefficients through public matching."
+    },
+    {
+      "name": "ecss-selector-test-tree-pseudos-are-not-local",
+      "file": "tests/ecss-selector-tests.el",
+      "purpose": "Tree-sensitive selectors must never enter subject-only invalidation paths."
+    },
+    {
+      "name": "ecss-selector-test-metadata-is-not-interaction-state",
+      "file": "tests/ecss-selector-tests.el",
+      "purpose": "Unrelated state tokens must not fabricate language or direction metadata."
+    },
+    {
+      "name": "ecss-rules-reader-rejects-wrappers-and-malformed-data",
+      "file": "tests/ecss-file-tests.el",
+      "purpose": "One inert list grammar rejects wrappers, malformed rules and trailing execution syntax."
+    },
+    {
+      "name": "ecss-rules-validation-preserves-inert-values",
+      "file": "tests/ecss-file-tests.el",
+      "purpose": "Rule validation retains declaration data without executing function values or duplicating domain schemas."
+    },
+    {
+      "name": "ecss-declaration-values-validate-concrete-importance",
+      "file": "tests/ecss-value-tests.el",
+      "purpose": "Importance preserves concrete validation while tagged values are identified without exposing storage."
+    },
+    {
+      "name": "ecss-declaration-values-defer-contextual-schema-validation",
+      "file": "tests/ecss-value-tests.el",
+      "purpose": "Deferred values retain schema validation after contextual computation."
+    },
+    {
+      "name": "ecss-scope-explicit-targets-preserve-slot-ownership",
+      "file": "tests/ecss-scope-tests.el",
+      "purpose": "Snapshot noncontiguous rule targets while preserving structural selectors and child ownership."
+    },
+    {
+      "name": "ecss-scope-target-membership-does-not-block-inheritance",
+      "file": "tests/ecss-scope-tests.el",
+      "purpose": "Restrict direct rule targets without suppressing inheritance; validate empty and invalid membership."
+    },
+    {
+      "name": "ecss-scope-resolver-cannot-mutate-mounted-declarations",
+      "file": "tests/ecss-scope-tests.el",
+      "purpose": "Resolver and result mutations leave mounted stylesheet values stable across repeated computations."
+    },
+    {
+      "name": "ecss-selector-test-locality-requires-stable-scope-context",
+      "file": "tests/ecss-selector-tests.el",
+      "purpose": "Scope anchors need caller proof; structural dependencies remain nonlocal."
+    }
+  ]
+}

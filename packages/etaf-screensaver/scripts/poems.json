@@ -1,0 +1,103 @@
+[
+  {
+    "id": "tte-ink-rain",
+    "title": "一蓑烟雨",
+    "summary": "苏轼《定风波》 · 逐字排印",
+    "line": "一蓑烟雨任平生",
+    "recording": "ink-rain.tterec",
+    "spec": "tte-ink-rain.esr"
+  },
+  {
+    "id": "tte-ink-river",
+    "title": "江海余生",
+    "summary": "苏轼《临江仙》 · 逐字排印",
+    "line": "江海寄余生",
+    "recording": "ink-river.tterec",
+    "spec": "tte-ink-river.esr"
+  },
+  {
+    "id": "tte-ink-snow-mud",
+    "title": "雪泥鸿爪",
+    "summary": "苏轼《和子由渑池怀旧》 · 逐字排印",
+    "line": "应似飞鸿踏雪泥",
+    "recording": "ink-snow-mud.tterec",
+    "spec": "tte-ink-snow-mud.esr"
+  },
+  {
+    "id": "poem-qingzhou",
+    "title": "轻舟万山",
+    "summary": "李白《早发白帝城》 · 逐字排印",
+    "line": "轻舟已过万重山",
+    "recording": "poem-qingzhou.tterec"
+  },
+  {
+    "id": "poem-tiancai",
+    "title": "天生我材",
+    "summary": "李白《将进酒》 · 逐字排印",
+    "line": "天生我材必有用",
+    "recording": "poem-tiancai.tterec"
+  },
+  {
+    "id": "poem-lingjue",
+    "title": "凌绝顶",
+    "summary": "杜甫《望岳》 · 逐字排印",
+    "line": "会当凌绝顶",
+    "recording": "poem-lingjue.tterec"
+  },
+  {
+    "id": "poem-mingyue",
+    "title": "明月松间",
+    "summary": "王维《山居秋暝》 · 逐字排印",
+    "line": "明月松间照",
+    "recording": "poem-mingyue.tterec"
+  },
+  {
+    "id": "poem-qingquan",
+    "title": "清泉石上",
+    "summary": "王维《山居秋暝》 · 逐字排印",
+    "line": "清泉石上流",
+    "recording": "poem-qingquan.tterec"
+  },
+  {
+    "id": "poem-genglou",
+    "title": "更上层楼",
+    "summary": "王之涣《登鹳雀楼》 · 逐字排印",
+    "line": "更上一层楼",
+    "recording": "poem-genglou.tterec"
+  },
+  {
+    "id": "poem-qingkong",
+    "title": "晴空一鹤",
+    "summary": "刘禹锡《秋词》 · 逐字排印",
+    "line": "晴空一鹤排云上",
+    "recording": "poem-qingkong.tterec"
+  },
+  {
+    "id": "poem-chanjuan",
+    "title": "千里婵娟",
+    "summary": "苏轼《水调歌头》 · 逐字排印",
+    "line": "千里共婵娟",
+    "recording": "poem-chanjuan.tterec"
+  },
+  {
+    "id": "poem-caiju",
+    "title": "采菊东篱",
+    "summary": "陶渊明《饮酒》 · 逐字排印",
+    "line": "采菊东篱下",
+    "recording": "poem-caiju.tterec"
+  },
+  {
+    "id": "poem-luoxia",
+    "title": "落霞孤鹜",
+    "summary": "王勃《滕王阁序》 · 逐字排印",
+    "line": "落霞与孤鹜齐飞",
+    "recording": "poem-luoxia.tterec"
+  },
+  {
+    "id": "poem-ciqing",
+    "title": "此情追忆",
+    "summary": "李商隐《锦瑟》 · 逐字排印",
+    "line": "此情可待成追忆",
+    "recording": "poem-ciqing.tterec"
+  }
+]

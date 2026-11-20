@@ -1,0 +1,9 @@
+{
+  "name": "etaf-gamekit-boardgame-io",
+  "version": "0.1.0",
+  "private": true,
+  "description": "GameKit's headless adapter for the public boardgame.io client",
+  "license": "GPL-3.0-or-later",
+  "engines": { "node": ">=18" },
+  "dependencies": { "boardgame.io": "0.50.2" }
+}

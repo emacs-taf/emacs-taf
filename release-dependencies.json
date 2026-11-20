@@ -1,0 +1,103 @@
+{
+  "schema": 1,
+  "packages": {
+    "ecss": {},
+    "ebox": {},
+    "etaf": {
+      "resources": [
+        "examples"
+      ]
+    },
+    "etaf-ui": {
+      "resources": [
+        "examples"
+      ]
+    },
+    "etaf-posframe": {
+      "resources": [
+        "examples"
+      ],
+      "external": [
+        "posframe"
+      ]
+    },
+    "etaf-db": {},
+    "ekp": {
+      "resources": [
+        "dictionaries",
+        "native"
+      ]
+    },
+    "etaf-manual": {
+      "resources": [
+        "book"
+      ]
+    },
+    "etaf-md": {
+      "resources": [
+        "scripts"
+      ]
+    },
+    "etaf-org-preview": {
+      "resources": [
+        "scripts"
+      ]
+    },
+    "etaf-video-player": {
+      "resources": []
+    },
+    "etaf-desktop": {
+      "resources": []
+    },
+    "etaf-telega": {
+      "resources": [],
+      "external": [
+        "telega"
+      ]
+    },
+    "etaf-gamekit": {
+      "resources": [
+        "native"
+      ]
+    },
+    "etaf-xiangqi": {
+      "resources": []
+    },
+    "etaf-weread": {
+      "resources": [
+        "backends"
+      ]
+    },
+    "etaf-ncm": {
+      "resources": [
+        "backends"
+      ]
+    },
+    "etaf-tanks": {
+      "resources": [
+        "native"
+      ]
+    },
+    "etaf-pomodoro": {
+      "resources": []
+    }
+  },
+  "targets": [
+    "etaf-ui",
+    "etaf-posframe",
+    "etaf",
+    "etaf-manual",
+    "etaf-db",
+    "ekp",
+    "etaf-md",
+    "etaf-org-preview",
+    "etaf-video-player",
+    "etaf-desktop",
+    "etaf-telega",
+    "etaf-xiangqi",
+    "etaf-weread",
+    "etaf-ncm",
+    "etaf-tanks",
+    "etaf-pomodoro"
+  ]
+}

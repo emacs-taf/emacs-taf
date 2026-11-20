@@ -1,0 +1,7 @@
+C4Context
+  title 预览的组件
+  Person(reader, "读者", "阅读文档")
+  System(preview, "Markdown 预览", "把源码画成页面")
+  System_Ext(draw, "渲染器", "Chromium 画图")
+  Rel(reader, preview, "阅读")
+  Rel(preview, draw, "请求图片")

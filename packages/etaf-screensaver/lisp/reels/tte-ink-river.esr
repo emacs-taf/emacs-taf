@@ -1,0 +1,2 @@
+;;; -*- lisp-data -*-
+(:id tte-ink-river :title "江海余生" :summary "苏轼《临江仙》 · 逐字排印" :tags (imported ink poem) :provider tte :recording "ink-river.tterec" :kind text :width 80 :height 24 :frame-rate 20 :frame-count 78 :source "ink: 江海寄余生" :license "MIT" :background "#F4F1EA")

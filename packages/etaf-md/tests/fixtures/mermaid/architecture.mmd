@@ -1,0 +1,7 @@
+architecture-beta
+    group api(cloud)[服务]
+    service page(server)[页面] in api
+    service render(server)[渲染器] in api
+    service store(database)[缓存] in api
+    page:R -- L:render
+    render:R -- L:store

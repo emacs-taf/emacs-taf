@@ -1,0 +1,109 @@
+{
+  "schema": 1,
+  "load_path": [
+    ".",
+    "../etaf-gamekit",
+    "../etaf-ui",
+    "../etaf",
+    "../ebox",
+    "../ecss"
+  ],
+  "support": [],
+  "cases": [
+    {
+      "name": "etaf-xiangqi-help-survives-the-computer-reply",
+      "file": "tests/etaf-xiangqi-tests.el",
+      "purpose": "Computer search and paced move presentation continue under help without stealing focus or replacing its opening snapshot; undo remains usable after closing."
+    },
+    {
+      "name": "etaf-xiangqi-slow-search-does-not-add-a-second-delay",
+      "file": "tests/etaf-xiangqi-tests.el",
+      "purpose": "A search longer than the response interval is not followed by a second artificial delay."
+    },
+    {
+      "name": "etaf-xiangqi-fast-reply-waits-and-keeps-visible-move-markers",
+      "file": "tests/etaf-xiangqi-tests.el",
+      "purpose": "A fast computer reply waits for the reading interval, then exposes persistent endpoints and a caption across both themes."
+    },
+    {
+      "name": "etaf-xiangqi-reset-and-close-discard-delayed-replies",
+      "file": "tests/etaf-xiangqi-tests.el",
+      "purpose": "Reset and close supersede a delayed reply without ghost moves or callbacks into a disposed match."
+    },
+    {
+      "name": "etaf-xiangqi-winning-reply-keeps-its-caption",
+      "file": "tests/etaf-xiangqi-tests.el",
+      "purpose": "A winning computer move names the winner and retains its final move caption."
+    },
+    {
+      "name": "etaf-xiangqi-capture-description-with-reduced-motion",
+      "file": "tests/etaf-xiangqi-tests.el",
+      "purpose": "The reduced-motion and terminal path still names a captured piece after the reading interval."
+    },
+    {
+      "name": "etaf-xiangqi-computer-rejection-stops-and-new-match-recovers",
+      "file": "tests/etaf-xiangqi-tests.el",
+      "purpose": "A rejected computer move stays visible without retrying; New match recovers and lets the computer open."
+    },
+    {
+      "name": "etaf-xiangqi-computer-opening-move-arrives-first",
+      "file": "tests/etaf-xiangqi-tests.el",
+      "purpose": "With the computer on red, its opening move needs no local input and leaves the human to move."
+    },
+    {
+      "name": "etaf-xiangqi-computer-replies-with-a-search-move",
+      "file": "tests/etaf-xiangqi-tests.el",
+      "purpose": "The computer answers a human move with the default search budget and keeps the human's perspective."
+    },
+    {
+      "name": "etaf-xiangqi-computer-undo-restores-the-human-turn",
+      "file": "tests/etaf-xiangqi-tests.el",
+      "purpose": "One undo takes back the computer's reply and the human's own move."
+    },
+    {
+      "name": "etaf-xiangqi-dialog-and-escape-dismiss-one-layer",
+      "file": "tests/etaf-xiangqi-tests.el",
+      "purpose": "All help entries share an in-buffer searchable modal, preserve the selected stone and native match, and dismiss one Escape layer at a time."
+    },
+    {
+      "name": "etaf-xiangqi-hot-seat-moves-and-undo-restores",
+      "file": "tests/etaf-xiangqi-tests.el",
+      "purpose": "Red and black alternate through the public board and undo restores the opening."
+    },
+    {
+      "name": "etaf-xiangqi-check-is-announced-and-explains-an-immobile-stone",
+      "file": "tests/etaf-xiangqi-tests.el",
+      "purpose": "A non-terminal check names itself in the status line, a stone that cannot answer it explains why, and an interposing move still resolves it."
+    },
+    {
+      "name": "etaf-xiangqi-invalid-action-preserves-the-board",
+      "file": "tests/etaf-xiangqi-tests.el",
+      "purpose": "An action outside the legal set changes nothing and is reported."
+    },
+    {
+      "name": "etaf-xiangqi-settings-level-drives-the-search",
+      "file": "tests/etaf-xiangqi-tests.el",
+      "purpose": "The difficulty picker selects the search budget the backend uses for the next move."
+    },
+    {
+      "name": "etaf-xiangqi-settings-switch-to-hot-seat",
+      "file": "tests/etaf-xiangqi-tests.el",
+      "purpose": "The settings dialog hands both sides to the local player without a computer reply."
+    },
+    {
+      "name": "etaf-xiangqi-themes-preserve-the-match",
+      "file": "tests/etaf-xiangqi-tests.el",
+      "purpose": "Switching the light and dark palettes preserves the match, selection and board metrics."
+    },
+    {
+      "name": "etaf-xiangqi-matches-are-independent",
+      "file": "tests/etaf-xiangqi-tests.el",
+      "purpose": "One running match cannot change a second match."
+    },
+    {
+      "name": "etaf-xiangqi-hosted-session-renders-in-its-host",
+      "file": "tests/etaf-xiangqi-tests.el",
+      "purpose": "A session created for a host mounts no presentation of its own, and the single host that renders it receives the computer's reply repaint."
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "title": "960x540 image cadence fixture",
+  "width": 960,
+  "height": 540,
+  "frame_rate": 30,
+  "frames": ["large-a.jpg", "large-b.jpg"],
+  "license": "GPL-3.0-or-later",
+  "source": "ETAF contributors: RGB coordinate gradients and offset circles"
+}

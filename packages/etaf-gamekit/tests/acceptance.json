@@ -1,0 +1,123 @@
+{
+ "schema": 1,
+ "load_path": [
+  ".",
+  "../ecss",
+  "../ebox",
+  "../etaf",
+  "../etaf-ui"
+ ],
+ "support": [],
+ "cases": [
+  {
+   "name": "etaf-gamekit-godot-preserves-batched-input-order",
+   "file": "tests/etaf-gamekit-tests.el",
+   "purpose": "A full burst of native commands acknowledges every input and preserves its order."
+  },
+  {
+   "name": "etaf-gamekit-godot-project-controls-stream-cadence",
+   "file": "tests/etaf-gamekit-tests.el",
+   "purpose": "A project selects autonomous observation cadence without changing its simulation clock."
+  },
+  {
+   "name": "etaf-gamekit-godot-rejects-invalid-stream-rates",
+   "file": "tests/etaf-gamekit-tests.el",
+   "purpose": "Invalid Godot publication settings fail startup with an actionable error."
+  },
+  {
+   "name": "etaf-gamekit-large-observations-remain-detached",
+   "file": "tests/etaf-gamekit-tests.el",
+   "purpose": "A large flat native tensor remains usable without consuming Lisp call depth."
+  },
+  {
+   "name": "etaf-gamekit-game-definitions-create-independent-instances",
+   "file": "tests/etaf-gamekit-tests.el",
+   "purpose": "A game definition creates independent worlds and supplies its view metadata."
+  },
+  {
+   "name": "etaf-gamekit-backend-registration-preserves-owned-games",
+   "file": "tests/etaf-gamekit-tests.el",
+   "purpose": "Replacing/removing an adapter affects future starts without taking live games."
+  },
+  {
+   "name": "etaf-gamekit-game-configurations-are-validated-and-detached",
+   "file": "tests/etaf-gamekit-tests.el",
+   "purpose": "Game options are detached data; invalid definitions and overrides fail clearly."
+  },
+  {
+   "name": "etaf-gamekit-games-route-actions-to-different-native-kernels",
+   "file": "tests/etaf-gamekit-tests.el",
+   "purpose": "Game definitions run boardgame.io turns and OpenSpiel poker through one API."
+  },
+  {
+   "name": "etaf-gamekit-game-snapshots-restore-through-the-same-action-api",
+   "file": "tests/etaf-gamekit-tests.el",
+   "purpose": "Opaque native/replay snapshots restore observations without frontend parsing."
+  },
+  {
+   "name": "etaf-gamekit-transport-fragments-detached-values-and-bounded-input",
+   "file": "tests/etaf-gamekit-tests.el",
+   "purpose": "Fragments decode safely, reads detach ownership and eight inputs retain order."
+  },
+  {
+   "name": "etaf-gamekit-transport-coalesces-to-the-newest-visible-frame",
+   "file": "tests/etaf-gamekit-tests.el",
+   "purpose": "A burst preserves the final backend observation and displayed characters."
+  },
+  {
+   "name": "etaf-gamekit-transport-rejects-stale-invalid-and-dead-peers",
+   "file": "tests/etaf-gamekit-tests.el",
+   "purpose": "Invalid schemas, stale replies, oversized messages and dead peers fail clearly."
+  },
+  {
+   "name": "etaf-gamekit-schema-validator-errors-fail-the-session",
+   "file": "tests/etaf-gamekit-tests.el",
+   "purpose": "A supplied validator failure is reported with connection state and context."
+  },
+  {
+   "name": "etaf-gamekit-close-unmount-and-buffer-death-release-the-child",
+   "file": "tests/etaf-gamekit-tests.el",
+   "purpose": "Explicit close, unmount and buffer death release the child idempotently."
+  },
+  {
+   "name": "etaf-gamekit-observations-preserve-an-action-rejection",
+   "file": "tests/etaf-gamekit-tests.el",
+   "purpose": "An unsolicited display frame cannot erase the last action's rejection."
+  },
+  {
+   "name": "etaf-gamekit-openspiel-bot-answers-for-the-side-to-move",
+   "file": "tests/etaf-gamekit-tests.el",
+   "purpose": "The adapter plays a requested search move for the side to move through the public action API, with its decision reported and undoable."
+  },
+  {
+   "name": "etaf-gamekit-bot-policies-follow-the-game",
+   "file": "tests/etaf-gamekit-tests.el",
+   "purpose": "The search policy rejects a game without an evaluation while the random policy plays any turn-based kernel."
+  },
+  {
+   "name": "etaf-gamekit-frame-canvas-shows-changed-strips",
+   "file": "tests/etaf-gamekit-tests.el",
+   "purpose": "A published frame description shows one strip image per row, and republishing replaces only the rows whose serial changed."
+  },
+  {
+   "name": "etaf-gamekit-frame-canvas-uses-text-without-native-frames",
+   "file": "tests/etaf-gamekit-tests.el",
+   "purpose": "A text geometry shows the caller's fallback text and follows its updates without native frames."
+  },
+  {
+   "name": "etaf-gamekit-godot-publishes-only-changed-frame-strips",
+   "file": "tests/etaf-gamekit-tests.el",
+   "purpose": "The shared Godot frame publisher writes one strip per changed row, describes their ids and leaves unchanged rows unwritten."
+  },
+  {
+   "name": "etaf-gamekit-hosted-session-mounts-nothing-and-still-publishes",
+   "file": "tests/etaf-gamekit-tests.el",
+   "purpose": "A session started with :display nil leaves its buffer unmounted so one host is the only rendering, while its state and reactive view still publish."
+  },
+  {
+   "name": "etaf-gamekit-install-godot-registers-an-existing-executable",
+   "file": "tests/etaf-gamekit-tests.el",
+   "purpose": "The setup script shipped in the package installs a runtime from an existing executable into the configured cache without network access."
+  }
+ ]
+}

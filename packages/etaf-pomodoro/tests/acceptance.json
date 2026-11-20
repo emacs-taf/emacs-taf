@@ -1,0 +1,50 @@
+{
+ "schema": 1,
+ "load_path": [
+  ".",
+  "lisp",
+  "tests",
+  "../etaf",
+  "../etaf-ui",
+  "../ebox",
+  "../ecss"
+ ],
+ "support": [],
+ "cases": [
+  {
+   "name": "etaf-pomodoro-creates-a-paused-session",
+   "file": "tests/etaf-pomodoro-tests.el",
+   "purpose": "A new session starts paused at its full length with the default or requested style."
+  },
+  {
+   "name": "etaf-pomodoro-rejects-invalid-input",
+   "file": "tests/etaf-pomodoro-tests.el",
+   "purpose": "A non-positive focus length or an unknown style signals a session error."
+  },
+  {
+   "name": "etaf-pomodoro-commands-move-the-countdown",
+   "file": "tests/etaf-pomodoro-tests.el",
+   "purpose": "Toggle, reset, extend and the style cycle change the state they own."
+  },
+  {
+   "name": "etaf-pomodoro-tick-runs-only-while-mounted",
+   "file": "tests/etaf-pomodoro-tests.el",
+   "purpose": "A mounted View counts a running session and the tick stops on unmount."
+  },
+  {
+   "name": "etaf-pomodoro-view-renders-the-clock-and-actions",
+   "file": "tests/etaf-pomodoro-tests.el",
+   "purpose": "The mounted surface shows the countdown, the actions, the progress line and the key hints."
+  },
+  {
+   "name": "etaf-pomodoro-styles-share-one-height",
+   "file": "tests/etaf-pomodoro-tests.el",
+   "purpose": "Every style paints the same rows, so a floating panel keeps its size across a style switch."
+  },
+  {
+   "name": "etaf-pomodoro-surface-follows-the-host-appearance",
+   "file": "tests/etaf-pomodoro-tests.el",
+   "purpose": "A provided appearance ref repaints the mounted timer in the host's palette."
+  }
+ ]
+}

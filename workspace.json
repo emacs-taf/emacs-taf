@@ -1,0 +1,146 @@
+{
+  "schema": 2,
+  "note": "One jjosh checkout: each package is a delivery unit under packages/, published to its own remote. The revision is the checkout commit, not a per-package pin.",
+  "packages": {
+    "ebox": {
+      "url": "https://github.com/emacs-taf/ebox.git",
+      "branch": "main",
+      "role": "framework"
+    },
+    "ecss": {
+      "url": "https://github.com/emacs-taf/ecss.git",
+      "branch": "main",
+      "role": "framework"
+    },
+    "ekp": {
+      "url": "https://github.com/emacs-taf/ekp.git",
+      "branch": "main",
+      "role": "framework"
+    },
+    "etaf": {
+      "url": "https://github.com/emacs-taf/etaf.git",
+      "branch": "main",
+      "role": "framework"
+    },
+    "etaf-bili": {
+      "url": "https://github.com/emacs-taf/etaf-bili.git",
+      "branch": "main",
+      "role": "application"
+    },
+    "etaf-db": {
+      "url": "https://github.com/emacs-taf/etaf-db.git",
+      "branch": "main",
+      "role": "framework"
+    },
+    "etaf-desktop": {
+      "url": "https://github.com/emacs-taf/etaf-desktop.git",
+      "branch": "main",
+      "role": "framework"
+    },
+    "etaf-gamekit": {
+      "url": "https://github.com/emacs-taf/etaf-gamekit.git",
+      "branch": "main",
+      "role": "framework"
+    },
+    "etaf-manual": {
+      "url": "https://github.com/emacs-taf/etaf-manual.git",
+      "branch": "main",
+      "role": "framework"
+    },
+    "etaf-mario": {
+      "url": "https://github.com/emacs-taf/etaf-mario.git",
+      "branch": "main",
+      "role": "game"
+    },
+    "etaf-md": {
+      "url": "https://github.com/emacs-taf/etaf-md.git",
+      "branch": "main",
+      "role": "application"
+    },
+    "etaf-ncm": {
+      "url": "https://github.com/emacs-taf/etaf-ncm.git",
+      "branch": "main",
+      "role": "application"
+    },
+    "etaf-org-preview": {
+      "url": "https://github.com/emacs-taf/etaf-org-preview.git",
+      "branch": "main",
+      "role": "application"
+    },
+    "etaf-pomodoro": {
+      "url": "https://github.com/emacs-taf/etaf-pomodoro.git",
+      "branch": "main",
+      "role": "application"
+    },
+    "etaf-posframe": {
+      "url": "https://github.com/emacs-taf/etaf-posframe.git",
+      "branch": "main",
+      "role": "framework"
+    },
+    "etaf-reader": {
+      "url": "https://github.com/emacs-taf/etaf-reader.git",
+      "branch": "main",
+      "role": "application"
+    },
+    "etaf-rss": {
+      "url": "https://github.com/emacs-taf/etaf-rss.git",
+      "branch": "main",
+      "role": "application"
+    },
+    "etaf-screensaver": {
+      "url": "https://github.com/emacs-taf/etaf-screensaver.git",
+      "branch": "main",
+      "role": "application"
+    },
+    "etaf-slides": {
+      "url": "https://github.com/emacs-taf/etaf-slides.git",
+      "branch": "main",
+      "role": "application"
+    },
+    "etaf-solitaire": {
+      "url": "https://github.com/emacs-taf/etaf-solitaire.git",
+      "branch": "main",
+      "role": "game"
+    },
+    "etaf-tanks": {
+      "url": "https://github.com/emacs-taf/etaf-tanks.git",
+      "branch": "main",
+      "role": "game"
+    },
+    "etaf-telega": {
+      "url": "https://github.com/emacs-taf/etaf-telega.git",
+      "branch": "main",
+      "role": "application"
+    },
+    "etaf-ui": {
+      "url": "https://github.com/emacs-taf/etaf-ui.git",
+      "branch": "main",
+      "role": "framework"
+    },
+    "etaf-video-player": {
+      "url": "https://github.com/emacs-taf/etaf-video-player.git",
+      "branch": "main",
+      "role": "application"
+    },
+    "etaf-video-studio": {
+      "url": "https://github.com/emacs-taf/etaf-video-studio.git",
+      "branch": "main",
+      "role": "application"
+    },
+    "etaf-weread": {
+      "url": "https://github.com/emacs-taf/etaf-weread.git",
+      "branch": "main",
+      "role": "application"
+    },
+    "etaf-xiangqi": {
+      "url": "https://github.com/emacs-taf/etaf-xiangqi.git",
+      "branch": "main",
+      "role": "game"
+    },
+    "maillist": {
+      "url": "https://github.com/emacs-taf/maillist.git",
+      "branch": "main",
+      "role": "application"
+    }
+  }
+}

@@ -1,0 +1,345 @@
+{
+  "title": {
+    "en": "ETAF Reference Manual",
+    "zh-CN": "ETAF \u53c2\u8003\u624b\u518c"
+  },
+  "languages": [
+    "en",
+    "zh-CN"
+  ],
+  "packages": [
+    "ecss",
+    "ekp",
+    "ebox",
+    "etaf",
+    "etaf-ui",
+    "etaf-db",
+    "etaf-posframe"
+  ],
+  "references": [
+    "etaf-manual"
+  ],
+  "coverage": [
+    "hosts",
+    "properties",
+    "styles",
+    "etaf-db",
+    "etaf-ui",
+    "tokens",
+    "ebox",
+    "ecss",
+    "ekp",
+    "etaf",
+    "etaf-posframe"
+  ],
+  "parts": [
+    {
+      "id": "overview",
+      "title": {
+        "en": "Overview",
+        "zh-CN": "\u603b\u8bba"
+      },
+      "chapters": [
+        "introduction",
+        "ecosystem-and-layers",
+        "installation-and-loading"
+      ]
+    },
+    {
+      "id": "programming-model",
+      "title": {
+        "en": "The ETAF Programming Model",
+        "zh-CN": "ETAF \u7f16\u7a0b\u6a21\u578b"
+      },
+      "chapters": [
+        "views",
+        "hosts",
+        "components",
+        "reactivity",
+        "runtime",
+        "applications",
+        "context",
+        "actions-behaviors-and-error-boundaries"
+      ]
+    },
+    {
+      "id": "styles",
+      "title": {
+        "en": "Styles",
+        "zh-CN": "\u6837\u5f0f"
+      },
+      "chapters": [
+        "style-system",
+        "selectors",
+        "values",
+        "style-properties",
+        "component-styles-and-themes",
+        "style-implementation"
+      ]
+    },
+    {
+      "id": "layout-and-rendering",
+      "title": {
+        "en": "Layout and Rendering",
+        "zh-CN": "\u5e03\u5c40\u4e0e\u6e32\u67d3"
+      },
+      "chapters": [
+        "rendering-model",
+        "boxes-and-normal-flow",
+        "flex-layout",
+        "grid-layout",
+        "positioning-layers-and-overlays",
+        "text",
+        "images",
+        "viewport",
+        "scrolling",
+        "incremental-updates-and-publication"
+      ]
+    },
+    {
+      "id": "interaction",
+      "title": {
+        "en": "Interaction",
+        "zh-CN": "\u4ea4\u4e92"
+      },
+      "chapters": [
+        "interaction-overview",
+        "events",
+        "focus",
+        "keyboard",
+        "region-navigation",
+        "dragging-and-gestures",
+        "text-input"
+      ]
+    },
+    {
+      "id": "data-and-async",
+      "title": {
+        "en": "Data and Asynchrony",
+        "zh-CN": "\u6570\u636e\u4e0e\u5f02\u6b65"
+      },
+      "chapters": [
+        "async",
+        "resources",
+        "data-sources",
+        "data-controllers",
+        "reconciliation",
+        "list-cache",
+        "sqlite-backend",
+        "storage-strategy"
+      ]
+    },
+    {
+      "id": "animation-and-media",
+      "title": {
+        "en": "Animation and Media",
+        "zh-CN": "\u52a8\u753b\u4e0e\u5a92\u4f53"
+      },
+      "chapters": [
+        "animation",
+        "native-video"
+      ]
+    },
+    {
+      "id": "ui-components",
+      "title": {
+        "en": "The UI Component Library",
+        "zh-CN": "UI \u7ec4\u4ef6\u5e93"
+      },
+      "chapters": [
+        "ui-overview",
+        "ui-icons",
+        "ui-containers",
+        "ui-feedback-and-status",
+        "ui-buttons-and-choice-controls",
+        "ui-text-input-controls",
+        "ui-embedded-editors",
+        "ui-pickers-and-menus",
+        "ui-overlays",
+        "ui-navigation-and-collections",
+        "ui-data-display",
+        "ui-composite-components",
+        "ui-panels-and-windows",
+        "ui-desktop-navigation-and-tiling",
+        "ui-media-and-reactions",
+        "ui-grids-and-character-surfaces",
+        "ui-gallery-and-acceptance"
+      ]
+    },
+    {
+      "id": "panels",
+      "title": {
+        "en": "Floating Panels",
+        "zh-CN": "\u6d6e\u52a8\u9762\u677f"
+      },
+      "chapters": [
+        "posframe-panels",
+        "posframe-applications"
+      ]
+    },
+    {
+      "id": "standalone-ebox",
+      "title": {
+        "en": "Using Ebox Standalone",
+        "zh-CN": "\u72ec\u7acb\u4f7f\u7528 Ebox"
+      },
+      "chapters": [
+        "ebox-node-construction",
+        "ebox-mount-lifecycle",
+        "ebox-tree-queries",
+        "ebox-files-and-preview",
+        "ebox-errors"
+      ]
+    },
+    {
+      "id": "standalone-ecss",
+      "title": {
+        "en": "ECSS as a General Library",
+        "zh-CN": "ECSS \u4f5c\u4e3a\u901a\u7528\u5e93"
+      },
+      "chapters": [
+        "ecss-schema-packages",
+        "ecss-subjects-and-adapters",
+        "ecss-stylesheets-and-scopes",
+        "ecss-computed-style",
+        "ecss-rule-files",
+        "ecss-incremental-hosts",
+        "ecss-errors"
+      ]
+    },
+    {
+      "id": "standalone-ekp",
+      "title": {
+        "en": "EKP Paragraph Typesetting",
+        "zh-CN": "EKP \u6bb5\u843d\u6392\u7248"
+      },
+      "chapters": [
+        "ekp-principles",
+        "ekp-cjk",
+        "ekp-hyphenation",
+        "ekp-interactive-use",
+        "ekp-programming-interface",
+        "ekp-parameters",
+        "ekp-native-module",
+        "ekp-implementation"
+      ]
+    },
+    {
+      "id": "framework-internals",
+      "title": {
+        "en": "Framework Internals and Extension",
+        "zh-CN": "\u6846\u67b6\u5185\u90e8\u4e0e\u6269\u5c55"
+      },
+      "chapters": [
+        "module-map",
+        "update-trace",
+        "core-records",
+        "invariants",
+        "extending-the-framework",
+        "performance-engineering",
+        "design-rationale"
+      ]
+    }
+  ],
+  "appendices": [
+    {
+      "id": "standard-errors",
+      "title": {
+        "en": "Standard Errors",
+        "zh-CN": "\u6807\u51c6\u9519\u8bef"
+      }
+    },
+    {
+      "id": "standard-hooks",
+      "title": {
+        "en": "Standard Hooks",
+        "zh-CN": "\u6807\u51c6\u94a9\u5b50"
+      }
+    },
+    {
+      "id": "standard-key-bindings",
+      "title": {
+        "en": "Standard Key Bindings",
+        "zh-CN": "\u6807\u51c6\u952e\u4f4d"
+      }
+    },
+    {
+      "id": "user-options-and-variables",
+      "title": {
+        "en": "User Options and Variables",
+        "zh-CN": "\u7528\u6237\u9009\u9879\u4e0e\u53d8\u91cf"
+      }
+    },
+    {
+      "id": "theme-token-table",
+      "generate": "token-table",
+      "title": {
+        "en": "Theme Token Table",
+        "zh-CN": "\u4e3b\u9898 token \u8868"
+      }
+    },
+    {
+      "id": "style-quick-reference",
+      "generate": "style-quick-reference",
+      "title": {
+        "en": "Style Property Quick Reference",
+        "zh-CN": "\u6837\u5f0f\u5c5e\u6027\u901f\u67e5"
+      }
+    },
+    {
+      "id": "host-and-property-quick-reference",
+      "generate": "host-and-property-quick-reference",
+      "title": {
+        "en": "Host and Semantic Property Quick Reference",
+        "zh-CN": "Host \u4e0e\u8bed\u4e49\u5c5e\u6027\u901f\u67e5"
+      }
+    },
+    {
+      "id": "component-quick-reference",
+      "generate": "component-quick-reference",
+      "title": {
+        "en": "Component Quick Reference",
+        "zh-CN": "\u7ec4\u4ef6\u901f\u67e5"
+      }
+    },
+    {
+      "id": "glossary",
+      "title": {
+        "en": "Glossary",
+        "zh-CN": "\u672f\u8bed\u8868"
+      }
+    },
+    {
+      "id": "versions-and-migration",
+      "title": {
+        "en": "Versions and Migration",
+        "zh-CN": "\u7248\u672c\u4e0e\u8fc1\u79fb"
+      }
+    },
+    {
+      "id": "license",
+      "title": {
+        "en": "License",
+        "zh-CN": "\u8bb8\u53ef"
+      }
+    }
+  ],
+  "indices": [
+    {
+      "id": "concept-index",
+      "generate": "concept-index",
+      "title": {
+        "en": "Concept Index",
+        "zh-CN": "\u6982\u5ff5\u7d22\u5f15"
+      }
+    },
+    {
+      "id": "symbol-index",
+      "generate": "symbol-index",
+      "title": {
+        "en": "Symbol Index",
+        "zh-CN": "\u7b26\u53f7\u7d22\u5f15"
+      }
+    }
+  ]
+}

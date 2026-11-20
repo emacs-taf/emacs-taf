@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>站点自动发现的订阅</title>
+    <link>https://site.example</link>
+    <item>
+      <title>发现的一篇</title>
+      <link>https://site.example/1</link>
+      <guid>site-1</guid>
+      <pubDate>Tue, 30 Sep 2025 12:00:00 GMT</pubDate>
+      <description>自动发现成功。</description>
+    </item>
+  </channel>
+</rss>

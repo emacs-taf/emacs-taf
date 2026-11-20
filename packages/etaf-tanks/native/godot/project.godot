@@ -1,0 +1,13 @@
+; SPDX-License-Identifier: GPL-3.0-or-later
+config_version=5
+
+[application]
+config/name="坦克大战"
+run/flush_stdout_on_print=true
+
+[gamekit]
+game_script="res://game.gd"
+observation_hz=60
+
+[rendering]
+renderer/rendering_method="gl_compatibility"

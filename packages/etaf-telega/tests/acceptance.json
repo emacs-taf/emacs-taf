@@ -1,0 +1,310 @@
+{
+  "schema": 1,
+  "load_path": [
+    ".",
+    "lisp",
+    "tests",
+    "../etaf",
+    "../etaf-ui",
+    "../ebox",
+    "../ecss"
+  ],
+  "support": [],
+  "cases": [
+    {
+      "name": "etaf-telega-tests-help-entries-are-read-only",
+      "file": "tests/etaf-telega-tests.el",
+      "purpose": "Help keys, the info button and both menus show effective pane bindings without executing them, splitting windows or losing focus after search and layered Escape."
+    },
+    {
+      "name": "etaf-telega-tests-open-lists-chats-and-close-releases",
+      "file": "tests/etaf-telega-tests.el",
+      "purpose": "Opening shows the account's chats in one buffer; closing kills it."
+    },
+    {
+      "name": "etaf-telega-tests-open-uses-the-application-canvas",
+      "file": "tests/etaf-telega-tests.el",
+      "purpose": "The client is an ETAF application: it owns no caret or mode line and its canvas is painted from the palette, repainting when the theme switches."
+    },
+    {
+      "name": "etaf-telega-tests-filter-shows-matching-chats",
+      "file": "tests/etaf-telega-tests.el",
+      "purpose": "A filter tab narrows the list and the main tab restores it."
+    },
+    {
+      "name": "etaf-telega-tests-filter-keys-cycle",
+      "file": "tests/etaf-telega-tests.el",
+      "purpose": "[ and ] walk the list's filter tabs and narrow the visible conversations."
+    },
+    {
+      "name": "etaf-telega-tests-list-keys-move-and-open",
+      "file": "tests/etaf-telega-tests.el",
+      "purpose": "n and p walk the list and RET opens the conversation under point."
+    },
+    {
+      "name": "etaf-telega-tests-chat-with-opens-by-name",
+      "file": "tests/etaf-telega-tests.el",
+      "purpose": "Known conversations are offered by name and the chosen one opens."
+    },
+    {
+      "name": "etaf-telega-tests-chat-with-offers-names-and-resolves-the-pick",
+      "file": "tests/etaf-telega-tests.el",
+      "purpose": "The interactive chat picker offers names and opens the chosen conversation."
+    },
+    {
+      "name": "etaf-telega-tests-open-chat-shows-history-and-lands-on-composer",
+      "file": "tests/etaf-telega-tests.el",
+      "purpose": "Opening a chat replaces the list with its history, oldest first."
+    },
+    {
+      "name": "etaf-telega-tests-back-returns-to-the-list",
+      "file": "tests/etaf-telega-tests.el",
+      "purpose": "q leaves the chat for the list with that conversation under point."
+    },
+    {
+      "name": "etaf-telega-tests-message-keys-walk-history-and-composer",
+      "file": "tests/etaf-telega-tests.el",
+      "purpose": "p selects older messages and n past the newest returns to the composer."
+    },
+    {
+      "name": "etaf-telega-tests-jump-newest-selects-the-newest-message",
+      "file": "tests/etaf-telega-tests.el",
+      "purpose": "> shows the newest message from anywhere in the history."
+    },
+    {
+      "name": "etaf-telega-tests-composer-option-keys-reach-their-toggles",
+      "file": "tests/etaf-telega-tests.el",
+      "purpose": "Each composer option key toggles its own send option."
+    },
+    {
+      "name": "etaf-telega-tests-palette-lists-and-runs-the-pane-keys",
+      "file": "tests/etaf-telega-tests.el",
+      "purpose": "The palette lists the list or chat keys with their descriptions, including Telega's own commands, and runs the chosen one."
+    },
+    {
+      "name": "etaf-telega-tests-split-layout-keys-follow-the-pane-at-point",
+      "file": "tests/etaf-telega-tests.el",
+      "purpose": "In the split layout the list and chat keys answer in the pane holding point, and opening or leaving a chat moves point into its pane."
+    },
+    {
+      "name": "etaf-telega-tests-split-layout-tab-and-ret-move-between-panes",
+      "file": "tests/etaf-telega-tests.el",
+      "purpose": "Keyboard focus on a list row enters the chat pane with RET, where the chat keys answer, and q returns focus to that row."
+    },
+    {
+      "name": "etaf-telega-tests-composer-sends-and-clears-on-ack",
+      "file": "tests/etaf-telega-tests.el",
+      "purpose": "Typing in the composer sends the text and clears it after acceptance."
+    },
+    {
+      "name": "etaf-telega-tests-markdown-ack-clears-the-typed-draft",
+      "file": "tests/etaf-telega-tests.el",
+      "purpose": "An acknowledgement clears the draft even when its text differs from the typed markup."
+    },
+    {
+      "name": "etaf-telega-tests-input-history-recalls-sent-texts",
+      "file": "tests/etaf-telega-tests.el",
+      "purpose": "M-p and M-n recall the texts sent in the open conversation."
+    },
+    {
+      "name": "etaf-telega-tests-send-options-reach-the-backend",
+      "file": "tests/etaf-telega-tests.el",
+      "purpose": "Silent, preview, schedule and markdown options ride on the next send."
+    },
+    {
+      "name": "etaf-telega-tests-clear-draft-discards-the-composer",
+      "file": "tests/etaf-telega-tests.el",
+      "purpose": "C-c C-d clears a draft and leaves the composer."
+    },
+    {
+      "name": "etaf-telega-tests-drafts-persist-per-conversation",
+      "file": "tests/etaf-telega-tests.el",
+      "purpose": "Leaving a composer saves its draft and reopening restores it."
+    },
+    {
+      "name": "etaf-telega-tests-send-file-uses-caption-and-progress",
+      "file": "tests/etaf-telega-tests.el",
+      "purpose": "Attaching a file reports progress, uses the draft as caption and clears it."
+    },
+    {
+      "name": "etaf-telega-tests-cancel-upload-stops-the-file",
+      "file": "tests/etaf-telega-tests.el",
+      "purpose": "Cancelling an upload marks it cancelled and clears the status."
+    },
+    {
+      "name": "etaf-telega-tests-compose-popovers-complete-and-pick",
+      "file": "tests/etaf-telega-tests.el",
+      "purpose": "Typing @ or # completes; the emoji and sticker pickers insert or send."
+    },
+    {
+      "name": "etaf-telega-tests-draft-survives-until-ack",
+      "file": "tests/etaf-telega-tests.el",
+      "purpose": "A pending send keeps the draft and clears only after acceptance."
+    },
+    {
+      "name": "etaf-telega-tests-leaving-the-composer-keeps-the-draft",
+      "file": "tests/etaf-telega-tests.el",
+      "purpose": "Cancelling plain typing keeps the text as the chat's draft."
+    },
+    {
+      "name": "etaf-telega-tests-reply-quotes-the-selected-message",
+      "file": "tests/etaf-telega-tests.el",
+      "purpose": "r arms a reply to the message under point and the sent message quotes it."
+    },
+    {
+      "name": "etaf-telega-tests-edit-replaces-and-cancel-restores-the-draft",
+      "file": "tests/etaf-telega-tests.el",
+      "purpose": "e edits an outgoing message; cancelling an edit restores the old draft."
+    },
+    {
+      "name": "etaf-telega-tests-edit-refuses-incoming-messages",
+      "file": "tests/etaf-telega-tests.el",
+      "purpose": "Only the account's own messages can be edited."
+    },
+    {
+      "name": "etaf-telega-tests-live-changes-update-the-open-chat",
+      "file": "tests/etaf-telega-tests.el",
+      "purpose": "Arrivals append once, updates replace in place and deletions remove."
+    },
+    {
+      "name": "etaf-telega-tests-load-more-prepends-older-pages",
+      "file": "tests/etaf-telega-tests.el",
+      "purpose": "Older pages load above the history until the chat's first message."
+    },
+    {
+      "name": "etaf-telega-tests-jump-loads-and-selects-a-message",
+      "file": "tests/etaf-telega-tests.el",
+      "purpose": "Jumping to an unloaded message loads its page and selects it."
+    },
+    {
+      "name": "etaf-telega-tests-jumps-reach-quoted-pinned-and-dated-messages",
+      "file": "tests/etaf-telega-tests.el",
+      "purpose": "Quoted, pinned and dated jumps select the right message."
+    },
+    {
+      "name": "etaf-telega-tests-pinned-jump-follows-the-backend-over-the-cache",
+      "file": "tests/etaf-telega-tests.el",
+      "purpose": "The pinned jump follows a pin or unpin made after the conversation loaded."
+    },
+    {
+      "name": "etaf-telega-tests-next-unread-chat-moves-to-the-unread-one",
+      "file": "tests/etaf-telega-tests.el",
+      "purpose": "M-g u on the list selects the next conversation with unread messages."
+    },
+    {
+      "name": "etaf-telega-tests-fastnav-walks-unread-mentions-and-outgoing",
+      "file": "tests/etaf-telega-tests.el",
+      "purpose": "M-g u/m/o select unread, mentioning and outgoing messages."
+    },
+    {
+      "name": "etaf-telega-tests-day-separators-label-each-date",
+      "file": "tests/etaf-telega-tests.el",
+      "purpose": "Each new date opens with a day label; today reads as 今天."
+    },
+    {
+      "name": "etaf-telega-tests-activate-opens-media-or-composes",
+      "file": "tests/etaf-telega-tests.el",
+      "purpose": "RET on a media message opens it through Telega; elsewhere it composes."
+    },
+    {
+      "name": "etaf-telega-tests-telega-keys-run-native-commands",
+      "file": "tests/etaf-telega-tests.el",
+      "purpose": "Telega's own keys run Telega's commands on the chat or message at point."
+    },
+    {
+      "name": "etaf-telega-tests-chat-action-keys-run-native-commands",
+      "file": "tests/etaf-telega-tests.el",
+      "purpose": "M, A and L run Telega's mute, archive and leave on the conversation under point."
+    },
+    {
+      "name": "etaf-telega-tests-theme-switch-repaints-the-client",
+      "file": "tests/etaf-telega-tests.el",
+      "purpose": "Toggling the theme repaints the mounted rows with the palette of the new mode and keeps the open chat."
+    },
+    {
+      "name": "etaf-telega-tests-declares-its-surface-to-a-host",
+      "file": "tests/etaf-telega-tests.el",
+      "purpose": "A host frames the client from the palette, mode cell and mode labels it declares, so the host's switch repaints every row instead of only the frame chrome."
+    },
+    {
+      "name": "etaf-telega-tests-viewer-pages-and-closes-in-the-buffer",
+      "file": "tests/etaf-telega-tests.el",
+      "purpose": "A photo opens in the in-buffer viewer, pages between media messages and closes back to the chat."
+    },
+    {
+      "name": "etaf-telega-tests-viewer-plays-voice-messages",
+      "file": "tests/etaf-telega-tests.el",
+      "purpose": "A voice message opens in the in-buffer viewer with its total time."
+    },
+    {
+      "name": "etaf-telega-tests-react-toggles-a-visible-reaction",
+      "file": "tests/etaf-telega-tests.el",
+      "purpose": "Toggling a reaction shows the emoji on the message and toggling again removes it."
+    },
+    {
+      "name": "etaf-telega-tests-custom-emoji-reaction-renders-and-toggles",
+      "file": "tests/etaf-telega-tests.el",
+      "purpose": "A custom emoji reaction keyed by a scalar custom:<id> renders as a chip and toggles by clicking it."
+    },
+    {
+      "name": "etaf-telega-tests-own-messages-align-with-everyone-else",
+      "file": "tests/etaf-telega-tests.el",
+      "purpose": "Outgoing and incoming messages share one left-aligned layout."
+    },
+    {
+      "name": "etaf-telega-tests-swipes-go-back-and-change-filters",
+      "file": "tests/etaf-telega-tests.el",
+      "purpose": "Swiping right leaves a chat and horizontal swipes on the list change the filter."
+    },
+    {
+      "name": "etaf-telega-tests-printing-keys-never-edit-the-history",
+      "file": "tests/etaf-telega-tests.el",
+      "purpose": "Unbound printing keys on a message never insert text into the history."
+    },
+    {
+      "name": "etaf-telega-tests-search-finds-opens-and-remembers-chats",
+      "file": "tests/etaf-telega-tests.el",
+      "purpose": "List search filters conversations, opens the first match and lists it as recent until cleared."
+    },
+    {
+      "name": "etaf-telega-tests-search-finds-server-only-chats",
+      "file": "tests/etaf-telega-tests.el",
+      "purpose": "Typing in the list search finds conversations the list has not loaded."
+    },
+    {
+      "name": "etaf-telega-tests-chat-search-finds-server-history",
+      "file": "tests/etaf-telega-tests.el",
+      "purpose": "Message search reaches a match the loaded history does not carry."
+    },
+    {
+      "name": "etaf-telega-tests-chat-search-and-details-pane",
+      "file": "tests/etaf-telega-tests.el",
+      "purpose": "Message search narrows the open history and the details pane toggles on demand."
+    },
+    {
+      "name": "etaf-telega-tests-attach-menu-sends-the-chosen-kind",
+      "file": "tests/etaf-telega-tests.el",
+      "purpose": "The composer's paperclip menu offers the four attachment kinds and sends the chosen one with the draft as caption."
+    },
+    {
+      "name": "etaf-telega-tests-read-only-channel-shows-why-it-cannot-post",
+      "file": "tests/etaf-telega-tests.el",
+      "purpose": "A channel without post rights shows why instead of a composer and refuses the send."
+    },
+    {
+      "name": "etaf-telega-tests-attach-refuses-an-empty-path",
+      "file": "tests/etaf-telega-tests.el",
+      "purpose": "An empty or directory attachment answer starts no upload and keeps the draft."
+    },
+    {
+      "name": "etaf-telega-tests-failed-send-clears-the-pending-upload",
+      "file": "tests/etaf-telega-tests.el",
+      "purpose": "A backend send failure drops the upload strip and keeps the draft."
+    },
+    {
+      "name": "etaf-telega-tests-view-mounts-in-a-host-buffer",
+      "file": "tests/etaf-telega-tests.el",
+      "purpose": "A host mounts the View in its own buffer, the client adopts that buffer so its commands act on the mounted session, and unmounting stops the backend."
+    }
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "songs": [
+    {
+      "id": 1,
+      "name": "曲目 1",
+      "artist": "歌手 1",
+      "album": "专辑 1",
+      "ms": 180000,
+      "vip": false,
+      "level": "exhigh"
+    },
+    {
+      "id": 2,
+      "name": "曲目 2",
+      "artist": "歌手 2",
+      "album": "专辑 2",
+      "ms": 181000,
+      "vip": true,
+      "level": "exhigh"
+    },
+    {
+      "id": 3,
+      "name": "曲目 3",
+      "artist": "歌手 3",
+      "album": "专辑 3",
+      "ms": 182000,
+      "vip": false,
+      "level": "exhigh"
+    },
+    {
+      "id": 4,
+      "name": "曲目 4",
+      "artist": "歌手 4",
+      "album": "专辑 4",
+      "ms": 183000,
+      "vip": true,
+      "level": "exhigh"
+    },
+    {
+      "id": 5,
+      "name": "曲目 5",
+      "artist": "歌手 5",
+      "album": "专辑 5",
+      "ms": 184000,
+      "vip": false,
+      "level": "exhigh"
+    }
+  ]
+}

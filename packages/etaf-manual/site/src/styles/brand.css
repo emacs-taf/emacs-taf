@@ -1,0 +1,56 @@
+/* Brand typography and palette, shared by the landing page and the manual.
+
+   Latin text is set in Source Serif 4 (variable weight and optical size, so
+   headings take its display cut and body text its text cut).  Chinese body
+   text uses LXGW WenKai, loaded as a subset webfont from the page head;
+   Chinese headings use Noto Serif SC.  Code and small labels use IBM Plex
+   Mono, with WenKai Mono for Chinese inside code.  Every face is split by
+   unicode-range, so a page downloads only the glyphs it shows.
+
+   The light palette is warm paper and ink; the dark palette is a matte
+   charcoal with a fine grain, so a glossy screen reflects less and the surface
+   reads like painted paper rather than black glass.  The violet of the ETAF
+   mark stays for links and small accents. */
+
+@import '@fontsource-variable/source-serif-4/opsz.css';
+@import '@fontsource-variable/source-serif-4/opsz-italic.css';
+@import '@fontsource-variable/noto-serif-sc/wght.css';
+@import '@fontsource/ibm-plex-mono/400.css';
+@import '@fontsource/ibm-plex-mono/500.css';
+@import '@fontsource/ibm-plex-mono/600.css';
+
+:root {
+  --etaf-font-text: "Source Serif 4 Variable", "LXGW WenKai", "霞鹜文楷",
+    "Noto Serif SC Variable", "Songti SC", Georgia, serif;
+  --etaf-font-display: "Source Serif 4 Variable", "Noto Serif SC Variable",
+    "Songti SC", Georgia, serif;
+  --etaf-font-mono: "IBM Plex Mono", "LXGW WenKai Mono", "霞鹜文楷等宽",
+    ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* Dark (default) */
+  --etaf-paper: #191a1c;
+  --etaf-paper-2: #202225;
+  --etaf-paper-3: #25272b;
+  --etaf-rule: #2f3135;
+  --etaf-rule-strong: #43464b;
+  --etaf-ink: #e3e1db;
+  --etaf-ink-2: #b8b6af;
+  --etaf-ink-3: #89877f;
+  --etaf-accent: #c3b0ff;
+  --etaf-accent-soft: #2b2540;
+  --etaf-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.055'/%3E%3C/svg%3E");
+}
+
+:root[data-theme='light'] {
+  --etaf-paper: #faf8f3;
+  --etaf-paper-2: #f3f0e8;
+  --etaf-paper-3: #ebe7dd;
+  --etaf-rule: #e2ddd1;
+  --etaf-rule-strong: #c9c3b5;
+  --etaf-ink: #1c1a16;
+  --etaf-ink-2: #45413a;
+  --etaf-ink-3: #7a7468;
+  --etaf-accent: #5b3ea8;
+  --etaf-accent-soft: #ece6f8;
+  --etaf-grain: none;
+}

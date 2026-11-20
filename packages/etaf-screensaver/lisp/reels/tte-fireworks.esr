@@ -1,0 +1,2 @@
+;;; -*- lisp-data -*-
+(:id tte-fireworks :title "Terminal Text Effects: fireworks" :summary "fireworks (Terminal Text Effects) text recording, 80×24, 465 frames at 20 fps, MIT license" :tags (imported) :provider tte :recording "fireworks.tterec" :kind text :width 80 :height 24 :frame-rate 20 :frame-count 465 :source "fireworks" :license "MIT")

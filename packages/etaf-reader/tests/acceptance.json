@@ -1,0 +1,115 @@
+{
+  "schema": 1,
+  "load_path": [
+    ".",
+    "tests",
+    "../etaf",
+    "../etaf-ui",
+    "../etaf-db",
+    "../ebox",
+    "../ecss"
+  ],
+  "support": [],
+  "cases": [
+    {
+      "name": "etaf-reader-tests-help-stays-in-reader",
+      "file": "tests/etaf-reader-tests.el",
+      "purpose": "Native help keys and the public help-pane request share a searchable in-buffer modal, preserve reading state and restore focus after layered Escape."
+    },
+    {
+      "name": "etaf-reader-tests-switching-books-keeps-separate-progress",
+      "file": "tests/etaf-reader-tests.el",
+      "purpose": "Switching between books preserves independent chapter positions and never attributes the previous book's progress to the next."
+    },
+    {
+      "name": "etaf-reader-tests-library-query-sort-and-pages",
+      "file": "tests/etaf-reader-tests.el",
+      "purpose": "Query and author filters reset pagination and every matching book remains reachable in the requested order."
+    },
+    {
+      "name": "etaf-reader-tests-preferences-persist-and-reject-invalid-options",
+      "file": "tests/etaf-reader-tests.el",
+      "purpose": "Preferences persist across sessions and invalid mixed options leave state unchanged."
+    },
+    {
+      "name": "etaf-reader-tests-root-keys-own-the-canvas",
+      "file": "tests/etaf-reader-tests.el",
+      "purpose": "The reader's root keys beat the renderer's map, t repaints the canvas beyond the page in the new theme, and q closes the reader."
+    },
+    {
+      "name": "etaf-reader-tests-declares-its-surface-to-a-host",
+      "file": "tests/etaf-reader-tests.el",
+      "purpose": "A host frames the reader from the palette, mode cell and modes it declares, so a panel's title-bar switch repaints the paper instead of only the frame chrome."
+    },
+    {
+      "name": "etaf-reader-tests-arrows-reach-the-page",
+      "file": "tests/etaf-reader-tests.el",
+      "purpose": "With no control focused, arrows turn the page from anywhere in the reader and extend a keyboard selection instead of moving focus."
+    },
+    {
+      "name": "etaf-reader-tests-pages-turn-past-pictures",
+      "file": "tests/etaf-reader-tests.el",
+      "purpose": "SPC turns pages onto, across and away from a chapter picture without a retained-update error."
+    },
+    {
+      "name": "etaf-reader-tests-navigation-panes-and-return-position",
+      "file": "tests/etaf-reader-tests.el",
+      "purpose": "Mounted navigation dialogs and settings open and close through public actions and keys while preserving the reading page and jump history."
+    },
+    {
+      "name": "etaf-reader-tests-mounted-styled-pages-and-final-page",
+      "file": "tests/etaf-reader-tests.el",
+      "purpose": "Mounted one- and two-column turns preserve heading and annotation faces, render the final partial page, and continue through the keyboard after resizing."
+    },
+    {
+      "name": "etaf-reader-tests-headless-session-starts-on-shelf",
+      "file": "tests/etaf-reader-tests.el",
+      "purpose": "A session built without a buffer starts on the shelf and needs no window or backend."
+    },
+    {
+      "name": "etaf-reader-tests-scan-imports-into-the-store",
+      "file": "tests/etaf-reader-tests.el",
+      "purpose": "Scanning stores the discovered book and opening imports its chapters and lines."
+    },
+    {
+      "name": "etaf-reader-tests-book-without-chapters-imports-and-reports-it",
+      "file": "tests/etaf-reader-tests.el",
+      "purpose": "A book whose parser found no chapter imports and then reports it has nothing to read."
+    },
+    {
+      "name": "etaf-reader-tests-pages-turn-and-chapters-advance",
+      "file": "tests/etaf-reader-tests.el",
+      "purpose": "Page turns move by one page and crossing the last page opens the next chapter."
+    },
+    {
+      "name": "etaf-reader-tests-selection-annotate-and-note",
+      "file": "tests/etaf-reader-tests.el",
+      "purpose": "A selection becomes an annotation that can change style and carry a thought, then be deleted."
+    },
+    {
+      "name": "etaf-reader-tests-progress-is-restored",
+      "file": "tests/etaf-reader-tests.el",
+      "purpose": "Saving stores chapter and line and a new session resumes exactly there."
+    },
+    {
+      "name": "etaf-reader-tests-search-finds-and-selects",
+      "file": "tests/etaf-reader-tests.el",
+      "purpose": "Search finds a phrase across chapters, jumps to it and selects the match."
+    },
+    {
+      "name": "etaf-reader-tests-reflow-keeps-position",
+      "file": "tests/etaf-reader-tests.el",
+      "purpose": "A column change re-wraps the chapter and keeps the reading offset."
+    },
+    {
+      "name": "etaf-reader-tests-export-notes",
+      "file": "tests/etaf-reader-tests.el",
+      "purpose": "Exporting writes quotations and thoughts of the book as Markdown."
+    },
+    {
+      "name": "etaf-reader-tests-shelf-filters-use-state",
+      "file": "tests/etaf-reader-tests.el",
+      "purpose": "Shelf filters read the stored reading state instead of a second copy."
+    }
+  ]
+}

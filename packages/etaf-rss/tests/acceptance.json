@@ -1,0 +1,139 @@
+{
+  "schema": 1,
+  "load_path": [
+    ".",
+    "tests",
+    "../etaf",
+    "../etaf-ui",
+    "../ebox",
+    "../ecss"
+  ],
+  "support": [],
+  "cases": [
+    {
+      "name": "etaf-rss-tests-root-keys-own-the-canvas",
+      "file": "tests/etaf-rss-help-tests.el",
+      "purpose": "The opened reader paints its canvas with the palette, and its root keys switch the theme and close the reader instead of renderer scrolling."
+    },
+    {
+      "name": "etaf-rss-tests-canvas-fills-the-window-without-overflow",
+      "file": "tests/etaf-rss-help-tests.el",
+      "purpose": "The mounted reader canvas never exceeds its window rows, so no scroll of the window can slide the sidebar and the list together with the article."
+    },
+    {
+      "name": "etaf-rss-tests-help-stays-in-reader",
+      "file": "tests/etaf-rss-help-tests.el",
+      "purpose": "Both help keys show labelled effective bindings in the existing reader, search treats ? as text, Escape exits one layer at a time, and backdrop dismissal restores focus without changing the scope."
+    },
+    {
+      "name": "etaf-rss-tests-parses-rss-atom-and-json",
+      "file": "tests/etaf-rss-tests.el",
+      "purpose": "RSS, Atom and JSON Feed fixtures parse into the documented article shape with titles, counts and publish times."
+    },
+    {
+      "name": "etaf-rss-tests-parses-opml-and-renders-html",
+      "file": "tests/etaf-rss-tests.el",
+      "purpose": "OPML subscriptions parse with folders, article HTML renders to heading/item/link blocks, wrapping respects the column width, and relative time reads naturally."
+    },
+    {
+      "name": "etaf-rss-tests-wraps-prose-at-spaces",
+      "file": "tests/etaf-rss-tests.el",
+      "purpose": "Prose with spaces wraps at the last space inside the column width instead of signalling an integerp error."
+    },
+    {
+      "name": "etaf-rss-tests-new-session-is-headless",
+      "file": "tests/etaf-rss-tests.el",
+      "purpose": "A session created without a buffer starts on the all scope, in the wide layout, with no rows and no requests."
+    },
+    {
+      "name": "etaf-rss-tests-subscribe-lists-articles",
+      "file": "tests/etaf-rss-tests.el",
+      "purpose": "Subscribing over a file URL stores the feed, reports totals and unread counts, and lists the newest article first."
+    },
+    {
+      "name": "etaf-rss-tests-add-feed-discovers-site-feed",
+      "file": "tests/etaf-rss-tests.el",
+      "purpose": "Subscribing to a site page follows its advertised feed link and stores the discovered feed."
+    },
+    {
+      "name": "etaf-rss-tests-broken-feed-reports-error",
+      "file": "tests/etaf-rss-tests.el",
+      "purpose": "An unreachable feed reports a readable error in the status line and leaves the reader usable with an empty list."
+    },
+    {
+      "name": "etaf-rss-tests-scopes-filter-articles",
+      "file": "tests/etaf-rss-tests.el",
+      "purpose": "The unread, starred, feed and folder scopes filter the stored articles, and an unknown scope signals without changing the reader."
+    },
+    {
+      "name": "etaf-rss-tests-search-finds-and-rejects-blank",
+      "file": "tests/etaf-rss-tests.el",
+      "purpose": "Search matches article titles and bodies into a search scope, and a blank keyword signals instead of querying."
+    },
+    {
+      "name": "etaf-rss-tests-selection-moves-and-pages",
+      "file": "tests/etaf-rss-tests.el",
+      "purpose": "Selection clamps at both ends of the list, click-press selects a row, and an out-of-range press signals."
+    },
+    {
+      "name": "etaf-rss-tests-read-and-star-toggle",
+      "file": "tests/etaf-rss-tests.el",
+      "purpose": "Read and star toggles flip the visible row immediately and update the unread and starred counts after the service confirms."
+    },
+    {
+      "name": "etaf-rss-tests-reader-loads-and-scrolls",
+      "file": "tests/etaf-rss-tests.el",
+      "purpose": "Activating an article wraps its body into lines within the reading width, scroll clamps, and the pane switch records the choice."
+    },
+    {
+      "name": "etaf-rss-tests-mark-read-scopes",
+      "file": "tests/etaf-rss-tests.el",
+      "purpose": "Marking above read and marking the whole scope read cover exactly the intended articles and update the unread total."
+    },
+    {
+      "name": "etaf-rss-tests-refresh-preserves-state",
+      "file": "tests/etaf-rss-tests.el",
+      "purpose": "Refreshing an unchanged feed keeps the read and starred state of its articles."
+    },
+    {
+      "name": "etaf-rss-tests-remove-feed-keeps-starred",
+      "file": "tests/etaf-rss-tests.el",
+      "purpose": "Unsubscribing removes the feed while its starred articles stay readable in the starred scope."
+    },
+    {
+      "name": "etaf-rss-tests-opml-round-trip",
+      "file": "tests/etaf-rss-tests.el",
+      "purpose": "Subscriptions export to an OPML file and import into another session with the same feed count."
+    },
+    {
+      "name": "etaf-rss-tests-theme-switches",
+      "file": "tests/etaf-rss-tests.el",
+      "purpose": "The palette cycles and sets between dark and light, an unknown appearance signals, and the UI tokens match the palette."
+    },
+    {
+      "name": "etaf-rss-tests-declares-its-surface-to-a-host",
+      "file": "tests/etaf-rss-tests.el",
+      "purpose": "A host frames the reader from the palette, mode cell and modes it declares, so a panel's title-bar switch repaints every row instead of only the frame chrome."
+    },
+    {
+      "name": "etaf-rss-tests-miniflux-backend-reads-a-server",
+      "file": "tests/etaf-rss-miniflux-tests.el",
+      "purpose": "The Miniflux backend answers the reader's own request protocol, so a server's categories, counters, feeds and entries fill the same sidebar and list."
+    },
+    {
+      "name": "etaf-rss-tests-miniflux-backend-opens-an-article",
+      "file": "tests/etaf-rss-miniflux-tests.el",
+      "purpose": "Opening an article on the server backend requests the entry by id and renders its HTML in the reading pane."
+    },
+    {
+      "name": "etaf-rss-tests-miniflux-backend-writes-read-and-star",
+      "file": "tests/etaf-rss-miniflux-tests.el",
+      "purpose": "Read state, stars and mark-all-read reach the server endpoints and update the reader rows and counters from the replies."
+    },
+    {
+      "name": "etaf-rss-tests-miniflux-backend-reports-a-server-failure",
+      "file": "tests/etaf-rss-miniflux-tests.el",
+      "purpose": "A rejected server request becomes the reader's readable error while the session stays usable."
+    }
+  ]
+}

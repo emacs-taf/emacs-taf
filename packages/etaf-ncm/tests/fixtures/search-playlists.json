@@ -1,0 +1,70 @@
+{
+  "kw": "关键词",
+  "count": 8,
+  "playlists": [
+    {
+      "id": 1001,
+      "name": "歌单 1",
+      "count": 10,
+      "creator": "创建者 1",
+      "special": 0,
+      "sub": false
+    },
+    {
+      "id": 1002,
+      "name": "歌单 2",
+      "count": 11,
+      "creator": "创建者 2",
+      "special": 0,
+      "sub": true
+    },
+    {
+      "id": 1003,
+      "name": "歌单 3",
+      "count": 12,
+      "creator": "创建者 3",
+      "special": 0,
+      "sub": false
+    },
+    {
+      "id": 1004,
+      "name": "歌单 4",
+      "count": 13,
+      "creator": "创建者 4",
+      "special": 0,
+      "sub": true
+    },
+    {
+      "id": 1005,
+      "name": "歌单 5",
+      "count": 14,
+      "creator": "创建者 5",
+      "special": 0,
+      "sub": false
+    },
+    {
+      "id": 1006,
+      "name": "歌单 6",
+      "count": 15,
+      "creator": "创建者 6",
+      "special": 0,
+      "sub": true
+    },
+    {
+      "id": 1007,
+      "name": "歌单 7",
+      "count": 16,
+      "creator": "创建者 7",
+      "special": 0,
+      "sub": false
+    },
+    {
+      "id": 1008,
+      "name": "歌单 8",
+      "count": 17,
+      "creator": "创建者 8",
+      "special": 0,
+      "sub": true
+    }
+  ]
+}

@@ -1,0 +1,215 @@
+{
+ "schema": 1,
+ "load_path": [
+  ".",
+  "tests",
+  "../etaf",
+  "../etaf-ui",
+  "../etaf-db",
+  "../ebox",
+  "../ecss"
+ ],
+ "support": [],
+ "cases": [
+  {
+   "name": "etaf-weread-tests-help-stays-in-reader",
+   "file": "tests/etaf-weread-tests.el",
+   "purpose": "Both help entries show effective labelled keys in the reader, preserve business state and restore focus after layered Escape or backdrop dismissal."
+  },
+  {
+   "name": "etaf-weread-tests-new-session-is-headless",
+   "file": "tests/etaf-weread-tests.el",
+   "purpose": "A session built without a buffer starts on the shelf, shows the detail pane and sends no request."
+  },
+  {
+   "name": "etaf-weread-tests-refresh-loads-shelf-account-and-stats",
+   "file": "tests/etaf-weread-tests.el",
+   "purpose": "Refreshing loads the shelf rows, the account name and the reading statistics into one visible state."
+  },
+  {
+   "name": "etaf-weread-tests-login-sends-the-login-request-and-reloads",
+   "file": "tests/etaf-weread-tests.el",
+   "purpose": "Signing in sends the login request with the longer login deadline and, once it succeeds, reloads the account and the shelf into the reader."
+  },
+  {
+   "name": "etaf-weread-tests-logout-forgets-the-account-and-names-the-command",
+   "file": "tests/etaf-weread-tests.el",
+   "purpose": "Signing out sends the logout request, drops the account, statistics and loaded rows, and names the Emacs login command in the status line."
+  },
+  {
+   "name": "etaf-weread-tests-login-failure-names-the-emacs-command",
+   "file": "tests/etaf-weread-tests.el",
+   "purpose": "A backend failure that needs a login is reported with the Emacs login command instead of the backend's command line."
+  },
+  {
+   "name": "etaf-weread-tests-sections-are-navigable",
+   "file": "tests/etaf-weread-tests.el",
+   "purpose": "Every sidebar section opens and names itself, and an unknown section signals without changing the current one."
+  },
+  {
+   "name": "etaf-weread-tests-filter-selects-shelf-section",
+   "file": "tests/etaf-weread-tests.el",
+   "purpose": "The shelf filter selects the matching section, sends the backend filter and rejects an unknown one."
+  },
+  {
+   "name": "etaf-weread-tests-search-trims-and-rejects-blank",
+   "file": "tests/etaf-weread-tests.el",
+   "purpose": "Searching trims the keyword, shows the store results and rejects a blank keyword without a request."
+  },
+  {
+   "name": "etaf-weread-tests-selection-keeps-its-page",
+   "file": "tests/etaf-weread-tests.el",
+   "purpose": "Selection clamps at both ends and opening the selected book publishes its detail."
+  },
+  {
+   "name": "etaf-weread-tests-show-book-loads-detail-and-chapters",
+   "file": "tests/etaf-weread-tests.el",
+   "purpose": "Showing a book publishes its detail and chapter list, and a cached book is not requested twice."
+  },
+  {
+   "name": "etaf-weread-tests-notes-group-and-attach-thoughts",
+   "file": "tests/etaf-weread-tests.el",
+   "purpose": "Highlights group by chapter, a matching thought attaches to its highlight and an orphan thought collects under its own heading."
+  },
+  {
+   "name": "etaf-weread-tests-panes-toggle-and-load-notes",
+   "file": "tests/etaf-weread-tests.el",
+   "purpose": "The side pane switches between detail and highlights, loading the highlights on first use, and rejects an unknown pane."
+  },
+  {
+   "name": "etaf-weread-tests-press-row-selects-then-opens",
+   "file": "tests/etaf-weread-tests.el",
+   "purpose": "A press selects another row and pressing the selected row opens it; an out-of-range row signals."
+  },
+  {
+   "name": "etaf-weread-tests-reader-url-and-open-book",
+   "file": "tests/etaf-weread-tests.el",
+   "purpose": "Reader URLs prefer the backend deep link, fall back to the book id, and opening hands the URL to browse-url."
+  },
+  {
+   "name": "etaf-weread-tests-export-notes-sends-the-export-request",
+   "file": "tests/etaf-weread-tests.el",
+   "purpose": "Exporting the selected book sends the export request and reports the backend conclusion."
+  },
+  {
+   "name": "etaf-weread-tests-index-stores-and-searches-highlights",
+   "file": "tests/etaf-weread-tests.el",
+   "purpose": "Reading highlights stores them in the SQLite index, and the index section filters them by keyword."
+  },
+  {
+   "name": "etaf-weread-tests-index-notebook-walks-and-skips-indexed",
+   "file": "tests/etaf-weread-tests.el",
+   "purpose": "The notebook walk fetches each unindexed book once, skips indexed books on a repeat run and re-fetches them when refreshed."
+  },
+  {
+   "name": "etaf-weread-tests-index-upsert-updates-a-changed-thought",
+   "file": "tests/etaf-weread-tests.el",
+   "purpose": "Re-indexing a changed thought updates the stored row through upsert instead of adding a duplicate."
+  },
+  {
+   "name": "etaf-weread-tests-backend-failure-is-reported-not-signaled",
+   "file": "tests/etaf-weread-tests.el",
+   "purpose": "A failing backend reply lands in the session error and message while the reader stays usable."
+  },
+  {
+   "name": "etaf-weread-tests-missing-backend-script-is-reported",
+   "file": "tests/etaf-weread-tests.el",
+   "purpose": "A client whose backend script is missing reports the failure instead of signaling."
+  },
+  {
+   "name": "etaf-weread-tests-theme-tokens-cover-both-palettes",
+   "file": "tests/etaf-weread-tests.el",
+   "purpose": "Every palette key resolves in both modes, an unknown key signals and the UI tokens follow the selected mode."
+  },
+  {
+   "name": "etaf-weread-tests-format-duration-and-progress-bar",
+   "file": "tests/etaf-weread-tests.el",
+   "purpose": "Reading time and the text progress bar keep their documented shapes, including the empty and full ends."
+  },
+  {
+   "name": "etaf-weread-tests-mount-renders-and-revives",
+   "file": "tests/etaf-weread-tests.el",
+   "purpose": "Mounting paints the shelf into a buffer, and killing that buffer lets the same session mount again."
+  },
+  {
+   "name": "etaf-weread-tests-status-hints-fit-their-layout",
+   "file": "tests/etaf-weread-tests.el",
+   "purpose": "The wide status bar and the compact tab row each paint their binding hint whole, so no layout clips the summary off."
+  },
+  {
+   "name": "etaf-weread-tests-section-switches-return-to-the-list-on-compact",
+   "file": "tests/etaf-weread-tests.el",
+   "purpose": "Switching section or running a store search brings the list pane back on a compact frame, while a wide frame keeps the pane the reader was showing."
+  },
+  {
+   "name": "etaf-weread-tests-ret-opens-the-selection",
+   "file": "tests/etaf-weread-tests.el",
+   "purpose": "RET activates a Host under point and otherwise opens the selected book, so selecting with the arrows and pressing RET follows the documented contract."
+  },
+  {
+   "name": "etaf-weread-tests-pane-keys-scroll-the-pane",
+   "file": "tests/etaf-weread-tests.el",
+   "purpose": "SPC and M-v scroll a long table-of-contents pane from the keyboard, which the wheel alone cannot do."
+  },
+  {
+   "name": "etaf-weread-tests-replaced-keys-run-the-reader-command",
+   "file": "tests/etaf-weread-tests.el",
+   "purpose": "Keys the renderer also binds (n, q, PageUp/PageDown) run the reader command instead of a renderer scroll, so the documented keyboard contract holds."
+  },
+  {
+   "name": "etaf-weread-tests-open-and-close-own-a-buffer",
+   "file": "tests/etaf-weread-tests.el",
+   "purpose": "Opening installs the reader keymap, hides the mode line and paints the shelf; closing kills the buffer."
+  },
+  {
+   "name": "etaf-weread-tests-open-fills-the-selected-window",
+   "file": "tests/etaf-weread-tests.el",
+   "purpose": "Opening the reader replaces the selected window instead of splitting the frame into a second pane."
+  },
+  {
+   "name": "etaf-weread-tests-default-client-runs-the-backend-script",
+   "file": "tests/etaf-weread-tests.el",
+   "purpose": "The default client runs the backend script with the documented arguments for a shelf filter, an export with its directory, a login and a logout."
+  },
+  {
+   "name": "etaf-weread-tests-backend-refusal-reports-its-own-message",
+   "file": "tests/etaf-weread-tests.el",
+   "purpose": "A refused backend command surfaces its own JSON message, code and hint even though the exit event can arrive before the output; a crash without JSON keeps the exit status."
+  },
+  {
+   "name": "etaf-weread-tests-backend-timeout-and-cancel",
+   "file": "tests/etaf-weread-tests.el",
+   "purpose": "A slow backend request times out with its command line as the hint, and a cancelled request never calls back."
+  },
+  {
+   "name": "etaf-weread-tests-cached-list-refreshes-without-a-loading-state",
+   "file": "tests/etaf-weread-tests.el",
+   "purpose": "A cached list is shown at once and compared in the background without a loading state; a changed reply replaces the rows and the reader keeps its place."
+  },
+  {
+   "name": "etaf-weread-tests-prefetch-warms-lists-and-stops-on-close",
+   "file": "tests/etaf-weread-tests.el",
+   "purpose": "A mounted reader warms unopened sidebar lists in the background, opens a warmed section without a loading state, and cancels the timer when the buffer is killed."
+  },
+  {
+   "name": "etaf-weread-tests-prefetch-pauses-while-hidden",
+   "file": "tests/etaf-weread-tests.el",
+   "purpose": "A reader whose buffer no window shows pauses background refreshes, and showing it again resumes them."
+  },
+  {
+   "name": "etaf-weread-tests-auth-failure-pauses-refreshes",
+   "file": "tests/etaf-weread-tests.el",
+   "purpose": "A background refresh failing with an auth error pauses the warmer until a foreground load succeeds."
+  },
+  {
+   "name": "etaf-weread-tests-declares-its-palette-to-a-host",
+   "file": "tests/etaf-weread-tests.el",
+   "purpose": "A reader mounted under a host declares its palette, mode labels and mode cell there, and its own theme cycle writes the same cell the host's switch writes."
+  },
+  {
+   "name": "etaf-weread-tests-keys-belong-to-the-root-host",
+   "file": "tests/etaf-weread-tests.el",
+   "purpose": "The reader's keys and its recorded session travel with its View, so a host that mounts it without etaf-app-open keeps working keys and can resolve the mounted reader."
+  }
+ ]
+}

@@ -1,0 +1,16 @@
+;;; -*- mode: emacs-lisp; lexical-binding: t; -*-
+;; SPDX-License-Identifier: GPL-3.0-or-later
+;; Passive falling sand with configurable emission intensity.
+
+(etaf-scene
+ :id falling-sand
+ :title "落沙"
+ :summary "沙粒不断落下，沿着坡面堆积。"
+ :tags (physics)
+ :frame-rate 20
+ :params ((:key grains :label "每帧沙粒数" :type number
+           :min 1 :max 12 :step 1 :default 3))
+ :layers ((:kind sand
+           :materials ((:key sand :char "#" :color "#D9C08A"
+                        :moves (down down-left down-right)))
+           :rain grains)))

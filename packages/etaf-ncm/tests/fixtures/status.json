@@ -1,0 +1,16 @@
+{
+  "ok": true,
+  "conclusion": "正在播放：曲目 1 - 歌手 1",
+  "title": "曲目 1",
+  "artist": "歌手 1",
+  "song_id": "1",
+  "state": "playing",
+  "queue_pos": "2/5",
+  "elapsed": "42",
+  "duration": "180",
+  "volume": "55",
+  "repeat": "false",
+  "shuffle": "false",
+  "source": "mpv",
+  "as_of": "2026-01-01T00:00:00+0800"
+}

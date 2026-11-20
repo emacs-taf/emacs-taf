@@ -1,0 +1,128 @@
+#+TITLE: ETAF Org 预览
+#+SUBTITLE: 一份覆盖主要语法的样例文档
+#+AUTHOR: 王小明
+#+DATE: 2026-02-14
+#+KEYWORDS: org etaf 预览
+#+FILETAGS: demo notes
+#+TODO: TODO NEXT WAIT | DONE CANCELLED
+#+PRIORITIES: A C B
+#+OPTIONS: toc:2
+
+这份文档用来手工检查预览效果。它覆盖标题、计划、标签、列表、表格、
+源码块、引用、告示、脚注、图片与常见行内标记。
+
+* 标题与元数据
+
+有 *粗体*、/斜体/、_下划线_、+删除线+、=逐字文本= 与 ~行内代码~。
+实体写成 \alpha 与 \rightarrow，上下标写成 H_2O 与 x^2。
+时间戳 <2026-02-14 Sat 10:00> 与 [2026-01-01 Thu]，还有 [[https://example.com][一个链接]]。
+
+** TODO [#A] 带计划与标签的标题                                  :work:urgent:
+   SCHEDULED: <2026-02-18 Wed> DEADLINE: <2026-02-20 Fri>
+:PROPERTIES:
+:CUSTOM_ID: planning
+:OWNER: 王小明
+:END:
+这一段在标题下面，带一个自定义 ID 和一条属性。
+
+*** NEXT 处理中的子任务
+正文内容。
+
+*** WAIT 等待中的子任务
+正文内容。
+
+*** DONE 已经完成的子任务
+正文内容。
+
+* 列表
+
+- 无序列表的第一项
+- 第二项
+  - 嵌套的一层
+  - 另一项
+- [X] 第三项 已完成
+- [ ] 第四项 未完成
+- [-] 第五项 做了一半
+
+1. 有序列表从一数起
+2. 第二项
+3. 第三项
+
+- 术语一 :: 说明文字，续行与说明列对齐
+- 术语二 :: 另一段说明
+
+* 表格
+
+| 项目     | 数量 | 备注             |
+|----------+------+------------------|
+| 苹果     |   12 | 新鲜的           |
+| 香蕉     |    3 | 熟透了           |
+| 合计     |   15 | 一个较长的备注会换行 |
+
+#+TBLFM: $2=vsum(@2..@-1)
+
+* 源码、引用与告示
+
+#+CAPTION: 一个最小的 elisp 函数
+#+BEGIN_SRC elisp
+(defun hello (name)
+  "Say hello to NAME."
+  (message "Hello, %s" name))
+#+END_SRC
+
+#+BEGIN_EXAMPLE
+这是一个逐字块。
+    缩进也保留。
+#+END_EXAMPLE
+
+#+BEGIN_QUOTE
+引用一段话，末尾带署名。
+-- 某人
+#+END_QUOTE
+
+#+BEGIN_NOTE
+这是一条提示。
+#+END_NOTE
+
+#+BEGIN_WARNING
+这是一条警告。
+#+END_WARNING
+
+#+BEGIN_VERSE
+诗句第一行
+诗句第二行
+#+END_VERSE
+
+#+BEGIN_CENTER
+居中的一行文字
+#+END_CENTER
+
+: 这是固定宽度的一行
+: 这是第二行
+
+-----
+
+* 公式与脚注
+
+行内公式 $E = mc^2$，行间公式：
+
+\[
+\sum_{i=1}^{n} i = \frac{n(n+1)}{2}
+\]
+
+这里有一个脚注[fn:note]，还有另一个脚注[fn::这是行内定义的脚注]。
+
+[fn:note] 这是脚注的定义。
+
+* 深层标题的级别
+**** 第四级
+***** 第五级
+****** 第六级
+******* 第七级
+******** 第八级
+
+* COMMENT 注释标题
+这一节正文默认隐藏，并带注释标记。
+
+* 长文档与收尾
+最后一段，用来检查文档末尾的留白与脚注区间距。

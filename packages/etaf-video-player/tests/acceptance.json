@@ -1,0 +1,145 @@
+{
+  "schema": 1,
+  "load_path": [
+    ".",
+    "tests",
+    "../etaf",
+    "../etaf-ui",
+    "../ebox",
+    "../ecss",
+    "../etaf-db"
+  ],
+  "support": [],
+  "cases": [
+    {
+      "name": "etaf-video-player-tests-help-stays-in-player",
+      "file": "tests/etaf-video-player-tests.el",
+      "purpose": "Both help entries open the shared searchable modal in the existing player, block playback keys and preserve playback through layered Escape."
+    },
+    {
+      "name": "etaf-video-player-tests-image-frames-publish-image-cells",
+      "file": "tests/etaf-video-player-tests.el",
+      "purpose": "A graphical frame makes the native Component publish one scaled JPEG cropped into one display slice per canvas row, so the canvas occupies exactly its rows and the controls below it stay visible."
+    },
+    {
+      "name": "etaf-video-player-tests-retina-frames-scale-by-device-pixel-ratio",
+      "file": "tests/etaf-video-player-tests.el",
+      "purpose": "The producer decodes at twice the canvas pixel size on a Retina display so the image is never upscaled by the window system."
+    },
+    {
+      "name": "etaf-video-player-tests-falls-back-to-ascii-on-terminal",
+      "file": "tests/etaf-video-player-tests.el",
+      "purpose": "Without a graphical frame the requested image mode renders a density-ramp canvas while the state reports both modes."
+    },
+    {
+      "name": "etaf-video-player-tests-resolves-relative-file-names",
+      "file": "tests/etaf-video-player-tests.el",
+      "purpose": "A source named relative to the caller's directory reaches the decoder as the absolute file name and plays."
+    },
+    {
+      "name": "etaf-video-player-tests-audio-sidecar-follows-playback",
+      "file": "tests/etaf-video-player-tests.el",
+      "purpose": "An audio source starts one ffplay sidecar with the documented arguments while playing, releases it on pause, and stays silent while sound is off."
+    },
+    {
+      "name": "etaf-video-player-tests-volume-commands-restart-sidecar",
+      "file": "tests/etaf-video-player-tests.el",
+      "purpose": "The volume keys change the level and restart the running sidecar with the documented volume."
+    },
+    {
+      "name": "etaf-video-player-tests-controls-pause-step-seek-speed",
+      "file": "tests/etaf-video-player-tests.el",
+      "purpose": "Pause freezes the position, step presents one more frame, and seek and speed restart the producer with the documented arguments."
+    },
+    {
+      "name": "etaf-video-player-tests-finishes-and-restarts",
+      "file": "tests/etaf-video-player-tests.el",
+      "purpose": "A producer that runs out of frames ends the player, keeps its last picture, and plays again from the start."
+    },
+    {
+      "name": "etaf-video-player-tests-streams-http-url",
+      "file": "tests/etaf-video-player-tests.el",
+      "purpose": "An HTTP URL reaches ffmpeg with reconnect options while a non-HTTP scheme is rejected before any process starts."
+    },
+    {
+      "name": "etaf-video-player-tests-rejects-invalid-sources",
+      "file": "tests/etaf-video-player-tests.el",
+      "purpose": "Unsupported sources and a missing ffmpeg signal user-error and leave no mounted buffer behind."
+    },
+    {
+      "name": "etaf-video-player-tests-documented-keys-reach-player",
+      "file": "tests/etaf-video-player-tests.el",
+      "purpose": "The documented keys drive the player through the command loop instead of the renderer's own keymap, and closing leaves no buffer."
+    },
+    {
+      "name": "etaf-video-player-tests-canvas-and-close-follow-the-application",
+      "file": "tests/etaf-video-player-tests.el",
+      "purpose": "Unpainted canvas cells take the chrome color of the current appearance and follow T, and killing the player buffer saves the playback position like closing it."
+    },
+    {
+      "name": "etaf-video-player-tests-color-half-blocks-publish-true-colors",
+      "file": "tests/etaf-video-player-tests.el",
+      "purpose": "Color mode publishes one half-block cell per column with the two true colors of the pixel pair, so a character terminal keeps the source's colors."
+    },
+    {
+      "name": "etaf-video-player-tests-render-mode-switches-without-restarting",
+      "file": "tests/etaf-video-player-tests.el",
+      "purpose": "C changes the render mode between image, ascii and half-block color, keeps the playback place and the effective mode, and refuses an unknown mode."
+    },
+    {
+      "name": "etaf-video-player-tests-color-mode-caps-the-fitted-canvas",
+      "file": "tests/etaf-video-player-tests.el",
+      "purpose": "A fitted color canvas stops at the configured column cap while its rows follow the video aspect, bounding the per-frame face properties."
+    },
+    {
+      "name": "etaf-video-player-tests-close-restores-frame-background",
+      "file": "tests/etaf-video-player-tests.el",
+      "purpose": "A graphic frame takes the player's chrome color while it is open and gets its own background back when the player closes."
+    },
+    {
+      "name": "etaf-video-player-tests-open-interactively-shows-the-demo",
+      "file": "tests/etaf-video-player-tests.el",
+      "purpose": "The generic open command reads nothing from the minibuffer and plays the built-in demo, while open-file remains the command that prompts for a name."
+    },
+    {
+      "name": "etaf-video-player-tests-plays-demo-with-real-ffmpeg",
+      "file": "tests/etaf-video-player-tests.el",
+      "purpose": "The built-in demo plays through a real ffmpeg when one is installed, gated so other machines still run the fixture scenarios."
+    },
+    {
+      "name": "etaf-video-player-tests-playlist-navigates-and-edits",
+      "file": "tests/etaf-video-player-tests.el",
+      "purpose": "A playlist opens by index and follows next, previous, enqueue and remove while keeping the running item addressable."
+    },
+    {
+      "name": "etaf-video-player-tests-playlist-auto-advances-with-loop",
+      "file": "tests/etaf-video-player-tests.el",
+      "purpose": "An item that ends advances per loop policy: all wraps to the first item, none stops on the last one."
+    },
+    {
+      "name": "etaf-video-player-tests-playlist-shuffle-stays-in-range",
+      "file": "tests/etaf-video-player-tests.el",
+      "purpose": "Shuffle reports its flag and next picks a different queue item within range."
+    },
+    {
+      "name": "etaf-video-player-tests-subtitles-parse-time-and-probe",
+      "file": "tests/etaf-video-player-tests.el",
+      "purpose": "SubRip and WebVTT tracks parse into timed cues, the timeline answers lookups per second, unreadable files raise the documented error and the beside probe prefers the language suffix."
+    },
+    {
+      "name": "etaf-video-player-tests-subtitle-loads-beside-video-and-toggles",
+      "file": "tests/etaf-video-player-tests.el",
+      "purpose": "A local video adopts the track beside it, the subtitle line reaches the buffer, and the c key hides and restores it."
+    },
+    {
+      "name": "etaf-video-player-tests-history-records-and-resumes",
+      "file": "tests/etaf-video-player-tests.el",
+      "purpose": "Playback positions round-trip per file, a useful record resumes after open, and a record at the very end restarts from zero."
+    },
+    {
+      "name": "etaf-video-player-tests-screenshot-writes-a-png",
+      "file": "tests/etaf-video-player-tests.el",
+      "purpose": "The screenshot command decodes the current frame with a real ffmpeg into a readable PNG and returns the output path."
+    }
+  ]
+}

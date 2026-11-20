@@ -1,0 +1,54 @@
+{
+  "kind": "subscribed",
+  "count": 8,
+  "podcasts": [
+    {
+      "id": 5001,
+      "name": "播客 1",
+      "episodes": 5,
+      "dj": "主播 1"
+    },
+    {
+      "id": 5002,
+      "name": "播客 2",
+      "episodes": 6,
+      "dj": "主播 2"
+    },
+    {
+      "id": 5003,
+      "name": "播客 3",
+      "episodes": 7,
+      "dj": "主播 3"
+    },
+    {
+      "id": 5004,
+      "name": "播客 4",
+      "episodes": 8,
+      "dj": "主播 4"
+    },
+    {
+      "id": 5005,
+      "name": "播客 5",
+      "episodes": 9,
+      "dj": "主播 5"
+    },
+    {
+      "id": 5006,
+      "name": "播客 6",
+      "episodes": 10,
+      "dj": "主播 6"
+    },
+    {
+      "id": 5007,
+      "name": "播客 7",
+      "episodes": 11,
+      "dj": "主播 7"
+    },
+    {
+      "id": 5008,
+      "name": "播客 8",
+      "episodes": 12,
+      "dj": "主播 8"
+    }
+  ]
+}

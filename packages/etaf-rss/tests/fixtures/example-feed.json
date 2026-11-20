@@ -1,0 +1,16 @@
+{
+  "version": "https://jsonfeed.org/version/1.1",
+  "title": "JSON 示例",
+  "home_page_url": "https://json.example",
+  "description": "一个 JSON Feed",
+  "items": [
+    {
+      "id": "json-1",
+      "url": "https://json.example/1",
+      "title": "JSON 条目一",
+      "date_published": "2025-09-27T09:00:00Z",
+      "authors": [{"name": "作者丙"}],
+      "content_html": "<p>JSON 正文</p>"
+    }
+  ]
+}

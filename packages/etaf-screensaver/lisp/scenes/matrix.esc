@@ -1,0 +1,19 @@
+;;; -*- mode: emacs-lisp; lexical-binding: t; -*-
+;; SPDX-License-Identifier: GPL-3.0-or-later
+;; Digital rain: one driven drop per column with a random glyph and speed.
+
+(etaf-scene
+ :id matrix
+ :title "数字雨"
+ :summary "经典数字雨：每列一滴，字形随机，整帧一个绿色 face。"
+ :tags (effect monochrome)
+ :frame-rate 20
+ :background "#05070B"
+ :params ((:key speed :label "下落速度" :type number
+           :min 1 :max 20 :step 1 :default 8))
+ :layers ((:kind rain
+           :glyphs "0123456789ABCDEF<>*+=-"
+           :head "▓"
+           :tail 9
+           :speed speed
+           :color "#3BF07A")))

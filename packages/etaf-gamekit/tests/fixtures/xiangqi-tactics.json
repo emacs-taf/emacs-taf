@@ -1,0 +1,14 @@
+[
+  {
+    "purpose": "Red must take a one-ply win instead of preserving its material advantage.",
+    "player": 0,
+    "actions": [6307, 1792, 635, 7464, 458, 373, 7734, 1184, 723, 9, 271, 2284, 96, 823, 547, 1265, 632, 3076, 180, 454],
+    "wins": [5761]
+  },
+  {
+    "purpose": "Black must take a one-ply win from its own perspective.",
+    "player": 1,
+    "actions": [5761, 1, 6307, 727, 5633, 2272, 7362, 2038, 4905, 718, 8098, 1736, 4086, 2393, 3267],
+    "wins": [4819]
+  }
+]
