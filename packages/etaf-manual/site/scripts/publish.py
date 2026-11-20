@@ -50,7 +50,10 @@ def remote(command, **kwargs):
     ssh = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=15", host, command]
     if route == "lightos":
         ssh = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=15", "lightos", shlex.join(ssh)]
-    return subprocess.run(ssh, check=True, timeout=600, **kwargs)
+    # The payload crosses two hops to reach the archive host: an 18 MB set of
+    # tarballs made a deployment finish just after the old ten-minute limit, and
+    # the timeout then reported a failure for an archive that was serving.
+    return subprocess.run(ssh, check=True, timeout=1800, **kwargs)
 
 
 def add_tree(archive, directory, prefix=""):
