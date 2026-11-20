@@ -32,6 +32,13 @@ import time
 import package_archive
 
 ROOT = Path(__file__).resolve().parents[1]
+# A third-party archive throttles repeated index fetches: MELPA answers 429 after
+# a few.  The external dependency closure of these packages changes rarely, so
+# one snapshot serves every verification until someone asks to refresh it.
+STANDARD_ARCHIVE_CACHE = Path(os.environ.get(
+    "ETAF_STANDARD_ARCHIVE_CACHE",
+    Path.home() / ".cache" / "etaf-standard-archives"))
+
 
 
 # An install smoke compiles the target's dependencies from source; a large
@@ -511,6 +518,21 @@ def check_installation(directory, emacs, target, entry, names, community, standa
     return result
 
 
+def standard_snapshot(explicit, emacs, refresh=False):
+    """Return the snapshot verified profiles should install from.
+
+    An explicit directory wins.  Otherwise the cached snapshot is reused, and it
+    is fetched once when missing or when REFRESH asks for the current closure.
+    Fetching the closure once per verification is what made the gate hit a
+    rate limit rather than test the archive.
+    """
+    if explicit:
+        return explicit
+    if refresh or not (STANDARD_ARCHIVE_CACHE / "manifest.json").is_file():
+        prefetch(STANDARD_ARCHIVE_CACHE, emacs)
+    return STANDARD_ARCHIVE_CACHE
+
+
 def verify(directory, emacs, targets, paths=("etaf-install",), standard_archives=None,
            scope="full", jobs=None, reason=None):
     """Exercise PATHS in separate disposable profiles.
@@ -730,7 +752,9 @@ def main():
                                  help="Record a full gate or a gate of the named targets")
             command.add_argument("--reason", help="Why a selected gate covers these targets")
             command.add_argument("--standard-archives", type=Path,
-                                 help="Serve a prefetched standard archive snapshot instead of live archives")
+                                 help="Serve this prefetched snapshot instead of the cached one")
+            command.add_argument("--refresh-standard-archives", action="store_true",
+                                 help="Fetch the external dependency closure again")
         elif name == "prefetch":
             command.add_argument("--emacs", default="emacs")
         elif name == "stage":
@@ -751,7 +775,9 @@ def main():
     elif args.command == "verify":
         paths = ("etaf-install", "package-install") if args.paths == "both" else (args.paths,)
         verify(args.directory.resolve(), args.emacs, args.target or release_targets(), paths,
-               args.standard_archives.resolve() if args.standard_archives else None,
+               standard_snapshot(
+                   args.standard_archives.resolve() if args.standard_archives else None,
+                   args.emacs, args.refresh_standard_archives),
                args.scope, args.jobs, args.reason)
     elif args.command == "stage":
         stage(args.directory.resolve(), args.output.resolve())
@@ -760,7 +786,11 @@ def main():
     else:
         # The site publisher owns transport, deployment locking and rollback.
         # It invokes stage before contacting the host and never uploads reports.
-        return subprocess.call([sys.executable, str(ROOT / "etaf-manual/site/scripts/publish.py"),
+        # The site publisher lives in the manual's checkout, which the package
+        # container holds when every package shares one tree.
+        manual = ROOT / "packages" / "etaf-manual"
+        site = (manual if manual.is_dir() else ROOT / "etaf-manual") / "site" / "scripts" / "publish.py"
+        return subprocess.call([sys.executable, str(site),
                                 "--packages-only", str(args.directory.resolve())])
     return 0
 

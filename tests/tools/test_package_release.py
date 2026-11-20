@@ -29,6 +29,49 @@ def release_module():
 
 
 @unittest.skipUnless(shutil.which(EMACS), "Release checks require Emacs")
+class StandardSnapshotTests(unittest.TestCase):
+    """A verification reuses one snapshot instead of refetching the closure."""
+
+    def module(self):
+        return release_module()
+
+    def test_an_explicit_directory_wins_without_touching_the_cache(self):
+        module = self.module()
+        with tempfile.TemporaryDirectory() as work:
+            explicit = Path(work)
+            calls = []
+            original = module.prefetch
+            module.prefetch = lambda *args, **kwargs: calls.append(args)
+            try:
+                chosen = module.standard_snapshot(explicit, "emacs")
+            finally:
+                module.prefetch = original
+            self.assertEqual(explicit, chosen)
+            self.assertEqual([], calls)
+
+    def test_a_cached_snapshot_is_reused_and_missing_one_is_fetched(self):
+        module = self.module()
+        with tempfile.TemporaryDirectory() as work:
+            cache = Path(work)
+            calls = []
+            original_prefetch, original_cache = module.prefetch, module.STANDARD_ARCHIVE_CACHE
+            module.prefetch = lambda directory, emacs: calls.append(directory)
+            module.STANDARD_ARCHIVE_CACHE = cache
+            try:
+                # Nothing cached yet: the closure is fetched once.
+                self.assertEqual(cache, module.standard_snapshot(None, "emacs"))
+                self.assertEqual([cache], calls)
+                # A manifest makes the next verification local.
+                (cache / "manifest.json").write_text("{}", encoding="utf-8")
+                self.assertEqual(cache, module.standard_snapshot(None, "emacs"))
+                self.assertEqual([cache], calls)
+                # Asking for a refresh fetches again.
+                self.assertEqual(cache, module.standard_snapshot(None, "emacs", refresh=True))
+                self.assertEqual([cache, cache], calls)
+            finally:
+                module.prefetch, module.STANDARD_ARCHIVE_CACHE = original_prefetch, original_cache
+
+
 class PackageReleaseVerificationTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
