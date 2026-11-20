@@ -34,7 +34,7 @@ clean:
 structure-check:
 	python3 ../../scripts/check-repository.py --root . --skip-api
 setup-hooks:
-	git config --local core.hooksPath .githooks
+	@echo "jj does not run Git hooks; the container's 'make setup-hooks' explains what to check."
 
 GUI_EXAMPLE ?= surfaces
 gui-check: icon-check
@@ -44,18 +44,18 @@ icon-check:
 	scripts/run-icon-check.sh
 
 PERF_ARGS ?=
-PERF_TOOL ?= ../scripts/performance.py
+PERF_TOOL ?= ../../scripts/performance.py
 .PHONY: perf-check
 perf-check:
 	python3 "$(PERF_TOOL)" run --root . --scenario-file benchmarks/performance-scenarios.el --mode gui --scenario 'gallery.*' $(PERF_ARGS)
 
 .PHONY: acceptance
 acceptance:
-	python3 scripts/run-acceptance.py --emacs "$(EMACS)"
+	python3 ../../scripts/run-acceptance.py --root . --emacs "$(EMACS)"
 
 .PHONY: api-check
 api-check:
-	$(EMACS) -Q --batch -L . $(API_PROVIDER_PATH) --eval '(setq load-prefer-newer t)' -l scripts/check-api.el
+	$(EMACS) -Q --batch -L . $(API_PROVIDER_PATH) --eval '(setq load-prefer-newer t)' -l ../../scripts/check-api.el
 API_PROVIDER_PATH = -L ../ecss -L ../ekp -L ../ebox -L ../etaf -L ../etaf-db -L ../ebox-playground -L ../etaf-playground
 
 .PHONY: test

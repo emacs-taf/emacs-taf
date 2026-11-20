@@ -22,14 +22,14 @@ engine-check:
 	node native/boardgame-io/bridge.cjs --version
 	"$(GAMEKIT_CACHE)/openspiel/bin/python" native/openspiel/bridge.py --version
 acceptance: engine-check
-	python3 scripts/run-acceptance.py --emacs "$(EMACS)"
+	python3 ../../scripts/run-acceptance.py --root . --emacs "$(EMACS)"
 tool-test: engine-check
 	python3 -m unittest discover -s tests/tools -p 'test_*.py'
 api-check:
-	$(EMACS) -Q --batch $(LOAD_PATH) --eval '(setq load-prefer-newer t)' -l scripts/check-api.el
+	$(EMACS) -Q --batch $(LOAD_PATH) --eval '(setq load-prefer-newer t)' -l ../../scripts/check-api.el
 test: acceptance tool-test
 check: structure-check compile acceptance tool-test api-check
 clean:
 	rm -f *.elc lisp/*.elc tests/*.elc benchmarks/*.elc scripts/*.elc
 setup-hooks:
-	git config --local core.hooksPath .githooks
+	@echo "jj does not run Git hooks; the container's 'make setup-hooks' explains what to check."

@@ -12,7 +12,9 @@ import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
-ARCHIVE_TOOL = ROOT / "scripts/package_archive.py"
+# The archive primitives belong to the container that owns them.
+CONTAINER = ROOT.parents[1]
+ARCHIVE_TOOL = ROOT.parents[1] / "scripts/package_archive.py"
 PAGES_TOOL = ROOT / "site/scripts/archive_pages.py"
 
 

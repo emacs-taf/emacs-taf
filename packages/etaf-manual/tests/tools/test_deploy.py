@@ -14,6 +14,8 @@ import threading
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
+# The archive primitives belong to the container that owns them.
+CONTAINER = ROOT.parents[1]
 
 
 @unittest.skipIf(os.name == "nt", "Deployment runs on the POSIX web host")
@@ -27,7 +29,7 @@ class DeploymentTests(unittest.TestCase):
         self.tools = self.work / "tools"
         self.tools.mkdir()
         shutil.copyfile(ROOT / "site/scripts/deploy-release.py", self.tools / "deploy-release.py")
-        shutil.copyfile(ROOT / "scripts/package_archive.py", self.tools / "package_archive.py")
+        shutil.copyfile(CONTAINER / "scripts/package_archive.py", self.tools / "package_archive.py")
         self.broken = False
         owner = self
 
@@ -64,7 +66,7 @@ class DeploymentTests(unittest.TestCase):
             f';; Version: {version}\n;; Package-Requires: ((emacs "29.1"))\n'
             f"{body}\n(provide 'example)\n")
         output = self.work / f"archive-{self.sequence}"
-        result = subprocess.run([sys.executable, str(ROOT / "scripts/package_archive.py"),
+        result = subprocess.run([sys.executable, str(CONTAINER / "scripts/package_archive.py"),
                                  "build", "--directory", str(output), "--package", f"example={source}"],
                                 capture_output=True, text=True, timeout=20)
         self.assertEqual(result.returncode, 0, result.stderr)

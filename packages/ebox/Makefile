@@ -62,21 +62,21 @@ clean:
 structure-check:
 	python3 ../../scripts/check-repository.py --root . --skip-api
 setup-hooks:
-	git config --local core.hooksPath .githooks
+	@echo "jj does not run Git hooks; the container's 'make setup-hooks' explains what to check."
 
 .PHONY: acceptance
 acceptance:
-	python3 scripts/run-acceptance.py --emacs "$(EMACS)"
+	python3 ../../scripts/run-acceptance.py --root . --emacs "$(EMACS)"
 
 .PHONY: api-check
 api-check:
-	$(EMACS) -Q --batch -L . $(API_PROVIDER_PATH) --eval '(setq load-prefer-newer t)' -l scripts/check-api.el
+	$(EMACS) -Q --batch -L . $(API_PROVIDER_PATH) --eval '(setq load-prefer-newer t)' -l ../../scripts/check-api.el
 API_PROVIDER_PATH = -L ../ecss -L ../ekp -L ../etaf -L ../etaf-ui -L ../etaf-db -L ../ebox-playground -L ../etaf-playground
 
 .PHONY: test
 test: acceptance
 
-PERF_TOOL ?= ../scripts/performance.py
+PERF_TOOL ?= ../../scripts/performance.py
 .PHONY: perf-list perf-check
 perf-list:
 	$(PYTHON) "$(PERF_TOOL)" list --root . --scenario-file benchmarks/performance-scenarios.el --scenario 'ebox.*'

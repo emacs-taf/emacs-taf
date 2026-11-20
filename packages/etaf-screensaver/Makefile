@@ -50,13 +50,13 @@ structure-check:
 	$(PYTHON) ../../scripts/check-repository.py --root . --skip-api
 
 setup-hooks:
-	git config --local core.hooksPath .githooks
+	@echo "jj does not run Git hooks; the container's 'make setup-hooks' explains what to check."
 
 acceptance:
-	$(PYTHON) scripts/run-acceptance.py --emacs "$(EMACS)"
+	$(PYTHON) ../../scripts/run-acceptance.py --root . --emacs "$(EMACS)"
 
 api-check:
-	$(EMACS) -Q --batch -L . $(LOAD_PATH) --eval '(setq load-prefer-newer t)' -l scripts/check-api.el
+	$(EMACS) -Q --batch -L . $(LOAD_PATH) --eval '(setq load-prefer-newer t)' -l ../../scripts/check-api.el
 
 # Run the maintained GUI scenario in an existing owned server and print a fresh
 # evidence directory; pass SERVER=<name> for a dedicated verification instance.

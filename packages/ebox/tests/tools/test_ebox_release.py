@@ -44,8 +44,12 @@ class ReleaseTests(unittest.TestCase):
                 self.lock[section][name] = {"url": f"https://example.invalid/{name}.git", "revision": revision}
         (self.root / "release-dependencies.json").write_text(json.dumps(self.lock))
         (self.root / "scripts").mkdir()
-        for name in ("ebox-release.py", "package_archive.py"):
-            shutil.copy2(ROOT / "scripts" / name, self.root / "scripts" / name)
+        # The release script is this package's own; the archive primitives come
+        # from the container that owns them.
+        shutil.copy2(ROOT / "scripts" / "ebox-release.py",
+                     self.root / "scripts" / "ebox-release.py")
+        shutil.copy2(ROOT.parents[1] / "scripts" / "package_archive.py",
+                     self.root / "scripts" / "package_archive.py")
         self.command = [sys.executable, str(self.root / "scripts/ebox-release.py")]
 
     def call(self, *arguments, success=True):

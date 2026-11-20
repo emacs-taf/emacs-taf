@@ -17,6 +17,12 @@ import subprocess
 import sys
 import tempfile
 
+# The archive primitives belong to the container; a standalone clone keeps a
+# copy beside this script.
+_container_scripts = Path(__file__).resolve().parents[3] / "scripts"
+if _container_scripts.is_dir():
+    sys.path.insert(0, str(_container_scripts))
+
 import package_archive
 
 ROOT = Path(__file__).resolve().parents[1]

@@ -88,6 +88,16 @@ def owner_binary(root):
     return 'jj'
 
 
+def package_of_container(root):
+    """Return non-nil when ROOT is one package inside a shared container.
+
+    The container owns the shared tooling, the hooks and the workflow, so a
+    package does not carry its own copies of them.
+    """
+    root = Path(root).resolve()
+    return root.parent.name == 'packages' and (root.parent.parent / 'workspace.json').exists()
+
+
 def inventory(root):
     """Include new nonignored files, and exclude deleted or generated files."""
     if git_checkout_p(root):
@@ -154,10 +164,16 @@ def check(root, files=None, notices=None):
         for name in sorted(allowed_dirs - DIRS):
             if (root / name / 'workspace.json').exists():
                 fail(name, 'nested workspace root; register its checkouts in the workspace registry instead')
-    for required in ['README.md', 'Makefile', 'scripts/check-repository.py',
-                     '.githooks/pre-commit', '.githooks/commit-msg', 'scripts/check-commit-message.py', '.github/workflows/structure.yml',
-                     'scripts/check-api.py', 'scripts/check-api.el', 'scripts/api-workspace.json']:
-        if required not in files: fail(required, 'required maintained file is missing')
+    # A package inside a shared container borrows the tooling the container
+    # owns; only a root that stands alone carries its own copies.
+    required = ['README.md', 'Makefile']
+    if not package_of_container(root):
+        required += ['scripts/check-repository.py', '.githooks/pre-commit',
+                     '.githooks/commit-msg', 'scripts/check-commit-message.py',
+                     '.github/workflows/structure.yml', 'scripts/check-api.py',
+                     'scripts/check-api.el', 'scripts/api-workspace.json']
+    for item in required:
+        if item not in files: fail(item, 'required maintained file is missing')
     if workspace and 'AGENTS.md' not in files:
         fail('AGENTS.md', 'workspace requires its development instructions')
     if workspace and 'docs/architecture.zh-CN.md' not in files:

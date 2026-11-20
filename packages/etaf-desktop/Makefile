@@ -19,11 +19,11 @@ check: structure-check compile acceptance api-check
 structure-check:
 	python3 ../../scripts/check-repository.py --root . --skip-api
 setup-hooks:
-	git config --local core.hooksPath .githooks
+	@echo "jj does not run Git hooks; the container's 'make setup-hooks' explains what to check."
 acceptance:
-	python3 scripts/run-acceptance.py --emacs "$(EMACS)"
+	python3 ../../scripts/run-acceptance.py --root . --emacs "$(EMACS)"
 api-check:
-	$(EMACS) -Q --batch -L . $(LOAD_PATH) --eval '(setq load-prefer-newer t)' -l scripts/check-api.el
+	$(EMACS) -Q --batch -L . $(LOAD_PATH) --eval '(setq load-prefer-newer t)' -l ../../scripts/check-api.el
 # check-api.el is supplied by the shared provider checker in standalone clones.
 clean:
 	rm -f *.elc lisp/*.elc tests/*.elc examples/*.elc

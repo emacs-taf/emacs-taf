@@ -29,7 +29,7 @@ load: compile
 		--eval '(princ "maillist load OK\n")'
 
 acceptance:
-	python3 scripts/run-acceptance.py --emacs "$(EMACS)"
+	python3 ../../scripts/run-acceptance.py --root . --emacs "$(EMACS)"
 
 test: acceptance
 
@@ -39,15 +39,15 @@ structure-check:
 	@test -f maillist.el || { echo "缺少入口 maillist.el"; exit 1; }
 	@test -f tests/acceptance.json || { echo "缺少 tests/acceptance.json"; exit 1; }
 	@test -n "$(PROVIDER_ROOT)" || { echo "找不到 provider（../etaf 或 ../../etaf）"; exit 1; }
-	python3 scripts/check-repository.py
+	python3 ../../scripts/check-repository.py --root . --skip-api
 
 api-check:
 	$(EMACS) -Q --batch $(LOAD_PATH) \
 		--eval '(setq load-prefer-newer t)' \
-		-l scripts/check-api.el
+		-l ../../scripts/check-api.el
 
 setup-hooks:
-	git config --local core.hooksPath .githooks
+	@echo "jj does not run Git hooks; the container's 'make setup-hooks' explains what to check."
 
 # Run the maintained GUI scenario in an existing owned server and print a fresh
 # evidence directory; pass SERVER=<name> for a dedicated verification instance.

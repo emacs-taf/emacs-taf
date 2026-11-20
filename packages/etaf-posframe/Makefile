@@ -23,7 +23,7 @@ load: compile
 
 acceptance:
 	EMACSLOADPATH="$(POSFRAME_DIR):$(EMACSLOADPATH)" \
-		python3 scripts/run-acceptance.py --emacs "$(EMACS)"
+		python3 ../../scripts/run-acceptance.py --root . --emacs "$(EMACS)"
 
 test: acceptance
 
@@ -34,10 +34,10 @@ structure-check:
 	python3 ../../scripts/check-repository.py --root . --skip-api
 
 setup-hooks:
-	git config --local core.hooksPath .githooks
+	@echo "jj does not run Git hooks; the container's 'make setup-hooks' explains what to check."
 
 api-check:
-	$(EMACS) -Q --batch $(LOAD_PATH) --eval '(setq load-prefer-newer t)' -l scripts/check-api.el
+	$(EMACS) -Q --batch $(LOAD_PATH) --eval '(setq load-prefer-newer t)' -l ../../scripts/check-api.el
 
 check: structure-check compile acceptance api-check
 
