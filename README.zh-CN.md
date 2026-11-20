@@ -2,7 +2,19 @@
 
 [English](README.md)
 
-本仓库管理 Emacs TAF 生态的统一规范和本地构建入口：框架包、应用与游戏。每个仓库都是本目录下的独立检出，登记在 `workspace.json`；各自保留自己的 Git 历史、公共接口与发布流程。
+本仓库管理 Emacs TAF 生态的统一规范和本地构建入口：框架包、应用与游戏。每个包是同一份 Jujutsu 检出里 `packages/` 下的一个目录，登记在 `workspace.json`；各自仍作为独立仓库发布，有自己的版本号、公共接口与行为验证。
+
+## 开发
+
+所有包在同一份检出里，所以一次改动可以横跨框架层和用它的应用。发布时按包投影出去，每个仓库保持普通单包仓库的形状，仍然通过 package.el 安装。
+
+```sh
+make check           # 整份检出，发布前用
+make check-affected  # 只验本次改动够得着的单元
+make -C packages/etaf-ui check
+```
+
+每个已发布仓库都带着 `pre-mono` 标签，记录统一检出之前的历史；早于那次变更的克隆需要重新获取，不能直接 pull。
 
 ## 在已有 Emacs 中安装
 

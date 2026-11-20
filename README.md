@@ -2,11 +2,28 @@
 
 [中文](README.zh-CN.md)
 
-This repository owns the shared development policy and local orchestration for
-the Emacs TAF ecosystem: its framework packages, applications and games. Every
-repository is an independent checkout beside this one, registered in
-`workspace.json`; each retains its own Git history, public interfaces, releases
-and behavior checks.
+This repository owns the shared development policy and orchestration for the
+Emacs TAF ecosystem: its framework packages, applications and games. Every
+package is a directory under `packages/` in one Jujutsu checkout, registered in
+`workspace.json`; each still publishes as its own repository with its own
+version, public interfaces, releases and behavior checks.
+
+## Development
+
+Every package lives in one Jujutsu checkout under `packages/`, so a change can
+span a provider and the applications that use it. Publishing projects one
+package out of that checkout: each repository keeps its ordinary single-package
+history and installs through package.el as before.
+
+```sh
+make check           # the whole checkout, before a release
+make check-affected  # only the units one change reaches
+make -C packages/etaf-ui check
+```
+
+The published repositories each carry a `pre-mono` tag naming the history they
+had before the checkout was unified; a clone older than that has to be replaced
+rather than pulled.
 
 ## Install in an existing Emacs
 

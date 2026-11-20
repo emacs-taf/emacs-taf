@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### Changed
+
+- Development now happens in one Jujutsu checkout: every package lives under
+  `packages/` and one change can touch a provider and its consumers together,
+  while a push still carries only the package it names. The published
+  repositories keep their ordinary single-repository shape, so installing and
+  pinning work as before.
+- Each package's `main` branch now starts from that checkout's history, so a
+  clone that predates this change has to be replaced rather than pulled. The
+  previous history is preserved as the `pre-mono` tag on every package.
+
 ### Added
 
 - The archive ships `etaf-posframe` as a framework target, so `M-x etaf-install`
