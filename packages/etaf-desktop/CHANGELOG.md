@@ -2,6 +2,15 @@
 
 All notable changes to ETAF Desktop are documented here.
 
+## Unreleased
+
+### Fixed
+
+- The title and content type sizes reach the window again.  Desktop keeps a
+  point size in its settings and the window takes a ratio of the body size,
+  so the value is converted on the way out instead of being rejected.
+
+
 ## [0.1.7] - 2026-10-24
 
 ### Fixed
@@ -21,8 +30,6 @@ All notable changes to ETAF Desktop are documented here.
   characters narrower, while the shell stretched to the surface: the workspace
   bar reached the right edge and the canvas, together with every maximized
   window, stopped short of it.
-
-
 
 ### Fixed
 
@@ -68,7 +75,6 @@ are `<token>/<instance-id>/<window-id>`.
   canvas it was created with.
 
 ## [0.1.2] - 2026-10-20
-
 
 ### Changed
 

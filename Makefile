@@ -19,7 +19,10 @@ compile: installer-compile
 test:
 	python3 -m unittest discover -s tests/tools -p 'test_*.py'
 	@set -e; for repo in $(MODULE_DIRS); do $(MAKE) -C "packages/$$repo" test EMACS="$(EMACS)"; done
-check: structure-check installer-compile
+# Compile before the tool tests: the performance scenarios record whether the
+# libraries they load came from source or from byte code, so a stale `.elc'
+# beside a newer `.el' turns every sample invalid.
+check: structure-check compile
 	python3 -m unittest discover -s tests/tools -p 'test_*.py'
 	@set -e; for repo in $(MODULE_DIRS); do $(MAKE) -C "packages/$$repo" check EMACS="$(EMACS)"; done
 

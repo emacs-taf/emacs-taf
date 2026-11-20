@@ -1,5 +1,7 @@
 """Contract of scripts/add-package.py: the steps it plans and the names it refuses."""
+import contextlib
 import importlib.util
+import io
 import json
 import subprocess
 import sys
@@ -55,8 +57,9 @@ class RegistryTests(unittest.TestCase):
             original = add_package.ROOT
             add_package.ROOT = Path(work)
             try:
-                add_package.register('etaf-probe', 'https://example.invalid/x.git',
-                                     'main', 'application', False)
+                with contextlib.redirect_stdout(io.StringIO()):
+                    add_package.register('etaf-probe', 'https://example.invalid/x.git',
+                                         'main', 'application', False)
                 written = json.loads(path.read_text(encoding='utf-8'))
             finally:
                 add_package.ROOT = original

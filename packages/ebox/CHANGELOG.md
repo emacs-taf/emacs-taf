@@ -4,6 +4,13 @@ All notable changes to Ebox are documented here.
 
 ## Unreleased
 
+### Fixed
+
+- Sizes render the same in batch as in a window.  The default face height
+  was read in points without its tenths outside a window system, so a ratio
+  written for a heading came out ten times smaller than the same ratio drawn
+  on screen.
+
 ### Changed
 
 - `:font-size` is a ratio of the body size, not a pixel size.  A style says

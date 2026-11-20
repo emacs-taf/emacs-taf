@@ -4,6 +4,12 @@ All notable changes to the ETAF Reference Manual and the `etaf-manual` package a
 
 ## Unreleased
 
+### Fixed
+
+- The book documents the nineteen interfaces and six variables that `etaf'
+  and `etaf-ui' publish and the appendix was missing, so every definition a
+  reader follows from a code span resolves.
+
 ### Changed
 
 - The archive pages file a package by where it belongs: adding `etaf-posframe`

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Fixed
+
+- A window title, a desktop taskbar label and a statistic's value show the
+  text a reactive source holds.  These three surfaces passed the source
+  object itself to the text host and failed to render.
+
 ### Added
 
 - `etaf-edge-panel`, `etaf-edge-tabs` and `etaf-underline-field` put their

@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- A failed session reports the engine's own message.  The engine's error
+  pipe wrote Emacs' own `Process ... finished' line into its buffer, and that
+  line was read back as part of the failure.
+
+
 ## [Unreleased]
 
 ### Added
