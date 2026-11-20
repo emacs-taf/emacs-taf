@@ -22,6 +22,11 @@ test:
 check: structure-check installer-compile
 	python3 -m unittest discover -s tests/tools -p 'test_*.py'
 	@set -e; for repo in $(MODULE_DIRS); do $(MAKE) -C "packages/$$repo" check EMACS="$(EMACS)"; done
+
+# Only the units a change reaches: a symbol nobody outside uses costs nothing,
+# while `check' still proves the whole checkout before a release.
+check-affected:
+	python3 scripts/refscope.py run --rev '@' --yes
 clean:
 	@set -e; for repo in $(MODULE_DIRS); do $(MAKE) -C "packages/$$repo" clean; done
 
