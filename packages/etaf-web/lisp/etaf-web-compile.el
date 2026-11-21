@@ -21,7 +21,7 @@
 
 (define-error 'etaf-web-error "ETAF Web error")
 
-(defconst etaf-web--compiler-version "6"
+(defconst etaf-web--compiler-version "7"
   "Version tag folded into page cache keys.")
 
 (defconst etaf-web--drop-tags
@@ -804,6 +804,19 @@ Recognizes `role=\"note|alert\"' and common docs callout/admonition classes."
           (etaf-web--makeinfo-nav-block-p node)
           (etaf-web--breadcrumb-block-p node)))))
 
+(defun etaf-web--interactive-form-p (node)
+  "Return non-nil when `<form>' NODE is a short interactive UI widget.
+Prunes search boxes, login forms and vote polls while leaving full-page
+wrapper forms (e.g. ASP.NET WebForms) intact."
+  (when (and (etaf-web--node-p node)
+             (eq (dom-tag node) 'form)
+             (not (etaf-web--contains-landmark-p node)))
+    (and (<= (length (etaf-web--clean-text node)) 600)
+         (not (etaf-web--find-first
+               node (lambda (n) (memq (dom-tag n) '(pre table h1)))))
+         (etaf-web--find-first
+          node (lambda (n) (memq (dom-tag n) '(input select textarea button)))))))
+
 (defun etaf-web--boilerplate-node-p (node inside-primary)
   "Return non-nil when DOM NODE should be pruned as page chrome.
 INSIDE-PRIMARY is non-nil once traversal is inside the chosen article/main."
@@ -836,13 +849,14 @@ INSIDE-PRIMARY is non-nil once traversal is inside the chosen article/main."
        ((member role etaf-web--boilerplate-roles) t)
        ((string-match-p "breadcrumb\\|crumbs?" aria-label) t)
        ((cl-some (lambda (tok)
-                   (or (string-match-p etaf-web--boilerplate-token-regexp tok)
-                       (string-match-p etaf-web--noise-container-substr-regexp tok)
-                       (and block-like
-                            (string-match-p etaf-web--noise-tag-token-regexp tok))))
+                   (or (and block-like
+                            (or (string-match-p etaf-web--boilerplate-token-regexp tok)
+                                (string-match-p etaf-web--noise-tag-token-regexp tok)))
+                       (string-match-p etaf-web--noise-container-substr-regexp tok)))
                  tokens)
         t)
        (layout-widget nil)
+       ((etaf-web--interactive-form-p node) t)
        ((etaf-web--button-only-block-p node) t)
        ((etaf-web--noise-section-container-p node) t)
        ((etaf-web--makeinfo-nav-block-p node) t)
@@ -858,10 +872,23 @@ INSIDE-PRIMARY is non-nil once traversal is inside the chosen article/main."
                 (not (and (stringp n) (string-blank-p n))))
               nodes))
 
+(defun etaf-web--drop-trailing-orphan-heading (kept next-level)
+  "Drop a trailing heading in reversed KEPT if NEXT-LEVEL closes its section.
+NEXT-LEVEL is nil at end of parent, or the heading level of the next heading.
+Only called when a pruned sibling directly emptied that heading's section."
+  (let ((scan kept))
+    (while (and scan (stringp (car scan)) (string-blank-p (car scan)))
+      (setq scan (cdr scan)))
+    (let ((lvl (and scan (etaf-web--heading-level (car scan)))))
+      (if (and lvl (>= lvl 2) (or (null next-level) (<= next-level lvl)))
+          (cdr scan)
+        kept))))
+
 (defun etaf-web--prune-boilerplate (node &optional inside-primary)
   "Return a copy of NODE with navigation, sidebars, footers and ads removed.
-Drops `<hr>' immediately adjacent to pruned nav chrome and drops noise-titled
-sections (`h2'–`h4') up to the next peer or higher heading."
+Drops `<hr>' immediately adjacent to pruned nav chrome, drops noise-titled
+sections (`h2'–`h4') up to the next peer or higher heading, and removes
+headings whose following body was completely pruned away."
   (cond
    ((stringp node) node)
    ((not (etaf-web--node-p node)) nil)
@@ -871,6 +898,7 @@ sections (`h2'–`h4') up to the next peer or higher heading."
            (primary (or inside-primary (memq tag '(article main))))
            (kept nil)
            (prev-was-nav nil)
+           (pruned-after-heading nil)
            (skip-section-level nil)
            (rest (dom-children node)))
       (while rest
@@ -886,10 +914,15 @@ sections (`h2'–`h4') up to the next peer or higher heading."
            ((and (stringp child) (string-blank-p child))
             (push child kept))
            ((etaf-web--noise-heading-level child)
+            (when pruned-after-heading
+              (setq kept (etaf-web--drop-trailing-orphan-heading
+                          kept (etaf-web--noise-heading-level child))
+                    pruned-after-heading nil))
             (setq skip-section-level (etaf-web--noise-heading-level child)
                   prev-was-nav nil))
            ((etaf-web--boilerplate-node-p child primary)
-            (setq prev-was-nav (etaf-web--nav-chrome-p child)))
+            (setq prev-was-nav (etaf-web--nav-chrome-p child)
+                  pruned-after-heading t))
            ((and (etaf-web--node-p child)
                  (eq (dom-tag child) 'hr)
                  (or prev-was-nav
@@ -899,9 +932,25 @@ sections (`h2'–`h4') up to the next peer or higher heading."
                             (etaf-web--nav-chrome-p next)))))
             (setq prev-was-nav nil))
            (t
+            (when-let* ((lvl (etaf-web--heading-level child)))
+              (when pruned-after-heading
+                (setq kept (etaf-web--drop-trailing-orphan-heading kept lvl))))
             (setq prev-was-nav nil)
-            (when-let* ((pruned (etaf-web--prune-boilerplate child primary)))
-              (push pruned kept))))))
+            (let ((pruned (etaf-web--prune-boilerplate child primary)))
+              (if (and pruned
+                       (or (not (etaf-web--node-p pruned))
+                           (not (memq (dom-tag pruned) '(div section ul ol dl)))
+                           (not (string-empty-p (etaf-web--clean-text pruned)))
+                           (etaf-web--find-first
+                            pruned (lambda (n)
+                                     (memq (dom-tag n)
+                                           '(img picture hr input))))))
+                  (progn
+                    (setq pruned-after-heading nil)
+                    (push pruned kept))
+                (setq pruned-after-heading t)))))))
+      (when pruned-after-heading
+        (setq kept (etaf-web--drop-trailing-orphan-heading kept nil)))
       (cons tag (cons (dom-attributes node) (nreverse kept)))))))
 
 (defun etaf-web--link-text-length (node)
@@ -913,61 +962,184 @@ sections (`h2'–`h4') up to the next peer or higher heading."
    (t (cl-loop for child in (dom-children node)
                sum (etaf-web--link-text-length child)))))
 
-(defun etaf-web--block-count (node)
-  "Return count of substantive content blocks inside DOM NODE."
-  (if (not (etaf-web--node-p node))
-      0
-    (+ (if (memq (dom-tag node) '(p pre table ul ol blockquote dl details)) 1 0)
-       (cl-loop for child in (dom-children node)
-                sum (etaf-web--block-count child)))))
+(defun etaf-web--non-link-length (node)
+  "Return non-link plain-text character count under DOM NODE."
+  (max 0 (- (length (etaf-web--clean-text node))
+            (etaf-web--link-text-length node))))
 
-(defun etaf-web--density-score (node)
-  "Compute a heuristic main-content density score for DOM NODE."
-  (let* ((text (etaf-web--clean-text node))
-         (total (length text))
-         (link-len (etaf-web--link-text-length node))
-         (non-link (max 0 (- total link-len)))
-         (link-ratio (if (> total 0) (/ (float link-len) total) 0.0))
-         (blocks (etaf-web--block-count node))
-         (tokens (etaf-web--class-tokens node))
-         (bonus (if (cl-some (lambda (tok)
-                               (string-match-p etaf-web--content-hint-regexp tok))
-                             tokens)
-                    1.25
-                  1.0))
-         (penalty (if (> link-ratio 0.5) 0.2 1.0)))
-    (* (float non-link)
-       (+ 1.0 (* 0.2 (min 10 blocks)))
-       bonus
-       penalty)))
+(defun etaf-web--link-density (node)
+  "Return fraction of plain text inside `<a>' links under NODE (0.0..1.0)."
+  (let ((total (length (etaf-web--clean-text node))))
+    (if (> total 0)
+        (min 1.0 (/ (float (etaf-web--link-text-length node)) total))
+      0.0)))
 
-(defun etaf-web--pick-densest-node (root)
-  "Select the highest-density content container under pruned ROOT."
-  (let ((best root)
-        (best-score (etaf-web--density-score root)))
+(defun etaf-web--direct-inline-text (node)
+  "Return plain text owned directly by NODE (excluding child block elements)."
+  (let ((parts nil))
     (cl-labels
-        ((walk (node)
+        ((walk (n)
+           (cond
+            ((stringp n) (push n parts))
+            ((not (etaf-web--node-p n)) nil)
+            ((eq (dom-tag n) 'br) (push " " parts))
+            ((memq (dom-tag n) etaf-web--block-tags) nil)
+            (t (dolist (c (dom-children n)) (walk c))))))
+      (dolist (c (dom-children node)) (walk c)))
+    (string-trim (etaf-web--collapse-ws (mapconcat #'identity (nreverse parts) "")))))
+
+(defun etaf-web--punct-count (text)
+  "Count sentence and clause punctuation marks in TEXT (ASCII and CJK)."
+  (let ((count 0)
+        (pos 0))
+    (while (string-match "[,.;:!?，。；：！？、]" text pos)
+      (setq count (1+ count)
+            pos (match-end 0)))
+    count))
+
+(defun etaf-web--content-unit-score (node)
+  "Return bottom-up textual richness score for leaf content unit NODE, or nil.
+Scores `<p>', `<pre>', `<blockquote>' and block cells (`<div>', `<td>', `<li>')
+that directly hold substantive prose, using punctuation density, length and
+continuous link-density damping with zero class/id assumptions."
+  (when (etaf-web--node-p node)
+    (let* ((tag (dom-tag node))
+           (text (cond
+                  ((memq tag '(p pre blockquote)) (etaf-web--clean-text node))
+                  ((memq tag '(div td li)) (etaf-web--direct-inline-text node))
+                  (t nil))))
+      (when (and text (>= (length (replace-regexp-in-string "[ \t\n\r]+" "" text)) 25))
+        (let* ((total (length text))
+               (link-len (if (memq tag '(p pre blockquote))
+                             (etaf-web--link-text-length node)
+                           (cl-loop for c in (dom-children node)
+                                    when (and (etaf-web--node-p c)
+                                              (not (memq (dom-tag c) etaf-web--block-tags)))
+                                    sum (etaf-web--link-text-length c))))
+               (non-link (max 0 (- total link-len)))
+               (link-ratio (if (> total 0) (min 1.0 (/ (float link-len) total)) 0.0))
+               (punct (etaf-web--punct-count text))
+               (base (+ 1.0 (min 15.0 (float punct))
+                        (min 8.0 (/ (float non-link) 60.0)))))
+          (* base (max 0.1 (- 1.0 link-ratio))))))))
+
+(defun etaf-web--pick-main-candidate (root)
+  "Select the primary content container under pruned ROOT via bottom-up scoring.
+Propagates leaf content-unit scores upward with geometric distance decay and
+applies continuous `(1 - link-density)' scaling, without site-specific class
+or id bonuses."
+  (let ((scores (make-hash-table :test #'eq))
+        (candidates nil))
+    (cl-labels
+        ((walk (node ancestors)
            (when (etaf-web--node-p node)
-             (when (memq (dom-tag node) '(div section main article td))
-               (let ((score (etaf-web--density-score node)))
-                 ;; Prefer a more specific descendant when it retains >= 80%
-                 ;; of the best score so wrappers do not shadow the article div.
-                 (when (or (> score best-score)
-                           (and (> score 0.0)
-                                (not (eq node root))
-                                (>= score (* 0.8 best-score))))
-                   (setq best node
-                         best-score score))))
-             (dolist (child (dom-children node))
-               (walk child)))))
-      (walk root))
-    best))
+             (when-let* ((unit-score (etaf-web--content-unit-score node)))
+               ;; Credit the node itself if it is a container (`td'/`div'),
+               ;; plus its enclosing container ancestors with distance decay.
+               (let ((targets (if (memq (dom-tag node) '(div section main article td))
+                                  (cons node ancestors)
+                                ancestors))
+                     (depth 0))
+                 (dolist (anc targets)
+                   (when (and (<= depth 5)
+                              (memq (dom-tag anc) '(div section main article td body)))
+                     (let ((weight (cond
+                                    ((= depth 0) 1.0)
+                                    ((= depth 1) 0.9)
+                                    ((= depth 2) 0.75)
+                                    ((= depth 3) 0.4)
+                                    (t (/ 1.0 (* 2.0 depth))))))
+                       (unless (gethash anc scores)
+                         (push anc candidates))
+                       (puthash anc (+ (gethash anc scores 0.0)
+                                       (* unit-score weight))
+                                scores)))
+                   (when (memq (dom-tag anc) '(div section main article td body))
+                     (setq depth (1+ depth))))))
+             (let ((next-anc (cons node ancestors)))
+               (dolist (child (dom-children node))
+                 (walk child next-anc))))))
+      (walk root nil))
+    (let ((best root)
+          (best-score -1.0))
+      (dolist (cand candidates)
+        (let* ((raw (gethash cand scores 0.0))
+               (final (* raw (max 0.1 (- 1.0 (etaf-web--link-density cand))))))
+          (when (> final best-score)
+            (setq best cand
+                  best-score final))))
+      best)))
+
+(defun etaf-web--tighten-main-node (node)
+  "Descend from NODE into a dominant content child when siblings are chrome.
+Unwraps single-child wrappers and sheds header/sidebar siblings whenever one
+child container holds >= 75% of NODE's non-link prose without shedding direct
+prose siblings, purely from DOM structure and link density."
+  (let ((cur node)
+        (keep-going t))
+    (while keep-going
+      (setq keep-going nil)
+      (when (and (etaf-web--node-p cur)
+                 (not (eq (dom-tag cur) 'article)))
+        (let* ((elems (etaf-web--element-children cur))
+               (total-nl (etaf-web--non-link-length cur))
+               (cur-ld (etaf-web--link-density cur))
+               (best-child nil)
+               (best-nl -1))
+          (dolist (c elems)
+            (when (memq (dom-tag c) '(div section main article td tbody tr table))
+              (let ((nl (etaf-web--non-link-length c)))
+                (when (> nl best-nl)
+                  (setq best-child c best-nl nl)))))
+          (when (and best-child (> total-nl 0))
+            (let* ((siblings (cl-remove best-child elems :count 1 :test #'eq))
+                   (sib-text-len (cl-loop for s in siblings
+                                          sum (length (etaf-web--clean-text s))))
+                   (sib-link-len (cl-loop for s in siblings
+                                          sum (etaf-web--link-text-length s)))
+                   (sib-ld (if (> sib-text-len 0)
+                               (/ (float sib-link-len) sib-text-len)
+                             0.0))
+                   (sib-has-prose
+                    (cl-some (lambda (s)
+                               (and (memq (dom-tag s) '(p h1 pre blockquote figure))
+                                    (>= (length (etaf-web--clean-text s)) 30)))
+                             siblings))
+                   (sib-has-media
+                    (cl-some (lambda (s)
+                               (etaf-web--find-first
+                                s (lambda (n) (memq (dom-tag n) '(img picture)))))
+                             siblings))
+                   (sib-has-form
+                    (cl-some (lambda (s)
+                               (etaf-web--find-first
+                                s (lambda (n) (memq (dom-tag n) '(form input select)))))
+                             siblings))
+                   (share (/ (float best-nl) total-nl))
+                   (child-ld (etaf-web--link-density best-child))
+                   (transparent
+                    (and (>= share 0.96)
+                         (< sib-text-len 20)
+                         (not sib-has-media)))
+                   (chrome-shed
+                    (and (memq (dom-tag best-child) '(div section main article td))
+                         (>= best-nl 200)
+                         (>= share 0.75)
+                         (not sib-has-prose)
+                         (<= child-ld (+ cur-ld 0.03))
+                         (or (>= sib-ld 0.30)
+                             (<= (- total-nl best-nl) (* 0.15 total-nl))
+                             sib-has-form))))
+              (when (or transparent chrome-shed)
+                (setq cur best-child
+                      keep-going t)))))))
+    cur))
 
 (defun etaf-web--extract-main (dom)
   "Return (MAIN . FOOTNOTE-ROOTS) extracted from sanitized DOM.
-When a page uses multiple `<article>' cards inside `<main>' (or alongside
-broader page content), keep `<main>' or the densest container rather than
-truncating the document to a single card."
+Prefers a dominant `<article>' or `<main>' landmark when present, otherwise
+uses bottom-up Readability content scoring, then tightens wrappers to drop
+sidebar and header chrome."
   (let* ((body (or (etaf-web--find-first dom (lambda (n) (eq (dom-tag n) 'body)))
                    dom))
          (articles (etaf-web--find-all body (lambda (n) (eq (dom-tag n) 'article))))
@@ -988,21 +1160,24 @@ truncating the document to a single card."
              (len (length (etaf-web--clean-text pruned))))
         (when (> len best-art-len)
           (setq best-art pruned best-art-len len))))
-    (let ((chosen
-           (cond
-            ((and best-art pruned-main)
-             (if (or (= (length articles) 1)
-                     (>= best-art-len (* 0.6 main-len)))
-                 best-art
-               pruned-main))
-            (best-art
-             (if (or (= (length articles) 1)
-                     (>= best-art-len (* 0.5 body-len)))
-                 best-art
-               (etaf-web--pick-densest-node pruned-body)))
-            (pruned-main pruned-main)
-            (t
-             (etaf-web--pick-densest-node pruned-body)))))
+    (let* ((picked
+            (cond
+             ((and best-art pruned-main)
+              (if (or (= (length articles) 1)
+                      (>= best-art-len (* 0.6 main-len)))
+                  best-art
+                pruned-main))
+             (best-art
+              (if (or (= (length articles) 1)
+                      (>= best-art-len (* 0.5 body-len)))
+                  best-art
+                (etaf-web--pick-main-candidate pruned-body)))
+             (pruned-main pruned-main)
+             (t
+              (etaf-web--pick-main-candidate pruned-body))))
+           (chosen (if (eq picked best-art)
+                       picked
+                     (etaf-web--tighten-main-node (or picked pruned-body)))))
       (cons (or chosen pruned-body) fn-roots))))
 
 ;;; ---------------------------------------------------------------------------
@@ -1330,45 +1505,118 @@ while tolerating commas inside URL query parameters."
       (member ext etaf-web--decodable-image-exts))
      (t t))))
 
+(defun etaf-web--parse-css-px (raw)
+  "Return positive integer pixel value parsed from HTML/CSS RAW, or nil.
+Accepts numeric values (`\"52\"', `\"52px\"', `\"52.5px\"'); rejects percentages
+and relative units (`%`, `em`, `rem`, `auto')."
+  (when (and (stringp raw)
+             (string-match "\\`[ \t]*\\([0-9]+\\(?:\\.[0-9]+\\)?\\)\\(?:px\\)?[ \t]*\\'"
+                           (downcase raw)))
+    (let ((num (round (string-to-number (match-string 1 raw)))))
+      (when (> num 0) num))))
+
+(defun etaf-web--style-prop-px (style prop)
+  "Return positive pixel number for CSS PROP in inline STYLE string, or nil."
+  (when (and (stringp style) (not (string-blank-p style)))
+    (let ((case-fold-search t))
+      (when (string-match
+             (format "\\(?:\\`\\|[; \t]\\)%s[ \t]*:[ \t]*\\([^;!]+\\)" prop)
+             style)
+        (etaf-web--parse-css-px (match-string 1 style))))))
+
+(defun etaf-web--extract-img-dims (img-node)
+  "Return `(WIDTH . HEIGHT)' CSS pixel bounds declared on IMG-NODE.
+Reads HTML `width'/`height' attributes and inline CSS `width'/`height'/
+`max-width'/`max-height'.  When only `max-*' bounds are declared, returns a
+single-axis cap so downstream layout preserves natural aspect ratio."
+  (when (etaf-web--node-p img-node)
+    (let* ((style (etaf-web--attr img-node 'style))
+           (aw (etaf-web--parse-css-px (etaf-web--attr img-node 'width)))
+           (ah (etaf-web--parse-css-px (etaf-web--attr img-node 'height)))
+           (sw (etaf-web--style-prop-px style "width"))
+           (sh (etaf-web--style-prop-px style "height"))
+           (mw (etaf-web--style-prop-px style "max-width"))
+           (mh (etaf-web--style-prop-px style "max-height"))
+           (w (or sw aw))
+           (h (or sh ah)))
+      (when (and w mw) (setq w (min w mw)))
+      (when (and h mh) (setq h (min h mh)))
+      (cond
+       ((or w h) (cons w h))
+       (mw (cons mw nil))
+       (mh (cons nil mh))
+       (t (cons nil nil))))))
+
+(defun etaf-web--html-escape-attr (value)
+  "Escape VALUE for a double-quoted HTML attribute."
+  (let ((s (replace-regexp-in-string "&" "&amp;" (or value ""))))
+    (setq s (replace-regexp-in-string "\"" "&quot;" s))
+    (setq s (replace-regexp-in-string "<" "&lt;" s))
+    (replace-regexp-in-string ">" "&gt;" s)))
+
+(defun etaf-web--format-block-img (info &optional alt-override)
+  "Format image INFO plist as Markdown or sized HTML `<img>' block.
+Emits `<img src=... alt=... width=... height=...>' when HTML declared a
+bounded size (<= 480 px), so icons, avatars and Retina thumbnails render
+at their page size instead of their larger intrinsic file dimensions."
+  (let* ((url (plist-get info :url))
+         (alt (if alt-override alt-override (or (plist-get info :alt) "")))
+         (w (plist-get info :width))
+         (h (plist-get info :height)))
+    (if (or (and w (<= w 480)) (and h (<= h 480)))
+        (concat "<img src=\"" (etaf-web--html-escape-attr url) "\""
+                " alt=\"" (etaf-web--html-escape-attr alt) "\""
+                (when w (format " width=\"%d\"" w))
+                (when h (format " height=\"%d\"" h))
+                ">")
+      (format "![%s](%s)"
+              (etaf-web--escape-link-label alt)
+              (etaf-web--format-link-dest url)))))
+
 (defun etaf-web--extract-img-info (node ctx)
-  "Return (URL . ALT) for an `<img>' or `<picture>' DOM NODE under CTX, or nil."
+  "Return plist `(:url :alt :width :height)' for `<img>'/`<picture>', or nil.
+Drops tracking pixels (declared <= 4 px in width or height)."
   (let* ((img (if (eq (dom-tag node) 'picture)
                   (etaf-web--find-first node (lambda (n) (eq (dom-tag n) 'img)))
                 node))
-         (raw-url
-          (if (eq (dom-tag node) 'picture)
-              (or (cl-loop for child in (dom-children node)
-                           when (and (etaf-web--node-p child)
-                                     (eq (dom-tag child) 'source))
-                           for candidate =
-                           (or (etaf-web--parse-srcset-best
-                                (etaf-web--attr child 'data-srcset))
-                               (etaf-web--parse-srcset-best
-                                (etaf-web--attr child 'srcset))
-                               (cl-loop for attr in etaf-web--lazy-img-attrs
-                                        for v = (etaf-web--valid-img-url
-                                                 (etaf-web--attr child attr))
-                                        when v return v)
-                               (etaf-web--valid-img-url
-                                (etaf-web--attr child 'src)))
-                           when (and candidate
-                                     (etaf-web--decodable-source-p child candidate))
-                           return candidate)
-                  (etaf-web--img-raw-url img))
-            (etaf-web--img-raw-url node)))
-         (resolved (and raw-url
-                        (etaf-web--resolve-url raw-url (etaf-web--ctx-base-url ctx))))
-         (final-url (if (and resolved (etaf-web--ctx-image-rewriter ctx))
-                        (or (funcall (etaf-web--ctx-image-rewriter ctx) resolved)
-                            resolved)
-                      resolved))
-         (alt (etaf-web--clean-image-alt
-               (or (and img (etaf-web--attr img 'alt))
-                   (and img (etaf-web--attr img 'title))
-                   "")
-               ctx)))
-    (when final-url
-      (cons final-url alt))))
+         (dims (etaf-web--extract-img-dims img))
+         (w (car dims))
+         (h (cdr dims)))
+    (unless (or (and w (<= w 4)) (and h (<= h 4)))
+      (let* ((raw-url
+              (if (eq (dom-tag node) 'picture)
+                  (or (cl-loop for child in (dom-children node)
+                               when (and (etaf-web--node-p child)
+                                         (eq (dom-tag child) 'source))
+                               for candidate =
+                               (or (etaf-web--parse-srcset-best
+                                    (etaf-web--attr child 'data-srcset))
+                                   (etaf-web--parse-srcset-best
+                                    (etaf-web--attr child 'srcset))
+                                   (cl-loop for attr in etaf-web--lazy-img-attrs
+                                            for v = (etaf-web--valid-img-url
+                                                     (etaf-web--attr child attr))
+                                            when v return v)
+                                   (etaf-web--valid-img-url
+                                    (etaf-web--attr child 'src)))
+                               when (and candidate
+                                         (etaf-web--decodable-source-p child candidate))
+                               return candidate)
+                      (etaf-web--img-raw-url img))
+                (etaf-web--img-raw-url node)))
+             (resolved (and raw-url
+                            (etaf-web--resolve-url raw-url (etaf-web--ctx-base-url ctx))))
+             (final-url (if (and resolved (etaf-web--ctx-image-rewriter ctx))
+                            (or (funcall (etaf-web--ctx-image-rewriter ctx) resolved)
+                                resolved)
+                          resolved))
+             (alt (etaf-web--clean-image-alt
+                   (or (and img (etaf-web--attr img 'alt))
+                       (and img (etaf-web--attr img 'title))
+                       "")
+                   ctx)))
+        (when final-url
+          (list :url final-url :alt alt :width w :height h))))))
 
 (defun etaf-web--footnote-ref-id (node)
   "Return referenced footnote anchor id if NODE is a footnote ref, else nil."
@@ -1476,10 +1724,18 @@ or distinctly classed spans."
          ((not (etaf-web--node-p node)) nil)
          ((eq (dom-tag node) 'br)
           (setq pending-space nil)
-          (push "\\\n" parts)
-          (setq prev-node node
-                prev-piece "\\\n"
-                after-break t))
+          (cond
+           ((and parts (equal (car parts) "\n\n")) nil)
+           ((and parts (equal (car parts) "\\\n"))
+            (setcar parts "\n\n")
+            (setq prev-node node
+                  prev-piece "\n\n"
+                  after-break t))
+           (t
+            (push "\\\n" parts)
+            (setq prev-node node
+                  prev-piece "\\\n"
+                  after-break t))))
          ((eq (dom-tag node) 'code)
           (let ((code (etaf-web--inline-code (etaf-web--plain-text node))))
             (emit-piece node code nil nil)))
@@ -1585,9 +1841,15 @@ or distinctly classed spans."
                              trail)))))))))
       ((or 'img 'picture)
        (if-let* ((info (etaf-web--extract-img-info node ctx)))
-           (format "![%s](%s)"
-                   (etaf-web--escape-link-label (cdr info))
-                   (etaf-web--format-link-dest (car info)))
+           (let ((alt (plist-get info :alt))
+                 (w (plist-get info :width))
+                 (h (plist-get info :height)))
+             ;; Drop tiny empty-alt inline decorative icons (<= 32px).
+             (if (and (string-empty-p alt) w h (<= w 32) (<= h 32))
+                 ""
+               (format "![%s](%s)"
+                       (etaf-web--escape-link-label alt)
+                       (etaf-web--format-link-dest (plist-get info :url)))))
          ""))
       ('input
        ;; Task checkboxes are consumed by `li'; ignore standalone inputs.
@@ -1710,67 +1972,133 @@ Multiple block children or hard breaks are joined with \"；\"."
           ('tr (push child body-rows)))))
     (append (nreverse thead-rows) (nreverse body-rows) (nreverse tfoot-rows))))
 
+(defun etaf-web--layout-table-p (table-node trs)
+  "Return non-nil when HTML `<table>' TABLE-NODE is a layout container.
+Treats `role=presentation|none', tables nesting another `<table>', 1-column
+tables without `<th>', single-row headerless tables, and headerless tables
+containing long essays or block structures (`<pre>', `<blockquote>', `h1'-`h3')
+as layout wrappers rather than GFM data tables."
+  (let* ((role (downcase (string-trim (or (etaf-web--attr table-node 'role) ""))))
+         (has-thead (cl-some (lambda (c)
+                               (and (etaf-web--node-p c) (eq (dom-tag c) 'thead)))
+                             (dom-children table-node)))
+         (has-th nil)
+         (has-nested-table nil)
+         (has-prose-block nil)
+         (max-cols 0)
+         (max-cell-len 0))
+    (dolist (tr trs)
+      (let ((cols 0))
+        (dolist (cell (dom-children tr))
+          (when (and (etaf-web--node-p cell) (memq (dom-tag cell) '(th td)))
+            (when (eq (dom-tag cell) 'th) (setq has-th t))
+            (setq cols (+ cols (max 1 (string-to-number
+                                       (or (etaf-web--attr cell 'colspan) "1")))))
+            (setq max-cell-len (max max-cell-len
+                                    (length (etaf-web--clean-text cell))))
+            (when (etaf-web--find-first
+                   cell (lambda (n) (and (not (eq n cell))
+                                         (eq (dom-tag n) 'table))))
+              (setq has-nested-table t))
+            (when (etaf-web--find-first
+                   cell (lambda (n) (memq (dom-tag n) '(pre blockquote h1 h2 h3))))
+              (setq has-prose-block t))))
+        (setq max-cols (max max-cols cols))))
+    (or (member role '("presentation" "none"))
+        has-nested-table
+        (and (<= max-cols 1) (not has-th))
+        (and (not has-th) (not has-thead)
+             (or (<= (length trs) 1)
+                 (> max-cell-len 400)
+                 has-prose-block)))))
+
+(defun etaf-web--emit-layout-table (trs ctx)
+  "Emit rows TRS of a layout `<table>' as regular Markdown blocks under CTX."
+  (let ((blocks nil))
+    (dolist (tr trs)
+      (let ((row-parts nil)
+            (has-block nil))
+        (dolist (cell (dom-children tr))
+          (when (and (etaf-web--node-p cell) (memq (dom-tag cell) '(th td)))
+            (let ((rendered (etaf-web--emit-children-blocks
+                             (dom-children cell) ctx)))
+              (unless (string-empty-p rendered)
+                (when (or (string-match-p "\n" rendered)
+                          (> (length rendered) 120))
+                  (setq has-block t))
+                (push rendered row-parts)))))
+        (setq row-parts (nreverse row-parts))
+        (when row-parts
+          (push (mapconcat #'identity row-parts (if has-block "\n\n" " "))
+                blocks))))
+    (mapconcat #'identity (nreverse blocks) "\n\n")))
+
 (defun etaf-web--emit-table (table-node ctx)
   "Compile HTML `<table>' TABLE-NODE into a GFM pipe table under CTX.
-Expands `colspan' and `rowspan' by repeating the cell value."
+Layout tables are unwrapped into normal Markdown blocks; data tables expand
+`colspan' and `rowspan' by repeating the cell value."
   (let* ((trs (etaf-web--table-rows table-node))
-         (row-count (length trs))
-         (grid (make-hash-table :test #'equal))
-         (aligns (make-hash-table :test #'eql))
-         (max-cols 0))
-    (when (> row-count 0)
-      (cl-loop
-       for tr in trs
-       for r from 0
-       do
-       (let ((c 0))
-         (dolist (cell (dom-children tr))
-           (when (and (etaf-web--node-p cell) (memq (dom-tag cell) '(th td)))
-             (while (gethash (cons r c) grid)
-               (setq c (1+ c)))
-             (let* ((colspan (max 1 (min 32 (string-to-number
-                                             (or (etaf-web--attr cell 'colspan) "1")))))
-                    (rowspan (max 1 (min 64 (string-to-number
-                                             (or (etaf-web--attr cell 'rowspan) "1")))))
-                    (text (etaf-web--compile-table-cell cell ctx))
-                    (align (downcase (string-trim (or (etaf-web--attr cell 'align) "")))))
-               (dotimes (dr rowspan)
-                 (dotimes (dc colspan)
-                   (puthash (cons (+ r dr) (+ c dc)) text grid)))
-               (when (member align '("left" "center" "right"))
-                 (dotimes (dc colspan)
-                   (unless (gethash (+ c dc) aligns)
-                     (puthash (+ c dc) align aligns))))
-               (setq c (+ c colspan)
-                     max-cols (max max-cols c)))))))
-      (when (> max-cols 0)
-        (let* ((total-rows
-                (1+ (cl-loop for key being the hash-keys of grid
-                             maximize (car key))))
-               (format-row
-                (lambda (r)
+         (row-count (length trs)))
+    (cond
+     ((<= row-count 0) nil)
+     ((etaf-web--layout-table-p table-node trs)
+      (etaf-web--emit-layout-table trs ctx))
+     (t
+      (let ((grid (make-hash-table :test #'equal))
+            (aligns (make-hash-table :test #'eql))
+            (max-cols 0))
+        (cl-loop
+         for tr in trs
+         for r from 0
+         do
+         (let ((c 0))
+           (dolist (cell (dom-children tr))
+             (when (and (etaf-web--node-p cell) (memq (dom-tag cell) '(th td)))
+               (while (gethash (cons r c) grid)
+                 (setq c (1+ c)))
+               (let* ((colspan (max 1 (min 32 (string-to-number
+                                               (or (etaf-web--attr cell 'colspan) "1")))))
+                      (rowspan (max 1 (min 64 (string-to-number
+                                               (or (etaf-web--attr cell 'rowspan) "1")))))
+                      (text (etaf-web--compile-table-cell cell ctx))
+                      (align (downcase (string-trim (or (etaf-web--attr cell 'align) "")))))
+                 (dotimes (dr rowspan)
+                   (dotimes (dc colspan)
+                     (puthash (cons (+ r dr) (+ c dc)) text grid)))
+                 (when (member align '("left" "center" "right"))
+                   (dotimes (dc colspan)
+                     (unless (gethash (+ c dc) aligns)
+                       (puthash (+ c dc) align aligns))))
+                 (setq c (+ c colspan)
+                       max-cols (max max-cols c)))))))
+        (when (> max-cols 0)
+          (let* ((total-rows
+                  (1+ (cl-loop for key being the hash-keys of grid
+                               maximize (car key))))
+                 (format-row
+                  (lambda (r)
+                    (concat "| "
+                            (mapconcat
+                             (lambda (c) (or (gethash (cons r c) grid) ""))
+                             (number-sequence 0 (1- max-cols))
+                             " | ")
+                            " |")))
+                 (sep-row
                   (concat "| "
                           (mapconcat
-                           (lambda (c) (or (gethash (cons r c) grid) ""))
+                           (lambda (c)
+                             (pcase (gethash c aligns)
+                               ("left" ":---")
+                               ("center" ":---:")
+                               ("right" "---:")
+                               (_ "---")))
                            (number-sequence 0 (1- max-cols))
                            " | ")
-                          " |")))
-               (sep-row
-                (concat "| "
-                        (mapconcat
-                         (lambda (c)
-                           (pcase (gethash c aligns)
-                             ("left" ":---")
-                             ("center" ":---:")
-                             ("right" "---:")
-                             (_ "---")))
-                         (number-sequence 0 (1- max-cols))
-                         " | ")
-                        " |"))
-               (lines (list (funcall format-row 0) sep-row)))
-          (cl-loop for r from 1 below total-rows
-                   do (setq lines (append lines (list (funcall format-row r)))))
-          (mapconcat #'identity lines "\n"))))))
+                          " |"))
+                 (lines (list (funcall format-row 0) sep-row)))
+            (cl-loop for r from 1 below total-rows
+                     do (setq lines (append lines (list (funcall format-row r)))))
+            (mapconcat #'identity lines "\n"))))))))
 
 (defun etaf-web--extract-checkbox (children)
   "Check if list item CHILDREN begin with a checkbox `<input>'.
@@ -1998,10 +2326,7 @@ image alt text without emitting an extra caption paragraph."
                                      node (lambda (n) (memq (dom-tag n) '(pre table))))))))
       (if is-img-figure
           (when-let* ((info (etaf-web--extract-img-info nested-img ctx)))
-            (let ((alt (if has-caption caption-text (cdr info))))
-              (format "![%s](%s)"
-                      (etaf-web--escape-link-label alt)
-                      (etaf-web--format-link-dest (car info)))))
+            (etaf-web--format-block-img info (when has-caption caption-text)))
         (let ((parts nil)
               (rendered (etaf-web--emit-children-blocks content-nodes ctx)))
           (unless (string-empty-p rendered)
@@ -2199,10 +2524,7 @@ and (when ALLOW-FIRST-LINK is non-nil) a leading `<a>' title link."
              (parts nil))
         (when media
           (when-let* ((info (etaf-web--extract-img-info media ctx)))
-            (push (format "![%s](%s)"
-                          (etaf-web--escape-link-label (cdr info))
-                          (etaf-web--format-link-dest (car info)))
-                  parts)))
+            (push (etaf-web--format-block-img info) parts)))
         (let ((cap-body (etaf-web--emit-children-blocks cap-rest ctx)))
           (unless (string-empty-p cap-body)
             (push cap-body parts)))
@@ -2735,6 +3057,45 @@ Return `(PANELS . REMAINING-NODES)'."
       (cons (etaf-web--panel-wrapper-children (car rest)) (cdr rest)))
      (t (cons nil nodes)))))
 
+(defun etaf-web--standalone-block-media (nodes ctx)
+  "If NODES holds a single standalone image/lightbox wrapper, return it formatted."
+  (let ((sig (cl-remove-if (lambda (c) (and (stringp c) (string-blank-p c)))
+                           nodes)))
+    (when (and (= (length sig) 1) (etaf-web--node-p (car sig)))
+      (let* ((only (car sig))
+             (media (cond
+                     ((memq (dom-tag only) '(img picture)) only)
+                     ((and (eq (dom-tag only) 'a)
+                           (let ((child (etaf-web--sole-media-child only)))
+                             (and child
+                                  (or (assq 'data-lightbox (dom-attributes only))
+                                      (let* ((raw-img (etaf-web--img-raw-url
+                                                       (if (eq (dom-tag child) 'picture)
+                                                           (etaf-web--find-first
+                                                            child
+                                                            (lambda (n) (eq (dom-tag n) 'img)))
+                                                         child)))
+                                             (href (etaf-web--resolve-url
+                                                    (etaf-web--attr only 'href)
+                                                    (etaf-web--ctx-base-url ctx))))
+                                        (and raw-img href
+                                             (equal href
+                                                    (etaf-web--resolve-url
+                                                     raw-img
+                                                     (etaf-web--ctx-base-url ctx)))))))))
+                      (etaf-web--sole-media-child only)))))
+        (when media
+          (if-let* ((info (etaf-web--extract-img-info media ctx)))
+              (etaf-web--format-block-img info)
+            ""))))))
+
+(defun etaf-web--trim-block-inlines (text)
+  "Trim outer whitespace and stray leading/trailing `<br>' breaks from TEXT."
+  (let ((s (string-trim (or text ""))))
+    (setq s (replace-regexp-in-string "\\`\\(?:\\\\[ \t\n]*\\)+" "" s))
+    (setq s (replace-regexp-in-string "\\(?:[ \t\n]*\\\\\\)+\\'" "" s))
+    (string-trim s)))
+
 (defun etaf-web--emit-children-blocks (children ctx)
   "Compile mixed block/inline DOM CHILDREN under CTX into Markdown blocks."
   (let ((blocks nil)
@@ -2742,8 +3103,11 @@ Return `(PANELS . REMAINING-NODES)'."
         (rest children))
     (cl-flet ((flush-inlines ()
                 (when inline-buf
-                  (let ((text (string-trim
-                               (etaf-web--emit-inlines (nreverse inline-buf) ctx))))
+                  (let* ((items (nreverse inline-buf))
+                         (solo (etaf-web--standalone-block-media items ctx))
+                         (text (or solo
+                                   (etaf-web--trim-block-inlines
+                                    (etaf-web--emit-inlines items ctx)))))
                     (unless (string-empty-p text)
                       (push text blocks)))
                   (setq inline-buf nil))))
@@ -2797,8 +3161,10 @@ Return `(PANELS . REMAINING-NODES)'."
            (unless (string-empty-p text)
              (concat (make-string level ?#) " " text)))))
       ('p
-       (let ((text (string-trim
-                    (etaf-web--emit-inlines (dom-children node) ctx))))
+       (let* ((solo (etaf-web--standalone-block-media (dom-children node) ctx))
+              (text (or solo
+                        (etaf-web--trim-block-inlines
+                         (etaf-web--emit-inlines (dom-children node) ctx)))))
          (unless (string-empty-p text) text)))
       ('pre (etaf-web--emit-code-block node))
       ('table (etaf-web--emit-table node ctx))

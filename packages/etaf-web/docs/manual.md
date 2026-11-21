@@ -44,6 +44,20 @@ To avoid duplicate headings and captions when rendered by `etaf-md`:
 - Lazy-loaded images prefer `data-src`, `data-original`, `data-lazy-src`,
   `data-actualsrc`, `data-original-src` and `data-url` (plus the widest
   candidate in `data-srcset` / `srcset`) before falling back to `src`.
+- Standalone images declaring bounded CSS pixel dimensions (`<= 480` px via
+  `width`/`height` attributes or inline `style` `width`/`height`/`max-width`/
+  `max-height`) emit standard HTML `<img src="..." alt="..." width="..."
+  height="...">` blocks so icons, avatars and Retina thumbnails render at
+  their intended page size in `etaf-md` instead of inflating to the file's
+  intrinsic pixels.  Tracking pixels (`<= 4` px) and tiny empty-alt inline
+  icons (`<= 32` px) are dropped.
+- Primary content extraction uses semantic landmarks (`<article>` / `<main>`),
+  bottom-up Readability-style prose scoring with continuous link-density
+  weighting, structural wrapper tightening to shed masthead/sidebar siblings,
+  interactive `<form>` widget and orphan-heading pruning, and layout-table
+  unwrapping (while preserving real data tables with `<th>` / `<thead>`).
+- Consecutive `<br><br>` breaks normalize to clean paragraph breaks while
+  single `<br>` tags keep hard line breaks (`\`).
 - For an image `<figure>` with a `<figcaption>`, the caption's plain text
   becomes the image's alt text and no separate caption paragraph is emitted;
   for plain images without `<figcaption>`, alt text longer than 60 characters

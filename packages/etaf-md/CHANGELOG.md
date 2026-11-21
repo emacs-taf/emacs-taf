@@ -4,6 +4,12 @@
 
 ### Fixed
 
+- Raw HTML `<img>` blocks with declared CSS pixel `width`/`height` attributes
+  now render at those declared dimensions (preserving intrinsic aspect ratio
+  when only one axis is specified, left-aligning compact icons and omitting
+  blank caption rows for empty `alt=""`) instead of inflating to the image
+  file's larger intrinsic pixel dimensions.
+
 - Documents containing `:::` containers now retain every heading (before,
   inside and after containers) in document order with unique anchor IDs, and
   resolve footnote references across container boundaries instead of keeping

@@ -1347,6 +1347,11 @@
       "name": "etaf-ui-cell-metrics-slice-icons-at-the-canvas-row",
       "file": "tests/etaf-ui-cell-metrics-tests.el",
       "purpose": "A two-row icon is cut at the line height the canvas draws, so a canvas font or text scale does not leave the picture a row short of the cells that hold it."
+    },
+    {
+      "name": "etaf-ui-markdown-html-media-forwards-declared-dimensions",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "Raw HTML `<img>' blocks parse positive pixel `width' and `height' attributes (quoted, unquoted or `px'-suffixed, ignoring percentages) and forward `:width' and `:height' to `:render-media'."
     }
   ]
 }

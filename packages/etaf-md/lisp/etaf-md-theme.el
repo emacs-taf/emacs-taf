@@ -275,21 +275,23 @@ Signal `etaf-md-error' when either is unknown."
 (declare-function etaf-display-metrics "etaf-runtime" (&optional runtime))
 
 (defun etaf-md--cell-metrics ()
-  "Return (CHAR-WIDTH . LINE-HEIGHT) of the page's own text.
+  "Return (CHAR-WIDTH . LINE-HEIGHT) in pixels of the page's own text.
 A picture is placed in cells, so its grid has to be measured in the cells the
 page actually paints.  Text scaling changes them and a frame's default font
 does not follow it, so reading the frame placed a picture in cells the page no
 longer had and left it striped: slices cut for the old line height sat on
 taller lines.  `etaf-display-metrics' is a reactive read, so the block that
-placed a picture renders again when the scale settles."
-  (let ((metrics (ignore-errors (etaf-display-metrics))))
-    (if metrics
-        (cons (max 1 (or (plist-get metrics :char-width) 1))
-              (max 1 (or (plist-get metrics :line-height) 1)))
-      ;; A batch run or a first build has no mounted Runtime, and the frame's
-      ;; own font is what the page will be painted with.
-      (cons (max 1 (or (ignore-errors (frame-char-width)) 8)) ; frame metric
-            (max 1 (or (ignore-errors (frame-char-height)) 16))))))
+placed a picture renders again when the scale settles.  On terminal or batch
+frames where character dimensions are reported in 1x1 character units rather
+than pixels, falls back to a standard 8x16 pixel monospace cell."
+  (let* ((metrics (ignore-errors (etaf-display-metrics)))
+         (cw (or (and metrics (plist-get metrics :char-width))
+                 (ignore-errors (frame-char-width))))
+         (ch (or (and metrics (plist-get metrics :line-height))
+                 (ignore-errors (frame-char-height)))))
+    (if (and (numberp cw) (> cw 1) (numberp ch) (> ch 1))
+        (cons cw ch)
+      (cons 8 16))))
 
 (defun etaf-md--base-pixels ()
   "Return the pixel size the page draws its own text at.

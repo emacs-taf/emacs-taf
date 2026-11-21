@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Classic Table Layout Essay</title>
+</head>
+<body>
+  <table border="0" cellpadding="0" cellspacing="0">
+    <tr>
+      <td>
+        <h3>Search</h3>
+        <form action="/search" method="get">
+          <input type="text" name="q" placeholder="Search site">
+          <button type="submit">Go</button>
+        </form>
+      </td>
+      <td>
+        <table border="0">
+          <tr>
+            <td>
+              <h2>[<span class="Subscription">$</span>] Why Classic Layout Tables Persist</h2>
+              <p>Many durable essays from the early web wrap their entire body inside nested layout tables without semantic landmarks or CSS grids, relying solely on nested cells for margins and reading width.<br><br>
+              Converting such a layout table into a Markdown pipe table collapses the entire essay onto a single unreadable line; unwrapping layout tables restores clean headings and paragraphs.</p>
+              <table>
+                <tr><td>A single-column headerless note block should also unwrap cleanly as normal prose rather than a 1x1 pipe table.</td></tr>
+              </table>
+              <table>
+                <thead>
+                  <tr><th>Metric</th><th>Before</th><th>After</th></tr>
+                </thead>
+                <tbody>
+                  <tr><td>Rows</td><td>1</td><td>147</td></tr>
+                  <tr><td>Readability</td><td>Broken</td><td>Clean</td></tr>
+                </tbody>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

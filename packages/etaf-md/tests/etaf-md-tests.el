@@ -2481,3 +2481,43 @@ multiple lines inside the card width, and the image frame stays inside the card.
             (should (string-match-p (regexp-quote word) joined))))
         ;; Image right border renders intact inside the card column.
         (should (cl-some (lambda (l) (string-match-p "│▀+│" l)) lines))))))
+
+(ert-deftest etaf-md-tests-html-img-declared-dimensions-bound-render-size ()
+  "HTML `<img>' `width'/`height' attributes bound rendered grid size instead of intrinsic size.
+A compact declared icon backed by a much larger image renders small and
+left-aligned without a blank caption row, and a single-axis `width' scales
+proportionally below the unsized width."
+  (let* ((fixture (etaf-md-tests--fixture "wide-400x100.png"))
+         (measure
+          (lambda (doc)
+            (let ((session (etaf-md-create :text doc :theme 'dark))
+                  (width 0)
+                  (indent 0)
+                  (has-caption nil))
+              (etaf-md-tests--with-mount session
+                (let* ((text (buffer-substring-no-properties (point-min) (point-max)))
+                       (lines (split-string text "\n"))
+                       (img-line (cl-find-if (lambda (l) (string-match-p "│▀+│" l)) lines)))
+                  (when (and img-line (string-match "^\\( *\\)│\\(▀+\\)│" img-line))
+                    (setq indent (length (match-string 1 img-line))
+                          width (length (match-string 2 img-line))))
+                  (setq has-caption (and (string-match-p "▲" text) t))))
+              (list width indent has-caption))))
+         (unsized (funcall measure (format "![](%s)\n" fixture)))
+         (compact (funcall measure
+                           (format "<img src=\"%s\" alt=\"\" width=\"48\" height=\"48\">\n"
+                                   fixture)))
+         (scaled (funcall measure
+                          (format "<img src=\"%s\" alt=\"Thumb\" width=\"96\">\n"
+                                  fixture))))
+    ;; Unsized 400x100 image renders wide; declared 48x48 renders compact & left-aligned.
+    (should (>= (nth 0 unsized) 24))
+    (should (> (nth 0 compact) 0))
+    (should (<= (nth 0 compact) 12))
+    (should (< (nth 0 compact) (nth 0 unsized)))
+    (should (< (nth 1 compact) (nth 1 unsized)))
+    (should-not (nth 2 compact))
+    ;; Single-axis declared width sits between compact and unsized, keeping caption.
+    (should (> (nth 0 scaled) (nth 0 compact)))
+    (should (< (nth 0 scaled) (nth 0 unsized)))
+    (should (nth 2 scaled))))

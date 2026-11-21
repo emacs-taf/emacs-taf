@@ -13,8 +13,11 @@
   and `etaf-web-fetch-timeout` (default 30 seconds, with distinct HTTP status,
   timeout and connection-failure diagnostics).
 - Built-in libxml sanitization, main-content extraction (`<article>`, `<main>`,
-  and density fallback), leading duplicate `<h1>` suppression (including site
-  suffixes and prefixes), `YYYY-MM-DD` date normalization, lazy-load image
+  bottom-up Readability prose scoring and structural wrapper tightening),
+  layout-table unwrapping vs data-table preservation, interactive `<form>` and
+  orphan-heading pruning, consecutive `<br><br>` paragraph normalization,
+  bounded HTML `<img>` dimension preservation and tracking-pixel filtering,
+  leading duplicate `<h1>` suppression (including site suffixes and prefixes), `YYYY-MM-DD` date normalization, lazy-load image
   attribute and widest `srcset` selection, overlong/title-duplicate image alt
   cleanup, `<figcaption>`-to-image-alt consolidation, makeinfo navigation /
   permalink (`¶`) / breadcrumb / tail noise pruning, footnote collection,

@@ -389,12 +389,36 @@ missing file says so instead of failing the page."
                                       (funcall (plist-get env :open-url) url)))))
                  (list (format "🔗 %s" url)))))))
 
-(defun etaf-md--media-card (url alt env &optional declared-kind)
+(defun etaf-md--media-target-pixels (natural declared-width declared-height)
+  "Return effective (WIDTH . HEIGHT) pixels combining NATURAL with declared size.
+DECLARED-WIDTH and DECLARED-HEIGHT are positive CSS pixel bounds from HTML
+`<img>' attributes.  When a dimension is declared, the image renders at that
+size instead of its larger intrinsic file size, preserving NATURAL aspect ratio
+when only one axis is specified."
+  (let ((nat-w (and (consp natural) (numberp (car natural)) (> (car natural) 0)
+                    (float (car natural))))
+        (nat-h (and (consp natural) (numberp (cdr natural)) (> (cdr natural) 0)
+                    (float (cdr natural))))
+        (dw (and (numberp declared-width) (> declared-width 0)
+                 (float declared-width)))
+        (dh (and (numberp declared-height) (> declared-height 0)
+                 (float declared-height))))
+    (cond
+     ((and dw dh) (cons dw dh))
+     ((and dw nat-w nat-h) (cons dw (* nat-h (/ dw nat-w))))
+     ((and dh nat-w nat-h) (cons (* nat-w (/ dh nat-h)) dh))
+     (dw (cons dw dw))
+     (dh (cons dh dh))
+     (t natural))))
+
+(defun etaf-md--media-card (url alt env &optional declared-kind declared-width declared-height)
   "Return a media card View for URL with ALT in ENV.
 Local images and videos render through the ETAF image Host, which owns the
 graphics/terminal adapters and the video poster frame; remote sources render
 as a bordered placeholder that opens in the browser.  DECLARED-KIND, when
-`video', preserves video classification for sources without a video extension."
+`video', preserves video classification for sources without a video extension.
+DECLARED-WIDTH and DECLARED-HEIGHT, when given as positive CSS pixel counts,
+bound the rendered grid to the document's declared display size."
   (let* ((remote (etaf-md--remote-url-p url))
          (path (unless remote (etaf-md--absolute-media url env)))
          (kind (and path (if (eq declared-kind 'video)
@@ -420,31 +444,43 @@ as a bordered placeholder that opens in the browser.  DECLARED-KIND, when
                     env media-kind target
                     (lambda () (funcall (plist-get env :open-url) url))))))
          (columns (plist-get env :width))
-         (caption (or alt (and path (file-name-nondirectory path)) url)))
+         (caption (or alt (and path (file-name-nondirectory path)) url))
+         (help-label (if (and (stringp caption) (not (string-empty-p caption)))
+                         caption
+                       (or (and path (file-name-nondirectory path)) url))))
     (cond
      ((and exists (eq kind 'image))
-      (let* ((grid (etaf-md--media-grid path kind (- columns 2)))
+      (let* ((natural (etaf-md--image-pixels path))
+             (pixels (etaf-md--media-target-pixels
+                      natural declared-width declared-height))
+             (grid (etaf-md--media-grid-for-pixels pixels (- columns 2)))
+             (compact (and (or declared-width declared-height)
+                           (<= (car grid) 16)))
              (figure
               (etaf-node 'image
                          (list :src path
                                :columns (car grid)
                                :rows (cdr grid)
                                :adapter 'auto
-                               :help-echo (format "%s（按 RET 打开）" caption))
+                               :help-echo (format "%s（按 RET 打开）" help-label))
                          nil)))
         (etaf-node 'column
-                   (list :width 'stretch :cross-align 'center :item-gap '(lh 0))
-                   (list
-                    (etaf-node 'box
-                               (list :border (list '(px 1) 'solid
-                                                   (etaf-md--env-color env :border))
-                                     :on-press open :role 'button :tab-index 0
-                                     :pointer 'hand
-                                     :help-echo (format "%s（按 RET 打开）" caption))
-                               (list figure))
-                    (etaf-md--caption-view
-                     (format "%s%s" (if (string-empty-p caption) "" "▲ ") caption)
-                     env)))))
+                   (list :width 'stretch
+                         :cross-align (if compact 'start 'center)
+                         :item-gap '(lh 0))
+                   (append
+                    (list
+                     (etaf-node 'box
+                                (list :border (list '(px 1) 'solid
+                                                    (etaf-md--env-color env :border))
+                                      :on-press open :role 'button :tab-index 0
+                                      :pointer 'hand
+                                      :help-echo (format "%s（按 RET 打开）" help-label))
+                                (list figure)))
+                    (unless (and compact (string-empty-p caption))
+                      (list (etaf-md--caption-view
+                             (format "%s%s" (if (string-empty-p caption) "" "▲ ") caption)
+                             env)))))))
      ((and exists (eq kind 'video))
       (let* ((native (etaf-md--native-video-source path))
              (grid (if native
@@ -795,7 +831,10 @@ elements render as the full poster card with caption and activation."
   (pcase kind
     ('inline-image (etaf-md--inline-image-view node env))
     (_ (etaf-md--media-card (plist-get node :url)
-                            (plist-get node :alt) env kind))))
+                            (plist-get node :alt)
+                            env kind
+                            (plist-get node :width)
+                            (plist-get node :height)))))
 
 ;;; ---------------------------------------------------------------------------
 ;;; Document

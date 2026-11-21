@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>Portal Stream — Tech News</title>
+</head>
+<body>
+  <div id="main">
+    <div class="masthead">
+      <a href="/login">登录</a> <a href="/register">注册</a>
+      <a href="/archive">归档</a> <a href="/about">关于</a>
+    </div>
+
+    <div id="rail">
+      <div class="box">
+        <h3>每日投票</h3>
+        <form action="/poll" method="post">
+          <p>你平时使用哪款编辑器？</p>
+          <input type="radio" name="ed" value="emacs"> Emacs
+          <input type="radio" name="ed" value="vim"> Vim
+          <button type="submit">投票</button>
+        </form>
+      </div>
+      <div class="box">
+        <h3>热门链接</h3>
+        <ul>
+          <li><a href="/hot/1">热门讨论一</a></li>
+          <li><a href="/hot/2">热门讨论二</a></li>
+          <li><a href="/hot/3">热门讨论三</a></li>
+          <li><a href="/hot/4">热门讨论四</a></li>
+        </ul>
+      </div>
+      <div class="box">
+        <h3>关注我们</h3>
+        <p><a href="/rss">RSS</a> <a href="/tg">Telegram</a> <a href="/gh">GitHub</a></p>
+      </div>
+    </div>
+
+    <div id="stream">
+      <p><img src="brand-icon.svg" alt="" width="52" height="52"></p>
+      <img src="pixel.gif" alt="" width="1" height="1">
+
+      <div class="entry">
+        <h2><a href="/story/101">文本界面引擎发布新版增量排版器</a></h2>
+        <div class="thumb"><img src="thumb-large.png" alt="示意图" style="max-width:120px;max-height:120px"></div>
+        <div class="entry-body">
+          新版排版器在保留原有单行网格的同时，显著降低了长文档局部编辑后的重排成本，使得在普通笔记本上编辑数万字的技术文档也能维持稳定的交互响应。<br><br>
+          开发团队表示，此次改动完全基于文档树节点边界与脏区追踪，不依赖任何特定站点的硬编码规则，并已在多套公开语料上完成回归验证。
+        </div>
+      </div>
+
+      <div class="entry">
+        <h2><a href="/story/102">跨平台静态分析工具链新增离线测试套件</a></h2>
+        <div class="entry-body">
+          <p>项目维护者宣布，新一轮重构移除了对外部网络服务的隐式依赖，所有核心场景现在都可以在本地离线环境下以毫秒级速度完成端到端校验。</p>
+          <p>此外，工具链还新增了对高分屏资源与声明尺寸的统一处理，避免高像素源图在终端和编辑器里被意外放大到整屏。</p>
+          <p><img src="hero-photo.png" alt="架构全景图" width="1200" height="800"></p>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

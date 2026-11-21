@@ -1035,8 +1035,20 @@ keeps a tight container from squeezing cells below their words."
 
 (defun etaf-ui-markdown--html-attribute (tag name)
   "Return NAME's attribute value from TAG, or nil."
-  (when (string-match (format "%s[ \t]*=[ \t]*[\"']\\([^\"']*\\)[\"']" name) tag)
-    (match-string 1 tag)))
+  (let ((case-fold-search t))
+    (cond
+     ((string-match (format "\\b%s[ \t]*=[ \t]*[\"']\\([^\"']*\\)[\"']" name) tag)
+      (match-string 1 tag))
+     ((string-match (format "\\b%s[ \t]*=[ \t]*\\([^ \t\n\r\"'=<>`/]+\\)" name) tag)
+      (match-string 1 tag)))))
+
+(defun etaf-ui-markdown--html-px (value)
+  "Return positive pixel number parsed from HTML size VALUE, or nil."
+  (when (and (stringp value)
+             (string-match "\\`[ \t]*\\([0-9]+\\(?:\\.[0-9]+\\)?\\)\\(?:px\\)?[ \t]*\\'"
+                           (downcase value)))
+    (let ((num (string-to-number (match-string 1 value))))
+      (when (> num 0) num))))
 
 (defun etaf-ui-markdown--html-comment-p (text)
   "Return non-nil when TEXT is an HTML comment block.
@@ -1047,16 +1059,23 @@ printing markup the document never intended to show."
 (defun etaf-ui-markdown--html-media (text)
   "Return a media descriptor for raw HTML TEXT, or nil.
 A `<video>' or `<img>' opening tag with a source becomes a descriptor with
-`:url', `:kind' (`video' or `image') and `:alt'."
+`:url', `:kind' (`video' or `image'), `:alt', and optional `:width'/`:height'
+pixel bounds when declared on the tag."
   (when (string-match etaf-ui-markdown--html-media-regexp text)
     (let* ((tag (match-string 0 text))
-           (src (etaf-ui-markdown--html-attribute tag "src")))
+           (src (etaf-ui-markdown--html-attribute tag "src"))
+           (width (etaf-ui-markdown--html-px
+                   (etaf-ui-markdown--html-attribute tag "width")))
+           (height (etaf-ui-markdown--html-px
+                    (etaf-ui-markdown--html-attribute tag "height"))))
       (when src
-        (list :type 'html-media
-              :url src
-              :kind (if (string-match-p "\\`<video" tag) 'video 'image)
-              :alt (or (etaf-ui-markdown--html-attribute tag "alt")
-                       (etaf-ui-markdown--html-attribute tag "title")))))))
+        (append (list :type 'html-media
+                      :url src
+                      :kind (if (string-match-p "\\`<video" tag) 'video 'image)
+                      :alt (or (etaf-ui-markdown--html-attribute tag "alt")
+                               (etaf-ui-markdown--html-attribute tag "title")))
+                (when width (list :width width))
+                (when height (list :height height)))))))
 
 (defun etaf-ui-markdown--html-block-node (block env)
   "Return the View of raw HTML BLOCK in ENV, or nil.

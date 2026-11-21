@@ -130,6 +130,21 @@
       "name": "etaf-web-tests-strips-card-ordinal-keeps-prose-number",
       "file": "tests/etaf-web-tests.el",
       "purpose": "A card body whose opening paragraph consists solely of a 1-3 digit decorative ordinal (such as `01') drops that paragraph, while standalone numeric paragraphs in regular article prose (such as `42') are preserved."
+    },
+    {
+      "name": "etaf-web-tests-preserves-bounded-img-dimensions-and-drops-trackers",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "Standalone images declaring bounded HTML `width'/`height' or inline `style` pixel caps emit sized `<img>' tags that render compactly in `etaf-md', 1x1 tracking pixels are dropped, and large (>480px) photos stay Markdown images."
+    },
+    {
+      "name": "etaf-web-tests-extracts-content-column-from-wrapper-with-leading-sidebar",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "Bottom-up content-unit scoring and structural wrapper tightening isolate the untagged primary prose stream inside a page wrapper (`#main') while excluding masthead links, DOM-first sidebars, poll forms and hot-link lists."
+    },
+    {
+      "name": "etaf-web-tests-unwraps-layout-tables-and-keeps-data-tables",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "Nested and headerless 1-column/essay layout tables unwrap into normal Markdown blocks (with `<br><br>` normalized to paragraph breaks), short `<form>` widgets and their orphaned headings are pruned, inline spans in headings stay intact, and real `<th>` data tables remain GFM pipe tables."
     }
   ]
 }

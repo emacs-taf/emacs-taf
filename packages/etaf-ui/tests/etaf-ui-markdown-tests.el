@@ -955,5 +955,28 @@ its columns need."
                        (plist-get (get-text-property position 'mouse-face)
                                   :background)))))))
 
+(ert-deftest etaf-ui-markdown-html-media-forwards-declared-dimensions ()
+  "Raw HTML media tags pass declared pixel `:width' and `:height' to `:render-media'."
+  (let ((calls nil))
+    (etaf-ui-markdown-test--with-mount
+        (concat "<img src=\"icon.svg\" alt=\"ETAF\" width=\"52\" height=\"52\">\n\n"
+                "<img src=\"logo.svg\" alt=\"\" width=\"40px\" height=\"40px\">\n\n"
+                "<img src=\"banner.png\" width=240 height=\"100%\">\n")
+        (etaf-ui-markdown-test--env
+         :render-media
+         (lambda (kind node _env)
+           (push (list kind
+                       (plist-get node :url)
+                       (plist-get node :alt)
+                       (plist-get node :width)
+                       (plist-get node :height))
+                 calls)
+           (etaf-node 'text nil (list "media"))))
+      (let ((seen (nreverse calls)))
+        (should (equal seen
+                       '((image "icon.svg" "ETAF" 52 52)
+                         (image "logo.svg" "" 40 40)
+                         (image "banner.png" nil 240 nil))))))))
+
 (provide 'etaf-ui-markdown-tests)
 ;;; etaf-ui-markdown-tests.el ends here

@@ -799,5 +799,75 @@
     ;; Standalone numeric paragraph in normal prose stays untouched.
     (should (string-match-p "^Answer to everything:\n\n42$" md))))
 
+(ert-deftest etaf-web-tests-preserves-bounded-img-dimensions-and-drops-trackers ()
+  "Bounded HTML image dimensions survive compilation, trackers drop, large photos stay Markdown."
+  (let* ((html (etaf-web-tests--read-file
+                (etaf-web-tests--fixture "wrapper-sidebar-layout.html")))
+         (md (etaf-web-to-markdown html :base-url "https://portal.example/")))
+    ;; Bounded 52x52 icon preserves width/height in CommonMark HTML <img>.
+    (should (string-match-p
+             "<img src=\"https://portal\\.example/brand-icon\\.svg\" alt=\"\" width=\"52\" height=\"52\">"
+             md))
+    ;; Inline style max-width/max-height caps single axis (120px) to keep aspect ratio.
+    (should (string-match-p
+             "<img src=\"https://portal\\.example/thumb-large\\.png\" alt=\"示意图\" width=\"120\">"
+             md))
+    ;; 1x1 tracking pixel is dropped completely.
+    (should-not (string-match-p "pixel\\.gif" md))
+    ;; Large (>480px) photo stays normal Markdown image syntax.
+    (should (string-match-p
+             "!\\[架构全景图\\](https://portal\\.example/hero-photo\\.png)"
+             md))
+    ;; End-to-end: compiling a local HTML page with a 52x52 bounded icon backed
+    ;; by a larger local PNG renders compactly in etaf-md instead of full width.
+    (let* ((local-png (etaf-web-tests--fixture "sample.png"))
+           (page-html (format (concat "<!DOCTYPE html><html><body><article>"
+                                      "<p><img src=\"%s\" alt=\"\" width=\"52\" height=\"52\"></p>"
+                                      "<p>Readable body paragraph.</p>"
+                                      "</article></body></html>")
+                              local-png))
+           (compiled (etaf-web-to-markdown page-html))
+           (session (etaf-md-create :text compiled :theme 'dark))
+           (buf (etaf-md-open session)))
+      (unwind-protect
+          (let* ((text (with-current-buffer buf
+                         (buffer-substring-no-properties (point-min) (point-max))))
+                 (lines (split-string text "\n"))
+                 (img-line (cl-find-if (lambda (l) (string-match-p "│▀+│" l)) lines)))
+            (should img-line)
+            (should (string-match "│\\(▀+\\)│" img-line))
+            (should (<= (length (match-string 1 img-line)) 12))
+            (should (string-match-p "Readable body paragraph\\." text)))
+        (when (buffer-live-p buf)
+          (with-current-buffer buf (etaf-md-close)))))))
+
+(ert-deftest etaf-web-tests-extracts-content-column-from-wrapper-with-leading-sidebar ()
+  "Bottom-up scoring + wrapper tightening isolate prose column from header/sidebar chrome."
+  (let* ((html (etaf-web-tests--read-file
+                (etaf-web-tests--fixture "wrapper-sidebar-layout.html")))
+         (md (etaf-web-to-markdown html :base-url "https://portal.example/")))
+    ;; Stories appear cleanly with <br><br> normalized into paragraph breaks.
+    (should (string-match-p "## \\[文本界面引擎发布新版增量排版器\\](https://portal\\.example/story/101)" md))
+    (should (string-match-p "## \\[跨平台静态分析工具链新增离线测试套件\\](https://portal\\.example/story/102)" md))
+    (should (string-match-p "维持稳定的交互响应。\n\n开发团队表示" md))
+    ;; Masthead and DOM-first sidebar (poll form, hot links, follow box) are excluded.
+    (should-not (string-match-p "登录\\|注册\\|每日投票\\|热门链接\\|关注我们" md))))
+
+(ert-deftest etaf-web-tests-unwraps-layout-tables-and-keeps-data-tables ()
+  "Layout tables unwrap to blocks, interactive forms and orphan headings drop, data tables stay."
+  (let* ((html (etaf-web-tests--read-file
+                (etaf-web-tests--fixture "layout-vs-data-tables.html")))
+         (md (etaf-web-to-markdown html :base-url "https://essay.example/")))
+    ;; Nested layout table unwrapped; inline <span class="Subscription">$</span> preserved.
+    (should (string-match-p "^## \\[\\$\\] Why Classic Layout Tables Persist$" md))
+    (should (string-match-p "margins and reading width\\.\n\nConverting such a layout table" md))
+    (should (string-match-p "^A single-column headerless note block should also unwrap cleanly" md))
+    ;; Search form and its orphaned heading are pruned.
+    (should-not (string-match-p "### Search\\|Search site" md))
+    ;; Real data table with <th> remains a GFM pipe table.
+    (should (string-match-p "| Metric | Before | After |" md))
+    (should (string-match-p "| Rows | 1 | 147 |" md))
+    (should (string-match-p "| Readability | Broken | Clean |" md))))
+
 (provide 'etaf-web-tests)
 ;;; etaf-web-tests.el ends here

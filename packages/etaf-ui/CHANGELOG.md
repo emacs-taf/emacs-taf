@@ -10,6 +10,11 @@
 
 ### Added
 
+- Raw HTML `<img>` and `<video>` blocks in `etaf-ui-markdown-view-blocks` now
+  parse positive pixel `width` and `height` attributes (quoted, unquoted or
+  `px`-suffixed) and forward them as `:width` and `:height` on the media
+  descriptor passed to `:render-media`.
+
 - `etaf-edge-panel`, `etaf-edge-tabs` and `etaf-underline-field` put their
   labels on rules the layout already draws: a panel title and status sit on its
   top rule, tabs share the pane's edge instead of owning a strip above it, and a

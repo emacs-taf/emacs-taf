@@ -509,6 +509,11 @@
       "name": "etaf-md-tests-card-with-image-wraps-paragraph-inside-columns",
       "file": "tests/etaf-md-tests.el",
       "purpose": "A `:::card' inside multi-column `:::columns' containing a block image followed by a long paragraph sizes its image to the card interior and wraps every word of the paragraph inside the card without clipping or changing column count."
+    },
+    {
+      "name": "etaf-md-tests-html-img-declared-dimensions-bound-render-size",
+      "file": "tests/etaf-md-tests.el",
+      "purpose": "Raw HTML `<img>' blocks declaring CSS pixel `width'/`height' render at their declared size (preserving natural aspect ratio for single-axis bounds, left-aligning compact icons without blank captions) rather than inflating to the underlying file's larger intrinsic pixel dimensions."
     }
   ]
 }
