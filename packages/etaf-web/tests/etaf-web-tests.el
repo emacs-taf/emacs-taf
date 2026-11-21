@@ -264,6 +264,26 @@ HANDLER receives `(METHOD PATH)' and returns a plist with optional keys
                          "Evil JS Link" "Evil VBS Link" "Evil Data Link"))
       (should-not (string-match-p (regexp-quote forbidden) md)))))
 
+(defun etaf-web-tests--reveal (buffer text)
+  "Scroll BUFFER's page viewport until TEXT shows; return its position or nil.
+A long document shows one screen at a time inside its scrolling viewport, so a
+test scrolls the same way a reader does."
+  (with-current-buffer buffer
+    (switch-to-buffer buffer)
+    (let* ((rt (etaf-runtime-for-buffer buffer))
+           (found (progn (etaf-scroll-to rt 'web-scroll 0)
+                         (etaf-runtime-flush rt)
+                         (save-excursion (goto-char (point-min))
+                                         (search-forward text nil t))))
+           (rounds 0))
+      (while (and (not found) (< rounds 60))
+        (etaf-scroll-by rt 'web-scroll 6)
+        (etaf-runtime-flush rt)
+        (setq found (save-excursion (goto-char (point-min))
+                                    (search-forward text nil t)))
+        (setq rounds (1+ rounds)))
+      found)))
+
 (ert-deftest etaf-web-tests-open-local-fixture-renders-in-buffer ()
   "Opening a local fixture renders title, code and caption in preview buffer."
   (let* ((cache-root (make-temp-file "etaf-web-local-cache-" t))
@@ -277,9 +297,9 @@ HANDLER receives `(METHOD PATH)' and returns a plist with optional keys
           (should (buffer-live-p buf))
           (let ((painted (with-current-buffer buf
                            (buffer-substring-no-properties (point-min) (point-max)))))
-            (should (string-match-p "Building Text Renderers in Emacs" painted))
-            (should (string-match-p "defun render-box" painted))
-            (should (string-match-p "Figure 1: Rendering pipeline stages\\." painted)))
+            (should (string-match-p "Building Text Renderers in Emacs" painted)))
+          (should (etaf-web-tests--reveal buf "defun render-box"))
+          (should (etaf-web-tests--reveal buf "Figure 1: Rendering pipeline stages"))
           ;; Local cache directory holds index.md, source.html, meta.json and copied asset.
           (let* ((dirs (etaf-web-tests--cached-page-dirs cache-root))
                  (page-dir (car dirs))
@@ -1263,7 +1283,7 @@ HANDLER receives `(METHOD PATH)' and returns a plist with optional keys
             (with-current-buffer buf
               ;; Scroll down to bottom link and activate it.
               (goto-char (point-min))
-              (should (search-forward "Go Second" nil t))
+              (should (etaf-web-tests--reveal buf "Go Second"))
               (goto-char (match-beginning 0))
               (setq saved-pt (point))
               (should (> saved-pt 200))
@@ -1655,13 +1675,19 @@ HANDLER receives `(METHOD PATH)' and returns a plist with optional keys
                        (let ((st (etaf-web-state buf)))
                          (and (equal (plist-get st :url) u2)
                               (eq (plist-get st :phase) 'ready))))))
-            ;; Scrolling moves the window; the page is not pinned.
+            ;; `C-v' scrolls the page inside its viewport and leaves the toolbar alone.
             (with-current-buffer buf
-              (let* ((win (get-buffer-window buf t))
-                     (before (window-start win)))
-                (should win)
+              (let* ((chrome-before (with-current-buffer buf
+                                      (buffer-substring-no-properties
+                                       (point-min) (line-end-position))))
+                     (before (etaf-scroll-offset (etaf-runtime-for-buffer buf) 'web-scroll)))
                 (execute-kbd-macro (kbd "C-v"))
-                (should (> (window-start win) before))))))
+                (should (> (etaf-scroll-offset (etaf-runtime-for-buffer buf) 'web-scroll)
+                           before))
+                (should (equal (with-current-buffer buf
+                                 (buffer-substring-no-properties
+                                  (point-min) (line-end-position)))
+                               chrome-before))))))
       (when (and buf (buffer-live-p buf))
         (with-current-buffer buf (etaf-web-close)))
       (delete-directory cache t))))
@@ -1799,14 +1825,14 @@ HANDLER receives `(METHOD PATH)' and returns a plist with optional keys
                              ((keywordp (car f)) (and (plist-get f :underline) t))
                              (t (cl-some #'face-underlined-p f)))))
                 (goto-char (point-min))
-                (should (search-forward "External Spec Heading" nil t))
+                (should (etaf-web-tests--reveal buf "External Spec Heading"))
                 (let* ((hpos (match-beginning 0))
                        (hface (get-text-property hpos 'face)))
                   (should-not (face-underlined-p hface))
                   (should (eq 'hand (get-text-property hpos 'pointer))))
                 ;; Body paragraph link keeps `:underline'.
                 (goto-char (point-min))
-                (should (search-forward "almanac reference" nil t))
+                (should (etaf-web-tests--reveal buf "almanac reference"))
                 (let* ((bpos (match-beginning 0))
                        (bface (get-text-property bpos 'face)))
                   (should (face-underlined-p bface))))))

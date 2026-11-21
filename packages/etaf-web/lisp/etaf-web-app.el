@@ -38,6 +38,10 @@
     ("g"         etaf-web-focus-address "编辑地址栏")
     ("C-l"       etaf-web-focus-address "编辑地址栏")
     ("o"         etaf-web-open-external "外部浏览器打开")
+    ("C-v"       etaf-web-scroll-page-down "下一页")
+    ("M-v"       etaf-web-scroll-page-up "上一页")
+    ("<next>"    etaf-web-scroll-page-down "下一页")
+    ("<prior>"   etaf-web-scroll-page-up "上一页")
     ("n"         etaf-web--next-heading "下一个标题")
     ("p"         etaf-web--previous-heading "上一个标题")
     ("C-c j"     etaf-web--goto-heading "选择标题")
@@ -200,6 +204,28 @@ that line's link run instead of failing with `No Ebox RET command at position'."
                     (command-execute cmd))
                 (etaf-activate rt))))
         (etaf-activate rt))))))
+
+(defun etaf-web--scroll-page (step)
+  "Scroll the page viewport STEP lines in the current browser buffer."
+  (when-let* ((buf (and (derived-mode-p 'fundamental-mode) (current-buffer)))
+              (rt (and (etaf-app-state buf) (etaf-runtime-for-buffer buf))))
+    (let* ((win (get-buffer-window buf t))
+           (rows (if (window-live-p win) (window-body-height win) 24))
+           (delta (* step (max 3 (- rows 3)))))
+      (with-current-buffer buf
+        (condition-case nil
+            (etaf-scroll-by rt 'web-scroll delta)
+          (etaf-runtime-error nil))))))
+
+(defun etaf-web-scroll-page-down ()
+  "Scroll the page down by one screen."
+  (interactive)
+  (etaf-web--scroll-page 1))
+
+(defun etaf-web-scroll-page-up ()
+  "Scroll the page up by one screen."
+  (interactive)
+  (etaf-web--scroll-page -1))
 
 (defun etaf-web--sync-history-refs (session)
   "Update reactive `:can-back' and `:can-forward' refs on SESSION."

@@ -445,6 +445,22 @@ Narrow (<72ch): [‹ › ⟳/×] │ [https://host/…tail] [38%]."
                                 :ref 'web-error-cached
                                 :on-press (plist-get callbacks :load-cached)))))))))))))
 
+(defun etaf-web--body-viewport (child)
+  "Return CHILD as the scrollable page viewport.
+The toolbar is a sibling above it, so scrolling the page cannot move the
+toolbar, and no scroll hook or per-frame repaint is involved."
+  (etaf-node 'box
+             (list :ref 'web-scroll :id "web-scroll"
+                   :width 'stretch
+                   :height 'stretch
+                   :min-height '(lh 0)
+                   :overflow 'scroll
+                   :role 'region
+                   :tab-index 0
+                   :aria-label "网页正文")
+             (list (etaf-node 'column (list :width 'stretch :height 'auto)
+                              (list child)))))
+
 (defun etaf-web--body-view (session measure)
   "Render main content area for SESSION inside MEASURE columns.
 Wraps `etaf-md-view' under a `:key' tied to `:md-gen' so installing a new
@@ -454,19 +470,20 @@ in-place with zero vertical jitter."
   (let ((phase (etaf-value (plist-get session :phase)))
         (md-session (etaf-value (plist-get session :md-session)))
         (md-gen (etaf-value (plist-get session :md-gen))))
-    (pcase phase
-      ('error
-       (etaf-web--error-card-view session measure))
-      ('loading
-       (if md-session
-           (etaf-node 'box (list :key md-gen :width 'stretch)
-                      (list (etaf-md-view md-session)))
-         (etaf-web--loading-skeleton-view session measure)))
-      (_
-       (if md-session
-           (etaf-node 'box (list :key md-gen :width 'stretch)
-                      (list (etaf-md-view md-session)))
-         (etaf-web--loading-skeleton-view session measure))))))
+    (etaf-web--body-viewport
+     (pcase phase
+       ('error
+        (etaf-web--error-card-view session measure))
+       ('loading
+        (if md-session
+            (etaf-node 'box (list :key md-gen :width 'stretch)
+                       (list (etaf-md-view md-session)))
+          (etaf-web--loading-skeleton-view session measure)))
+       (_
+        (if md-session
+            (etaf-node 'box (list :key md-gen :width 'stretch)
+                       (list (etaf-md-view md-session)))
+          (etaf-web--loading-skeleton-view session measure)))))))
 
 (etaf-define-component etaf-web--browser-app (&key session keys)
   "Root Component of an `etaf-web' browser buffer."
@@ -494,6 +511,8 @@ in-place with zero vertical jitter."
     (etaf-node
      'column
      (append (list :width '(vw 100)
+                   :height '(vh 100)
+                   :min-height '(lh 0)
                    :keys keys
                    :color fg-tok
                    :aria-label "ETAF Web 浏览器")
