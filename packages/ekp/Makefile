@@ -13,6 +13,10 @@ clean:
 
 .PHONY: structure-check setup-hooks
 structure-check:
+	@test -f ../../scripts/check-repository.py || { \
+	  echo "This is a published package checkout; run the shared checks from the etaf-mono workspace:"; \
+	  echo "  make -C packages/$(notdir $(CURDIR)) check"; \
+	  exit 2; }
 	python3 ../../scripts/check-repository.py --root . --skip-api
 setup-hooks:
 	@echo "jj does not run Git hooks; the container's 'make setup-hooks' explains what to check."

@@ -13,7 +13,6 @@
 (require 'etaf-ui-input)
 (require 'etaf-ui-feedback)
 (require 'etaf-ui-icon)
-(require 'ebox)
 
 (defconst etaf-ui--modal-backdrop-brightness 0.55
   "Brightness of the shared modal backdrop behind floating panels.

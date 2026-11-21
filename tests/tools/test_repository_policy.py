@@ -46,6 +46,34 @@ class PolicyTests(unittest.TestCase):
         self.write('probe/notes.md', '# Notes\n')
         self.assertIn('unapproved top-level directory', self.errors())
 
+    def installer_fixture(self, menu, packages, targets):
+        entries = '\n'.join(f'    ({name} "Label" application {name}-open)' for name in menu)
+        self.write('etaf-install.el',
+                   '(defconst etaf-install--targets\n'
+                   f"  '((etaf-install \"Install ETAF\" framework etaf-install)\n{entries})\n"
+                   '  "Installable targets as (PACKAGE LABEL GROUP OPEN).")\n')
+        self.write('release-dependencies.json', json.dumps(
+            {'schema': 1, 'packages': {name: {} for name in packages}, 'targets': targets}))
+
+    def test_installer_target_must_be_shipped_and_gated(self):
+        self.installer_fixture(['etaf-ui'], ['etaf-ui', 'etaf-md'], ['etaf-md'])
+        self.assertIn('target etaf-ui is not in release-dependencies targets',
+                      '\n'.join(POLICY.install_selection_errors(self.root)))
+        self.installer_fixture(['etaf-ui', 'maillist'], ['etaf-ui'], ['etaf-ui'])
+        errors = '\n'.join(POLICY.install_selection_errors(self.root))
+        self.assertIn('target maillist is not in release-dependencies packages', errors)
+        self.assertIn('target maillist is not in release-dependencies targets', errors)
+
+    def test_gated_target_must_be_an_installer_target(self):
+        self.installer_fixture(['etaf-ui'], ['etaf-ui', 'maillist'], ['etaf-ui', 'maillist'])
+        self.assertIn('target maillist is not an installer target',
+                      '\n'.join(POLICY.install_selection_errors(self.root)))
+
+    def test_a_consistent_installer_selection_has_no_errors(self):
+        self.installer_fixture(['etaf-ui', 'maillist'], ['etaf-ui', 'maillist'],
+                               ['etaf-ui', 'maillist'])
+        self.assertEqual([], POLICY.install_selection_errors(self.root))
+
     def test_nested_application_resolves_providers_above_its_workspace(self):
         # A game checkout nested in a workspace still finds the provider
         # checkouts beside that workspace, in worktree and staged checks.

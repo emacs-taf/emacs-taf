@@ -83,7 +83,7 @@ Unless `load-prefer-newer` is non-nil, Emacs loads a byte-compiled file even whe
 
 <!-- index: package.el; autoload; package archive -->
 
-Each entry file has the `Version` and `Package-Requires` headers that package.el reads. A package archive of a package contains its entry file and its `lisp/` directory; an archive of EKP also needs `dictionaries/` and `native/`.
+Each entry file has the `Version` and `Package-Requires` headers that package.el reads. A package archive of a package contains its entry file and its `lisp/` directory; an archive of EKP also needs `dictionaries/` and `native/`. Ebox and ETAF archives carry their `native/` sources for the optional emoji and canvas helpers.
 
 Function and Macro records may carry an autoload cookie:
 

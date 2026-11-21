@@ -9,6 +9,10 @@ SOURCES = lisp/etaf-gamekit-session.el lisp/etaf-gamekit-backends.el lisp/etaf-g
 compile: clean
 	$(EMACS) -Q --batch $(LOAD_PATH) --eval '(setq load-prefer-newer t byte-compile-error-on-warn t)' --eval '(require (quote cl-lib))' --eval '(unless (cl-every (function byte-compile-file) (quote ($(foreach file,$(SOURCES),"$(file)")))) (kill-emacs 1))'
 structure-check:
+	@test -f ../../scripts/check-repository.py || { \
+	  echo "This is a published package checkout; run the shared checks from the etaf-mono workspace:"; \
+	  echo "  make -C packages/$(notdir $(CURDIR)) check"; \
+	  exit 2; }
 	python3 ../../scripts/check-repository.py --root . --skip-api
 engine:
 	python3 native/godot/install-godot.py

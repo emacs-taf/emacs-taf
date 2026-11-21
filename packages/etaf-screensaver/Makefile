@@ -47,6 +47,10 @@ tools-test:
 	$(NODE) --test tests/tools/*.test.mjs
 
 structure-check:
+	@test -f ../../scripts/check-repository.py || { \
+	  echo "This is a published package checkout; run the shared checks from the etaf-mono workspace:"; \
+	  echo "  make -C packages/$(notdir $(CURDIR)) check"; \
+	  exit 2; }
 	$(PYTHON) ../../scripts/check-repository.py --root . --skip-api
 
 setup-hooks:

@@ -252,42 +252,24 @@ ARGUMENTS is a list of command-line strings."
 
 (defun etaf-bili--run (client arguments callback)
   "Run bounded curl ARGUMENTS for CLIENT, then deliver stdout to CALLBACK.
-Drain both pipes before settlement; stderr process messages are not backend
-errors.  The returned process can be cancelled by its owner."
-  (let ((output (generate-new-buffer " *bili-output*"))
-        (errors (generate-new-buffer " *bili-errors*")))
-    (condition-case problem
-        (let ((process
-               (make-process
-                :name "etaf-bili-curl" :buffer output :stderr errors
-                :coding '(utf-8-unix . utf-8-unix) :noquery t
-                :command (etaf-bili--curl-command client arguments)
-                :sentinel
-                (lambda (process _event)
-                  (when (and (memq (process-status process) '(exit signal))
-                             (buffer-live-p output))
-                    (while (accept-process-output process 0))
-                    (when-let* ((pipe (get-buffer-process errors)))
-                      (while (accept-process-output pipe 0)))
-                    (let ((body (with-current-buffer output
-                                  (buffer-substring-no-properties (point-min) (point-max))))
-                          (failure (with-current-buffer errors
-                                     (string-trim (buffer-substring-no-properties
-                                                   (point-min) (point-max)))))
-                          (code (process-exit-status process)))
-                      (kill-buffer output)
-                      (kill-buffer errors)
-                      (funcall callback
-                               (if (= code 0) (list :ok body)
-                                 (list :error "网络请求未完成，请重试"
-                                       :hint (format "curl %s: %s" code failure))))))))))
-          (when-let* ((pipe (get-buffer-process errors)))
-            (set-process-sentinel pipe #'ignore))
-          process)
-      (file-error
-       (kill-buffer output) (kill-buffer errors)
-       (funcall callback (list :error (error-message-string problem)))
-       nil))))
+Return the `etaf-process-run' job so an owner can cancel it."
+  (etaf-process-run
+   (etaf-bili--curl-command client arguments)
+   :name "etaf-bili-curl"
+   :coding '(utf-8-unix . utf-8-unix)
+   :callback
+   (lambda (result)
+     (if (eq (plist-get result :status) 'failed)
+         (funcall callback (list :error (or (plist-get result :message)
+                                            "curl 没有启动")))
+       (let ((body (or (plist-get result :output) ""))
+             (failure (string-trim (or (plist-get result :stderr) "")))
+             (code (or (plist-get result :exit) 0)))
+         (funcall callback
+                  (if (and (eq (plist-get result :status) 'exit) (zerop code))
+                      (list :ok body)
+                    (list :error "网络请求未完成，请重试"
+                          :hint (format "curl %s: %s" code failure)))))))))
 
 (defun etaf-bili--json (body)
   "Parse BODY as a JSON object alist, signaling on malformed data."

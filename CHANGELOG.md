@@ -2,24 +2,11 @@
 
 ## Unreleased
 
-### Changed
-
-- Reissued: the source had moved ahead of this version without a
-  release, so the published file no longer matched it.  Changed since
-  0.2.18 was cut: `CHANGELOG.md`, `README.md`, `README.zh-CN.md`, `etaf-install.el`.
-### Changed
-
-- Development now happens in one Jujutsu checkout: every package lives under
-  `packages/` and one change can touch a provider and its consumers together,
-  while a push still carries only the package it names. The published
-  repositories keep their ordinary single-repository shape, so installing and
-  pinning work as before.
-- Each package's `main` branch now starts from that checkout's history, so a
-  clone that predates this change has to be replaced rather than pulled. The
-  previous history is preserved as the `pre-mono` tag on every package.
-
 ### Added
 
+- The archive ships `maillist` as an application target. `M-x etaf-install`
+  offers it under Applications, and a release verifies the SQLite-backed
+  client through the installer like every other application.
 - The archive ships `etaf-posframe` as a framework target, so `M-x etaf-install`
   can install the floating panel host that an application's panels need; the
   menu lists it under Framework and the release gate installs it both ways and
@@ -28,64 +15,17 @@
   installs and opens from `M-x etaf-install` like every other application.
   `etaf-pomodoro` 0.2.0 renames its opening command to `etaf-pomodoro-open` for
   that; bindings that call `etaf-pomodoro-start` need updating.
+- The installer lists `ebox`, `ecss` and `etaf-gamekit` beside the other
+  framework packages, and the release selection gates those menu entries. A
+  structure check now rejects a target the installer offers but the archive does
+  not ship, and a gated target the menu cannot reach.
+- The `etaf` and `ebox` archives carry their `native/` sources. The optional
+  video canvas module builds from the installed package with
+  `sh native/build-video-canvas-module.sh`, and the emoji helper compiles from
+  its shipped Swift source.
 - `etaf-emacs` installs `etaf-install` and opens its manager once the archives
   are down, so trying ETAF no longer starts by picking the installer out of a
   package list.
-
-### Changed
-
-- `etaf-install` 0.2.15: the manager's mode line always shows the keys. It
-  takes the longest summary that still leaves room for a hint, so a narrow
-  frame shortens the summary instead of dropping the keys.
-
-- `etaf-install` 0.2.14: `M-x etaf-install-manage` is one window that fills the
-  frame. The summary, the key hints and the refresh button moved to the mode
-  line, and the hints shorten or drop as the window narrows instead of being
-  clipped.
-
-- `etaf-install` 0.2.13: `l` opens the package menu beside the manager instead
-  of replacing its window, so the ETAF header no longer ends up above an ELPA
-  package list and `g` cannot refresh a page that looks like the manager.
-
-- `etaf-install` 0.2.12: the shipped files changed with the archive's package
-  list, so the archive serves it under a new version instead of overwriting
-  0.2.11.
-
-- `etaf-install` 0.2.8: the shipped files changed with the archive's package
-  list, so the archive serves it under a new version instead of overwriting
-  0.2.7.
-
-- `etaf-install` 0.2.7 offers the packages other authors publish through the
-  archive beside its own targets, in the group and under the label the
-  archive states. Its own table now names every package this project
-  ships, so no framework or game is filed under applications.
-
-- `etaf-install` 0.2.6: the installer payload changed with the archive's new
-  package list, so the archive serves it under a new version instead of
-  overwriting 0.2.5.
-
-- `etaf-install` 0.2.5: the installer payload changed with the new package
-  versions, so the archive serves it under a new version instead of
-  overwriting 0.2.4.
-
-### Changed
-
-- `Package-Requires` states direct dependencies only, and `scripts/check-api.py`
-  enforces it: a declaration no source uses, or a provider whose API the
-  sources call without declaring it, fails `make check`. Fourteen entries were
-  corrected; the archive's Requires column follows their next release.
-
-### Added
-
-- `scripts/changes.py` seals and publishes one cross-repository change.
-  `status` reports the checkouts with unsealed work, the commits beyond
-  `main@origin` and the stale `workspace.json` pins; `commit -F FILE` runs each
-  checkout's own checks, then seals providers before the consumers that call
-  them and records the sealed revisions in the root; `publish` verifies
-  fast-forward on both mirrors before moving any branch, blocks the consumers
-  of a checkout it cannot publish, and resumes with only what a failed push
-  left behind.
-
 - The archive can carry packages other authors build with ETAF. `community.json`
   pins one revision of each author's repository with the files to ship, the
   dependencies this archive guarantees and the license; `scripts/community.py
@@ -93,8 +33,6 @@
   yibie) is the first entry. Community packages are filed under Community on the
   archive page, and every package row now names its author, linking the
   organization or the author's GitHub account.
-### Added
-
 - The published package archive states when each package last changed. The
   release build records `updated` in `manifest.json`, the newest commit that
   touched the files a package ships, so publishing a release or changing an
@@ -113,6 +51,68 @@
   `<package>-doctor` commands report Node.js, Python 3, mpv and the login state;
   the tank game reports the Godot runtime GameKit builds. `etaf-install` is
   0.1.6.
+- Gallery usage panels provide the public signature, parameter defaults,
+  constraints and callback arguments for all 63 components, together with
+  runnable examples shared with their live previews. References come from
+  the installed UI entry, without a manual-package dependency.
+
+### Changed
+
+- Development now happens in one Jujutsu checkout: every package lives under
+  `packages/` and one change can touch a provider and its consumers together,
+  while a push still carries only the package it names. The published
+  repositories keep their ordinary single-repository shape, so installing and
+  pinning work as before.
+- Each package's `main` branch now starts from that checkout's history, so a
+  clone that predates this change has to be replaced rather than pulled. The
+  previous history is preserved as the `pre-mono` tag on every package.
+- Reissued: the source had moved ahead of this version without a
+  release, so the published file no longer matched it.  Changed since
+  0.2.18 was cut: `CHANGELOG.md`, `README.md`, `README.zh-CN.md`, `etaf-install.el`.
+- `etaf-install` 0.2.15: the manager's mode line always shows the keys. It
+  takes the longest summary that still leaves room for a hint, so a narrow
+  frame shortens the summary instead of dropping the keys.
+- `etaf-install` 0.2.14: `M-x etaf-install-manage` is one window that fills the
+  frame. The summary, the key hints and the refresh button moved to the mode
+  line, and the hints shorten or drop as the window narrows instead of being
+  clipped.
+- `etaf-install` 0.2.13: `l` opens the package menu beside the manager instead
+  of replacing its window, so the ETAF header no longer ends up above an ELPA
+  package list and `g` cannot refresh a page that looks like the manager.
+- `etaf-install` 0.2.12: the shipped files changed with the archive's package
+  list, so the archive serves it under a new version instead of overwriting
+  0.2.11.
+- `etaf-install` 0.2.8: the shipped files changed with the archive's package
+  list, so the archive serves it under a new version instead of overwriting
+  0.2.7.
+- `etaf-install` 0.2.7 offers the packages other authors publish through the
+  archive beside its own targets, in the group and under the label the
+  archive states. Its own table now names every package this project
+  ships, so no framework or game is filed under applications.
+- `etaf-install` 0.2.6: the installer payload changed with the archive's new
+  package list, so the archive serves it under a new version instead of
+  overwriting 0.2.5.
+- `etaf-install` 0.2.5: the installer payload changed with the new package
+  versions, so the archive serves it under a new version instead of
+  overwriting 0.2.4.
+- `Package-Requires` states direct dependencies only, and `scripts/check-api.py`
+  enforces it: a declaration no source uses, or a provider whose API the
+  sources call without declaring it, fails `make check`. Fourteen entries were
+  corrected; the archive's Requires column follows their next release.
+- Application and game help entries now share searchable, read-only help inside
+  the existing application buffer. `?`, existing help commands and help buttons
+  no longer split a window or open a separate help page. Search follows the
+  application's Theme and adapts between two columns and one scrolling column.
+- Modal dialogs and drawers request dismissal when their backdrop is clicked.
+  Clicking inside keeps them open and never activates covered controls. Escape
+  leaves search editing before closing help; dismissal restores the surviving
+  opening focus and scroll position without resetting application state.
+- Custom applications should declare bindings with `:keys`, contribute
+  non-binding notes through `:help`, and invoke `etaf-help` rather than override
+  `?` or manage a separate help buffer. `etaf-help` returns the application
+  buffer; `M-x etaf-palette` remains the separate command-execution interface.
+  Opening help preserves each application's declared playback or pause policy;
+  screensaver input still wakes the display instead of opening help.
 
 ### Fixed
 
@@ -135,36 +135,6 @@
   are reported after installation and hold back only the opening step.
 - `etaf-gamekit` 0.1.2 marks its JSON configuration validation as side-effect
   only, avoiding an Emacs 29/30 byte-compiler warning during installation.
-
-## [Unreleased]
-
-### Added
-
-- Gallery usage panels provide the public signature, parameter defaults,
-  constraints and callback arguments for all 63 components, together with
-  runnable examples shared with their live previews. References come from
-  the installed UI entry, without a manual-package dependency.
-
-### Changed
-
-- Application and game help entries now share searchable, read-only help inside
-  the existing application buffer. `?`, existing help commands and help buttons
-  no longer split a window or open a separate help page. Search follows the
-  application's Theme and adapts between two columns and one scrolling column.
-- Modal dialogs and drawers request dismissal when their backdrop is clicked.
-  Clicking inside keeps them open and never activates covered controls. Escape
-  leaves search editing before closing help; dismissal restores the surviving
-  opening focus and scroll position without resetting application state.
-- Upgrade the framework packages and their consumers together using the recorded
-  revisions. Custom applications should declare bindings with `:keys`, contribute
-  non-binding notes through `:help`, and invoke `etaf-help` rather than override
-  `?` or manage a separate help buffer. `etaf-help` returns the application
-  buffer; `M-x etaf-palette` remains the separate command-execution interface.
-  Opening help preserves each application's declared playback or pause policy;
-  screensaver input still wakes the display instead of opening help.
-
-### Fixed
-
 - Catalog selection changes paint without shifting labels or resizing controls.
   Disclosure arrows, calendar columns and multi-row overview previews retain
   their intended alignment and visibility.

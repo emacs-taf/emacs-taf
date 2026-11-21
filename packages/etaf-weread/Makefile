@@ -22,6 +22,10 @@ load: compile
 	$(EMACS) -Q --batch $(LOAD_PATH) --eval '(require (quote etaf-weread))' --eval '(princ "etaf-weread load OK\n")'
 check: structure-check compile acceptance api-check
 structure-check:
+	@test -f ../../scripts/check-repository.py || { \
+	  echo "This is a published package checkout; run the shared checks from the etaf-mono workspace:"; \
+	  echo "  make -C packages/$(notdir $(CURDIR)) check"; \
+	  exit 2; }
 	python3 ../../scripts/check-repository.py --root . --skip-api
 setup-hooks:
 	@echo "jj does not run Git hooks; the container's 'make setup-hooks' explains what to check."

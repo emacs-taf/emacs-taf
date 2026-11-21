@@ -272,7 +272,7 @@
 
 视频帧到达屏幕所用的渲染后端。
 
-**语义。** 值默认 `image`：每帧发布一张缩放后的 JPEG，经保留的 Host 内容写入画布，任何能显示图像的 Emacs 都能用。`canvas` 把 BGRA 帧读进一张 Emacs canvas 图像，只刷新它的像素缓冲，不再逐帧编码、解码或发布内容；它要求 Emacs 具备 `canvas` 图像类型（Emacs 32，或打了 canvas 补丁的 31）以及编译好的 `native/etaf-video-canvas` 模块。`auto` 在两者都满足时选 `canvas`，否则选 `image`。能力不满足时本变量不会导致失败：缺图像类型、模块加载失败或画布不在图形 frame 里，都静默回退 `image`。`ascii` 与 `color` 模式不受影响。
+**语义。** 值默认 `image`：每帧发布一张缩放后的 JPEG，经保留的 Host 内容写入画布，任何能显示图像的 Emacs 都能用。`canvas` 把 BGRA 帧读进一张 Emacs canvas 图像，只刷新它的像素缓冲，不再逐帧编码、解码或发布内容；它要求 Emacs 具备 `canvas` 图像类型（Emacs 32，或打了 canvas 补丁的 31）以及编译好的 `native/etaf-video-canvas` 模块。在包根目录执行 `sh native/build-video-canvas-module.sh` 即可编译。脚本读取 `CC` 与 `EMACS_MODULE_INCLUDE`，把模块写在源码旁边。`auto` 在两者都满足时选 `canvas`，否则选 `image`。能力不满足时本变量不会导致失败：缺图像类型、模块加载失败或画布不在图形 frame 里，都静默回退 `image`。`ascii` 与 `color` 模式不受影响。
 
 **性能。** canvas 缓冲保持在逻辑分辨率：macOS 的 NS 后端在每次刷新时逐像素上传，设备分辨率的缓冲会让每帧成本翻四倍而画布上没有可见收益。
 

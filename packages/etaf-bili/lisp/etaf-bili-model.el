@@ -24,7 +24,7 @@
   ;; press on the same card plays without asking the site again.
   play-bvid play-source
   (covers (make-hash-table :test #'equal)) cover-queue (cover-active 0)
-  processes)
+  jobs)
 
 (cl-defun etaf-bili-session-create (&key client)
   "Create a headless session with CLIENT, or `etaf-bili-client-factory'.

@@ -3,7 +3,9 @@
 Show any ETAF View in a floating child frame.  A panel does not take a window,
 does not replace the current buffer and does not disturb the user's layout, so
 ETAF content can appear next to ordinary editing work: a preview, a status
-board, a detail card or a small form.
+board, a detail card or a small form.  User workflows and the full option
+reference live in the [ETAF Reference Manual](https://etaf.top/posframe-panels/);
+the maintainer design is in [docs/architecture.md](docs/architecture.md).
 
 Requires Emacs 29.1 or newer, ETAF 0.3 and [Posframe](https://github.com/tumashu/posframe).
 A graphical frame shows a panel with its full border and colours.  A text

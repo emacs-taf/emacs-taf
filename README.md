@@ -51,11 +51,12 @@ advanced package menu. Package.el owns dependency installation, local byte
 compilation, updates and removal. No Git, Python, system compiler, Pi or
 replacement Emacs configuration is required.
 
-The installer groups its targets: framework (`etaf-ui` gallery, `etaf`,
-`etaf-db`, `ekp`), applications (`etaf-md`, `etaf-video-player`,
-`etaf-desktop`, `etaf-manual`, `etaf-telega`, `etaf-weread`, `etaf-ncm`,
-`etaf-pomodoro`) and
-games (`etaf-xiangqi`, `etaf-tanks`). Each entry reports what is missing before
+The installer groups its targets: framework (`etaf-install`, the `etaf-ui`
+gallery, `etaf`, `ebox`, `ecss`, `ekp`, `etaf-db`, `etaf-gamekit`,
+`etaf-posframe`), applications (`etaf-manual`, `etaf-md`,
+`etaf-org-preview`, `etaf-video-player`, `etaf-desktop`, `etaf-telega`,
+`etaf-weread`, `etaf-ncm`, `etaf-pomodoro`, `maillist`) and games
+(`etaf-xiangqi`, `etaf-tanks`). Each entry reports what is missing before
 opening. SQLite needs an Emacs build with SQLite support;
 `M-x etaf-install-doctor` reports required and optional capabilities without
 installing anything. External service accounts and media programs are detected,
@@ -128,12 +129,16 @@ table names the framework packages each one uses:
 | [etaf-bili](https://github.com/emacs-taf/etaf-bili) | Bilibili client: popular feed, ranking and search with in-buffer playback | etaf, etaf-ui, ebox |
 | [etaf-screensaver](https://github.com/emacs-taf/etaf-screensaver) | Idle screensavers: canvas-only animation, input dismissal, grouped playback and adapted recorded animations | etaf, ebox |
 
+`etaf-bili`, `etaf-reader`, `etaf-rss` and `etaf-screensaver` live and pass
+their checks in this checkout but are not in the package archive yet;
+`M-x etaf-install` does not list them.
+
 ### Games
 
-Game applications live under `packages/` too. Most build on
+Game applications live under `packages/` too. Both build on
 [etaf-gamekit](https://github.com/emacs-taf/etaf-gamekit) for game definitions,
 independent instances, actions and backend adapters, and keep their rules,
-presentation and resources in their own package directories.:
+presentation and resources in their own package directories.
 
 | Game | Description | Backend |
 | --- | --- | --- |

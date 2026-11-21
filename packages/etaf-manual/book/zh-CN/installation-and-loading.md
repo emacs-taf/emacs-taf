@@ -83,7 +83,7 @@ Ebox 用帧实际使用的字体测量文字，所以普通文字不需要特定
 
 <!-- index: package.el; autoload; 包归档 -->
 
-每个入口文件都带有 package.el 读取的 `Version` 和 `Package-Requires` 头。一个包的归档包含它的入口文件和 `lisp/` 目录；EKP 的归档还需要包含 `dictionaries/` 和 `native/`。
+每个入口文件都带有 package.el 读取的 `Version` 和 `Package-Requires` 头。一个包的归档包含它的入口文件和 `lisp/` 目录。EKP 的归档还需要 `dictionaries/` 和 `native/`。Ebox 与 ETAF 的归档也带上各自的 `native/` 源码，供可选的 emoji 与画布辅助程序使用。
 
 Function 与 Macro 记录可以带一个 autoload 标记：
 

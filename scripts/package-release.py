@@ -110,6 +110,10 @@ def change_graph_binary(root):
     if not (root / ".jj").is_dir():
         return None
     repository = root / ".jj" / "repo"
+    # A secondary workspace stores a path to the owning repository here.
+    if repository.is_file():
+        target = Path(repository.read_text(encoding="utf-8").strip())
+        repository = target if target.is_absolute() else (repository.parent / target).resolve()
     binary = "jjosh" if repository.is_dir() and (repository / "store" / "git").is_dir() else "jj"
     if not shutil.which(binary):
         raise ValueError(f"{root}: {binary} is not on PATH; it owns this checkout")
@@ -596,16 +600,17 @@ def verify(directory, emacs, targets, paths=("etaf-install",), standard_archives
     print(f"evidence={report}")
 
 
-GROUPS = {
-    "Framework": {"etaf-install", "etaf-ui", "etaf-posframe", "etaf", "ebox", "ecss", "ekp",
-                  "etaf-db"},
-    "Applications": {"etaf-md", "etaf-rss", "etaf-reader", "etaf-algo-lab", "etaf-screensaver",
-                     "etaf-desktop", "etaf-miniflux", "etaf-ncm", "etaf-weread", "etaf-bili",
-                     "etaf-youtube", "etaf-pi", "etaf-telega", "etaf-ascii-video",
-                     "etaf-video-player", "etaf-video-studio", "etaf-manual", "etaf-telega",
-                     "etaf-pomodoro"},
-    "Games": {"etaf-gamekit", "etaf-solitaire", "etaf-xiangqi", "etaf-tanks", "etaf-salvage"},
-}
+def package_groups():
+    """Return {label: {package}} from the workspace roles plus the installer."""
+    labels = {"framework": "Framework", "application": "Applications", "game": "Games"}
+    groups = {label: set() for label in labels.values()}
+    groups["Framework"].add("etaf-install")
+    document = json.loads((ROOT / "workspace.json").read_text())
+    for name, record in checkpoint_sources(document).items():
+        label = labels.get(record.get("role", "application"))
+        if label:
+            groups[label].add(name)
+    return groups
 
 
 def published(url):
@@ -623,7 +628,7 @@ def published(url):
     seen = set()
     # A package published for another author states its own group in the
     # manifest, so the listing places it exactly where the page does.
-    groups = {label: set(members) for label, members in GROUPS.items()}
+    groups = package_groups()
     labels = {"framework": "Framework", "application": "Applications", "game": "Games"}
     for name, record in (manifest.get("community") or {}).items():
         label = labels.get(record.get("group", "application"))

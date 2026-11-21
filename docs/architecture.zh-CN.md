@@ -49,7 +49,7 @@ GameKit 的应用入口是游戏定义与独立实例，统一边界是动作、
 所选后端；统一接入契约不表示原生规则可以互换，也不表示原生游戏目录中的每个
 游戏都已通过前端验收。
 
-实时样例 Salvage Station 位于 `etaf-salvage/`，使用 Godot 的物理碰撞、
+实时样例 Salvage Station 位于本检出之外的 `etaf-salvage/` 仓库，使用 Godot 的物理碰撞、
 固定步长模拟和寻路；Godot 不承担此样例的画面和输入。ETAF 前端提供地图、目标
 检查、货舱、技能、日志和存档交互。棋类、麻将等专用规则或 AI 内核按具体游戏
 选择，尚未接入的候选不作为默认依赖。轻量经营游戏可以保留独立的进程内状态
@@ -362,7 +362,7 @@ Source/Controller 契约存取；后端权威数据不复制为第二权威，�
 | 样式所有权 | ECSS 作用域可快照显式规则目标；Ebox 规范输入可用共享描述标记多个根与成员，根可更新规则而保留旧成员与快照，保持 slot 归属、结构选择器、继承与保留更新语义；ETAF 已传递组件、模板与代码 slot、fallback 和多根归属；局部选择器按节点的规则、成员资格及祖先关系复用，不因其他成员增删而全部失效 | 保持声明归属，覆盖参考应用中的保留更新与隔离验收 |
 | 样式表达 | Component、文件、DSL 和预览入口使用同一有序规则列表；共享 ECSS 静态读取与 Ebox schema 校验，不再要求包装 | 保持文件数据与普通 Elisp 引用规则的区别；继续统一计算和组件作用域 |
 | 交互接入 | Ebox 提供原生节点 keymap、共享 buffer 导航与激活，统一键盘焦点优先级及显式位置／鼠标目标；ETAF 已删除命中扫描、独立鼠标路径、输入模式与键盘目标覆盖，仅分派所选 Host 的已提交 handler；原生帮助、指针与悬停绘制直接传递给 Ebox；按下与拖动经 Ebox 统一发布 `:active`；hover-content 支持同组节点的一次增量更新，ETAF 提供显式 `:on-press-capture` 祖先钩子 | 继续完成真实 GUI 与性能验收，不新增通用 DOM bubble 语义 |
-| 应用运行时 | 应用的打开、画布、适配、关闭与根按键由 `etaf-app-open` 统一提供：画布把窗口区域与 View 未绘制的单元格 remap 到应用颜色，适配在窗口尺寸稳定后发布，关闭函数在 View 仍挂载时恰好运行一次，根 `:keys` 优先于 buffer keymap 且在原生输入会话期间让位。16 个应用中的 15 个与四个游戏（经 `etaf-gamekit` 的单一挂载点）已迁移到它，原来的 per-app mode map、face remap、display table、尺寸 hook 与 kill hook 已删除 | `etaf-browser` 的迁移在其依赖的 `etaf-http` 提供方并入 etaf 后完成；`etaf-bili` 按用户要求暂不迁移；真实 GUI 与前台输入延迟仍需各应用单独验收 |
+| 应用运行时 | 应用的打开、画布、适配、关闭与根按键由 `etaf-app-open` 统一提供：画布把窗口区域与 View 未绘制的单元格 remap 到应用颜色，适配在窗口尺寸稳定后发布，关闭函数在 View 仍挂载时恰好运行一次，根 `:keys` 优先于 buffer keymap 且在原生输入会话期间让位。检出内的 11 个应用与两个游戏（经 `etaf-gamekit` 的单一挂载点）已迁移到它，原来的 per-app mode map、face remap、display table、尺寸 hook 与 kill hook 已删除；`etaf-desktop` 作为桌面宿主自行挂载，`etaf-bili` 按用户要求暂不迁移 | `etaf-browser` 的迁移在其依赖的 `etaf-http` 提供方并入 etaf 后完成；`etaf-bili` 按用户要求暂不迁移；真实 GUI 与前台输入延迟仍需各应用单独验收 |
 | 简单行为对照 | 同一计数按钮通过 Ebox 公共激活入口，两边都从 0 更新到 1；Ebox 导航已识别 ETAF 目标，并验证禁用与无回调子控件的命中屏障 | 继续扩展参考应用的跨层行为对照；这些场景不替代真实鼠标、GUI 和性能验收 |
 | 焦点与按下 | Ebox 已提供 buffer 逻辑焦点、tab 顺序与循环导航，按保留节点身份跟随重排，发布隐藏／禁用／删除时清空，失败恢复；ETAF 已接入并删除 Runtime 焦点字段、扫描排序和 point 修正，两层 API 共享同一状态；禁用与焦点选择器状态由 Ebox 派生，焦点规则进入同一次样式与布局发布，覆盖独立挂载、ETAF 组件规则、裁剪与拒绝恢复；按下状态使用同一 source 派生投影和绘制可用性校验 | 继续补齐悬停状态，整体 GUI 与性能验收仍需完成 |
 | 几何增量与手势 | Ebox 已有节点属性/区域更新及 `:drag` 输入原语；ETAF Behavior 将拖动阶段接入响应式发布；ETAF Playground 通过公开入口消费 `etaf-desktop` | 保持稳定的受控几何更新契约和拖动/调整大小 Behavior；Ebox 不实现窗口语义，ETAF UI 提供面板外壳，`etaf-desktop` 提供完整窗口策略 |
@@ -547,7 +547,7 @@ GUI 保持实际运行时的 GC 策略与用户设置，测量工具不能额外
 
 | 类别 | 例子 | 归属与机制 |
 | --- | --- | --- |
-| Emacs 包（自有或公共） | `etaf-db`、`telega` | 在 `Package-Requires` 声明；`etaf-install` 注册所需归档（`etaf`、`gnu`、`nongnu`、`melpa`），由 `package.el` 自动解析安装；不关闭签名校验、不改用户其它源。应用条目在 `workspace.json` 的 `applications` 段记录提交，框架提供方仍在 `repositories` 段 |
+| Emacs 包（自有或公共） | `etaf-db`、`telega` | 在 `Package-Requires` 声明；`etaf-install` 注册所需归档（`etaf`、`gnu`、`nongnu`、`melpa`），由 `package.el` 自动解析安装；不关闭签名校验、不改用户其它源。归档包与安装目标由 `release-dependencies.json` 选择；`workspace.json` 只登记检出单元与远端，整仓提交就是发布版本 |
 | 自有组件（CLI、Node 后端、可编译模块） | `weread` 后端、`ebook-parse`、EKP C 模块 | 源码放在**应用仓内**，随包同一 tar 发布并计入 sha256；安装到 `package-user-dir/etaf/<包>/<版本>/`；需要 `npm ci` 或 `make` 时在该目录执行，输出进日志、失败可重试；启动时握手校验组件版本与包版本一致 |
 | 系统程序与账号 | ffmpeg、mpv、node、TDLib、Godot、OpenSpiel、平台登录 | 只检测，给出按平台生成的一条可复制命令；不代跑 `sudo`/`brew`/`apt`。游戏引擎是唯一例外：包内自带固定版本与校验值的安装脚本，用户显式执行一条命令时装进 ETAF 缓存目录；安装器与启动路径都不自行下载 |
 
@@ -574,15 +574,16 @@ GUI 保持实际运行时的 GC 策略与用户设置，测量工具不能额外
 
 ### 13.6.1 发布清单的三层含义
 
-`release-dependencies.json` 里 `packages` 是归档包含的全部包（含 `ebox`、`ecss` 这类依赖），`targets` 是用户真正安装的条目，只有它们需要安装证据；包所需的归档外依赖（例如 `telega` 来自 MELPA）必须在 `external` 里显式列出，闭包检查仍会拒绝未声明的缺包。安装诊断只对本归档发布的包负责：第三方依赖在安装时产生的过时宏警告不得阻塞发布，而我们自己的警告仍然失败。已安装包的入口在**编译期与加载期**都要能解析自己的 `lisp/`：编译期优先用 `byte-compile-current-file`，再回退 `load-file-name` 与 `buffer-file-name`（安装脚本本身可能仍在加载，`load-file-name` 会指向脚本而不是入口），否则 `package.el` 安装时会报 `Cannot open load file`。
+`release-dependencies.json` 里 `packages` 是归档包含的全部包，`targets` 是安装器菜单提供的条目；两者必须与 `etaf-install--targets` 一致，结构检查会拒绝只在一侧出现的包。包所需的归档外依赖（例如 `telega` 来自 MELPA）必须在 `external` 里显式列出，闭包检查仍会拒绝未声明的缺包。安装诊断只对本归档发布的包负责：第三方依赖在安装时产生的过时宏警告不得阻塞发布，而我们自己的警告仍然失败。已安装包的入口在**编译期与加载期**都要能解析自己的 `lisp/`：编译期优先用 `byte-compile-current-file`，再回退 `load-file-name` 与 `buffer-file-name`（安装脚本本身可能仍在加载，`load-file-name` 会指向脚本而不是入口），否则 `package.el` 安装时会报 `Cannot open load file`。
 
 ### 13.7 当前差距
 
-- 归档的安装目标覆盖框架、应用与游戏三段：框架 8 个包（`etaf-install`、`etaf-ui`、`etaf-posframe`、`etaf`、`ebox`、`ecss`、`ekp`、`etaf-db`），应用 8 个（`etaf-manual`、`etaf-md`、`etaf-video-player`、`etaf-desktop`、`etaf-telega`、`etaf-weread`、`etaf-ncm`、`etaf-pomodoro`），游戏 2 个（`etaf-xiangqi`、`etaf-tanks`）。`etaf-gamekit` 随归档发布并由两个游戏声明为依赖，但不是独立安装目标。
+- 归档的安装目标覆盖框架、应用与游戏三段：框架 8 个（`etaf-ui`、`etaf-posframe`、`etaf`、`ebox`、`ecss`、`ekp`、`etaf-db`、`etaf-gamekit`），应用 10 个（`etaf-manual`、`etaf-md`、`etaf-org-preview`、`etaf-video-player`、`etaf-desktop`、`etaf-telega`、`etaf-weread`、`etaf-ncm`、`etaf-pomodoro`、`maillist`），游戏 2 个（`etaf-xiangqi`、`etaf-tanks`）。`etaf-install` 是安装入口，同时作为框架菜单项出现，但不计入 `release-dependencies.json` 的 `targets`。
+- 检出内的 `etaf-bili`、`etaf-reader`、`etaf-rss` 与 `etaf-screensaver` 已通过各自检查，但还没有进入归档，也不在安装器菜单中；把它们上架要走 13.8 的固定步骤。
 - `etaf-posframe` 是框架包：应用只暴露 View，浮动面板由它承载，所以归档必须先能装上它，应用的“作为面板打开”才成立。它依赖的窗口管理器 `posframe` 来自 GNU ELPA，因此该目标的能力清单声明 `gnu`，安装器才会注册那个归档。应用以 `<包>-open` 展示自己，安装器菜单与发布门禁都按这个约定检查；`etaf-pomodoro` 因此在 0.2.0 把 `etaf-pomodoro-start` 改名为 `etaf-pomodoro-open`，成为安装目标。
 - `etaf-telega` 通过声明 `telega` 与注册 MELPA 自动装齐依赖；`telega-server` 与账号仍未纳入（只检测）。
 - `etaf-weread` 与 `etaf-ncm` 的后端已随应用仓发布，提示、数据目录与检测都指向包内后端；系统侧只检测 Node.js、mpv 等程序。
-- `etaf-salvage` 与 `etaf-solitaire` 尚未纳入检查点，也没有引擎检测。`etaf-gamekit` 的 Godot 与 OpenSpiel 运行时由归档内的安装脚本提供，分别由 `M-x etaf-gamekit-install-godot` 与 `M-x etaf-gamekit-install-openspiel` 安装，写进 `~/.cache/emacs-taf/game-engines`；两者都不再要求源码检出。
+- 不在本检出的应用与游戏（例如 `etaf-salvage`、`etaf-solitaire`、`etaf-mario`）尚未纳入检查点，也没有引擎检测。`etaf-gamekit` 的 Godot 与 OpenSpiel 运行时由归档内的安装脚本提供，分别由 `M-x etaf-gamekit-install-godot` 与 `M-x etaf-gamekit-install-openspiel` 安装，写进 `~/.cache/emacs-taf/game-engines`；两者都不再要求源码检出。
 - 组件的托管目录安装（`npm ci`/`make` 到 `package-user-dir/etaf/<包>/<版本>/`）与版本握手仍未实现。当前归档内的后端都是纯源码（Node、Python、Shell），随 tar 解包即可运行，所以这两个应用的“装完即用”不依赖它；需要托管安装的是将来带构建步骤的组件。
 
 ### 13.8 新增应用上架
@@ -593,10 +594,10 @@ GUI 保持实际运行时的 GC 策略与用户设置，测量工具不能额外
 
 ### 14.1 唯一工作区与检出位置
 
-根仓库是唯一的集成根：框架包、应用与游戏都是本目录下的同级检出，逐个登记在
-`workspace.json` 的 `repositories` 表里，`role` 取 `framework`、`application` 或
-`game`。根 `make check` 按注册表顺序逐仓运行各自的 `check`，因此这张表同时是
-检出清单、检查顺序和集成检查点。
+根仓库是唯一的集成根：框架包、应用与游戏都在 `packages/` 下各占一个目录，逐个
+登记在 `workspace.json` 的 `packages` 表里，`role` 取 `framework`、`application`
+或 `game`。根 `make check` 按注册表声明的依赖顺序在 `packages/<名字>` 下运行各自的
+`check`，因此这张表同时是检出清单、检查顺序和集成检查点。
 
 不建立第二层工作区。嵌套的 `workspace.json` 会让注册表、共享检查工具和集成检查点
 各长一份，结构检查会直接拒绝这样的目录；需要隔离副本的流程（发布、基准、验收）
@@ -608,7 +609,7 @@ GUI 保持实际运行时的 GC 策略与用户设置，测量工具不能额外
 | 层级 | 仓库 | 职责 |
 | --- | --- | --- |
 | 应用 | `etaf-ncm`、`etaf-weread` 及各应用 | 具体产品的界面、交互与业务模型 |
-| 游戏 | `etaf-tanks`、`etaf-xiangqi`、`etaf-solitaire`、`etaf-salvage`、`etaf-mario` | 游戏身份、玩法配置、内容资源、界面、局部交互状态与启动命令 |
+| 游戏 | `etaf-tanks`、`etaf-xiangqi` | 游戏身份、玩法配置、内容资源、界面、局部交互状态与启动命令 |
 | 游戏框架 | `etaf-gamekit` | 游戏定义、独立运行实例、通用后端适配、动作与观察结果、生命周期 |
 | 组件 | `etaf-ui` | 可复用界面组件与主题 token |
 | 运行时 | `etaf` | 组件、状态与挂载运行环境 |
@@ -617,14 +618,15 @@ GUI 保持实际运行时的 GC 策略与用户设置，测量工具不能额外
 
 依赖方向只允许自上而下：应用与游戏依赖 ETAF UI、ETAF、Ebox 与 ECSS，游戏还依赖
 GameKit；框架侧不得反向依赖任何应用或游戏，也不得因某个应用的需要改变框架的公共
-接口。应用只通过提供者根入口声明的公共接口使用它们，未在 Commentary 中列出的符号
-一律视为内部实现。添加应用通常只增加应用代码：只有实际用例证明缺少通用能力时，才
-先在所属提供者补能力，再由应用使用；不得把应用或游戏的名称、规则、资源或专用开关
-混进框架。
+接口。不在本检出的游戏（例如 `etaf-salvage`、`etaf-solitaire`、`etaf-mario`）同样
+属于游戏层，通过已发布的框架包使用公共接口。应用只通过提供者根入口声明的公共接口
+使用它们，未在 Commentary 中列出的符号一律视为内部实现。添加应用通常只增加应用
+代码：只有实际用例证明缺少通用能力时，才先在所属提供者补能力，再由应用使用；不得
+把应用或游戏的名称、规则、资源或专用开关混进框架。
 
 ### 14.3 应用契约
 
-每个应用以本目录下的同名目录独立检出，并满足：
+每个应用是 `packages/` 下与包同名的目录，随本检出一起交付，发布时投影为独立仓库。每个应用满足：
 
 - 根入口 `<名称>.el` 是唯一的包入口，实现放在 `lisp/`；入口 Commentary 是该应用公共
   API 的唯一清单，在同一处声明 `Function`、`Macro`、`Variable`、`Hook`、`Error`、

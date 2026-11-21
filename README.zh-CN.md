@@ -34,7 +34,7 @@ make -C packages/etaf-ui check
 
 以后运行 `M-x etaf-install` 即可；已安装的目标可以离线重开。用 `M-x etaf-install-manage` 查看已安装/可用版本、更新、卸载或打开目标并查看 doctor；`M-x list-packages` 仍是高级包菜单。依赖安装、本地字节编译、更新和卸载均由 package.el 管理，不需要 Git、Python、系统编译器或 Pi，也不替换现有 Emacs 配置。
 
-安装入口按框架、应用与游戏分组：框架含组件画廊（`etaf-ui`）、`etaf`、`etaf-db`、`ekp`；应用含 `etaf-md`、`etaf-video-player`、`etaf-desktop`、`etaf-manual`、`etaf-telega`、`etaf-weread`、`etaf-ncm`；游戏含 `etaf-xiangqi`、`etaf-tanks`。每个条目在打开前报告缺少什么。SQLite 需要 Emacs 本身具备 SQLite 支持；`M-x etaf-install-doctor` 只检查必需和可选能力，不执行安装。外部服务账号与媒体程序只检测、不代装；应用自己的后端随包发布。Telega 的 `telega`
+安装入口按框架、应用与游戏分组：框架含 `etaf-install`、组件画廊（`etaf-ui`）、`etaf`、`ebox`、`ecss`、`ekp`、`etaf-db`、`etaf-gamekit`、`etaf-posframe`；应用含 `etaf-manual`、`etaf-md`、`etaf-org-preview`、`etaf-video-player`、`etaf-desktop`、`etaf-telega`、`etaf-weread`、`etaf-ncm`、`etaf-pomodoro`、`maillist`；游戏含 `etaf-xiangqi`、`etaf-tanks`。每个条目在打开前报告缺少什么。SQLite 需要 Emacs 本身具备 SQLite 支持；`M-x etaf-install-doctor` 只检查必需和可选能力，不执行安装。外部服务账号与媒体程序只检测、不代装；应用自己的后端随包发布。Telega 的 `telega`
 Emacs 包会自动安装，但原生 `telega-server` 不会：先安装 TDLib，再运行
 `M-x telega-server-build`（或按 Telega README 手工构建），把 `telega-server`
 放进 `exec-path`。安装消息、`M-x etaf-install-doctor` 和
@@ -88,9 +88,11 @@ Emacs 包会自动安装，但原生 `telega-server` 不会：先安装 TDLib，
 | [etaf-bili](https://github.com/emacs-taf/etaf-bili) | B 站客户端：热门、排行榜与搜索，可在 buffer 内直接播放 | etaf、etaf-ui、ebox |
 | [etaf-screensaver](https://github.com/emacs-taf/etaf-screensaver) | 空闲屏保：纯画布动画、输入唤回、组合播放与适配的外部录制动画 | etaf、ebox |
 
+`etaf-bili`、`etaf-reader`、`etaf-rss`、`etaf-screensaver` 已在本检出中开发并通过检查，但还没有进入包归档；`M-x etaf-install` 不会列出它们。
+
 ### 游戏
 
-游戏应用同样位于 `packages/` 目录下。大部分基于 [etaf-gamekit](https://github.com/emacs-taf/etaf-gamekit)
+游戏应用同样位于 `packages/` 目录下。两款游戏都基于 [etaf-gamekit](https://github.com/emacs-taf/etaf-gamekit)
 提供游戏定义、独立运行实例、动作与后端适配器，规则、呈现和资源保存在各自的包目录：
 
 | 游戏 | 说明 | 后端 |

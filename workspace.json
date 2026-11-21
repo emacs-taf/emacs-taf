@@ -35,7 +35,7 @@
     "etaf-desktop": {
       "url": "https://github.com/emacs-taf/etaf-desktop.git",
       "branch": "main",
-      "role": "framework"
+      "role": "application"
     },
     "etaf-gamekit": {
       "url": "https://github.com/emacs-taf/etaf-gamekit.git",

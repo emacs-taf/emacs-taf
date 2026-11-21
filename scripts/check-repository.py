@@ -83,6 +83,11 @@ def owner_binary(root):
     for its owner.
     """
     repository = root / '.jj' / 'repo'
+    # A secondary workspace stores a path to the owning repository here, so
+    # read through it instead of treating the workspace as a Git-backed jj.
+    if repository.is_file():
+        target = Path(repository.read_text(encoding='utf-8').strip())
+        repository = target if target.is_absolute() else (repository.parent / target).resolve()
     if repository.is_dir() and (repository / 'store' / 'git').is_dir():
         return 'jjosh'
     return 'jj'
@@ -159,6 +164,7 @@ def check(root, files=None, notices=None):
         allowed_dirs = set(DIRS)
     def fail(path, message): errors.append(f'{path}: {message}')
     if workspace:
+        errors.extend(install_selection_errors(root))
         # One workspace owns every checkout: a nested workspace root would fork
         # the registry, its shared tooling and its integration checkpoint again.
         for name in sorted(allowed_dirs - DIRS):
@@ -330,6 +336,41 @@ def check(root, files=None, notices=None):
             except (ValueError, KeyError, TypeError, OSError) as error:
                 fail('tests/acceptance.json', f'invalid inventory: {error}')
     return sorted(set(errors))
+
+
+INSTALLER_TARGETS = re.compile(r'^\(defconst etaf-install--targets\b(.*?)^  "', re.M | re.S)
+INSTALLER_ENTRY = re.compile(r'\(([a-z][a-z0-9-]*) "')
+
+
+def install_selection_errors(root):
+    """Return drift between the installer menu and the release selection.
+
+    A curated menu entry a user can pick must be shipped and gated, and a gated
+    target must be reachable from that menu.  The two lists drifted once, so a
+    target was offered while the archive had no file for it.
+    """
+    installer = root / 'etaf-install.el'
+    selection_path = root / 'release-dependencies.json'
+    if not installer.is_file() or not selection_path.is_file():
+        return []
+    match = INSTALLER_TARGETS.search(installer.read_text(encoding='utf-8'))
+    if not match:
+        return ['etaf-install.el: cannot read etaf-install--targets; update the consistency check']
+    targets = set(INSTALLER_ENTRY.findall(match.group(1))) - {'etaf-install'}
+    try:
+        selection = json.loads(selection_path.read_text(encoding='utf-8'))
+        packages = set(selection['packages'])
+        gated = set(selection.get('targets') or packages)
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        return [f'release-dependencies.json: {error}']
+    errors = []
+    for name in sorted(targets - packages):
+        errors.append(f'etaf-install.el: target {name} is not in release-dependencies packages')
+    for name in sorted(targets - gated):
+        errors.append(f'etaf-install.el: target {name} is not in release-dependencies targets')
+    for name in sorted(gated - targets):
+        errors.append(f'release-dependencies.json: target {name} is not an installer target')
+    return errors
 
 
 def main():

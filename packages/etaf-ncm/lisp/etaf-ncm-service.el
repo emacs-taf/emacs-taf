@@ -74,10 +74,6 @@ tests bind this to a fake client.")
   "Backend client that runs the bundled backend as child processes."
   backend-directory state-directory node-program timeout (pending nil))
 
-(cl-defstruct (etaf-ncm--pending (:constructor etaf-ncm--pending-create))
-  "One in-flight backend request."
-  process timer cancelled stdout stderr)
-
 (cl-defun etaf-ncm-make-client (&key backend-directory state-directory node-program timeout)
   "Create a client that runs the bundled backend as child processes.
 BACKEND-DIRECTORY, STATE-DIRECTORY, NODE-PROGRAM and TIMEOUT default to
@@ -138,14 +134,10 @@ Cancelled requests never run their callbacks.  Return the number of cancelled
 requests, or 0 when CLIENT is not a subprocess client."
   (let ((count 0))
     (when (etaf-ncm--client-p client)
-      (dolist (pending (etaf-ncm--client-pending client))
-        (setf (etaf-ncm--pending-cancelled pending) t)
-        (when-let* ((timer (etaf-ncm--pending-timer pending)))
-          (cancel-timer timer))
-        (when-let* ((process (etaf-ncm--pending-process pending)))
-          (when (process-live-p process)
-            (cl-incf count)
-            (delete-process process))))
+      (dolist (job (etaf-ncm--client-pending client))
+        (when (etaf-process-live-p job)
+          (cl-incf count)
+          (etaf-process-cancel job)))
       (setf (etaf-ncm--client-pending client) nil))
     count))
 
@@ -570,98 +562,48 @@ Only the requests that still live in the POSIX shell entry are left here."
 
 (cl-defun etaf-ncm--spawn (client program arguments callback &optional request-timeout)
   "Run PROGRAM with ARGUMENTS for CLIENT; deliver its decoded JSON to CALLBACK.
-REQUEST-TIMEOUT, when given, replaces CLIENT's own request timeout."
-  (let* ((stdout (generate-new-buffer " *etaf-ncm-stdout*"))
-         (stderr (generate-new-buffer " *etaf-ncm-stderr*"))
-         (pending (etaf-ncm--pending-create :stdout stdout :stderr stderr))
-         (timeout (or request-timeout (etaf-ncm--client-timeout client))))
-    (condition-case error
-        (progn
-          (setf (etaf-ncm--pending-process pending)
-                ;; `make-process' has no :environment keyword, so the child's
-                ;; environment comes from a binding around the call.
-                (let ((process-environment (etaf-ncm--environment client)))
-                  (make-process
-                   :name "etaf-ncm"
-                   :buffer stdout
-                   :stderr stderr
-                   :command (cons program arguments)
-                   :connection-type 'pipe
-                   :noquery t
-                   :coding 'utf-8-unix)))
-          ;; The stderr pipe is a process of its own; without a sentinel Emacs
-          ;; appends a "Process ... finished" line to its buffer on exit,
-          ;; which is not backend output.  An ignoring sentinel keeps the
-          ;; buffer to exactly what the backend wrote.
-          (let ((pipe (get-buffer-process stderr)))
-            (when pipe (set-process-sentinel pipe #'ignore))))
-      (error
-       (kill-buffer stdout)
-       (kill-buffer stderr)
-       (funcall callback (list :error (error-message-string error)))
-       (cl-return-from etaf-ncm--spawn nil)))
-    (push pending (etaf-ncm--client-pending client))
-    (setf (etaf-ncm--pending-timer pending)
-          (run-at-time
-           timeout nil
-           (lambda ()
-             (setf (etaf-ncm--pending-cancelled pending) t)
-             (when-let* ((process (etaf-ncm--pending-process pending)))
-               (when (process-live-p process) (delete-process process)))
-             (setf (etaf-ncm--client-pending client)
-                   (delq pending (etaf-ncm--client-pending client)))
-             (funcall callback
-                      (list :error (format "Backend request timed out after %ss" timeout)
-                            :hint (mapconcat #'identity (cons program arguments) " "))))))
-    (set-process-sentinel
-     (etaf-ncm--pending-process pending)
-     (lambda (process _event)
-       (when (memq (process-status process) '(exit signal failed))
-         (etaf-ncm--settle client pending process callback))))
+REQUEST-TIMEOUT, when given, replaces CLIENT's own request timeout.  The
+transport is `etaf-process-run'; only the backend protocol stays here."
+  (let* ((command (cons program arguments))
+         (timeout (or request-timeout (etaf-ncm--client-timeout client)))
+         job)
+    (let ((deliver (lambda (result)
+                     (setf (etaf-ncm--client-pending client)
+                           (delq job (etaf-ncm--client-pending client)))
+                     (funcall callback (etaf-ncm--reply result command timeout)))))
+      (let ((process-environment (etaf-ncm--environment client)))
+        (setq job (etaf-process-run command
+                                    :name "etaf-ncm"
+                                    :output 'json
+                                    :timeout timeout
+                                    :callback deliver))))
+    (push job (etaf-ncm--client-pending client))
     nil))
 
-(defun etaf-ncm--settle (client pending process callback)
-  "Collect the result of PROCESS and finish PENDING for CLIENT.
-The callback is skipped when the request was cancelled."
-  (let ((stdout (etaf-ncm--pending-stdout pending))
-        (stderr (etaf-ncm--pending-stderr pending))
-        (cancelled (etaf-ncm--pending-cancelled pending)))
-    (when-let* ((timer (etaf-ncm--pending-timer pending)))
-      (cancel-timer timer))
-    (setf (etaf-ncm--client-pending client)
-          (delq pending (etaf-ncm--client-pending client)))
-    ;; An exited process can still have output in flight: `:stderr' is its own
-    ;; pipe, so the exit event may arrive before its data.  A zero timeout
-    ;; reads what is already in the pipe without waiting — the exit means the
-    ;; writer finished, so its bytes are in the kernel buffer — and it avoids
-    ;; the "Blocking call to accept-process-output with quit inhibited"
-    ;; warning a timeout-less wait would print from this sentinel.
-    (unless cancelled
-      (while (accept-process-output process 0))
-      (let ((pipe (get-buffer-process stderr)))
-        (while (and pipe (accept-process-output pipe 0)))))
-    (let ((output (with-current-buffer stdout (buffer-string)))
-          (errors (with-current-buffer stderr (buffer-string)))
-          (status (process-exit-status process)))
-      (kill-buffer stdout)
-      (kill-buffer stderr)
-      ;; Re-read the cancellation flag: draining the streams can run a timer
-      ;; that times this request out, which already delivered the failure.
-      (unless (or cancelled (etaf-ncm--pending-cancelled pending))
-        (funcall callback
-                 (if (and (eq (process-status process) 'exit) (zerop status))
-                     (let ((data (etaf-ncm--decode output)))
-                       (cond ((null data) (list :error "Backend returned no data"
-                                                :hint (string-trim errors)))
-                             ((eq (plist-get data :ok) :false)
-                              (etaf-ncm--failure data errors))
-                             (t (list :ok data))))
-                   (let ((data (etaf-ncm--decode output)))
-                     (if data
-                         (etaf-ncm--failure data errors)
-                       (or (etaf-ncm--stderr-failure errors)
-                           (list :error (format "Backend command failed (exit %s)" status)
-                                 :hint (string-trim errors)))))))))))
+(defun etaf-ncm--reply (result command timeout)
+  "Return the backend reply for etaf-process RESULT of COMMAND and TIMEOUT."
+  (pcase (plist-get result :status)
+    ('timeout
+     (list :error (format "Backend request timed out after %ss" timeout)
+           :hint (mapconcat #'identity command " ")))
+    ('failed
+     (list :error (or (plist-get result :message) "Backend command failed to start")))
+    ((or 'exit 'signal)
+     (let ((data (plist-get result :output))
+           (errors (or (plist-get result :stderr) ""))
+           (status (plist-get result :exit)))
+       (if (and (eq (plist-get result :status) 'exit) (zerop status))
+           (cond ((null data)
+                  (list :error "Backend returned no data" :hint (string-trim errors)))
+                 ((eq (plist-get data :ok) :false)
+                  (etaf-ncm--failure data errors))
+                 (t (list :ok data)))
+         (if data
+             (etaf-ncm--failure data errors)
+           (or (etaf-ncm--stderr-failure errors)
+               (list :error (format "Backend command failed (exit %s)" status)
+                     :hint (string-trim errors)))))))
+    (_ (list :error (or (plist-get result :message) "Backend request failed")))))
 
 (defun etaf-ncm--failure (data errors)
   "Return an (:error ...) result built from backend DATA and ERRORS."

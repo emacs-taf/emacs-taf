@@ -339,7 +339,7 @@ remains the sole offset authority."
            (entry (gethash url (etaf-bili--session-covers session))))
       (setcar entry 'loading)
       (cl-incf (etaf-bili--session-cover-active session))
-      (let ((process
+      (let ((job
              (etaf-bili-client-call
               (etaf-bili--session-client session) (list :op :cover :url url)
               (lambda (reply)
@@ -355,7 +355,7 @@ remains the sole offset authority."
                          (error 'unavailable))
                      'unavailable))
                   (etaf-bili--pump-covers session))))))
-        (when (processp process) (push process (etaf-bili--session-processes session)))))))
+        (when (etaf-process-live-p job) (push job (etaf-bili--session-jobs session)))))))
 
 (defun etaf-bili--sync-viewport (session)
   "Lay SESSION out for the region that shows it.
@@ -412,9 +412,9 @@ revived session where it was instead of fetching again."
         (etaf-bili--session-loading session) nil)
   (cl-incf (etaf-bili--session-request session))
   (etaf-bili--login-stop)
-  (dolist (process (etaf-bili--session-processes session))
-    (when (process-live-p process) (delete-process process)))
-  (setf (etaf-bili--session-processes session) nil))
+  (dolist (job (etaf-bili--session-jobs session))
+    (etaf-process-cancel job))
+  (setf (etaf-bili--session-jobs session) nil))
 
 (defun etaf-bili--start-playback (session source)
   "Publish SOURCE into SESSION's media viewer if the buffer remains live."

@@ -36,6 +36,10 @@ test: acceptance
 check: structure-check compile acceptance api-check
 
 structure-check:
+	@test -f ../../scripts/check-repository.py || { \
+	  echo "This is a published package checkout; run the shared checks from the etaf-mono workspace:"; \
+	  echo "  make -C packages/$(notdir $(CURDIR)) check"; \
+	  exit 2; }
 	@test -f maillist.el || { echo "缺少入口 maillist.el"; exit 1; }
 	@test -f tests/acceptance.json || { echo "缺少 tests/acceptance.json"; exit 1; }
 	@test -n "$(PROVIDER_ROOT)" || { echo "找不到 provider（../etaf 或 ../../etaf）"; exit 1; }

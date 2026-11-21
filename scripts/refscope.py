@@ -260,6 +260,10 @@ def execution_order(graph, names):
 def owner_binary(root):
     """Return the Jujutsu binary that owns ROOT without mixing jjosh and jj."""
     repository = root / '.jj' / 'repo'
+    # A secondary workspace stores a path to the owning repository here.
+    if repository.is_file():
+        target = Path(repository.read_text(encoding='utf-8').strip())
+        repository = target if target.is_absolute() else (repository.parent / target).resolve()
     if repository.is_dir() and (repository / 'store' / 'git').is_dir():
         return 'jjosh'
     return 'jj'

@@ -57,9 +57,6 @@
   :type 'number
   :group 'etaf-bili)
 
-(defvar etaf-bili-account--process nil
-  "Backend process currently answering an account request.")
-
 (defvar etaf-bili--login-poll-timer nil
   "Timer polling the sign-in code the panel is showing.")
 
@@ -73,49 +70,36 @@
       (list etaf-bili-node-program
             (expand-file-name "bili.mjs" etaf-bili-backend-directory))))
 
-(defun etaf-bili--backend-settle (output errors callback)
-  "Drain OUTPUT and ERRORS, then deliver the parsed backend reply to CALLBACK."
-  (when-let* ((pipe (get-buffer-process errors)))
-    (set-process-sentinel pipe #'ignore)
-    (while (accept-process-output pipe 0)))
-  (let* ((text (with-current-buffer output
-                 (string-trim (buffer-substring-no-properties (point-min) (point-max)))))
-         (failure (with-current-buffer errors
-                    (string-trim (buffer-substring-no-properties (point-min) (point-max)))))
-         (reply (condition-case nil
-                    (json-parse-string text :object-type 'plist :array-type 'list
-                                       :null-object nil :false-object nil)
-                  (error nil))))
-    (when (buffer-live-p output) (kill-buffer output))
-    (when (buffer-live-p errors) (kill-buffer errors))
-    (funcall callback
-             (or reply
-                 (list :ok nil :error "internal"
-                       :message (if (string-empty-p failure)
-                                    "Bilibili 后端没有返回结果"
-                                  failure))))))
+(defun etaf-bili--backend-reply (result)
+  "Return the parsed backend reply for etaf-process RESULT.
+The backend answers on stdout even when it exits non-zero, so a readable
+reply wins over the exit status; otherwise stderr names the failure."
+  (if (eq (plist-get result :status) 'failed)
+      (list :ok nil :error "internal"
+            :message (or (plist-get result :message)
+                         "Bilibili 后端没有返回结果"))
+    (let* ((text (string-trim (or (plist-get result :output) "")))
+           (failure (string-trim (or (plist-get result :stderr) "")))
+           (reply (condition-case nil
+                      (json-parse-string text :object-type 'plist :array-type 'list
+                                         :null-object nil :false-object nil)
+                    (error nil))))
+      (or reply
+          (list :ok nil :error "internal"
+                :message (if (string-empty-p failure)
+                             "Bilibili 后端没有返回结果"
+                           failure))))))
 
 (defun etaf-bili--backend (args callback)
   "Run ARGS through the account backend and deliver CALLBACK a parsed plist."
-  (let ((output (generate-new-buffer " *bili-backend*"))
-        (errors (generate-new-buffer " *bili-backend-errors*")))
-    (condition-case problem
-        (setq etaf-bili-account--process
-              (make-process
-               :name "etaf-bili-backend" :buffer output :stderr errors
-               :coding '(utf-8-unix . utf-8-unix) :noquery t
-               :command (append (etaf-bili--backend-command) args)
-               :sentinel (lambda (process _event)
-                           (when (memq (process-status process) '(exit signal))
-                             (while (accept-process-output process 0))
-                             (setq etaf-bili-account--process nil)
-                             (etaf-bili--backend-settle output errors callback)))))
-      (error
-       (kill-buffer output)
-       (kill-buffer errors)
-       (funcall callback (list :ok nil :error "internal"
-                               :message (error-message-string problem)))))
-    etaf-bili-account--process))
+  (etaf-process-run
+   (append (etaf-bili--backend-command) args)
+   :name "etaf-bili-backend"
+   :output 'string
+   :coding '(utf-8-unix . utf-8-unix)
+   :callback (lambda (result)
+               (funcall callback (etaf-bili--backend-reply result))))
+  nil)
 
 ;;; Session state
 

@@ -2,10 +2,15 @@
   "schema": 1,
   "packages": {
     "ecss": {},
-    "ebox": {},
+    "ebox": {
+      "resources": [
+        "native"
+      ]
+    },
     "etaf": {
       "resources": [
-        "examples"
+        "examples",
+        "native"
       ]
     },
     "etaf-ui": {
@@ -80,7 +85,8 @@
     },
     "etaf-pomodoro": {
       "resources": []
-    }
+    },
+    "maillist": {}
   },
   "targets": [
     "etaf-ui",
@@ -89,6 +95,9 @@
     "etaf-manual",
     "etaf-db",
     "ekp",
+    "ebox",
+    "ecss",
+    "etaf-gamekit",
     "etaf-md",
     "etaf-org-preview",
     "etaf-video-player",
@@ -98,6 +107,7 @@
     "etaf-weread",
     "etaf-ncm",
     "etaf-tanks",
-    "etaf-pomodoro"
+    "etaf-pomodoro",
+    "maillist"
   ]
 }
