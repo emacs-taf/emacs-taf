@@ -178,6 +178,42 @@ class PlanningTests(Fixture):
         self.assertNotEqual(0, result.returncode)
         self.assertIn('unknown symbol', result.stderr)
 
+    def test_order_and_layers_put_providers_before_consumers(self):
+        self.package('core')
+        self.package('util')
+        self.package('mid', requires=['core'])
+        self.package('app-a', requires=['mid', 'util'])
+        self.package('app-b', requires=['mid'])
+        flat = self.cli('order')
+        self.assertEqual(0, flat.returncode, flat.stderr)
+        names = flat.stdout.splitlines()
+        self.assertLess(names.index('core'), names.index('mid'))
+        self.assertLess(names.index('mid'), names.index('app-a'))
+        self.assertLess(names.index('util'), names.index('app-a'))
+
+        layered = self.cli('order', '--layers')
+        self.assertEqual(0, layered.returncode, layered.stderr)
+        layers = [line.split() for line in layered.stdout.splitlines()]
+        self.assertEqual([['core', 'util'], ['mid'], ['app-a', 'app-b']], layers)
+
+    def test_bare_defvar_declaration_does_not_claim_ownership(self):
+        self.package('base', body='(defvar base-volume 100)')
+        self.package('app', body='(defvar base-volume)\n(defvar read-eval)\n'
+                                  '(defun app-use () base-volume)')
+        self.package('other', body='(defvar read-eval)')
+        warnings = io.StringIO()
+        graph = self.build(stream=warnings)
+        self.assertEqual('', warnings.getvalue())
+        self.assertEqual('base', graph.owners['base-volume'])
+        self.assertNotIn('read-eval', graph.owners)
+        self.assertEqual({'app'}, set(VERIFY.scope_for_package(graph, 'base')))
+
+    def test_owner_binary_distinguishes_jjosh_and_plain_jj(self):
+        (self.root / '.jj/repo').mkdir(parents=True)
+        self.assertEqual('jj', VERIFY.owner_binary(self.root))
+        (self.root / '.jj/repo/store/git').mkdir(parents=True)
+        self.assertEqual('jjosh', VERIFY.owner_binary(self.root))
+
 
 if __name__ == '__main__':
     unittest.main()

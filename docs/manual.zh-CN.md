@@ -62,7 +62,7 @@ python3 scripts/package_archive.py verify --directory /tmp/package-archive
 
 ### 构建与验证官方包集
 
-维护者使用 Python 3.12+、Git 和 Emacs 进行发布验证；用户只需要 Emacs。先封口根仓库，准备 `workspace.json` 记录的提供方检出。构建读取这些精确 Git 对象，不读取未提交文件或当前远端头部。`release-dependencies.json` 选择包及运行资源，根仓库版本提供安装入口。
+维护者使用 Python 3.12+、Git 和 Emacs 进行发布验证；用户只需要 Emacs。先封口工作副本：每个包都从这一个封口的检出提交里导出（树中的 `packages/<名字>`），不读取未提交文件或当前远端头部。`release-dependencies.json` 选择包及运行资源，同一提交提供安装入口。
 
 ```sh
 make release-build RELEASE_DIR=/tmp/etaf-release-unique
@@ -70,56 +70,45 @@ make release-check RELEASE_DIR=/tmp/etaf-release-unique EMACS=/path/to/emacs
 make release-tool-tests
 ```
 
-`release-build` 拒绝未封口的根目录、已有输出、缺失资源及不完整或版本过旧的依赖闭包。清单记录根仓库和提供方版本。同名同版本包文件不得被不同字节替换；新发布必须更新包的 `Version` 头。
+`release-build` 拒绝未封口的根目录、已有输出、缺失资源及不完整或版本过旧的依赖闭包。清单记录每个包导出自哪个检出提交。同名同版本包文件不得被不同字节替换；新发布必须更新包的 `Version` 头。
 
 `release-check` 为每个受支持目标运行安装入口，每次使用独立的 `emacs -Q` 配置；`--paths both` 再跑一遍普通 `package-install`，没有 ETAF 入口的社区包就靠这条路径验证。安装并行执行（`--jobs`，默认四个）；`--scope selected --reason TEXT` 记录只覆盖指定目标的门禁；`--standard-archives DIR` 用一份预取的归档快照安装，不联网取各包索引。它检查依赖来源、离线重开、响应式渲染、真实画廊入口、复制并运行画廊示例，以及手册数据。即使 Emacs 返回成功，编译警告和被降级为日志的加载错误也会阻止通过。新尝试会使旧的 `installation.json` 失效；成功报告记录清单、验证器摘要，以及 Emacs、平台和已测目标。日志和本机证据应保持私有，不放入公开包目录。每个受支持的 Emacs/平台组合须分别验证；一个平台的结果不证明另一个平台。GUI 渲染与交互另行实测。
 
 定向诊断可运行 `scripts/package-release.py verify --directory DIR --target etaf-ui`；`--paths package-install` 只验证普通 package.el 安装。这类局部证据不证明省略的目标或安装路径。
 
-完成受支持环境的验证后，用 `make release-publish RELEASE_DIR=/path/to/release` 发布该归档。命令委托给手册站点的仅包发布器，不重新构建或改变页面。首次同时上线站点和包归档时，使用 `make -C etaf-manual site-publish PUBLISH_ARGS='--packages /path/to/release'`。传输、部署锁、版本不可变、历史下载和回滚的契约见[站点部署手册](https://github.com/emacs-taf/etaf-manual/blob/main/docs/manual.zh-CN.md#发布站点和包归档)。
+完成受支持环境的验证后，用 `make release-publish RELEASE_DIR=/path/to/release` 发布该归档。命令委托给手册站点的仅包发布器，不重新构建或改变页面。首次同时上线站点和包归档时，使用 `make -C packages/etaf-manual site-publish PUBLISH_ARGS='--packages /path/to/release'`。传输、部署锁、版本不可变、历史下载和回滚的契约见[站点部署手册](https://github.com/emacs-taf/etaf-manual/blob/main/docs/manual.zh-CN.md#发布站点和包归档)。
 
-`package-release.py stage --directory DIR --output NEW` 是发布器调用的本地门禁。它要求封口工作区清单与记录的提供方版本一致，验证器、安装探针和清单摘要仍有效，并在同一记录的 Emacs/平台上完成全部目标的安装入口验证。局部证据会被拒绝；输出只含 `archive-contents`、公开清单及其中列出的源码 tar 包。报告是本地验证证据，不是签名；此门禁本身不认证其他 Emacs 版本、平台或 GUI 行为。
+`package-release.py stage --directory DIR --output NEW` 是发布器调用的本地门禁。它要求封口工作区清单与记录的包版本一致，验证器、安装探针和清单摘要仍有效，并在同一记录的 Emacs/平台上完成全部目标的安装入口验证。局部证据会被拒绝；输出只含 `archive-contents`、公开清单及其中列出的源码 tar 包。报告是本地验证证据，不是签名；此门禁本身不认证其他 Emacs 版本、平台或 GUI 行为。
 
-根仓库的 `Package installation` GitHub Actions 工作流定义 Linux、macOS、Windows 上 Emacs 29.1 和 30.2 的批处理矩阵。它只获取检查点记录的精确提供方提交，然后在无源码加载路径的环境中构建并验证所有目标的安装入口；矩阵中的失败不能忽略。成功作业仅把机器可读清单和安装报告保留为 CI 附件，不部署包、不上传安装日志。发布前须检查对应发布提交上的每一个作业。工作流文件本身不是通过证据，这些批处理检查也不认证 GUI 行为或本机使用的不同开发构建。
+根仓库的 `Package installation` 工作流定义 Linux、macOS、Windows 上 Emacs 29.1 和 30.2 的批处理矩阵。它以完整历史检出单仓，从推送的提交构建每个包，然后在无源码加载路径的环境中验证所有目标的安装入口；工作流只在检出托管处配置了 Actions runner 时运行。矩阵中的失败不能忽略。成功作业仅把机器可读清单和安装报告保留为 CI 附件，不部署包、不上传安装日志。发布前须检查对应发布提交上的每一个作业。工作流文件本身不是通过证据，这些批处理检查也不认证 GUI 行为或本机使用的不同开发构建。
 
 只在 POSIX 上通过会掩盖两类失败：遍历目录的工具里路径风格比较错误（Windows 上的 `Path` 不等于 `PurePosixPath`），以及已安装包的 autoload 文件通过宿主的 `load-path` 而不是包自身根目录解析。Windows 格子是这两类问题的平台证据；格子失败时读日志，不要只看退出码猜。
 
-## 封口并发布一次跨仓改动
+## 提交并发布一次跨包改动
 
-提供方的改动通常要和消费方、以及记录它们的检查点一起落地。手工做这件事意味着
-同一条消息要写进好几个仓库、顺序靠记、pin 忘了更新。`scripts/changes.py` 按依赖
-顺序把这条序列跑一次：
+所有包都在这一份 jjosh 检出里，所以提供方改动和它迁移的消费方是同一个提交；
+不需要按仓库排序，也没有版本 pin 要更新。
 
 ```sh
-python3 scripts/changes.py status
-python3 scripts/changes.py commit -F /tmp/message.txt
-python3 scripts/changes.py publish
+jjosh status                                   # 看 @ 里有什么；不封别人的改动
+make plan-affected                             # 本次改动影响到的单元
+make check-affected JOBS=4                     # 按提供方优先编译并测试它们
+jjosh describe -m "$(cat /tmp/message.txt)" && jjosh new
+python3 scripts/check-commit-message.py /tmp/message.txt
+make structure-check
+python3 scripts/publish-packages.py --dry-run  # 确认后去掉 --dry-run
+jjosh bookmark set main -r @- && jjosh git push --remote aliyun --bookmark main
 ```
 
-顺序来自数据而不是工具里的清单：每个入口在 `Package-Requires` 里声明自己的提供方，
-所以提供方先封口，消费它的包后封口，根仓库最后，因为根仓库记录它们的版本。
-
-- `status` 依次打印：有未封口改动的仓库、各仓库超出 `main@origin` 的提交（按上次抓取）、
-  `workspace.json` 里 pin 与封口版本不一致的仓库、持有未封口共享工具副本的仓库，以及
-  `commit` 会采用的封口顺序。它不抓取也不写入。
-- 消息文件只有一行不带 scope 的 Conventional Commits 标题，以及解释这次改动的正文。
-  工具补上仓库名（`feat(etaf): ...`），再追加 `Repo: <仓库>` 和写明实际跑了哪些门禁的
-  `Validation:` 行，然后对每条结果运行 `scripts/check-commit-message.py`。正文里不要
-  自己写这两行。
-- 所有门禁都在第一次封口之前跑完，任一失败则所有仓库保持原样。包运行自己的
-  `make -C <包> structure-check`，有 `tests/tools` 时再跑这套测试；根仓库运行
-  `python3 scripts/check-repository.py` 和根测试套件。`--full` 改为运行每个包的完整
-  `check` 目标，即发布前的门禁。
-- 根仓库最后封口，把每个封口版本写进 `workspace.json`。`--only CHECKOUT...` 把一次运行
-  限制在指定仓库（可重复或用逗号分隔；`workspace` 指根仓库）。没点名根仓库的改动仍会
-  记录 pin：此时根仓库只提交 `workspace.json`，别处未完成的工作保持未封口。共享工具的
-  未封口副本一律拒绝封口，那些文件归 `workspace.py seal-sync`。
-- `publish` 抓取两个镜像，并拒绝以下仓库：任一镜像上无法快进、pin 指向别的版本、提交
-  过不了消息或结构检查。所有判定到齐之前不推任何仓库；推不了的仓库同时阻塞依赖它的
-  消费方。远端分支就是账本：推送失败后重跑会跳过已在封口版本上的仓库，只推剩下的；
-  远端已走在前面的仓库会被报出来，而不是强推。
-- `publish --dry-run` 抓取并验证但不移动分支，有仓库被阻塞时退出码为 1；`--remote`
-  限制镜像，`--only` 限制仓库。新仓库先在镜像上建好分支；本工具不会替你创建。
+- 消息是一条带具体 scope 的 Conventional Commit，正文解释改动，并用 `Validation:`
+  行写明实际跑过的门禁。jjosh 不运行 Git 钩子，所以上面的消息与结构检查就是门禁，
+  推送任何东西之前都要跑。
+- `publish-packages.py` 把每个包目录从共享提交里投影出来，依次推到该包自己的
+  `aliyun`、`laycat` 和 `origin` 远端。`--package NAME` 与 `--remote NAME` 缩小范围；
+  没有变化的包只花一次请求。
+- 检出本身由仓库级的 `aliyun` 远端备份（forgejo 上的私有仓库 `emacs-taf/etaf-mono`）。
+  安装器源码、共享工具、工作区契约与跨包历史只存在于这个远端，所以每次交付后都推它的 `main`。
+- `make check` 覆盖整份检出，用于发布前；`make check-affected` 是日常门禁。
 
 ## 发布一个安装目标
 
@@ -155,16 +144,16 @@ make release-publish RELEASE_DIR=/tmp/release-next
 
 新增一个包进归档是固定顺序，不要另开路径：
 
-1. 包放在已记录的仓库：框架提供方记进 `workspace.json` 的 `repositories`，
-   应用记进 `applications`，都钉到已发布的提交。
+1. 包放在 `packages/<名字>` 下，并登记进 `workspace.json`
+   （`python3 scripts/add-package.py NAME --url URL`）。
 2. 声明 `Version` 与全部 Emacs 依赖；组件和运行资源放进仓库，并在
    `release-dependencies.json` 列出资源目录。
 3. 实现 `<包>-doctor`，返回 `(LABEL AVAILABLE REMEDY)`，标清阻塞与降级；安装器只聚合。
 4. 把目标加进 `etaf-install--targets`，带分组与打开命令，菜单需在安装前就显示状态。
 5. 跑该包的 `make check`，再用 dev 道在 Emacs 29.1、30.2、31.1 上实装验证
    （29.1 在 `lightos` 上，见本机主机清单）。
-6. 提交并发布提供方，记录到 `workspace.json`，构建封口归档并跑 `make release-check`；
-   提交并发布根仓。
+6. 用 jjosh 提交，发布包投影并推送检出的 `main`（见[提交并发布一次跨包改动](#提交并发布一次跨包改动)），
+   再构建封口归档并跑 `make release-check`。
 7. `make release-publish` 发布，随后回读 `archive-contents` 与该包详情页。
 8. 页面或书稿有变化就重发站点；让六格安装工作流在发布提交上全部通过。
 
@@ -355,9 +344,9 @@ python3 scripts/tui-capture.py --cols 120 --rows 40 --out /tmp/app-wide.png -- \
    Emacs 会把它当作未知选项拒绝。
 3. 测量前先证明只有一个代码代：每个 provider 的 `locate-library` 结果与 `load-history`
    里的 `(provide . feature)` 条目都必须落在隔离根下。性能驱动会在预检里重复这项检查，
-   并拒绝加载自另一份 checkout 的库。测量前先确认每个检出都已跟到已发布的 main：
-   jj workspace 有自己的工作副本提交，而 `workspace.py status` 读的是主检出的书签，
-   因此隔离检出可能悄悄落在 main 之后，使测量与记录的 revision 双双失效。
+   并拒绝加载自另一份 checkout 的库。测量前先确认隔离检出已跟到已发布的 main：
+   `jjosh workspace add` 检出有自己的工作副本提交，用 `jjosh log -r main` 与它的 `@-` 对比；
+   落在 main 之后会使测量与记录的 revision 双双失效。
 4. 运行 `scripts/performance.py run --mode gui --server <名字> --root <隔离根>
    --load-path <应用根>`，并按记录的 PID 关闭实例，不要按进程名杀。
 

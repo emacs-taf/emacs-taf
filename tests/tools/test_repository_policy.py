@@ -288,5 +288,30 @@ class PolicyTests(unittest.TestCase):
         self.write('AUDIT.md','# Extra\n')
         self.assertIn('merge or delete',self.errors())
 
+    def test_monorepo_registry_matches_packages_and_forbids_nested_vcs(self):
+        self.write('workspace.json', json.dumps({'schema': 2, 'packages': {'alpha': {'url': 'https://example.invalid/alpha.git', 'branch': 'main'}}}))
+        self.write('AGENTS.md', '# Workspace instructions\n')
+        self.write('docs/architecture.zh-CN.md', '# Ecosystem contract\n')
+        (self.root / 'package.el').unlink()
+        (self.root / 'packages/alpha').mkdir(parents=True)
+        self.assertEqual('', '\n'.join(POLICY.check(self.root, files=[f for f in POLICY.inventory(self.root) if not f.startswith('packages/')])))
+
+        # Unregistered directory under packages/ is rejected.
+        (self.root / 'packages/orphan').mkdir(parents=True)
+        errors = '\n'.join(POLICY.check(self.root, files=[f for f in POLICY.inventory(self.root) if not f.startswith('packages/')]))
+        self.assertIn('unregistered package directory', errors)
+        (self.root / 'packages/orphan').rmdir()
+
+        # Nested .git inside packages/<name> is rejected.
+        (self.root / 'packages/alpha/.git').mkdir()
+        errors = '\n'.join(POLICY.check(self.root, files=[f for f in POLICY.inventory(self.root) if not f.startswith('packages/')]))
+        self.assertIn('nested VCS directory', errors)
+        (self.root / 'packages/alpha/.git').rmdir()
+
+        # Missing registered package under packages/ is rejected.
+        (self.root / 'packages/alpha').rmdir()
+        errors = '\n'.join(POLICY.check(self.root, files=[f for f in POLICY.inventory(self.root) if not f.startswith('packages/')]))
+        self.assertIn('registered package is missing under packages/: alpha', errors)
+
 
 if __name__ == '__main__':unittest.main()

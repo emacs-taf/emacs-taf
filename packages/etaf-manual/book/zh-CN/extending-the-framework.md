@@ -106,19 +106,19 @@ Data 后端把存储或服务适配到 Data Source 协议。用 `etaf-data-sourc
 
 框架在测试或示例运行期间报告警告时——组件校验、渲染器警告、字节编译或加载错误——那份报告就是发现，不是噪声：它要被追到拥有它的层、在那里修，绝不用 `ignore-errors`、更宽的 `condition-case`、抑制警告或排除测试来消音。同理，不为了把失败变绿而削弱检查或跳过测试；当某项检查过期时，把它更新到当前契约，同时保留它的行为覆盖。
 
-手册也受同样的门禁。`make -C etaf-manual book-check` 校验章节结构、定义条目签名与 provider Commentary 逐字一致、文档化包与词表的覆盖、链接、正文的公共符号规则、段行纪律与两种语言的对齐；它的活示例验收会挂载两种语言的每个 `:run` 示例，所以求值或挂载失败的示例会让门禁失败。公共接口的变化因此在同一次交付里更新受影响的章节与两种语言，这正是手册始终描述当前代码、而不是更早版本快照的原因。
+手册也受同样的门禁。`make -C packages/etaf-manual book-check` 校验章节结构、定义条目签名与 provider Commentary 逐字一致、文档化包与词表的覆盖、链接、正文的公共符号规则、段行纪律与两种语言的对齐；它的活示例验收会挂载两种语言的每个 `:run` 示例，所以求值或挂载失败的示例会让门禁失败。公共接口的变化因此在同一次交付里更新受影响的章节与两种语言，这正是手册始终描述当前代码、而不是更早版本快照的原因。
 
 ## 改动怎样交付
 
 <!-- index: colocated 仓库; conventional commit; 快进 -->
 
-每个仓库都是与 Git colocated 的 Jujutsu 仓库，各有一条已发布分支。Jujutsu 拥有工作副本：当前提交 `@` 就是工作副本，每条命令都会把文件快照进它，Git 处于分离 `HEAD` 属预期。用 `jj commit <paths> -m "…"` 封口一个提交，它把指名的路径放进一个已完成的 change 并开始一个空的 `@`；指名路径只会封住你自己的改动，所以提交永远不会顺手带走别人未完成的工作。一个工作副本只有一个写者：动手前先跑 `jj st`；当 `@` 里已有不是你做的改动时，只封自己的路径，若两边都改同一个文件先沟通。并行工作用独立的 `jj workspace add <dir>` 检出，绝不用 git worktree；已发布历史是必须尊重的例外：`immutable_heads()` 包含远端 bookmark，所以已发布的提交不会被无意重写。
+所有包都在同一份 jjosh 检出里，它是一个 Jujutsu 仓库，`packages/` 目录下放着每个包；普通 `jj` 读不了它，所以一切写操作都走 `jjosh`。Jujutsu 拥有工作副本：当前提交 `@` 就是工作副本，每条命令都会把文件快照进它，Git 处于分离 `HEAD` 属预期。用 `jjosh commit <paths> -m "…"` 封口一个提交，它把指名的路径放进一个已完成的 change 并开始一个空的 `@`；指名路径只会封住你自己的改动，所以提交永远不会顺手带走别人未完成的工作。一个工作副本只有一个写者：动手前先跑 `jjosh status`；当 `@` 里已有不是你做的改动时，只封自己的路径，若两边都改同一个文件先沟通。并行工作用独立的 `jjosh workspace add <dir>` 检出，绝不用 git worktree；已发布历史是必须尊重的例外：`immutable_heads()` 包含远端 bookmark，所以已发布的提交不会被无意重写。
 
 一个提交是一个可解释、可独立评审与回退的改动——一个有内聚性的功能、修复、移动或文档更新，连同它的回归覆盖与文档——不是固定数量的文件或行。互不相关的改动要拆开，让每个提交都能用于二分。消息遵循 Conventional Commits：`type(scope): concrete imperative English summary`，标题最多 72 个字符；空行之后，正文解释问题与由此产生的行为或改动原因。`Validation:` 行列出实际运行过的命令与结果，或者说明某项检查为什么没跑。破坏性改动在标题里带 `!`，并在 footer 写 `BREAKING CHANGE:` 说明影响与迁移。
 
-发布之前，发布范围里的每个提交都要检查，它产出的树也要检查：把每个提交的描述写到文件，用 `python3 scripts/check-commit-message.py` 检查；用 `python3 scripts/check-repository.py --staged` 校验 colocated Git 索引所镜像的封口树；运行 `jj log -r '(<range>) & (conflicts() | divergent() | description(exact:""))'`，它必须什么都不打印；确认 `@-..main@<remote>` 为空，于是发布是一次快进。每个仓库向 `origin`（`github.com/emacs-taf`）发布，并在同一检查点向 `aliyun` 镜像交付，`laycat` 保留为第二个镜像；发布的分支是 `workspace.json` 记录的 `branch`。Jujutsu 不根据 tracking 推导推送远端，所以远端与 bookmark 永远显式指名：`jj bookmark set main -r @-`，然后 `jj git push --remote aliyun -b main` 与 `jj git push --remote origin -b main`。provider 先于依赖它接口的 consumer 发布；未发布的提交从不强推：当远端有本地没有的提交时，把未发布提交 rebase 到远端之上并重跑检查。认证或连通性导致推不上去时，提交留在本地并如实报告交付失败。
+发布之前，发布范围里的每个提交都要检查，它产出的树也要检查：把每个提交的描述写到文件，用 `python3 scripts/check-commit-message.py` 检查；用 `make structure-check` 校验封口树；运行 `jjosh log -r '(<range>) & (conflicts() | divergent() | description(exact:""))'`，它必须什么都不打印；确认 `@-..main@<remote>` 为空，于是发布是一次快进。发布时把每个包目录从共享提交投影到该包自己的仓库，所以包仍以普通单包仓库的形式安装：`python3 scripts/publish-packages.py` 把每个包推到它的 `aliyun`、`origin` 与 `laycat` 远端，检出本身用 `jjosh bookmark set main -r @-` 和 `jjosh git push --remote aliyun --bookmark main` 推到仓库级的 `aliyun` 远端。provider 改动与它迁移的 consumer 是同一个提交；未发布的提交从不强推：当远端有本地没有的提交时，把未发布提交 rebase 到远端之上并重跑检查。认证或连通性导致推不上去时，提交留在本地并如实报告交付失败。
 
-在集成交付点，每个仓库已发布的 `main` 提交连同运行过的检查一起记录进 `workspace.json`，这正让一组修订号组合可复现；`python3 scripts/workspace.py status` 把仓库 bookmark 与这些记录的修订对比——绝不与工作副本对比——工作区的集成检查在编辑与提交都完成之后、在安静的树上运行。历史与恢复方面，`jj log -p <path>` 显示单个文件的历史，`jj file annotate <path>` 给一行定责，`jj bisect run --range <good>..<bad> -- <command>` 在独立 workspace 里对提交范围二分，因为二分会在工作副本上编辑；退出码 125 表示跳过无法测试的修订，而不是标它为坏。`jj undo` 反转上一次操作，`jj op log` 配合 `jj op restore <operation>` 把仓库恢复到更早的状态，`jj evolog -p -r <rev>` 显示单个 change 自身怎样被重写，这与文件的历史不同。
+一个检出提交就是一组包修订的组合，这正让集成状态可复现：`make check-affected` 只按提供方优先重验本次改动影响到的包，`make check` 在发布前验证整份检出，两者都在编辑与提交完成之后、在安静的树上运行。历史与恢复方面，`jjosh log -p <path>` 显示单个文件的历史，`jjosh file annotate <path>` 给一行定责，`jjosh bisect run --range <good>..<bad> -- <command>` 在独立 workspace 里对提交范围二分，因为二分会在工作副本上编辑；退出码 125 表示跳过无法测试的修订，而不是标它为坏。`jjosh undo` 反转上一次操作，`jjosh op log` 配合 `jjosh op restore <operation>` 把仓库恢复到更早的状态，`jjosh evolog -p -r <rev>` 显示单个 change 自身怎样被重写，这与文件的历史不同。
 
 用户可见的变化按 Keep a Changelog 记进变更记录，归在某个发布标题或 `Unreleased` 下；手册与变更记录随代码同行：受影响的章节在同一次交付里更新两种语言，book 门禁作为包检查的一部分运行，版本头变化时更新手册中每一个同时点名包与版本的段落，因为 book 门禁会把那段与入口文件对比。
 

@@ -7,14 +7,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - name: Fetch API provider sources
+      - name: Check repository structure and public API boundaries
         run: |
-          if [ -f workspace.json ]; then
+          if [ -f workspace.json ] && [ -d packages ]; then
+            make structure-check
+          elif [ -f workspace.json ]; then
             python3 scripts/check-api.py --workspace . --fetch-providers
+            python3 scripts/check-repository.py
           else
             python3 scripts/check-api.py --root . --fetch-providers --providers-dir ..
+            python3 scripts/check-repository.py
           fi
-      - run: python3 scripts/check-repository.py
       - name: Install batch Emacs
         run: |
           sudo apt-get update

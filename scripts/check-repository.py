@@ -164,6 +164,21 @@ def check(root, files=None, notices=None):
         for name in sorted(allowed_dirs - DIRS):
             if (root / name / 'workspace.json').exists():
                 fail(name, 'nested workspace root; register its checkouts in the workspace registry instead')
+        packages_dir = root / 'packages'
+        registered = registry.get('packages')
+        if packages_dir.is_dir() and isinstance(registered, dict):
+            actual = {p.name for p in packages_dir.iterdir()
+                      if p.is_dir() and not p.name.startswith('.')}
+            declared = set(registered)
+            for name in sorted(actual - declared):
+                fail(f'packages/{name}', 'unregistered package directory; add it to workspace.json')
+            for name in sorted(declared - actual):
+                fail('workspace.json', f'registered package is missing under packages/: {name}')
+            for name in sorted(actual):
+                for vcs in ('.git', '.jj'):
+                    if (packages_dir / name / vcs).exists():
+                        fail(f'packages/{name}/{vcs}',
+                             'nested VCS directory inside packages/; keep one shared checkout')
     # A package inside a shared container borrows the tooling the container
     # owns; only a root that stands alone carries its own copies.
     required = ['README.md', 'Makefile']

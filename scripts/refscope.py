@@ -27,6 +27,7 @@ Reusing scripts/check-api.py (tokenizer, definition regex, Commentary parser)
 keeps refscope and the API boundary gate from disagreeing about symbol ownership.
 """
 import argparse
+import concurrent.futures
 import importlib.util
 from pathlib import Path
 import re
@@ -37,6 +38,7 @@ from typing import NamedTuple
 
 CHECK_API = Path(__file__).resolve().parent / 'check-api.py'
 TOKEN = re.compile(r"[^\s()\[\]'`,;\"]+")
+BARE_DEFVAR = re.compile(r"(?<!['`])\(defvar\s+([^\s()]+)\s*\)")
 LEVELS = ('L1', 'L2')
 
 
@@ -236,18 +238,31 @@ def _add_transitive(graph, impacts, changed_units):
     return impacts
 
 
-def execution_order(graph, names):
-    """Dependencies first, so a failure stops before its consumers run."""
-    pending, ordered = set(names), []
+def execution_layers(graph, names):
+    """Group NAMES into dependency layers; units in one layer can run in parallel."""
+    pending, layers = set(names), []
     while pending:
         ready = sorted(name for name in pending
                        if not (graph.units[name].requires & pending))
         if not ready:
-            ordered.extend(sorted(pending))
+            layers.append(sorted(pending))
             break
-        ordered.extend(ready)
+        layers.append(ready)
         pending.difference_update(ready)
-    return ordered
+    return layers
+
+
+def execution_order(graph, names):
+    """Dependencies first, so a failure stops before its consumers run."""
+    return [name for layer in execution_layers(graph, names) for name in layer]
+
+
+def owner_binary(root):
+    """Return the Jujutsu binary that owns ROOT without mixing jjosh and jj."""
+    repository = root / '.jj' / 'repo'
+    if repository.is_dir() and (repository / 'store' / 'git').is_dir():
+        return 'jjosh'
+    return 'jj'
 
 
 def changed_from_rev(root, rev):
@@ -257,11 +272,9 @@ def changed_from_rev(root, rev):
     through its index. Both report paths relative to ROOT.
     """
     if (root / '.jj').is_dir():
-        # A jjosh checkout answers through its own binary; a plain jj checkout
-        # through jj. Both take the same diff arguments.
-        binary = next((name for name in ('jjosh', 'jj') if shutil.which(name)), None)
-        if binary is None:
-            raise SystemExit(f'no jj or jjosh on PATH to read {rev} in {root}')
+        binary = owner_binary(root)
+        if not shutil.which(binary):
+            raise SystemExit(f'{binary} is not on PATH; it owns {root}')
         argv = [binary, '--no-pager', 'diff', '--name-only', '-r', rev]
         result = subprocess.run(argv, cwd=str(root), text=True, capture_output=True)
         source = f'{binary} diff'
@@ -326,8 +339,15 @@ class ElispExtractor:
 
     def definitions(self, path):
         text = path.read_text(errors='replace')
-        found = {s for s in self.check.DEFINITION.findall(mask(text))
+        masked = mask(text)
+        found = {s for s in self.check.DEFINITION.findall(masked)
                  if not s.startswith(',')}
+        # A bare `(defvar NAME)' only tells the byte compiler that NAME is
+        # special; it defines nothing, so it must not claim ownership.
+        declared_only = set(BARE_DEFVAR.findall(masked))
+        defined = {s for s in self.check.DEFINITION.findall(
+            BARE_DEFVAR.sub(' ', masked)) if not s.startswith(',')}
+        found -= declared_only - defined
         found.update(self.check.struct_symbols(text))
         return found
 
@@ -391,36 +411,60 @@ def print_plan(graph, impacts, root, as_json=False):
           f'{len(order) - len(human)} need a compile')
 
 
-def run_plan(graph, impacts, assume_yes=False):
-    """Compile then test each unit in dependency order."""
-    order = execution_order(graph, impacts)
-    failures = []
-    for name in order:
-        unit, impact = graph.units[name], impacts[name]
-        steps = []
-        if 'L1' in impact.levels:
-            steps.append(['make', '-C', str(unit.root), 'compile'])
-        if 'L2' in impact.levels:
-            steps.append(['make', '-C', str(unit.root), 'test'])
-        for step in steps:
-            rendered = ' '.join(step)
-            if not assume_yes:
-                print(f'would run: {rendered}')
-                continue
-            print(f'run: {rendered}', flush=True)
-            result = subprocess.run(step, text=True, capture_output=True)
-            if result.returncode != 0:
-                print(result.stdout[-2000:], file=sys.stderr)
-                print(result.stderr[-2000:], file=sys.stderr)
-                failures.append(f'{name}: {rendered} exited {result.returncode}')
-                break
-        if failures:
-            break
+def _run_unit(unit, impact):
+    """Run compile/test steps for one unit; return (name, error_or_none, output)."""
+    steps = []
+    if 'L1' in impact.levels:
+        steps.append(['make', '-C', str(unit.root), 'compile'])
+    if 'L2' in impact.levels:
+        steps.append(['make', '-C', str(unit.root), 'test'])
+    for step in steps:
+        rendered = ' '.join(step)
+        print(f'run: {rendered}', flush=True)
+        result = subprocess.run(step, text=True, capture_output=True)
+        if result.returncode != 0:
+            detail = (result.stdout[-2000:] + '\n' + result.stderr[-2000:]).strip()
+            return unit.name, f'{unit.name}: {rendered} exited {result.returncode}', detail
+    return unit.name, None, ''
+
+
+def run_plan(graph, impacts, assume_yes=False, jobs=1):
+    """Compile then test each unit in dependency order, optionally parallel per layer."""
+    layers = execution_layers(graph, impacts)
+    order = [name for layer in layers for name in layer]
     if not assume_yes:
+        for name in order:
+            unit, impact = graph.units[name], impacts[name]
+            if 'L1' in impact.levels:
+                print(f'would run: make -C {unit.root} compile')
+            if 'L2' in impact.levels:
+                print(f'would run: make -C {unit.root} test')
         print('\n(dry run; pass --yes to execute)')
         return 0
+    failures = []
+    workers = max(1, int(jobs))
+    for layer in layers:
+        if workers == 1 or len(layer) == 1:
+            for name in layer:
+                _name, error, detail = _run_unit(graph.units[name], impacts[name])
+                if error:
+                    if detail:
+                        print(detail, file=sys.stderr)
+                    failures.append(error)
+                    break
+        else:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=min(workers, len(layer))) as pool:
+                futures = [pool.submit(_run_unit, graph.units[name], impacts[name]) for name in layer]
+                for future in concurrent.futures.as_completed(futures):
+                    _name, error, detail = future.result()
+                    if error:
+                        if detail:
+                            print(detail, file=sys.stderr)
+                        failures.append(error)
+        if failures:
+            break
     if failures:
-        print('\n'.join(failures), file=sys.stderr)
+        print('\n'.join(sorted(failures)), file=sys.stderr)
         return 1
     print(f'ok: {len(order)} unit(s) passed')
     return 0
@@ -443,6 +487,10 @@ def main():
     sub.add_parser("stats", help="graph size and per-unit reference counts")
     sub.add_parser("plugins", help="the extractor and scoper currently in use")
 
+    order_cmd = sub.add_parser("order", help="all units in dependency order (providers first)")
+    order_cmd.add_argument("--layers", action="store_true",
+                           help="print one parallelizable dependency layer per line")
+
     plan = sub.add_parser("plan", help="what to re-check for a set of changed files")
     add_change_arguments(plan)
     plan.add_argument("--json", action="store_true", help="machine-readable output")
@@ -450,16 +498,32 @@ def main():
     run = sub.add_parser("run", help="execute the plan: compile then test")
     add_change_arguments(run)
     run.add_argument("--yes", action="store_true", help="actually execute; default is a dry run")
+    run.add_argument("--jobs", type=int, default=1,
+                     help="parallel workers within each dependency layer (default: 1)")
 
     args = parser.parse_args()
     root = args.root.resolve()
     check = load_check()
-    graph = build(root, check)
 
     if args.command == "plugins":
         print(f'scoper     {EmacsScoper.name}')
         print(f'extractor  {ElispExtractor.name}')
         return 0
+
+    if args.command == "order":
+        # Ordering needs only each unit's declared requirements, not the
+        # symbol graph, so it skips extraction and stays cheap enough for
+        # every Makefile recipe that iterates packages.
+        graph = Graph(EmacsScoper(check).units(root), {}, {}, {}, {})
+        if args.layers:
+            for layer in execution_layers(graph, graph.units):
+                print(' '.join(layer))
+        else:
+            for name in execution_order(graph, graph.units):
+                print(name)
+        return 0
+
+    graph = build(root, check)
 
     if args.command == "stats":
         print(f"packages       {len(graph.units)}")
@@ -477,7 +541,7 @@ def main():
         impacts = collect_impacts(graph, root, args)
         print_plan(graph, impacts, root)
         print()
-        return run_plan(graph, impacts, assume_yes=args.yes)
+        return run_plan(graph, impacts, assume_yes=args.yes, jobs=args.jobs)
 
     if args.command == "impact":
         if args.symbol:

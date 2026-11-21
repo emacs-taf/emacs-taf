@@ -102,12 +102,17 @@ def run(args, *, cwd=None, env=None, timeout=120, log_file=None):
 
 
 def change_graph_binary(root):
-    """Return the Jujutsu binary that owns ROOT, or nil outside a jj checkout."""
+    """Return the Jujutsu binary that owns ROOT, or nil outside a jj checkout.
+
+    jjosh and jj write incompatible repository metadata; never fall back to
+    the wrong binary when the owner is missing from PATH.
+    """
     if not (root / ".jj").is_dir():
         return None
-    binary = next((name for name in ("jjosh", "jj") if shutil.which(name)), None)
-    if binary is None:
-        raise ValueError(f"{root}: a jj checkout needs jj or jjosh on PATH")
+    repository = root / ".jj" / "repo"
+    binary = "jjosh" if repository.is_dir() and (repository / "store" / "git").is_dir() else "jj"
+    if not shutil.which(binary):
+        raise ValueError(f"{root}: {binary} is not on PATH; it owns this checkout")
     return binary
 
 

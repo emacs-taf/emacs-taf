@@ -47,11 +47,6 @@
       "branch": "main",
       "role": "framework"
     },
-    "etaf-mario": {
-      "url": "https://github.com/emacs-taf/etaf-mario.git",
-      "branch": "main",
-      "role": "game"
-    },
     "etaf-md": {
       "url": "https://github.com/emacs-taf/etaf-md.git",
       "branch": "main",
@@ -92,16 +87,6 @@
       "branch": "main",
       "role": "application"
     },
-    "etaf-slides": {
-      "url": "https://github.com/emacs-taf/etaf-slides.git",
-      "branch": "main",
-      "role": "application"
-    },
-    "etaf-solitaire": {
-      "url": "https://github.com/emacs-taf/etaf-solitaire.git",
-      "branch": "main",
-      "role": "game"
-    },
     "etaf-tanks": {
       "url": "https://github.com/emacs-taf/etaf-tanks.git",
       "branch": "main",
@@ -119,11 +104,6 @@
     },
     "etaf-video-player": {
       "url": "https://github.com/emacs-taf/etaf-video-player.git",
-      "branch": "main",
-      "role": "application"
-    },
-    "etaf-video-studio": {
-      "url": "https://github.com/emacs-taf/etaf-video-studio.git",
       "branch": "main",
       "role": "application"
     },

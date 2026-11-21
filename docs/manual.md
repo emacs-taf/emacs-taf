@@ -103,10 +103,10 @@ package.el only, since `M-x etaf-install` does not own them.
 ### Build and verify the official selection
 
 Maintainers use Python 3.12+, Git and Emacs for release verification. Users need
-only Emacs. Seal the root first, and restore the provider checkouts recorded in
-`workspace.json`; building reads those exact Git objects, not their working
-copies or current remote heads. `release-dependencies.json` selects packages and
-runtime resources, while the root revision supplies the installer.
+only Emacs. Seal the working copy first: every package is exported from that one
+sealed checkout commit (`packages/<name>` in its tree), never from working copies
+or remote heads. `release-dependencies.json` selects packages and runtime
+resources, while the same commit supplies the installer.
 
 ```sh
 make release-build RELEASE_DIR=/tmp/etaf-release-unique
@@ -116,10 +116,10 @@ make release-tool-tests
 
 `release-build` refuses a dirty root, an existing output directory, missing
 resources, and an incomplete or too-old dependency closure. The manifest records
-the root and provider revisions. Versioned package files must never be replaced
+the checkout commit each package was exported from. Versioned package files must never be replaced
 with different bytes; change the package's `Version` header for a new release.
 
-The manifest also records the root revision. Rewriting that sealed commit —
+The manifest also records the checkout revision. Rewriting that sealed commit —
 including a message edit — gives it a new identity, so rebuild and rerun
 `release-check` before publishing an amended commit.
 
@@ -170,22 +170,23 @@ After the supported environment checks, publish the validated directory with
 `make release-publish RELEASE_DIR=/path/to/release`. The command delegates to the
 manual site's package-only publisher; it does not rebuild or change site pages.
 For the first combined site/package publication, use
-`make -C etaf-manual site-publish PUBLISH_ARGS='--packages /path/to/release'`.
+`make -C packages/etaf-manual site-publish PUBLISH_ARGS='--packages /path/to/release'`.
 See the [site deployment contract](https://github.com/emacs-taf/etaf-manual/blob/main/docs/manual.md#publishing-the-site-and-packages)
 for transport, locking, immutable versions, historical downloads and rollback.
 
 `package-release.py stage --directory DIR --output NEW` is the local publication
 gate used by that publisher. It requires a sealed workspace manifest matching its
-recorded providers, current validator/smoke/manifest digests, and every target through both
+recorded package revisions, current validator/smoke/manifest digests, and every target through both
 installation paths on one recorded Emacs/platform. It refuses
 partial evidence and exports only `archive-contents`, a public manifest and its
 listed source tarballs. Reports are local evidence, not signatures; this gate
 alone does not certify other Emacs versions, platforms or GUI behavior.
 
-The root's `Package installation` GitHub Actions workflow defines batch checks
-for Emacs 29.1 and 30.2 on Linux, macOS and Windows. It fetches only the exact
-provider commits recorded in the checkpoint, then builds and verifies all targets
-through the installer entry without source load paths. It first prefetches
+The root's `Package installation` workflow defines batch checks
+for Emacs 29.1 and 30.2 on Linux, macOS and Windows. It checks out the
+monorepo with full history and builds every package from the pushed commit, then verifies all targets
+through the installer entry without source load paths. A workflow runs only
+where the checkout is hosted with a configured Actions runner. It first prefetches
 one live standard-archive snapshot for the whole run; each matrix job installs
 from that snapshot over localhost, so a throttled archive fails once with its
 HTTP status instead of as a missing dependency in every target. The matrix
@@ -208,57 +209,37 @@ packages whose autoloaded files are resolved through the host's `load-path`
 instead of the package's own root. The Windows cell is the platform proof for
 both; when a cell fails, read its log rather than guessing from the exit code.
 
-## Seal and publish one cross-repository change
+## Commit and publish one cross-package change
 
-A provider change usually lands with its consumers and the checkpoint that
-records them, and doing that by hand means the same message on several
-checkouts, a manual order, and a pin nobody remembers to update.
-`scripts/changes.py` runs that sequence once, in dependency order:
+Every package lives in this one jjosh checkout, so a provider change and the
+consumers it migrates are one commit; there is no per-repository sequence to
+order and no revision pin to update.
 
 ```sh
-python3 scripts/changes.py status
-python3 scripts/changes.py commit -F /tmp/message.txt
-python3 scripts/changes.py publish
+jjosh status                                   # what @ holds; never seal another writer's work
+make plan-affected                             # the units the change reaches
+make check-affected JOBS=4                     # compile and test them, providers first
+jjosh describe -m "$(cat /tmp/message.txt)" && jjosh new
+python3 scripts/check-commit-message.py /tmp/message.txt
+make structure-check
+python3 scripts/publish-packages.py --dry-run  # then without --dry-run
+jjosh bookmark set main -r @- && jjosh git push --remote aliyun --bookmark main
 ```
 
-The order is data, not a list in the tool: each entry declares its providers in
-`Package-Requires`, so a provider is sealed before the consumers that now call
-it, and the workspace root last because it records their revisions.
-
-- `status` prints the checkouts with unsealed changes, the commits each one has
-  beyond `main@origin` (as last fetched), the checkouts whose `workspace.json`
-  pin names another revision, the checkouts holding unsealed copies of the
-  shared tooling, and the order `commit` would use. It fetches and writes
-  nothing.
-- The message file holds one Conventional Commit title without a scope and the
-  body that explains the change. The tool adds the checkout name -
-  `feat(etaf): ...` - and appends `Repo: <checkout>` and a `Validation:` line
-  naming the gates it actually ran, then runs
-  `scripts/check-commit-message.py` on each result. A body must not carry those
-  two lines itself.
-- Every gate runs before the first seal, and one failing gate leaves every
-  checkout as it was. A package runs its own `make -C <package>
-  structure-check` and, when it keeps any, its `tests/tools` suite; the root runs
-  `python3 scripts/check-repository.py` and the root suite. `--full` runs each
-  package's whole `check` target instead, which is the pre-release run.
-- The root is sealed last and records each sealed revision in `workspace.json`.
-  `--only CHECKOUT...` limits a run to the named checkouts (repeatable or comma
-  separated; `workspace` names the root). A change sealed without naming the
-  root still records its pins: the root then commits `workspace.json` alone, so
-  work in progress elsewhere stays unsealed. Unsealed copies of the shared
-  tooling always refuse the seal, because `workspace.py seal-sync` owns those
-  files.
-- `publish` fetches both mirrors and refuses a checkout that is not
-  fast-forward on either one, whose pin names another revision, or whose
-  commits fail the message or structure check. It pushes nothing until every
-  verdict is in, and a checkout it cannot publish also blocks the consumers
-  depending on it. The remote bookmarks are the ledger: a rerun after a failed
-  push skips what already sits at its sealed revision and pushes the rest, and
-  a mirror that moved ahead is reported instead of forced.
-- `publish --dry-run` fetches and verifies without moving a branch, and exits 1
-  when a checkout it would publish is blocked. `--remote` limits the mirrors and
-  `--only` limits the checkouts. For a new repository create its branch on the
-  mirrors first; the tool will not create one.
+- The message is one Conventional Commit with a concrete scope, a body that
+  explains the change and a `Validation:` line naming the gates that ran.
+  jjosh runs no Git hooks, so the message and structure checks above are the
+  gate; run them before anything is pushed.
+- `publish-packages.py` projects each package directory out of the shared
+  commit and pushes it to the package's own `aliyun`, `laycat` and `origin`
+  remotes, one package after another. `--package NAME` and `--remote NAME`
+  narrow a run; an unchanged package costs one request.
+- The checkout itself is backed up by the repository-wide `aliyun` remote
+  (`emacs-taf/etaf-mono` on forgejo, private). It is the only remote holding
+  the installer source, the shared tooling, the workspace contracts and the
+  cross-package history, so push its `main` after every delivery.
+- `make check` covers the whole checkout and belongs before a release;
+  `make check-affected` is the everyday gate.
 
 ## Publish an install target
 
@@ -308,9 +289,8 @@ make release-publish RELEASE_DIR=/tmp/release-next
 
 Adding a package to the archive is a fixed sequence; do not invent another route:
 
-1. Keep the package in a recorded repository: framework providers go in the
-   `repositories` section of `workspace.json`, applications in its
-   `applications` section, both pinned to a published commit.
+1. Keep the package under `packages/<name>` and register it in
+   `workspace.json` (`python3 scripts/add-package.py NAME --url URL`).
 2. Declare `Version` and every Emacs dependency in `Package-Requires`; put
    components and runtime resources inside the repository and list resource
    directories in `release-dependencies.json`. The entry must also resolve its
@@ -336,8 +316,9 @@ Adding a package to the archive is a fixed sequence; do not invent another route
    nameless `Other` entry.
 6. Run the package's `make check`, then the dev-lane install on Emacs 29.1, 30.2
    and 31.1 (29.1 lives on `lightos`, see the host notes).
-7. Commit and publish the provider, record it in `workspace.json`, build the
-   sealed archive and run `make release-check`; commit and publish the root.
+7. Commit with jjosh, publish the package projection and push the checkout's
+   `main` (see [Commit and publish one cross-package change](#commit-and-publish-one-cross-package-change)),
+   then build the sealed archive and run `make release-check`.
 8. Publish with `make release-publish`, then read back `archive-contents` and the
    package page over HTTPS.
 9. Republish the site when pages or the book changed, and let every cell of the
@@ -634,21 +615,21 @@ forms also add `~/emacs-taf` paths, and an added path wins the resolution.
 3. Prove one code generation before measuring: `locate-library` for every
    provider and the `(provide . feature)` entries in `load-history` must all
    resolve under the isolated root. The performance driver repeats this in its
-   preflight and rejects a library loaded from another checkout. Confirm each
-   checkout follows its published main first: a jj workspace keeps its own
-   working-copy commit, and `workspace.py status` reads the primary checkout's
-   bookmarks, so an isolated checkout can sit behind main and invalidate both
-   the measurement and the recorded revision.
+   preflight and rejects a library loaded from another checkout. Confirm the
+   isolated checkout follows the published main first: a `jjosh workspace add`
+   checkout keeps its own working-copy commit, so compare its `@-` with
+   `jjosh log -r main`; one that sits behind main invalidates both the
+   measurement and the recorded revision.
 4. Run `scripts/performance.py run --mode gui --server <name> --root <isolated
    root> --load-path <app root>` and close the instance by its recorded PID,
    never by process name.
 
 When writers change the primary checkout, snapshot the measured source generation to avoid
 `UNVERIFIED: Workspace sources changed during measurement`:
-copy `workspace.json` and each loaded repository (ecss, ekp, ebox, etaf,
+copy `workspace.json` and each loaded package directory (ecss, ekp, ebox, etaf,
 etaf-ui, and etaf-gamekit or the app) with `rsync -a --exclude .jj
---exclude .git ~/emacs-taf/<repo> /tmp/<snapshot>/`, substituting a `jj workspace
-add` checkout where a repository change is not in the primary tree. Apply the same
+--exclude .git <checkout>/packages/<name> /tmp/<snapshot>/`, substituting a `jjosh workspace
+add` checkout where a change is not in the primary tree. Apply the same
 site-start redirection and start file with `--root /private/tmp/<snapshot>` and
 matching `--load-path`;
 macOS needs the `/private/tmp` truename because preflight compares truenames.

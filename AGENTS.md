@@ -5,9 +5,10 @@ under `packages/`, each of which publishes as its own repository.
 
 ## Locate the task
 
-- Use [README.md](README.md) for the repository map and workspace commands. Each
-  child has its own Git history; inspect and commit changes in the owning repository.
-  The root repository tracks orchestration, documentation and integration revisions.
+- Use [README.md](README.md) for the repository map and workspace commands. All
+  packages under `packages/` live in this single `jjosh` checkout; inspect and
+  commit changes here, and publish per-package projections to their remotes via
+  `scripts/publish-packages.py`.
 - Before editing a package, discover and read any AGENTS.md on the path from its
   root to the target files, then its README and the relevant contract sections.
 - Maintain common instructions here. Add a local AGENTS.md only when its scope
@@ -122,7 +123,7 @@ to every repository changed from this workspace.
 - Keep the reference manual current. A change to a core package's public
   interface, documented behavior or a mechanism the manual explains updates the
   affected etaf-manual chapters in both languages in the same integrated
-  delivery; `make -C etaf-manual check` verifies definition coverage, signatures,
+  delivery; `make -C packages/etaf-manual check` verifies definition coverage, signatures,
   translations, links and examples against the packages in this checkout.
 
 ## Development and validation
@@ -333,8 +334,9 @@ to every repository changed from this workspace.
   measurement marks the entire run `UNVERIFIED: Workspace sources changed during measurement`.
 - jjosh runs no Git hooks, so run the gates yourself before publishing (see
   `Version control and delivery`). CI runs the same structural and API checker plus
-  `make api-check` in batch Emacs. Local checks read the packages in this
-  checkout; CI fetches the provider default branches.
+  `make api-check` in batch Emacs. Local checks and the checkout's CI validate
+  every package directly from `packages/`. CI runs only where the checkout is
+  hosted with an Actions runner; projected package repositories carry no CI.
   The boundary gate covers runtime, runnable examples and Lisp tests/helpers.
   Tests may not reference internal APIs of either their own package or a provider.
   Static checks cover direct references; code review must also reject dynamically
@@ -394,6 +396,12 @@ through a Git directory. `scripts/check-repository.py` does this in
   behaviour. Include `Validation:` on one line with what actually ran.
 
 ### Remotes
+
+The checkout itself is backed up to one repository-wide remote, `aliyun`
+(`https://forgejo.vhkd.top/emacs-taf/etaf-mono.git`, private). It is the only
+remote holding the installer, the shared tooling, the workspace contracts and
+the cross-package history: after a delivery, `jjosh bookmark set main -r @-`
+and `jjosh git push --remote aliyun --bookmark main`.
 
 Every package publishes to three remotes, all named after the package:
 
