@@ -4,6 +4,14 @@ All notable user-visible changes to maillist are recorded here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project uses [Semantic Versioning](https://semver.org/).
 
+## [0.4.1] - 2026-11-22
+
+### Fixed
+
+- Restored symmetric vertical breathing space (`:height '(lh 3)` in wide mode
+  and top/search row spacing in narrow mode) in `maillist-appbar` so the search
+  bar and list header sit centered instead of flush against the top edge.
+
 ## [0.4.0] - 2026-11-22
 
 Reliable daily reading across real public-inbox archives: UTF-8 HTTP decoding,

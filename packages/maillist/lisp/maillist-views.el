@@ -111,7 +111,7 @@
           :border-bottom (maillist--border (maillist-color :line))
     ;; Normal flex allocation guarantees the search box yields room to the
     ;; summary at every wide width without overlapping or running past the edge.
-    (flex :if (not narrow) :width 'stretch :height '(lh 2) :align-items 'center
+    (flex :if (not narrow) :width 'stretch :height '(lh 3) :align-items 'center
           :padding (list (list 'lh 0) (list 'ch 2))
           :gap (list (list 'lh 0) (list 'ch 2))
       (flex :flex-shrink 0 :height '(lh 1) :align-items 'center
@@ -139,6 +139,7 @@
       (box :flex-shrink 0 :height '(lh 1) :overflow 'hidden
         (etaf-label :text summary :variant 'muted)))
     (column :if narrow :width 'stretch :item-gap '(lh 0)
+            :padding (list (list 'lh 1) (list 'ch 0) (list 'lh 0) (list 'ch 0))
       (flex :width 'stretch :height '(lh 1) :align-items 'center
             :padding (list (list 'lh 0) (list 'ch 2))
             :gap (list (list 'lh 0) (list 'ch 2))
@@ -159,7 +160,7 @@
                                      (unread . "未读")
                                      (starred . "已收藏"))
                           :on-change on-scope)))
-      (flex :width 'stretch :height '(lh 2) :align-items 'center
+      (flex :width 'stretch :height '(lh 3) :align-items 'center
             :padding (list (list 'lh 0) (list 'ch 2))
         (box :flex-grow 1 :flex-basis '(ch 0) :min-width '(ch 0)
           (maillist-search-box :value search-input
