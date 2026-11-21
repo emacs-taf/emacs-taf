@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>时间线门禁与短元信息聚类测试</title>
+</head>
+<body>
+  <main>
+    <h1>项目发布与数据概览</h1>
+    <div class="profile-stats">
+      <div>关注 18</div>
+      <div>粉丝 204</div>
+      <div>获赞 1.2k</div>
+      <div>文章 36</div>
+    </div>
+    <p>上方是一组连续的短元信息项，应当合并为单行而不被拆成四段独立块。下面是一条误带 timeline 类名的纯计数动作栏。</p>
+    <ul class="action-list jh-timeline-action-area">
+      <li>3月前</li>
+      <li>1.0k</li>
+      <li>8</li>
+    </ul>
+    <h2>版本演进</h2>
+    <ul class="release-timeline">
+      <li><time>2026-01</time><strong>基础引擎</strong><p>完成增量布局与缓存管线的第一阶段实现。</p></li>
+      <li><time>2026-04</time><strong>浏览器外壳</strong><p>新增多页独立缓冲区、异步加载与错误恢复卡片。</p></li>
+    </ul>
+    <h2>特性卡片</h2>
+    <div class="feature-grid">
+      <div class="card"><h3>异步管线</h3><p>抓取与无头渲染完全非阻塞运行。</p></div>
+      <div class="card"><h3>结构保留</h3><p>卡片内部段落与标题维持原有语义。</p></div>
+    </div>
+  </main>
+</body>
+</html>

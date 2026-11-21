@@ -16,7 +16,8 @@
 ;; compiles HTML documents into the text-level intermediate language accepted
 ;; by `etaf-md' (YAML front matter, Markdown and `:::' containers), writes the
 ;; compiled page and bounded image assets into a local cache directory, and
-;; opens the resulting reading view through `etaf-md'.
+;; presents each page inside its own ETAF browser buffer with navigation
+;; history, address bar, asynchronous non-blocking loading and error recovery.
 ;;
 ;; Only the interfaces listed below are supported for use by other packages.
 ;; All unlisted symbols and implementation features are internal, including
@@ -29,22 +30,63 @@
 ;;;###autoload (autoload 'etaf-web-to-markdown "etaf-web" nil nil)
 ;; Compile HTML string into `etaf-md' intermediate language text.
 ;; Pure function with no network or disk I/O.  Strips unsafe tags, event
-;; handler attributes and dangerous link schemes, extracts the primary article
-;; content and YAML front matter, resolves relative links and images against
-;; BASE-URL when supplied, and emits normalized Markdown plus `:::' containers.
-;; Signals `etaf-web-error' if HTML is not a string or Emacs lacks libxml.
+;; handler attributes, hidden nodes and dangerous link schemes, extracts the
+;; primary content and YAML front matter, resolves relative links and images
+;; against BASE-URL when supplied, and emits normalized Markdown plus `:::'
+;; containers.  Signals `etaf-web-error' if HTML is not a string or Emacs lacks
+;; libxml.
 ;;
 ;; Function: etaf-web-open (source &optional other-window)
 ;;;###autoload (autoload 'etaf-web-open "etaf-web" nil t)
-;; Open a web page or local HTML file SOURCE in an `etaf-md' preview buffer.
-;; SOURCE is either a local HTML file path (or `file://' URL) or an `http://'
-;; / `https://' URL.  Reads or fetches the page, compiles it to `index.md'
-;; inside `etaf-web-cache-directory', optionally downloads bounded image assets
-;; when `etaf-web-download-images' is non-nil, and opens the preview via
-;; `etaf-md'.  Reuses an existing cached `index.md' for repeated opens of the
-;; same HTTP(S) URL.  With OTHER-WINDOW non-nil, displays the preview in
-;; another window.  Returns the preview buffer; signals `etaf-web-error' on
-;; unreadable input or fetch failure.
+;; Open a web page or local HTML file SOURCE in its own ETAF Web browser buffer
+;; (`*Web: <host>*').  SOURCE is either a local HTML file path (or `file://'
+;; URL) or an `http://' / `https://' URL.  Returns the browser buffer
+;; immediately while HTTP fetching, optional headless rendering, compilation
+;; and background image caching run asynchronously without blocking Emacs.
+;; Reuses an existing cached `index.md' on repeated opens while backfilling any
+;; missing images in the background.  With OTHER-WINDOW non-nil, displays the
+;; buffer in another window.  Signals `etaf-web-error' synchronously on invalid
+;; SOURCE or unreadable local files; network/HTTP failures display a readable
+;; error card with retry and browser actions inside the buffer.
+;;
+;; Function: etaf-web-back ()
+;;;###autoload (autoload 'etaf-web-back "etaf-web" nil t)
+;; Navigate backward in the current ETAF Web browser buffer's history stack,
+;; restoring the previous scroll position.
+;;
+;; Function: etaf-web-forward ()
+;;;###autoload (autoload 'etaf-web-forward "etaf-web" nil t)
+;; Navigate forward in the current ETAF Web browser buffer's history stack,
+;; restoring its scroll position.
+;;
+;; Function: etaf-web-reload ()
+;;;###autoload (autoload 'etaf-web-reload "etaf-web" nil t)
+;; Re-fetch and recompile the current ETAF Web page bypassing on-disk cache.
+;;
+;; Function: etaf-web-stop ()
+;;;###autoload (autoload 'etaf-web-stop "etaf-web" nil t)
+;; Cancel any in-flight HTTP fetch, headless render or background image job in
+;; the current ETAF Web buffer without leaving orphan subprocesses.
+;;
+;; Function: etaf-web-focus-address ()
+;;;###autoload (autoload 'etaf-web-focus-address "etaf-web" nil t)
+;; Focus and edit the inline address bar (with history completion) in the
+;; current ETAF Web buffer.
+;;
+;; Function: etaf-web-open-external ()
+;;;###autoload (autoload 'etaf-web-open-external "etaf-web" nil t)
+;; Open the current ETAF Web page's URL in the external system browser.
+;;
+;; Function: etaf-web-close ()
+;;;###autoload (autoload 'etaf-web-close "etaf-web" nil t)
+;; Close the current ETAF Web browser buffer, cancelling any active loads.
+;;
+;; Function: etaf-web-state (&optional buffer)
+;;;###autoload (autoload 'etaf-web-state "etaf-web" nil nil)
+;; Return a detached state plist snapshot for ETAF Web BUFFER (default current).
+;; Keys include `:url', `:title', `:phase' (`loading', `ready' or `error'),
+;; `:stage', `:progress', `:cached', `:error', `:can-back', `:can-forward',
+;; `:history-length', `:address-editing', `:narrow' and `:width'.
 ;;
 ;; Variable: etaf-web-cache-directory (default "~/.cache/etaf-web/")
 ;; Root directory where cached pages, `index.md', `source.html', `meta.json'
@@ -56,8 +98,8 @@
 ;; nil, remote image URLs remain untouched and render as placeholder cards.
 ;;
 ;; Variable: etaf-web-fetch-timeout (default 30)
-;; Timeout in seconds (integer or float) for synchronous HTTP(S) fetches
-;; performed by `etaf-web-open'.
+;; Timeout in seconds (integer or float) for HTTP(S) fetches performed by
+;; `etaf-web-open'.
 ;;
 ;; Variable: etaf-web-render-command (default nil)
 ;; Program used to render a page whose content a script builds.  nil
@@ -88,9 +130,12 @@
                                       (bound-and-true-p byte-compile-current-file)
                                       buffer-file-name)))))
 
+(require 'etaf)
+(require 'etaf-ui)
 (require 'etaf-md)
 (require 'etaf-web-compile)
 (require 'etaf-web-cache)
+(require 'etaf-web-views)
 (require 'etaf-web-app)
 
 (provide 'etaf-web)

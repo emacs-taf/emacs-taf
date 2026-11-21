@@ -1556,7 +1556,6 @@ re-render after a theme switch instead of keeping the faces it first read."
         :background (etaf-md--page-background session)
         :dir (plist-get session :dir)
         :features (plist-get session :features)
-        :line-grid t
         :open-url (lambda (url) (etaf-md--open-url session url))
         :open-link (lambda (url) (etaf-md--open-url session url))
         :open-media (lambda (kind path) (etaf-md--open-media session kind path))

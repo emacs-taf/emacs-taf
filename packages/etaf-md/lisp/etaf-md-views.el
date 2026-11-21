@@ -89,16 +89,13 @@ document with front matter opens on a page-like header instead of raw text."
                  (list :width 'stretch :item-gap '(lh 1))
                  (append
                   (list
-                   (etaf-node 'box
-                              (list :width 'stretch
-                                    :border-bottom
-                                    (list '(px 1) 'solid
-                                          (etaf-md--env-color env :heading-rule)))
-                              (list
-                               (etaf-node 'text
-                                          (list :font-weight 'bold
-                                                :color (etaf-md--env-color env :heading))
-                                          (list title)))))
+                   (etaf-node 'text
+                              (list :font-weight 'bold
+                                    ;; The page title is the document's first
+                                    ;; level and reads above a body heading.
+                                    :font-size 2.2
+                                    :color (etaf-md--env-color env :heading))
+                              (list title)))
                   (when tags
                     (list
                      (etaf-node 'flex

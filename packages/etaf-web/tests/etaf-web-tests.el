@@ -6,7 +6,10 @@
 ;;
 ;; Public API behavior scenarios for `etaf-web'.  Every test exercises only
 ;; declared public interfaces (`etaf-web-to-markdown', `etaf-web-open',
-;; `etaf-web-cache-directory', `etaf-web-download-images', `etaf-web-error')
+;; `etaf-web-back', `etaf-web-forward', `etaf-web-reload', `etaf-web-stop',
+;; `etaf-web-focus-address', `etaf-web-open-external', `etaf-web-close',
+;; `etaf-web-state', `etaf-web-cache-directory', `etaf-web-download-images',
+;; `etaf-web-fetch-timeout', `etaf-web-render-command', `etaf-web-error')
 ;; and observable on-disk cache artifacts (`index.md', `source.html',
 ;; `meta.json', `assets/').
 
@@ -16,6 +19,7 @@
 (require 'ert)
 (require 'json)
 (require 'subr-x)
+(require 'etaf)
 (require 'etaf-md)
 (require 'etaf-web)
 
@@ -35,15 +39,6 @@
     (insert-file-contents path)
     (buffer-string)))
 
-(defun etaf-web-tests--make-http-buffer (headers body-bytes)
-  "Create an unibyte HTTP response buffer with HEADERS and BODY-BYTES."
-  (let ((buf (generate-new-buffer " *etaf-web-test-http*")))
-    (with-current-buffer buf
-      (set-buffer-multibyte nil)
-      (insert headers "\r\n\r\n")
-      (insert body-bytes))
-    buf))
-
 (defun etaf-web-tests--cached-page-dirs (cache-root)
   "Return list of page directories created under CACHE-ROOT/pages/."
   (let ((pages (expand-file-name "pages" cache-root)))
@@ -51,6 +46,101 @@
       (cl-remove-if-not
        #'file-directory-p
        (directory-files pages t "\\`[^.]")))))
+
+(defun etaf-web-tests--wait-until (predicate &optional timeout)
+  "Pump Emacs events until PREDICATE returns non-nil or TIMEOUT seconds pass."
+  (let ((deadline (+ (float-time) (or timeout 8.0)))
+        (val nil))
+    (while (and (not (setq val (funcall predicate)))
+                (< (float-time) deadline))
+      (accept-process-output nil 0.02)
+      (sleep-for 0.01))
+    val))
+
+(defun etaf-web-tests--wait-phase (buf phases &optional timeout)
+  "Wait until `etaf-web-state' of BUF reaches one of PHASES (symbol or list)."
+  (let ((targets (if (listp phases) phases (list phases))))
+    (unless (etaf-web-tests--wait-until
+             (lambda ()
+               (and (buffer-live-p buf)
+                    (memq (plist-get (etaf-web-state buf) :phase) targets)))
+             timeout)
+      (ert-fail (format "Timed out waiting for phase %S; current state: %S"
+                        targets (and (buffer-live-p buf) (etaf-web-state buf)))))))
+
+(defun etaf-web-tests--http-start (handler)
+  "Start a loopback HTTP/1.1 test server on 127.0.0.1:0 calling HANDLER.
+HANDLER receives `(METHOD PATH)' and returns a plist with optional keys
+`:status', `:headers', `:body', `:delay', `:close'.  Returns `(SERVER . URL)'."
+  (let ((timers nil)
+        (clients nil)
+        (server nil))
+    (setq server
+          (make-network-process
+           :name "etaf-web-test-httpd"
+           :server t
+           :host "127.0.0.1"
+           :service 0
+           :family 'ipv4
+           :noquery t
+           :coding 'no-conversion
+           :sentinel #'ignore
+           :filter
+           (lambda (proc chunk)
+             (push proc clients)
+             (let ((buf (concat (or (process-get proc :req) "") chunk)))
+               (process-put proc :req buf)
+               (when (and (not (process-get proc :handled))
+                          (string-match "\\`\\([A-Z]+\\) \\([^ \r\n]+\\) HTTP/" buf)
+                          (string-match-p "\r\n\r\n" buf))
+                 (process-put proc :handled t)
+                 (let* ((method (match-string 1 buf))
+                        (path (match-string 2 buf))
+                        (resp (funcall handler method path))
+                        (delay (plist-get resp :delay)))
+                   (cl-labels
+                       ((send-now ()
+                          (when (process-live-p proc)
+                            (if (plist-get resp :close)
+                                (delete-process proc)
+                              (let* ((status (or (plist-get resp :status) "200 OK"))
+                                     (headers (or (plist-get resp :headers)
+                                                  "Content-Type: text/html; charset=utf-8"))
+                                     (raw-body (or (plist-get resp :body) ""))
+                                     (body (if (multibyte-string-p raw-body)
+                                               (encode-coding-string raw-body 'utf-8)
+                                             raw-body))
+                                     (wire (concat
+                                            (format "HTTP/1.1 %s\r\n%s\r\nContent-Length: %d\r\nConnection: close\r\n\r\n"
+                                                    status headers (length body))
+                                            body)))
+                                (ignore-errors (process-send-string proc wire))
+                                (ignore-errors (process-send-eof proc)))))))
+                     (if (and (numberp delay) (> delay 0))
+                         (push (run-at-time delay nil #'send-now) timers)
+                       (send-now)))))))))
+    (process-put server :cleanup
+                 (lambda ()
+                   (dolist (tm timers) (when (timerp tm) (cancel-timer tm)))
+                   (dolist (c clients) (when (process-live-p c) (delete-process c)))
+                   (when (process-live-p server) (delete-process server))))
+    (cons server (format "http://127.0.0.1:%d" (process-contact server :service)))))
+
+(defun etaf-web-tests--http-stop (server)
+  "Stop loopback HTTP test SERVER and cancel all pending timers/clients."
+  (when-let* ((fn (and server (process-get server :cleanup))))
+    (funcall fn)))
+
+(defmacro etaf-web-tests--with-http (base-var handler &rest body)
+  "Run BODY with loopback HTTP server dispatching to HANDLER bound to BASE-VAR."
+  (declare (indent 2))
+  (let ((srv (make-symbol "srv")))
+    `(let* ((url-proxy-services nil)
+            (,srv (etaf-web-tests--http-start ,handler))
+            (,base-var (cdr ,srv)))
+       (unwind-protect
+           (progn ,@body)
+         (etaf-web-tests--http-stop (car ,srv))))))
 
 (ert-deftest etaf-web-tests-article-ir-elements ()
   "Article fixture compiles front matter, headings, inline runs, code and footnotes."
@@ -203,16 +293,14 @@
                      "!\\[Figure 1: Rendering pipeline stages\\.\\](assets/[0-9a-f]+\\.png)"
                      index-md))))
       (when (buffer-live-p buf)
-        (with-current-buffer buf (etaf-md-close)))
+        (with-current-buffer buf (etaf-web-close)))
       (delete-directory cache-root t))))
 
 (ert-deftest etaf-web-tests-url-fetch-caches-and-skips-refetch ()
-  "Stubbed HTTP fetch decodes charset, caches files and skips second fetch."
+  "Async HTTP fetch decodes charset, caches files and skips second fetch."
   (let* ((cache-root (make-temp-file "etaf-web-http-cache-" t))
          (etaf-web-cache-directory cache-root)
          (etaf-web-download-images t)
-         (page-url "https://docs.example.test/guide/start.html")
-         (img-url "https://docs.example.test/guide/hero.png")
          (png-bytes (with-temp-buffer
                       (set-buffer-multibyte nil)
                       (insert-file-contents-literally
@@ -223,7 +311,7 @@
                             "<meta charset=\"gbk\">"
                             "<title>中文指南</title></head>"
                             "<body><article><h1>中文指南</h1>"
-                            "<p>正文内容与图片：</p>"
+                            "<p>正文内容与图片，长度足够以保证页面作为完整正文渲染而不会触发空壳判定：</p>"
                             "<figure><img src=\"hero.png\" alt=\"示意图\">"
                             "<figcaption>图 1 架构</figcaption></figure>"
                             "<img src=\"missing.png\" alt=\"缺失图\">"
@@ -233,66 +321,77 @@
          (buf1 nil)
          (buf2 nil))
     (unwind-protect
-        (cl-letf (((symbol-function 'url-retrieve-synchronously)
-                   (lambda (url &rest _args)
-                     (push url fetch-log)
-                     (cond
-                      ((equal url page-url)
-                       (etaf-web-tests--make-http-buffer
-                        "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nETag: \"v1\""
-                        gbk-html))
-                      ((equal url img-url)
-                       (etaf-web-tests--make-http-buffer
-                        "HTTP/1.1 200 OK\r\nContent-Type: image/png"
-                        png-bytes))
-                      (t
-                       (etaf-web-tests--make-http-buffer
-                        "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain"
-                        "not found"))))))
-          ;; First open: fetches HTML + two images (one succeeds, one 404s gracefully).
-          (setq buf1 (etaf-web-open page-url))
-          (should (buffer-live-p buf1))
-          (let ((painted (with-current-buffer buf1
-                           (buffer-substring-no-properties (point-min) (point-max))))
-                (first-fetches (length fetch-log)))
-            (should (string-match-p "中文指南" painted))
-            (should (string-match-p "图 1 架构" painted))
-            (should (= first-fetches 3))
-            ;; Verify cache artifacts on disk.
-            (let* ((dirs (etaf-web-tests--cached-page-dirs cache-root))
-                   (page-dir (car dirs))
-                   (index-md (etaf-web-tests--read-file
-                              (expand-file-name "index.md" page-dir)))
-                   (meta (json-parse-string
-                          (etaf-web-tests--read-file
-                           (expand-file-name "meta.json" page-dir))
-                          :object-type 'alist)))
-              (should (= (length dirs) 1))
-              (should (equal (alist-get 'url meta) page-url))
-              (should (equal (alist-get 'title meta) "中文指南"))
-              (should (equal (alist-get 'etag meta) "\"v1\""))
-              ;; Successful image rewritten to assets/ with figcaption as alt.
-              (should (string-match-p "!\\[图 1 架构\\](assets/[0-9a-f]+\\.png)" index-md))
-              (should-not (string-match-p "\\*图 1 架构\\*" index-md))
-              (should (string-match-p
-                       "!\\[缺失图\\](https://docs\\.example\\.test/guide/missing\\.png)"
-                       index-md)))
-            (with-current-buffer buf1 (etaf-md-close))
-            (setq buf1 nil)
-            ;; Second open reuses index.md: the page and the saved image are
-            ;; not fetched again.  Only the image that failed may be retried,
-            ;; so a later success can still be cached.
-            (setq buf2 (etaf-web-open page-url))
-            (should (buffer-live-p buf2))
-            (should (= (cl-count page-url fetch-log :test #'equal) 1))
-            (should (= (cl-count img-url fetch-log :test #'equal) 1))
-            (let ((painted2 (with-current-buffer buf2
-                              (buffer-substring-no-properties (point-min) (point-max)))))
-              (should (string-match-p "中文指南" painted2)))))
+        (etaf-web-tests--with-http base
+            (lambda (_method path)
+              (push path fetch-log)
+              (pcase path
+                ("/guide/start.html"
+                 (list :status "200 OK"
+                       :headers "Content-Type: text/html\r\nETag: \"v1\""
+                       :body gbk-html))
+                ("/guide/hero.png"
+                 (list :status "200 OK"
+                       :headers "Content-Type: image/png"
+                       :body png-bytes))
+                (_
+                 (list :status "404 Not Found"
+                       :headers "Content-Type: text/plain"
+                       :body "not found"))))
+          (let ((page-url (concat base "/guide/start.html"))
+                (missing-url (concat base "/guide/missing.png")))
+            ;; First open: fetches HTML + two images asynchronously (one succeeds, one 404s).
+            (setq buf1 (etaf-web-open page-url))
+            (should (buffer-live-p buf1))
+            (etaf-web-tests--wait-phase buf1 'ready)
+            (should (etaf-web-tests--wait-until
+                     (lambda ()
+                       (let* ((dirs (etaf-web-tests--cached-page-dirs cache-root))
+                              (dir (car dirs))
+                              (idx (and dir (expand-file-name "index.md" dir))))
+                         (and idx (file-readable-p idx)
+                              (>= (length fetch-log) 3)
+                              (string-match-p "](assets/" (etaf-web-tests--read-file idx)))))))
+            (let ((painted (with-current-buffer buf1
+                             (buffer-substring-no-properties (point-min) (point-max))))
+                  (first-fetches (length fetch-log)))
+              (should (string-match-p "中文指南" painted))
+              (should (string-match-p "图 1 架构" painted))
+              (should (= first-fetches 3))
+              ;; Verify cache artifacts on disk.
+              (let* ((dirs (etaf-web-tests--cached-page-dirs cache-root))
+                     (page-dir (car dirs))
+                     (index-md (etaf-web-tests--read-file
+                                (expand-file-name "index.md" page-dir)))
+                     (meta (json-parse-string
+                            (etaf-web-tests--read-file
+                             (expand-file-name "meta.json" page-dir))
+                            :object-type 'alist)))
+                (should (= (length dirs) 1))
+                (should (equal (alist-get 'url meta) page-url))
+                (should (equal (alist-get 'title meta) "中文指南"))
+                (should (equal (alist-get 'etag meta) "\"v1\""))
+                ;; Successful image rewritten to assets/ with figcaption as alt.
+                (should (string-match-p "!\\[图 1 架构\\](assets/[0-9a-f]+\\.png)" index-md))
+                (should-not (string-match-p "\\*图 1 架构\\*" index-md))
+                (should (string-match-p
+                         (format "!\\[缺失图\\](%s)" (regexp-quote missing-url))
+                         index-md)))
+              (with-current-buffer buf1 (etaf-web-close))
+              (setq buf1 nil)
+              ;; Second open reuses index.md: the page and saved image are not refetched.
+              (setq buf2 (etaf-web-open page-url))
+              (should (buffer-live-p buf2))
+              (etaf-web-tests--wait-phase buf2 'ready)
+              (should (plist-get (etaf-web-state buf2) :cached))
+              (should (= (cl-count "/guide/start.html" fetch-log :test #'equal) 1))
+              (should (= (cl-count "/guide/hero.png" fetch-log :test #'equal) 1))
+              (let ((painted2 (with-current-buffer buf2
+                                (buffer-substring-no-properties (point-min) (point-max)))))
+                (should (string-match-p "中文指南" painted2))))))
       (when (buffer-live-p buf1)
-        (with-current-buffer buf1 (etaf-md-close)))
+        (with-current-buffer buf1 (etaf-web-close)))
       (when (buffer-live-p buf2)
-        (with-current-buffer buf2 (etaf-md-close)))
+        (with-current-buffer buf2 (etaf-web-close)))
       (delete-directory cache-root t))))
 
 (ert-deftest etaf-web-tests-disable-image-downloads-and-error-conditions ()
@@ -300,7 +399,6 @@
   (let* ((cache-root (make-temp-file "etaf-web-noimg-cache-" t))
          (etaf-web-cache-directory cache-root)
          (etaf-web-download-images nil)
-         (page-url "https://example.test/no-images.html")
          (fetched nil)
          (buf nil))
     (unwind-protect
@@ -308,75 +406,77 @@
           (should-error (etaf-web-to-markdown 123) :type 'etaf-web-error)
           (should-error (etaf-web-open "/nonexistent/etaf-web-missing.html")
                         :type 'etaf-web-error)
-          (cl-letf (((symbol-function 'url-retrieve-synchronously)
-                     (lambda (url &rest _args)
-                       (push url fetched)
-                       (etaf-web-tests--make-http-buffer
-                        "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8"
-                        "<article><h1>No DL</h1><img src=\"pic.png\" alt=\"Pic\"></article>"))))
-            (setq buf (etaf-web-open page-url))
-            (should (equal fetched (list page-url)))
-            (let* ((page-dir (car (etaf-web-tests--cached-page-dirs cache-root)))
-                   (index-md (etaf-web-tests--read-file
-                              (expand-file-name "index.md" page-dir))))
-              (should (string-match-p
-                       "!\\[Pic\\](https://example\\.test/pic\\.png)" index-md)))))
+          (etaf-web-tests--with-http base
+              (lambda (_method path)
+                (push path fetched)
+                (list :status "200 OK"
+                      :body "<article><h1>No DL</h1><p>Body paragraph without image downloading enabled.</p><img src=\"pic.png\" alt=\"Pic\"></article>"))
+            (let ((page-url (concat base "/no-images.html")))
+              (setq buf (etaf-web-open page-url))
+              (etaf-web-tests--wait-phase buf 'ready)
+              (should (equal fetched '("/no-images.html")))
+              (let* ((page-dir (car (etaf-web-tests--cached-page-dirs cache-root)))
+                     (index-md (etaf-web-tests--read-file
+                                (expand-file-name "index.md" page-dir))))
+                (should (string-match-p
+                         (format "!\\[Pic\\](%s/pic\\.png)" (regexp-quote base))
+                         index-md))))))
       (when (buffer-live-p buf)
-        (with-current-buffer buf (etaf-md-close)))
+        (with-current-buffer buf (etaf-web-close)))
       (delete-directory cache-root t))))
 
 (ert-deftest etaf-web-tests-http-link-navigation-and-anchor-jump ()
-  "Activating an HTTP link opens it via `etaf-web-open'; `#anchor' jumps locally."
+  "Activating an HTTP link navigates inside `etaf-web'; `#anchor' jumps locally."
   (let* ((cache-root (make-temp-file "etaf-web-nav-cache-" t))
          (etaf-web-cache-directory cache-root)
          (etaf-web-download-images nil)
-         (url-a "https://nav.example.test/a.html")
-         (url-b "https://nav.example.test/b.html")
          (browsed nil)
          (buf nil))
     (unwind-protect
-        (cl-letf (((symbol-function 'browse-url)
-                   (lambda (u &rest _) (push u browsed)))
-                  ((symbol-function 'url-retrieve-synchronously)
-                   (lambda (url &rest _args)
-                     (cond
-                      ((equal url url-a)
-                       (etaf-web-tests--make-http-buffer
-                        "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8"
-                        (concat "<article><h1>Page Alpha</h1>"
-                                "<p><a href=\"#sec-end\">Jump Down</a> and "
-                                "<a href=\"b.html\">Next Page</a>.</p>"
-                                "<h2 id=\"sec-end\">Section End</h2></article>")))
-                      ((equal url url-b)
-                       (etaf-web-tests--make-http-buffer
-                        "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8"
-                        "<article><h1>Page Beta</h1><p>Arrived on Beta.</p></article>"))
-                      (t
-                       (etaf-web-tests--make-http-buffer
-                        "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain"
-                        "missing"))))))
-          (setq buf (etaf-web-open url-a))
-          (with-current-buffer buf
-            ;; `#anchor' link resolves HTML heading id and jumps in-document.
-            (goto-char (point-min))
-            (should (search-forward "Jump Down" nil t))
-            (goto-char (match-beginning 0))
-            (call-interactively (key-binding (kbd "RET")))
-            (should (looking-at-p "Section End"))
-            ;; HTTP link routes back into etaf-web-open instead of browse-url.
-            (goto-char (point-min))
-            (should (search-forward "Next Page" nil t))
-            (goto-char (match-beginning 0))
-            (call-interactively (key-binding (kbd "RET"))))
-          (let* ((current (current-buffer))
-                 (painted (with-current-buffer current
-                            (buffer-substring-no-properties (point-min) (point-max)))))
-            (setq buf current)
-            (should (string-match-p "Page Beta" painted))
-            (should (string-match-p "Arrived on Beta\\." painted))
-            (should-not browsed)))
+        (etaf-web-tests--with-http base
+            (lambda (_method path)
+              (pcase path
+                ("/a.html"
+                 (list :status "200 OK"
+                       :body (concat "<article><h1>Page Alpha</h1>"
+                                     "<p><a href=\"#sec-end\">Jump Down</a> and "
+                                     "<a href=\"b.html\">Next Page</a>.</p>"
+                                     "<h2 id=\"sec-end\">Section End</h2>"
+                                     "<p>Enough body text on Alpha to render directly.</p></article>")))
+                ("/b.html"
+                 (list :status "200 OK"
+                       :body "<article><h1>Page Beta</h1><p>Arrived on Beta with clear prose.</p></article>"))
+                (_ (list :status "404 Not Found" :body "missing"))))
+          (cl-letf (((symbol-function 'browse-url)
+                     (lambda (u &rest _) (push u browsed))))
+            (let ((url-a (concat base "/a.html"))
+                  (url-b (concat base "/b.html")))
+              (setq buf (etaf-web-open url-a))
+              (etaf-web-tests--wait-phase buf 'ready)
+              (with-current-buffer buf
+                ;; `#anchor' link resolves HTML heading id and jumps in-document.
+                (goto-char (point-min))
+                (should (search-forward "Jump Down" nil t))
+                (goto-char (match-beginning 0))
+                (call-interactively (key-binding (kbd "RET")))
+                (should (looking-at-p "Section End"))
+                ;; HTTP link navigates inside the browser shell instead of browse-url.
+                (goto-char (point-min))
+                (should (search-forward "Next Page" nil t))
+                (goto-char (match-beginning 0))
+                (call-interactively (key-binding (kbd "RET"))))
+              (should (etaf-web-tests--wait-until
+                       (lambda ()
+                         (let ((st (etaf-web-state buf)))
+                           (and (equal (plist-get st :url) url-b)
+                                (eq (plist-get st :phase) 'ready))))))
+              (let ((painted (with-current-buffer buf
+                               (buffer-substring-no-properties (point-min) (point-max)))))
+                (should (string-match-p "Page Beta" painted))
+                (should (string-match-p "Arrived on Beta" painted))
+                (should-not browsed)))))
       (when (buffer-live-p buf)
-        (with-current-buffer buf (etaf-md-close)))
+        (with-current-buffer buf (etaf-web-close)))
       (delete-directory cache-root t))))
 
 (defun etaf-web-tests--count-occurrences (needle haystack)
@@ -436,61 +536,62 @@
              md))))
 
 (ert-deftest etaf-web-tests-fetch-timeout-and-distinct-errors ()
-  "`etaf-web-fetch-timeout' is passed to fetcher; HTTP, timeout and connection errors differ."
+  "`etaf-web-fetch-timeout' bounds fetches; HTTP, timeout and connection errors differ."
   (let* ((cache-root (make-temp-file "etaf-web-timeout-cache-" t))
          (etaf-web-cache-directory cache-root)
          (etaf-web-download-images nil)
-         (etaf-web-fetch-timeout 42.5)
+         (etaf-web-fetch-timeout 0.4)
          (sample-html (etaf-web-tests--read-file
                        (etaf-web-tests--fixture "mdn-fetch-snippet.html")))
-         (seen-timeout nil)
+         (closed-url nil)
          (buf nil))
     (unwind-protect
         (progn
-          ;; 1. Passes `etaf-web-fetch-timeout' through to `url-retrieve-synchronously'.
-          (cl-letf (((symbol-function 'url-retrieve-synchronously)
-                     (lambda (_url _silent _inhibit timeout)
-                       (setq seen-timeout timeout)
-                       (etaf-web-tests--make-http-buffer
-                        "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8"
-                        sample-html))))
-            (setq buf (etaf-web-open "https://docs.example.test/api/fetch"))
-            (should (eql seen-timeout 42.5))
-            (when (buffer-live-p buf)
-              (with-current-buffer buf (etaf-md-close))
-              (setq buf nil)))
-          ;; 2. HTTP 403 reports status code distinctly.
-          (cl-letf (((symbol-function 'url-retrieve-synchronously)
-                     (lambda (&rest _)
-                       (etaf-web-tests--make-http-buffer
-                        "HTTP/1.1 403 Forbidden\r\nContent-Type: text/html"
-                        "<h1>Forbidden</h1>"))))
-            (let ((err (should-error
-                        (etaf-web-open "https://docs.example.test/forbidden")
-                        :type 'etaf-web-error)))
-              (should (string-match-p "403" (error-message-string err)))))
-          ;; 3. Timeout (nil return) reports timeout distinctly from connection failure.
-          (let ((timeout-msg nil)
-                (conn-msg nil))
-            (cl-letf (((symbol-function 'url-retrieve-synchronously)
-                       (lambda (&rest _) nil)))
-              (let ((err (should-error
-                          (etaf-web-open "https://docs.example.test/slow")
-                          :type 'etaf-web-error)))
-                (setq timeout-msg (error-message-string err))))
-            (cl-letf (((symbol-function 'url-retrieve-synchronously)
-                       (lambda (&rest _)
-                         (signal 'file-error '("Connection refused")))))
-              (let ((err (should-error
-                          (etaf-web-open "https://docs.example.test/down")
-                          :type 'etaf-web-error)))
-                (setq conn-msg (error-message-string err))))
-            (should (string-match-p "Timed out" timeout-msg))
-            (should (string-match-p "42\\.5" timeout-msg))
-            (should (string-match-p "Connection failed" conn-msg))
-            (should-not (equal timeout-msg conn-msg))))
+          (etaf-web-tests--with-http base
+              (lambda (_method path)
+                (pcase path
+                  ("/api/fetch" (list :status "200 OK" :body sample-html))
+                  ("/forbidden" (list :status "403 Forbidden" :body "<h1>Forbidden</h1>"))
+                  ("/slow" (list :status "200 OK" :delay 3.0 :body "<p>too late</p>"))
+                  (_ (list :status "404 Not Found" :body "nope"))))
+            (setq closed-url (concat base "/down"))
+            ;; 1. Normal fetch succeeds within timeout.
+            (setq buf (etaf-web-open (concat base "/api/fetch")))
+            (etaf-web-tests--wait-phase buf 'ready)
+            (with-current-buffer buf (etaf-web-close))
+            (setq buf nil)
+            ;; 2. HTTP 403 renders error card with distinct HTTP status message.
+            (setq buf (etaf-web-open (concat base "/forbidden")))
+            (etaf-web-tests--wait-phase buf 'error)
+            (let* ((st (etaf-web-state buf))
+                   (err-msg (plist-get (plist-get st :error) :message))
+                   (painted (with-current-buffer buf
+                              (buffer-substring-no-properties (point-min) (point-max)))))
+              (should (string-match-p "403" err-msg))
+              (should (string-match-p "无法加载页面" painted))
+              (should (string-match-p "重试" painted))
+              (with-current-buffer buf (etaf-web-close))
+              (setq buf nil)
+              ;; 3. Timeout reports distinct timeout error naming `etaf-web-fetch-timeout'.
+              (setq buf (etaf-web-open (concat base "/slow")))
+              (etaf-web-tests--wait-phase buf 'error 5.0)
+              (let ((timeout-msg (plist-get (plist-get (etaf-web-state buf) :error) :message)))
+                (should (string-match-p "Timed out" timeout-msg))
+                (should (string-match-p "0\\.4" timeout-msg))
+                (with-current-buffer buf (etaf-web-close))
+                (setq buf nil)
+                ;; 4. After server stops, closed port yields distinct connection failure.
+                (let ((conn-msg nil))
+                  (etaf-web-tests--with-http tmp-base (lambda (_m _p) (list :close t))
+                    (setq closed-url (concat tmp-base "/down")))
+                  (setq buf (etaf-web-open closed-url))
+                  (etaf-web-tests--wait-phase buf 'error 5.0)
+                  (setq conn-msg (plist-get (plist-get (etaf-web-state buf) :error) :message))
+                  (should (string-match-p "Connection failed" conn-msg))
+                  (should-not (equal timeout-msg conn-msg))
+                  (should-not (equal err-msg conn-msg)))))))
       (when (buffer-live-p buf)
-        (with-current-buffer buf (etaf-md-close)))
+        (with-current-buffer buf (etaf-web-close)))
       (delete-directory cache-root t))))
 
 (ert-deftest etaf-web-tests-strips-makeinfo-nav-and-permalinks ()
@@ -924,7 +1025,6 @@
 (ert-deftest etaf-web-tests-script-page-renders-through-browser ()
   "A page whose HTML carries no prose is compiled from the rendered DOM."
   (let* ((cache (make-temp-file "etaf-web-render-" t))
-         (page "https://example.test/app/")
          (browser (etaf-web-tests--fake-browser (etaf-web-tests--rendered-page)))
          (old etaf-web-render-command)
          (buffer nil))
@@ -932,15 +1032,16 @@
         (progn
           (setq etaf-web-render-command browser)
           (etaf-web-tests--with-cache cache
-            (cl-letf (((symbol-function 'url-retrieve-synchronously)
-                       (lambda (_url &rest _)
-                         (etaf-web-tests--http-buffer (etaf-web-tests--short-shell)))))
-              (setq buffer (etaf-web-open page))
+            (etaf-web-tests--with-http base
+                (lambda (_m _p) (list :status "200 OK" :body (etaf-web-tests--short-shell)))
+              (setq buffer (etaf-web-open (concat base "/app/")))
+              (etaf-web-tests--wait-phase buffer 'ready)
               (with-current-buffer buffer
                 (should (string-match-p
                          "Rendered page"
                          (buffer-substring-no-properties (point-min) (point-max))))))))
-      (when (and buffer (buffer-live-p buffer)) (kill-buffer buffer))
+      (when (and buffer (buffer-live-p buffer))
+        (with-current-buffer buffer (etaf-web-close)))
       (setq etaf-web-render-command old)
       (ignore-errors (delete-file browser))
       (delete-directory cache t))))
@@ -948,56 +1049,57 @@
 (ert-deftest etaf-web-tests-page-without-prose-shows-notice ()
   "A script-only page explains itself instead of opening an empty buffer."
   (let* ((cache (make-temp-file "etaf-web-notice-" t))
-         (page "https://example.test/shell/")
          (old etaf-web-render-command)
          (buffer nil))
     (unwind-protect
         (progn
           (setq etaf-web-render-command 'off)
           (etaf-web-tests--with-cache cache
-            (cl-letf (((symbol-function 'url-retrieve-synchronously)
-                       (lambda (_url &rest _)
-                         (etaf-web-tests--http-buffer (etaf-web-tests--short-shell)))))
-              (setq buffer (etaf-web-open page))
-              (with-current-buffer buffer
-                (let ((text (buffer-substring-no-properties (point-min) (point-max))))
-                  (should (string-match-p "需要脚本渲染" text))
-                  (should (string-match-p "在浏览器打开" text)))))
-            (let* ((page-dir (car (etaf-web-tests--cached-page-dirs cache)))
-                   (index (etaf-web-tests--read-file (expand-file-name "index.md" page-dir))))
-              (should (string-match-p "需要脚本渲染" index))
-              (should (string-match-p (regexp-quote page) index)))))
-      (when (and buffer (buffer-live-p buffer)) (kill-buffer buffer))
+            (etaf-web-tests--with-http base
+                (lambda (_m _p) (list :status "200 OK" :body (etaf-web-tests--short-shell)))
+              (let ((page (concat base "/shell/")))
+                (setq buffer (etaf-web-open page))
+                (etaf-web-tests--wait-phase buffer 'ready)
+                (with-current-buffer buffer
+                  (let ((text (buffer-substring-no-properties (point-min) (point-max))))
+                    (should (string-match-p "需要脚本渲染" text))
+                    (should (string-match-p "在浏览器打开" text))))
+                (let* ((page-dir (car (etaf-web-tests--cached-page-dirs cache)))
+                       (index (etaf-web-tests--read-file
+                               (expand-file-name "index.md" page-dir))))
+                  (should (string-match-p "需要脚本渲染" index))
+                  (should (string-match-p (regexp-quote page) index)))))))
+      (when (and buffer (buffer-live-p buffer))
+        (with-current-buffer buffer (etaf-web-close)))
       (setq etaf-web-render-command old)
       (delete-directory cache t))))
 
 (ert-deftest etaf-web-tests-short-page-is-not-a-shell ()
   "A genuinely short page keeps its paragraph instead of a notice."
   (let* ((cache (make-temp-file "etaf-web-short-" t))
-         (page "https://example.test/note/")
          (paragraph (concat "这一页只有一段话，但它确实是一段正常的正文，"
                             "所以它应该原样读出来，不需要任何额外提示。"))
          (buffer nil))
     (unwind-protect
         (etaf-web-tests--with-cache cache
-          (cl-letf (((symbol-function 'url-retrieve-synchronously)
-                     (lambda (_url &rest _)
-                       (etaf-web-tests--http-buffer
-                        (format "<html><head><title>Note</title></head><body><article><p>%s</p></article></body></html>"
-                                paragraph)))))
-            (setq buffer (etaf-web-open page))
+          (etaf-web-tests--with-http base
+              (lambda (_m _p)
+                (list :status "200 OK"
+                      :body (format "<html><head><title>Note</title></head><body><article><p>%s</p></article></body></html>"
+                                    paragraph)))
+            (setq buffer (etaf-web-open (concat base "/note/")))
+            (etaf-web-tests--wait-phase buffer 'ready)
             (with-current-buffer buffer
               (let ((text (buffer-substring-no-properties (point-min) (point-max))))
                 (should (string-match-p "只有一段话" text))
                 (should-not (string-match-p "需要脚本渲染" text))))))
-      (when (and buffer (buffer-live-p buffer)) (kill-buffer buffer))
+      (when (and buffer (buffer-live-p buffer))
+        (with-current-buffer buffer (etaf-web-close)))
       (delete-directory cache t))))
 
 (ert-deftest etaf-web-tests-cache-backfills-missing-images ()
   "Reopening a cached page downloads images its first pass could not save."
   (let* ((cache (make-temp-file "etaf-web-backfill-" t))
-         (page "https://example.test/photo/")
-         (image "https://example.test/photo/hero.png")
          (png (with-temp-buffer
                 (set-buffer-multibyte nil)
                 (insert-file-contents-literally
@@ -1011,38 +1113,390 @@
          (page-dir nil))
     (unwind-protect
         (etaf-web-tests--with-cache cache
-          (cl-letf (((symbol-function 'url-retrieve-synchronously)
-                     (lambda (url &rest _)
-                       (cond
-                        ((equal url page)
-                         (etaf-web-tests--http-buffer html))
-                        ((equal url image)
-                         (etaf-web-tests--make-http-buffer
-                          "HTTP/1.1 200 OK\r\nContent-Type: image/png" png))
-                        (t (etaf-web-tests--make-http-buffer
-                            "HTTP/1.1 404 Not Found\r\nContent-Type: text/html"
-                            "<html></html>"))))))
-            ;; First pass keeps the remote URL, as a failed download would.
-            (setq etaf-web-download-images nil)
-            (setq buffer (etaf-web-open page))
-            (when (buffer-live-p buffer) (kill-buffer buffer))
-            (setq page-dir (car (etaf-web-tests--cached-page-dirs cache)))
-            (let ((index (etaf-web-tests--read-file
-                          (expand-file-name "index.md" page-dir))))
-              (should (string-match-p (regexp-quote image) index))
-              (should-not (file-directory-p (expand-file-name "assets" page-dir))))
-            ;; The second pass fills the hole without the reader clearing the cache.
-            (setq etaf-web-download-images t)
-            (setq buffer (etaf-web-open page))
-            (let ((index (etaf-web-tests--read-file
-                          (expand-file-name "index.md" page-dir))))
-              (should-not (string-match-p (regexp-quote image) index))
-              (should (string-match-p (regexp-quote "](assets/") index))
-              (should (> (length (directory-files
-                                  (expand-file-name "assets" page-dir)))
-                         2)))))
+          (etaf-web-tests--with-http base
+              (lambda (_m path)
+                (pcase path
+                  ("/photo/" (list :status "200 OK" :body html))
+                  ("/photo/hero.png" (list :status "200 OK"
+                                           :headers "Content-Type: image/png"
+                                           :body png))
+                  (_ (list :status "404 Not Found" :body "<html></html>"))))
+            (let ((page (concat base "/photo/"))
+                  (image (concat base "/photo/hero.png")))
+              ;; First pass keeps remote URL, as a failed download would.
+              (setq etaf-web-download-images nil)
+              (setq buffer (etaf-web-open page))
+              (etaf-web-tests--wait-phase buffer 'ready)
+              (when (buffer-live-p buffer)
+                (with-current-buffer buffer (etaf-web-close)))
+              (setq buffer nil)
+              (setq page-dir (car (etaf-web-tests--cached-page-dirs cache)))
+              (let ((index (etaf-web-tests--read-file
+                            (expand-file-name "index.md" page-dir))))
+                (should (string-match-p (regexp-quote image) index))
+                (should-not (file-directory-p (expand-file-name "assets" page-dir))))
+              ;; Second pass fills the hole asynchronously without clearing cache.
+              (setq etaf-web-download-images t)
+              (setq buffer (etaf-web-open page))
+              (etaf-web-tests--wait-phase buffer 'ready)
+              (should (etaf-web-tests--wait-until
+                       (lambda ()
+                         (let ((idx (etaf-web-tests--read-file
+                                     (expand-file-name "index.md" page-dir))))
+                           (string-match-p (regexp-quote "](assets/") idx)))))
+              (let ((index (etaf-web-tests--read-file
+                            (expand-file-name "index.md" page-dir))))
+                (should-not (string-match-p (regexp-quote image) index))
+                (should (string-match-p (regexp-quote "](assets/") index))
+                (should (> (length (directory-files
+                                    (expand-file-name "assets" page-dir)))
+                           2))))))
       (setq etaf-web-download-images old-download)
-      (when (and buffer (buffer-live-p buffer)) (kill-buffer buffer))
+      (when (and buffer (buffer-live-p buffer))
+        (with-current-buffer buffer (etaf-web-close)))
+      (delete-directory cache t))))
+
+;;; ---------------------------------------------------------------------------
+;;; Universal layout/extraction rules & interactive browser shell tests
+;;; ---------------------------------------------------------------------------
+
+(ert-deftest etaf-web-tests-prunes-hidden-search-and-punct-blocks ()
+  "Hidden nodes (except tabpanels), ARIA overlays, short search bars and punct blocks drop."
+  (let* ((html (etaf-web-tests--read-file
+                (etaf-web-tests--fixture "pruning-hidden-search-punct.html")))
+         (md (etaf-web-to-markdown html :base-url "https://example.com/")))
+    (dolist (noise '("不应该出现的隐藏提示文本" "同样不可见的悬浮文案"
+                     "悬浮提示" "菜单项一" "登录弹窗标题" "警告弹窗" "搜索文章"))
+      (should-not (string-match-p (regexp-quote noise) md)))
+    ;; Lone punctuation/pipe leaf lines are removed.
+    (should-not (string-match-p "^[|·/]$" md))
+    ;; Normal prose and inactive `role="tabpanel"` stay intact inside :::tabs.
+    (should (string-match-p "这是正常保留的主体正文段落" md))
+    (should (string-match-p "^:::tabs$" md))
+    (should (string-match-p "make check" md))
+    (should (string-match-p "make test" md))))
+
+(ert-deftest etaf-web-tests-timeline-gate-rejects-counter-bars ()
+  "Counter/action bars with timeline class are rejected; real timelines remain :::timeline."
+  (let* ((html (etaf-web-tests--read-file
+                (etaf-web-tests--fixture "timeline-gate-and-metadata.html")))
+         (md (etaf-web-to-markdown html :base-url "https://example.com/")))
+    ;; Counter bar collapses to single metadata line instead of :::timeline.
+    (should (string-match-p "^3月前 · 1\\.0k · 8$" md))
+    ;; Genuine timeline with <time> and substantive text stays :::timeline.
+    (should (string-match-p "^:::timeline$" md))
+    (should (string-match-p ":::event {title=\"基础引擎\" time=\"2026-01\"}" md))
+    (should (string-match-p ":::event {title=\"浏览器外壳\" time=\"2026-04\"}" md))
+    (should-not (string-match-p ":::event.*3月前" md))))
+
+(ert-deftest etaf-web-tests-clusters-short-metadata-and-preserves-cards ()
+  "Consecutive short metadata siblings merge into one line while card grids stay intact."
+  (let* ((html (etaf-web-tests--read-file
+                (etaf-web-tests--fixture "timeline-gate-and-metadata.html")))
+         (md (etaf-web-to-markdown html :base-url "https://example.com/")))
+    ;; Four consecutive short stat blocks merge into a single ` · '-joined line.
+    (should (string-match-p "^关注 18 · 粉丝 204 · 获赞 1\\.2k · 文章 36$" md))
+    ;; Feature cards keep their card/columns structure untouched.
+    (should (string-match-p "^:::card {title=\"异步管线\"}\n抓取与无头渲染完全非阻塞运行。" md))
+    (should (string-match-p "^:::card {title=\"结构保留\"}\n卡片内部段落与标题维持原有语义。" md))))
+
+(ert-deftest etaf-web-tests-formats-repeated-entry-stream ()
+  "Homogeneous entry streams compile into linked headings, prose summaries, meta line and hr."
+  (let* ((html (etaf-web-tests--read-file
+                (etaf-web-tests--fixture "repeated-entry-stream.html")))
+         (md (etaf-web-to-markdown html :base-url "https://example.com/")))
+    (should (string-match-p
+             "^### \\[深入理解增量排版引擎的脏区计算\\](https://example\\.com/post/101)$" md))
+    (should (string-match-p
+             "^### \\[终端文本应用里的异步状态机设计\\](https://example\\.com/post/102)$" md))
+    (should (string-match-p
+             "^### \\[面向通用网页的噪音剪枝与版式恢复\\](https://example\\.com/post/103)$" md))
+    ;; Summary unwraps same-href link into plain prose rather than nested link.
+    (should (string-match-p "^本文剖析保留式渲染树如何只重排变更的节点" md))
+    (should-not (string-match-p "\\[本文剖析" md))
+    ;; Single-line metadata and horizontal rule separators between entries.
+    (should (string-match-p "^3月前 · 1\\.2k · 18$" md))
+    (should (string-match-p "^4月前 · 980 · 12$" md))
+    (should (string-match-p "^---$" md))))
+
+(ert-deftest etaf-web-tests-handles-inline-badges-pua-and-emoji ()
+  "Empty-alt inline imgs drop, badge runs degrade to alt text, PUA strips, real emoji stays."
+  (let* ((html (etaf-web-tests--read-file
+                (etaf-web-tests--fixture "inline-badges-pua-emoji.html")))
+         (md (etaf-web-to-markdown html :base-url "https://example.com/")))
+    ;; Empty-alt decorative inline img dropped completely.
+    (should-not (string-match-p "icon-deco\\.png" md))
+    ;; Run of inline badge images degrades to `alt` text joined with ` · '.
+    (should (string-match-p "创作等级LV\\.4 · 杰出作者 · 博览群文" md))
+    (should-not (string-match-p "b1\\.png\\|b2\\.png\\|b3\\.png" md))
+    ;; PUA glyphs and variation selectors stripped; standard emoji preserved.
+    (should-not (string-match-p "[\ue000-\uf8ff\ufe0e\ufe0f]" md))
+    (should (string-match-p "🚀" md))
+    (should (string-match-p "📝" md))))
+
+(ert-deftest etaf-web-tests-browser-history-scroll-and-reload ()
+  "Back/Forward restore scroll positions and `r' reloads bypassing cache via real keys."
+  (let* ((cache (make-temp-file "etaf-web-hist-" t))
+         (etaf-web-cache-directory cache)
+         (etaf-web-download-images nil)
+         (ver 1)
+         (page1-body (concat "<article><h1>First Long Page</h1>"
+                             (mapconcat (lambda (i)
+                                          (format "<p>Paragraph %d with enough text to scroll through cleanly.</p>" i))
+                                        (number-sequence 1 35) "")
+                             "<p><a href=\"/p2\">Go Second</a></p></article>"))
+         (buf nil))
+    (unwind-protect
+        (etaf-web-tests--with-http base
+            (lambda (_m path)
+              (pcase path
+                ("/p1" (list :status "200 OK" :body page1-body))
+                ("/p2" (list :status "200 OK"
+                             :body (format "<article><h1>Second Page v%d</h1><p>Version %d readable content body.</p></article>"
+                                           ver ver)))
+                (_ (list :status "404 Not Found" :body "404"))))
+          (let ((u1 (concat base "/p1"))
+                (u2 (concat base "/p2"))
+                (saved-pt nil))
+            (setq buf (etaf-web-open u1))
+            (etaf-web-tests--wait-phase buf 'ready)
+            (with-current-buffer buf
+              ;; Scroll down to bottom link and activate it.
+              (goto-char (point-min))
+              (should (search-forward "Go Second" nil t))
+              (goto-char (match-beginning 0))
+              (setq saved-pt (point))
+              (should (> saved-pt 200))
+              (call-interactively (key-binding (kbd "RET"))))
+            (should (etaf-web-tests--wait-until
+                     (lambda ()
+                       (let ((st (etaf-web-state buf)))
+                         (and (equal (plist-get st :url) u2)
+                              (eq (plist-get st :phase) 'ready))))))
+            (let ((st2 (etaf-web-state buf)))
+              (should (plist-get st2 :can-back))
+              (should-not (plist-get st2 :can-forward))
+              (should (= (plist-get st2 :history-length) 2)))
+            ;; Drive real `M-<left>' key -> goes back to u1 and restores point!
+            (with-current-buffer buf
+              (execute-kbd-macro (kbd "M-<left>")))
+            (should (etaf-web-tests--wait-until
+                     (lambda ()
+                       (let ((st (etaf-web-state buf)))
+                         (and (equal (plist-get st :url) u1)
+                              (eq (plist-get st :phase) 'ready))))))
+            (let ((st-back (etaf-web-state buf)))
+              (should-not (plist-get st-back :can-back))
+              (should (plist-get st-back :can-forward))
+              (should (= (with-current-buffer buf (point)) saved-pt)))
+            ;; Drive real `M-<right>' key -> goes forward to u2!
+            (with-current-buffer buf
+              (execute-kbd-macro (kbd "M-<right>")))
+            (should (etaf-web-tests--wait-until
+                     (lambda ()
+                       (let ((st (etaf-web-state buf)))
+                         (and (equal (plist-get st :url) u2)
+                              (eq (plist-get st :phase) 'ready))))))
+            ;; Bump server version and drive real `r' key -> bypasses cache!
+            (setq ver 2)
+            (with-current-buffer buf
+              (execute-kbd-macro "r"))
+            (should (etaf-web-tests--wait-until
+                     (lambda ()
+                       (and (eq (plist-get (etaf-web-state buf) :phase) 'ready)
+                            (string-match-p
+                             "Version 2"
+                             (with-current-buffer buf
+                               (buffer-substring-no-properties (point-min) (point-max))))))))))
+      (when (and buf (buffer-live-p buf))
+        (with-current-buffer buf (etaf-web-close)))
+      (delete-directory cache t))))
+
+(ert-deftest etaf-web-tests-address-bar-and-independent-buffers ()
+  "Opening two pages yields independent `*Web: ...*' buffers; `g' edits address bar."
+  (let* ((cache (make-temp-file "etaf-web-addr-" t))
+         (etaf-web-cache-directory cache)
+         (etaf-web-download-images nil)
+         (buf1 nil)
+         (buf2 nil))
+    (unwind-protect
+        (etaf-web-tests--with-http base
+            (lambda (_m path)
+              (pcase path
+                ("/one" (list :status "200 OK"
+                              :body "<article><h1>Page One</h1><p>First independent page content.</p></article>"))
+                ("/two" (list :status "200 OK"
+                              :body "<article><h1>Page Two</h1><p>Second independent page content.</p></article>"))
+                ("/three" (list :status "200 OK"
+                                :body "<article><h1>Page Three</h1><p>Reached through address bar.</p></article>"))
+                (_ (list :status "404 Not Found" :body "404"))))
+          (let ((u1 (concat base "/one"))
+                (u2 (concat base "/two"))
+                (u3 (concat base "/three")))
+            (setq buf1 (etaf-web-open u1))
+            (setq buf2 (etaf-web-open u2))
+            (etaf-web-tests--wait-phase buf1 'ready)
+            (etaf-web-tests--wait-phase buf2 'ready)
+            ;; Two distinct live browser buffers named `*Web: ...*'.
+            (should-not (eq buf1 buf2))
+            (should (string-prefix-p "*Web: " (buffer-name buf1)))
+            (should (string-prefix-p "*Web: " (buffer-name buf2)))
+            (should (string-match-p "Page One"
+                                    (with-current-buffer buf1
+                                      (buffer-substring-no-properties (point-min) (point-max)))))
+            (should (string-match-p "Page Two"
+                                    (with-current-buffer buf2
+                                      (buffer-substring-no-properties (point-min) (point-max)))))
+            ;; Switch to buf1 and press real `g' to edit address bar, enter u3, press RET.
+            (switch-to-buffer buf1)
+            (execute-kbd-macro "g")
+            (should (plist-get (etaf-web-state buf1) :address-editing))
+            (execute-kbd-macro (vconcat (kbd "C-a") (kbd "C-k") u3 (kbd "RET")))
+            (should (etaf-web-tests--wait-until
+                     (lambda ()
+                       (let ((st (etaf-web-state buf1)))
+                         (and (equal (plist-get st :url) u3)
+                              (eq (plist-get st :phase) 'ready))))))
+            ;; buf1 updated to Page Three while buf2 remains completely untouched.
+            (should (string-match-p "Reached through address bar"
+                                    (with-current-buffer buf1
+                                      (buffer-substring-no-properties (point-min) (point-max)))))
+            (should (string-match-p "Page Two"
+                                    (with-current-buffer buf2
+                                      (buffer-substring-no-properties (point-min) (point-max)))))))
+      (when (and buf1 (buffer-live-p buf1))
+        (with-current-buffer buf1 (etaf-web-close)))
+      (when (and buf2 (buffer-live-p buf2))
+        (with-current-buffer buf2 (etaf-web-close)))
+      (delete-directory cache t))))
+
+(ert-deftest etaf-web-tests-cancel-inflight-load-leaves-no-orphans ()
+  "Pressing `x' cancels an in-flight slow load immediately with zero orphan subprocesses."
+  (let* ((cache (make-temp-file "etaf-web-cancel-" t))
+         (etaf-web-cache-directory cache)
+         (etaf-web-download-images nil)
+         (buf nil))
+    (unwind-protect
+        (etaf-web-tests--with-http base
+            (lambda (_m _p) (list :status "200 OK" :delay 10.0 :body "<p>slow</p>"))
+          (setq buf (etaf-web-open (concat base "/hang")))
+          (should (eq (plist-get (etaf-web-state buf) :phase) 'loading))
+          (accept-process-output nil 0.05)
+          ;; Drive real `x' key to stop in-flight fetch.
+          (with-current-buffer buf
+            (execute-kbd-macro "x"))
+          (etaf-web-tests--wait-phase buf 'error 2.0)
+          (let ((st (etaf-web-state buf))
+                (fetch-procs (cl-remove-if-not
+                              (lambda (p)
+                                (and (process-live-p p)
+                                     (string-match-p "etaf-web-fetch\\|etaf-web-render"
+                                                     (process-name p))))
+                              (process-list))))
+            (should (eq (plist-get (plist-get st :error) :kind) 'cancelled))
+            (should (null fetch-procs))))
+      (when (and buf (buffer-live-p buf))
+        (with-current-buffer buf (etaf-web-close)))
+      (delete-directory cache t))))
+
+(ert-deftest etaf-web-tests-error-card-actions-and-narrow-viewport ()
+  "Error card exposes Retry, External Browser and Back buttons; narrow mode folds toolbar."
+  (let* ((cache (make-temp-file "etaf-web-errcard-" t))
+         (etaf-web-cache-directory cache)
+         (etaf-web-download-images nil)
+         (fail-b t)
+         (browsed nil)
+         (buf nil))
+    (unwind-protect
+        (etaf-web-tests--with-http base
+            (lambda (_m path)
+              (pcase path
+                ("/ok" (list :status "200 OK"
+                             :body "<article><h1>Origin Page</h1><p><a href=\"/flaky\">Open Flaky</a></p></article>"))
+                ("/flaky" (if fail-b
+                              (list :status "503 Service Unavailable" :body "down")
+                            (list :status "200 OK"
+                                  :body "<article><h1>Recovered Page</h1><p>Back online now.</p></article>")))
+                (_ (list :status "404 Not Found" :body "404"))))
+          (cl-letf (((symbol-function 'browse-url)
+                     (lambda (u &rest _) (push u browsed))))
+            (let ((u-ok (concat base "/ok"))
+                  (u-flaky (concat base "/flaky")))
+              (setq buf (etaf-web-open u-ok))
+              (etaf-web-tests--wait-phase buf 'ready)
+              ;; Navigate to flaky page -> lands on error card with all 3 buttons.
+              (with-current-buffer buf
+                (goto-char (point-min))
+                (should (search-forward "Open Flaky" nil t))
+                (goto-char (match-beginning 0))
+                (call-interactively (key-binding (kbd "RET"))))
+              (should (etaf-web-tests--wait-until
+                       (lambda ()
+                         (let ((st (etaf-web-state buf)))
+                           (and (equal (plist-get st :url) u-flaky)
+                                (eq (plist-get st :phase) 'error))))))
+              (let ((painted (with-current-buffer buf
+                               (buffer-substring-no-properties (point-min) (point-max)))))
+                (should (string-match-p "无法加载页面" painted))
+                (should (string-match-p "503" painted))
+                (should (string-match-p (regexp-quote u-flaky) painted))
+                (should (string-match-p "重试" painted))
+                (should (string-match-p "外部浏览器" painted))
+                (should (string-match-p "返回上页" painted)))
+              ;; Button 1: External Browser via `etaf-focus' + `RET'.
+              (let ((rt (etaf-runtime-for-buffer buf)))
+                (with-current-buffer buf
+                  (etaf-focus rt 'web-error-browser)
+                  (execute-kbd-macro (kbd "RET")))
+                (should (equal browsed (list u-flaky)))
+                ;; Button 2: Back via `etaf-focus' + `RET'.
+                (with-current-buffer buf
+                  (etaf-focus rt 'web-error-back)
+                  (execute-kbd-macro (kbd "RET")))
+                (should (etaf-web-tests--wait-until
+                         (lambda ()
+                           (let ((st (etaf-web-state buf)))
+                             (and (equal (plist-get st :url) u-ok)
+                                  (eq (plist-get st :phase) 'ready))))))
+                ;; Go forward back to flaky error card, flip server healthy, activate Retry!
+                (with-current-buffer buf (execute-kbd-macro (kbd "M-<right>")))
+                (etaf-web-tests--wait-phase buf 'error)
+                (setq fail-b nil)
+                (with-current-buffer buf
+                  (etaf-focus rt 'web-error-retry)
+                  (execute-kbd-macro (kbd "RET")))
+                (etaf-web-tests--wait-phase buf 'ready)
+                (should (string-match-p "Recovered Page"
+                                        (with-current-buffer buf
+                                          (buffer-substring-no-properties (point-min) (point-max)))))
+                ;; Wide 1lh header: left Chinese actions + full URL with scheme + no footer.
+                (let ((wide-text (with-current-buffer buf
+                                   (buffer-substring-no-properties (point-min) (point-max)))))
+                  (should (string-match-p "后退.*前进.*刷新" wide-text))
+                  (should (string-match-p (regexp-quote u-flaky) wide-text)))
+                ;; Narrow viewport (<72ch) triggers `:narrow t', folds to `‹ › ⟳', keeps scheme.
+                (let ((w-orig (selected-window))
+                      (w-right (ignore-errors (split-window-horizontally 56)))
+                      (buf-narrow nil))
+                  (unwind-protect
+                      (when (window-live-p w-right)
+                        (select-window w-orig)
+                        (setq buf-narrow (etaf-web-open u-ok))
+                        (etaf-web-tests--wait-phase buf-narrow 'ready)
+                        (let ((st-n (etaf-web-state buf-narrow))
+                              (painted-n (with-current-buffer buf-narrow
+                                           (buffer-substring-no-properties (point-min) (point-max)))))
+                          (should (< (plist-get st-n :width) 72))
+                          (should (plist-get st-n :narrow))
+                          (should (string-match-p "‹.*›.*⟳" painted-n))
+                          (should (string-match-p "http://" painted-n))
+                          (should-not (string-match-p "后退" painted-n))))
+                    (when (and buf-narrow (buffer-live-p buf-narrow))
+                      (with-current-buffer buf-narrow (etaf-web-close)))
+                    (when (and (window-live-p w-right) (not (one-window-p t)))
+                      (delete-window w-right))))))))
+      (when (and buf (buffer-live-p buf))
+        (with-current-buffer buf (etaf-web-close)))
       (delete-directory cache t))))
 
 (provide 'etaf-web-tests)

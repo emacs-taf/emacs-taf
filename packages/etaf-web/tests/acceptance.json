@@ -64,7 +64,7 @@
     {
       "name": "etaf-web-tests-fetch-timeout-and-distinct-errors",
       "file": "tests/etaf-web-tests.el",
-      "purpose": "`etaf-web-fetch-timeout' is forwarded to `url-retrieve-synchronously', and HTTP status errors (e.g. 403), timeouts and connection failures each report distinct `etaf-web-error' messages."
+      "purpose": "`etaf-web-fetch-timeout' bounds asynchronous HTTP fetches, and HTTP status errors (e.g. 403), timeouts and connection failures each surface distinct diagnostics inside the error card and `etaf-web-state'."
     },
     {
       "name": "etaf-web-tests-strips-makeinfo-nav-and-permalinks",
@@ -170,6 +170,51 @@
       "name": "etaf-web-tests-separates-cjk-and-latin-across-elements",
       "file": "tests/etaf-web-tests.el",
       "purpose": "Adjacent inline elements that meet at a Chinese character and a Latin letter or digit are joined with one separating space, while an inline code span keeps its own boundary untouched."
+    },
+    {
+      "name": "etaf-web-tests-prunes-hidden-search-and-punct-blocks",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "Inline `display:none'/`visibility:hidden' elements (except `role=\"tabpanel\"'), ARIA `tooltip|menu|dialog|alertdialog' overlays, non-form short search bars and lone punctuation/pipe leaf blocks are pruned while real prose and tabpanels survive."
+    },
+    {
+      "name": "etaf-web-tests-timeline-gate-rejects-counter-bars",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "The `:::timeline' gate rejects pure counter/action bars even when their class contains `timeline', collapsing them to a single metadata line while preserving real `<time>'/substantive timelines."
+    },
+    {
+      "name": "etaf-web-tests-clusters-short-metadata-and-preserves-cards",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "Consecutive 2-6 short metadata siblings merge into one ` · '-separated line without disrupting `:::card' internals."
+    },
+    {
+      "name": "etaf-web-tests-formats-repeated-entry-stream",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "Repeated homogeneous entry streams (>=3 titled items) compile to `### [Title](url)', unwrapped plain-prose summary, single-line metadata and `---' separators."
+    },
+    {
+      "name": "etaf-web-tests-handles-inline-badges-pua-and-emoji",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "Empty-alt decorative inline images are dropped, runs of inline badge images degrade to ` · '-joined alt text, Unicode PUA and variation selectors are stripped, and standard emoji in prose are preserved."
+    },
+    {
+      "name": "etaf-web-tests-browser-history-scroll-and-reload",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "Real key bindings `M-<left>'/`M-<right>' (`B'/`F') traverse per-buffer history while restoring scroll/point position, and `r' bypasses cache to fetch fresh content."
+    },
+    {
+      "name": "etaf-web-tests-address-bar-and-independent-buffers",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "Opening two pages yields independent `*Web: <host>*' buffers side by side, and pressing `g' focuses the inline editable address bar to navigate to a new URL."
+    },
+    {
+      "name": "etaf-web-tests-cancel-inflight-load-leaves-no-orphans",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "Pressing `x' cancels an in-flight slow HTTP fetch cleanly, updates state to cancelled and leaves zero live background fetch/render subprocesses."
+    },
+    {
+      "name": "etaf-web-tests-error-card-actions-and-narrow-viewport",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "Failed loads render an interactive error card whose Retry, External Browser and Back buttons activate via `etaf-focus' + `RET' and recover cleanly."
     }
   ]
 }

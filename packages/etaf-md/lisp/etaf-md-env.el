@@ -50,15 +50,14 @@
 
 (defun etaf-md--markdown-env (env)
   "Return the `etaf-ui-markdown' rendering env for paint ENV.
-Preserves the page services (media, links, footnotes and `:line-grid') while
-binding `:width' to ENV's own available columns."
+Preserves the page services (media, links, footnotes) while binding `:width'
+to ENV's own available columns."
   (if-let* ((session (etaf-md-env-session env)))
       (plist-put (copy-sequence (etaf-md--env session))
                  :width (etaf-md-env-width env))
     (list :theme (etaf-md-env-theme env)
           :palette (etaf-md-env-palette env)
-          :width (etaf-md-env-width env)
-          :line-grid t)))
+          :width (etaf-md-env-width env))))
 
 (defun etaf-md--paint (node env)
   "Return the view ENV's definition gives NODE, or a failure line."

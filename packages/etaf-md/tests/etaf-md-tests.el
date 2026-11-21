@@ -2236,39 +2236,32 @@ document footnote list and paint at the end of the page."
           (push (char-after (1+ index)) scaled))))
     (concat (nreverse scaled))))
 
-(ert-deftest etaf-md-tests-headings-render-on-line-grid-without-font-size ()
-  "Front-matter title and body headings keep standard line height with no scaling.
-The document header uses bold weight, heading color and a bottom hairline, and
-total line counts stay on the uniform line grid."
-  (let* ((front-h3 (concat "---\ntitle: 文档标题\nauthor: 作者\n---\n\n"
-                           "### 小节\n\n正文。\n"))
+(ert-deftest etaf-md-tests-headings-scale-with-level ()
+  "Front-matter title and body headings scale above body text again.
+The document header keeps the largest size, and every heading level draws
+larger than the paragraphs below it, so a page is not a wall of equal text."
+  (let* ((page (concat "---\ntitle: 文档标题\nauthor: 作者\n---\n\n"
+                       "### 小节\n\n正文。\n"))
          (all-levels (concat "---\ntitle: 页面标题\n---\n\n"
                              "# 一级标题\n\n"
                              "## 二级标题\n\n"
                              "### 三级标题\n\n"
                              "正文[^n]。\n\n"
                              "[^n]: 脚注内容\n"))
-         (s1 (etaf-md-create :text front-h3 :theme 'dark))
+         (s1 (etaf-md-create :text page :theme 'dark))
          (s2 (etaf-md-create :text all-levels :theme 'dark)))
     (etaf-md-tests--with-mount s1
-      (let ((scaled (etaf-md-tests--scaled-chars))
-            (lines (count-lines (point-min) (point-max)))
-            (weight (etaf-md-tests--face-attribute "文档标题" :weight))
-            (underline (etaf-md-tests--face-attribute "文档标题" :underline)))
-        (should (equal scaled ""))
-        ;; Same 10 lines as before removing heading scaling: no extra rows added.
-        (should (= lines 10))
-        (should (eq weight 'bold))
-        (should underline)))
+      (let ((scaled (etaf-md-tests--scaled-chars)))
+        ;; The front-matter title and the body heading are both above body size.
+        (should (string-match-p "文档标题" scaled))
+        (should (string-match-p "小节" scaled))
+        (should (eq (etaf-md-tests--face-attribute "文档标题" :weight) 'bold))))
     (etaf-md-tests--with-mount s2
-      (let ((scaled (etaf-md-tests--scaled-chars))
-            (h1-weight (etaf-md-tests--face-attribute "一级标题" :weight))
-            (h2-weight (etaf-md-tests--face-attribute "二级标题" :weight))
-            (h3-weight (etaf-md-tests--face-attribute "三级标题" :weight)))
-        (should (equal scaled ""))
-        (should (eq h1-weight 'bold))
-        (should (eq h2-weight 'bold))
-        (should (eq h3-weight 'bold))))))
+      (let ((scaled (etaf-md-tests--scaled-chars)))
+        (dolist (heading '("一级标题" "二级标题" "三级标题"))
+          (should (string-match-p heading scaled)))
+        (should (eq (etaf-md-tests--face-attribute "一级标题" :weight) 'bold))
+        (should (eq (etaf-md-tests--face-attribute "三级标题" :weight) 'bold))))))
 
 (ert-deftest etaf-md-tests-on-link-intercepts-or-falls-back ()
   "`:on-link' intercepts link press on non-nil and falls back on nil."

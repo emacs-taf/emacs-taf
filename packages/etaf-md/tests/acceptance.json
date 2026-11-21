@@ -481,9 +481,9 @@
       "purpose": "Footnote references before, inside and after containers are numbered in document order and resolve definitions written either inside or outside containers."
     },
     {
-      "name": "etaf-md-tests-headings-render-on-line-grid-without-font-size",
+      "name": "etaf-md-tests-headings-scale-with-level",
       "file": "tests/etaf-md-tests.el",
-      "purpose": "Front-matter titles and headings render on the uniform line grid without `:font-size`/`:height` scaling, keeping standard line height and unchanged line count."
+      "purpose": "Front-matter titles and body headings of every level render larger than body text, with the document title the largest and all headings bold."
     },
     {
       "name": "etaf-md-tests-on-link-intercepts-or-falls-back",

@@ -102,10 +102,11 @@
 
 ### Changed
 
-- Document titles and body headings render on the uniform line grid
-  (`:line-grid t`) without `:font-size` scaling: front-matter titles use bold
-  weight, the heading color and a bottom hairline, while markdown headings keep
-  standard line height.
+- Document titles and body headings scale above body text again, as the reader
+  asked: the front-matter title is the largest run on the page and every
+  heading level steps down from it, so a page reads with a real hierarchy
+  instead of one uniform text size.  This is an explicit reader request and the
+  one place the package sets a size.
 
 - The `r`, `[`, `]` and `C-c j` keys run commands that are now part of the
   supported API: `etaf-md-reload`, `etaf-md-wider`, `etaf-md-narrower` and

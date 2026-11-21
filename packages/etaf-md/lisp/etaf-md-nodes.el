@@ -944,8 +944,7 @@ frame and its colours; only the language row is left out."
              (plist-put (copy-sequence (etaf-md-node-block child)) :header nil)
              (list :theme (etaf-md-env-theme env)
                    :palette (etaf-md-env-palette env)
-                   :width (etaf-md-env-width env)
-                   :line-grid t))
+                   :width (etaf-md-env-width env)))
           (etaf-md--paint child env)))
       (etaf-md-children env page))))))
 

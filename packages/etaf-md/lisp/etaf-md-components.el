@@ -64,7 +64,6 @@ here once instead of in every card."
     (list :theme (etaf-md-env-theme env)
           :palette (etaf-md-env-palette env)
           :width (etaf-md-env-width env)
-          :line-grid t
           :dir (plist-get session :dir)
           :open-url (lambda (url) (etaf-md-follow-link env url))
           :open-media (when session
@@ -622,8 +621,7 @@ shown under a strip that names every manager the `tabs' attribute lists."
                  synthetic
                  (list :theme (etaf-md-env-theme env)
                        :palette (etaf-md-env-palette env)
-                       :width (etaf-md-env-width env)
-                       :line-grid t))))))))
+                       :width (etaf-md-env-width env)))))))))
 
 (etaf-md--define-shipped 'npm-to
   :name "npm-to"
