@@ -623,5 +623,181 @@
              "!\\[Figure 2: A detailed caption that intentionally exceeds sixty characters is still preserved from figcaption\\](https://img\\.example\\.com/fig\\.png)"
              md))))
 
+(ert-deftest etaf-web-tests-card-grids-to-columns-and-cards ()
+  "3-card, 5-card (3+2 split) and classless grids compile to columns + cards and render."
+  (let* ((html (etaf-web-tests--read-file
+                (etaf-web-tests--fixture "layout-cards.html")))
+         (md (etaf-web-to-markdown html :base-url "https://example.com/")))
+    ;; 3-card feature grid -> single 3-column block with resolved hrefs.
+    (should (string-match-p
+             "^:::columns {columns=\"3\" min-width=\"22ch\" divider=false}$"
+             md))
+    (should (string-match-p
+             "^:::card {title=\"Fast Parser\" href=\"https://example\\.com/docs/parse\"}\nParses HTML directly"
+             md))
+    (should (string-match-p
+             "^:::card {title=\"Grid Layout\" href=\"https://example\\.org/layout\"}\nPreserves multi-column"
+             md))
+    (should (string-match-p
+             "^:::card {title=\"Offline Cache\"}\nStores readable Markdown"
+             md))
+    ;; 5-card catalog splits into 3 + 2 columns blocks.
+    (should (string-match-p
+             (concat ":::columns {columns=\"3\" min-width=\"22ch\" divider=false}\n"
+                     ":::col\n:::card {title=\"Card One\"}")
+             md))
+    (should (string-match-p
+             (concat ":::columns {columns=\"2\" min-width=\"22ch\" divider=false}\n"
+                     ":::col\n:::card {title=\"Card Four\"}")
+             md))
+    (should (string-match-p "^:::card {title=\"Card Five\"}$" md))
+    ;; Classless 2-card grid maps to 2-column block.
+    (should (string-match-p "^:::card {title=\"Compact Footprints\"}$" md))
+    (should (string-match-p "^:::card {title=\"Keyboard First\"}\nNavigate every link" md))
+    ;; Verify compiled IR renders cleanly in etaf-md with zero validation errors.
+    (let* ((session (etaf-md-create :text md))
+           (buf (etaf-md-open session)))
+      (unwind-protect
+          (let ((painted (with-current-buffer buf
+                           (buffer-substring-no-properties (point-min) (point-max)))))
+            (should (string-match-p "Fast Parser" painted))
+            (should (string-match-p "Card Five" painted))
+            (should (string-match-p "Keyboard First" painted))
+            (should-not (string-match-p "is not an attribute\\|is required\\|is not a child"
+                                        painted)))
+        (when (buffer-live-p buf)
+          (with-current-buffer buf (etaf-md-close)))))))
+
+(ert-deftest etaf-web-tests-docs-tabs-to-tabs-container ()
+  "ARIA tablist+tabpanel (including hidden panels) and class-based tabs map to :::tabs."
+  (let* ((html (etaf-web-tests--read-file
+                (etaf-web-tests--fixture "layout-tabs.html")))
+         (md (etaf-web-to-markdown html)))
+    ;; ARIA tablist matches panels by aria-controls despite DOM order and keeps hidden panels.
+    (should (string-match-p
+             (concat "^:::tabs\n"
+                     "@tab {title=\"npm\"}\n```sh\nnpm install etaf-demo\n```\n\n"
+                     "@tab {title=\"pnpm\" selected=true}\n```sh\npnpm add etaf-demo\n```\n\n"
+                     "@tab {title=\"yarn\"}\n```sh\nyarn add etaf-demo\n```\n:::$")
+             md))
+    ;; Class-based code-tabs container also compiles to :::tabs.
+    (should (string-match-p
+             (concat "@tab {title=\"Emacs Lisp\" selected=true}\n```elisp\n"
+                     "(etaf-web-open \"https://example\\.com\")\n```\n\n"
+                     "@tab {title=\"Shell\"}\n```sh\nmake -C packages/etaf-web check\n```")
+             md))
+    ;; Verify compiled IR renders cleanly in etaf-md.
+    (let* ((session (etaf-md-create :text md))
+           (buf (etaf-md-open session)))
+      (unwind-protect
+          (let ((painted (with-current-buffer buf
+                           (buffer-substring-no-properties (point-min) (point-max)))))
+            (should (string-match-p "npm" painted))
+            (should (string-match-p "pnpm add etaf-demo" painted))
+            (should (string-match-p "Emacs Lisp" painted))
+            (should-not (string-match-p "is not an attribute\\|is required\\|is not a child"
+                                        painted)))
+        (when (buffer-live-p buf)
+          (with-current-buffer buf (etaf-md-close)))))))
+
+(ert-deftest etaf-web-tests-steps-and-timeline-containers ()
+  "Steps/stepper/how-it-works and timeline containers compile to :::steps and :::timeline."
+  (let* ((html (etaf-web-tests--read-file
+                (etaf-web-tests--fixture "layout-steps-timeline.html")))
+         (md (etaf-web-to-markdown html)))
+    ;; Section heading preserved before :::steps; redundant `1.' prefix stripped.
+    (should (string-match-p "^## How It Works\n\n:::steps {list-style=\"decimal\"}$" md))
+    (should (string-match-p
+             "^:::step {title=\"Fetch Page\"}\nDownload HTML over HTTP(S)"
+             md))
+    (should (string-match-p "^:::step {title=\"Compile to IR\"}$" md))
+    (should (string-match-p "^:::step {title=\"Render Buffer\"}$" md))
+    ;; Stepper with badge spans strips badge from body.
+    (should (string-match-p "^:::step {title=\"Clone Workspace\"}\nCheck out the repository" md))
+    (should (string-match-p "^:::step {title=\"Run Checks\"}\nExecute `make -C packages/etaf-web check`" md))
+    ;; Timeline maps <time> to time="..." attribute on :::event.
+    (should (string-match-p
+             (concat "^:::timeline\n"
+                     ":::event {title=\"Initial Compiler\" time=\"2026-01\"}\n"
+                     "Added libxml sanitization and article extraction\\.\n:::\n"
+                     ":::event {title=\"Layout Containers\" time=\"2026-04\"}\n"
+                     "Mapped card grids, docs tabs, steps and timelines\\.\n:::\n:::$")
+             md))
+    ;; Verify compiled IR renders cleanly in etaf-md.
+    (let* ((session (etaf-md-create :text md))
+           (buf (etaf-md-open session)))
+      (unwind-protect
+          (let ((painted (with-current-buffer buf
+                           (buffer-substring-no-properties (point-min) (point-max)))))
+            (should (string-match-p "Fetch Page" painted))
+            (should (string-match-p "Clone Workspace" painted))
+            (should (string-match-p "Initial Compiler" painted))
+            (should (string-match-p "2026-04" painted))
+            (should-not (string-match-p "is not an attribute\\|is required\\|is not a child"
+                                        painted)))
+        (when (buffer-live-p buf)
+          (with-current-buffer buf (etaf-md-close)))))))
+
+(ert-deftest etaf-web-tests-prose-lists-and-code-not-cards ()
+  "Consecutive paragraphs, ordinary lists, code blocks and single-child wrappers stay flat."
+  (let* ((html (etaf-web-tests--read-file
+                (etaf-web-tests--fixture "layout-negative-prose.html")))
+         (md (etaf-web-to-markdown html)))
+    ;; None of the layout containers should trigger on ordinary prose/lists/code.
+    (should-not (string-match-p ":::columns" md))
+    (should-not (string-match-p ":::card" md))
+    (should-not (string-match-p ":::col" md))
+    (should-not (string-match-p ":::steps" md))
+    (should-not (string-match-p ":::timeline" md))
+    (should-not (string-match-p ":::tabs" md))
+    ;; Original prose, lists, code and headings stay intact.
+    (should (string-match-p "\\*\\*First point:\\*\\* Consecutive paragraphs" md))
+    (should (string-match-p "^- \\*\\*Alpha\\*\\*: Regular unordered list" md))
+    (should (string-match-p "^1\\. \\*\\*Step one\\*\\*: Plain ordered lists" md))
+    (should (string-match-p "```elisp\n(\\+ 1 2)\n```" md))
+    (should (string-match-p "^### Lonely Card$" md))
+    (should (string-match-p "^## Long Section One$" md))
+    (should (string-match-p "^### Unordered Note A$" md))))
+
+(ert-deftest etaf-web-tests-inline-spacing-fidelity ()
+  "Adjacent inline siblings preserve boundary whitespace without corrupting tight runs or code."
+  (let* ((html (etaf-web-tests--read-file
+                (etaf-web-tests--fixture "inline-spacing.html")))
+         (md (etaf-web-to-markdown html :base-url "https://example.com/")))
+    ;; 1. Adjacent spans separated by newline collapse to one space.
+    (should (string-match-p "^ETAF Emacs Text Application Framework$" md))
+    (should-not (string-match-p "ETAFEmacs" md))
+    ;; 2. Adjacent links separated by space (or minified) keep a single space.
+    (should (string-match-p
+             "^\\[Install ETAF\\](https://example\\.com/install) \\[GitHub\\](https://github\\.com/emacs-taf)$"
+             md))
+    (should-not (string-match-p ")\\[GitHub\\]" md))
+    ;; 3. Tight adjacent unclassed elements add no spurious space.
+    (should (string-match-p "^foobar and \\*un\\*known and hello,world\\.$" md))
+    ;; 4. Inline code preserves internal spacing, respects outer spacing, no space before `.'.
+    (should (string-match-p
+             "^Run `make  check` now, tight`foo`bar, and `spaced`\\.$"
+             md))
+    ;; 5. Chinese/English boundary whitespace vs tight spans, plus `<br>' preserved.
+    (should (string-match-p "^中文 English 与 `ETAF` 文本，以及紧贴中En。$" md))
+    (should (string-match-p "^Line one\\\\\nLine two$" md))))
+
+(ert-deftest etaf-web-tests-strips-card-ordinal-keeps-prose-number ()
+  "Decorative 1-3 digit leading ordinal is dropped inside cards; prose numbers stay."
+  (let* ((html (etaf-web-tests--read-file
+                (etaf-web-tests--fixture "inline-spacing.html")))
+         (md (etaf-web-to-markdown html :base-url "https://example.com/")))
+    ;; Leading `01' / `02' inside feature cards are removed.
+    (should (string-match-p
+             "^:::card {title=\"Declarative components\"}\nCompose reusable Components"
+             md))
+    (should (string-match-p
+             "^:::card {title=\"Incremental updates\"}\nRetained rendering publishes"
+             md))
+    (should-not (string-match-p "^01$" md))
+    (should-not (string-match-p "^02$" md))
+    ;; Standalone numeric paragraph in normal prose stays untouched.
+    (should (string-match-p "^Answer to everything:\n\n42$" md))))
+
 (provide 'etaf-web-tests)
 ;;; etaf-web-tests.el ends here

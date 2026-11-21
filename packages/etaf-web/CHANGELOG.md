@@ -18,6 +18,9 @@
   attribute and widest `srcset` selection, overlong/title-duplicate image alt
   cleanup, `<figcaption>`-to-image-alt consolidation, makeinfo navigation /
   permalink (`¶`) / breadcrumb / tail noise pruning, footnote collection,
-  `<details>` and docs callout container compilation, charset detection,
+  `<details>` and docs callout container compilation, layout-aware mapping for
+  card grids (`:::columns` + `:::card`, stripping decorative card-leading
+  ordinals), docs tabs (`:::tabs`), steps (`:::steps`) and timelines
+  (`:::timeline`), inline sibling spacing normalization, charset detection,
   on-disk page cache and bounded local image downloading (5 MB per image, 30
   images per page).

@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Installation Tabs</title>
+</head>
+<body>
+  <article>
+    <h1>Installation Tabs</h1>
+    <p>Choose a package manager below.</p>
+
+    <div role="tablist" aria-label="Package managers">
+      <button role="tab" id="tab-npm" aria-controls="panel-npm" aria-selected="false">npm</button>
+      <button role="tab" id="tab-pnpm" aria-controls="panel-pnpm" aria-selected="true">pnpm</button>
+      <button role="tab" id="tab-yarn" aria-controls="panel-yarn" aria-selected="false">yarn</button>
+    </div>
+    <div role="tabpanel" id="panel-yarn" aria-labelledby="tab-yarn" hidden>
+      <pre><code class="language-sh">yarn add etaf-demo</code></pre>
+    </div>
+    <div role="tabpanel" id="panel-npm" aria-labelledby="tab-npm" hidden>
+      <pre><code class="language-sh">npm install etaf-demo</code></pre>
+    </div>
+    <div role="tabpanel" id="panel-pnpm" aria-labelledby="tab-pnpm">
+      <pre><code class="language-sh">pnpm add etaf-demo</code></pre>
+    </div>
+
+    <h2>Language Examples</h2>
+    <div class="code-tabs">
+      <div class="tab-list">
+        <button class="active">Emacs Lisp</button>
+        <button>Shell</button>
+      </div>
+      <div class="tab-panel">
+        <pre><code class="language-elisp">(etaf-web-open "https://example.com")</code></pre>
+      </div>
+      <div class="tab-panel" hidden>
+        <pre><code class="language-sh">make -C packages/etaf-web check</code></pre>
+      </div>
+    </div>
+  </article>
+</body>
+</html>

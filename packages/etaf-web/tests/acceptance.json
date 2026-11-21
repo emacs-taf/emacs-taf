@@ -100,6 +100,36 @@
       "name": "etaf-web-tests-cleans-overlong-and-title-duplicate-image-alt",
       "file": "tests/etaf-web-tests.el",
       "purpose": "Image alt text exceeding 60 characters or matching the document title (including stripped suffix) becomes empty, while short distinct alts and `<figcaption>` text are kept."
+    },
+    {
+      "name": "etaf-web-tests-card-grids-to-columns-and-cards",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "3-card grids, 5-card grids (split into 3+2 columns blocks) and classless 2-card structural grids compile into `:::columns' + `:::col' + `:::card' with resolved `href' links and render cleanly in `etaf-md'."
+    },
+    {
+      "name": "etaf-web-tests-docs-tabs-to-tabs-container",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "ARIA `role=\"tablist\"' paired with `role=\"tabpanel\"' (including `aria-controls' matching, `aria-selected=\"true\"' and `hidden' inactive panels) and class-based code tabs compile into `:::tabs' + `@tab' blocks and render cleanly in `etaf-md'."
+    },
+    {
+      "name": "etaf-web-tests-steps-and-timeline-containers",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "Numbered `steps'/`stepper'/`how-it-works' containers and `timeline' containers compile into `:::steps {list-style=\"decimal\"}' (`:::step') and `:::timeline' (`:::event' with optional `time') and render cleanly in `etaf-md'."
+    },
+    {
+      "name": "etaf-web-tests-prose-lists-and-code-not-cards",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "Consecutive paragraphs (including bold lead-ins), ordinary unordered and ordered lists, code blocks, single-child `.cards' wrappers, long article sections and unnumbered `.steps' blocks are never misclassified as card grids or sequence containers."
+    },
+    {
+      "name": "etaf-web-tests-inline-spacing-fidelity",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "Inline sibling boundaries preserve single spaces across newlines/spaces (and minified adjacent links or distinctly classed spans), keep tight unclassed elements glued, leave inline code internals and `<br>' intact, avoid spaces before punctuation, and handle CJK-Latin boundaries cleanly."
+    },
+    {
+      "name": "etaf-web-tests-strips-card-ordinal-keeps-prose-number",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "A card body whose opening paragraph consists solely of a 1-3 digit decorative ordinal (such as `01') drops that paragraph, while standalone numeric paragraphs in regular article prose (such as `42') are preserved."
     }
   ]
 }

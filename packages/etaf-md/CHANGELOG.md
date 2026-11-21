@@ -18,6 +18,11 @@
 - `:::columns` containers given an explicit track list such as `"2fr 1fr 1fr"`
   now count columns from the parsed tracks instead of falling back to 2.
 
+- Container bodies painted via `etaf-md-render` now stretch to their enclosing
+  column width, and `:::columns` and `:::card` propagate narrowed available
+  widths to nested blocks so images fit inside multi-column cards and following
+  paragraphs wrap within the card instead of being clipped.
+
 - The package loads twice without complaint.  A shipped node type used to
   refuse its second registration, which `package.el' triggers when a file
   that `require' already loaded is loaded again.

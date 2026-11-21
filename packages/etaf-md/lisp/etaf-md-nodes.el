@@ -93,6 +93,43 @@ Vertical space is a whole number of lines, so a width unit draws none."
                 :border (etaf-md--hairline env)
              (expr (etaf-md-content env))))))
 
+(defun etaf-md--length-columns (length available)
+  "Return horizontal LENGTH resolved to whole character cells against AVAILABLE."
+  (pcase (car-safe length)
+    ('ch (max 0 (round (cadr length))))
+    ('% (max 0 (floor (* available (/ (float (cadr length)) 100.0)))))
+    (_ 0)))
+
+(defun etaf-md--column-widths (available tracks gap divider padding)
+  "Return per-column integer cell widths for TRACKS inside AVAILABLE cells.
+Subtracts horizontal PADDING, inter-column GAP and optional DIVIDER rules,
+resolving fixed tracks first and sharing remaining space by `:flex-grow'."
+  (let* ((count (max 1 (length tracks)))
+         (pad-ch (* 2 (etaf-md--length-columns padding available)))
+         (gap-ch (if (consp gap) (etaf-md--length-columns gap available) 2))
+         (gaps (* (max 0 (1- count)) gap-ch))
+         (dividers (if divider (max 0 (1- count)) 0))
+         (usable (max count (- available pad-ch gaps dividers)))
+         (fixed-sum 0)
+         (grow-sum 0.0)
+         (resolved
+          (mapcar (lambda (track)
+                    (if (eq (car track) :width)
+                        (let ((w (max 1 (etaf-md--length-columns
+                                         (cadr track) usable))))
+                          (setq fixed-sum (+ fixed-sum w))
+                          (cons 'fixed w))
+                      (let ((g (max 0.01 (float (or (cadr track) 1)))))
+                        (setq grow-sum (+ grow-sum g))
+                        (cons 'flex g))))
+                  tracks))
+         (flex-pool (max 1 (- usable fixed-sum))))
+    (mapcar (lambda (entry)
+              (if (eq (car entry) 'fixed)
+                  (cdr entry)
+                (max 1 (floor (* flex-pool (/ (cdr entry) grow-sum))))))
+            resolved)))
+
 (etaf-md--define-shipped 'card
   :name "card"
   :summary "带标题与摘要的卡片"
@@ -104,17 +141,27 @@ Vertical space is a whole number of lines, so a width unit draws none."
            (text-align  :type align   :default start          :doc "内容的水平位置")
            (width       :type length                          :doc "自身宽度"))
   :view (lambda (env)
-          (let ((href (etaf-md-attr env :href)))
+          (let* ((href (etaf-md-attr env :href))
+                 (declared-width (etaf-md-attr env :width))
+                 (available (etaf-md-available-width env))
+                 (outer (if (consp declared-width)
+                            (min available
+                                 (max 1 (etaf-md--length-columns
+                                         declared-width available)))
+                          available))
+                 ;; `etaf-card' draws 1px borders and 2ch horizontal padding on
+                 ;; each side (6 cells total), so children size to its interior.
+                 (inner-env (etaf-md--env-with-width env (max 8 (- outer 6)))))
             (etaf-view
              (etaf-card :title (etaf-md-attr env :title)
                         :icon (etaf-md-attr env :icon)
                         :description (etaf-md-attr env :description)
                         :variant (etaf-md-attr env :accent)
-                        :width (or (etaf-md-attr env :width) 'stretch)
+                        :width (or declared-width 'stretch)
                         :text-align (etaf-md-attr env :text-align)
                         :on-press (when href
                                     (lambda () (etaf-md-follow-link env href)))
-               (expr (etaf-md-content env)))))))
+               (expr (etaf-md-content inner-env)))))))
 
 (defun etaf-md--justify (word)
   "Return WORD as the justification Ebox names.
@@ -192,6 +239,7 @@ Each recognized token (`2fr', `20ch', `30%') becomes a flex or width plist."
                              (seq-take parsed-tracks per)
                            (make-list (max 1 per) (list :flex-grow 1))))
                  (divider (etaf-md-attr env :divider))
+                 (padding (etaf-md-attr env :padding))
                  (rows (seq-partition (etaf-md-children env) per)))
             ;; The number of rows is only known while painting, so the rows are
             ;; built as nodes instead of being written out in the DSL.
@@ -200,46 +248,50 @@ Each recognized token (`2fr', `20ch', `30%') becomes a flex or width plist."
              (list :width 'stretch
                    :item-gap '(lh 1)
                    :align-self (etaf-md-attr env :align-self)
-                   :padding (when-let* ((padding (etaf-md-attr env :padding)))
+                   :padding (when padding
                               (list '(lh 0) padding)))
              (mapcar
               (lambda (row)
-                (etaf-node
-                 'flex
-                 (list :width 'stretch
-                       :gap (list '(lh 0) gap)
-                       :align-items (etaf-md-attr env :align-items)
-                       :justify-content (etaf-md--justify
-                                         (etaf-md-attr env :justify-content)))
-                 (cl-loop
-                  for col in row
-                  for first = t then nil
-                  for track in tracks
-                  ;; A column is a declared child, not a type of its own, so
-                  ;; the parent paints its content instead of asking for a
-                  ;; definition the child never has.  The rule between two
-                  ;; columns is its own one-pixel box, so a stretched column
-                  ;; never decides where it sits.
-                  append
-                  (append
-                   (when (and divider (not first))
-                     (list (etaf-md--column-divider env)))
-                   (list (etaf-node
-                          'column
-                          (append
-                           (list :item-gap '(lh 0))
-                           ;; Equal tracks start from zero and share the row:
-                           ;; a column that starts from its content width
-                           ;; would make a long paragraph wider than its
-                           ;; neighbour, and the panes would never line up.
-                           (if (eq (car track) :width)
-                               (list :width (cadr track))
-                             (list :flex-basis '(ch 0)
-                                   :flex-grow (cadr track)
-                                   :width 'stretch)))
-                          (list (etaf-md-render
-                                 env
-                                 (etaf-md-children env col)))))))))
+                (let* ((row-tracks (seq-take tracks (length row)))
+                       (col-widths (etaf-md--column-widths
+                                    width row-tracks gap divider padding)))
+                  (etaf-node
+                   'flex
+                   (list :width 'stretch
+                         :gap (list '(lh 0) gap)
+                         :align-items (etaf-md-attr env :align-items)
+                         :justify-content (etaf-md--justify
+                                           (etaf-md-attr env :justify-content)))
+                   (cl-loop
+                    for col in row
+                    for first = t then nil
+                    for track in row-tracks
+                    for col-width in col-widths
+                    ;; A column is a declared child, not a type of its own, so
+                    ;; the parent paints its content instead of asking for a
+                    ;; definition the child never has.  The rule between two
+                    ;; columns is its own one-pixel box, so a stretched column
+                    ;; never decides where it sits.
+                    append
+                    (append
+                     (when (and divider (not first))
+                       (list (etaf-md--column-divider env)))
+                     (list (etaf-node
+                            'column
+                            (append
+                             (list :item-gap '(lh 0))
+                             ;; Equal tracks start from zero and share the row:
+                             ;; a column that starts from its content width
+                             ;; would make a long paragraph wider than its
+                             ;; neighbour, and the panes would never line up.
+                             (if (eq (car track) :width)
+                                 (list :width (cadr track))
+                               (list :flex-basis '(ch 0)
+                                     :flex-grow (cadr track)
+                                     :width 'stretch)))
+                            (list (etaf-md-render
+                                   (etaf-md--env-with-width env col-width)
+                                   (etaf-md-children env col))))))))))
               rows)))))
 
 

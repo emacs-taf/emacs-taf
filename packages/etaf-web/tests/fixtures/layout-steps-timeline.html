@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Getting Started and Changelog</title>
+</head>
+<body>
+  <main>
+    <h1>Getting Started and Changelog</h1>
+
+    <section class="how-it-works">
+      <h2>How It Works</h2>
+      <ol>
+        <li>
+          <h3>1. Fetch Page</h3>
+          <p>Download HTML over HTTP(S) or read a local file.</p>
+        </li>
+        <li>
+          <h3>2. Compile to IR</h3>
+          <p>Transform DOM structures into Markdown and containers.</p>
+        </li>
+        <li>
+          <h3>3. Render Buffer</h3>
+          <p>Open the cached document in the reading view.</p>
+        </li>
+      </ol>
+    </section>
+
+    <div class="stepper">
+      <div class="step">
+        <span class="step-num">01</span>
+        <h4>Clone Workspace</h4>
+        <p>Check out the repository and add package roots to load-path.</p>
+      </div>
+      <div class="step">
+        <span class="step-num">02</span>
+        <h4>Run Checks</h4>
+        <p>Execute <code>make -C packages/etaf-web check</code>.</p>
+      </div>
+    </div>
+
+    <h2>Release History</h2>
+    <div class="timeline">
+      <article class="timeline-item">
+        <time datetime="2026-01-15">2026-01</time>
+        <h3>Initial Compiler</h3>
+        <p>Added libxml sanitization and article extraction.</p>
+      </article>
+      <article class="timeline-item">
+        <time datetime="2026-04-20">2026-04</time>
+        <h3>Layout Containers</h3>
+        <p>Mapped card grids, docs tabs, steps and timelines.</p>
+      </article>
+    </div>
+  </main>
+</body>
+</html>

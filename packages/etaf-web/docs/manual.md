@@ -48,6 +48,23 @@ To avoid duplicate headings and captions when rendered by `etaf-md`:
   becomes the image's alt text and no separate caption paragraph is emitted;
   for plain images without `<figcaption>`, alt text longer than 60 characters
   or identical to the document title is omitted.
+- Structured page layouts preserve their visual structure using `etaf-md`
+  containers instead of flattening to single-column prose:
+  - Card grids (by grid/card/feature/gallery/tile/catalog class, inline
+    `grid-template-columns`, or 2–6 homogeneous titled siblings with compact
+    bodies) compile to responsive `:::columns {columns="..." min-width="22ch"
+    divider=false}` blocks holding `:::col` + `:::card` entries, with 5+ cards
+    split into 3-column batches (e.g. 5 into 3+2).  Decorative 1–3 digit
+    leading ordinal paragraphs inside cards (such as `01`) are stripped while
+    numeric paragraphs in normal prose stay intact.  Consecutive paragraphs,
+    ordinary lists, code blocks and single-child wrappers stay flat.
+  - Documentation tabs (`role="tablist"` + `role="tabpanel"` or `tabs` /
+    `tab-list` / `code-tabs` classes) compile to `:::tabs` with `@tab
+    {title="..." [selected=true]}` entries while keeping inactive `hidden`
+    panels intact.
+  - Numbered `steps` / `stepper` / `how-it-works` containers compile to
+    `:::steps {list-style="decimal"}` (`:::step`), and `timeline` containers
+    compile to `:::timeline` (`:::event` with optional `time`).
 
 ## Cache layout and image limits
 

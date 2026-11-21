@@ -504,6 +504,11 @@
       "name": "etaf-md-tests-columns-counts-explicit-tracks",
       "file": "tests/etaf-md-tests.el",
       "purpose": "`:::columns' with an explicit track list counts columns from the parsed tracks (e.g. 3 tracks on one row, 1 track stacked) instead of falling back to 2."
+    },
+    {
+      "name": "etaf-md-tests-card-with-image-wraps-paragraph-inside-columns",
+      "file": "tests/etaf-md-tests.el",
+      "purpose": "A `:::card' inside multi-column `:::columns' containing a block image followed by a long paragraph sizes its image to the card interior and wraps every word of the paragraph inside the card without clipping or changing column count."
     }
   ]
 }

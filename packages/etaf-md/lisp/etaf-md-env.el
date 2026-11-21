@@ -37,6 +37,17 @@
   theme
   block)
 
+(defun etaf-md--env-with-width (env width)
+  "Return a copy of ENV whose available column count is narrowed to WIDTH."
+  (etaf-md-env-create
+   :session (etaf-md-env-session env)
+   :node (etaf-md-env-node env)
+   :width (max 1 width)
+   :state (etaf-md-env-state env)
+   :palette (etaf-md-env-palette env)
+   :theme (etaf-md-env-theme env)
+   :block (etaf-md-env-block env)))
+
 (defun etaf-md--markdown-env (env)
   "Return the `etaf-ui-markdown' rendering env for paint ENV.
 Preserves the page services (media, links, footnotes and `:line-grid') while
@@ -139,7 +150,7 @@ step wrote."
 (defun etaf-md-render (env nodes)
   "Return NODES painted as one view, stacked in document order."
   (etaf-view
-   (column :item-gap '(lh 0)
+   (column :width 'stretch :item-gap '(lh 0)
      (expr (mapcar (lambda (node) (etaf-md--paint node env)) nodes)))))
 
 (defun etaf-md--palette-value (palette key)

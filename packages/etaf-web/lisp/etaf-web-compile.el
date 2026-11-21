@@ -21,7 +21,7 @@
 
 (define-error 'etaf-web-error "ETAF Web error")
 
-(defconst etaf-web--compiler-version "4"
+(defconst etaf-web--compiler-version "6"
   "Version tag folded into page cache keys.")
 
 (defconst etaf-web--drop-tags
@@ -463,6 +463,113 @@ Recognizes `role=\"note|alert\"' and common docs callout/admonition classes."
                    tokens)))))
 
 ;;; ---------------------------------------------------------------------------
+;;; Layout container classification helpers
+;;; ---------------------------------------------------------------------------
+
+(defconst etaf-web--card-grid-token-regexp
+  (concat
+   "\\(?:\\`\\|[-_]\\)\\(?:"
+   "cards?\\|tiles?\\|grid\\|features?\\|catalog\\|gallery\\|showcase"
+   "\\)\\(?:\\'\\|[-_]\\)")
+  "Word-bounded class/id tokens suggesting a card-grid container.")
+
+(defconst etaf-web--tabs-token-regexp
+  "\\(?:\\`\\|[-_]\\)\\(?:tabs\\|tab-list\\|tablist\\|code-tabs\\)\\(?:\\'\\|[-_]\\)"
+  "Word-bounded class/id tokens suggesting a tabbed container.")
+
+(defconst etaf-web--tablist-token-regexp
+  "\\(?:\\`\\|[-_]\\)\\(?:tab-list\\|tablist\\|tabs-nav\\|tab-bar\\)\\(?:\\'\\|[-_]\\)"
+  "Word-bounded class/id tokens identifying a tab trigger strip.")
+
+(defconst etaf-web--tabpanel-token-regexp
+  "\\(?:\\`\\|[-_]\\)\\(?:tabpanel\\|tab-panel\\|tab-pane\\)\\(?:\\'\\|[-_]\\)"
+  "Word-bounded class/id tokens identifying a tab panel.")
+
+(defconst etaf-web--steps-token-regexp
+  "\\(?:\\`\\|[-_]\\)\\(?:steps\\|stepper\\|how-it-works\\)\\(?:\\'\\|[-_]\\)"
+  "Word-bounded class/id tokens identifying a steps container.")
+
+(defconst etaf-web--timeline-token-regexp
+  "\\(?:\\`\\|[-_]\\)timeline\\(?:\\'\\|[-_]\\)"
+  "Word-bounded class/id tokens identifying a timeline container.")
+
+(defun etaf-web--element-children (node)
+  "Return direct DOM element children of NODE."
+  (when (etaf-web--node-p node)
+    (cl-remove-if-not #'etaf-web--node-p (dom-children node))))
+
+(defun etaf-web--significant-children (node)
+  "Return direct children of NODE excluding whitespace-only strings."
+  (when (etaf-web--node-p node)
+    (cl-remove-if (lambda (c) (and (stringp c) (string-blank-p c)))
+                  (dom-children node))))
+
+(defun etaf-web--sole-media-child (node)
+  "Return the sole `<img>' or `<picture>' child of NODE, or nil."
+  (let ((sig (etaf-web--significant-children node)))
+    (when (and (= (length sig) 1)
+               (etaf-web--node-p (car sig))
+               (memq (dom-tag (car sig)) '(img picture)))
+      (car sig))))
+
+(defun etaf-web--grid-style-p (node)
+  "Return non-nil when NODE's inline `style' declares CSS Grid columns."
+  (let ((style (etaf-web--attr node 'style)))
+    (and (stringp style)
+         (string-match-p "grid-template-columns" (downcase style)))))
+
+(defun etaf-web--card-grid-class-p (node)
+  "Return non-nil when NODE carries a card-grid class/id or CSS Grid style."
+  (when (and (etaf-web--node-p node)
+             (memq (dom-tag node) '(div section ul ol)))
+    (or (etaf-web--grid-style-p node)
+        (cl-some (lambda (tok)
+                   (string-match-p etaf-web--card-grid-token-regexp tok))
+                 (etaf-web--class-tokens node)))))
+
+(defun etaf-web--tablist-node-p (node)
+  "Return non-nil when NODE is a tab trigger strip (`role=tablist' or class)."
+  (when (etaf-web--node-p node)
+    (let ((role (downcase (string-trim (or (etaf-web--attr node 'role) "")))))
+      (or (equal role "tablist")
+          (cl-some (lambda (tok)
+                     (string-match-p etaf-web--tablist-token-regexp tok))
+                   (etaf-web--class-tokens node))))))
+
+(defun etaf-web--tabpanel-node-p (node)
+  "Return non-nil when NODE is a tab content panel (`role=tabpanel' or class)."
+  (when (etaf-web--node-p node)
+    (let ((role (downcase (string-trim (or (etaf-web--attr node 'role) "")))))
+      (or (equal role "tabpanel")
+          (cl-some (lambda (tok)
+                     (string-match-p etaf-web--tabpanel-token-regexp tok))
+                   (etaf-web--class-tokens node))))))
+
+(defun etaf-web--tabs-class-p (node)
+  "Return non-nil when NODE has a tabs container class/id."
+  (when (and (etaf-web--node-p node)
+             (memq (dom-tag node) '(div section)))
+    (cl-some (lambda (tok)
+               (string-match-p etaf-web--tabs-token-regexp tok))
+             (etaf-web--class-tokens node))))
+
+(defun etaf-web--steps-class-p (node)
+  "Return non-nil when NODE has a steps/stepper/how-it-works class/id."
+  (when (and (etaf-web--node-p node)
+             (memq (dom-tag node) '(div section ol ul)))
+    (cl-some (lambda (tok)
+               (string-match-p etaf-web--steps-token-regexp tok))
+             (etaf-web--class-tokens node))))
+
+(defun etaf-web--timeline-class-p (node)
+  "Return non-nil when NODE has a timeline class/id."
+  (when (and (etaf-web--node-p node)
+             (memq (dom-tag node) '(div section ol ul)))
+    (cl-some (lambda (tok)
+               (string-match-p etaf-web--timeline-token-regexp tok))
+             (etaf-web--class-tokens node))))
+
+;;; ---------------------------------------------------------------------------
 ;;; Boilerplate pruning & main-content extraction
 ;;; ---------------------------------------------------------------------------
 
@@ -708,11 +815,20 @@ INSIDE-PRIMARY is non-nil once traversal is inside the chosen article/main."
            (tokens (etaf-web--class-tokens node))
            (hidden (or (assq 'hidden (dom-attributes node))
                        (equal (downcase (or (etaf-web--attr node 'aria-hidden) ""))
-                              "true"))))
+                              "true")))
+           (layout-widget (or (etaf-web--tablist-node-p node)
+                              (etaf-web--tabpanel-node-p node)
+                              (etaf-web--tabs-class-p node)
+                              (etaf-web--steps-class-p node)
+                              (etaf-web--timeline-class-p node)
+                              (etaf-web--card-grid-class-p node))))
       (cond
        ((memq tag '(html body article main)) nil)
        ((etaf-web--callout-kind node) nil)
        ((etaf-web--footnote-container-p node) nil)
+       ;; Tab controls and inactive `hidden' tabpanels belong to document UI.
+       ((member role '("tablist" "tab" "tabpanel")) nil)
+       ((etaf-web--tabpanel-node-p node) nil)
        ((etaf-web--contains-landmark-p node) nil)
        (hidden t)
        ((memq tag etaf-web--boilerplate-tags) t)
@@ -726,6 +842,7 @@ INSIDE-PRIMARY is non-nil once traversal is inside the chosen article/main."
                             (string-match-p etaf-web--noise-tag-token-regexp tok))))
                  tokens)
         t)
+       (layout-widget nil)
        ((etaf-web--button-only-block-p node) t)
        ((etaf-web--noise-section-container-p node) t)
        ((etaf-web--makeinfo-nav-block-p node) t)
@@ -847,7 +964,10 @@ sections (`h2'–`h4') up to the next peer or higher heading."
     best))
 
 (defun etaf-web--extract-main (dom)
-  "Return (MAIN . FOOTNOTE-ROOTS) extracted from sanitized DOM."
+  "Return (MAIN . FOOTNOTE-ROOTS) extracted from sanitized DOM.
+When a page uses multiple `<article>' cards inside `<main>' (or alongside
+broader page content), keep `<main>' or the densest container rather than
+truncating the document to a single card."
   (let* ((body (or (etaf-web--find-first dom (lambda (n) (eq (dom-tag n) 'body)))
                    dom))
          (articles (etaf-web--find-all body (lambda (n) (eq (dom-tag n) 'article))))
@@ -858,22 +978,32 @@ sections (`h2'–`h4') up to the next peer or higher heading."
                                    "main")))))
          (pruned-body (etaf-web--prune-boilerplate body nil))
          (fn-roots (etaf-web--find-all pruned-body #'etaf-web--footnote-container-p))
-         (chosen
-          (cond
-           (articles
-            (let ((best (car articles))
-                  (best-len -1))
-              (dolist (art articles)
-                (let* ((pruned (etaf-web--prune-boilerplate art t))
-                       (len (length (etaf-web--clean-text pruned))))
-                  (when (> len best-len)
-                    (setq best pruned best-len len))))
-              best))
-           (mains
-            (etaf-web--prune-boilerplate (car mains) t))
-           (t
-            (etaf-web--pick-densest-node pruned-body)))))
-    (cons (or chosen pruned-body) fn-roots)))
+         (pruned-main (and mains (etaf-web--prune-boilerplate (car mains) t)))
+         (main-len (if pruned-main (length (etaf-web--clean-text pruned-main)) 0))
+         (body-len (length (etaf-web--clean-text pruned-body)))
+         (best-art nil)
+         (best-art-len -1))
+    (dolist (art articles)
+      (let* ((pruned (etaf-web--prune-boilerplate art t))
+             (len (length (etaf-web--clean-text pruned))))
+        (when (> len best-art-len)
+          (setq best-art pruned best-art-len len))))
+    (let ((chosen
+           (cond
+            ((and best-art pruned-main)
+             (if (or (= (length articles) 1)
+                     (>= best-art-len (* 0.6 main-len)))
+                 best-art
+               pruned-main))
+            (best-art
+             (if (or (= (length articles) 1)
+                     (>= best-art-len (* 0.5 body-len)))
+                 best-art
+               (etaf-web--pick-densest-node pruned-body)))
+            (pruned-main pruned-main)
+            (t
+             (etaf-web--pick-densest-node pruned-body)))))
+      (cons (or chosen pruned-body) fn-roots))))
 
 ;;; ---------------------------------------------------------------------------
 ;;; Footnote collection & stripping
@@ -940,7 +1070,8 @@ sections (`h2'–`h4') up to the next peer or higher heading."
   heading-ids      ; hash-table: html-id -> etaf-md heading slug
   fn-defs          ; hash-table: id -> DOM node
   fn-order         ; list of referenced ids (reversed while collecting)
-  fn-numbers)      ; hash-table: id -> 1-based integer
+  fn-numbers       ; hash-table: id -> 1-based integer
+  in-card)         ; non-nil while emitting inside a `:::card' body
 
 (defun etaf-web--title-candidates (title)
   "Return TITLE and progressively site-suffix-stripped candidate prefixes."
@@ -1264,11 +1395,109 @@ while tolerating commas inside URL query parameters."
                              (etaf-web--class-list link)))
             id))))))
 
+(defconst etaf-web--attaching-punct-regexp
+  "\\`\\(?:[，。；：、！？）】》]\\|[],.;:!?)]\\(?:\\'\\|[^a-zA-Z0-9]\\)\\)"
+  "Punctuation prefix that must not take a synthetic preceding space.")
+
+(defun etaf-web--implicit-inline-sep-p (prev-node prev-piece node piece)
+  "Return non-nil when minified siblings PREV-NODE and NODE need a space.
+Applies only to directly adjacent hyperlinks (`<a><a>') or `<span>' siblings
+with distinct non-empty CSS classes whose boundary is word-to-word."
+  (when (and (etaf-web--node-p prev-node)
+             (etaf-web--node-p node)
+             (not (string-empty-p prev-piece))
+             (not (string-empty-p piece))
+             (not (string-match-p "[([“‘（【《]\\'" prev-piece))
+             (not (string-match-p etaf-web--attaching-punct-regexp piece)))
+    (let ((t1 (dom-tag prev-node))
+          (t2 (dom-tag node)))
+      (or (and (eq t1 'a) (eq t2 'a))
+          (and (eq t1 'span) (eq t2 'span)
+               (>= (length prev-piece) 2)
+               (let ((c1 (etaf-web--class-list prev-node))
+                     (c2 (etaf-web--class-list node)))
+                 (and c1 c2 (not (equal c1 c2)))))))))
+
 (defun etaf-web--emit-inlines (nodes ctx)
-  "Compile list of inline DOM NODES under CTX into a Markdown inline string."
-  (let ((raw (mapconcat (lambda (n) (etaf-web--emit-inline n ctx)) nodes "")))
-    ;; Collapse spaces around lines while keeping explicit `\\\n' breaks.
-    (replace-regexp-in-string "[ \t]+\n" "\n" raw)))
+  "Compile list of inline DOM NODES under CTX into a Markdown inline string.
+Preserves single spaces across inter-sibling source whitespace (including
+newlines and tabs), avoids adding space before punctuation or inside code
+spans, keeps `<br>' hard breaks intact, and separates minified adjacent links
+or distinctly classed spans."
+  (let ((parts nil)
+        (had-leading-ws nil)
+        (pending-space nil)
+        (after-break nil)
+        (prev-node nil)
+        (prev-piece nil))
+    (cl-flet
+        ((emit-piece (node piece lead-ws trail-ws)
+           (when lead-ws
+             (if parts
+                 (setq pending-space t)
+               (setq had-leading-ws t)))
+           (unless (string-empty-p piece)
+             (let ((implicit (and (not pending-space)
+                                  (not after-break)
+                                  parts
+                                  (etaf-web--implicit-inline-sep-p
+                                   prev-node prev-piece node piece))))
+               (when (and parts (not after-break)
+                          (or (and pending-space
+                                   (not (string-match-p
+                                         etaf-web--attaching-punct-regexp
+                                         piece)))
+                              implicit))
+                 (push " " parts)))
+             (push piece parts)
+             (setq prev-node node
+                   prev-piece piece
+                   after-break (string-suffix-p "\n" piece)
+                   pending-space nil))
+           (when trail-ws
+             (if parts
+                 (setq pending-space t)
+               (setq had-leading-ws t)))))
+      (dolist (node nodes)
+        (cond
+         ((stringp node)
+          (cond
+           ((string-empty-p node) nil)
+           ((string-blank-p node)
+            (if parts
+                (setq pending-space t)
+              (setq had-leading-ws t)))
+           (t
+            (let* ((collapsed (etaf-web--collapse-ws node))
+                   (lead-ws (string-prefix-p " " collapsed))
+                   (trail-ws (string-suffix-p " " collapsed))
+                   (core (string-trim collapsed " +" " +")))
+              (emit-piece node core lead-ws trail-ws)))))
+         ((not (etaf-web--node-p node)) nil)
+         ((eq (dom-tag node) 'br)
+          (setq pending-space nil)
+          (push "\\\n" parts)
+          (setq prev-node node
+                prev-piece "\\\n"
+                after-break t))
+         ((eq (dom-tag node) 'code)
+          (let ((code (etaf-web--inline-code (etaf-web--plain-text node))))
+            (emit-piece node code nil nil)))
+         (t
+          (let ((raw (etaf-web--emit-inline node ctx)))
+            (unless (string-empty-p raw)
+              (let* ((lead-ws (string-match-p "\\`[ \t]" raw))
+                     (trail-ws (string-match-p "[ \t]\\'" raw))
+                     (core (string-trim raw "[ \t]+" "[ \t]+")))
+                (emit-piece node core lead-ws trail-ws))))))))
+    (let ((joined (mapconcat #'identity (nreverse parts) "")))
+      (cond
+       ((string-empty-p joined)
+        (if (or had-leading-ws pending-space) " " ""))
+       (t
+        (concat (if had-leading-ws " " "")
+                (replace-regexp-in-string "[ \t]+\n" "\n" joined)
+                (if (and pending-space (not after-break)) " " "")))))))
 
 (defun etaf-web--emit-inline (node ctx)
   "Compile a single inline DOM NODE under CTX into Markdown text."
@@ -1319,20 +1548,41 @@ while tolerating commas inside URL query parameters."
                                 (concat "#" mapped)
                               href)
                           href))
-                  (body (string-trim (etaf-web--emit-inlines (dom-children node) ctx))))
-             (cond
-              ((and raw-href (etaf-web--dangerous-url-p raw-href)) "")
-              ((null href) body)
-              ((string-empty-p body)
-               (let ((title (string-trim (or (etaf-web--attr node 'title) ""))))
-                 (if (string-empty-p title)
-                     ""
-                   (format "[%s](%s)"
-                           (etaf-web--escape-link-label title)
-                           (etaf-web--format-link-dest href)))))
-              (t (format "[%s](%s)"
-                         body
-                         (etaf-web--format-link-dest href))))))))
+                  (sole-img (etaf-web--sole-media-child node)))
+             (if (and sole-img
+                      (or (assq 'data-lightbox (dom-attributes node))
+                          (let ((raw-img (etaf-web--img-raw-url
+                                          (if (eq (dom-tag sole-img) 'picture)
+                                              (etaf-web--find-first
+                                               sole-img (lambda (n) (eq (dom-tag n) 'img)))
+                                            sole-img))))
+                            (and raw-img href
+                                 (equal href (etaf-web--resolve-url
+                                              raw-img (etaf-web--ctx-base-url ctx)))))))
+                 (etaf-web--emit-inline sole-img ctx)
+               (let* ((raw-body (etaf-web--emit-inlines (dom-children node) ctx))
+                      (lead (if (string-match "\\`[ \t]+" raw-body)
+                                (match-string 0 raw-body) ""))
+                      (trail (if (string-match "[ \t]+\\'" raw-body)
+                                 (match-string 0 raw-body) ""))
+                      (body (string-trim raw-body)))
+                 (cond
+                  ((and raw-href (etaf-web--dangerous-url-p raw-href)) "")
+                  ((null href) raw-body)
+                  ((string-empty-p body)
+                   (let ((title (string-trim (or (etaf-web--attr node 'title) ""))))
+                     (if (string-empty-p title)
+                         ""
+                       (concat lead
+                               (format "[%s](%s)"
+                                       (etaf-web--escape-link-label title)
+                                       (etaf-web--format-link-dest href))
+                               trail))))
+                  (t (concat lead
+                             (format "[%s](%s)"
+                                     body
+                                     (etaf-web--format-link-dest href))
+                             trail)))))))))
       ((or 'img 'picture)
        (if-let* ((info (etaf-web--extract-img-info node ctx)))
            (format "![%s](%s)"
@@ -1772,10 +2022,724 @@ image alt text without emitting an extra caption paragraph."
                  (split-string body "\n")
                  "\n"))))
 
+;;; ---------------------------------------------------------------------------
+;;; Layout-aware containers: card grids, tabs, steps and timelines
+;;; ---------------------------------------------------------------------------
+
+(defun etaf-web--heading-link-href (node ctx)
+  "Return resolved href when heading/title NODE is or wraps a primary link."
+  (when (etaf-web--node-p node)
+    (let ((link (if (eq (dom-tag node) 'a)
+                    node
+                  (etaf-web--find-first node (lambda (n) (eq (dom-tag n) 'a))))))
+      (when link
+        (let ((href (etaf-web--resolve-url
+                     (etaf-web--attr link 'href)
+                     (etaf-web--ctx-base-url ctx))))
+          (when (and href (not (string-empty-p href)))
+            href))))))
+
+(defun etaf-web--strip-leading-separator (nodes)
+  "Strip a leading punctuation separator (`:', `：', `-', `—') from NODES."
+  (if (and nodes (stringp (car nodes)))
+      (let ((rest (replace-regexp-in-string
+                   "\\`[ \t\n\r]*[:：—–-][ \t\n\r]*" "" (car nodes))))
+        (if (string-empty-p rest)
+            (cdr nodes)
+          (cons rest (cdr nodes))))
+    nodes))
+
+(defun etaf-web--strip-trailing-colon (text)
+  "Trim whitespace and trailing colon from title TEXT."
+  (string-trim
+   (replace-regexp-in-string "[ \t]*[:：]+\\'" "" (or text ""))))
+
+(defun etaf-web--extract-strong-title-from-p (p-node ctx)
+  "If P-NODE starts with `<strong>' or `<b>', return `(TITLE HREF REST-P)'.
+REST-P is nil when P-NODE held only the bold title, or a `<p>' node holding
+the remaining inline children."
+  (let* ((sig (etaf-web--significant-children p-node))
+         (first (car sig)))
+    (when (and first (etaf-web--node-p first))
+      (let* ((is-bold (memq (dom-tag first) '(strong b)))
+             (link-bold (and (eq (dom-tag first) 'a)
+                             (let ((inner (etaf-web--significant-children first)))
+                               (and (= (length inner) 1)
+                                    (etaf-web--node-p (car inner))
+                                    (memq (dom-tag (car inner)) '(strong b)))))))
+        (when (or is-bold link-bold)
+          (let ((title (etaf-web--strip-trailing-colon
+                        (etaf-web--clean-text first)))
+                (href (etaf-web--heading-link-href first ctx))
+                (rem (etaf-web--strip-leading-separator (cdr sig))))
+            (when (and (not (string-empty-p title)) (<= (length title) 80))
+              (list title href
+                    (when rem
+                      (cons 'p (cons (dom-attributes p-node) rem)))))))))))
+
+(defun etaf-web--extract-title-and-body (children ctx &optional allow-first-link)
+  "Extract `(TITLE HREF BODY-NODES)' from CHILDREN under CTX, or nil.
+Checks `h2'–`h4' headings, leading `strong'/`b' elements or bold-led `<p>',
+and (when ALLOW-FIRST-LINK is non-nil) a leading `<a>' title link."
+  (let ((sig (cl-remove-if (lambda (c) (and (stringp c) (string-blank-p c)))
+                           children))
+        (title nil)
+        (href nil)
+        (body nil))
+    ;; 1. Direct h2..h4 heading (or wrapped in a single `<a>' or `<header>').
+    (let ((head-idx
+           (cl-position-if
+            (lambda (c)
+              (and (etaf-web--node-p c)
+                   (or (memq (dom-tag c) '(h2 h3 h4))
+                       (and (eq (dom-tag c) 'a)
+                            (let ((in (etaf-web--significant-children c)))
+                              (and (= (length in) 1)
+                                   (etaf-web--node-p (car in))
+                                   (memq (dom-tag (car in)) '(h2 h3 h4))))))))
+            sig)))
+      (when head-idx
+        (let ((hnode (nth head-idx sig)))
+          (setq title (etaf-web--clean-text hnode)
+                href (etaf-web--heading-link-href hnode ctx)
+                body (append (cl-subseq sig 0 head-idx)
+                             (cl-subseq sig (1+ head-idx)))))))
+    ;; 2. Heading nested inside a direct `<header>' child.
+    (when (and (null title) sig)
+      (let ((hdr-idx (cl-position-if
+                      (lambda (c)
+                        (and (etaf-web--node-p c)
+                             (eq (dom-tag c) 'header)
+                             (etaf-web--find-first
+                              c (lambda (n) (memq (dom-tag n) '(h2 h3 h4))))))
+                      sig)))
+        (when hdr-idx
+          (let* ((hdr (nth hdr-idx sig))
+                 (inner (etaf-web--extract-title-and-body
+                         (dom-children hdr) ctx nil)))
+            (when inner
+              (setq title (nth 0 inner)
+                    href (nth 1 inner)
+                    body (append (cl-subseq sig 0 hdr-idx)
+                                 (nth 2 inner)
+                                 (cl-subseq sig (1+ hdr-idx)))))))))
+    ;; 3. Leading `<strong>' / `<b>' or `<p><strong>...</strong>...</p>'.
+    (when (and (null title) sig (etaf-web--node-p (car sig)))
+      (let ((first (car sig)))
+        (cond
+         ((or (memq (dom-tag first) '(strong b))
+              (and (eq (dom-tag first) 'a)
+                   (let ((in (etaf-web--significant-children first)))
+                     (and (= (length in) 1)
+                          (etaf-web--node-p (car in))
+                          (memq (dom-tag (car in)) '(strong b))))))
+          (let ((cand (etaf-web--strip-trailing-colon (etaf-web--clean-text first))))
+            (when (and (not (string-empty-p cand)) (<= (length cand) 80))
+              (setq title cand
+                    href (etaf-web--heading-link-href first ctx)
+                    body (etaf-web--strip-leading-separator (cdr sig))))))
+         ((eq (dom-tag first) 'p)
+          (when-let* ((res (etaf-web--extract-strong-title-from-p first ctx)))
+            (setq title (nth 0 res)
+                  href (nth 1 res)
+                  body (if (nth 2 res)
+                           (cons (nth 2 res) (cdr sig))
+                         (cdr sig))))))))
+    ;; 4. Leading `<a>' title link (e.g. `<figcaption><a href="...">name</a><span>desc</span></figcaption>').
+    (when (and (null title) allow-first-link sig (etaf-web--node-p (car sig))
+               (eq (dom-tag (car sig)) 'a)
+               (not (etaf-web--sole-media-child (car sig))))
+      (let ((cand (etaf-web--clean-text (car sig))))
+        (when (and (not (string-empty-p cand)) (<= (length cand) 80))
+          (setq title cand
+                href (etaf-web--heading-link-href (car sig) ctx)
+                body (cdr sig)))))
+    (when (and title (not (string-empty-p (etaf-web--sanitize-attr-value title))))
+      (list (etaf-web--sanitize-attr-value title) href body))))
+
+(defun etaf-web--card-disqualified-p (item)
+  "Return non-nil when ITEM contains block structures unsuitable for a card."
+  (or (not (etaf-web--node-p item))
+      (etaf-web--find-first
+       item (lambda (n)
+              (or (memq (dom-tag n) '(pre table h1))
+                  (etaf-web--tablist-node-p n)
+                  (etaf-web--steps-class-p n)
+                  (etaf-web--timeline-class-p n))))))
+
+(defun etaf-web--strip-card-leading-ordinal (body)
+  "Drop a leading 1-3 digit decorative ordinal paragraph from card BODY."
+  (if (not (stringp body))
+      ""
+    (let ((parts (split-string body "\n\n")))
+      (if (and parts
+               (string-match-p "\\`[0-9]\\{1,3\\}\\'"
+                               (string-trim (car parts))))
+          (mapconcat #'identity (cdr parts) "\n\n")
+        body))))
+
+(defun etaf-web--extract-figure-card (fig-node ctx)
+  "Extract card plist `(:title T :href H :body B :plain-len N)' from FIG-NODE."
+  (let* ((caption (cl-find-if (lambda (c)
+                                (and (etaf-web--node-p c)
+                                     (eq (dom-tag c) 'figcaption)))
+                              (dom-children fig-node)))
+         (media (etaf-web--find-first
+                 fig-node (lambda (n) (memq (dom-tag n) '(picture img)))))
+         (cap-res (and caption
+                       (etaf-web--extract-title-and-body
+                        (dom-children caption) ctx t))))
+    (when cap-res
+      (let* ((title (nth 0 cap-res))
+             (href (nth 1 cap-res))
+             (cap-rest (nth 2 cap-res))
+             (plain-len (length (string-trim
+                                 (etaf-web--collapse-ws
+                                  (mapconcat #'etaf-web--plain-text cap-rest " ")))))
+             (parts nil))
+        (when media
+          (when-let* ((info (etaf-web--extract-img-info media ctx)))
+            (push (format "![%s](%s)"
+                          (etaf-web--escape-link-label (cdr info))
+                          (etaf-web--format-link-dest (car info)))
+                  parts)))
+        (let ((cap-body (etaf-web--emit-children-blocks cap-rest ctx)))
+          (unless (string-empty-p cap-body)
+            (push cap-body parts)))
+        (list :title title
+              :href href
+              :body (etaf-web--strip-card-leading-ordinal
+                     (mapconcat #'identity (nreverse parts) "\n\n"))
+              :plain-len plain-len)))))
+
+(defun etaf-web--extract-card (item ctx strict-p)
+  "Extract card plist `(:title :href :body :plain-len)' from ITEM, or nil.
+When STRICT-P is non-nil (class-less structural grid), applies tighter tag and
+body-length bounds to avoid false positives on prose."
+  (let ((allowed-tags (if strict-p
+                          '(div article section figure a)
+                        '(div article section figure a li))))
+    (when (and (etaf-web--node-p item)
+               (memq (dom-tag item) allowed-tags)
+               (not (etaf-web--card-disqualified-p item)))
+      (let ((card
+             (cond
+              ((eq (dom-tag item) 'figure)
+               (etaf-web--extract-figure-card item ctx))
+              (t
+               (let* ((outer-link (cond
+                                   ((eq (dom-tag item) 'a) item)
+                                   ((let ((sig (etaf-web--significant-children item)))
+                                      (and (= (length sig) 1)
+                                           (etaf-web--node-p (car sig))
+                                           (eq (dom-tag (car sig)) 'a)))
+                                    (car (etaf-web--significant-children item)))))
+                      (target (or outer-link item))
+                      (outer-href (and outer-link
+                                       (etaf-web--resolve-url
+                                        (etaf-web--attr outer-link 'href)
+                                        (etaf-web--ctx-base-url ctx))))
+                      (res (etaf-web--extract-title-and-body
+                            (dom-children target) ctx (not strict-p))))
+                 (when res
+                   (let* ((title (nth 0 res))
+                          (href (or (nth 1 res) outer-href))
+                          (body-nodes (nth 2 res))
+                          (plain-len
+                           (length (string-trim
+                                    (etaf-web--collapse-ws
+                                     (mapconcat #'etaf-web--plain-text body-nodes " ")))))
+                          (saved (etaf-web--ctx-in-card ctx))
+                          (body nil))
+                     (setf (etaf-web--ctx-in-card ctx) t)
+                     (unwind-protect
+                         (setq body (etaf-web--strip-card-leading-ordinal
+                                     (etaf-web--emit-children-blocks body-nodes ctx)))
+                       (setf (etaf-web--ctx-in-card ctx) saved))
+                     (list :title title :href href :body body :plain-len plain-len))))))))
+        (when card
+          (let ((title (plist-get card :title))
+                (body (plist-get card :body))
+                (plain-len (plist-get card :plain-len))
+                (max-len (if strict-p 240 400)))
+            (when (and (not (string-empty-p title))
+                       (<= (length title) (if strict-p 80 100))
+                       (<= plain-len max-len)
+                       (if strict-p
+                           (and (> plain-len 0) (not (string-empty-p body)))
+                         (or (not (string-empty-p body))
+                             (plist-get card :href))))
+              card)))))))
+
+(defun etaf-web--row-wrapper-p (node)
+  "Return non-nil when NODE is a `<div>' row wrapper inside a multi-row grid."
+  (and (etaf-web--node-p node)
+       (eq (dom-tag node) 'div)
+       (or (etaf-web--grid-style-p node)
+           (cl-some (lambda (tok)
+                      (string-match-p
+                       "\\(?:\\`\\|[-_]\\)\\(?:row\\|grid-row\\|card-row\\)\\'"
+                       tok))
+                    (etaf-web--class-tokens node)))))
+
+(defun etaf-web--card-grid-items (node)
+  "Return candidate card children of NODE, flattening uniform grid rows."
+  (let ((elems (cl-remove-if
+                (lambda (n)
+                  (and (string-empty-p (etaf-web--clean-text n))
+                       (not (etaf-web--find-first
+                             n (lambda (c) (memq (dom-tag c) '(img picture)))))))
+                (etaf-web--element-children node))))
+    (if (and (>= (length elems) 2)
+             (cl-every #'etaf-web--row-wrapper-p elems))
+        (cl-loop for row in elems
+                 append (etaf-web--element-children row))
+      elems)))
+
+(defun etaf-web--partition-cards (cards)
+  "Split CARDS into `(COL-COUNT . CHUNK)' groups for `:::columns'.
+2–3 cards stay in one group matching the count; 4 cards form one 2-column
+2x2 grid; 5 or more cards split into 3-column batches (e.g. 5 -> 3+2)."
+  (let ((n (length cards)))
+    (cond
+     ((<= n 3) (list (cons n cards)))
+     ((= n 4) (list (cons 2 cards)))
+     (t
+      (let ((groups nil)
+            (rest cards))
+        (while rest
+          (let ((chunk (seq-take rest 3)))
+            (push (cons (length chunk) chunk) groups)
+            (setq rest (nthcdr 3 rest))))
+        (nreverse groups))))))
+
+(defun etaf-web--format-card (card)
+  "Format CARD plist as a `:::col' containing a `:::card' block."
+  (let* ((title (plist-get card :title))
+         (href (plist-get card :href))
+         (body (or (plist-get card :body) ""))
+         (attrs (concat (format "title=\"%s\"" title)
+                        (when (and href (not (string-empty-p href)))
+                          (format " href=\"%s\""
+                                  (etaf-web--sanitize-attr-value href))))))
+    (if (string-empty-p body)
+        (format ":::col\n:::card {%s}\n:::\n:::" attrs)
+      (format ":::col\n:::card {%s}\n%s\n:::\n:::" attrs body))))
+
+(defun etaf-web--try-emit-card-grid (node ctx)
+  "Compile card-grid DOM NODE into `:::columns' + `:::card' blocks, or nil."
+  (when (and (not (etaf-web--ctx-in-card ctx))
+             (etaf-web--node-p node)
+             (memq (dom-tag node) '(div section ul ol))
+             (not (etaf-web--steps-class-p node))
+             (not (etaf-web--timeline-class-p node))
+             (not (etaf-web--tabs-class-p node)))
+    (let* ((has-loose-text
+            (cl-some (lambda (c) (and (stringp c) (not (string-blank-p c))))
+                     (dom-children node)))
+           (class-grid (etaf-web--card-grid-class-p node))
+           (elems (unless has-loose-text (etaf-web--card-grid-items node)))
+           (row-flattened (and elems
+                               (let ((direct (etaf-web--element-children node)))
+                                 (and (>= (length direct) 2)
+                                      (cl-every #'etaf-web--row-wrapper-p direct)))))
+           (explicit (or class-grid row-flattened))
+           (count (length elems)))
+      (cond
+       ;; Explicit class/CSS-grid container: >= 2 valid cards, no upper cap.
+       ((and explicit (>= count 2))
+        (let ((cards (mapcar (lambda (el) (etaf-web--extract-card el ctx nil))
+                             elems)))
+          (when (cl-every #'identity cards)
+            (mapconcat
+             (lambda (group)
+               (format ":::columns {columns=\"%d\" min-width=\"22ch\" divider=false}\n%s\n:::"
+                       (car group)
+                       (mapconcat #'etaf-web--format-card (cdr group) "\n")))
+             (etaf-web--partition-cards cards)
+             "\n\n"))))
+       ;; Structural homogeneity without grid class: div/section, 2..6 same-tag siblings.
+       ((and (not explicit)
+             (memq (dom-tag node) '(div section))
+             (<= 2 count) (<= count 6)
+             (not (cl-some (lambda (tok)
+                             (string-match-p etaf-web--content-hint-regexp tok))
+                           (etaf-web--class-tokens node)))
+             (let ((first-tag (dom-tag (car elems))))
+               (cl-every (lambda (el) (eq (dom-tag el) first-tag)) elems)))
+        (let ((cards (mapcar (lambda (el) (etaf-web--extract-card el ctx t))
+                             elems)))
+          (when (cl-every #'identity cards)
+            (mapconcat
+             (lambda (group)
+               (format ":::columns {columns=\"%d\" min-width=\"22ch\" divider=false}\n%s\n:::"
+                       (car group)
+                       (mapconcat #'etaf-web--format-card (cdr group) "\n")))
+             (etaf-web--partition-cards cards)
+             "\n\n"))))))))
+
+(defun etaf-web--tab-triggers (tablist-node)
+  "Return ordered list of tab trigger DOM nodes inside TABLIST-NODE."
+  (or (etaf-web--find-all
+       tablist-node
+       (lambda (n) (equal (downcase (string-trim (or (etaf-web--attr n 'role) "")))
+                          "tab")))
+      (etaf-web--find-all tablist-node (lambda (n) (eq (dom-tag n) 'button)))
+      (etaf-web--find-all tablist-node (lambda (n) (eq (dom-tag n) 'a)))
+      (etaf-web--find-all tablist-node (lambda (n) (eq (dom-tag n) 'li)))))
+
+(defun etaf-web--tab-trigger-controls (trigger)
+  "Return target panel id referenced by tab TRIGGER, or nil."
+  (let ((ctrl (etaf-web--attr trigger 'aria-controls))
+        (href (etaf-web--attr trigger 'href)))
+    (cond
+     ((and ctrl (not (string-blank-p ctrl))) (string-trim ctrl))
+     ((and href (string-prefix-p "#" (string-trim href)))
+      (substring (string-trim href) 1))
+     (t nil))))
+
+(defun etaf-web--tab-trigger-selected-p (trigger)
+  "Return non-nil when tab TRIGGER is marked active/selected."
+  (let ((aria (downcase (string-trim (or (etaf-web--attr trigger 'aria-selected) ""))))
+        (classes (etaf-web--class-list trigger)))
+    (or (equal aria "true")
+        (cl-some (lambda (c) (member c '("active" "selected" "is-active")))
+                 classes))))
+
+(defun etaf-web--emit-tabs-from-parts (triggers panels ctx)
+  "Compile paired tab TRIGGERS and PANELS under CTX into a `:::tabs' block."
+  (when (and triggers panels)
+    (let ((used (make-hash-table :test #'eq))
+          (entries nil)
+          (had-selected nil))
+      (cl-loop
+       for trigger in triggers
+       for idx from 0
+       for title = (etaf-web--sanitize-attr-value (etaf-web--clean-text trigger))
+       when (not (string-empty-p title))
+       do
+       (let* ((ctrl (etaf-web--tab-trigger-controls trigger))
+              (tid (etaf-web--attr trigger 'id))
+              (panel
+               (or (and ctrl
+                        (cl-find-if
+                         (lambda (p)
+                           (and (not (gethash p used))
+                                (equal (etaf-web--attr p 'id) ctrl)))
+                         panels))
+                   (and tid (not (string-empty-p tid))
+                        (cl-find-if
+                         (lambda (p)
+                           (and (not (gethash p used))
+                                (equal (etaf-web--attr p 'aria-labelledby) tid)))
+                         panels))
+                   (let ((pos-panel (nth idx panels)))
+                     (and pos-panel (not (gethash pos-panel used)) pos-panel))
+                   (cl-find-if (lambda (p) (not (gethash p used))) panels))))
+         (when panel
+           (puthash panel t used)
+           (let* ((sel (and (not had-selected)
+                            (etaf-web--tab-trigger-selected-p trigger)))
+                  (body (etaf-web--emit-children-blocks (dom-children panel) ctx)))
+             (when sel (setq had-selected t))
+             (push (list :title title :selected sel :body body) entries)))))
+      (setq entries (nreverse entries))
+      (when entries
+        (concat ":::tabs\n"
+                (mapconcat
+                 (lambda (entry)
+                   (let ((hdr (if (plist-get entry :selected)
+                                  (format "@tab {title=\"%s\" selected=true}"
+                                          (plist-get entry :title))
+                                (format "@tab {title=\"%s\"}"
+                                        (plist-get entry :title))))
+                         (body (plist-get entry :body)))
+                     (if (string-empty-p body)
+                         hdr
+                       (concat hdr "\n" body))))
+                 entries
+                 "\n\n")
+                "\n:::")))))
+
+(defun etaf-web--panel-wrapper-children (node)
+  "If NODE is a container holding only tabpanel elements, return them."
+  (when (and (etaf-web--node-p node) (memq (dom-tag node) '(div section)))
+    (let ((elems (etaf-web--element-children node)))
+      (when (and elems (cl-every #'etaf-web--tabpanel-node-p elems))
+        elems))))
+
+(defun etaf-web--try-emit-tabs-container (node ctx)
+  "Compile a `.tabs' / `.code-tabs' wrapper NODE into `:::tabs', or nil."
+  (when (etaf-web--tabs-class-p node)
+    (let* ((elems (etaf-web--element-children node))
+           (tablist (cl-find-if #'etaf-web--tablist-node-p elems))
+           (triggers (if tablist
+                         (etaf-web--tab-triggers tablist)
+                       (cl-remove-if-not
+                        (lambda (e)
+                          (or (eq (dom-tag e) 'button)
+                              (equal (downcase (or (etaf-web--attr e 'role) ""))
+                                     "tab")))
+                        elems)))
+           (panels (let ((direct (cl-remove-if-not #'etaf-web--tabpanel-node-p elems)))
+                     (or direct
+                         (cl-loop for e in elems
+                                  unless (eq e tablist)
+                                  for wrapped = (etaf-web--panel-wrapper-children e)
+                                  when wrapped return wrapped)))))
+      (when (and (>= (length triggers) 2) panels)
+        (etaf-web--emit-tabs-from-parts triggers panels ctx)))))
+
+(defun etaf-web--step-number-node-p (node)
+  "Return non-nil when DOM NODE is a standalone step-number badge."
+  (when (and (etaf-web--node-p node)
+             (not (memq (dom-tag node) '(h1 h2 h3 h4 h5 h6 pre table))))
+    (let ((text (etaf-web--clean-text node))
+          (tokens (etaf-web--class-tokens node)))
+      (and (not (string-empty-p text))
+           (<= (length text) 16)
+           (or (string-match-p
+                "\\`\\(?:step[ \t]*\\)?[0-9]+[.)]?\\'\\|\\`第[ \t]*[0-9]+[ \t]*步\\'"
+                (downcase text))
+               (and (cl-some (lambda (tok)
+                               (string-match-p
+                                "num\\|number\\|index\\|badge\\|counter\\|order"
+                                tok))
+                             tokens)
+                    (string-match-p "[0-9]" text)))))))
+
+(defun etaf-web--strip-step-prefix (title)
+  "Remove redundant leading step numbering from TITLE when text remains."
+  (let ((cleaned
+         (cond
+          ((string-match
+            "\\`\\(?:[Ss]tep[ \t]+[0-9]+[ \t]*[:.)—–-]*[ \t]*\\|[0-9]+[.)][ \t]+\\|[0-9]+[ \t]*[—–:-][ \t]+\\|第[ \t]*[0-9]+[ \t]*步[：:. \t]*\\)\\(.+\\)\\'"
+            title)
+           (string-trim (match-string 1 title)))
+          (t title))))
+    (if (string-empty-p cleaned) title cleaned)))
+
+(defun etaf-web--step-item-numbered-p (item)
+  "Return non-nil when step ITEM carries an explicit step number."
+  (or (etaf-web--attr item 'data-step)
+      (etaf-web--attr item 'value)
+      (cl-some #'etaf-web--step-number-node-p (etaf-web--element-children item))
+      (let ((text (downcase (etaf-web--clean-text item))))
+        (string-match-p
+         "\\`\\(?:step[ \t]+[0-9]+\\|[0-9]+[.)][ \t]\\|0[1-9][ \t]\\|第[ \t]*[0-9]+[ \t]*步\\|[①②③④⑤⑥⑦⑧⑨⑩]\\)"
+         text))))
+
+(defun etaf-web--extract-sequence-items (node)
+  "Return `(LEADING-HEADING ITEMS ORDERED-P)' for sequence container NODE."
+  (if (memq (dom-tag node) '(ol ul))
+      (list nil
+            (cl-remove-if-not (lambda (c) (and (etaf-web--node-p c)
+                                               (eq (dom-tag c) 'li)))
+                              (dom-children node))
+            (eq (dom-tag node) 'ol))
+    (let* ((elems (etaf-web--element-children node))
+           (first (car elems))
+           (heading (when (and first (memq (dom-tag first) '(h2 h3 h4 header)))
+                      first))
+           (rest (if heading (cdr elems) elems)))
+      (cond
+       ((and (= (length rest) 1) (memq (dom-tag (car rest)) '(ol ul)))
+        (list heading
+              (cl-remove-if-not (lambda (c) (and (etaf-web--node-p c)
+                                                 (eq (dom-tag c) 'li)))
+                                (dom-children (car rest)))
+              (eq (dom-tag (car rest)) 'ol)))
+       ((and (= (length rest) 1)
+             (memq (dom-tag (car rest)) '(div section))
+             (>= (length (etaf-web--element-children (car rest))) 2))
+        (list heading (etaf-web--element-children (car rest)) nil))
+       (t (list heading rest nil))))))
+
+(defun etaf-web--extract-step-entry (item ctx)
+  "Extract `(TITLE . BODY)' for one step ITEM under CTX, or nil."
+  (let* ((children (cl-remove-if #'etaf-web--step-number-node-p
+                                 (etaf-web--significant-children item)))
+         (res (etaf-web--extract-title-and-body children ctx nil))
+         (title nil)
+         (body-nodes nil))
+    (cond
+     (res
+      (setq title (nth 0 res)
+            body-nodes (nth 2 res)))
+     ;; Element with title/heading/label class.
+     ((let ((tidx (cl-position-if
+                   (lambda (c)
+                     (and (etaf-web--node-p c)
+                          (cl-some (lambda (cls)
+                                     (string-match-p "title\\|heading\\|label\\|name" cls))
+                                   (etaf-web--class-list c))))
+                   children)))
+        (when tidx
+          (setq title (etaf-web--sanitize-attr-value
+                       (etaf-web--clean-text (nth tidx children)))
+                body-nodes (append (cl-subseq children 0 tidx)
+                                   (cl-subseq children (1+ tidx))))
+          t)))
+     ;; Plain `<li>' or simple step: first block/paragraph is title, rest is body.
+     ((and children (etaf-web--node-p (car children))
+           (memq (dom-tag (car children)) '(p div span))
+           (> (length children) 1))
+      (setq title (etaf-web--sanitize-attr-value
+                   (etaf-web--clean-text (car children)))
+            body-nodes (cdr children)))
+     (t
+      (setq title (etaf-web--sanitize-attr-value (etaf-web--clean-text item))
+            body-nodes nil)))
+    (setq title (etaf-web--sanitize-attr-value (etaf-web--strip-step-prefix title)))
+    (when (and title (not (string-empty-p title)))
+      (cons title (etaf-web--emit-children-blocks body-nodes ctx)))))
+
+(defun etaf-web--try-emit-steps (node ctx)
+  "Compile a steps/stepper/how-it-works container into `:::steps', or nil."
+  (when (etaf-web--steps-class-p node)
+    (let* ((seq-info (etaf-web--extract-sequence-items node))
+           (heading (nth 0 seq-info))
+           (items (nth 1 seq-info))
+           (ordered-p (nth 2 seq-info))
+           (numbered-count (cl-count-if #'etaf-web--step-item-numbered-p items)))
+      (when (and (>= (length items) 2)
+                 (or ordered-p (>= numbered-count 2)))
+        (let ((steps (delq nil
+                           (mapcar (lambda (it) (etaf-web--extract-step-entry it ctx))
+                                   items))))
+          (when (>= (length steps) 2)
+            (let* ((hdr-md (and heading (etaf-web--emit-block heading ctx)))
+                   (steps-md
+                    (concat ":::steps {list-style=\"decimal\"}\n"
+                            (mapconcat
+                             (lambda (st)
+                               (if (string-empty-p (cdr st))
+                                   (format ":::step {title=\"%s\"}\n:::" (car st))
+                                 (format ":::step {title=\"%s\"}\n%s\n:::"
+                                         (car st) (cdr st))))
+                             steps "\n")
+                            "\n:::")))
+              (if (and hdr-md (not (string-empty-p hdr-md)))
+                  (concat hdr-md "\n\n" steps-md)
+                steps-md))))))))
+
+(defun etaf-web--timeline-time-node-p (node)
+  "Return non-nil when DOM NODE represents a timeline event timestamp."
+  (when (etaf-web--node-p node)
+    (let ((text (etaf-web--clean-text node)))
+      (and (not (string-empty-p text))
+           (<= (length text) 40)
+           (or (eq (dom-tag node) 'time)
+               (cl-some (lambda (cls)
+                          (string-match-p
+                           "\\(?:\\`\\|[-_]\\)\\(?:time\\|date\\|year\\|timestamp\\|period\\)\\(?:\\'\\|[-_]\\)"
+                           cls))
+                        (etaf-web--class-list node)))))))
+
+(defun etaf-web--extract-timeline-entry (item ctx)
+  "Extract `(:title :time :body)' for one timeline ITEM under CTX, or nil."
+  (let* ((sig (etaf-web--significant-children item))
+         (time-node (cl-find-if #'etaf-web--timeline-time-node-p sig))
+         (time-str (and time-node
+                        (etaf-web--sanitize-attr-value
+                         (etaf-web--clean-text time-node))))
+         (rest (if time-node (cl-remove time-node sig :count 1 :test #'eq) sig))
+         (res (etaf-web--extract-title-and-body rest ctx nil))
+         (title nil)
+         (body-nodes nil))
+    (cond
+     (res
+      (setq title (nth 0 res)
+            body-nodes (nth 2 res)))
+     ((let ((tidx (cl-position-if
+                   (lambda (c)
+                     (and (etaf-web--node-p c)
+                          (cl-some (lambda (cls)
+                                     (string-match-p "title\\|heading\\|label" cls))
+                                   (etaf-web--class-list c))))
+                   rest)))
+        (when tidx
+          (setq title (etaf-web--sanitize-attr-value
+                       (etaf-web--clean-text (nth tidx rest)))
+                body-nodes (append (cl-subseq rest 0 tidx)
+                                   (cl-subseq rest (1+ tidx))))
+          t)))
+     ((and rest (etaf-web--node-p (car rest))
+           (memq (dom-tag (car rest)) '(p div span))
+           (> (length rest) 1))
+      (setq title (etaf-web--sanitize-attr-value (etaf-web--clean-text (car rest)))
+            body-nodes (cdr rest)))
+     (t
+      (let ((fallback (etaf-web--sanitize-attr-value
+                       (mapconcat #'etaf-web--plain-text rest " "))))
+        (setq title (if (not (string-empty-p fallback)) fallback time-str)
+              body-nodes nil))))
+    (when (and title (not (string-empty-p title)))
+      (list :title title
+            :time (and time-str (not (string-empty-p time-str))
+                       (not (equal time-str title))
+                       time-str)
+            :body (etaf-web--emit-children-blocks body-nodes ctx)))))
+
+(defun etaf-web--try-emit-timeline (node ctx)
+  "Compile a `timeline' container NODE into `:::timeline', or nil."
+  (when (etaf-web--timeline-class-p node)
+    (let* ((seq-info (etaf-web--extract-sequence-items node))
+           (heading (nth 0 seq-info))
+           (items (nth 1 seq-info)))
+      (when (>= (length items) 2)
+        (let ((events (delq nil
+                            (mapcar (lambda (it)
+                                      (etaf-web--extract-timeline-entry it ctx))
+                                    items))))
+          (when (>= (length events) 2)
+            (let* ((hdr-md (and heading (etaf-web--emit-block heading ctx)))
+                   (tl-md
+                    (concat ":::timeline\n"
+                            (mapconcat
+                             (lambda (ev)
+                               (let ((attrs (concat
+                                             (format "title=\"%s\"" (plist-get ev :title))
+                                             (when (plist-get ev :time)
+                                               (format " time=\"%s\""
+                                                       (plist-get ev :time)))))
+                                     (body (plist-get ev :body)))
+                                 (if (string-empty-p body)
+                                     (format ":::event {%s}\n:::" attrs)
+                                   (format ":::event {%s}\n%s\n:::" attrs body))))
+                             events "\n")
+                            "\n:::")))
+              (if (and hdr-md (not (string-empty-p hdr-md)))
+                  (concat hdr-md "\n\n" tl-md)
+                tl-md))))))))
+
+(defun etaf-web--consume-adjacent-tabpanels (nodes)
+  "Consume leading tabpanels (or one tabpanel wrapper) from NODES.
+Return `(PANELS . REMAINING-NODES)'."
+  (let ((panels nil)
+        (rest nodes))
+    (while (and rest (stringp (car rest)) (string-blank-p (car rest)))
+      (setq rest (cdr rest)))
+    (cond
+     ((and rest (etaf-web--tabpanel-node-p (car rest)))
+      (let ((done nil))
+        (while (and rest (not done))
+          (cond
+           ((and (stringp (car rest)) (string-blank-p (car rest)))
+            (setq rest (cdr rest)))
+           ((etaf-web--tabpanel-node-p (car rest))
+            (push (pop rest) panels))
+           (t (setq done t)))))
+      (cons (nreverse panels) rest))
+     ((and rest (etaf-web--panel-wrapper-children (car rest)))
+      (cons (etaf-web--panel-wrapper-children (car rest)) (cdr rest)))
+     (t (cons nil nodes)))))
+
 (defun etaf-web--emit-children-blocks (children ctx)
   "Compile mixed block/inline DOM CHILDREN under CTX into Markdown blocks."
   (let ((blocks nil)
-        (inline-buf nil))
+        (inline-buf nil)
+        (rest children))
     (cl-flet ((flush-inlines ()
                 (when inline-buf
                   (let ((text (string-trim
@@ -1783,17 +2747,35 @@ image alt text without emitting an extra caption paragraph."
                     (unless (string-empty-p text)
                       (push text blocks)))
                   (setq inline-buf nil))))
-      (dolist (child children)
-        (cond
-         ((and (etaf-web--node-p child)
-               (or (memq (dom-tag child) etaf-web--block-tags)
-                   (etaf-web--callout-kind child)
-                   (etaf-web--footnote-container-p child)))
-          (flush-inlines)
-          (let ((blk (etaf-web--emit-block child ctx)))
-            (when (and blk (not (string-empty-p blk)))
-              (push blk blocks))))
-         (t (push child inline-buf))))
+      (while rest
+        (let ((child (pop rest)))
+          (cond
+           ((and (etaf-web--node-p child)
+                 (etaf-web--tablist-node-p child))
+            (let* ((consumed (etaf-web--consume-adjacent-tabpanels rest))
+                   (panels (car consumed))
+                   (tabs-md (and panels
+                                 (etaf-web--emit-tabs-from-parts
+                                  (etaf-web--tab-triggers child) panels ctx))))
+              (if tabs-md
+                  (progn
+                    (flush-inlines)
+                    (push tabs-md blocks)
+                    (setq rest (cdr consumed)))
+                ;; Standalone tablist without panels: fall through normally.
+                (flush-inlines)
+                (let ((blk (etaf-web--emit-block child ctx)))
+                  (when (and blk (not (string-empty-p blk)))
+                    (push blk blocks))))))
+           ((and (etaf-web--node-p child)
+                 (or (memq (dom-tag child) etaf-web--block-tags)
+                     (etaf-web--callout-kind child)
+                     (etaf-web--footnote-container-p child)))
+            (flush-inlines)
+            (let ((blk (etaf-web--emit-block child ctx)))
+              (when (and blk (not (string-empty-p blk)))
+                (push blk blocks))))
+           (t (push child inline-buf)))))
       (flush-inlines))
     (mapconcat #'identity (nreverse blocks) "\n\n")))
 
@@ -1820,13 +2802,23 @@ image alt text without emitting an extra caption paragraph."
          (unless (string-empty-p text) text)))
       ('pre (etaf-web--emit-code-block node))
       ('table (etaf-web--emit-table node ctx))
-      ((or 'ul 'ol) (etaf-web--emit-list node 0 ctx))
+      ((or 'ul 'ol)
+       (or (etaf-web--try-emit-steps node ctx)
+           (etaf-web--try-emit-timeline node ctx)
+           (etaf-web--try-emit-card-grid node ctx)
+           (etaf-web--emit-list node 0 ctx)))
       ('dl (etaf-web--emit-dl node ctx))
       ('blockquote (etaf-web--emit-blockquote node ctx))
       ('hr "---")
       ('details (etaf-web--emit-details node ctx))
       ('figure (etaf-web--emit-figure node ctx))
-      ((or 'div 'section 'article 'main 'header 'body 'html 'hgroup 'address 'fieldset)
+      ((or 'div 'section)
+       (or (etaf-web--try-emit-tabs-container node ctx)
+           (etaf-web--try-emit-steps node ctx)
+           (etaf-web--try-emit-timeline node ctx)
+           (etaf-web--try-emit-card-grid node ctx)
+           (etaf-web--emit-children-blocks (dom-children node) ctx)))
+      ((or 'article 'main 'header 'body 'html 'hgroup 'address 'fieldset)
        (etaf-web--emit-children-blocks (dom-children node) ctx))
       (_ (etaf-web--emit-children-blocks (dom-children node) ctx))))))
 

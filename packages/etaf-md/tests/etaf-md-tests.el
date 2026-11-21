@@ -2430,3 +2430,54 @@ and a single-track list stacks its columns one per row."
         (should (string-match-p "FirstRow" text))
         (should (string-match-p "SecondRow" text))
         (should-not (string-match-p "FirstRow.*SecondRow" text))))))
+
+(ert-deftest etaf-md-tests-card-with-image-wraps-paragraph-inside-columns ()
+  "A multi-column card holding an image and a long paragraph wraps without clipping.
+All three cards remain side by side on one row at the same column width as the
+text-only control, every word of the paragraph appears intact wrapped across
+multiple lines inside the card width, and the image frame stays inside the card."
+  (let* ((fixture (etaf-md-tests--fixture "wide-400x100.png"))
+         (body "video as sharp image frames with sound, subtitles and a queue that keeps playing")
+         (doc (format (concat ":::columns {columns=\"3\" min-width=\"22ch\" divider=false}\n"
+                              ":::col\n:::card {title=\"card-one\"}\n"
+                              "![](%s)\n\n%s\n:::\n:::\n"
+                              ":::col\n:::card {title=\"card-two\"}\nshort body\n:::\n:::\n"
+                              ":::col\n:::card {title=\"card-three\"}\nshort body\n:::\n:::\n"
+                              ":::\n")
+                      fixture body))
+         (ctrl-doc (format (concat ":::columns {columns=\"3\" min-width=\"22ch\" divider=false}\n"
+                                   ":::col\n:::card {title=\"card-one\"}\n%s\n:::\n:::\n"
+                                   ":::col\n:::card {title=\"card-two\"}\nshort body\n:::\n:::\n"
+                                   ":::col\n:::card {title=\"card-three\"}\nshort body\n:::\n:::\n"
+                                   ":::\n")
+                           body))
+         (session (etaf-md-create :text doc :theme 'dark))
+         (ctrl-session (etaf-md-create :text ctrl-doc :theme 'dark))
+         (ctrl-border nil))
+    (etaf-md-tests--with-mount ctrl-session
+      (let ((lines (split-string (buffer-substring-no-properties (point-min) (point-max)) "\n")))
+        (setq ctrl-border (cl-find-if (lambda (l) (string-match-p "┌─+┐" l)) lines))))
+    (etaf-md-tests--with-mount session
+      (let* ((rendered (buffer-substring-no-properties (point-min) (point-max)))
+             (lines (split-string rendered "\n"))
+             (top-border (cl-find-if (lambda (l) (string-match-p "┌─+┐" l)) lines))
+             (title-line (cl-find-if (lambda (l) (string-match-p "card-one" l)) lines))
+             (body-words (split-string body " " t))
+             (para-lines (cl-remove-if-not
+                          (lambda (l)
+                            (string-match-p
+                             "video\\|image\\|frames\\|sound\\|subtitles\\|queue\\|playing"
+                             l))
+                          lines)))
+        ;; Column count and exact top border geometry match the no-image control.
+        (should ctrl-border)
+        (should (equal top-border ctrl-border))
+        (should title-line)
+        (should (string-match-p "card-one.*card-two.*card-three" title-line))
+        ;; Paragraph wraps across multiple lines (>= 3) with zero clipped words.
+        (should (>= (length para-lines) 3))
+        (let ((joined (mapconcat #'identity para-lines " ")))
+          (dolist (word body-words)
+            (should (string-match-p (regexp-quote word) joined))))
+        ;; Image right border renders intact inside the card column.
+        (should (cl-some (lambda (l) (string-match-p "│▀+│" l)) lines))))))

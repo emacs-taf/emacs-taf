@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Ordinary Prose Article</title>
+</head>
+<body>
+  <article>
+    <h1>Ordinary Prose Article</h1>
+
+    <div class="prose-block">
+      <p><strong>First point:</strong> Consecutive paragraphs inside a wrapper must stay paragraphs even when they begin with bold lead-ins.</p>
+      <p><strong>Second point:</strong> Another paragraph right below should never turn into a card grid.</p>
+      <p><strong>Third point:</strong> Reading flow depends on keeping prose linear.</p>
+    </div>
+
+    <ul>
+      <li><strong>Alpha</strong>: Regular unordered list items must stay a bullet list.</li>
+      <li><strong>Beta</strong>: Even when every item starts with a strong label.</li>
+      <li><strong>Gamma</strong>: Never emit cards for plain lists.</li>
+    </ul>
+
+    <ol>
+      <li><strong>Step one</strong>: Plain ordered lists without a steps class stay ordered lists.</li>
+      <li><strong>Step two</strong>: Keep simple Markdown numbering intact.</li>
+    </ol>
+
+    <div class="samples">
+      <pre><code class="language-elisp">(+ 1 2)</code></pre>
+      <pre><code class="language-elisp">(* 3 4)</code></pre>
+    </div>
+
+    <div class="cards">
+      <div class="card">
+        <h3>Lonely Card</h3>
+        <p>A single child inside a cards wrapper must not trigger columns or card emission.</p>
+      </div>
+    </div>
+
+    <div class="content">
+      <section>
+        <h2>Long Section One</h2>
+        <p>This first article section contains well over two hundred and forty characters of continuous prose discussing layout engines, box measurements, font metrics, caching strategies, and incremental invalidation across Emacs buffers so that structural card detection must treat it as standard document prose rather than a compact feature tile.</p>
+      </section>
+      <section>
+        <h2>Long Section Two</h2>
+        <p>This second article section likewise carries a full multi-sentence explanation of keyboard navigation, link routing, local asset budgets, and graceful image fallback behavior exceeding the compact card text ceiling by a wide margin so both sections stay ordinary headings and paragraphs.</p>
+      </section>
+    </div>
+
+    <div class="steps">
+      <div>
+        <h3>Unordered Note A</h3>
+        <p>Without numeric markers or an ordered list, a steps-like wrapper stays normal blocks.</p>
+      </div>
+      <div>
+        <h3>Unordered Note B</h3>
+        <p>Another unnumbered block stays normal blocks too.</p>
+      </div>
+    </div>
+  </article>
+</body>
+</html>

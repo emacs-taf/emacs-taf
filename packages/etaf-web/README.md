@@ -20,9 +20,11 @@ reading view.
   `<figure>` + `<figcaption>`), fenced code blocks with language detection
   (defaulting to `text`), GFM pipe tables (with `colspan`/`rowspan` expansion
   and multi-block cell compaction), nested and task lists, definition lists,
-  blockquotes, rules, GFM footnotes, `<details>` (`:::details`) and docs
+  blockquotes, rules, GFM footnotes, `<details>` (`:::details`), docs
   callouts (`:::note`, `:::tip`, `:::warning`, `:::caution`, `:::important`,
-  `:::danger`).
+  `:::danger`), responsive multi-column card grids (`:::columns` + `:::card`),
+  documentation tabs (`:::tabs`), ordered steps (`:::steps`) and timelines
+  (`:::timeline`).
 - **Local page cache and bounded assets** (`etaf-web-open`): reads local HTML
   files or fetches HTTP(S) pages with `Content-Type` / `<meta charset>`
   decoding, writes `index.md`, `source.html`, `meta.json` and cached images
