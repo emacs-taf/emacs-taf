@@ -97,7 +97,14 @@ The shape matches `etaf-install-doctor': :required and :optional lists of
   "Strength of the computer opponent in new Xiangqi instances."
   :type '(choice (const easy) (const normal) (const hard)) :group 'etaf-xiangqi)
 (defconst etaf-xiangqi--directory
-  (file-name-directory (or load-file-name buffer-file-name)))
+  (file-name-directory
+   (or (and load-file-name
+            (not (string-suffix-p ".eln" load-file-name))
+            (file-directory-p (expand-file-name "lisp" (file-name-directory load-file-name)))
+            load-file-name)
+       (bound-and-true-p byte-compile-current-file)
+       (locate-library "etaf-xiangqi")
+       buffer-file-name)))
 ;; Installed archives compile each module separately, so `lisp' must be on
 ;; `load-path' while the byte compiler runs, not only when this entry loads.
 ;;;###autoload
@@ -105,8 +112,12 @@ The shape matches `etaf-install-doctor': :required and :optional lists of
   (add-to-list 'load-path
                (expand-file-name "lisp"
                                  (file-name-directory
-                                  (or load-file-name
+                                  (or (and load-file-name
+                                           (not (string-suffix-p ".eln" load-file-name))
+                                           (file-directory-p (expand-file-name "lisp" (file-name-directory load-file-name)))
+                                           load-file-name)
                                       (bound-and-true-p byte-compile-current-file)
+                                      (locate-library "etaf-xiangqi")
                                       buffer-file-name)))))
 (let ((load-path (cons (expand-file-name "lisp" etaf-xiangqi--directory) load-path)))
   (require 'etaf-xiangqi-theme)

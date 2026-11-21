@@ -169,7 +169,14 @@
 ;;; Code:
 (require 'etaf)
 (defconst etaf-gamekit--directory
-  (file-name-directory (or load-file-name buffer-file-name)))
+  (file-name-directory
+   (or (and load-file-name
+            (not (string-suffix-p ".eln" load-file-name))
+            (file-directory-p (expand-file-name "lisp" (file-name-directory load-file-name)))
+            load-file-name)
+       (bound-and-true-p byte-compile-current-file)
+       (locate-library "etaf-gamekit")
+       buffer-file-name)))
 (defgroup etaf-gamekit nil "Build games with ETAF presentation." :group 'games)
 (defcustom etaf-gamekit-godot-program
   (expand-file-name
@@ -196,8 +203,12 @@
   (add-to-list 'load-path
                (expand-file-name "lisp"
                                  (file-name-directory
-                                  (or load-file-name
+                                  (or (and load-file-name
+                                           (not (string-suffix-p ".eln" load-file-name))
+                                           (file-directory-p (expand-file-name "lisp" (file-name-directory load-file-name)))
+                                           load-file-name)
                                       (bound-and-true-p byte-compile-current-file)
+                                      (locate-library "etaf-gamekit")
                                       buffer-file-name)))))
 (let ((load-path (cons (expand-file-name "lisp" etaf-gamekit--directory) load-path)))
   (require 'etaf-gamekit-session)

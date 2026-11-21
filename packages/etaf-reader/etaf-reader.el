@@ -249,8 +249,12 @@
   (add-to-list 'load-path
                (expand-file-name "lisp"
                                  (file-name-directory
-                                  (or load-file-name
+                                  (or (and load-file-name
+                                           (not (string-suffix-p ".eln" load-file-name))
+                                           (file-directory-p (expand-file-name "lisp" (file-name-directory load-file-name)))
+                                           load-file-name)
                                       (bound-and-true-p byte-compile-current-file)
+                                      (locate-library "etaf-reader")
                                       buffer-file-name)))))
 
 (require 'etaf-reader-theme)

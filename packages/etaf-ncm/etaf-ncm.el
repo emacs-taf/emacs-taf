@@ -412,8 +412,12 @@
 ;; works on the independent modules an archive install compiles one by one.
 (eval-and-compile
   (let ((directory (file-name-directory
-                    (or (bound-and-true-p byte-compile-current-file)
-                        load-file-name
+                    (or (and load-file-name
+                             (not (string-suffix-p ".eln" load-file-name))
+                             (file-directory-p (expand-file-name "lisp" (file-name-directory load-file-name)))
+                             load-file-name)
+                        (bound-and-true-p byte-compile-current-file)
+                        (locate-library "etaf-ncm")
                         buffer-file-name))))
     (add-to-list 'load-path (expand-file-name "lisp" directory))))
 

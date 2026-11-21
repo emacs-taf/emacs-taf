@@ -356,6 +356,7 @@
                           ;; A native-compiled file lives in `eln-cache',
                           ;; where no sibling `lisp' directory exists.
                           (not (string-suffix-p ".eln" load-file-name))
+                          (file-directory-p (expand-file-name "lisp" (file-name-directory load-file-name)))
                           load-file-name)
                      (bound-and-true-p byte-compile-current-file)
                      (locate-library "ecss")

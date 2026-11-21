@@ -157,7 +157,14 @@ The shape matches `etaf-install-doctor': :required and :optional lists of
                     "Install it once with: M-x etaf-gamekit-install-godot"))
         :optional nil))
 (defconst etaf-tanks--directory
-  (file-name-directory (or load-file-name buffer-file-name)))
+  (file-name-directory
+   (or (and load-file-name
+            (not (string-suffix-p ".eln" load-file-name))
+            (file-directory-p (expand-file-name "lisp" (file-name-directory load-file-name)))
+            load-file-name)
+       (bound-and-true-p byte-compile-current-file)
+       (locate-library "etaf-tanks")
+       buffer-file-name)))
 ;; Installed archives compile each module separately, so `lisp' must be on
 ;; `load-path' while the byte compiler runs, not only when this entry loads.
 ;; `byte-compile-current-file` names the file being compiled; `load-file-name`
