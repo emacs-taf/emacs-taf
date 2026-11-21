@@ -4,11 +4,30 @@
 
 ### Fixed
 
+- Documents containing `:::` containers now retain every heading (before,
+  inside and after containers) in document order with unique anchor IDs, and
+  resolve footnote references across container boundaries instead of keeping
+  only the first plain stretch's metadata.  Heading navigation (`etaf-md-locate`
+  and `#anchor` links) also lands on headings rendered behind container or
+  line-grid left borders.
+
+- `:::table` containers preserve inline formatting and interactive runs (bold,
+  italic, inline code, links and footnotes) in cells instead of flattening
+  every cell to plain text.
+
+- `:::columns` containers given an explicit track list such as `"2fr 1fr 1fr"`
+  now count columns from the parsed tracks instead of falling back to 2.
+
 - The package loads twice without complaint.  A shipped node type used to
   refuse its second registration, which `package.el' triggers when a file
   that `require' already loaded is loaded again.
 
 ### Added
+
+- `etaf-md-create` accepts `:on-link` (`(url)`) and `:on-media` (`(kind path)`,
+  where `kind` is `image` or `video`) callbacks so embedding applications can
+  intercept link and media activation; returning non-nil marks the activation
+  handled, and returning nil falls back to the built-in behavior.
 
 - A page that holds many diagrams no longer pays for its generated mermaid
   configuration once per diagram.  The configuration is a property of the
@@ -71,6 +90,11 @@
   drawing so a journey no longer carries rows of empty picture under it.
 
 ### Changed
+
+- Document titles and body headings render on the uniform line grid
+  (`:line-grid t`) without `:font-size` scaling: front-matter titles use bold
+  weight, the heading color and a bottom hairline, while markdown headings keep
+  standard line height.
 
 - The `r`, `[`, `]` and `C-c j` keys run commands that are now part of the
   supported API: `etaf-md-reload`, `etaf-md-wider`, `etaf-md-narrower` and

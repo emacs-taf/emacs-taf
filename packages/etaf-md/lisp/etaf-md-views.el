@@ -89,13 +89,16 @@ document with front matter opens on a page-like header instead of raw text."
                  (list :width 'stretch :item-gap '(lh 1))
                  (append
                   (list
-                   (etaf-node 'text
-                              (list :font-weight 'bold
-                                    ;; The page title is the document's first
-                                    ;; level and reads above a body heading.
-                                    :font-size 2.2
-                                    :color (etaf-md--env-color env :heading))
-                              (list title)))
+                   (etaf-node 'box
+                              (list :width 'stretch
+                                    :border-bottom
+                                    (list '(px 1) 'solid
+                                          (etaf-md--env-color env :heading-rule)))
+                              (list
+                               (etaf-node 'text
+                                          (list :font-weight 'bold
+                                                :color (etaf-md--env-color env :heading))
+                                          (list title)))))
                   (when tags
                     (list
                      (etaf-node 'flex
@@ -122,16 +125,31 @@ document with front matter opens on a page-like header instead of raw text."
   "Return a horizontal divider View, optionally labeled."
   (etaf-node 'etaf-divider (list :orientation 'horizontal :label label) nil))
 
+(defun etaf-md--activate-media (env kind path fallback)
+  "Activate media PATH of KIND in ENV, falling back to FALLBACK.
+Consults ENV's `:open-media' callback first; returning non-nil marks the
+activation handled, while nil calls FALLBACK with no arguments."
+  (let ((handler (plist-get env :open-media)))
+    (unless (and handler (funcall handler kind path))
+      (funcall fallback))))
+
 (defun etaf-md--inline-image-view (node env)
   "Return the inline chip View of image NODE in ENV."
-  (let ((alt (or (plist-get node :alt) "图片"))
-        (url (plist-get node :url)))
+  (let* ((alt (or (plist-get node :alt) "图片"))
+         (url (plist-get node :url))
+         (remote (etaf-md--remote-url-p url))
+         (target (if remote url (etaf-md--absolute-media url env)))
+         (kind (etaf-md--media-kind target)))
     (etaf-node 'text
                (list :color (etaf-md--env-color env :accent)
                      :background-color (etaf-md--env-color env :accent-soft)
                      :role 'link :tab-index 0
                      :help-echo (or url alt)
-                     :on-press (lambda () (funcall (plist-get env :open-url) url)))
+                     :on-press (lambda ()
+                                 (etaf-md--activate-media
+                                  env kind target
+                                  (lambda ()
+                                    (funcall (plist-get env :open-url) url)))))
                (list (format "🖼 %s" alt)))))
 
 ;;; ---------------------------------------------------------------------------
@@ -364,25 +382,43 @@ missing file says so instead of failing the page."
                  (list :color (etaf-md--env-color env :accent)
                        :role 'link :tab-index 0
                        :help-echo url
-                       :on-press (lambda () (funcall (plist-get env :open-url) url)))
+                       :on-press (lambda ()
+                                   (etaf-md--activate-media
+                                    env (etaf-md--media-kind url) url
+                                    (lambda ()
+                                      (funcall (plist-get env :open-url) url)))))
                  (list (format "🔗 %s" url)))))))
 
-(defun etaf-md--media-card (url alt env)
+(defun etaf-md--media-card (url alt env &optional declared-kind)
   "Return a media card View for URL with ALT in ENV.
 Local images and videos render through the ETAF image Host, which owns the
 graphics/terminal adapters and the video poster frame; remote sources render
-as a bordered placeholder that opens in the browser."
+as a bordered placeholder that opens in the browser.  DECLARED-KIND, when
+`video', preserves video classification for sources without a video extension."
   (let* ((remote (etaf-md--remote-url-p url))
          (path (unless remote (etaf-md--absolute-media url env)))
-         (kind (and path (etaf-md--media-kind path)))
+         (kind (and path (if (eq declared-kind 'video)
+                             'video
+                           (etaf-md--media-kind path))))
+         (media-kind (or kind
+                         (if (eq declared-kind 'video)
+                             'video
+                           (etaf-md--media-kind url))))
+         (target (or path url))
          (exists (and path (file-exists-p path)))
          (open (if (and path exists)
                    ;; Local media opens with the operating system's default
                    ;; application, so a video plays instead of appearing as a
                    ;; binary buffer; remote and missing targets keep the URL
                    ;; callback.
-                   (lambda () (funcall (plist-get env :open-file) path))
-                 (lambda () (funcall (plist-get env :open-url) url))))
+                   (lambda ()
+                     (etaf-md--activate-media
+                      env media-kind path
+                      (lambda () (funcall (plist-get env :open-file) path))))
+                 (lambda ()
+                   (etaf-md--activate-media
+                    env media-kind target
+                    (lambda () (funcall (plist-get env :open-url) url))))))
          (columns (plist-get env :width))
          (caption (or alt (and path (file-name-nondirectory path)) url)))
     (cond
@@ -476,7 +512,10 @@ as a bordered placeholder that opens in the browser."
             (etaf-node 'column
                        (list :width 'stretch :cross-align 'center :item-gap '(lh 0)
                              :on-press (lambda ()
-                                         (funcall (plist-get env :activate-video) key))
+                                         (etaf-md--activate-media
+                                          env 'video path
+                                          (lambda ()
+                                            (funcall (plist-get env :activate-video) key))))
                              :role 'button :tab-index 0 :pointer 'hand
                              :help-echo (format "%s（按 RET 内嵌播放）" caption))
                        (list
@@ -533,9 +572,13 @@ read: the list walker found no text in a block and the page painted the
 heading's marker alone."
   (mapconcat
    (lambda (inline)
-     (or (plist-get inline :text)
-         (etaf-md--inlines-text (plist-get inline :children))
-         ""))
+     (cond ((eq (plist-get inline :type) 'footnote-ref)
+            (format "[%s]" (or (plist-get inline :number)
+                               (plist-get inline :label)
+                               "")))
+           ((plist-get inline :text))
+           (t (or (etaf-md--inlines-text (plist-get inline :children))
+                  ""))))
    inlines ""))
 
 (defun etaf-md--block-text (block)
@@ -645,6 +688,20 @@ so; that block alone degrades and the rest of the page renders."
                      :block block)))
     (etaf-md--paint node paint-env)))
 
+(defun etaf-md--heading-ref (id)
+  "Return the host ref symbol naming the heading box with anchor ID."
+  (when (and (stringp id) (not (string-empty-p id)))
+    (intern (format "etaf-md-heading-%s" id))))
+
+(defun etaf-md--wrap-heading (block view)
+  "Attach a host ref to VIEW when BLOCK is a heading with an anchor id."
+  (let ((ref (and view
+                  (eq (plist-get block :type) 'heading)
+                  (etaf-md--heading-ref (plist-get block :id)))))
+    (if ref
+        (etaf-node 'box (list :ref ref :width 'stretch) (list view))
+      view)))
+
 (etaf-define-component etaf-md-block (&key session identity block)
   "Render one published markdown BLOCK of SESSION under IDENTITY.
 The Component owns one block's hosts, and reads the session's environment in
@@ -676,7 +733,8 @@ stay."
                      (list :color (etaf-md--env-color env :muted)
                            :font-family (face-attribute 'fixed-pitch :family nil t))
                      (list (etaf-md--block-marker block))))
-         (t (etaf-ui-markdown-view-block block env))))))
+         (t (etaf-md--wrap-heading
+             block (etaf-ui-markdown-view-block block env)))))))
 
 (defun etaf-md--page-widths (session width)
   "Return (MEASURE . FIGURE) columns for SESSION's page, capped at WIDTH.
@@ -737,7 +795,7 @@ elements render as the full poster card with caption and activation."
   (pcase kind
     ('inline-image (etaf-md--inline-image-view node env))
     (_ (etaf-md--media-card (plist-get node :url)
-                                    (plist-get node :alt) env))))
+                            (plist-get node :alt) env kind))))
 
 ;;; ---------------------------------------------------------------------------
 ;;; Document

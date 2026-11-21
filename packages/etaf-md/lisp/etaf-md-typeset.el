@@ -295,7 +295,12 @@ clipped by the page."
         (etaf-node 'column
                    (list :width 'stretch :max-width (list 'ch width)
                          :cross-align 'center :item-gap '(lh 0)
-                         :on-press (lambda () (when open-file (funcall open-file path)))
+                         :on-press (lambda ()
+                                     (etaf-md--activate-media
+                                      env 'image path
+                                      (lambda ()
+                                        (when open-file
+                                          (funcall open-file path)))))
                          :role 'button :tab-index 0 :pointer 'hand
                          :help-echo caption)
                    (list image

@@ -172,7 +172,7 @@
 ;; `etaf-md-create' to mount a real document yourself with
 ;; `etaf-mount', for example inside a tab or a larger layout.
 ;;
-;; Function: etaf-md-create (&key file text title theme flavor)
+;; Function: etaf-md-create (&key file text title theme flavor on-link on-media)
 ;; Return a new headless preview session.
 ;; Exactly one of FILE (a markdown document read from disk) or TEXT (the
 ;; document itself) is required; a missing or unreadable FILE signals
@@ -181,8 +181,16 @@
 ;; background mode.  FLAVOR selects the markdown dialect: `gfm' (the default)
 ;; enables the GitHub extensions (tables, task lists, strikethrough, autolinks,
 ;; footnotes and front matter), `commonmark' parses the core specification
-;; only, and a feature plist toggles individual extensions.  The session owns
-;; no buffer, so it is a complete headless preview for scripts and tests.
+;; only, and a feature plist toggles individual extensions.  ON-LINK is an
+;; optional function (URL) called when a link is activated; returning non-nil
+;; marks the activation handled, and returning nil falls back to the default
+;; behavior (in-document `#anchor' jump, `browse-url' for remote URLs, or
+;; opening local files).  ON-MEDIA is an optional function (KIND PATH) called
+;; when media is activated, where KIND is the symbol `image' or `video' and
+;; PATH is the resolved local path or remote URL; returning non-nil marks the
+;; activation handled, and returning nil falls back to inline video playback
+;; or opening the media.  The session owns no buffer, so it is a complete
+;; headless preview for scripts and tests.
 ;;
 ;; Function: etaf-md-state (session)
 ;; Return SESSION's state as a detached plist snapshot.

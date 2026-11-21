@@ -113,6 +113,31 @@ frame 背景朝前景混出来的浅色。因此预览跟当前 Emacs 主题一�
 `etaf-md-open` 接受文件路径或者会话，所以调用方可以渲染自己拼出来的文档。
 `etaf-md-locate` 把光标移到目录里的第几项；`etaf-md-outline` 返回目录本身。
 
+### 由上层应用接管链接与媒体
+
+把 `etaf-md` 嵌进阅读器、网页视图或知识库应用时，往往不想把每次点击都直接丢给系统浏览器或默认播放器。给 `etaf-md-create` 传入 `:on-link` 和 `:on-media` 就能拦截这两类激活事件：
+
+- `:on-link` 接收 `(url)`，适合做站内路由、自定义协议分流或记录浏览历史；
+- `:on-media` 接收 `(kind path)`，其中 `kind` 为符号 `image` 或 `video`，`path` 是解析后的本地绝对路径或远程 URL，适合接入自定义灯箱看图或外部播放队列。
+
+两个回调都按返回值决定后续动作：返回非 nil 表示应用已经处理完，不再触发默认行为；返回 nil 则原样回退到 `etaf-md` 内置的锚点跳转、打开文件/浏览器或内嵌视频播放。下面这段代码可以直接求值试跑：
+
+```elisp
+(let* ((session
+        (etaf-md-create
+         :text "站内文档见 [接口说明](app://docs/api)，外部页面走默认 [主页](https://example.org)。\n\n![示意图](diagram.png)\n"
+         :on-link (lambda (url)
+                    (when (string-prefix-p "app://" url)
+                      (message "站内打开：%s" url)
+                      t))
+         :on-media (lambda (kind path)
+                     (when (eq kind 'image)
+                       (message "看图器预览 %s" path)
+                       t))))
+       (buffer (etaf-md-open session)))
+  (with-current-buffer buffer (etaf-md-close)))
+```
+
 `scripts/etaf-md-gui-probe.el` 驱动一个活的 frame 做 GUI 验证：按指定的 frame 尺寸打开
 文档，报告一行状态，发送真实按键，并检查版面不变量（没有超宽的行、有可交互的链接、有目录）。
 

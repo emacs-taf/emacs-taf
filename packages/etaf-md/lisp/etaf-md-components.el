@@ -30,7 +30,7 @@
 (declare-function etaf-md--tabs-view "etaf-md-nodes" (env &optional page-view label-fn))
 (declare-function etaf-md--code-tab-page "etaf-md-nodes" (env page))
 (declare-function etaf-md--child-view "etaf-md-nodes" (env child))
-(declare-function etaf-md--media-card "etaf-md-views" (url alt env))
+(declare-function etaf-md--media-card "etaf-md-views" (url alt env &optional declared-kind))
 (declare-function etaf-md-qrcode-view "etaf-md-qrcode" (env))
 (declare-function etaf-md-qrcode-cached-p "etaf-md-qrcode" (env))
 (declare-function etaf-md-qrcode-available-p "etaf-md-qrcode" ())
@@ -53,18 +53,24 @@ card follow the target, and EXTRA is a list of views painted under it."
                          extra))))))
 
 (declare-function etaf-md--open-file "etaf-md-model" (path))
+(declare-function etaf-md--open-media "etaf-md-model" (session kind path))
 
 (defun etaf-md--component-view-env (env)
   "Return the plist the shared view helpers read, built from ENV's definition.
 A definition's environment carries the page services; the views that draw
 prose take the plain plist they were written for, so the two are bridged
 here once instead of in every card."
-  (list :theme (etaf-md-env-theme env)
-        :palette (etaf-md-env-palette env)
-        :width (etaf-md-env-width env)
-        :dir (plist-get (etaf-md-env-session env) :dir)
-        :open-url (lambda (url) (etaf-md-follow-link env url))
-        :open-file #'etaf-md--open-file))
+  (let ((session (etaf-md-env-session env)))
+    (list :theme (etaf-md-env-theme env)
+          :palette (etaf-md-env-palette env)
+          :width (etaf-md-env-width env)
+          :line-grid t
+          :dir (plist-get session :dir)
+          :open-url (lambda (url) (etaf-md-follow-link env url))
+          :open-media (when session
+                        (lambda (kind path)
+                          (etaf-md--open-media session kind path)))
+          :open-file #'etaf-md--open-file)))
 
 (defun etaf-md--component-image (src alt env)
   "Return SRC as a media card with ALT for ENV.
@@ -616,7 +622,8 @@ shown under a strip that names every manager the `tabs' attribute lists."
                  synthetic
                  (list :theme (etaf-md-env-theme env)
                        :palette (etaf-md-env-palette env)
-                       :width (etaf-md-env-width env)))))))))
+                       :width (etaf-md-env-width env)
+                       :line-grid t))))))))
 
 (etaf-md--define-shipped 'npm-to
   :name "npm-to"

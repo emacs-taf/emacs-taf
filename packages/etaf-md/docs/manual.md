@@ -151,6 +151,33 @@ headless preview, which is what the acceptance tests use:
 a document they built themselves. `etaf-md-locate` moves point to an
 outline index; `etaf-md-outline` returns the outline itself.
 
+### Intercepting links and media
+
+Applications embedding a markdown view can supply `:on-link` and `:on-media`
+to `etaf-md-create` to take over link or media activation. Both callbacks
+follow the same convention: returning a non-nil value marks the activation
+handled, while returning `nil` falls back to the built-in behavior (in-document
+anchor jump, browser/file opening, or inline video playback). `:on-link`
+receives `(URL)`; `:on-media` receives `(KIND PATH)`, where `KIND` is the
+symbol `image` or `video` and `PATH` is the resolved local file path or remote
+URL:
+
+```elisp
+(let* ((session
+        (etaf-md-create
+         :text "Read [guide](https://example.com/guide) or ![shot](shot.png).\n"
+         :on-link (lambda (url)
+                    (when (string-prefix-p "https://example.com/" url)
+                      (message "Handled in app: %s" url)
+                      t))
+         :on-media (lambda (kind path)
+                     (when (eq kind 'image)
+                       (message "Open image viewer for %s" path)
+                       t))))
+       (buffer (etaf-md-open session)))
+  (with-current-buffer buffer (etaf-md-close)))
+```
+
 `scripts/etaf-md-gui-probe.el` drives a live frame for GUI verification: it
 opens a document at a given frame size, reports one-line state, sends real
 keys and checks layout invariants (no over-wide line, an interactive link, an

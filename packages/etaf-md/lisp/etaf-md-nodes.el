@@ -125,24 +125,19 @@ A document writes `between' and `around'; the engine spells them
     ('around 'space-around)
     (_ word)))
 
-(defun etaf-md--column-tracks (env count)
-  "Return the width spec of each column of ENV's row.
-A number of columns shares the width equally; a track string gives each column
-its own `fr' share or fixed size."
-  (let ((columns (etaf-md-attr env :columns)))
-    (cond
-     ((and (stringp columns) (string-match-p "\\`[0-9]+\\'" columns))
-      (make-list count (list :flex-grow 1)))
-     ((stringp columns)
-      (mapcar
-       (lambda (token)
-         (cond ((string-match "\\`\\([0-9.]+\\)fr\\'" token)
-                (list :flex-grow (string-to-number (match-string 1 token))))
-               ((string-match "\\`\\([0-9]+\\)\\(ch\\|%\\)\\'" token)
-                (list :width (list (intern (match-string 2 token))
-                                   (string-to-number (match-string 1 token)))))))
-       (split-string columns "[ \t]+" t)))
-     ((> count 0) (make-list count (list :flex-grow 1))))))
+(defun etaf-md--parse-column-tracks (columns)
+  "Return the track width specs parsed from track string COLUMNS, or nil.
+Each recognized token (`2fr', `20ch', `30%') becomes a flex or width plist."
+  (when (stringp columns)
+    (delq nil
+          (mapcar
+           (lambda (token)
+             (cond ((string-match "\\`\\([0-9.]+\\)fr\\'" token)
+                    (list :flex-grow (string-to-number (match-string 1 token))))
+                   ((string-match "\\`\\([0-9]+\\)\\(ch\\|%\\)\\'" token)
+                    (list :width (list (intern (match-string 2 token))
+                                       (string-to-number (match-string 1 token)))))))
+           (split-string columns "[ \t]+" t)))))
 
 (defun etaf-md--column-divider (env)
   "Return the one-pixel rule between two columns of ENV."
@@ -171,11 +166,19 @@ its own `fr' share or fixed size."
   :accepts '((col :attrs ((grow :type number :default 1 :doc "宽度份数"))))
   :view (lambda (env)
           (let* ((columns (etaf-md-attr env :columns))
-                 (count (if (stringp columns)
-                            (if (string-match-p "\\`[0-9]+\\'" columns)
-                                (max 1 (min 6 (string-to-number columns)))
-                              2)
-                          (max 1 (min 6 columns))))
+                 (numeric (and (stringp columns)
+                               (string-match-p "\\`[0-9]+\\'" columns)))
+                 (parsed-tracks (and (stringp columns)
+                                     (not numeric)
+                                     (etaf-md--parse-column-tracks columns)))
+                 (count (cond
+                         (numeric
+                          (max 1 (min 6 (string-to-number columns))))
+                         (parsed-tracks
+                          (max 1 (min 6 (length parsed-tracks))))
+                         ((numberp columns)
+                          (max 1 (min 6 columns)))
+                         (t 2)))
                  (gap (etaf-md-attr env :gap))
                  (width (etaf-md-available-width env))
                  (min-width (etaf-md-attr env :min-width))
@@ -185,7 +188,9 @@ its own `fr' share or fixed size."
                  (per (if (etaf-md-attr env :wrap)
                           count
                         (max 1 (min count min-columns))))
-                 (tracks (etaf-md--column-tracks env per))
+                 (tracks (if (and parsed-tracks (= per count))
+                             (seq-take parsed-tracks per)
+                           (make-list (max 1 per) (list :flex-grow 1))))
                  (divider (etaf-md-attr env :divider))
                  (rows (seq-partition (etaf-md-children env) per)))
             ;; The number of rows is only known while painting, so the rows are
@@ -887,7 +892,8 @@ frame and its colours; only the language row is left out."
              (plist-put (copy-sequence (etaf-md-node-block child)) :header nil)
              (list :theme (etaf-md-env-theme env)
                    :palette (etaf-md-env-palette env)
-                   :width (etaf-md-env-width env)))
+                   :width (etaf-md-env-width env)
+                   :line-grid t))
           (etaf-md--paint child env)))
       (etaf-md-children env page))))))
 
@@ -1196,6 +1202,30 @@ whole text as the message."
                 "\t"))
    rows "\n"))
 
+(defun etaf-md--table-cell-content (cell md-env env)
+  "Return the rendered inline view list for table CELL under MD-ENV and ENV.
+Preserves inline emphasis, code spans, links and footnotes parsed into CELL's
+block; an empty cell paints empty text."
+  (let* ((block (etaf-md-node-block cell))
+         (inlines (and block (plist-get block :children))))
+    (if (null inlines)
+        (list (etaf-node 'text nil
+                         (list (or (etaf-md-attr env :text cell) ""))))
+      ;; A lone image inside a paragraph renders as a full media card; keep
+      ;; table cells inline by pairing it with an empty text node.
+      (let* ((safe-block
+              (if (and (= 1 (length inlines))
+                       (eq (plist-get (car inlines) :type) 'image))
+                  (plist-put (copy-sequence block)
+                             :children (append inlines
+                                               (list (list :type 'text :text ""))))
+                block))
+             (rendered (etaf-ui-markdown-view-block safe-block md-env)))
+        (if rendered
+            (list rendered)
+          (list (etaf-node 'text nil
+                           (list (or (etaf-md-attr env :text cell) "")))))))))
+
 (defun etaf-md--table-view (env rows)
   "Paint ROWS of the table container in ENV."
   (let* ((first-row (car rows))
@@ -1208,6 +1238,7 @@ whole text as the message."
          (table-align (etaf-md-attr env :align))
          (header-fill (etaf-md-surface env (etaf-md-attr env :header-background)))
          (stripe-fill (etaf-md-surface env (etaf-md-attr env :stripe-background)))
+         (md-env (etaf-md--markdown-env env))
          (tracks (cl-loop for column below columns
                           collect (list 'ch
                                         (+ 4 (cl-loop
@@ -1258,9 +1289,7 @@ whole text as the message."
                          :color (and highlighted hit)
                          :font-weight (and (or (= row-number 1) highlighted)
                                            'bold))
-                   (list (etaf-node 'text nil
-                                    (list (or (etaf-md-attr env :text cell)
-                                              "")))))
+                   (etaf-md--table-cell-content cell md-env env))
                   cell-views)))
         (push (etaf-node 'flex (list :width table-width)
                          (nreverse cell-views))

@@ -469,6 +469,41 @@
       "name": "etaf-md-tests-a-link-to-a-document-opens-its-preview",
       "file": "tests/etaf-md-tests.el",
       "purpose": "A relative link to another markdown file opens that file's preview at the heading its fragment names, instead of showing the document's raw source in a buffer."
+    },
+    {
+      "name": "etaf-md-tests-container-outline-keeps-document-order-and-locate",
+      "file": "tests/etaf-md-tests.el",
+      "purpose": "Headings before, inside and after containers appear in `etaf-md-outline' in document order with unique anchor IDs, and `etaf-md-locate' and `#anchor' jumps land on them."
+    },
+    {
+      "name": "etaf-md-tests-container-footnotes-resolve-across-boundaries",
+      "file": "tests/etaf-md-tests.el",
+      "purpose": "Footnote references before, inside and after containers are numbered in document order and resolve definitions written either inside or outside containers."
+    },
+    {
+      "name": "etaf-md-tests-headings-render-on-line-grid-without-font-size",
+      "file": "tests/etaf-md-tests.el",
+      "purpose": "Front-matter titles and headings render on the uniform line grid without `:font-size`/`:height` scaling, keeping standard line height and unchanged line count."
+    },
+    {
+      "name": "etaf-md-tests-on-link-intercepts-or-falls-back",
+      "file": "tests/etaf-md-tests.el",
+      "purpose": "`:on-link' intercepts link activation (including container card links) when returning non-nil and falls back to browser or anchor navigation when returning nil."
+    },
+    {
+      "name": "etaf-md-tests-on-media-intercepts-or-falls-back",
+      "file": "tests/etaf-md-tests.el",
+      "purpose": "`:on-media' receives `(KIND PATH)' (`image' or `video') on media press, intercepting activation on non-nil and falling back to default opening on nil."
+    },
+    {
+      "name": "etaf-md-tests-table-container-preserves-inline-runs",
+      "file": "tests/etaf-md-tests.el",
+      "purpose": "`:::table' cells keep inline emphasis, code spans and clickable links instead of flattening cell content to plain text."
+    },
+    {
+      "name": "etaf-md-tests-columns-counts-explicit-tracks",
+      "file": "tests/etaf-md-tests.el",
+      "purpose": "`:::columns' with an explicit track list counts columns from the parsed tracks (e.g. 3 tracks on one row, 1 track stacked) instead of falling back to 2."
     }
   ]
 }

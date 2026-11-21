@@ -169,8 +169,9 @@ Flavored Markdown says so itself; a session's `:flavor' argument still wins."
                      (buffer-substring-no-properties (point-min) (point-max))))
             (should (equal (etaf-md-tests--face-attribute link :foreground)
                            accent))
-            (should-not (equal (etaf-md-tests--face-attribute
-                               (format "Heading%d" level) :foreground) accent))
+            (when (> level 1)
+              (should-not (equal (etaf-md-tests--face-attribute
+                                  (format "Heading%d" level) :foreground) accent)))
             (should (eq (etaf-md-tests--face-attribute link :weight) 'bold))
             (should (etaf-md-tests--keymap-at link))
             (goto-char (match-beginning 0))
@@ -369,7 +370,7 @@ Several dark themes do that, and honoring them literally renders every heading
 flat; the palette then derives the heading from the accent instead."
   (etaf-md-tests--with-faces
       '(:foreground "#ffffff" :background "#263238" :outline "#eceff1")
-    (etaf-md-tests--with-mount (etaf-md-create :text "# Heading\n")
+    (etaf-md-tests--with-mount (etaf-md-create :text "## Heading\n")
       (let ((heading (etaf-md-tests--foreground-at "Heading")))
         (should heading)
         (should-not (equal heading "#eceff1"))
@@ -380,7 +381,7 @@ flat; the palette then derives the heading from the accent instead."
 The derivation only replaces a heading color that would read as plain text."
   (etaf-md-tests--with-faces
       '(:foreground "#383a42" :background "#fafafa" :outline "#0184bc")
-    (etaf-md-tests--with-mount (etaf-md-create :text "# Heading\n")
+    (etaf-md-tests--with-mount (etaf-md-create :text "## Heading\n")
       (should (equal "#0184bc"
                      (etaf-md-tests--foreground-at "Heading"))))))
 
@@ -2126,3 +2127,306 @@ heading to start at."
                                   (line-beginning-position) (line-end-position))))))
                   (when (buffer-live-p preview) (kill-buffer preview)))))))
       (delete-directory dir t))))
+
+;;;; Containers, line grid, activation callbacks, tables and columns
+
+(ert-deftest etaf-md-tests-container-outline-keeps-document-order-and-locate ()
+  "Headings before, inside and after containers appear in order with unique ids.
+Locate and `#anchor' links land on the matching heading, including headings
+painted inside bordered containers."
+  (let* ((text (concat "# Before\n\n"
+                       "[Jump inside](#inside) "
+                       "[Jump column](#right-col) "
+                       "[Jump repeat](#same-2)\n\n"
+                       "## Same\n\n"
+                       ":::card {title=\"x\"}\n"
+                       "## Inside\n"
+                       "content\n\n"
+                       "### Same\n"
+                       ":::\n\n"
+                       ":::columns {columns=\"1fr 1fr\"}\n"
+                       ":::col\n## Left Col\n:::\n"
+                       ":::col\n## Right Col\n:::\n"
+                       ":::\n\n"
+                       "## After\n"
+                       "more\n"))
+         (session (etaf-md-create :text text :theme 'dark))
+         (outline (etaf-md-outline session))
+         (titles (mapcar #'cadr outline))
+         (ids (mapcar #'cl-caddr outline)))
+    (should (equal titles '("Before" "Same" "Inside" "Same"
+                            "Left Col" "Right Col" "After")))
+    (should (equal ids '("before" "same" "inside" "same-2"
+                         "left-col" "right-col" "after")))
+    (let ((buffer (etaf-md-open session)))
+      (unwind-protect
+          (with-current-buffer buffer
+            (let ((pos-before (etaf-md-locate session 0)))
+              (should pos-before)
+              (should (looking-at-p "Before")))
+            (let ((pos-inside (etaf-md-locate session 2)))
+              (should pos-inside)
+              (should (looking-at-p "Inside")))
+            (let ((pos-right (etaf-md-locate session 5)))
+              (should pos-right)
+              (should (looking-at-p "Right Col")))
+            (let ((pos-after (etaf-md-locate session 6)))
+              (should pos-after)
+              (should (looking-at-p "After")))
+            ;; Follow `#inside' link to jump into the container heading.
+            (goto-char (point-min))
+            (should (search-forward "Jump inside" nil t))
+            (goto-char (match-beginning 0))
+            (call-interactively (key-binding (kbd "RET")))
+            (should (looking-at-p "Inside"))
+            ;; Follow `#right-col' link to jump into the second column heading.
+            (goto-char (point-min))
+            (should (search-forward "Jump column" nil t))
+            (goto-char (match-beginning 0))
+            (call-interactively (key-binding (kbd "RET")))
+            (should (looking-at-p "Right Col"))
+            ;; Follow `#same-2' link to jump to the deduplicated heading.
+            (goto-char (point-min))
+            (should (search-forward "Jump repeat" nil t))
+            (goto-char (match-beginning 0))
+            (call-interactively (key-binding (kbd "RET")))
+            (should (looking-at-p "Same"))
+            (should (> (point) (etaf-md-locate session 2))))
+        (when (buffer-live-p buffer)
+          (with-current-buffer buffer (etaf-md-close)))))))
+
+(ert-deftest etaf-md-tests-container-footnotes-resolve-across-boundaries ()
+  "Footnote references outside and inside containers resolve in document order.
+Definitions written either outside or inside containers collect into the
+document footnote list and paint at the end of the page."
+  (let* ((text (concat "Before[^a].\n\n"
+                       ":::card {title=\"x\"}\n"
+                       "Inside[^b] and local[^c].\n\n"
+                       "[^c]: 容器内脚注\n"
+                       ":::\n\n"
+                       "After[^d].\n\n"
+                       "[^a]: 外部前脚注\n\n"
+                       "[^b]: 跨容器脚注\n\n"
+                       "[^d]: 外部后脚注\n"))
+         (session (etaf-md-create :text text :theme 'dark))
+         (labels (plist-get (etaf-md-state session) :footnotes)))
+    (should (equal labels '("a" "b" "c" "d")))
+    (etaf-md-tests--with-mount session
+      (let ((painted (buffer-substring-no-properties (point-min) (point-max))))
+        (should (string-match-p "Before\\[1\\]" painted))
+        (should (string-match-p "Inside\\[2\\] and local\\[3\\]" painted))
+        (should (string-match-p "After\\[4\\]" painted))
+        (should (string-match-p "\\[1\\] 外部前脚注" painted))
+        (should (string-match-p "\\[2\\] 跨容器脚注" painted))
+        (should (string-match-p "\\[3\\] 容器内脚注" painted))
+        (should (string-match-p "\\[4\\] 外部后脚注" painted))))))
+
+(defun etaf-md-tests--scaled-chars ()
+  "Return any characters in the current buffer whose face carries `:height'."
+  (let ((scaled nil))
+    (dotimes (index (buffer-size))
+      (let* ((face (get-text-property (1+ index) 'face))
+             (faces (cond ((null face) nil)
+                          ((and (listp face) (keywordp (car face))) (list face))
+                          ((listp face) face)
+                          (t (list face)))))
+        (when (cl-some (lambda (entry)
+                         (and (listp entry) (plist-get entry :height)))
+                       faces)
+          (push (char-after (1+ index)) scaled))))
+    (concat (nreverse scaled))))
+
+(ert-deftest etaf-md-tests-headings-render-on-line-grid-without-font-size ()
+  "Front-matter title and body headings keep standard line height with no scaling.
+The document header uses bold weight, heading color and a bottom hairline, and
+total line counts stay on the uniform line grid."
+  (let* ((front-h3 (concat "---\ntitle: 文档标题\nauthor: 作者\n---\n\n"
+                           "### 小节\n\n正文。\n"))
+         (all-levels (concat "---\ntitle: 页面标题\n---\n\n"
+                             "# 一级标题\n\n"
+                             "## 二级标题\n\n"
+                             "### 三级标题\n\n"
+                             "正文[^n]。\n\n"
+                             "[^n]: 脚注内容\n"))
+         (s1 (etaf-md-create :text front-h3 :theme 'dark))
+         (s2 (etaf-md-create :text all-levels :theme 'dark)))
+    (etaf-md-tests--with-mount s1
+      (let ((scaled (etaf-md-tests--scaled-chars))
+            (lines (count-lines (point-min) (point-max)))
+            (weight (etaf-md-tests--face-attribute "文档标题" :weight))
+            (underline (etaf-md-tests--face-attribute "文档标题" :underline)))
+        (should (equal scaled ""))
+        ;; Same 10 lines as before removing heading scaling: no extra rows added.
+        (should (= lines 10))
+        (should (eq weight 'bold))
+        (should underline)))
+    (etaf-md-tests--with-mount s2
+      (let ((scaled (etaf-md-tests--scaled-chars))
+            (h1-weight (etaf-md-tests--face-attribute "一级标题" :weight))
+            (h2-weight (etaf-md-tests--face-attribute "二级标题" :weight))
+            (h3-weight (etaf-md-tests--face-attribute "三级标题" :weight)))
+        (should (equal scaled ""))
+        (should (eq h1-weight 'bold))
+        (should (eq h2-weight 'bold))
+        (should (eq h3-weight 'bold))))))
+
+(ert-deftest etaf-md-tests-on-link-intercepts-or-falls-back ()
+  "`:on-link' intercepts link press on non-nil and falls back on nil."
+  (let* ((seen nil)
+         (browsed nil)
+         (session
+          (etaf-md-create
+           :text (concat "# Target\n\n"
+                         "[Handled](https://app.example/doc) "
+                         "[Fallback](https://other.example/page) "
+                         "[Anchor](#target)\n\n"
+                         ":::card {title=\"CardLink\" href=\"https://app.example/card\"}\n"
+                         "Body\n:::\n")
+           :theme 'dark
+           :on-link (lambda (url)
+                      (push url seen)
+                      (string-prefix-p "https://app.example/" url))))
+         (buffer (etaf-md-open session)))
+    (unwind-protect
+        (with-current-buffer buffer
+          (cl-letf (((symbol-function 'browse-url)
+                     (lambda (url &rest _) (push url browsed))))
+            ;; Handled link: callback returns non-nil, browse-url not called.
+            (goto-char (point-min))
+            (should (search-forward "Handled" nil t))
+            (goto-char (match-beginning 0))
+            (call-interactively (key-binding (kbd "RET")))
+            ;; Fallback link: callback returns nil, browse-url called.
+            (goto-char (point-min))
+            (should (search-forward "Fallback" nil t))
+            (goto-char (match-beginning 0))
+            (call-interactively (key-binding (kbd "RET")))
+            ;; Fallback anchor: callback returns nil, jumps to heading.
+            (goto-char (point-min))
+            (should (search-forward "Anchor" nil t))
+            (goto-char (match-beginning 0))
+            (call-interactively (key-binding (kbd "RET")))
+            (should (looking-at-p "Target"))
+            ;; Container card href also routes through `:on-link'.
+            (goto-char (point-min))
+            (should (search-forward "CardLink" nil t))
+            (goto-char (match-beginning 0))
+            (call-interactively (key-binding (kbd "RET")))))
+      (when (buffer-live-p buffer)
+        (with-current-buffer buffer (etaf-md-close))))
+    (should (equal (nreverse seen)
+                   '("https://app.example/doc"
+                     "https://other.example/page"
+                     "#target"
+                     "https://app.example/card")))
+    (should (equal browsed '("https://other.example/page")))))
+
+(ert-deftest etaf-md-tests-on-media-intercepts-or-falls-back ()
+  "`:on-media' receives `(KIND PATH)' on press; non-nil handles, nil falls back."
+  (skip-unless (memq system-type '(darwin gnu/linux)))
+  (let* ((image (etaf-md-tests--fixture "wide-400x100.png"))
+         (video (etaf-md-tests--fixture "clip.mp4"))
+         (handled-events nil)
+         (fallback-events nil)
+         (opened-desktop nil)
+         (real-process (symbol-function 'call-process)))
+    ;; 1. Intercept both image and video (returning non-nil).
+    (let ((session (etaf-md-create
+                    :text (format "![wide](%s)\n\n![clip](%s)\n" image video)
+                    :theme 'dark
+                    :on-media (lambda (kind path)
+                                (push (list kind path) handled-events)
+                                t))))
+      (etaf-md-tests--with-mount session
+        (cl-letf (((symbol-function 'call-process)
+                   (lambda (program &rest args)
+                     (if (member program '("open" "xdg-open"))
+                         (progn (push (car (last args)) opened-desktop) 0)
+                       (apply real-process program args)))))
+          (goto-char (point-min))
+          (should (search-forward "▀" nil t))
+          (goto-char (match-beginning 0))
+          (call-interactively (key-binding (kbd "RET")))
+          (goto-char (point-min))
+          (should (search-forward "按 RET 播放" nil t))
+          (goto-char (match-beginning 0))
+          (call-interactively (key-binding (kbd "RET")))
+          ;; Returning non-nil must not mount the inline player either.
+          (goto-char (point-min))
+          (should-not (search-forward "按 RET 播放/暂停" nil t)))))
+    (should (equal (nreverse handled-events)
+                   (list (list 'image image) (list 'video video))))
+    (should-not opened-desktop)
+    ;; 2. Returning nil falls back to the desktop opener for a local image.
+    (let ((session (etaf-md-create
+                    :text (format "![wide](%s)\n" image)
+                    :theme 'dark
+                    :on-media (lambda (kind path)
+                                (push (list kind path) fallback-events)
+                                nil))))
+      (etaf-md-tests--with-mount session
+        (cl-letf (((symbol-function 'call-process)
+                   (lambda (program &rest args)
+                     (if (member program '("open" "xdg-open"))
+                         (progn (push (car (last args)) opened-desktop) 0)
+                       (apply real-process program args)))))
+          (goto-char (point-min))
+          (should (search-forward "▀" nil t))
+          (goto-char (match-beginning 0))
+          (call-interactively (key-binding (kbd "RET"))))))
+    (should (equal fallback-events (list (list 'image image))))
+    (should (equal opened-desktop (list image)))))
+
+(ert-deftest etaf-md-tests-table-container-preserves-inline-runs ()
+  "`:::table' cells keep bold, italic, code spans and clickable links."
+  (let* ((opened nil)
+         (session
+          (etaf-md-create
+           :text (concat ":::table {title=\"特性\"}\n"
+                         "| 样式 | 链接 |\n"
+                         "| --- | --- |\n"
+                         "| **粗体** *斜体* `代码` | [文档](https://example.com/doc) |\n"
+                         ":::\n")
+           :theme 'dark
+           :on-link (lambda (url) (push url opened) t))))
+    (etaf-md-tests--with-mount session
+      (let ((bold-weight (etaf-md-tests--face-attribute "粗体" :weight))
+            (italic-slant (etaf-md-tests--face-attribute "斜体" :slant))
+            (code-bg (etaf-md-tests--face-attribute "代码" :background))
+            (link-keymap (etaf-md-tests--keymap-at "文档")))
+        (should (eq bold-weight 'bold))
+        (should (eq italic-slant 'italic))
+        (should (stringp code-bg))
+        (should-not (equal code-bg "#191a1c"))
+        (should link-keymap)
+        (goto-char (point-min))
+        (should (search-forward "文档" nil t))
+        (goto-char (match-beginning 0))
+        (call-interactively (key-binding (kbd "RET")))))
+    (should (equal opened '("https://example.com/doc")))))
+
+(ert-deftest etaf-md-tests-columns-counts-explicit-tracks ()
+  "`:::columns' with an explicit track list uses the track count as column count.
+A 3-track list lays three columns on one row instead of falling back to two,
+and a single-track list stacks its columns one per row."
+  (let ((three (etaf-md-create
+                :text (concat ":::columns {columns=\"2fr 1fr 1fr\"}\n"
+                              ":::col\nColA\n:::\n"
+                              ":::col\nColB\n:::\n"
+                              ":::col\nColC\n:::\n"
+                              ":::\n")
+                :theme 'dark))
+        (one (etaf-md-create
+              :text (concat ":::columns {columns=\"1fr\"}\n"
+                            ":::col\nFirstRow\n:::\n"
+                            ":::col\nSecondRow\n:::\n"
+                            ":::\n")
+              :theme 'dark)))
+    (etaf-md-tests--with-mount three
+      (let ((text (buffer-substring-no-properties (point-min) (point-max))))
+        (should (string-match-p "ColA.*ColB.*ColC" text))))
+    (etaf-md-tests--with-mount one
+      (let ((text (buffer-substring-no-properties (point-min) (point-max))))
+        (should (string-match-p "FirstRow" text))
+        (should (string-match-p "SecondRow" text))
+        (should-not (string-match-p "FirstRow.*SecondRow" text))))))

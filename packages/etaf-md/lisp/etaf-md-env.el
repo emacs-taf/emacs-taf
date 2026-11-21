@@ -22,6 +22,9 @@
 (require 'etaf-md-theme)
 
 (declare-function etaf-md--republish "etaf-md-model" (session))
+(declare-function etaf-md--env "etaf-md-model" (session))
+(declare-function etaf-md--open-url "etaf-md-model" (session url))
+(declare-function etaf-md--wrap-heading "etaf-md-views" (block view))
 
 (cl-defstruct (etaf-md-env (:constructor etaf-md-env-create)
                            (:copier nil))
@@ -33,6 +36,18 @@
   palette
   theme
   block)
+
+(defun etaf-md--markdown-env (env)
+  "Return the `etaf-ui-markdown' rendering env for paint ENV.
+Preserves the page services (media, links, footnotes and `:line-grid') while
+binding `:width' to ENV's own available columns."
+  (if-let* ((session (etaf-md-env-session env)))
+      (plist-put (copy-sequence (etaf-md--env session))
+                 :width (etaf-md-env-width env))
+    (list :theme (etaf-md-env-theme env)
+          :palette (etaf-md-env-palette env)
+          :width (etaf-md-env-width env)
+          :line-grid t)))
 
 (defun etaf-md--paint (node env)
   "Return the view ENV's definition gives NODE, or a failure line."
@@ -59,13 +74,15 @@
      ;; because a container cannot be painted without one.
      ((and (etaf-md-node-block node)
            (not (eq (plist-get (etaf-md-node-block node) :type) 'container)))
-      (etaf-ui-markdown-view-block
-       (etaf-md-node-block node)
-       ;; A block painted below a container keeps the page services: media,
-       ;; links and the page directory are part of the environment the block
-       ;; was written for, and a minimal plist would show a placeholder.
-       (plist-put (copy-sequence (etaf-md--env (etaf-md-env-session env)))
-                  :width (etaf-md-env-width env))))
+      (let ((block (etaf-md-node-block node)))
+        (etaf-md--wrap-heading
+         block
+         (etaf-ui-markdown-view-block
+          block
+          ;; A block painted below a container keeps the page services: media,
+          ;; links and the page directory are part of the environment the block
+          ;; was written for, and a minimal plist would show a placeholder.
+          (etaf-md--markdown-env env)))))
      (t
       (etaf-md--failure-view
        env (or (etaf-md-node-source node)
@@ -170,9 +187,11 @@ keep their own ink instead of sharing one fixed set of colours."
 
 (defun etaf-md-follow-link (env target)
   "Open TARGET for ENV's session; return non-nil when it was followed."
-  (let ((open (plist-get (etaf-md-env-session env) :open-url)))
-    (when (and open target)
-      (funcall open target)
+  (let ((session (etaf-md-env-session env)))
+    (when (and session target)
+      (if-let* ((open (plist-get session :open-url)))
+          (funcall open target)
+        (etaf-md--open-url session target))
       t)))
 
 (defun etaf-md--block-identity (env)

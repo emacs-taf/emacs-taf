@@ -253,7 +253,9 @@ inside a fence stays code.  BASE is where TEXT starts in the page."
        collect (list :type 'container
                      :name (plist-get marker :name)
                      :attrs (plist-get marker :attrs)
-                     :children (plist-get parsed :children)
+                     :children (etaf-md--shift-blocks
+                                (plist-get parsed :children)
+                                (+ base body-start))
                      :begin (+ base (plist-get marker :start))
                      :end (+ base body-end)
                      :source (substring text
@@ -272,30 +274,205 @@ would join them, so the marker gets its own paragraph here."
             else collect line)
    "\n"))
 
+(defvar etaf-md--footnote-def-collector nil
+  "Mutable cell `(ALIST)' collecting footnote definitions during container parse.")
+
+(defun etaf-md--line-indent (line)
+  "Return LINE's leading space count with tabs counted as four columns."
+  (let ((indent 0) (index 0) (len (length line)))
+    (while (and (< index len) (memq (aref line index) '(?\s ?\t)))
+      (setq indent (+ indent (if (eq (aref line index) ?\t) 4 1))
+            index (1+ index)))
+    indent))
+
+(defun etaf-md--collect-footnote-defs (text collector)
+  "Collect GFM footnote definitions from markdown TEXT into COLLECTOR.
+Skips fenced code blocks and keeps only the first definition per label."
+  (let ((lines (split-string (replace-regexp-in-string "\r\n?" "\n" text) "\n"))
+        (fence nil))
+    (while lines
+      (let ((line (car lines)))
+        (cond
+         ((string-match "\\`[ \t]*\\(`\\{3,\\}\\|~\\{3,\\}\\)" line)
+          (let ((marker (match-string 1 line))
+                (bare (string-match-p "\\`[ \t]*\\'" (substring line (match-end 0)))))
+            (cond (fence
+                   (when (and bare
+                              (eq (aref fence 0) (aref marker 0))
+                              (>= (length marker) (length fence)))
+                     (setq fence nil)))
+                  (t (setq fence marker))))
+          (setq lines (cdr lines)))
+         (fence
+          (setq lines (cdr lines)))
+         ((string-match "\\` ? ? ?\\[\\^\\([^]]+\\)\\]:[ \t]*\\(.*\\)\\'" line)
+          (let ((label (match-string 1 line))
+                (def-lines (list line))
+                (rest (cdr lines)))
+            (while (and rest
+                        (or (string-match-p "\\`[ \t]*\\'" (car rest))
+                            (>= (etaf-md--line-indent (car rest)) 4)))
+              (push (car rest) def-lines)
+              (setq rest (cdr rest)))
+            (unless (assoc label (car collector))
+              (setcar collector
+                      (cons (cons label (mapconcat #'identity (nreverse def-lines) "\n"))
+                            (car collector))))
+            (setq lines rest)))
+         (t
+          (setq lines (cdr lines))))))))
+
+(defun etaf-md--heading-plain-text (inlines)
+  "Return the concatenated plain text of heading inline NODES."
+  (mapconcat
+   (lambda (node)
+     (pcase (plist-get node :type)
+       ((or 'text 'code 'html 'abbreviation) (or (plist-get node :text) ""))
+       ((or 'emph 'strong 'strike 'link 'autolink 'mark)
+        (etaf-md--heading-plain-text (plist-get node :children)))
+       ((or 'subscript 'superscript)
+        (or (plist-get node :rendered) (plist-get node :text) ""))
+       ('emoji (or (plist-get node :char) (plist-get node :text) ""))
+       ('image (or (plist-get node :alt) ""))
+       ('break " ")
+       ('footnote-ref (format "[%s]" (or (plist-get node :label) "")))
+       ('badge (or (plist-get node :content) ""))
+       (_ "")))
+   inlines ""))
+
+(defun etaf-md--heading-slug (text)
+  "Return a stable anchor slug for heading TEXT."
+  (let ((slug (downcase (string-trim text))))
+    (setq slug (replace-regexp-in-string "[^[:alnum:]\u4e00-\u9fff]+" "-" slug))
+    (setq slug (replace-regexp-in-string "\\`-+\\|-+\\'" "" slug))
+    (if (string-empty-p slug) "section" slug)))
+
+(defun etaf-md--collect-outline (blocks)
+  "Assign unique heading ids across BLOCKS in document order and return outline.
+Descends into container blocks so headings before, inside and after containers
+appear in document order with unique anchor ids."
+  (let ((seen (make-hash-table :test #'equal))
+        (used (make-hash-table :test #'equal))
+        (outline nil))
+    (cl-labels
+        ((walk (items)
+           (dolist (block items)
+             (pcase (plist-get block :type)
+               ('heading
+                (let* ((text (string-trim
+                              (etaf-md--heading-plain-text
+                               (plist-get block :children))))
+                       (base (etaf-md--heading-slug text))
+                       (count (1+ (or (gethash base seen) 0)))
+                       (id (if (= count 1) base (format "%s-%d" base count))))
+                  (while (gethash id used)
+                    (setq count (1+ count)
+                          id (format "%s-%d" base count)))
+                  (puthash base count seen)
+                  (puthash id t used)
+                  (plist-put block :id id)
+                  (push (list (plist-get block :level) text id) outline)))
+               ('container
+                (walk (plist-get block :children)))))))
+      (walk blocks))
+    (nreverse outline)))
+
+(defun etaf-md--renumber-footnotes (blocks)
+  "Renumber footnote references in BLOCKS in document order.
+Return the list of referenced labels in first-reference order."
+  (let ((order nil))
+    (cl-labels
+        ((visit-inline (node)
+           (when (and (listp node) (keywordp (car node)))
+             (when (eq (plist-get node :type) 'footnote-ref)
+               (let* ((label (plist-get node :label))
+                      (existing (cl-position label order :test #'equal))
+                      (number (if (numberp existing)
+                                  (1+ existing)
+                                (1+ (length order)))))
+                 (unless (numberp existing)
+                   (setq order (append order (list label))))
+                 (plist-put node :number number)))
+             (dolist (child (plist-get node :children))
+               (visit-inline child))))
+         (visit-block (block)
+           (pcase (plist-get block :type)
+             ((or 'heading 'paragraph)
+              (dolist (child (plist-get block :children))
+                (visit-inline child)))
+             ((or 'blockquote 'list-item 'container)
+              (visit-blocks (plist-get block :children)))
+             ('list
+              (dolist (item (plist-get block :items))
+                (visit-blocks (plist-get item :children))))
+             ('table
+              (dolist (cell (plist-get block :header))
+                (dolist (child cell) (visit-inline child)))
+              (dolist (row (plist-get block :rows))
+                (dolist (cell row)
+                  (dolist (child cell) (visit-inline child)))))
+             ('definition-list
+              (dolist (item (plist-get block :items))
+                (dolist (child (plist-get item :children))
+                  (visit-inline child))
+                (dolist (def (plist-get item :definitions))
+                  (visit-blocks (plist-get def :children)))))))
+         (visit-blocks (items)
+           (dolist (block items)
+             (visit-block block))))
+      (visit-blocks blocks))
+    order))
+
+(defun etaf-md--resolve-footnotes (blocks defs flavor)
+  "Renumber footnote refs in BLOCKS and return resolved footnote definitions.
+DEFS is an alist of (LABEL . RAW-TEXT) collected in document order."
+  (let ((ordered (etaf-md--renumber-footnotes blocks)))
+    (when (and ordered defs)
+      (let ((def-blocks
+             (delq nil
+                   (mapcar (lambda (label) (cdr (assoc label defs)))
+                           ordered))))
+        (when def-blocks
+          (let* ((refs (mapconcat (lambda (label) (format "[^%s]" label))
+                                  ordered " "))
+                 (synthetic (concat refs "\n\n"
+                                    (mapconcat #'identity def-blocks "\n\n")
+                                    "\n"))
+                 (parsed (etaf-ui-markdown-parse synthetic flavor)))
+            (plist-get parsed :footnotes)))))))
+
 (defun etaf-md--parse-container-body (name text flavor base)
   "Return NAME's children parsed from TEXT, which starts at BASE in the page."
   (if (eq (etaf-md--child-syntax (intern name)) 'markers)
       (etaf-md--parse-marker-children name text flavor base)
-    (plist-get (etaf-md--parse
-                (if (equal name "chat")
-                    (etaf-md--chat-split-markers text)
-                  text)
-                flavor)
-               :children)))
+    (etaf-md--shift-blocks
+     (plist-get (etaf-md--parse
+                 (if (equal name "chat")
+                     (etaf-md--chat-split-markers text)
+                   text)
+                 flavor)
+                :children)
+     base)))
 
 (defun etaf-md--parse-containers (text flavor)
   "Parse TEXT with FLAVOR, reading `:::name {attrs}' containers.
 A container runs to the matching close, or to the end of the file for the last
 one.  Plain stretches between containers go to the shared Markdown parser, and
 their block ranges move to where the stretch sits in TEXT."
-  (let ((offset 0) (plain-start 0) (container nil) (depth 0) (fence nil)
-        (result nil) (template nil))
+  (let* ((top-level (null etaf-md--footnote-def-collector))
+         (etaf-md--footnote-def-collector
+          (or etaf-md--footnote-def-collector (list nil)))
+         (offset 0) (plain-start 0) (container nil) (depth 0) (fence nil)
+         (result nil) (template nil))
     (cl-flet ((flush (end)
                 (when (< plain-start end)
-                  (let* ((parsed (etaf-ui-markdown-parse
-                                  (substring text plain-start end) flavor))
+                  (let* ((slice (substring text plain-start end))
+                         (parsed (etaf-ui-markdown-parse slice flavor))
                          (blocks (plist-get parsed :children)))
-                    (unless template (setq template parsed))
+                    (etaf-md--collect-footnote-defs
+                     slice etaf-md--footnote-def-collector)
+                    (when (and (null template) (= plain-start 0))
+                      (setq template parsed))
                     (setq result
                           (nconc result (etaf-md--shift-blocks
                                          blocks plain-start)))))))
@@ -374,6 +551,17 @@ their block ranges move to where the stretch sits in TEXT."
                                             (etaf-ui-markdown-parse "" flavor)))))
         (setf (plist-get document :children) result)
         (plist-put document :meta (or (plist-get document :meta) nil))
+        (when top-level
+          (let* ((outline (etaf-md--collect-outline result))
+                 (footnotes (etaf-md--resolve-footnotes
+                             result
+                             (nreverse (car etaf-md--footnote-def-collector))
+                             flavor)))
+            (setq document (plist-put document :outline outline))
+            (setq document (plist-put document :footnotes footnotes))
+            (unless (plist-get document :title)
+              (when-let* ((first (car outline)))
+                (setq document (plist-put document :title (nth 1 first)))))))
         document))))
 
 (defun etaf-md--container-syntax-p (text)
@@ -399,7 +587,11 @@ boundary."
   (condition-case err
       (if (etaf-md--container-syntax-p text)
           (etaf-md--parse-containers text flavor)
-        (etaf-ui-markdown-parse text flavor))
+        (let ((parsed (etaf-ui-markdown-parse text flavor)))
+          (when etaf-md--footnote-def-collector
+            (etaf-md--collect-footnote-defs
+             text etaf-md--footnote-def-collector))
+          parsed))
     (etaf-ui-markdown-error
      (signal 'etaf-md-error (cdr err)))))
 
@@ -718,7 +910,7 @@ and passed back as PUBLISHED by the next parse."
     (cons (plist-put (copy-sequence document) :children entries)
           (etaf-md--published-table entries))))
 
-(cl-defun etaf-md-create (&key file text title theme flavor)
+(cl-defun etaf-md-create (&key file text title theme flavor on-link on-media)
   "Create a headless preview session and return it.
 FILE names a markdown document to read; TEXT supplies the document directly
 for buffers and tests.  Exactly one source is required.  TITLE overrides the
@@ -727,7 +919,21 @@ document title; THEME selects a palette and defaults to the value of
 frame's faces and paints no page background).  FLAVOR selects the markdown
 dialect and defaults to `etaf-md-flavor': `gfm' enables the GitHub
 extensions and front matter, `commonmark' parses the core only, and a feature
-plist may toggle individual extensions."
+plist may toggle individual extensions.  ON-LINK, when non-nil, is called as
+\(funcall ON-LINK URL) on link activation; returning non-nil marks the
+activation handled, while nil falls back to the default anchor, browser or
+file opening.  ON-MEDIA, when non-nil, is called as (funcall ON-MEDIA KIND
+PATH) on media activation, where KIND is `image' or `video' and PATH is the
+resolved local file path or remote URL; returning non-nil marks the
+activation handled, while nil falls back to inline playback or opening."
+  (when (and on-link (not (functionp on-link)))
+    (signal 'etaf-md-error
+            (list (format "etaf-md-create: :on-link must be a function: %S"
+                          on-link))))
+  (when (and on-media (not (functionp on-media)))
+    (signal 'etaf-md-error
+            (list (format "etaf-md-create: :on-media must be a function: %S"
+                          on-media))))
   (let* ((file (and file (expand-file-name file)))
          (contents (cond (text text)
                          (file (etaf-md--read-source file))
@@ -746,6 +952,8 @@ plist may toggle individual extensions."
                         :text (unless file contents)
                         :flavor decided
                         :features nil
+                        :on-link on-link
+                        :on-media on-media
                         :dir (if file (file-name-directory file)
                                default-directory)
                         :document (etaf-ref nil :name 'etaf-md-document)
@@ -1089,29 +1297,52 @@ session keeps its current width.  Return the width in effect."
 (defun etaf-md--heading-match-forward (text)
   "Search forward for heading TEXT at the start of a line.
 Return the match start, or nil.  Leading blank characters (including the
-display spaces the renderer uses for centering) may precede the match."
+display spaces the renderer uses for centering) and container or heading
+left borders (`│') may precede the match."
   (let ((found nil))
     (while (and (not found) (search-forward text nil t))
       (let ((line-start (line-beginning-position)))
-        (when (string-blank-p
+        (when (string-match-p
+               "\\`[ \t│]*\\'"
                (buffer-substring-no-properties line-start (match-beginning 0)))
           (setq found (match-beginning 0)))))
     found))
 
+(defun etaf-md--heading-position-from-bounds (bounds text)
+  "Return the buffer position of heading TEXT within host BOUNDS `(BEG . END)'."
+  (when (and (consp bounds) (integerp (car bounds)) (integerp (cdr bounds)))
+    (let ((beg (max (point-min) (min (point-max) (car bounds))))
+          (end (max (point-min) (min (point-max) (cdr bounds)))))
+      (save-excursion
+        (goto-char beg)
+        (if (and (stringp text) (not (string-empty-p text))
+                 (search-forward text end t))
+            (match-beginning 0)
+          beg)))))
+
 (defun etaf-md--heading-positions (session)
   "Return SESSION's heading buffer positions as a list of (INDEX . POSITION).
-The scan walks the outline in document order, so repeated heading texts map to
-successive occurrences."
+Prefers each heading's own host ref bounds when mounted, which tracks headings
+inside bordered or multi-column containers and omits headings hidden inside
+collapsed blocks; falls back to line-order scanning when no runtime is attached."
   (let ((buffer (plist-get session :buffer))
         (outline (etaf-md-outline session)))
     (when (buffer-live-p buffer)
-      (with-current-buffer buffer
-        (save-excursion
-          (goto-char (point-min))
-          (cl-loop for entry in outline
-                   for index from 0
-                   for position = (etaf-md--heading-match-forward (nth 1 entry))
-                   when position collect (cons index position)))))))
+      (let ((runtime (etaf-runtime-for-buffer buffer)))
+        (with-current-buffer buffer
+          (save-excursion
+            (goto-char (point-min))
+            (cl-loop for entry in outline
+                     for index from 0
+                     for ref = (etaf-md--heading-ref (nth 2 entry))
+                     for bounds = (and runtime ref
+                                       (etaf-host-ref-bounds runtime ref))
+                     for position =
+                     (if runtime
+                         (etaf-md--heading-position-from-bounds
+                          bounds (nth 1 entry))
+                       (etaf-md--heading-match-forward (nth 1 entry)))
+                     when position collect (cons index position))))))))
 
 (defun etaf-md-locate (session index)
   "Move point to SESSION's outline heading INDEX and recenter.
@@ -1171,33 +1402,44 @@ and the heading is searched in the text a reader sees."
 
 (defun etaf-md--open-url (session url)
   "Open URL referenced by SESSION's document.
-An in-document anchor jumps to the matching heading, a URL with a scheme goes
+When SESSION carries an `:on-link' callback, call it with URL first; a non-nil
+return value means the caller handled the activation.  Otherwise an
+in-document anchor jumps to the matching heading, a URL with a scheme goes
 to the browser, and a local path opens in Emacs: a markdown document opens as
 its preview, anything else as a file.  A `#fragment' after a local path selects
 that heading in the opened preview."
-  (let* ((fragment nil)
-         (target (if (string-match "\\`\\([^#]*\\)#\\(.+\\)\\'" url)
-                     (prog1 (match-string 1 url)
-                       (setq fragment (match-string 2 url)))
-                   url)))
-    (cond
-     ((string-empty-p target)
-      (when fragment (etaf-md--locate-anchor session fragment)))
-     ((etaf-md--remote-url-p target) (browse-url target))
-     (t
-      (let ((path (expand-file-name target (or (plist-get session :dir)
-                                               default-directory))))
+  (let ((handler (plist-get session :on-link)))
+    (unless (and handler (funcall handler url))
+      (let* ((fragment nil)
+             (target (if (string-match "\\`\\([^#]*\\)#\\(.+\\)\\'" url)
+                         (prog1 (match-string 1 url)
+                           (setq fragment (match-string 2 url)))
+                       url)))
         (cond
-         ((and (string-match-p etaf-md--markdown-file-regexp path)
-               (file-readable-p path))
-          (let ((buffer (etaf-md-open path)))
-            ;; The heading is found in the painted page, and the paint of a
-            ;; page mounted inside a command belongs to the redisplay that
-            ;; follows it, so the fragment is applied once that paint is done.
-            (when (and fragment (buffer-live-p buffer))
-              (run-at-time 0 nil #'etaf-md--locate-pending buffer fragment))))
-         ((file-exists-p path) (find-file-other-window path))
-         (t (message "File not found: %s" path))))))))
+         ((string-empty-p target)
+          (when fragment (etaf-md--locate-anchor session fragment)))
+         ((etaf-md--remote-url-p target) (browse-url target))
+         (t
+          (let ((path (expand-file-name target (or (plist-get session :dir)
+                                                   default-directory))))
+            (cond
+             ((and (string-match-p etaf-md--markdown-file-regexp path)
+                   (file-readable-p path))
+              (let ((buffer (etaf-md-open path)))
+                ;; The heading is found in the painted page, and the paint of a
+                ;; page mounted inside a command belongs to the redisplay that
+                ;; follows it, so the fragment is applied once that paint is done.
+                (when (and fragment (buffer-live-p buffer))
+                  (run-at-time 0 nil #'etaf-md--locate-pending buffer fragment))))
+             ((file-exists-p path) (find-file-other-window path))
+             (t (message "File not found: %s" path))))))))))
+
+(defun etaf-md--open-media (session kind path)
+  "Ask SESSION's `:on-media' callback to handle media PATH of KIND.
+KIND is `image' or `video'.  Return non-nil when the callback handled the
+activation, or nil to run the default media action."
+  (when-let* ((handler (plist-get session :on-media)))
+    (funcall handler kind path)))
 
 (defun etaf-md--open-file (path)
   "Open PATH with the operating system's default application.
@@ -1314,8 +1556,10 @@ re-render after a theme switch instead of keeping the faces it first read."
         :background (etaf-md--page-background session)
         :dir (plist-get session :dir)
         :features (plist-get session :features)
+        :line-grid t
         :open-url (lambda (url) (etaf-md--open-url session url))
         :open-link (lambda (url) (etaf-md--open-url session url))
+        :open-media (lambda (kind path) (etaf-md--open-media session kind path))
         :open-file #'etaf-md--open-file
         :render-media #'etaf-md--render-media
         :alert-labels etaf-md--alert-labels
