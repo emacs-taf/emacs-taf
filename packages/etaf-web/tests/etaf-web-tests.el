@@ -279,10 +279,13 @@
                        index-md)))
             (with-current-buffer buf1 (etaf-md-close))
             (setq buf1 nil)
-            ;; Second open of the same URL hits index.md cache with zero fetches.
+            ;; Second open reuses index.md: the page and the saved image are
+            ;; not fetched again.  Only the image that failed may be retried,
+            ;; so a later success can still be cached.
             (setq buf2 (etaf-web-open page-url))
             (should (buffer-live-p buf2))
-            (should (= (length fetch-log) first-fetches))
+            (should (= (cl-count page-url fetch-log :test #'equal) 1))
+            (should (= (cl-count img-url fetch-log :test #'equal) 1))
             (let ((painted2 (with-current-buffer buf2
                               (buffer-substring-no-properties (point-min) (point-max)))))
               (should (string-match-p "中文指南" painted2)))))
@@ -778,9 +781,26 @@
     (should (string-match-p
              "^Run `make  check` now, tight`foo`bar, and `spaced`\\.$"
              md))
-    ;; 5. Chinese/English boundary whitespace vs tight spans, plus `<br>' preserved.
-    (should (string-match-p "^中文 English 与 `ETAF` 文本，以及紧贴中En。$" md))
+    ;; 5. Chinese/English boundary whitespace, plus a split `中En' joined with
+    ;; one separating space, plus `<br>' preserved.
+    (should (string-match-p "^中文 English 与 `ETAF` 文本，以及紧贴中 En。$" md))
     (should (string-match-p "^Line one\\\\\nLine two$" md))))
+
+(ert-deftest etaf-web-tests-separates-cjk-and-latin-across-elements ()
+  "A Chinese character next to a Latin letter or digit gets one separating space."
+  (let* ((html (concat "<html><head><title>统计</title></head><body><article>"
+                       "<p><span>约 2095 字</span><span>7 分钟</span></p>"
+                       "<p><span>Vim</span><span>中文</span></p>"
+                       "<p><span>字数</span><code>7</code></p>"
+                       "<p>一段足够长的正文，用来保证这个页面不会被当成空壳页面处理，内容足够长足够长。</p>"
+                       "</article></body></html>"))
+         (md (etaf-web-to-markdown html :base-url "https://example.com/")))
+    ;; Digit after a Chinese character takes a space; so does a following ideograph.
+    (should (string-match-p "^约 2095 字 7 分钟$" md))
+    (should (string-match-p "^Vim 中文$" md))
+    ;; An inline code span keeps its own boundary untouched.
+    (should (string-match-p "^字数`7`$" md))
+    (should-not (string-match-p "字7" md))))
 
 (ert-deftest etaf-web-tests-strips-card-ordinal-keeps-prose-number ()
   "Decorative 1-3 digit leading ordinal is dropped inside cards; prose numbers stay."
@@ -868,6 +888,162 @@
     (should (string-match-p "| Metric | Before | After |" md))
     (should (string-match-p "| Rows | 1 | 147 |" md))
     (should (string-match-p "| Readability | Broken | Clean |" md))))
+
+
+(defun etaf-web-tests--fake-browser (dom)
+  "Return an executable that prints DOM when asked for a rendered page."
+  (let ((script (make-temp-file "etaf-web-fake-browser-" nil ".sh")))
+    (with-temp-file script
+      (insert "#!/bin/sh\ncat <<'ETAF_DOM'\n" dom "\nETAF_DOM\n"))
+    (set-file-modes script #o755)
+    script))
+
+(defun etaf-web-tests--short-shell ()
+  "Return the HTML a script-driven site serves before its script runs."
+  "<html><head><title>App</title><script src=\"/app.js\"></script></head><body><nav>Home About</nav></body></html>")
+
+(defun etaf-web-tests--rendered-page ()
+  "Return the DOM of the page the fake browser renders, longer than a shell."
+  (concat "<html><head><title>App</title></head><body><article>"
+          "<h1>Rendered page</h1><p>"
+          (mapconcat (lambda (_i) "正文内容足够长以便被当成真正的段落读下去。") (number-sequence 1 30) "")
+          "</p></article></body></html>"))
+
+(defmacro etaf-web-tests--with-cache (root &rest body)
+  "Run BODY with `etaf-web-cache-directory' bound under ROOT."
+  (declare (indent 1))
+  `(let ((etaf-web-cache-directory (file-name-as-directory ,root)))
+     ,@body))
+
+(defun etaf-web-tests--http-buffer (body)
+  "Wrap utf-8 BODY in an HTTP 200 response buffer."
+  (etaf-web-tests--make-http-buffer
+   "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8"
+   (encode-coding-string body 'utf-8)))
+
+(ert-deftest etaf-web-tests-script-page-renders-through-browser ()
+  "A page whose HTML carries no prose is compiled from the rendered DOM."
+  (let* ((cache (make-temp-file "etaf-web-render-" t))
+         (page "https://example.test/app/")
+         (browser (etaf-web-tests--fake-browser (etaf-web-tests--rendered-page)))
+         (old etaf-web-render-command)
+         (buffer nil))
+    (unwind-protect
+        (progn
+          (setq etaf-web-render-command browser)
+          (etaf-web-tests--with-cache cache
+            (cl-letf (((symbol-function 'url-retrieve-synchronously)
+                       (lambda (_url &rest _)
+                         (etaf-web-tests--http-buffer (etaf-web-tests--short-shell)))))
+              (setq buffer (etaf-web-open page))
+              (with-current-buffer buffer
+                (should (string-match-p
+                         "Rendered page"
+                         (buffer-substring-no-properties (point-min) (point-max))))))))
+      (when (and buffer (buffer-live-p buffer)) (kill-buffer buffer))
+      (setq etaf-web-render-command old)
+      (ignore-errors (delete-file browser))
+      (delete-directory cache t))))
+
+(ert-deftest etaf-web-tests-page-without-prose-shows-notice ()
+  "A script-only page explains itself instead of opening an empty buffer."
+  (let* ((cache (make-temp-file "etaf-web-notice-" t))
+         (page "https://example.test/shell/")
+         (old etaf-web-render-command)
+         (buffer nil))
+    (unwind-protect
+        (progn
+          (setq etaf-web-render-command 'off)
+          (etaf-web-tests--with-cache cache
+            (cl-letf (((symbol-function 'url-retrieve-synchronously)
+                       (lambda (_url &rest _)
+                         (etaf-web-tests--http-buffer (etaf-web-tests--short-shell)))))
+              (setq buffer (etaf-web-open page))
+              (with-current-buffer buffer
+                (let ((text (buffer-substring-no-properties (point-min) (point-max))))
+                  (should (string-match-p "需要脚本渲染" text))
+                  (should (string-match-p "在浏览器打开" text)))))
+            (let* ((page-dir (car (etaf-web-tests--cached-page-dirs cache)))
+                   (index (etaf-web-tests--read-file (expand-file-name "index.md" page-dir))))
+              (should (string-match-p "需要脚本渲染" index))
+              (should (string-match-p (regexp-quote page) index)))))
+      (when (and buffer (buffer-live-p buffer)) (kill-buffer buffer))
+      (setq etaf-web-render-command old)
+      (delete-directory cache t))))
+
+(ert-deftest etaf-web-tests-short-page-is-not-a-shell ()
+  "A genuinely short page keeps its paragraph instead of a notice."
+  (let* ((cache (make-temp-file "etaf-web-short-" t))
+         (page "https://example.test/note/")
+         (paragraph (concat "这一页只有一段话，但它确实是一段正常的正文，"
+                            "所以它应该原样读出来，不需要任何额外提示。"))
+         (buffer nil))
+    (unwind-protect
+        (etaf-web-tests--with-cache cache
+          (cl-letf (((symbol-function 'url-retrieve-synchronously)
+                     (lambda (_url &rest _)
+                       (etaf-web-tests--http-buffer
+                        (format "<html><head><title>Note</title></head><body><article><p>%s</p></article></body></html>"
+                                paragraph)))))
+            (setq buffer (etaf-web-open page))
+            (with-current-buffer buffer
+              (let ((text (buffer-substring-no-properties (point-min) (point-max))))
+                (should (string-match-p "只有一段话" text))
+                (should-not (string-match-p "需要脚本渲染" text))))))
+      (when (and buffer (buffer-live-p buffer)) (kill-buffer buffer))
+      (delete-directory cache t))))
+
+(ert-deftest etaf-web-tests-cache-backfills-missing-images ()
+  "Reopening a cached page downloads images its first pass could not save."
+  (let* ((cache (make-temp-file "etaf-web-backfill-" t))
+         (page "https://example.test/photo/")
+         (image "https://example.test/photo/hero.png")
+         (png (with-temp-buffer
+                (set-buffer-multibyte nil)
+                (insert-file-contents-literally
+                 (etaf-web-tests--fixture "sample.png"))
+                (buffer-string)))
+         (html (concat "<html><head><title>Photo</title></head><body><article>"
+                       "<h1>Photo</h1><p>一段足够长的正文，用来保证这个页面不会被当成空壳页面处理。</p>"
+                       "<img src=\"hero.png\" alt=\"Hero\"></article></body></html>"))
+         (old-download etaf-web-download-images)
+         (buffer nil)
+         (page-dir nil))
+    (unwind-protect
+        (etaf-web-tests--with-cache cache
+          (cl-letf (((symbol-function 'url-retrieve-synchronously)
+                     (lambda (url &rest _)
+                       (cond
+                        ((equal url page)
+                         (etaf-web-tests--http-buffer html))
+                        ((equal url image)
+                         (etaf-web-tests--make-http-buffer
+                          "HTTP/1.1 200 OK\r\nContent-Type: image/png" png))
+                        (t (etaf-web-tests--make-http-buffer
+                            "HTTP/1.1 404 Not Found\r\nContent-Type: text/html"
+                            "<html></html>"))))))
+            ;; First pass keeps the remote URL, as a failed download would.
+            (setq etaf-web-download-images nil)
+            (setq buffer (etaf-web-open page))
+            (when (buffer-live-p buffer) (kill-buffer buffer))
+            (setq page-dir (car (etaf-web-tests--cached-page-dirs cache)))
+            (let ((index (etaf-web-tests--read-file
+                          (expand-file-name "index.md" page-dir))))
+              (should (string-match-p (regexp-quote image) index))
+              (should-not (file-directory-p (expand-file-name "assets" page-dir))))
+            ;; The second pass fills the hole without the reader clearing the cache.
+            (setq etaf-web-download-images t)
+            (setq buffer (etaf-web-open page))
+            (let ((index (etaf-web-tests--read-file
+                          (expand-file-name "index.md" page-dir))))
+              (should-not (string-match-p (regexp-quote image) index))
+              (should (string-match-p (regexp-quote "](assets/") index))
+              (should (> (length (directory-files
+                                  (expand-file-name "assets" page-dir)))
+                         2)))))
+      (setq etaf-web-download-images old-download)
+      (when (and buffer (buffer-live-p buffer)) (kill-buffer buffer))
+      (delete-directory cache t))))
 
 (provide 'etaf-web-tests)
 ;;; etaf-web-tests.el ends here

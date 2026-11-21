@@ -80,6 +80,28 @@ To avoid duplicate headings and captions when rendered by `etaf-md`:
     `:::steps {list-style="decimal"}` (`:::step`), and `timeline` containers
     compile to `:::timeline` (`:::event` with optional `time`).
 
+## Pages that build their content with scripts
+
+Some sites ship a shell of navigation and load the article with JavaScript.
+When the compiled document has no sentence of its own and the HTML runs a
+script, `etaf-web-open` renders the page headlessly first and compiles that DOM
+instead.  Detection needs both signals, so a short static page keeps its own
+text and is never rewritten.
+
+```elisp
+(setq etaf-web-render-command "/Applications/Chromium.app/Contents/MacOS/Chromium")
+```
+
+`etaf-web-render-command` defaults to `nil`, which looks for a Chromium-based
+browser on this machine; the symbol `off` skips rendering, and a string names
+the executable.  Each render uses a private profile, so a browser you already
+have open does not answer instead.  `etaf-web-render-timeout` (default 25
+seconds) bounds the wait.
+
+When no browser is available or the render yields nothing, the page opens a
+notice that says the content needs scripts and links the original address for
+your browser.
+
 ## Cache layout and image limits
 
 `etaf-web-open` stores compiled pages under `etaf-web-cache-directory` (default
@@ -94,7 +116,9 @@ To avoid duplicate headings and captions when rendered by `etaf-md`:
 ```
 
 Opening the same HTTP(S) URL again renders the existing `index.md` directly
-without refetching.
+without refetching the page.  Images the first pass could not save are retried
+then, so a failed download does not stick until the cache is cleared: an image
+that succeeds later is swapped into `index.md` and shown immediately.
 
 When `etaf-web-download-images` is non-nil (the default), `etaf-web-open`
 downloads images into `assets/` and rewrites their URLs in `index.md` to

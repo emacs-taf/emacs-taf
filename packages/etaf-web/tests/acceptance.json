@@ -39,7 +39,7 @@
     {
       "name": "etaf-web-tests-url-fetch-caches-and-skips-refetch",
       "file": "tests/etaf-web-tests.el",
-      "purpose": "Stubbed HTTP fetch decodes meta charset, writes index.md, meta.json and cached assets while degrading failed images gracefully, and reuses the cached index.md without refetching on repeat open."
+      "purpose": "Stubbed HTTP fetch decodes charset, caches index.md/source.html/meta.json/assets, and a second open reuses the cache without refetching the page or a saved image (an image that failed earlier may be retried)."
     },
     {
       "name": "etaf-web-tests-disable-image-downloads-and-error-conditions",
@@ -124,7 +124,7 @@
     {
       "name": "etaf-web-tests-inline-spacing-fidelity",
       "file": "tests/etaf-web-tests.el",
-      "purpose": "Inline sibling boundaries preserve single spaces across newlines/spaces (and minified adjacent links or distinctly classed spans), keep tight unclassed elements glued, leave inline code internals and `<br>' intact, avoid spaces before punctuation, and handle CJK-Latin boundaries cleanly."
+      "purpose": "Inline sibling boundaries preserve single spaces across newlines/spaces (and minified adjacent links or distinctly classed spans), keep tight unclassed elements glued, leave inline code internals and `<br>' intact, avoid spaces before punctuation, and join a split CJK/Latin boundary with one separating space."
     },
     {
       "name": "etaf-web-tests-strips-card-ordinal-keeps-prose-number",
@@ -145,6 +145,31 @@
       "name": "etaf-web-tests-unwraps-layout-tables-and-keeps-data-tables",
       "file": "tests/etaf-web-tests.el",
       "purpose": "Nested and headerless 1-column/essay layout tables unwrap into normal Markdown blocks (with `<br><br>` normalized to paragraph breaks), short `<form>` widgets and their orphaned headings are pruned, inline spans in headings stay intact, and real `<th>` data tables remain GFM pipe tables."
+    },
+    {
+      "name": "etaf-web-tests-script-page-renders-through-browser",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "A page whose HTML only carries a shell is compiled from the DOM a headless browser renders, so its reading view shows the real content."
+    },
+    {
+      "name": "etaf-web-tests-page-without-prose-shows-notice",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "A script-only page opens a notice naming the situation and linking the original URL for the browser, instead of an empty buffer, when no renderer is available."
+    },
+    {
+      "name": "etaf-web-tests-short-page-is-not-a-shell",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "A genuinely short page keeps its paragraph: a page without scripts is never treated as a shell even when its prose is brief."
+    },
+    {
+      "name": "etaf-web-tests-cache-backfills-missing-images",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "Reopening a cached page downloads images its first pass could not save, so a failed download no longer sticks until the reader deletes the cache."
+    },
+    {
+      "name": "etaf-web-tests-separates-cjk-and-latin-across-elements",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "Adjacent inline elements that meet at a Chinese character and a Latin letter or digit are joined with one separating space, while an inline code span keeps its own boundary untouched."
     }
   ]
 }

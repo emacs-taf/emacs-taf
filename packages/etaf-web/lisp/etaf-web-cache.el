@@ -36,6 +36,30 @@ May be an integer or floating-point number of seconds."
   :type 'number
   :group 'etaf-web)
 
+(defcustom etaf-web-render-command nil
+  "Program used to render pages whose content a script builds.
+nil auto-detects a Chromium-based browser on this machine, the symbol `off'
+skips rendering, and a string names the executable to run."
+  :type '(choice (const :tag "Auto-detect" nil)
+                 (const :tag "Off" off)
+                 string)
+  :group 'etaf-web)
+
+(defcustom etaf-web-render-timeout 25
+  "Seconds to wait for a rendered page before giving up on it."
+  :type 'number
+  :group 'etaf-web)
+
+(defconst etaf-web--browser-candidates
+  '("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+    "/Applications/Chromium.app/Contents/MacOS/Chromium"
+    "google-chrome" "google-chrome-stable" "chromium" "chromium-browser"
+    "microsoft-edge" "brave-browser")
+  "Executables tried, in order, when `etaf-web-render-command' is nil.")
+
+(defconst etaf-web--notice-marker ":::note {title=\"这页需要脚本渲染\"}"
+  "First line of the reading-view notice for a page with no prose.")
+
 (defconst etaf-web--max-image-bytes (* 5 1024 1024)
   "Hard upper bound in bytes for a single downloaded image (5 MB).")
 
@@ -343,6 +367,179 @@ normalizes an empty path to `/'."
     (insert-file-contents-literally path)
     (buffer-substring-no-properties (point-min) (point-max))))
 
+(defun etaf-web--read-utf8 (file)
+  "Return the UTF-8 contents of FILE, or nil when it cannot be read."
+  (when (file-readable-p file)
+    (with-temp-buffer
+      (let ((coding-system-for-read 'utf-8))
+        (insert-file-contents file))
+      (buffer-substring-no-properties (point-min) (point-max)))))
+
+(defun etaf-web--browser-program ()
+  "Return the browser executable used to render script-built pages, or nil."
+  (let ((configured etaf-web-render-command))
+    (cond
+     ((eq configured 'off) nil)
+     ((and (stringp configured) (not (string-empty-p configured)))
+      (executable-find configured))
+     ((stringp configured) nil)
+     (t (cl-find-if #'executable-find etaf-web--browser-candidates)))))
+
+(defun etaf-web--render-dom (url)
+  "Return the DOM a browser renders for URL, or nil when it cannot.
+Never signals: a missing browser, a crash and a timeout all answer nil."
+  (when (and (stringp url) (etaf-web--browser-program))
+    (let* ((timeout (if (and (numberp etaf-web-render-timeout)
+                             (> etaf-web-render-timeout 0))
+                        etaf-web-render-timeout
+                      25))
+           (deadline (+ (float-time) timeout))
+           (buffer (generate-new-buffer " *etaf-web render*"))
+           (profile (make-temp-file "etaf-web-profile-" t))
+           (stderr (make-temp-file "etaf-web-render-"))
+           (process nil)
+           (dom nil))
+      (unwind-protect
+          (progn
+            (setq process
+                  (make-process
+                   :name "etaf-web-render"
+                   :buffer buffer
+                   :command (list (etaf-web--browser-program)
+                                  "--headless=new" "--disable-gpu"
+                                  "--no-sandbox" "--hide-scrollbars"
+                                  ;; A private profile keeps the render out of
+                                  ;; a browser the reader already has open,
+                                  ;; which would answer the command instead.
+                                  (concat "--user-data-dir=" profile)
+                                  "--virtual-time-budget=10000"
+                                  "--dump-dom" url)
+                   :stderr stderr
+                   :noquery t
+                   :connection-type 'pipe))
+            (while (and (process-live-p process) (< (float-time) deadline))
+              (accept-process-output process 0.1))
+            (when (process-live-p process)
+              (delete-process process))
+            (with-current-buffer buffer
+              (let ((text (buffer-substring-no-properties (point-min) (point-max))))
+                (when (and (> (length text) 500)
+                           (string-match-p "<html" (downcase text)))
+                  (setq dom text)))))
+        (when (buffer-live-p buffer) (kill-buffer buffer))
+        (ignore-errors (delete-directory profile t))
+        (ignore-errors (delete-file stderr)))
+      dom)))
+
+(defun etaf-web--prose-text (markdown)
+  "Return MARKDOWN's readable prose, without syntax, targets or front matter."
+  (let* ((text (or markdown ""))
+         (body (if (string-match "\\`---\n\\(?:.\|\n\\)*?\n---\n" text)
+                   (substring text (match-end 0))
+                 text))
+         (plain (replace-regexp-in-string "\\]([^)]*)" "]" body))
+         (plain (replace-regexp-in-string "<[^>]*>" " " plain))
+         (plain (replace-regexp-in-string "\\(?:https?\\|browser\\):[^[:space:]]+" " " plain)))
+    (string-trim (replace-regexp-in-string "[`*_#>|:~\\[\\]()!-]" " " plain))))
+
+(defun etaf-web--markdown-thin-p (markdown)
+  "Return non-nil when MARKDOWN carries no sentence of its own.
+A page shell keeps its navigation words but no prose, so a long line is the
+signal that a page has something to read.  Link targets, image URLs and front
+matter do not count."
+  (let* ((prose (etaf-web--prose-text markdown))
+         (chars (length (replace-regexp-in-string "[ \t\n]+" " " prose)))
+         (longest (apply #'max 0
+                         (mapcar (lambda (line) (length (string-trim line)))
+                                 (split-string prose "\n")))))
+    (and (< longest 40) (< chars 400))))
+
+(defun etaf-web--script-shell-p (html markdown)
+  "Return non-nil when HTML runs a script and MARKDOWN has no prose.
+A page that ships a sentence of its own is never treated as a shell, even when
+it also loads scripts."
+  (and (stringp html)
+       (string-match-p "<script" (downcase html))
+       (etaf-web--markdown-thin-p markdown)))
+
+(defun etaf-web--notice-page-p (text)
+  "Return non-nil when TEXT is the notice shown for a page with no prose."
+  (and (stringp text) (string-prefix-p etaf-web--notice-marker text)))
+
+(defun etaf-web--notice-markdown (url reason)
+  "Return the reading-view notice for URL that yielded no prose, with REASON."
+  (format (concat "%s\n%s\n\n"
+                  "HTML 里没有正文，所以现在读不到内容。\n\n"
+                  "[在浏览器打开](browser:%s)\n:::")
+          etaf-web--notice-marker reason url))
+
+(defun etaf-web--remote-image-references (text)
+  "Return the remote image URLs TEXT still points at."
+  (let (urls)
+    (dolist (regexp '("!\\[[^]]*\\](\\(https?://[^)[:space:]]+\\)"
+                      "<img[^>]+src=\"\\(https?://[^\"]+\\)\""))
+      (with-temp-buffer
+        (insert (or text ""))
+        (goto-char (point-min))
+        (while (re-search-forward regexp nil t)
+          (push (match-string 1) urls))))
+    (delete-dups (nreverse urls))))
+
+(defun etaf-web--backfill-images (page-dir index-file)
+  "Download images INDEX-FILE still points at remotely, inside PAGE-DIR.
+Return non-nil when the file changed.  A cached page keeps working after a
+failed download instead of showing placeholders until the cache is deleted."
+  (when (and etaf-web-download-images (file-readable-p index-file))
+    (let* ((text (etaf-web--read-utf8 index-file))
+           (urls (etaf-web--remote-image-references text))
+           (rewriter (etaf-web--make-image-rewriter page-dir))
+           (changed nil))
+      (make-directory (expand-file-name "assets" page-dir) t)
+      (dolist (url urls)
+        (let ((local (funcall rewriter url)))
+          (when (and (stringp local) (not (equal local url)))
+            (setq text (replace-regexp-in-string
+                        (regexp-quote url) local text t t)
+                  changed t))))
+      (when changed
+        (etaf-web--write-utf8 index-file text))
+      changed)))
+
+(defun etaf-web--materialize (canonical page-dir html etag)
+  "Compile HTML fetched from CANONICAL into PAGE-DIR and return the plist.
+A page that compiles to no prose is rendered through a browser first; when
+that fails too, the page carries a notice instead of an empty buffer.  ETAG is
+stored in the page metadata."
+  (let* ((index-file (expand-file-name "index.md" page-dir))
+         (rewriter (etaf-web--make-image-rewriter page-dir))
+         (compiled (etaf-web--compile html :base-url canonical
+                                      :image-rewriter rewriter))
+         (markdown (plist-get compiled :markdown))
+         (title (plist-get compiled :title)))
+    (when (etaf-web--script-shell-p html markdown)
+      (let ((rendered (etaf-web--render-dom canonical)))
+        (if rendered
+            (setq html rendered
+                  compiled (etaf-web--compile html :base-url canonical
+                                              :image-rewriter rewriter)
+                  markdown (plist-get compiled :markdown)
+                  title (plist-get compiled :title))
+          (setq markdown
+                (etaf-web--notice-markdown
+                 canonical
+                 (if (etaf-web--browser-program)
+                     "这页的正文由 JavaScript 生成，浏览器渲染也没有拿到内容。"
+                   "这页的正文由 JavaScript 生成，本机没有找到可用的无头浏览器。"))))))
+    (make-directory page-dir t)
+    (etaf-web--write-utf8 (expand-file-name "source.html" page-dir) html)
+    (etaf-web--write-utf8 index-file markdown)
+    (etaf-web--write-meta page-dir canonical title etag)
+    (list :index-file index-file
+          :page-dir page-dir
+          :url canonical
+          :title title
+          :cached nil)))
+
 (defun etaf-web--prepare-page (source)
   "Fetch or read SOURCE, compile and materialize its cache directory.
 Returns plist with `:index-file', `:page-dir', `:url', `:title' and `:cached'."
@@ -354,6 +551,20 @@ Returns plist with `:index-file', `:page-dir', `:url', `:title' and `:cached'."
       (let* ((canonical (etaf-web--normalize-url trimmed))
              (page-dir (etaf-web--page-dir canonical))
              (index-file (expand-file-name "index.md" page-dir)))
+        (when (file-readable-p index-file)
+          (let ((cached (etaf-web--read-utf8 index-file)))
+            (if (etaf-web--notice-page-p cached)
+                ;; A notice is retried once a renderer can tell more.
+                (when (etaf-web--browser-program)
+                  (delete-file index-file))
+              (if (etaf-web--script-shell-p
+                   (or (etaf-web--read-utf8
+                        (expand-file-name "source.html" page-dir))
+                       "")
+                   cached)
+                  ;; Compiled before script pages could be rendered.
+                  (delete-file index-file)
+                (etaf-web--backfill-images page-dir index-file)))))
         (if (file-readable-p index-file)
             (list :index-file index-file
                   :page-dir page-dir
@@ -363,21 +574,9 @@ Returns plist with `:index-file', `:page-dir', `:url', `:title' and `:cached'."
           (let* ((resp (etaf-web--fetch-raw canonical))
                  (html (etaf-web--decode-html
                         (plist-get resp :body-bytes)
-                        (plist-get resp :content-type)))
-                 (rewriter (etaf-web--make-image-rewriter page-dir))
-                 (compiled (etaf-web--compile html
-                                              :base-url canonical
-                                              :image-rewriter rewriter))
-                 (title (plist-get compiled :title)))
-            (make-directory page-dir t)
-            (etaf-web--write-utf8 (expand-file-name "source.html" page-dir) html)
-            (etaf-web--write-utf8 index-file (plist-get compiled :markdown))
-            (etaf-web--write-meta page-dir canonical title (plist-get resp :etag))
-            (list :index-file index-file
-                  :page-dir page-dir
-                  :url canonical
-                  :title title
-                  :cached nil)))))
+                        (plist-get resp :content-type))))
+            (etaf-web--materialize canonical page-dir html
+                                   (plist-get resp :etag))))))
      (t
       (let* ((local-path (if (etaf-web--file-url-p trimmed)
                              (expand-file-name
@@ -387,22 +586,8 @@ Returns plist with `:index-file', `:page-dir', `:url', `:title' and `:cached'."
              (raw-bytes (etaf-web--read-file-bytes local-path))
              (html (etaf-web--decode-html raw-bytes nil))
              (canonical (concat "file://" local-path))
-             (page-dir (etaf-web--page-dir canonical))
-             (index-file (expand-file-name "index.md" page-dir))
-             (rewriter (etaf-web--make-image-rewriter page-dir))
-             (compiled (etaf-web--compile html
-                                          :base-url canonical
-                                          :image-rewriter rewriter))
-             (title (plist-get compiled :title)))
-        (make-directory page-dir t)
-        (etaf-web--write-utf8 (expand-file-name "source.html" page-dir) html)
-        (etaf-web--write-utf8 index-file (plist-get compiled :markdown))
-        (etaf-web--write-meta page-dir canonical title nil)
-        (list :index-file index-file
-              :page-dir page-dir
-              :url canonical
-              :title title
-              :cached nil))))))
+             (page-dir (etaf-web--page-dir canonical)))
+        (etaf-web--materialize canonical page-dir html nil))))))
 
 (provide 'etaf-web-cache)
 ;;; etaf-web-cache.el ends here

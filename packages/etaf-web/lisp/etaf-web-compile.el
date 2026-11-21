@@ -21,7 +21,7 @@
 
 (define-error 'etaf-web-error "ETAF Web error")
 
-(defconst etaf-web--compiler-version "7"
+(defconst etaf-web--compiler-version "9"
   "Version tag folded into page cache keys.")
 
 (defconst etaf-web--drop-tags
@@ -1666,6 +1666,23 @@ with distinct non-empty CSS classes whose boundary is word-to-word."
                      (c2 (etaf-web--class-list node)))
                  (and c1 c2 (not (equal c1 c2)))))))))
 
+(defun etaf-web--cjk-char-p (ch)
+  "Return non-nil when CH is a CJK ideograph."
+  (and (stringp ch) (string-match-p "[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]" ch)))
+
+(defun etaf-web--latin-char-p (ch)
+  "Return non-nil when CH is a Latin letter or a digit."
+  (and (stringp ch) (string-match-p "[A-Za-z0-9]" ch)))
+
+(defun etaf-web--cjk-boundary-space-p (left right)
+  "Return non-nil when LEFT and RIGHT meet as scripts that need a space.
+A Chinese character next to a Latin letter or digit takes one separating
+space, including when the two live in different inline elements."
+  (let ((l (and (stringp left) (> (length left) 0) (substring left -1)))
+        (r (and (stringp right) (> (length right) 0) (substring right 0 1))))
+    (or (and (etaf-web--cjk-char-p l) (etaf-web--latin-char-p r))
+        (and (etaf-web--latin-char-p l) (etaf-web--cjk-char-p r)))))
+
 (defun etaf-web--emit-inlines (nodes ctx)
   "Compile list of inline DOM NODES under CTX into a Markdown inline string.
 Preserves single spaces across inter-sibling source whitespace (including
@@ -1685,17 +1702,21 @@ or distinctly classed spans."
                  (setq pending-space t)
                (setq had-leading-ws t)))
            (unless (string-empty-p piece)
-             (let ((implicit (and (not pending-space)
-                                  (not after-break)
-                                  parts
-                                  (etaf-web--implicit-inline-sep-p
-                                   prev-node prev-piece node piece))))
+             (let* ((implicit (and (not pending-space)
+                                   (not after-break)
+                                   parts
+                                   (etaf-web--implicit-inline-sep-p
+                                    prev-node prev-piece node piece)))
+                    (cjk (and (not pending-space)
+                              (not after-break)
+                              parts
+                              (etaf-web--cjk-boundary-space-p prev-piece piece))))
                (when (and parts (not after-break)
                           (or (and pending-space
                                    (not (string-match-p
                                          etaf-web--attaching-punct-regexp
                                          piece)))
-                              implicit))
+                              implicit cjk))
                  (push " " parts)))
              (push piece parts)
              (setq prev-node node

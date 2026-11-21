@@ -41,9 +41,13 @@ preview buffer; signals `etaf-web-error' on invalid input or fetch failure."
                    :file index-file
                    :title title
                    :on-link (lambda (url)
-                              (when (etaf-web--http-url-p url)
+                              (cond
+                               ((string-prefix-p "browser:" url)
+                                (browse-url (substring url (length "browser:")))
+                                t)
+                               ((etaf-web--http-url-p url)
                                 (etaf-web-open url)
-                                t)))))
+                                t))))))
     (when other-window
       (etaf-web--select-other-window))
     (etaf-md-open session)))

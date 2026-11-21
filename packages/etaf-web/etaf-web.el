@@ -59,6 +59,16 @@
 ;; Timeout in seconds (integer or float) for synchronous HTTP(S) fetches
 ;; performed by `etaf-web-open'.
 ;;
+;; Variable: etaf-web-render-command (default nil)
+;; Program used to render a page whose content a script builds.  nil
+;; auto-detects a Chromium-based browser, the symbol `off' skips rendering, and
+;; a string names the executable.  When a page compiles to no prose and a
+;; browser is available, `etaf-web-open' renders it headlessly and compiles the
+;; rendered DOM.
+;;
+;; Variable: etaf-web-render-timeout (default 25)
+;; Seconds to wait for that headless render before the page shows its notice.
+;;
 ;; Error: etaf-web-error
 ;; Invalid HTML input, missing libxml support, unreadable source file or HTTP
 ;; fetch failure.  Catch this condition with `condition-case'.

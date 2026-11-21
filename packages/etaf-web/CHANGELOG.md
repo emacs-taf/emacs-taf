@@ -27,3 +27,11 @@
   (`:::timeline`), inline sibling spacing normalization, charset detection,
   on-disk page cache and bounded local image downloading (5 MB per image, 30
   images per page).
+- Headless rendering for pages whose content a script builds: a document with
+  no prose of its own whose HTML runs a script is rendered through a
+  Chromium-based browser and compiled from that DOM, and a page with no
+  renderer available opens a notice naming the situation and linking the
+  original address.  Public options `etaf-web-render-command` (auto-detect,
+  `off`, or an executable) and `etaf-web-render-timeout` (default 25 seconds).
+- Reopening a cached page retries images its first pass could not save, so a
+  failed download no longer leaves placeholders until the cache is cleared.
