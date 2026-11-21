@@ -83,6 +83,7 @@ session is disposed afterwards."
           (maillist-store-file file)
           (maillist-sources (list (maillist-tests--source)))
           (maillist-prefetch-threads 0)
+          (maillist-prefetch-bodies 0)
           (,var (maillist-create :list "fixture")))
      (unwind-protect
          (progn ,@body)
@@ -714,19 +715,22 @@ show and the failure is reported instead of emptying the reader."
     (maillist-tests--wait session)
     (maillist-select session "alpha@example.com")
     (maillist-tests--open session)
+    ;; Switching to starred when nothing is starred must not drag an unstarred row.
+    (maillist-set-scope session 'starred)
+    (should (= 0 (length (maillist-rows session))))
+    (maillist-set-scope session 'all)
+    (maillist-select session "alpha@example.com")
     (maillist-toggle-star session)
     (maillist-set-scope session 'starred)
     (let ((rows (maillist-rows session)))
       (should (= 1 (length rows)))
       (should (equal "alpha@example.com" (plist-get (car rows) :id))))
+    ;; Switching to unread must not drag read alpha into the unread queue.
     (maillist-set-scope session 'unread)
     (let ((rows (maillist-rows session)))
       (should (cl-find "beta@example.com" rows
                        :key (lambda (row) (plist-get row :id)) :test #'equal))
-      (should (cl-every (lambda (row)
-                          (or (plist-get row :unread)
-                              (equal "alpha@example.com" (plist-get row :id))))
-                        rows)))
+      (should (cl-every (lambda (row) (plist-get row :unread)) rows)))
     (maillist-set-scope session 'all)
     (should (= 4 (length (maillist-rows session))))))
 
@@ -766,8 +770,10 @@ show and the failure is reported instead of emptying the reader."
     (unwind-protect
         (progn
           (should (buffer-live-p buffer))
+          (should (equal "*maillist*" (buffer-name buffer)))
           (should (etaf-runtime-for-buffer buffer))
           (with-current-buffer buffer
+            (should mode-line-format)
             (let ((text (buffer-substring-no-properties (point-min) (point-max))))
               (should (string-match-p "emacs-devel" text))
               (should (string-match-p "全部" text))
@@ -1388,6 +1394,878 @@ the quiet queries must read that file, not the default one."
               (maillist-store-close store))))
       (ignore-errors (delete-file first-file))
       (ignore-errors (delete-file second-file)))))
+
+;;; ---------------------------------------------------------------------------
+;;; v0.4.0 regressions: encoding, offline resilience, Debbugs, new replies,
+;;; search isolation, SQLite migration, structured local search and regions
+;;; ---------------------------------------------------------------------------
+
+(ert-deftest maillist-tests-http-utf8-response-is-decoded ()
+  "An HTTP response carrying UTF-8 bytes decodes cleanly without mojibake."
+  (let* ((html (encode-coding-string
+                (concat "<html><body><pre><a\nhref=\"utf8@example.com/T/#t\">"
+                        "Jörg Müller — 中文主题</a>\n"
+                        " 2026-10-21 09:15 UTC  (2+ messages)\n"
+                        "</pre></body></html>")
+                'utf-8))
+         (server (maillist-tests--server
+                  (lambda (process chunk)
+                    (let ((req (concat (or (process-get process :request) "") chunk)))
+                      (process-put process :request req)
+                      (when (string-match-p "\r\n\r\n" req)
+                        (process-send-string
+                         process
+                         (concat "HTTP/1.1 200 OK\r\n"
+                                 "Content-Type: text/html; charset=utf-8\r\n"
+                                 (format "Content-Length: %d\r\n" (length html))
+                                 "Connection: close\r\n\r\n"
+                                 html))
+                        (delete-process process))))))
+         (maillist-network-route 'direct)
+         (url-proxy-services nil)
+         (source (list :name "utf8"
+                       :base (format "http://127.0.0.1:%d/" (car server))
+                       :address "utf8@example.org")))
+    (unwind-protect
+        (let* ((answer (maillist-tests--answer
+                        (lambda (cb) (maillist-fetch-index source cb))))
+               (rows (cadr answer))
+               (subject (plist-get (car rows) :subject)))
+          (should (eq :ok (car answer)))
+          (should (equal "Jörg Müller — 中文主题" subject)))
+      (delete-process (cdr server)))))
+
+(ert-deftest maillist-tests-encoded-message-ids-decode-and-round-trip ()
+  "Percent-encoded Message-IDs decode cleanly and encode once in URLs."
+  (let* ((html (concat "<html><body><pre><a\nhref=\"a%2Bb%2Fc@gmail.com/T/#t\">"
+                       "Encoded ID &#x2014; test</a>\n"
+                       " 2026-10-21 09:15 UTC\n</pre></body></html>"))
+         (rows (maillist-parse-index html))
+         (row (car rows))
+         (id (plist-get row :id)))
+    (should (equal "a+b/c@gmail.com" id))
+    (should (equal "Encoded ID — test" (plist-get row :subject)))
+    (maillist-tests--with-session session
+      (let ((url (maillist-thread-url session id))
+            (mbox (maillist-thread-mbox-url session id)))
+        (should (string-suffix-p "/a%2Bb%2Fc@gmail.com/" url))
+        (should (string-suffix-p "/a%2Bb%2Fc@gmail.com/t.mbox.gz" mbox))))))
+
+(ert-deftest maillist-tests-offline-cached-thread-survives-refresh-failure ()
+  "Opening a cached thread while offline keeps the cached messages on screen."
+  (let ((maillist-thread-freshness 0))
+    (maillist-tests--with-session session
+      (maillist-refresh session)
+      (maillist-tests--wait session)
+      (maillist-select session "alpha@example.com")
+      (let ((first-open (maillist-tests--open session)))
+        (should (= 3 (length (plist-get first-open :messages)))))
+      ;; Point the source at a closed port so background refresh fails.
+      (let ((dead (maillist-tests--closed-port))
+            (maillist-network-route 'direct)
+            (url-proxy-services nil))
+        (plist-put (plist-get session :source) :base
+                   (format "http://127.0.0.1:%d/" dead))
+        (maillist-select session "alpha@example.com")
+        (let ((tries 0) open)
+          (while (and (< tries 100)
+                      (progn
+                        (setq open (etaf-value (plist-get session :open)))
+                        (plist-get open :refreshing)))
+            (sleep-for 0.05)
+            (setq tries (1+ tries)))
+          (should (= 3 (length (plist-get open :messages))))
+          (should-not (plist-get open :error))
+          (should (string-match-p "离线缓存" (plist-get open :meta))))))))
+
+(ert-deftest maillist-tests-debbugs-reply-targets-bug-address ()
+  "Replying in a Debbugs list addresses `<bug>@debbugs.gnu.org' instead of opening a new bug."
+  (let* ((file (maillist-tests--store))
+         (maillist-store-file file)
+         (maillist-mail-address "alice@example.com")
+         (maillist-prefetch-threads 0)
+         (bug-source (list :name "emacs-bugs"
+                           :base (concat "file://" maillist-tests--fixtures "/")
+                           :index "index.html"
+                           :address "bug-gnu-emacs@gnu.org"
+                           :reply-style 'debbugs))
+         (maillist-sources (list bug-source))
+         (session (maillist-create :list "emacs-bugs")))
+    (unwind-protect
+        (progn
+          (maillist-store-save-threads
+           (plist-get session :store) "emacs-bugs"
+           (list (list :id "bug1@example.com"
+                       :subject "bug#74123: widget default value"
+                       :date "2026-10-21T09:15:00Z"
+                       :count 2 :author "Alice Example" :depth 0 :participants 2)))
+          (maillist-store-save-thread-messages
+           (plist-get session :store) "bug1@example.com"
+           (list (list :id "bug1@example.com" :author "Alice Example"
+                       :email "alice@example.com" :date "2026-10-21T09:15:00Z"
+                       :parent nil :depth 0 :subject "bug#74123: widget default value"
+                       :text "Report")
+                 (list :id "bug2@example.com" :author "Bob Example"
+                       :email "bob@example.com" :date "2026-10-21T09:30:00Z"
+                       :parent "bug1@example.com" :depth 1
+                       :subject "Re: bug#74123: widget default value"
+                       :text "Thanks")))
+          (maillist-dispose session)
+          (setq session (maillist-create :list "emacs-bugs"))
+          (let ((maillist-thread-freshness 0))
+            (maillist-select session "bug1@example.com"))
+          ;; Reply to Bob (focused message defaults to newest): To is 74123@debbugs.gnu.org
+          (let ((buf (maillist-reply session)))
+            (unwind-protect
+                (with-current-buffer buf
+                  (should (equal "74123@debbugs.gnu.org" (message-fetch-field "To"))))
+              (with-current-buffer buf (set-buffer-modified-p nil))
+              (kill-buffer buf)))
+          ;; Focus Alice (own address) and reply-all: Cc excludes own address!
+          (maillist-select-message session "bug1@example.com")
+          (let ((buf (maillist-reply-all session)))
+            (unwind-protect
+                (with-current-buffer buf
+                  (should (equal "74123@debbugs.gnu.org" (message-fetch-field "To")))
+                  (should-not (message-fetch-field "Cc")))
+              (with-current-buffer buf (set-buffer-modified-p nil))
+              (kill-buffer buf))))
+      (maillist-dispose session)
+      (ignore-errors (delete-file file)))))
+
+(ert-deftest maillist-tests-focused-message-reply-and-ancestor-references ()
+  "Focusing an earlier message makes `maillist-reply' target it with its ancestor chain."
+  (let ((maillist-mail-address "reader@example.org"))
+    (maillist-tests--with-session session
+      (maillist-refresh session)
+      (maillist-tests--wait session)
+      (maillist-select session "alpha@example.com")
+      (maillist-tests--open session)
+      ;; Move focus backward from msg 3 to msg 2 (`alpha-reply@example.com').
+      (let ((prev (maillist-move-message session -1)))
+        (should (equal "alpha-reply@example.com" prev)))
+      (let ((buf (maillist-reply session)))
+        (unwind-protect
+            (with-current-buffer buf
+              (should (equal "<alpha-reply@example.com>"
+                             (message-fetch-field "In-Reply-To")))
+              (should (equal "<alpha@example.com> <alpha-reply@example.com>"
+                             (message-fetch-field "References"))))
+          (with-current-buffer buf (set-buffer-modified-p nil))
+          (kill-buffer buf))))))
+
+(ert-deftest maillist-tests-new-replies-reopen-read-thread-and-mark-new ()
+  "A read thread whose date or count advances on sync becomes unread and new again."
+  (let* ((file (maillist-tests--store))
+         (mirror (make-temp-file "maillist-replies" t))
+         (index (expand-file-name "index.html" mirror))
+         (maillist-store-file file)
+         (maillist-prefetch-threads 0)
+         (maillist-sources
+          (list (list :name "fixture"
+                      :base (concat "file://" mirror "/")
+                      :index "index.html"
+                      :address "fixture@example.org")))
+         (session (maillist-create :list "fixture")))
+    (unwind-protect
+        (progn
+          (write-region
+           (concat "<html><body><pre><a\nhref=\"alpha@example.com/T/#t\">"
+                   "[PATCH] Fix the widget default</a>\n"
+                   " 2026-10-21 09:15 UTC  (3+ messages)\n</pre></body></html>")
+           nil index nil 'silent)
+          (maillist-refresh session)
+          (maillist-tests--wait session)
+          (maillist-set-read session "alpha@example.com" t)
+          (let ((row (maillist-row session "alpha@example.com")))
+            (should-not (plist-get row :unread))
+            (should-not (plist-get row :new)))
+          ;; Next sync reports newer date and higher count on the same thread.
+          (write-region
+           (concat "<html><body><pre><a\nhref=\"alpha@example.com/T/#t\">"
+                   "[PATCH] Fix the widget default</a>\n"
+                   " 2026-10-21 12:30 UTC  (5+ messages)\n</pre></body></html>")
+           nil index nil 'silent)
+          (maillist-refresh session)
+          (maillist-tests--wait session)
+          (let ((row (maillist-row session "alpha@example.com")))
+            (should (plist-get row :unread))
+            (should (plist-get row :new)))
+          ;; Marking read again clears `:new' as well.
+          (maillist-set-read session "alpha@example.com" t)
+          (let ((row (maillist-row session "alpha@example.com")))
+            (should-not (plist-get row :unread))
+            (should-not (plist-get row :new))))
+      (maillist-dispose session)
+      (ignore-errors (delete-directory mirror t))
+      (ignore-errors (delete-file file)))))
+
+(ert-deftest maillist-tests-search-isolation-and-instant-restore ()
+  "Clearing a search restores the archive list offline without losing cached rows."
+  (let* ((server (maillist-tests--server
+                  (lambda (process chunk)
+                    (maillist-tests--answer-with
+                     process chunk (maillist-tests--read-literal "search.html")))))
+         (maillist-network-route 'direct)
+         (url-proxy-services nil))
+    (unwind-protect
+        (maillist-tests--with-session session
+          (maillist-refresh session)
+          (maillist-tests--wait session)
+          (should (= 4 (length (maillist-rows session))))
+          ;; Point to search server and run a remote query.
+          (plist-put (plist-get session :source) :base
+                     (format "http://127.0.0.1:%d/" (car server)))
+          (maillist-search session "clutch")
+          (maillist-tests--wait session)
+          (should (= 8 (length (maillist-rows session))))
+          ;; Now cut the network completely and clear search: all 4 archive
+          ;; threads must return immediately from memory/cache!
+          (let ((dead (maillist-tests--closed-port)))
+            (plist-put (plist-get session :source) :base
+                       (format "http://127.0.0.1:%d/" dead))
+            (maillist-search session "")
+            (should (eq 'idle (plist-get (etaf-value (plist-get session :status)) :kind)))
+            (should (= 4 (length (maillist-rows session))))))
+      (delete-process (cdr server)))))
+
+(ert-deftest maillist-tests-structured-local-search-handles-fields-and-wildcards ()
+  "Offline local search honours `from:', `subject:', negation, `is:read' and LIKE escapes."
+  (maillist-tests--with-session session
+    (maillist-refresh session)
+    (maillist-tests--wait session)
+    (maillist-select session "alpha@example.com")
+    (maillist-tests--open session)
+    (let ((dead (maillist-tests--closed-port))
+          (maillist-network-route 'direct)
+          (url-proxy-services nil))
+      (plist-put (plist-get session :source) :base
+                 (format "http://127.0.0.1:%d/" dead))
+      ;; Structured query compiles to f:alice s:widget, yet local fallback matches!
+      (maillist-search session "from:alice subject:widget")
+      (maillist-tests--wait session)
+      (let ((rows (maillist-rows session)))
+        (should (= 1 (length rows)))
+        (should (equal "alpha@example.com" (plist-get (car rows) :id))))
+      ;; Negated local filter is:read returns only the read thread (`alpha').
+      (maillist-search session "is:read")
+      (let ((rows (maillist-rows session)))
+        (should (= 1 (length rows)))
+        (should (equal "alpha@example.com" (plist-get (car rows) :id))))
+      ;; Wildcard `%` in body search must not match unrelated bodies.
+      (should-not (maillist-store-search-bodies
+                   (plist-get session :store) "100%" 10 "fixture")))))
+
+(ert-deftest maillist-tests-cross-posted-threads-and-shared-messages-stay-isolated ()
+  "Same thread ID in two lists and shared messages in two threads do not clobber."
+  (let* ((file (maillist-tests--store))
+         (maillist-store-file file)
+         (store (maillist-store-open)))
+    (unwind-protect
+        (progn
+          (maillist-store-save-threads
+           store "list-a"
+           (list (list :id "cross@example.com" :subject "Cross-posted A"
+                       :date "2026-10-21T09:00:00Z" :count 2 :author "A")))
+          (maillist-store-save-threads
+           store "list-b"
+           (list (list :id "cross@example.com" :subject "Cross-posted B"
+                       :date "2026-10-21T09:00:00Z" :count 2 :author "A")))
+          (should (= 1 (length (maillist-store-threads store "list-a"))))
+          (should (= 1 (length (maillist-store-threads store "list-b"))))
+          ;; Two thread caches sharing message `m2' both keep their messages and `:parent'.
+          (let ((m1 (list :id "m1" :author "A" :email "a@x" :date "2026-10-21T09:00:00Z"
+                          :parent nil :depth 0 :subject "S" :text "one"))
+                (m2 (list :id "m2" :author "B" :email "b@x" :date "2026-10-21T09:10:00Z"
+                          :parent "m1" :depth 1 :subject "Re: S" :text "two")))
+            (maillist-store-save-thread-messages store "m1" (list m1 m2))
+            (maillist-store-save-thread-messages store "m2" (list m1 m2))
+            (let ((parent-msgs (maillist-store-thread-messages store "m1"))
+                  (child-msgs (maillist-store-thread-messages store "m2")))
+              (should (= 2 (length parent-msgs)))
+              (should (= 2 (length child-msgs)))
+              (should (equal "m1" (plist-get (nth 1 parent-msgs) :parent))))))
+      (maillist-store-close store)
+      (ignore-errors (delete-file file)))))
+
+(ert-deftest maillist-tests-v3-store-migrates-in-place-preserving-marks ()
+  "A valid v0.3.0 store upgrades to composite keys in place without losing marks."
+  (let* ((file (maillist-tests--store))
+         (maillist-store-file file)
+         (conn (sqlite-open file)))
+    (unwind-protect
+        (progn
+          (sqlite-execute
+           conn
+           "CREATE TABLE threads (id TEXT PRIMARY KEY, subject TEXT, date TEXT,
+              thread_count INTEGER, author TEXT, depth INTEGER, list_name TEXT,
+              participants INTEGER)")
+          (sqlite-execute
+           conn
+           "CREATE TABLE messages (id TEXT PRIMARY KEY, thread TEXT, author TEXT,
+              email TEXT, date TEXT, depth INTEGER, position INTEGER, body TEXT,
+              subject TEXT)")
+          (sqlite-execute
+           conn
+           "CREATE TABLE marks (id TEXT PRIMARY KEY, read INTEGER, starred INTEGER)")
+          (sqlite-execute
+           conn
+           "INSERT INTO threads VALUES ('legacy@x', 'Old subject', '2026-10-01T00:00:00Z', 1, 'Alice', 0, 'emacs-devel', 1)")
+          (sqlite-execute
+           conn
+           "INSERT INTO marks VALUES ('legacy@x', 1, 1)")
+          (sqlite-close conn)
+          (let ((store (maillist-store-open)))
+            (unwind-protect
+                (progn
+                  (should store)
+                  (should-not (file-expand-wildcards (concat file ".rebuild-*")))
+                  (let ((rows (maillist-store-threads store "emacs-devel"))
+                        (marks (maillist-store-marks store)))
+                    (should (= 1 (length rows)))
+                    (should (equal "legacy@x" (plist-get (car rows) :id)))
+                    (should (plist-get (cdr (assoc "legacy@x" marks)) :read))
+                    (should (plist-get (cdr (assoc "legacy@x" marks)) :starred))))
+              (maillist-store-close store))))
+      (ignore-errors (sqlite-close conn))
+      (ignore-errors (delete-file file)))))
+
+(ert-deftest maillist-tests-prune-protects-starred-and-other-lists ()
+  "Pruning a list keeps starred threads and never drops another list's cached bodies."
+  (maillist-tests--with-session session
+    (maillist-refresh session)
+    (maillist-tests--wait session)
+    (maillist-select session "gamma@example.com")
+    (maillist-tests--open session)
+    (maillist-toggle-star session)
+    (let ((store (plist-get session :store)))
+      (maillist-store-save-threads
+       store "other"
+       (list (list :id "other-old@example.com" :subject "Quiet list"
+                   :date "2020-01-01T00:00:00Z" :count 1 :author "Z")))
+      (maillist-store-save-thread-messages
+       store "other-old@example.com"
+       (list (list :id "other-old@example.com" :author "Z" :email "z@x"
+                   :date "2020-01-01T00:00:00Z" :depth 0 :subject "Quiet list"
+                   :text "Kept in other list")))
+      (let ((maillist-thread-limit 1)
+            (maillist-body-limit 1))
+        (maillist-store-prune store "fixture")
+        ;; Starred `gamma' keeps both its thread row and its cached body.
+        (should (maillist-store-thread-messages store "gamma@example.com"))
+        ;; Quiet second list's cached body is untouched.
+        (should (maillist-store-thread-messages store "other-old@example.com"))))))
+
+(ert-deftest maillist-tests-classify-lines-and-links-handle-diffs-quotes-signatures ()
+  "Diff headers, nested quote depths, signatures and balanced URLs classify cleanly."
+  (let* ((body (concat "diff --git a/foo.el b/foo.el\n"
+                       "--- a/foo.el\n"
+                       "+++ b/foo.el\n"
+                       "@@ -1 +1 @@\n"
+                       "-old\n"
+                       "+new\n\n"
+                       "-- \n"
+                       "- not a diff deletion\n"
+                       ">> nested quote\n"))
+         (lines (maillist-classify-lines body "p"))
+         (kinds (mapcar (lambda (l) (plist-get l :kind)) lines)))
+    (should (equal '("patch-meta" "patch-meta" "patch-meta" "patch-meta"
+                     "patch-del" "patch-add" "blank" "signature"
+                     "signature" "signature" "blank")
+                   kinds)))
+  (let* ((quoted (maillist-classify-lines "> one\n>> two\n> > two-sp" "q")))
+    (should (equal '(1 2 2)
+                   (mapcar (lambda (l) (plist-get l :quote-depth)) quoted))))
+  (let ((links (maillist-message-links
+                (concat "> https://quoted.example.org/ignored\n"
+                        "See https://en.wikipedia.org/wiki/Emacs_(text_editor).\n"
+                        "(and https://example.org/ok)"))))
+    (should (equal '("https://en.wikipedia.org/wiki/Emacs_(text_editor)"
+                     "https://example.org/ok")
+                   links))))
+
+(ert-deftest maillist-tests-prev-unread-folding-quotes-and-custom-sources ()
+  "Previous-unread, collapse-all, quote toggle, inherit transport and custom sources work."
+  (let* ((file (maillist-tests--store))
+         (maillist-store-file file)
+         (maillist-sources (list (maillist-tests--source)))
+         (maillist-prefetch-threads 0))
+    (unwind-protect
+        (progn
+          (maillist-add-source "custom-list" "https://example.org/custom" "custom@example.org")
+          (should (equal "https://example.org/custom/"
+                         (plist-get (maillist-source "custom-list") :base)))
+          ;; Persists across a fresh `maillist-create' even if removed from dynamic var.
+          (let ((maillist-sources (list (maillist-tests--source))))
+            (let ((s (maillist-create :list "custom-list")))
+              (unwind-protect
+                  (should (equal "custom-list"
+                                 (plist-get (plist-get s :source) :name)))
+                (maillist-dispose s))))
+          (maillist-remove-source "custom-list")
+          (let ((session (maillist-create :list "fixture")))
+            (unwind-protect
+                (progn
+                  (maillist-refresh session)
+                  (maillist-tests--wait session)
+                  (maillist-select-edge session 'last)
+                  (maillist-tests--open session)
+                  (should (equal "beta-reply@example.com" (maillist-prev-unread session)))
+                  (maillist-select session "alpha@example.com")
+                  (maillist-tests--open session)
+                  (should (eq t (maillist-toggle-all-messages session)))
+                  (should (eq nil (maillist-toggle-all-messages session)))
+                  (should (eq t (maillist-toggle-quotes session)))
+                  (should (eq nil (maillist-toggle-quotes session)))
+                  ;; Inherit send-mail-function leaves Emacs's own transport intact.
+                  (let ((maillist-mail-address "me@example.org")
+                        (maillist-send-mail-function 'inherit)
+                        (message-send-mail-function #'message-send-mail-with-sendmail))
+                    (let ((buf (maillist-reply session)))
+                      (unwind-protect
+                          (with-current-buffer buf
+                            (should (eq #'message-send-mail-with-sendmail
+                                        message-send-mail-function)))
+                        (with-current-buffer buf (set-buffer-modified-p nil))
+                        (kill-buffer buf)))))
+              (maillist-dispose session))))
+      (ignore-errors (delete-file file)))))
+
+(ert-deftest maillist-tests-native-index-cursor-loads-older-threads ()
+  "When the index page exposes a `?t=...' next link, `maillist-load-older' pages threads natively."
+  (let* ((page1 (concat "<html><body><pre><a\nhref=\"new1@example.com/T/#t\">"
+                        "Newest thread</a>\n 2026-10-21 09:15 UTC  (3+ messages)\n"
+                        "</pre><a href=\"?t=20261020000000\">next (older)</a></body></html>"))
+         (page2 (concat "<html><body><pre><a\nhref=\"old1@example.com/T/#t\">"
+                        "Native paged thread</a>\n 2026-10-15 11:00 UTC  (7+ messages)\n"
+                        "</pre></body></html>"))
+         (server (maillist-tests--server
+                  (lambda (process chunk)
+                    (let ((req (concat (or (process-get process :request) "") chunk)))
+                      (process-put process :request req)
+                      (when (string-match-p "\r\n\r\n" req)
+                        (maillist-tests--answer-with
+                         process ""
+                         (if (string-match-p "\\?t=" req) page2 page1)))))))
+         (file (maillist-tests--store))
+         (maillist-store-file file)
+         (maillist-prefetch-threads 0)
+         (maillist-network-route 'direct)
+         (url-proxy-services nil)
+         (maillist-sources (list (list :name "paged"
+                                       :base (format "http://127.0.0.1:%d/" (car server))
+                                       :address "paged@example.org")))
+         (session (maillist-create :list "paged")))
+    (unwind-protect
+        (progn
+          (maillist-refresh session)
+          (maillist-tests--wait session)
+          (should (= 1 (length (maillist-rows session))))
+          (maillist-load-older session)
+          (maillist-tests--wait session)
+          (let ((older (maillist-row session "old1@example.com")))
+            (should (= 2 (length (maillist-rows session))))
+            (should older)
+            ;; Native index pagination preserves message count!
+            (should (= 7 (plist-get older :count)))))
+      (maillist-dispose session)
+      (delete-process (cdr server))
+      (ignore-errors (delete-file file)))))
+
+(ert-deftest maillist-tests-mounted-regions-and-help ()
+  "The mounted client declares ETAF regions (`search', `threads', `reader') and help notes."
+  (let* ((file (maillist-tests--store))
+         (maillist-store-file file)
+         (maillist-narrow-width 40)
+         (buffer (maillist-open :sync nil)))
+    (unwind-protect
+        (with-current-buffer buffer
+          (let* ((rt (etaf-runtime-for-buffer buffer))
+                 (help (etaf-help-data rt))
+                 (notes (plist-get help :notes))
+                 (groups (plist-get help :groups))
+                 (region-group (cl-find 'regions groups
+                                        :key (lambda (g) (plist-get g :kind))))
+                 (search-target (etaf-region-focus 'search rt))
+                 (threads-target (etaf-region-focus 'threads rt))
+                 (reader-target (etaf-region-focus 'reader rt)))
+            (should (consp notes))
+            (should region-group)
+            (should search-target)
+            (should threads-target)
+            (should reader-target)))
+      (when (buffer-live-p buffer)
+        (with-current-buffer buffer (maillist-close)))
+      (ignore-errors (delete-file file)))))
+
+;;; ---------------------------------------------------------------------------
+;;; NNTP fast transport, authoritative cache & HTTP resilience
+;;; ---------------------------------------------------------------------------
+
+(defun maillist-tests--nntp-server (state)
+  "Start a loopback mock NNTP server backed by STATE plist.
+STATE carries `:group' (string), `:articles' (list of plists with `:artnum',
+`:subject', `:from', `:date', `:id', `:refs', `:raw') and `:log' (commands
+received).  Return (PORT . SERVER-PROCESS)."
+  (let* ((handle-client
+          (lambda (client chunk)
+            (let ((buf (concat (or (process-get client :buf) "") chunk)))
+              (while (string-match "\r\n" buf)
+                (let ((line (substring buf 0 (match-beginning 0))))
+                  (setq buf (substring buf (match-end 0)))
+                  (plist-put state :log (append (plist-get state :log) (list line)))
+                  (let ((arts (plist-get state :articles)))
+                    (cond
+                     ((string-match "\\`GROUP[ \t]+\\(.+\\)\\'" line)
+                      (let* ((nums (mapcar (lambda (a) (plist-get a :artnum)) arts))
+                             (lo (if nums (apply #'min nums) 0))
+                             (hi (if nums (apply #'max nums) 0)))
+                        (process-send-string
+                         client
+                         (format "211 %d %d %d %s\r\n"
+                                 (length arts) lo hi (match-string 1 line)))))
+                     ((string-match "\\`XOVER[ \t]+\\([0-9]+\\)-\\([0-9]+\\)\\'" line)
+                      (let* ((lo (string-to-number (match-string 1 line)))
+                             (hi (string-to-number (match-string 2 line)))
+                             (picked (seq-filter
+                                      (lambda (a)
+                                        (and (>= (plist-get a :artnum) lo)
+                                             (<= (plist-get a :artnum) hi)))
+                                      arts))
+                             (body (mapconcat
+                                    (lambda (a)
+                                      (format "%d\t%s\t%s\t%s\t<%s>\t%s\t100\t5"
+                                              (plist-get a :artnum)
+                                              (plist-get a :subject)
+                                              (plist-get a :from)
+                                              (plist-get a :date)
+                                              (plist-get a :id)
+                                              (or (plist-get a :refs) "")))
+                                    picked "\r\n")))
+                        (process-send-string
+                         client
+                         (if (string-empty-p body)
+                             "224 Overview follows\r\n.\r\n"
+                           (concat "224 Overview follows\r\n" body "\r\n.\r\n")))))
+                     ((string-match "\\`ARTICLE[ \t]+<\\([^>]+\\)>\\'" line)
+                      (let* ((mid (match-string 1 line))
+                             (found (cl-find mid arts
+                                             :key (lambda (a) (plist-get a :id))
+                                             :test #'equal)))
+                        (if found
+                            (let ((raw (replace-regexp-in-string
+                                        "\n" "\r\n"
+                                        (replace-regexp-in-string
+                                         "\r\n" "\n" (plist-get found :raw) t t)
+                                        t t)))
+                              (process-send-string
+                               client
+                               (concat (format "220 0 <%s> article\r\n" mid)
+                                       raw "\r\n.\r\n")))
+                          (process-send-string
+                           client "430 No such article\r\n"))))
+                     ((string-match-p "\\`QUIT" line)
+                      (process-send-string client "205 Bye\r\n")
+                      (delete-process client))
+                     (t
+                      (process-send-string client "500 Unknown\r\n"))))))
+              (process-put client :buf buf))))
+         (server (make-network-process
+                  :name "maillist-test-nntp"
+                  :server t :host "127.0.0.1" :service 0
+                  :family 'ipv4 :coding 'binary
+                  :filter handle-client
+                  :log (lambda (_server client _msg)
+                         (process-send-string
+                          client "201 mock nntp ready\r\n")))))
+    (cons (process-contact server :service) server)))
+
+(ert-deftest maillist-tests-nntp-sync-thread-older-and-incremental-update ()
+  "NNTP sync fetches authors via XOVER, pipelines MIME articles, updates incrementally and pages older."
+  (let* ((old-art
+          (list :artnum 10
+                :subject "Older archived discussion"
+                :from "Dan Older <dan@example.org>"
+                :date "Thu, 15 Oct 2026 10:00:00 +0000"
+                :id "old-nntp@example.org"
+                :refs ""
+                :raw (concat "From: Dan Older <dan@example.org>\n"
+                             "Subject: Older archived discussion\n"
+                             "Date: Thu, 15 Oct 2026 10:00:00 +0000\n"
+                             "Message-ID: <old-nntp@example.org>\n"
+                             "Content-Type: text/plain; charset=utf-8\n\n"
+                             "Earlier mail body.")))
+         (art1
+          (list :artnum 11
+                :subject "=?UTF-8?B?5Lit5paH5Li76aKY?="
+                :from "=?UTF-8?Q?St=C3=A9phane_Marks?= <stephane@example.org>"
+                :date "Wed, 21 Oct 2026 09:00:00 +0000"
+                :id "nntp-root@example.org"
+                :refs ""
+                :raw (concat "From: =?UTF-8?Q?St=C3=A9phane_Marks?= <stephane@example.org>\n"
+                             "Subject: =?UTF-8?B?5Lit5paH5Li76aKY?=\n"
+                             "Date: Wed, 21 Oct 2026 09:00:00 +0000\n"
+                             "Message-ID: <nntp-root@example.org>\n"
+                             "Content-Type: text/plain; charset=utf-8\n"
+                             "Content-Transfer-Encoding: quoted-printable\n\n"
+                             "Hello =E4=B8=96=E7=95=8C!\n")))
+         (art2
+          (list :artnum 12
+                :subject "Re: =?UTF-8?B?5Lit5paH5Li76aKY?="
+                :from "Bob Reply <bob@example.org>"
+                :date "Wed, 21 Oct 2026 10:30:00 +0000"
+                :id "nntp-reply1@example.org"
+                :refs "<nntp-root@example.org>"
+                :raw (concat "From: Bob Reply <bob@example.org>\n"
+                             "Subject: Re: =?UTF-8?B?5Lit5paH5Li76aKY?=\n"
+                             "Date: Wed, 21 Oct 2026 10:30:00 +0000\n"
+                             "Message-ID: <nntp-reply1@example.org>\n"
+                             "In-Reply-To: <nntp-root@example.org>\n"
+                             "References: <nntp-root@example.org>\n"
+                             "Content-Type: multipart/alternative; boundary=\"bnd42\"\n\n"
+                             "--bnd42\n"
+                             "Content-Type: text/plain; charset=utf-8\n\n"
+                             "Plain reply text.\n"
+                             "--bnd42\n"
+                             "Content-Type: text/html; charset=utf-8\n\n"
+                             "<p>HTML ignored</p>\n"
+                             "--bnd42--\n")))
+         (art3
+          (list :artnum 13
+                :subject "Re: =?UTF-8?B?5Lit5paH5Li76aKY?="
+                :from "Carol Late <carol@example.org>"
+                :date "Wed, 21 Oct 2026 12:00:00 +0000"
+                :id "nntp-reply2@example.org"
+                :refs "<nntp-root@example.org> <nntp-reply1@example.org>"
+                :raw (concat "From: Carol Late <carol@example.org>\n"
+                             "Subject: Re: =?UTF-8?B?5Lit5paH5Li76aKY?=\n"
+                             "Date: Wed, 21 Oct 2026 12:00:00 +0000\n"
+                             "Message-ID: <nntp-reply2@example.org>\n"
+                             "In-Reply-To: <nntp-reply1@example.org>\n"
+                             "References: <nntp-root@example.org> <nntp-reply1@example.org>\n\n"
+                             "Brand new incremental reply.")))
+         (state (list :group "test.list" :articles (list old-art art1 art2) :log nil))
+         (srv (maillist-tests--nntp-server state))
+         (dead-http (maillist-tests--closed-port))
+         (file (maillist-tests--store))
+         (maillist-store-file file)
+         (maillist-transport 'auto)
+         (maillist-nntp-sync-window 2)
+         (maillist-nntp-older-batch 5)
+         (maillist-prefetch-threads 0)
+         (maillist-prefetch-bodies 0)
+         (maillist-sources
+          (list (list :name "nntp-list"
+                      :base (format "http://127.0.0.1:%d/" dead-http)
+                      :address "nntp-list@example.org"
+                      :nntp (list :host "127.0.0.1" :port (car srv) :group "test.list"))))
+         (session (maillist-create :list "nntp-list")))
+    (unwind-protect
+        (progn
+          ;; 1. Initial NNTP sync fetches only the latest 2 articles (art1 + art2)
+          ;;    with decoded UTF-8 authors & subjects and zero HTTP requests.
+          (maillist-refresh session)
+          (let ((st (maillist-tests--wait session)))
+            (should (eq 'idle (plist-get st :kind))))
+          (let ((row (maillist-row session "nntp-root@example.org")))
+            (should row)
+            (should (equal "中文主题" (plist-get row :subject)))
+            (should (equal "Stéphane Marks" (plist-get row :author)))
+            (should (= 2 (plist-get row :count))))
+          ;; 2. Open thread: pipelined ARTICLE fetches both & decodes QP + multipart.
+          (maillist-select session "nntp-root@example.org")
+          (let* ((open (maillist-tests--open session))
+                 (msgs (plist-get open :messages)))
+            (should (= 2 (length msgs)))
+            (should (string-match-p "Hello 世界!" (plist-get (nth 0 msgs) :text)))
+            (should (string-match-p "Plain reply text." (plist-get (nth 1 msgs) :text)))
+            (should (equal '(0 1) (mapcar (lambda (m) (plist-get m :depth)) msgs))))
+          ;; Thread is now read.  Append a 3rd reply on the NNTP server.
+          (should-not (plist-get (maillist-row session "nntp-root@example.org") :unread))
+          (plist-put state :articles (list old-art art1 art2 art3))
+          (plist-put state :log nil)
+          ;; 3. Incremental sync only runs XOVER 13-13 and re-surfaces the thread unread!
+          (maillist-refresh session)
+          (maillist-tests--wait session)
+          (should (member "XOVER 13-13" (plist-get state :log)))
+          (let ((row (maillist-row session "nntp-root@example.org")))
+            (should (plist-get row :unread))
+            (should (= 3 (plist-get row :count))))
+          ;; Reopening fetches ONLY the missing 3rd article, merging with cached 1 & 2!
+          (plist-put state :log nil)
+          (maillist-select session "nntp-root@example.org")
+          (let ((tries 0) open)
+            (while (and (< tries 100)
+                        (progn
+                          (setq open (etaf-value (plist-get session :open)))
+                          (< (length (plist-get open :messages)) 3)))
+              (sleep-for 0.05)
+              (setq tries (1+ tries)))
+            (should (= 3 (length (plist-get open :messages))))
+            (should (equal (list "ARTICLE <nntp-reply2@example.org>")
+                           (plist-get state :log))))
+          ;; 4. Load older over NNTP fetches article #10.
+          (maillist-load-older session)
+          (maillist-tests--wait session)
+          (should (maillist-row session "old-nntp@example.org")))
+      (maillist-dispose session)
+      (delete-process (cdr srv))
+      (ignore-errors (delete-file file)))))
+
+(ert-deftest maillist-tests-nntp-falls-back-to-http-when-unreachable ()
+  "An unreachable NNTP port falls back transparently to the HTTP archive."
+  (let* ((dead-nntp (maillist-tests--closed-port))
+         (file (maillist-tests--store))
+         (maillist-store-file file)
+         (maillist-transport 'auto)
+         (maillist-nntp-connect-timeout 1)
+         (maillist-prefetch-threads 0)
+         (maillist-prefetch-bodies 0)
+         (maillist-sources
+          (list (list :name "fallback"
+                      :base (concat "file://" maillist-tests--fixtures "/")
+                      :index "index.html"
+                      :address "fixture@example.org"
+                      :nntp (list :host "127.0.0.1" :port dead-nntp :group "dead.group"))))
+         (session (maillist-create :list "fallback")))
+    (unwind-protect
+        (progn
+          (maillist-refresh session)
+          (let ((st (maillist-tests--wait session)))
+            (should (eq 'idle (plist-get st :kind))))
+          (should (= 4 (length (maillist-rows session))))
+          (maillist-select session "alpha@example.com")
+          (let ((open (maillist-tests--open session)))
+            (should (= 3 (length (plist-get open :messages))))))
+      (maillist-dispose session)
+      (ignore-errors (delete-file file)))))
+
+(ert-deftest maillist-tests-unchanged-cached-thread-opens-without-network ()
+  "Reopening an unchanged cached thread in a fresh session makes zero network requests."
+  (let* ((hits 0)
+         (server (maillist-tests--server
+                  (lambda (process chunk)
+                    (let ((req (concat (or (process-get process :request) "") chunk)))
+                      (process-put process :request req)
+                      (when (string-match-p "\r\n\r\n" req)
+                        (cl-incf hits)
+                        (maillist-tests--answer-with process "" ""))))))
+         (file (maillist-tests--store))
+         (maillist-store-file file)
+         (maillist-prefetch-threads 0)
+         (maillist-prefetch-bodies 0)
+         (maillist-thread-freshness 60)
+         (maillist-network-route 'direct)
+         (url-proxy-services nil))
+    (unwind-protect
+        (progn
+          ;; Populate the store from the fixture archive.
+          (let* ((maillist-sources (list (maillist-tests--source)))
+                 (s1 (maillist-create :list "fixture")))
+            (unwind-protect
+                (progn
+                  (maillist-refresh s1)
+                  (maillist-tests--wait s1)
+                  (maillist-select s1 "alpha@example.com")
+                  (maillist-tests--open s1))
+              (maillist-dispose s1)))
+          ;; Reopen in a brand-new session backed by the counting HTTP server.
+          (let* ((maillist-sources
+                  (list (list :name "fixture"
+                              :base (format "http://127.0.0.1:%d/" (car server))
+                              :address "fixture@example.org")))
+                 (s2 (maillist-create :list "fixture")))
+            (unwind-protect
+                (progn
+                  (maillist-select s2 "alpha@example.com")
+                  (sleep-for 0.15)
+                  (let ((open (etaf-value (plist-get s2 :open))))
+                    (should (= 3 (length (plist-get open :messages))))
+                    (should-not (plist-get open :refreshing))
+                    (should (= 0 hits))))
+              (maillist-dispose s2))))
+      (delete-process (cdr server))
+      (ignore-errors (delete-file file)))))
+
+(ert-deftest maillist-tests-dead-proxy-falls-back-once-and-learns-direct-route ()
+  "A dead proxy falls back once (no duplicate direct hits) and subsequent requests use direct."
+  (let* ((hits 0)
+         (page (maillist-tests--read "index.html"))
+         (server (maillist-tests--server
+                  (lambda (process chunk)
+                    (let ((req (concat (or (process-get process :request) "") chunk)))
+                      (process-put process :request req)
+                      (when (string-match-p "\r\n\r\n" req)
+                        (cl-incf hits)
+                        (maillist-tests--answer-with process "" page))))))
+         (dead (maillist-tests--closed-port))
+         (maillist-proxy (format "127.0.0.1:%d" dead))
+         (maillist-network-route 'proxy)
+         (url-proxy-services nil)
+         (source (list :name "sticky"
+                       :base (format "http://127.0.0.1:%d/" (car server))
+                       :address "sticky@example.org")))
+    (unwind-protect
+        (progn
+          (let ((first (maillist-tests--answer
+                        (lambda (cb) (maillist-fetch-index source cb)))))
+            (should (eq :ok (car first)))
+            (should (= 4 (length (cadr first))))
+            (sleep-for 0.1)
+            (should (= 1 hits)))
+          (let ((second (maillist-tests--answer
+                         (lambda (cb) (maillist-fetch-index source cb)))))
+            (should (eq :ok (car second)))
+            (should (= 2 hits))))
+      (delete-process (cdr server)))))
+
+(ert-deftest maillist-tests-body-prefetch-warms-unread-threads-in-background ()
+  "Idle background body prefetch warms top uncached unread threads into SQLite."
+  (let* ((art1
+          (list :artnum 1
+                :subject "First unread thread"
+                :from "Alice <alice@example.org>"
+                :date "Wed, 21 Oct 2026 09:00:00 +0000"
+                :id "warm1@example.org"
+                :refs ""
+                :raw "From: Alice <alice@example.org>\nSubject: First unread thread\nDate: Wed, 21 Oct 2026 09:00:00 +0000\nMessage-ID: <warm1@example.org>\n\nBody one."))
+         (art2
+          (list :artnum 2
+                :subject "Second unread thread"
+                :from "Bob <bob@example.org>"
+                :date "Wed, 21 Oct 2026 10:00:00 +0000"
+                :id "warm2@example.org"
+                :refs ""
+                :raw "From: Bob <bob@example.org>\nSubject: Second unread thread\nDate: Wed, 21 Oct 2026 10:00:00 +0000\nMessage-ID: <warm2@example.org>\n\nBody two."))
+         (state (list :group "warm.list" :articles (list art1 art2) :log nil))
+         (srv (maillist-tests--nntp-server state))
+         (file (maillist-tests--store))
+         (maillist-store-file file)
+         (maillist-transport 'auto)
+         (maillist-prefetch-threads 0)
+         (maillist-prefetch-bodies 2)
+         (maillist-sources
+          (list (list :name "warm"
+                      :base "http://127.0.0.1:1/"
+                      :address "warm@example.org"
+                      :nntp (list :host "127.0.0.1" :port (car srv) :group "warm.list"))))
+         (session (maillist-create :list "warm")))
+    (unwind-protect
+        (progn
+          (maillist-refresh session)
+          (maillist-tests--wait session)
+          (let ((tries 0)
+                (store (plist-get session :store)))
+            (while (and (< tries 80)
+                        (not (and (maillist-store-thread-messages store "warm1@example.org")
+                                  (maillist-store-thread-messages store "warm2@example.org"))))
+              (sleep-for 0.05)
+              (setq tries (1+ tries)))
+            (should (maillist-store-thread-messages store "warm1@example.org"))
+            (should (maillist-store-thread-messages store "warm2@example.org"))))
+      (maillist-dispose session)
+      (delete-process (cdr srv))
+      (ignore-errors (delete-file file)))))
 
 (provide 'maillist-tests)
 ;;; maillist-tests.el ends here

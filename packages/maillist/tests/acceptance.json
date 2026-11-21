@@ -255,6 +255,106 @@
       "name": "maillist-tests-a-store-queries-its-own-file",
       "file": "tests/maillist-tests.el",
       "purpose": "Search and marks read the SQLite file the store was opened on, not the default one."
+    },
+    {
+      "name": "maillist-tests-http-utf8-response-is-decoded",
+      "file": "tests/maillist-tests.el",
+      "purpose": "HTTP responses carrying UTF-8 bytes decode cleanly without mojibake."
+    },
+    {
+      "name": "maillist-tests-encoded-message-ids-decode-and-round-trip",
+      "file": "tests/maillist-tests.el",
+      "purpose": "Percent-encoded Message-IDs decode canonically and encode once in URLs and mbox links."
+    },
+    {
+      "name": "maillist-tests-offline-cached-thread-survives-refresh-failure",
+      "file": "tests/maillist-tests.el",
+      "purpose": "Opening a cached thread offline keeps its cached messages visible when background refresh fails."
+    },
+    {
+      "name": "maillist-tests-debbugs-reply-targets-bug-address",
+      "file": "tests/maillist-tests.el",
+      "purpose": "Replying in a Debbugs list addresses <bug>@debbugs.gnu.org and excludes own address from Cc."
+    },
+    {
+      "name": "maillist-tests-focused-message-reply-and-ancestor-references",
+      "file": "tests/maillist-tests.el",
+      "purpose": "Focusing an earlier message targets it on reply with its RFC 5322 ancestor References chain."
+    },
+    {
+      "name": "maillist-tests-new-replies-reopen-read-thread-and-mark-new",
+      "file": "tests/maillist-tests.el",
+      "purpose": "A previously read thread whose date or count advances on sync becomes unread and new again."
+    },
+    {
+      "name": "maillist-tests-search-isolation-and-instant-restore",
+      "file": "tests/maillist-tests.el",
+      "purpose": "Clearing a search restores the archive list offline immediately without losing cached threads."
+    },
+    {
+      "name": "maillist-tests-structured-local-search-handles-fields-and-wildcards",
+      "file": "tests/maillist-tests.el",
+      "purpose": "Offline local search evaluates structured field queries, is:read and escapes SQLite LIKE wildcards."
+    },
+    {
+      "name": "maillist-tests-cross-posted-threads-and-shared-messages-stay-isolated",
+      "file": "tests/maillist-tests.el",
+      "purpose": "Cross-posted thread ids across lists and shared messages across threads stay isolated with :parent preserved."
+    },
+    {
+      "name": "maillist-tests-v3-store-migrates-in-place-preserving-marks",
+      "file": "tests/maillist-tests.el",
+      "purpose": "A valid v0.3.0 store migrates in place to composite keys without losing threads or marks."
+    },
+    {
+      "name": "maillist-tests-prune-protects-starred-and-other-lists",
+      "file": "tests/maillist-tests.el",
+      "purpose": "Pruning a list protects starred threads and leaves other lists' cached bodies untouched."
+    },
+    {
+      "name": "maillist-tests-classify-lines-and-links-handle-diffs-quotes-signatures",
+      "file": "tests/maillist-tests.el",
+      "purpose": "Line classification handles diff headers, nested quotes and signatures; link extraction skips quotes and keeps balanced parens."
+    },
+    {
+      "name": "maillist-tests-prev-unread-folding-quotes-and-custom-sources",
+      "file": "tests/maillist-tests.el",
+      "purpose": "Previous-unread, collapse-all, quote toggle, inherit mail transport and custom source persistence work."
+    },
+    {
+      "name": "maillist-tests-native-index-cursor-loads-older-threads",
+      "file": "tests/maillist-tests.el",
+      "purpose": "When the archive index provides a ?t= next cursor, load-older pages thread rows natively."
+    },
+    {
+      "name": "maillist-tests-mounted-regions-and-help",
+      "file": "tests/maillist-tests.el",
+      "purpose": "The mounted client registers ETAF search, threads and reader regions plus in-buffer help notes."
+    },
+    {
+      "name": "maillist-tests-nntp-sync-thread-older-and-incremental-update",
+      "file": "tests/maillist-tests.el",
+      "purpose": "NNTP sync reads XOVER authors, pipelines MIME thread articles, updates incrementally and pages older mail."
+    },
+    {
+      "name": "maillist-tests-nntp-falls-back-to-http-when-unreachable",
+      "file": "tests/maillist-tests.el",
+      "purpose": "When an archive's NNTP endpoint is unreachable, sync and thread reading fall back transparently to HTTP."
+    },
+    {
+      "name": "maillist-tests-unchanged-cached-thread-opens-without-network",
+      "file": "tests/maillist-tests.el",
+      "purpose": "Reopening an unchanged cached thread in a fresh session serves SQLite directly with zero network calls."
+    },
+    {
+      "name": "maillist-tests-dead-proxy-falls-back-once-and-learns-direct-route",
+      "file": "tests/maillist-tests.el",
+      "purpose": "A dead proxy falls back once without duplicating HTTP requests and subsequent requests lead with direct."
+    },
+    {
+      "name": "maillist-tests-body-prefetch-warms-unread-threads-in-background",
+      "file": "tests/maillist-tests.el",
+      "purpose": "Idle background body prefetch caches top uncached unread threads into SQLite for instant opening."
     }
   ]
 }

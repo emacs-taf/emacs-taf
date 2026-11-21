@@ -2,9 +2,10 @@
 
 maillist is a mailing-list client for Emacs. It reads a public-inbox archive —
 the index page that lists threads and the per-thread Atom document that carries
-every message — and keeps the reader's own state (read, starred, cached bodies,
-the last archive) in a local SQLite file. Sending goes through `message-mode`
-and smtpmail.
+every message — and keeps the reader's own state (read, starred, last-read
+snapshots, cached bodies, custom sources and preferences) in a local SQLite
+file. Sending goes through `message-mode` and either smtpmail or Emacs's own
+`message-send-mail-function`.
 
 The [root entry Commentary](../maillist.el) is the authoritative list of
 supported functions, variables and the error type. This manual describes the
@@ -29,15 +30,15 @@ documented in each module's own Commentary.
 (require 'maillist)
 ```
 
-## Opening the client
+## Opening and managing archives
 
 ```elisp
 M-x maillist-open
 ```
 
-The client mounts in `maillist-buffer-name` (default `*ETAF Lists*`), hides the
-mode line and fills the selected window. Every control is reachable from the
-keyboard; the mouse works on the same elements.
+The client mounts in `maillist-buffer-name` (default `*maillist*`), keeps the
+user's original Emacs theme mode line and fills the selected window. Every
+control is reachable from the keyboard; the mouse works on the same elements.
 
 `maillist-open` also takes `:list` (an archive name from `maillist-sources`)
 and `:sync` — nil opens from the stored rows without contacting the archive,
@@ -45,7 +46,9 @@ which embedded hosts and the acceptance scenarios use.
 
 The archive a client last opened is stored under the `last-list` setting, so a
 later `M-x maillist-open` returns to it. `L` switches archive from inside the
-client and remembers the choice as well.
+client and also offers `+ 添加新邮件列表…` (`maillist-add-source`) to add any
+public-inbox archive and persist it in settings. `M-x maillist-remove-source`
+removes a source.
 
 ```elisp
 (maillist-open :list "emacs-bugs")   ; a named archive, with a sync
@@ -54,199 +57,215 @@ M-x maillist-close                   ; close the window and dispose the session
 ```
 
 Which lists exist is `maillist-sources`: each entry is
-`(:name NAME :base URL :address LIST-ADDRESS)`. Add an archive by adding an
-entry; the client needs nothing else from it than the public-inbox layout.
+`(:name NAME :base URL :address LIST-ADDRESS)`, with optional `:index` for a
+local mirror, `:reply-style debbugs` for GNU Debbugs lists (`emacs-bugs`
+sets this by default), and `:nntp (:host HOST :port PORT :group GROUP)` for
+fast persistent NNTP sync (all four built-in `yhetil.org` lists enable this).
 
-## Reading
+## Reading and keyboard navigation
 
-The list shows one row per discussion with its newest author, message count,
-date and subject, grouped by date. An unread row is drawn in the theme's link
-colour, a starred row carries `*`, an unread one `+`, and a row whose subject
-matched a local search carries the matched text beside it.
+The list shows one row per discussion with its status markers (`*` starred,
+`+` unread, both shown simultaneously when applicable), sender, message count,
+date (`HH:MM`, `昨天`, `MM-DD` this year, or `YY-MM` for earlier years) and
+subject, grouped by date.
 
-`j`/`k` move the selection and open the row; `RET` opens the focused row; a
-pointer press opens the row it lands on.  `n` opens the next unread thread
-after the selection and `G` the last row of the list. Below `maillist-narrow-width` the
-window shows the list alone until a row is opened, and the reader carries a
-`← 列表` row to go back (`u`).
+| Key | Action |
+| --- | --- |
+| `j` / `k` | next / previous thread (in narrow list view moves selection without marking read off-screen) |
+| `RET` or click | open the thread |
+| `n` / `p` | open the next / previous unread thread |
+| `<` / `G` | jump to the first / last row |
+| `]` / `[` | focus next / previous message in the open thread (also sets reply/raw target) |
+| `SPC` / `DEL` / `S-SPC` | page down / up inside the reader (or list in narrow list view) |
+| `u` | back from the thread to the list (narrow layout) |
+| `M-g` | ETAF region selector (`f` search bar, `t` thread list, `v` reader) |
+| `Tab` / `S-Tab` | step across regions (the thread list is a single focus group) |
+| `?` | open read-only in-buffer modal help with bindings and syntax reference |
 
 The reader keeps its header (subject, message count, participants, last reply)
 fixed while the body scrolls in its own box. Within a message:
 
-- quoted lines keep their `>` depth and a quiet band,
-- diff hunks are marked as meta, addition or deletion,
-- the reply target of a message is named in the warm colour,
-- every web address the message mentions is listed below it as a link; `RET`
-  on the link, or a click, opens it in the browser.
+- reply indentation pads only the left edge and caps at depth 6 so deep
+  discussions stay readable,
+- the focused message carries a subtle accent bar on the left,
+- newly arrived replies in a previously read thread are separated by a `新回复`
+  divider,
+- quoted lines keep a continuous vertical bar across wrapped lines and
+  distinguish nested quote depths (`Q` folds/unfolds runs of 3+ quoted lines),
+- unified diff headers (`diff --git`, `---`, `+++`, `@@`) and `+`/`-` hunks
+  are highlighted while RFC 3676 signatures (`-- `) dim cleanly and end hunks,
+- the reply target of a message is named in the warm colour (preserved offline
+  in SQLite),
+- web addresses mentioned in non-quoted lines are listed below the message as
+  clickable links, preserving balanced parentheses in URLs.
 
 `e` expands the messages a long thread holds back (`maillist-message-window`,
-20 by default) — the thread opens with its newest ones. A thread larger than
-`maillist-fast-open-threshold` messages shows its newest message from the
-archive's search feed first, then the whole conversation.
+20 by default), and `z` collapses or expands all visible messages at once. A
+thread larger than `maillist-fast-open-threshold` messages shows its newest
+message from the search feed first, then the full conversation.
 
-`C` puts the archive's own page of the thread on the kill ring and `B` opens
-it in the browser, so a discussion can be shared with someone who does not use
-this client (`maillist-thread-url` builds that address).
+Reopening a thread fetched within `maillist-thread-freshness` seconds (60 by
+default) serves its cached messages immediately without re-fetching. When a
+background refresh fails offline, cached messages remain on screen with an
+`离线缓存` note instead of being replaced by an empty error placeholder.
 
-## Marks
+`C` copies the archive page URL (`maillist-thread-url`), `B` opens it in the
+browser, `m` copies the thread's `t.mbox.gz` URL (`maillist-thread-mbox-url`,
+ready for `git am`), `w` copies the focused message's canonical `<Message-ID>`,
+and `v` fetches and opens its raw RFC 5322 source and full headers in a
+read-only `view-mode` buffer.
 
-A thread is marked read when its body is on screen, not when the row is
-selected: a fetch that never answers, or a row passed with `j`, leaves it
-unread.
+## Marks and new-reply detection
+
+A thread is marked read once its body is on screen, recording the thread's
+`:date` and `:count` in the `marks` table as the last-read snapshot and
+clearing its `:new` highlight. On a later sync, if an already-read thread
+receives replies (its archive timestamp or message count advances), it
+automatically re-surfaces as unread and new, with the reader marking where the
+new replies begin.
 
 | Key | Action |
 | --- | --- |
-| `M-u` | mark the open thread unread |
-| `A` | mark every row the current scope shows read |
-
-`A` reports how many threads it changed and writes them in one transaction.
-Marks live in their own table: a sync rewrites the archive cache and cannot
-lose them, and a prune that drops a thread's row keeps its mark, so the thread
-comes back with the state it had.
+| `M-u` | mark the selected thread unread |
+| `A` | mark every row the current scope shows read in one transaction |
+| `s` | toggle star (starred threads are exempt from cache pruning) |
 
 ## Scopes
 
 `1`, `2` and `3` switch between all threads, unread only and starred only.
-A scope is a local filter over the stored rows; the thread being read stays in
-the list so `j` carries on from it.
+A scope is a local filter over the visible rows; the selected/open row stays
+visible while it is read so `j` carries on from it.
 
 ## Searching
 
-`/` focuses the search field. `RET` runs the query, and an empty query returns
-to the archive's own thread list.
-
-The field takes mail-client syntax:
+`/` focuses the search field. Local-only mark queries filter live; remote
+archive queries run when you press `RET` (avoiding mid-typing requests and
+partial entries in history). Clearing the field (or clicking the clear icon)
+immediately restores the cached archive list offline.
 
 | Form | Effect |
 | --- | --- |
-| `from:` `to:` `subject:` `body:` `message:` | the matching archive field |
-| `after:2026-10-01` `before:2026-10-10` | a date range |
-| `is:unread` `is:starred` | local marks |
-| `"two words"` | a phrase |
+| `from:` `to:` `subject:` `body:` `message:` | matching archive field (prefix `-` to exclude, e.g. `-from:bot`) |
+| `after:2026-10-01` `before:2026-10-10` | date range |
+| `is:unread` `is:read` `is:starred` | local marks (`-is:...` negates), no network request |
+| `"two words"` | exact phrase |
 
-The first three forms compile into the archive's own query
-(`maillist-compile-query`) and are answered by a search request; a query naming
-only local marks filters the rows already in the list without a request. The
-`is:` conditions keep applying to a remote answer.
+Search results live in a view separate from `:archive-threads`: opening a
+search result or receiving a background scheduled sync never writes search
+rows into SQLite and never overwrites the visible search view.
 
-The results are a view, not the stored list: opening a thread from a search
-does not write the search page's date or subject back as the thread's facts.
+When the archive cannot answer (network error or anti-bot challenge page),
+the query falls back to structured local search over cached threads and bodies
+for the current archive (`maillist-local-search-limit`, 50 rows), honouring
+field clauses, negations, date bounds and escaped SQLite wildcards, and showing
+a single-line snippet when a body matched.
 
-When the archive cannot answer, the query falls back to the cached bodies
-(`maillist-local-search-limit`, 50 rows) and says so in the notice area; the
-row then carries the matched text. A search that neither the archive nor the
-cache can answer reports the failure and leaves the reader as it was.
-
-`M-p` and `M-n` walk the queries this client ran, newest first
+`M-p` and `M-n` walk the submitted query history, newest first
 (`maillist-recall-query`); past the oldest query the walk returns to the
-archive's list.
+archive list.
 
 ## Older mail
 
-The archive's index page names only its newest threads. `o` asks the archive's
-own date search for every message before the oldest date the client holds,
-groups the answer by subject (the newest message of each discussion stands for
-it), skips what the list already has and adds up to `maillist-older-batch`
-rows. The notice says how many joined, or that there is nothing older.
+`o` extends the archive list with older mail:
 
-Each added row is a message; opening it fetches the thread it belongs to.
+- When the archive is backed by NNTP, `o` fetches the preceding
+  `maillist-nntp-older-batch` (200) overview headers directly over the
+  persistent connection.
+- Otherwise, when the archive's index page exposes public-inbox's native
+  `?t=...` `next (older)` cursor, `o` pages the thread index directly,
+  preserving thread counts and nesting.
+- Otherwise it queries the archive's date search using full timestamp
+  comparison (so earlier same-day mail is not skipped) and automatically steps
+  result offsets past high-volume days.
 
-## Automatic sync
+`o` is disabled while viewing search results so search rows never mix into the
+archive cache.
+
+## Automatic sync and caching
 
 An open client syncs every `maillist-auto-refresh` seconds (300 by default;
-nil syncs only when asked). The scheduled sync is quiet: it stays out of the
-notice area, counts the threads the archive added in the summary (`6 个线程 ·
-2 未读 · 1 新 · 22:05 同步`) and tints those rows. A failure still reports —
-a client that hides its errors cannot be trusted with mail. The timer belongs
-to the session and is cancelled by `maillist-close`.
+nil syncs only on demand). The scheduled sync is quiet, counts newly added
+threads and new replies in the summary (`6 个线程 · 2 未读 · 1 新 · 22:05 同步`),
+and never clobbers an active search view.
+
+- **Persistent NNTP fast path**: Sources declaring `:nntp` (all four default
+  `yhetil.org` lists) sync incrementally via `GROUP` + `XOVER` over one
+  persistent non-blocking socket — delivering authors, dates and threading in
+  under a second without `/raw` storms — and fetch thread bodies via pipelined
+  `ARTICLE <Message-ID>` commands, fetching only messages not already cached in
+  SQLite. If NNTP is unreachable or blocked, the client falls back
+  transparently to HTTP.
+- **Authoritative cache hits & idle warmup**: Opening a cached thread whose
+  message count and newest timestamp already cover the archive row renders in
+  0 ms with zero network traffic (even across restarts, unless
+  `maillist-thread-freshness` is 0). After each sync, up to
+  `maillist-prefetch-bodies` (10) top uncached unread threads warm quietly in
+  the background at low priority, yielding immediately to user navigation.
+- **HTTP-only sources**: After the index arrives, `new.atom` fills newest
+  authors and caches single-message bodies, then missing senders fetch gently
+  (`maillist-prefetch-parallel` 1), yielding to user clicks.
 
 ## Sending
 
 | Key | Action |
 | --- | --- |
-| `r` | reply to the list |
-| `R` | reply to the list, copying the last message's author |
-| `C-u r` | reply to the last message's author |
-| `c` | post a new message |
+| `r` | reply to the list (or `<bug>@debbugs.gnu.org` in `emacs-bugs`) |
+| `R` | reply to the list, copying the replied message's author (excluding self and list) |
+| `C-u r` | reply privately to the replied message's author |
+| `c` | post a new message to the list |
 
-Replies carry `In-Reply-To` and `References`, so they stay in the thread both in
-the archive and in other mail clients. The draft opens in the current window
-under `message-mode`; `C-c C-c` sends it, `C-c C-k` discards it.
+Replies target the currently focused message (`[` / `]`, defaulting to the
+first new or newest message), build `In-Reply-To` from its canonical decoded
+`<Message-ID>` and `References` from its RFC 5322 `:parent` ancestor chain
+(keeping the thread root plus up to 9 nearest ancestors), format `From:` with
+`user-full-name`, and place point directly in the message body.
 
-Sending uses smtpmail:
+Two sending modes are controlled by `maillist-send-mail-function`:
 
-```elisp
-(setq maillist-mail-address "you@gmail.com")
-;; M-x maillist-mail-configure, then paste the account's application password
-```
-
-The password is looked up in auth-source when the mail goes out, so a reply can
-be written before the account is configured; sending then fails with the
-lookup error. `maillist-smtp-server`, `maillist-smtp-service` and
-`maillist-smtp-stream-type` choose the endpoint (Gmail with SSL on port 465 by
-default). A GNU list holds posts from an address that is not subscribed for
-moderation; the archive will not show the message until a moderator releases
-it.
+- `'smtpmail` (default): uses `maillist-smtp-server`, `maillist-smtp-service`
+  and `maillist-smtp-stream-type` with auth-source credentials stored by
+  `M-x maillist-mail-configure` (plaintext `~/.authinfo` is automatically set
+  to mode `0600`).
+- `'inherit`: leaves Emacs's own `message-send-mail-function` untouched (for
+  `msmtp`, `sendmail`, `gmi`, etc.).
 
 ## Storage
 
 Everything the client keeps lives in `maillist-store-file`
-(`~/.emacs.d/maillist/store.sqlite3`):
+(`~/.emacs.d/maillist/store.sqlite3`) in WAL mode with a 5-second busy timeout:
 
 | Table | Contents |
 | --- | --- |
-| `threads` | the archive cache: one row per thread and archive |
-| `messages` | fetched bodies, keyed by thread |
-| `marks` | read and starred state |
-| `settings` | the last archive and anything else the client remembers |
+| `threads` | archive cache keyed by `(list_name, id)` with `(list_name, date)` index |
+| `messages` | cached bodies (including `:parent`) keyed by `(thread, id)` with `(thread, position)` index |
+| `marks` | read, starred, `read_date` and `read_count` snapshot per thread |
+| `settings` | `last-list`, `list-width`, `custom-sources` |
+| `nntp_articles` | NNTP article numbers, `Message-ID`s, normalized thread roots and `References` |
 
-The file is switched to WAL at open, and every connection waits up to five
-seconds for a writer instead of failing at once, so a second Emacs can prune or
-search while the first saves a list.
+Valid v0.3.0 stores migrate in place to composite keys without losing threads
+or marks. An incompatible or torn file is moved aside to
+`store.sqlite3.rebuild-<time>` and rebuilt with a notice naming the backup.
 
-The cache is bounded and rebuildable:
-
-- `maillist-thread-limit` (2000) — threads kept per archive;
-- `maillist-body-limit` (400) — threads that keep a cached body.
-
-Both keep the newest rows. `maillist-store-prune` runs at open and after each
-sync, and never touches `marks`. A large prune vacuums the file so its size
-follows what it still stores.
-
-A file written by an incompatible earlier version is moved aside to
-`store.sqlite3.rebuild-<time>` and rebuilt; the notice names the backup, which
-still holds the marks. Delete the file (or the backup) to start from scratch:
-the archive cache is fetched again, marks and the remembered archive are not.
+`maillist-store-prune` enforces `maillist-thread-limit` (2000) and
+`maillist-body-limit` (400) per list, exempts starred threads and never drops
+other lists' cached bodies, reclaiming space incrementally via
+`PRAGMA incremental_vacuum` and `wal_checkpoint(PASSIVE)`.
 
 ## Network
 
-`maillist-network-route` decides the leading route:
+`maillist-transport` selects `'auto` (default: persistent NNTP when the source
+declares `:nntp` with automatic HTTP fallback), `'nntp` or `'http`. Remote
+full-text search always uses public-inbox's HTTP Xapian endpoint.
 
-| Value | Leading route | Falls back to |
-| --- | --- | --- |
-| `auto` (default) | direct | the proxy |
-| `proxy` | the proxy | direct |
-| `direct` | direct | — |
-
-The leading route hands the request to the other one when it cannot connect,
-stops answering for `maillist-route-attempt-timeout` seconds (10), or answers
-with something the client cannot use. That is why a proxy client that is not
-running does not take the archive offline, and a blocked direct path still has
-the proxy to use.
-
-The proxy is `maillist-proxy` (`HOST:PORT`); when it is nil the client takes
-`url-proxy-services` or the environment's `HTTP(S)_PROXY`. A `file:` archive
-never takes a proxy route, and neither does an archive the proxy has no path
-to.
-
-A request that reaches nothing names what it tried:
-
-```
-同步失败：无法连接代理 127.0.0.1:7890；无法连接档案 yhetil.org:443 · 按 g 重试
-```
-
-HTTP answers report their status (`档案返回 HTTP 403`) instead of url.el's
-internal error shape.
+For HTTP requests, `maillist-network-route` picks the leading route (`auto`,
+`proxy` or `direct`) with fallback after `maillist-route-attempt-timeout`
+seconds (10); once a fallback route succeeds, it leads for 5 minutes so every
+request does not stall against a down endpoint. HTTP/1.1 keep-alive reuse is
+disabled per request to avoid reverse-proxy socket stalls, and HTTP responses
+decode according to their declared `Content-Type` charset (defaulting to
+UTF-8). `maillist-proxy` names an HTTP(S) proxy (`HOST:PORT`); when nil, the
+client reads HTTP/HTTPS entries from `url-proxy-services` or `HTTP(S)_PROXY`
+(ignoring `no_proxy`-only lists and `socks*://` addresses).
 
 ## Configuration
 
@@ -254,22 +273,29 @@ internal error shape.
 | --- | --- | --- |
 | `maillist-sources` | four `yhetil.org` archives | archives the client can open |
 | `maillist-default-list` | `"emacs-devel"` | archive used when nothing was opened yet |
-| `maillist-buffer-name` | `"*ETAF Lists*"` | buffer the client mounts in |
+| `maillist-buffer-name` | `"*maillist*"` | buffer the client mounts in |
+| `maillist-transport` | `auto` | `auto` (NNTP + HTTP fallback), `nntp` or `http` |
+| `maillist-nntp-sync-window` | 250 | recent articles fetched on initial NNTP sync |
+| `maillist-nntp-older-batch` | 200 | older articles fetched per NNTP `o` |
+| `maillist-nntp-connect-timeout` | 6 | seconds before NNTP connect falls back to HTTP |
 | `maillist-store-file` | `~/.emacs.d/maillist/store.sqlite3` | SQLite file |
-| `maillist-thread-limit` | 2000 | threads kept per archive |
-| `maillist-body-limit` | 400 | threads that keep a cached body |
+| `maillist-thread-limit` | 2000 | threads kept per archive (starred exempt) |
+| `maillist-body-limit` | 400 | threads per archive keeping cached bodies (starred exempt) |
 | `maillist-message-window` | 20 | messages a long thread shows first |
-| `maillist-fast-open-threshold` | 40 | messages that make a thread open on the search feed first |
-| `maillist-prefetch-threads` | 500 | threads whose sender is fetched after a sync |
-| `maillist-prefetch-parallel` | 3 | sender requests kept in flight |
+| `maillist-thread-freshness` | 60 | seconds a fetched thread skips re-fetching (0 forces refresh) |
+| `maillist-fast-open-threshold` | 40 | messages that make an HTTP thread open on the search feed first |
+| `maillist-prefetch-threads` | 500 | HTTP threads whose sender is fetched after a sync |
+| `maillist-prefetch-parallel` | 1 | HTTP sender requests kept in flight per batch |
+| `maillist-prefetch-bodies` | 10 | uncached unread/recent threads warmed quietly on idle |
 | `maillist-auto-refresh` | 300 | seconds between automatic syncs, nil for on demand |
-| `maillist-older-batch` | 50 | rows one `o` adds |
+| `maillist-older-batch` | 50 | rows one date-search `o` adds |
 | `maillist-local-search-limit` | 50 | cached rows a fallback search reports |
 | `maillist-narrow-width` | 104 | columns below which the layout is one column |
 | `maillist-route-attempt-timeout` | 10 | seconds the leading route may stall |
 | `maillist-network-route` | `auto` | `auto`, `proxy` or `direct` |
-| `maillist-proxy` | nil | `HOST:PORT` of the proxy |
+| `maillist-proxy` | nil | `HOST:PORT` of the HTTP(S) proxy |
 | `maillist-mail-address` | `user-mail-address` | address mail is sent from |
+| `maillist-send-mail-function` | `smtpmail` | `smtpmail` or `inherit` |
 | `maillist-smtp-server` | `smtp.gmail.com` | SMTP host |
 | `maillist-smtp-service` | 465 | SMTP port |
 | `maillist-smtp-stream-type` | `ssl` | `ssl`, `starttls` or nil |
@@ -278,79 +304,19 @@ internal error shape.
 
 | Symptom | Cause and what to do |
 | --- | --- |
-| `同步失败：无法连接代理 …` | the proxy client is not running; the direct route was tried too and also failed. Start the proxy, or set `maillist-network-route` to `direct`. |
-| `同步失败：档案返回 HTTP 403` | the archive answered a block page instead of the index — public-inbox installations front themselves with a challenge (Anubis, go-away) that a plain Emacs request cannot pass. Use an archive that answers without it, or open the page in a browser first. |
-| `同步失败：档案没有返回线程索引` | the answer held no thread rows. Press `g`: the client fetches once more, then keeps the list and stored rows it has. |
-| `搜索失败：…` | neither the archive nor the cached bodies answered. `g` re-runs the query; the rows stay as they were. |
-| a thread shows `邮件数据不完整` | the archive no longer serves that thread document; the client shows the newest message it could reach from the search feed. |
-| the list is shorter than expected | the archive's index names only recent threads and `maillist-thread-limit` prunes old rows. Press `o` for older mail, or raise the limit. |
-| marks are gone after a start | the store was rebuilt from an incompatible file; the notice names the backup, which still holds them. |
-| `Sending...failed` with an auth error | no application password in auth-source: run `M-x maillist-mail-configure`. Check `~/.authinfo` for the machine and port in `maillist-smtp-server`/`maillist-smtp-service`. |
-| a sent message does not appear | GNU lists moderate posts from unsubscribed addresses; the archive shows it after release. |
+| `同步失败：无法连接代理 …` | the proxy client is not running; the direct route failed too. Start the proxy or set `maillist-network-route` to `direct`. |
+| `同步失败：档案返回 HTTP 403` | the archive served a challenge page (Anubis, go-away). Use another mirror or open the page in a browser. |
+| `刷新失败（…），当前显示本地缓存` | offline or archive unreachable while reopening a cached thread; cached text remains readable. Press `g` when online. |
+| `搜索失败：…` | neither the archive nor the local cache matched. Press `g` to retry or clear the search box to restore the list immediately. |
+| `Sending...failed` with an auth error | run `M-x maillist-mail-configure` or set `maillist-send-mail-function` to `'inherit`. |
+| a sent message does not appear | GNU lists moderate posts from unsubscribed addresses; archive mirrors also lag slightly behind list delivery. |
 | `没有打开的邮件列表` | the client buffer was closed; `M-x maillist-open` opens it again. |
-
-## GUI acceptance
-
-`make gui` drives `scripts/maillist-gui-scenarios.el` on the shared
-`emacs-gui-verifier` engine against a loopback copy of the test fixtures. It
-needs a running graphical Emacs server; pass `SERVER=<name>` to use a
-dedicated instance, and the target prints the evidence directory of the run.
-
-The scenario walks the documented keys — sync, selection, opening a thread,
-copying and opening the archive page, starring, the three scopes, `M-u`, `A`,
-search, search history, older mail, switching archives — and then the size
-matrix (150×40, 120×32, 96×32 narrow, 120×16 short). Every checkpoint asserts
-the visible text, the canvas filling its window, the painted width fitting the
-window, and the row height staying within the frame's line height, and saves a
-frame capture. The functional assertions certify behavior; the captured frames
-are what appearance is reviewed against.
-
-## Performance notes
-
-- A sync merges the archive page into the stored rows in one transaction and
-  repaints the list; a prune runs after the save, so the visible list does not
-  wait for it.
-- Opening a thread shows the stored body immediately when one is cached; a
-  thread above `maillist-fast-open-threshold` shows its newest message from the
-  search feed while the full document arrives.
-- Sender names are fetched only for threads that have none, three at a time,
-  and are stored, so a second sync of the same page does no requests for them.
-- The scheduled sync sends one index request per period; it does not prefetch
-  bodies.  Publishing the merged list costs a few milliseconds: a 50 ms timer
-  probe in a graphical session (205×51, six threads, one reader open) measured
-  a worst-case lateness of 11 ms both while idle and with a sync landing inside
-  the window, so the periodic refresh does not interrupt typing.
-- The palette is derived once per theme and frame colors, not once per row: a
-  row asks for ten colors, and mixing them again for every row of a long list
-  cost more than the list itself.  A theme switch, a changed face or another
-  frame recomputes it, and the shared components re-read their tokens through a
-  computed value, so a switch repaints the whole client.
-- `benchmarks/performance-scenarios.el` holds three workloads registered with
-  the workspace driver: scrolling a three-hundred-thread list, opening one
-  thread after another from it, and searching nine hundred cached bodies.
-  Run them against a graphical Emacs, which is where redisplay counts:
-
-  ```sh
-  python3 ~/emacs-taf/scripts/performance.py run \
-    --scenario 'maillist.*' --mode gui --server maillist-gui \
-    --samples 10 --output-dir /tmp/maillist-perf
-  ```
-
-  A run on a 300-thread store measured p50 26.4 ms per move, 22.4 ms per thread
-  opened and 5.9 ms per cached-body search, each inside its 150-200 ms budget.
-  The same store costs about a tenth of a millisecond per row to paint, so
-  these numbers grow with `maillist-thread-limit`, not with the window.
 
 ## Development
 
 ```sh
 make check     # structure, byte compilation, acceptance scenarios, public API
-make test      # the acceptance scenarios only
-make gui       # the GUI scenario on a running Emacs server
+make test      # acceptance scenarios only
+make gui       # drive the GUI scenario on a running Emacs server
 make clean
 ```
-
-The scenarios read `tests/fixtures/archive` over `file:` URLs. A scenario that
-needs a network path serves the fixtures from a loopback socket instead
-(`maillist-tests--server`), so the suite runs offline and still exercises the
-transport, the search page parser and the route fallback.

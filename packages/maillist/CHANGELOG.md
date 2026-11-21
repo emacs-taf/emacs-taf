@@ -4,6 +4,111 @@ All notable user-visible changes to maillist are recorded here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project uses [Semantic Versioning](https://semver.org/).
 
+## [0.4.0] - 2026-11-22
+
+Reliable daily reading across real public-inbox archives: UTF-8 HTTP decoding,
+offline cache preservation, new-reply detection, Debbugs reply routing,
+per-message focus and replies, composite SQLite keys with in-place migration,
+and full ETAF region navigation and help integration.
+
+### Added
+
+- **New-reply detection**: `marks` now records `:read-date` and `:read-count`
+  when a thread is read; a later sync that advances a read thread's date or
+  message count re-surfaces it as unread and new, with a `新回复` divider in
+  the reader.
+- **Per-message focus and actions**: `[` / `]` (`maillist-move-message`,
+  `maillist-select-message`) select any message in an open thread as the target
+  for `r` / `R` / `C-u r`, raw RFC 5322 viewing (`v`, `maillist-fetch-raw`)
+  and copying canonical `<Message-ID>` (`w`).
+- **Debbugs routing**: `emacs-bugs` (or any source with `:reply-style debbugs`)
+  automatically addresses replies to `<bug>@debbugs.gnu.org` parsed from the
+  subject instead of filing a new bug at `bug-gnu-emacs@gnu.org`.
+- **Reading & workflow controls**: `p` (`maillist-prev-unread`), `<` (jump to
+  first row), `SPC` / `DEL` / `S-SPC` (page reader from anywhere), `z`
+  (`maillist-toggle-all-messages`), `Q` (`maillist-toggle-quotes` for 3+ line
+  quote blocks), `m` (`maillist-thread-mbox-url` for `t.mbox.gz`), and
+  persistent custom archive sources (`maillist-add-source`,
+  `maillist-remove-source`, and `+ 添加新邮件列表…` inside `L`).
+- **Flexible mail transport**: `maillist-send-mail-function` (`smtpmail` or
+  `inherit`) lets users reuse Emacs's existing `message-send-mail-function`.
+- **ETAF keyboard contract**: declared `search` (`f`), `threads` (`t`, with
+  `:focus-group vertical`) and `reader` (`v`) regions for `M-g` and single-step
+  `Tab` traversal, plus in-buffer `?` help notes.
+- **Persistent NNTP fast transport** (`maillist-transport`, default `auto`):
+  all four built-in `yhetil.org` lists now sync incrementally over persistent
+  non-blocking NNTP (`GROUP` + `XOVER` with full RFC 2047 authors & threading,
+  eliminating `/raw` storms and anti-bot tarpits) and pipeline `ARTICLE <mid>`
+  bursts with full RFC 5322 / MIME decoding, falling back transparently to HTTP
+  if NNTP is unreachable.
+- **0 ms authoritative cache hits & idle body warmup**: reopening a cached
+  thread whose count and timestamp already cover the archive row renders
+  immediately without a network round-trip; `maillist-prefetch-bodies` (10 by
+  default) quietly pre-caches top uncached unread threads on idle at low
+  priority while yielding to user clicks.
+- **Preserved Emacs mode-line & clearer buffer name**: `maillist-open` now
+  passes `:mode-line t` to `etaf-app-open` so the buffer retains the user's
+  original Emacs theme mode-line, and `maillist-buffer-name` defaults to
+  `"*maillist*"` instead of `"*ETAF Lists*"`.
+- **Box-model search & action toasts**: replaced the rounded pill search input
+  with a clean rectangular box search field matching the segmented controls;
+  `s` (star/unstar), `e`, `[`/`]` boundaries and manual `g` refresh now show
+  crisp rectangular bottom-right notices; switching to `未读`/`已收藏` no longer
+  drags unrelated rows from `全部` and shows context-specific empty states;
+  focused messages keep fixed horizontal alignment with theme-native `:select`
+  highlighting and a `* 已收藏` badge in the reader header.
+- **Native index pagination**: `o` (`maillist-load-older`) pages via NNTP
+  `XOVER` on NNTP-backed lists, follows public-inbox `?t=...` next-page cursors
+  on HTTP lists, and steps offsets past high-volume days when falling back to
+  date search.
+
+### Fixed
+
+- **HTTP keep-alive stalls & dead-proxy double-retries**: disabled
+  `url-http-attempt-keepalives` per request to eliminate 15–45 s hung-socket
+  stalls behind `yhetil.org`'s `go-away` proxy, guarded route fallback against
+  duplicate retries, cached the healthy network route for 5 minutes so a closed
+  proxy is not retried on every request, cached single-message bodies from
+  `new.atom`, and lowered HTTP `maillist-prefetch-parallel` default to `1`.
+- **UTF-8 HTTP decoding**: HTTP responses from `url-retrieve` are now decoded
+  using the declared `Content-Type` charset (default UTF-8) instead of staying
+  raw unibyte octets, eliminating mojibake on real online archives.
+- **Offline cached reading**: reopening a cached thread when the network fails
+  keeps its cached body visible (`离线缓存`) instead of replacing it with an
+  empty error placeholder; freshly fetched threads skip redundant reloads
+  within `maillist-thread-freshness` (60 s) without skeleton flicker.
+- **Search / archive isolation**: search results no longer overwrite
+  `:archive-threads`; clearing a search restores the full cached list
+  immediately offline, and background syncs or `o` never contaminate SQLite
+  with search rows. Remote queries run on `RET` instead of firing mid-typing
+  requests that polluted `:query-history`.
+- **Canonical Message-IDs & RFC 5322 headers**: percent-encoded IDs from archive
+  links decode canonically and encode once in URLs; `References` walks the
+  `:parent` ancestor chain (root + up to 9 recent ancestors); `R` excludes the
+  sender's own address and list address from Cc; `From:` includes
+  `user-full-name`; draft point lands in the body; plaintext `~/.authinfo` is
+  set to mode `0600`.
+- **Deep threads & layout bounds**: message indentation pads only the left edge
+  and caps at depth 6; the appbar uses flex allocation instead of an
+  absolutely-positioned summary so medium-wide windows never overlap; dragged
+  `:list-width` clamps on window shrink and persists in settings; status
+  markers display `*` (starred) and `+` (unread) simultaneously in sync with
+  the manual; footer hints budget to viewport width with distinct labels.
+- **SQLite integrity & local fallback search**: `threads` and `messages` use
+  composite keys `(list_name, id)` and `(thread, id)` with indexes and in-place
+  migration from v0.3.0 (preserving marks and `:parent`); removed hardcoded
+  5000-mark and 2000-thread read caps; pruning is per-list, exempts starred
+  threads and uses non-blocking incremental vacuum; offline local search
+  evaluates structured query clauses across subjects, authors and bodies with
+  escaped LIKE wildcards and thread deduplication.
+- **Parsing, diffs, links & proxy**: `maillist-parse-thread` parses XML once
+  via `libxml-parse-xml-region` when available; diff headers (`diff --git`,
+  `---`, `+++`) and RFC 3676 `-- ` signatures classify cleanly; quote bars span
+  wrapped lines via `:border-left`; link extraction skips quoted lines and
+  preserves balanced parentheses; proxy detection ignores `socks*://` and
+  `no_proxy`-only `url-proxy-services`; `new.atom` finishes before batched
+  `/raw` sender prefetch; narrow list moves no longer mark unseen threads read.
+
 ## [0.3.0] - 2026-10-30
 
 Reading a mailing list continuously: several archives, scheduled syncs, read

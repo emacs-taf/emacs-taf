@@ -164,6 +164,10 @@ to every repository changed from this workspace.
   colour, weight, spacing and position. A short window drops a whole row rather
   than shrinking text. `grep -rn ':font-size'` over the application should stay
   empty; only an explicit user request changes a size.
+- Applications preserve the user's original theme mode-line: pass `:mode-line t`
+  to `etaf-app-open` and do not clear `mode-line-format` or override the mode-line
+  face unless the user explicitly asks for a frameless mode (such as a fullscreen
+  screensaver or transient overlay).
 - Interactive states must not stack.  A control or row that is already
   active or selected keeps its selected presentation and takes no
   pointer-hover highlight; hover feedback belongs to unselected targets

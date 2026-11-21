@@ -214,15 +214,40 @@ KEYS are documented keys, sent through the client's own command loop."
       (with-current-buffer buffer
         (car (window-text-pixel-size window (point-min) (point-max) 100000))))))
 
-(defun maillist-gui--fits-window-p (&optional buffer)
-  "Return non-nil when BUFFER's widest line fits its window body.
-The application paints a canvas the width of the window, so a repaint that
-has not caught up with a resize is the one thing a resize has to wait for."
+(defun maillist-gui--canvas-fits-p (&optional buffer)
+  "Return non-nil when BUFFER's painted canvas fits its window width and height.
+With the original theme's mode-line preserved, a boxed mode-line can leave a
+sub-line pixel remainder below the last full row; the canvas fills every full
+row without overflowing horizontally or vertically."
   (let ((buffer (or buffer (current-buffer))))
     (when-let* ((window (get-buffer-window buffer)))
-      (let ((painted (maillist-gui--painted-width buffer))
-            (body (window-body-width window t)))
-        (and painted (<= painted body))))))
+      (with-current-buffer buffer
+        (let* ((size (window-text-pixel-size window (point-min) (point-max) 100000))
+               (painted-w (car size))
+               (painted-h (cdr size))
+               (body-w (window-body-width window t))
+               (body-h (window-body-height window t))
+               (row-h (max 1 (line-pixel-height))))
+          (and (> painted-w 0)
+               (<= painted-w body-w)
+               (<= painted-h body-h)
+               (< (- body-h painted-h) row-h)))))))
+
+(defun maillist-gui--height-assertion (&optional buffer)
+  "Return an assertion that BUFFER's painted canvas fills every full window row."
+  (let ((buffer (or buffer (current-buffer))))
+    (if-let* ((window (get-buffer-window buffer)))
+        (with-current-buffer buffer
+          (let* ((painted (cdr (window-text-pixel-size
+                                window (point-min) (point-max) 100000)))
+                 (body (window-body-height window t))
+                 (row-h (max 1 (line-pixel-height))))
+            (maillist-gui--assert
+             "canvas height fills every full row above the mode-line"
+             (and (<= painted body) (< (- body painted) row-h))
+             (format "canvas-h=%s body-h=%s row-h=%s" painted body row-h))))
+      (maillist-gui--assert "canvas height fills every full row above the mode-line" nil
+                            "target buffer is not displayed"))))
 
 (defun maillist-gui--width-assertion (&optional buffer)
   "Return an assertion that BUFFER's painted canvas fits the window width.
@@ -255,8 +280,7 @@ layout that budgets the viewport is repainted before it is measured."
    :settled-p (lambda (context)
                 (and (= (frame-width) width) (= (frame-height) height)
                      (with-current-buffer (maillist-gui--target context)
-                       (and (etaf-gui-verifier-canvas-filled-p)
-                            (maillist-gui--fits-window-p)))))
+                       (maillist-gui--canvas-fits-p))))
    :screenshot screenshots
    :assertions
    (lambda (context)
@@ -267,7 +291,7 @@ layout that budgets the viewport is repainted before it is measured."
                                   (= (frame-height) height))))
       (with-current-buffer (maillist-gui--target context)
         (list
-         (etaf-gui-verifier-canvas-assertion)
+         (maillist-gui--height-assertion)
          (maillist-gui--width-assertion)))))))
 
 ;;; ---------------------------------------------------------------------------
@@ -289,6 +313,7 @@ and leaves the client closed."
          (other (make-temp-file "maillist-gui-other" t))
          (maillist-store-file (make-temp-file "maillist-gui-store" nil ".sqlite3"))
          (maillist-prefetch-threads 200)
+         (maillist-prefetch-bodies 0)
          (maillist-auto-refresh nil)
          (maillist-network-route 'direct)
          (url-proxy-services nil)
@@ -308,7 +333,9 @@ and leaves the client closed."
           :invariants
           (lambda (context)
             (with-current-buffer (maillist-gui--target context)
-              (etaf-gui-verifier-line-height-assertions)))
+              (cons (maillist-gui--assert "mode-line is preserved"
+                                          (not (null mode-line-format)))
+                    (etaf-gui-verifier-line-height-assertions))))
           :initialize
           (lambda (context)
             (ignore-errors (maillist-close))
@@ -361,6 +388,81 @@ and leaves the client closed."
               (list
                (maillist-gui--assert "k returns to the first thread"
                                      (maillist-gui--shows context "3 封")))))
+           (maillist-gui--key-action
+            "message-prev" "["
+            nil
+            (lambda (context)
+              (let ((focused (with-current-buffer (maillist-gui--target context)
+                               (let ((session (plist-get (etaf-app-state (buffer-name)) :session)))
+                                 (etaf-value (plist-get session :focused-message))))))
+                (list
+                 (maillist-gui--assert "[ moves focused message to the previous mail"
+                                       (equal "alpha-reply@example.com" focused))))))
+           (maillist-gui--key-action
+            "toggle-quotes-on" "Q"
+            nil
+            (lambda (context)
+              (list
+               (maillist-gui--assert "Q folds long quoted blocks"
+                                     (maillist-gui--shows context "已折叠长引文")))))
+           (maillist-gui--key-action
+            "toggle-quotes-off" "Q"
+            nil
+            (lambda (context)
+              (list
+               (maillist-gui--assert "Q unfolds quotes again"
+                                     (maillist-gui--shows context "已展开全部引文")))))
+           (maillist-gui--key-action
+            "toggle-all-collapse" "z"
+            nil
+            (lambda (context)
+              (list
+               (maillist-gui--assert "z collapses all messages in the thread"
+                                     (maillist-gui--shows context "已折叠全部邮件")))))
+           (maillist-gui--key-action
+            "toggle-all-expand" "z"
+            nil
+            (lambda (context)
+              (list
+               (maillist-gui--assert "z expands all messages again"
+                                     (maillist-gui--shows context "已展开全部邮件")))))
+           (maillist-gui--key-action
+            "copy-mbox-url" "m"
+            nil
+            (lambda (context)
+              (ignore context)
+              (list
+               (maillist-gui--assert "m copies the thread mbox.gz URL"
+                                     (and (stringp (car kill-ring))
+                                          (string-suffix-p "/t.mbox.gz" (car kill-ring)))))))
+           (maillist-gui--key-action
+            "copy-message-id" "w"
+            nil
+            (lambda (context)
+              (ignore context)
+              (list
+               (maillist-gui--assert "w copies the focused Message-ID"
+                                     (equal "<alpha-reply@example.com>" (car kill-ring))))))
+           (maillist-gui--key-action
+            "open-help" "?"
+            nil
+            (lambda (context)
+              (let ((notes (with-current-buffer (maillist-gui--target context)
+                             (plist-get (etaf-help-data
+                                         (etaf-runtime-for-buffer (current-buffer)))
+                                        :notes))))
+                (list
+                 (maillist-gui--assert "? shows in-buffer modal help"
+                                       (and (maillist-gui--shows context "回复邮件")
+                                            (cl-some (lambda (n) (string-match-p "搜索语法" n))
+                                                     notes)))))))
+           (maillist-gui--key-action
+            "close-help" "<escape>"
+            nil
+            (lambda (context)
+              (list
+               (maillist-gui--assert "ESC closes help back to the client"
+                                     (maillist-gui--shows context "4 个线程")))))
            (maillist-gui--key-action
             "next-unread" "n"
             nil
@@ -421,12 +523,54 @@ and leaves the client closed."
                                                           maillist-gui--browsed))))))
            ;; --- Marks and scopes ---------------------------------------
            (maillist-gui--key-action
-            "star" "s"
+            "empty-starred-scope" "3"
             nil
             (lambda (context)
               (list
-               (maillist-gui--assert "s stars the selected thread"
-                                     (maillist-gui--shows context "已收藏")))))
+               (maillist-gui--assert "empty starred scope shows dedicated message"
+                                     (maillist-gui--shows context "还没有收藏的线程")))))
+           (maillist-gui--key-action
+            "back-to-all-before-star" "1"
+            nil
+            (lambda (context)
+              (list
+               (maillist-gui--assert "returns to all threads"
+                                     (maillist-gui--shows context "Widget default value")))))
+           (maillist-gui--key-action
+            "star" "s"
+            nil
+            (lambda (context)
+              (let ((toast (with-current-buffer (maillist-gui--target context)
+                             (let ((sess (plist-get (etaf-app-state (buffer-name)) :session)))
+                               (plist-get (etaf-value (plist-get sess :toast)) :text)))))
+                (list
+                 (maillist-gui--assert "s shows starred toast notice"
+                                       (equal "已收藏" toast)
+                                       (format "toast=%S" toast))
+                 (maillist-gui--assert "reader header shows starred badge"
+                                       (maillist-gui--shows context "* 已收藏"))))))
+           (maillist-gui--key-action
+            "unstar" "s"
+            nil
+            (lambda (context)
+              (let ((toast (with-current-buffer (maillist-gui--target context)
+                             (let ((sess (plist-get (etaf-app-state (buffer-name)) :session)))
+                               (plist-get (etaf-value (plist-get sess :toast)) :text)))))
+                (list
+                 (maillist-gui--assert "second s shows unstarred toast notice"
+                                       (equal "已取消收藏" toast)
+                                       (format "toast=%S" toast))))))
+           (maillist-gui--key-action
+            "restar" "s"
+            nil
+            (lambda (context)
+              (let ((toast (with-current-buffer (maillist-gui--target context)
+                             (let ((sess (plist-get (etaf-app-state (buffer-name)) :session)))
+                               (plist-get (etaf-value (plist-get sess :toast)) :text)))))
+                (list
+                 (maillist-gui--assert "restarring shows toast again"
+                                       (equal "已收藏" toast)
+                                       (format "toast=%S" toast))))))
            (maillist-gui--key-action
             "scope-starred" "3"
             screenshots
@@ -537,6 +681,14 @@ and leaves the client closed."
                (maillist-gui--assert "G opens the last thread of the list"
                                      (equal "another@example.com"
                                             (maillist-gui--open-id context))))))
+           (maillist-gui--key-action
+            "jump-first" "<"
+            nil
+            (lambda (context)
+              (list
+               (maillist-gui--assert "< opens the first thread of the list"
+                                     (equal "alpha@example.com"
+                                            (maillist-gui--open-id context))))))
            ;; --- Switching archives -------------------------------------
            (etaf-gui-verifier-action-create
             :id "switch-list"
@@ -589,6 +741,7 @@ and leaves the client closed."
                (maillist-gui--assert "the wide layout keeps the list and the reader"
                                      (and (maillist-gui--shows context "6 个线程")
                                           (maillist-gui--shows context "Older discussion"))))))
+           (maillist-gui--resize 108 32 screenshots)
            (maillist-gui--resize 96 32 screenshots)
            (etaf-gui-verifier-action-create
             :id "narrow-shows-one-column"
@@ -635,10 +788,19 @@ and leaves the client closed."
             :screenshot screenshots
             :assertions
             (lambda (context)
-              (list
-               (maillist-gui--assert "a short window keeps the header and rows"
-                                     (and (maillist-gui--shows context "fixture")
-                                          (maillist-gui--shows context "6 个线程"))))))
+              (let ((list-width
+                     (with-current-buffer (maillist-gui--target context)
+                       (let* ((state (etaf-app-state (buffer-name)))
+                              (session (plist-get state :session)))
+                         (and session
+                              (etaf-value (plist-get session :list-width)))))))
+                (list
+                 (maillist-gui--assert "a short window keeps the header and rows"
+                                       (and (maillist-gui--shows context "fixture")
+                                            (maillist-gui--shows context "6 个线程")))
+                 (maillist-gui--assert "widening restores the user list width"
+                                       (and (integerp list-width) (> list-width 320))
+                                       (format "list-width=%s" list-width))))))
            (maillist-gui--resize 150 40 nil)))
          directory)
         (ignore-errors (maillist-close))

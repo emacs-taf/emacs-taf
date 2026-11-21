@@ -2,26 +2,25 @@
 
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 ;; Author: ETAF contributors
-;; Version: 0.3.0
-;; Package-Requires: ((emacs "29.1") (etaf "0.2.1") (etaf-ui "0.1.0") (etaf-db "0.1.0"))
+;; Version: 0.4.0
+;; Package-Requires: ((emacs "29.1") (etaf "0.3.6") (etaf-ui "0.3.4") (etaf-db "0.1.0"))
 ;; Keywords: mail
 ;; URL: https://github.com/emacs-taf/maillist
 
 ;;; Commentary:
 
-;; maillist reads a public-inbox archive as a mail client: the thread list,
-;; the open conversation and the client's own read and starred marks.  The
-;; archive cache, cached bodies and marks live in one SQLite file, so a restart
-;; shows the list before the archive answers; the marks sit in their own table,
-;; so a refresh cannot lose them.  A reply or a new post opens in `message-mode'
-;; with the thread's message ids in `In-Reply-To' and `References', and leaves
-;; through smtpmail with an application password from auth-source.
+;; maillist reads public-inbox archives as a mail client: the thread list,
+;; the open conversation and the reader's own read and starred marks.  The
+;; archive cache, cached bodies, marks (with last-read snapshots to detect new
+;; replies on previously read threads) and settings live in one SQLite file.
+;; Replies target the focused message (or newest message), keep canonical
+;; `In-Reply-To' and RFC 5322 `References' ancestor chains, route GNU Debbugs
+;; replies to `<bug>@debbugs.gnu.org', and leave through smtpmail or Emacs's
+;; own `message-send-mail-function'.
 ;;
 ;; Load this package with (require 'maillist) after adding this repository
-;; root and the ETAF, ETAF UI, Ebox and ECSS roots to `load-path'.  Then use
-;; M-x maillist-open.  The archive service below is usable without a buffer:
-;; it parses a public-inbox document and fetches one asynchronously, so an
-;; embedder can build its own client on the same data.
+;; root and the ETAF, ETAF UI, Ebox, ECSS and ETAF DB roots to `load-path'.
+;; Then use M-x maillist-open.
 ;;
 ;; Only the interfaces listed below are supported for use by other packages.
 ;; All unlisted symbols and implementation features are internal, including
@@ -42,56 +41,103 @@
 ;; Function: maillist-create (&key list)
 ;; Create a client session over the archive LIST (a `maillist-sources' name)
 ;; and return it; without LIST it opens the archive this client opened last,
-;; then `maillist-default-list'.  The open also prunes what the store no
-;; longer needs.  The session is the value a View reads: `:threads', `:groups',
-;; `:open', `:selected', `:scope', `:query', `:summary', `:status', `:reading'
-;; and `:viewport' are reactive refs; `:source' and `:store' are plain values.
+;; then `maillist-default-list'.  The open merges saved custom sources and
+;; prunes what the store no longer needs.  The session holds reactive refs
+;; `:threads', `:groups', `:open', `:selected', `:focused-message',
+;; `:hide-quotes', `:scope', `:query', `:search-input', `:summary', `:status',
+;; `:reading' and `:viewport', plus `:source' and `:store'.
 ;;
 ;; Function: maillist-dispose (session)
-;; Release SESSION's store and ignore late archive answers.  Closing the
-;; mounted buffer does the same; use this with a session that has no buffer.
+;; Release SESSION's store, cancel timers and ignore late archive answers.
+;; Closing the mounted buffer does the same; use this with a session that has
+;; no buffer.
 ;;
 ;; Function: maillist-refresh (session &optional quiet)
 ;; Reload SESSION's thread list from its archive; the request is asynchronous
-;; and `:status' carries `loading', `idle' or `error' while it runs.  The index
-;; page lists recent threads only, so its rows merge into the stored list: a
-;; thread the page no longer names keeps its row and its marks.  QUIET keeps a
-;; background sync out of the notice area; a thread the archive added shows in
-;; the summary and in its own colour.
+;; and `:status' carries `loading', `idle' or `error' while it runs.  Rows
+;; merge into `:archive-threads' so older cached rows stay and previously read
+;; threads with newer replies re-surface as unread.  When a search is active,
+;; the archive cache updates without replacing the visible search results.
 ;;
 ;; Function: maillist-select (session id &optional no-mark)
-;; Open the thread ID of SESSION, fetching its body when uncached, and return
-;; the open-thread value.  Unless NO-MARK is non-nil, the thread becomes read
-;; once its body is on screen: a fetch that never answers leaves it unread.
+;; Open the thread ID of SESSION, fetching its body when uncached or stale,
+;; and return the open-thread value.  Unless NO-MARK is non-nil, the thread
+;; becomes read once its body is on screen.  A failed refresh keeps cached
+;; messages on screen instead of wiping the reader.
 ;;
-;; Function: maillist-move (session delta)
-;; Move the selection by DELTA rows and open the new row.
+;; Function: maillist-move (session delta &optional no-open)
+;; Move the selection by DELTA rows and open the new row, or only move the
+;; selection highlight when NO-OPEN is non-nil.
 ;;
 ;; Function: maillist-next-unread (session)
 ;; Open the first unread row after SESSION's selection and return its id, or
 ;; nil when nothing after it is unread.
 ;;
-;; Function: maillist-select-edge (session edge)
-;; Open the first or the last row SESSION shows (`first' or `last') and return
-;; its id.
+;; Function: maillist-prev-unread (session)
+;; Open the nearest unread row before SESSION's selection and return its id,
+;; or nil when nothing before it is unread.
 ;;
-;; Function: maillist-reply-all (session)
-;; Reply to SESSION's open thread with the last message's author in Cc, so the
-;; list and everybody the thread reached see the answer.
+;; Function: maillist-select-edge (session edge &optional no-open)
+;; Select the first or last row SESSION shows (`first' or `last') and return
+;; its id; when NO-OPEN is non-nil, only move the selection highlight.
+;;
+;; Function: maillist-select-message (session id)
+;; Focus message ID inside SESSION's open thread so subsequent reply, raw-view
+;; and copy commands target it.
+;;
+;; Function: maillist-move-message (session delta)
+;; Move the focused message inside SESSION's open thread by DELTA and return
+;; the newly focused message id.
+;;
+;; Function: maillist-toggle-message (session id)
+;; Fold or unfold message ID of the open thread, focus it and return the new
+;; collapsed state.
+;;
+;; Function: maillist-toggle-all-messages (session)
+;; Collapse every visible message in SESSION's open thread when any is
+;; expanded, otherwise expand all; return the new collapsed state.
+;;
+;; Function: maillist-toggle-quotes (session)
+;; Toggle collapsing long quoted blocks (3+ lines) inside SESSION's reader
+;; and return the new state.
+;;
+;; Function: maillist-reply (session &optional private message-id)
+;; Reply to SESSION's open thread in `message-mode', targeting MESSAGE-ID,
+;; `:focused-message' or the newest message.  With PRIVATE non-nil reply to
+;; the message's author instead of the list; Debbugs lists address
+;; `<bug>@debbugs.gnu.org'.  Keeps canonical `In-Reply-To' and `References'.
+;;
+;; Function: maillist-reply-all (session &optional message-id)
+;; Reply to SESSION's open thread and copy the replied message's author in Cc
+;; (excluding the sender's own address and the list address).
+;;
+;; Function: maillist-compose (session)
+;; Write a new post to SESSION's list in a `message-mode' buffer.
+;;
+;; Function: maillist-mail-configure ()
+;;;###autoload (autoload 'maillist-mail-configure "maillist" nil t)
+;; Store the SMTP application password of the sending account in auth-source
+;; with 0600 permissions for plaintext `~/.authinfo'.
+;;
+;; Function: maillist-add-source (name base address &optional reply-style)
+;;;###autoload (autoload 'maillist-add-source "maillist" nil t)
+;; Add or update a public-inbox archive source NAME at BASE with list ADDRESS
+;; (and optional REPLY-STYLE such as `debbugs') and persist it in settings.
+;;
+;; Function: maillist-remove-source (name)
+;;;###autoload (autoload 'maillist-remove-source "maillist" nil t)
+;; Remove archive NAME from `maillist-sources' and saved custom sources.
 ;;
 ;; Function: maillist-toggle-star (session)
 ;; Star or unstar the selected row, persist the choice and return the new state.
 ;;
 ;; Function: maillist-set-read (session id read)
-;; Set thread ID read or unread, persist the mark and return the new state.
-;; Marking unread puts a thread back in the queue, and a sync does not undo it.
+;; Set thread ID read or unread, persist the mark (and read snapshot when read)
+;; and return the new state.
 ;;
 ;; Function: maillist-mark-all-read (session)
 ;; Mark every row SESSION shows read in one store transaction and return how
 ;; many changed.
-;;
-;; Function: maillist-toggle-message (session id)
-;; Fold or unfold message ID of the open thread and return the new state.
 ;;
 ;; Function: maillist-load-earlier (session)
 ;; Grow the open thread's message window by `maillist-message-window' and
@@ -101,32 +147,31 @@
 ;; Show only SCOPE's rows: `all', `unread' or `starred'.
 ;;
 ;; Function: maillist-search (session text)
-;; Search the archive for TEXT, or return to the archive's own index when TEXT
-;; is empty.  TEXT may name `from:', `to:', `subject:', `body:' and `message:',
-;; a date range with `after:' and `before:', and the reader's own marks with
-;; `is:unread' or `is:starred'; `maillist-compile-query' turns it into the
-;; archive's query and the local filters.  A query naming only local marks
-;; filters the rows already shown and contacts nothing.
+;; Search the archive for TEXT, or restore `:archive-threads' when TEXT is
+;; empty.  TEXT may name `from:', `to:', `subject:', `body:' and `message:'
+;; (with optional leading `-'), `after:'/`before:', and local marks
+;; `is:unread', `is:read', `is:starred' (or `-is:...').  When the archive
+;; cannot answer, cached threads and bodies answer locally using the
+;; structured terms.
 ;;
 ;; Function: maillist-load-older (session)
-;; Add mail older than the rows SESSION holds.  The archive's index names only
-;; its newest page, so the next page comes from the archive's own date search,
-;; grouped by subject and capped at `maillist-older-batch'.  Each added row is
-;; a message; opening it fetches its thread.  The request is asynchronous and
-;; the notice names how many rows joined.
+;; Add mail older than `:archive-threads'.  Uses the archive index's native
+;; `?t=...' next-page cursor when available, otherwise falls back to date
+;; search with timestamp comparison and automatic offset stepping.
 ;;
 ;; Function: maillist-recall-query (session &optional forward)
-;; Search SESSION again with an older (FORWARD nil) or newer query from the
-;; history of what this client ran, and return the query now shown.  Past the
-;; oldest query the walk returns to the archive's own list, whose query is
-;; empty.
+;; Search SESSION again with an older (FORWARD nil) or newer query from its
+;; history and return the query now shown, empty for the archive list.
 ;;
 ;; Function: maillist-thread-url (session id)
-;; Return the archive's own page for thread ID of SESSION, the address a
-;; reader shares with someone who does not use this client.
+;; Return the archive's own page for thread ID of SESSION.
+;;
+;; Function: maillist-thread-mbox-url (session id)
+;; Return the downloadable `t.mbox.gz' archive URL for thread ID of SESSION.
 ;;
 ;; Function: maillist-rows (session)
-;; Return the rows SESSION shows, in list order, honouring `:scope'.
+;; Return the rows SESSION shows, in list order, honouring `:filters' and
+;; `:scope'.
 ;;
 ;; Function: maillist-row (session id)
 ;; Return the row of SESSION named ID, or nil.
@@ -136,78 +181,59 @@
 ;;
 ;; Function: maillist-source (name)
 ;; Return the source named NAME from `maillist-sources'; an unknown name is an
-;; error.  A source is (:name NAME :base URL :address LIST-ADDRESS) with an
-;; optional `:index' file name for a mirror that serves one.
+;; error.
 ;;
 ;; Function: maillist-parse-index (html)
 ;; Parse a public-inbox index page into thread rows
-;; (:id :subject :date :count :depth), newest first.  `:date' is an ISO-8601
-;; UTC stamp and a buried sub-thread has `:depth' 1.
+;; (:id :subject :date :count :depth), newest first, with decoded canonical
+;; Message-IDs.
 ;;
 ;; Function: maillist-decode-entities (text)
-;; Return TEXT with the HTML entities a public-inbox page emits, so a subject
-;; named `&amp;' reads as the character it stands for.
+;; Return TEXT with named and numeric HTML entities decoded.
 ;;
 ;; Function: maillist-parse-search (html)
 ;; Parse a public-inbox search page into message rows (:id :subject :date
-;; :author), newest first.  A search answers per message, so a row carries no
-;; `:count' or `:depth'; opening it fetches the thread the message belongs to.
+;; :author), newest first.
 ;;
 ;; Function: maillist-parse-thread (xml-text &optional fallback-subject)
-;; Parse a public-inbox thread Atom document into
-;; (:id :subject :participants :messages).  Each message is
-;; (:id :author :email :date :depth :subject :text), where `:text' is the raw
-;; body that `maillist-classify-lines' renders.  A document without messages
-;; signals an error instead of reporting an empty thread.
+;; Parse a public-inbox thread Atom document in a single pass into
+;; (:id :subject :participants :messages).
 ;;
 ;; Function: maillist-parse-author (text)
-;; Return the sender display name of the raw message TEXT, or nil.  Folded
-;; headers and RFC 2047 encoded names are unfolded and decoded.
+;; Return the sender display name of the raw message TEXT, or nil.
 ;;
 ;; Function: maillist-parse-recent (xml-text)
 ;; Parse a public-inbox new-messages feed into (MESSAGE-ID . AUTHOR) hints.
 ;;
 ;; Function: maillist-classify-lines (text &optional prefix)
-;; Split a message body into (:id :kind :text) lines.  KIND is `body',
-;; `blank', `quote', `patch-meta', `patch-add' or `patch-del'; PREFIX names
-;; the message so every line keeps a stable key.
+;; Split a message body into (:id :kind :text ...) lines.  KIND is `body',
+;; `blank', `quote' (with `:quote-depth'), `signature', `patch-meta',
+;; `patch-add' or `patch-del'.
 ;;
-;; Function: maillist-message-links (text)
-;; Return the web addresses of message TEXT that a reader can open, in the
-;; order they appear and without repeats.  Sentence punctuation after an
-;; address is not part of it.
+;; Function: maillist-message-links (text &optional include-quotes)
+;; Return the web addresses of message TEXT in order without repeats, skipping
+;; quoted lines unless INCLUDE-QUOTES is non-nil and preserving balanced
+;; parentheses inside URLs.
 ;;
 ;; Function: maillist-thread-subject (subject)
-;; Return SUBJECT without the reply prefixes a thread accumulates, which is
-;; how two messages of one discussion are recognised as the same thread.
+;; Return SUBJECT without leading reply prefixes.
 ;;
 ;; Function: maillist-fetch-index (source callback)
 ;; Fetch SOURCE's thread list and call CALLBACK with (:ok ROWS) or (:error MSG).
-;; An answer that carries no thread row is fetched once more, then reported as
-;; an error, not as an empty list: a mirror always lists its threads, so a
-;; body-less answer or a page that is not the index means the archive did not
-;; answer, and the caller keeps the rows it already has.
 ;;
 ;; Function: maillist-fetch-thread (source id callback &optional subject)
 ;; Fetch thread ID and call CALLBACK with (:ok THREAD) or (:error MSG).
 ;;
-;; Function: maillist-fetch-search (source query callback)
-;; Search SOURCE for QUERY and call CALLBACK with (:ok ROWS) or (:error MSG).
-;; QUERY is the archive's own syntax; `maillist-compile-query' builds it.
+;; Function: maillist-fetch-search (source query callback &optional offset)
+;; Search SOURCE for QUERY (optionally at result OFFSET) and call CALLBACK
+;; with (:ok ROWS) or (:error MSG).
 ;;
 ;; Function: maillist-compile-query (text)
-;; Compile the reader's search TEXT for a public-inbox archive.  Fields
-;; `from:', `to:', `subject:', `body:' and `message:' become the archive's own
-;; prefixes, `after:' and `before:' become one date range, and bare words or
-;; quoted phrases stay terms.  `is:unread' and `is:starred' are returned as
-;; local filters, because the archive does not know this reader's marks.
-;; Return (:query REMOTE :filters (unread starred)); REMOTE is empty when TEXT
-;; only names local filters.
+;; Compile search TEXT into (:query REMOTE :filters FILTERS :terms TERMS).
 ;;
 ;; Function: maillist-fetch-subject (source subject callback)
 ;; Fetch every message whose subject matches SUBJECT and call CALLBACK with
-;; (:ok THREAD).  The subject feed answers when a merged thread document lost
-;; messages the index announced.
+;; (:ok THREAD).
 ;;
 ;; Function: maillist-fetch-message (source id callback)
 ;; Fetch message ID alone and call CALLBACK with (:ok THREAD).
@@ -215,12 +241,15 @@
 ;; Function: maillist-fetch-author (source id callback)
 ;; Fetch the sender of message ID and call CALLBACK with (:ok AUTHOR).
 ;;
+;; Function: maillist-fetch-raw (source id callback)
+;; Fetch the raw RFC 5322 message ID and call CALLBACK with (:ok TEXT).
+;;
 ;; Function: maillist-fetch-recent (source callback)
 ;; Fetch SOURCE's newest messages and call CALLBACK with (:ok HINTS).
 ;;
 ;; Function: maillist-time-label (stamp)
-;; Return STAMP read as a list label: a clock today, `昨天' yesterday, a date
-;; before that.
+;; Return STAMP read as a list label: clock today, `昨天' yesterday, `MM-DD'
+;; this year, or `YY-MM' for earlier years.
 ;;
 ;; Function: maillist-day-label (stamp)
 ;; Return the group label of STAMP: `今天', `昨天', `本周' or `更早'.
@@ -228,29 +257,15 @@
 ;; Function: maillist-long-label (stamp)
 ;; Return STAMP as a readable date for the reader header.
 ;;
-;; Function: maillist-reply (session &optional private)
-;; Reply to SESSION's open thread in a `message-mode' buffer.  A private reply
-;; goes to the last message's author instead of the list; both forms keep the
-;; thread's `In-Reply-To' and `References'.
-;;
-;; Function: maillist-compose (session)
-;; Write a new post to SESSION's list in a `message-mode' buffer.
-;;
-;; Function: maillist-mail-configure ()
-;;;###autoload (autoload 'maillist-mail-configure "maillist" nil t)
-;; Store the SMTP application password of the sending account in auth-source.
-;;
 ;; Function: maillist-store-open ()
-;; Open the client's SQLite file and return its store, or nil without SQLite.
-;; The file is switched to WAL and an unreadable one is moved aside and
-;; rebuilt, so a reader never loses persistence silently.
+;; Open the client's SQLite file, migrating compatible legacy tables in place
+;; or retiring unreadable files to a `.rebuild-*' backup.
 ;;
 ;; Function: maillist-store-close (store)
 ;; Release STORE's Data Controllers.
 ;;
 ;; Function: maillist-store-adopt-threads (store list)
-;; Tag stored rows that carry no list name with LIST, so a store written before
-;; lists were separated keeps its threads under the archive they came from.
+;; Tag stored rows that carry no list name with LIST.
 ;;
 ;; Function: maillist-store-threads (store list)
 ;; Return every stored row of LIST, newest first.
@@ -259,40 +274,38 @@
 ;; Write ROWS of LIST in one transaction; an empty ROWS writes nothing.
 ;;
 ;; Function: maillist-store-thread-messages (store id)
-;; Return the cached messages of thread ID, oldest first.
+;; Return the cached messages of thread ID, oldest first, including `:parent'.
 ;;
 ;; Function: maillist-store-save-thread-messages (store id messages)
-;; Cache MESSAGES as thread ID in one transaction; empty MESSAGES is a no-op.
+;; Cache MESSAGES as thread ID in one transaction, removing stale messages of
+;; the same thread; empty MESSAGES is a no-op.
 ;;
 ;; Function: maillist-store-marks (store)
-;; Return the reader's marks as an alist of thread ID to (:read BOOLEAN
-;; :starred BOOLEAN).
+;; Return every reader mark as an alist of ID to
+;; (:read BOOLEAN :starred BOOLEAN :read-date STAMP :read-count INT).
 ;;
-;; Function: maillist-store-save-mark (store id read starred)
-;; Store the whole mark of thread ID, so a toggle never clears the other flag.
+;; Function: maillist-store-save-mark (store id read starred &optional read-date read-count)
+;; Store the mark and optional last-read snapshot of thread ID.
 ;;
 ;; Function: maillist-store-save-marks (store marks)
-;; Store MARKS, a list of (ID READ STARRED), in one transaction and return how
-;; many rows it wrote.
+;; Store MARKS in one transaction and return how many rows it wrote.
 ;;
 ;; Function: maillist-store-prune (store list)
-;; Drop what LIST no longer needs: threads beyond `maillist-thread-limit' and
-;; bodies beyond `maillist-body-limit', newest kept, and return the removed
-;; counts.  Marks stay.
+;; Prune threads and bodies of LIST beyond limits while keeping starred
+;; threads, other lists' cached bodies and all marks.
 ;;
-;; Function: maillist-store-search-bodies (store text limit)
-;; Scan cached bodies for TEXT and return (THREAD-ID . SNIPPET) pairs, newest
-;; message first.  This answers when the archive does not.
+;; Function: maillist-store-search-bodies (store text limit &optional list)
+;; Scan cached bodies (optionally scoped to LIST) for TEXT with wildcards
+;; escaped, deduplicated per thread, returning (THREAD-ID . SNIPPET) pairs.
 ;;
-;; Function: maillist-store-setting (key)
-;; Return the value stored under KEY, or nil.
+;; Function: maillist-store-setting (key &optional store)
+;; Return the value stored under KEY in STORE (or `maillist-store-file').
 ;;
-;; Function: maillist-store-save-setting (key value)
-;; Store VALUE under KEY and return VALUE.
+;; Function: maillist-store-save-setting (key value &optional store)
+;; Store VALUE under KEY in STORE (or `maillist-store-file') and return VALUE.
 ;;
 ;; Function: maillist-palette ()
-;; Return the palette derived from the active Emacs theme: surfaces, ink,
-;; muted text and the accents the views paint with.
+;; Return the palette derived from the active Emacs theme.
 ;;
 ;; Function: maillist-color (key)
 ;; Return the palette color named KEY; an unknown KEY signals `maillist-error'.
@@ -300,68 +313,95 @@
 ;; Function: maillist-theme-defaults ()
 ;; Return the ETAF UI token plist for the current theme.
 ;;
+;; Error: maillist-error
+;; Signalled when `maillist-color' is asked for an unknown palette key.
+;;
 ;; Variable: maillist-sources
-;; Archives the client can open; a source may name an `:index' file for a
-;; local mirror.
+;; Archives the client can open; entries may declare `:index', `:reply-style'
+;; and `:nntp' (`(:host HOST :port PORT :group GROUP)').
+;;
+;; Variable: maillist-transport
+;; Transport used for sync and reading: `auto' (NNTP when declared, falling
+;; back to HTTP), `nntp' or `http'.
+;;
+;; Variable: maillist-nntp-sync-window
+;; Number of recent articles fetched on an initial NNTP sync.
+;;
+;; Variable: maillist-nntp-older-batch
+;; Number of older articles fetched per `maillist-load-older' over NNTP.
+;;
+;; Variable: maillist-nntp-connect-timeout
+;; Seconds to wait for an NNTP connection before falling back to HTTP.
 ;;
 ;; Variable: maillist-default-list
 ;; Archive a new client opens, by default "emacs-devel".
 ;;
+;; Variable: maillist-buffer-name
+;; Buffer name of a mounted client, by default "*maillist*".
+;;
 ;; Variable: maillist-auto-refresh
-;; Seconds between automatic syncs of an open client; nil syncs only on
-;; demand.  A quiet sync stays out of the notice area and reports the threads
-;; the archive added.
+;; Seconds between automatic syncs of an open client; nil syncs only on demand.
 ;;
 ;; Variable: maillist-older-batch
-;; How many older messages one `maillist-load-older' adds.
+;; How many older messages one `maillist-load-older' adds in date-search mode.
 ;;
 ;; Variable: maillist-local-search-limit
 ;; How many cached threads a search reports when the archive cannot answer.
 ;;
 ;; Variable: maillist-store-file
-;; SQLite file holding the thread list, read and starred marks and cached
-;; bodies.
+;; SQLite file holding the thread list, marks, cached bodies and settings.
 ;;
 ;; Variable: maillist-thread-limit
-;; How many threads of one list the client keeps; older rows are pruned and
-;; the archive can serve them again.
+;; How many threads of one list the client keeps (starred threads are exempt).
 ;;
 ;; Variable: maillist-body-limit
-;; How many threads keep a cached body.
+;; How many threads per list keep a cached body (starred threads are exempt).
 ;;
 ;; Variable: maillist-message-window
 ;; How many of the newest messages a thread shows at first.
 ;;
+;; Variable: maillist-thread-freshness
+;; Seconds a freshly fetched thread stays fresh without re-fetching `t.atom'.
+;;
+;; Variable: maillist-fast-open-threshold
+;; Thread size from which the newest mail is shown while the full thread loads.
+;;
 ;; Variable: maillist-prefetch-threads
 ;; How many threads without an author to warm after each sync.
+;;
+;; Variable: maillist-prefetch-parallel
+;; How many raw sender requests to keep in flight at once on HTTP sources.
+;;
+;; Variable: maillist-prefetch-bodies
+;; How many uncached unread/recent threads to pre-cache quietly on idle.
 ;;
 ;; Variable: maillist-narrow-width
 ;; Viewport width below which the client shows one column.
 ;;
 ;; Variable: maillist-network-route
-;; `auto' (direct, then the proxy), `proxy' (the proxy, then direct) or
-;; `direct' (no proxy); a route that cannot connect hands the request to the
-;; other one.
+;; `auto', `proxy' or `direct'; a failing route falls back to the other one.
 ;;
 ;; Variable: maillist-proxy
-;; Proxy address (HOST:PORT) of archive requests; empty takes it from
-;; `url-proxy-services' or the environment.
+;; Proxy address (HOST:PORT) of archive requests; empty falls back to
+;; `url-proxy-services' or HTTP(S)_PROXY.
 ;;
 ;; Variable: maillist-route-attempt-timeout
 ;; Seconds the leading route may stall before the other one answers.
 ;;
 ;; Variable: maillist-mail-address
-;; Address the client sends from; its password comes from auth-source under
-;; `maillist-smtp-server'.
+;; Address the client sends from.
+;;
+;; Variable: maillist-send-mail-function
+;; `smtpmail' (built-in SMTP settings) or `inherit' (Emacs's own mail transport).
 ;;
 ;; Variable: maillist-smtp-server
-;; SMTP host used for replies and new posts; default "smtp.gmail.com".
+;; SMTP host used when `maillist-send-mail-function' is `smtpmail'.
 ;;
 ;; Variable: maillist-smtp-service
-;; SMTP port used for replies and new posts; default 465.
+;; SMTP port used when `maillist-send-mail-function' is `smtpmail'.
 ;;
 ;; Variable: maillist-smtp-stream-type
-;; Transport of the SMTP connection: `ssl' (the default), `starttls' or nil.
+;; Transport of the SMTP connection: `ssl', `starttls' or nil.
 
 ;;; Code:
 
@@ -386,6 +426,7 @@
 (require 'maillist-app)
 (require 'maillist-mail)
 (require 'maillist-model)
+(require 'maillist-nntp)
 (require 'maillist-service)
 
 (provide 'maillist)
