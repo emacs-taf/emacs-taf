@@ -21,7 +21,7 @@
 
 (define-error 'etaf-web-error "ETAF Web error")
 
-(defconst etaf-web--compiler-version "10"
+(defconst etaf-web--compiler-version "11"
   "Version tag folded into page cache keys.")
 
 (defconst etaf-web--drop-tags
@@ -60,8 +60,8 @@
 
 (defconst etaf-web--block-tags
   '(address article aside blockquote dd details div dl dt fieldset figcaption
-    figure footer form h1 h2 h3 h4 h5 h6 header hgroup hr li main nav ol p pre
-    section summary table tbody td tfoot th thead tr ul)
+    figure footer form h1 h2 h3 h4 h5 h6 header hgroup hr li main menu nav ol
+    p pre search section summary table tbody td tfoot th thead tr ul)
   "HTML tags treated as block-level elements.")
 
 (defconst etaf-web--decodable-image-types
@@ -1295,7 +1295,8 @@ sidebar and header chrome."
   fn-defs          ; hash-table: id -> DOM node
   fn-order         ; list of referenced ids (reversed while collecting)
   fn-numbers       ; hash-table: id -> 1-based integer
-  in-card)         ; non-nil while emitting inside a `:::card' body
+  in-card          ; non-nil while emitting inside a `:::card' body
+  in-heading)      ; non-nil while emitting heading inline text
 
 (defun etaf-web--title-candidates (title)
   "Return TITLE and progressively site-suffix-stripped candidate prefixes."
@@ -1605,14 +1606,17 @@ single-axis cap so downstream layout preserves natural aspect ratio."
 
 (defun etaf-web--format-block-img (info &optional alt-override)
   "Format image INFO plist as Markdown or sized HTML `<img>' block.
-Emits `<img src=... alt=... width=... height=...>' when HTML declared a
-bounded size (<= 480 px), so icons, avatars and Retina thumbnails render
-at their page size instead of their larger intrinsic file dimensions."
+Emits `<img src=... alt=... width=... height=...>' only when all declared CSS
+pixel dimensions are bounded (<= 480 px), so compact icons, avatars and small
+diagrams keep their declared size while wider figures emit Markdown and scale
+proportionally to the reading column."
   (let* ((url (plist-get info :url))
          (alt (if alt-override alt-override (or (plist-get info :alt) "")))
          (w (plist-get info :width))
          (h (plist-get info :height)))
-    (if (or (and w (<= w 480)) (and h (<= h 480)))
+    (if (and (or w h)
+             (or (null w) (<= w 480))
+             (or (null h) (<= h 480)))
         (concat "<img src=\"" (etaf-web--html-escape-attr url) "\""
                 " alt=\"" (etaf-web--html-escape-attr alt) "\""
                 (when w (format " width=\"%d\"" w))
@@ -1825,19 +1829,23 @@ to ` · '-separated text, and separates minified adjacent links or spans."
                 (emit-piece node core lead-ws trail-ws)))))
            ((not (etaf-web--node-p node)) nil)
            ((eq (dom-tag node) 'br)
-            (setq pending-space nil)
-            (cond
-             ((and parts (equal (car parts) "\n\n")) nil)
-             ((and parts (equal (car parts) "\\\n"))
-              (setcar parts "\n\n")
-              (setq prev-node node
-                    prev-piece "\n\n"
-                    after-break t))
-             (t
-              (push "\\\n" parts)
-              (setq prev-node node
-                    prev-piece "\\\n"
-                    after-break t))))
+            (if (etaf-web--ctx-in-heading ctx)
+                (if parts
+                    (setq pending-space t)
+                  (setq had-leading-ws t))
+              (setq pending-space nil)
+              (cond
+               ((and parts (equal (car parts) "\n\n")) nil)
+               ((and parts (equal (car parts) "\\\n"))
+                (setcar parts "\n\n")
+                (setq prev-node node
+                      prev-piece "\n\n"
+                      after-break t))
+               (t
+                (push "\\\n" parts)
+                (setq prev-node node
+                      prev-piece "\\\n"
+                      after-break t)))))
            ((eq (dom-tag node) 'code)
             (let ((code (etaf-web--inline-code (etaf-web--plain-text node))))
               (emit-piece node code nil nil)))
@@ -1883,6 +1891,27 @@ to ` · '-separated text, and separates minified adjacent links or spans."
                 (replace-regexp-in-string "[ \t]+\n" "\n" joined)
                 (if (and pending-space (not after-break)) " " "")))))))
 
+(defun etaf-web--strip-url-fragment (url)
+  "Return URL without any `#fragment' and without a trailing slash."
+  (when (stringp url)
+    (let* ((no-frag (car (split-string url "#")))
+           (trimmed (string-trim no-frag)))
+      (if (and (> (length trimmed) 1)
+               (string-suffix-p "/" trimmed)
+               (not (string-match-p "\\`[a-zA-Z][a-zA-Z0-9+.-]+://\\'" trimmed)))
+          (substring trimmed 0 -1)
+        trimmed))))
+
+(defun etaf-web--same-page-anchor-p (href base-url)
+  "Return non-nil when HREF is a `#fragment' or same-page anchor of BASE-URL."
+  (and (stringp href)
+       (or (string-prefix-p "#" href)
+           (and (string-match-p "#" href)
+                (stringp base-url)
+                (not (string-empty-p (string-trim base-url)))
+                (equal (etaf-web--strip-url-fragment href)
+                       (etaf-web--strip-url-fragment base-url))))))
+
 (defun etaf-web--emit-inline (node ctx)
   "Compile a single inline DOM NODE under CTX into Markdown text."
   (cond
@@ -1891,7 +1920,7 @@ to ` · '-separated text, and separates minified adjacent links or spans."
    ((not (etaf-web--node-p node)) "")
    (t
     (pcase (dom-tag node)
-      ('br "\\\n")
+      ('br (if (etaf-web--ctx-in-heading ctx) " " "\\\n"))
       ((or 'em 'i)
        (etaf-web--wrap-inline "*" (etaf-web--emit-inlines (dom-children node) ctx)))
       ((or 'strong 'b)
@@ -1953,6 +1982,10 @@ to ` · '-separated text, and separates minified adjacent links or spans."
                  (cond
                   ((and raw-href (etaf-web--dangerous-url-p raw-href)) "")
                   ((null href) raw-body)
+                  ((and (etaf-web--ctx-in-heading ctx)
+                        (etaf-web--same-page-anchor-p
+                         href (etaf-web--ctx-base-url ctx)))
+                   raw-body)
                   ((string-empty-p body)
                    (let ((title (string-trim (or (etaf-web--attr node 'title) ""))))
                      (if (string-empty-p title)
@@ -2377,8 +2410,73 @@ Return `(STATE . REST-CHILDREN)' where STATE is `checked', `unchecked' or nil."
     "\"" "'"
     (etaf-web--collapse-ws (or text "")))))
 
+(defun etaf-web--emit-heading-text (children ctx)
+  "Compile heading inline CHILDREN under CTX into single-line Markdown text.
+Unwraps same-page `#anchor' wrappers and turns `<br>' into spaces so headings
+never carry literal backslashes or self-referential anchor links."
+  (let ((saved (etaf-web--ctx-in-heading ctx))
+        (raw nil))
+    (setf (etaf-web--ctx-in-heading ctx) t)
+    (unwind-protect
+        (setq raw (etaf-web--emit-inlines children ctx))
+      (setf (etaf-web--ctx-in-heading ctx) saved))
+    (string-trim (etaf-web--collapse-ws raw))))
+
+(defun etaf-web--details-unwrap-p (open-p summary-node body-children)
+  "Return non-nil when an open `<details>' acts as a document chapter/section.
+Closed disclosures and short single-topic open `<details>' stay as
+`:::details' containers; open `<details>' whose `<summary>' contains a
+heading or whose body holds headings, multiple substantive blocks (`>= 4')
+or substantial prose (`> 600' chars) unwrap into normal top-level headings
+and blocks so full article sections never sit inside tall vertical frames."
+  (when open-p
+    (let ((summary-has-heading
+           (and summary-node
+                (etaf-web--find-first
+                 summary-node
+                 (lambda (n) (memq (dom-tag n) '(h1 h2 h3 h4 h5 h6))))))
+          (body-has-heading
+           (cl-some (lambda (c)
+                      (etaf-web--find-first
+                       c (lambda (n) (memq (dom-tag n) '(h1 h2 h3 h4 h5 h6)))))
+                    body-children)))
+      (or summary-has-heading
+          body-has-heading
+          (let ((block-count 0)
+                (plain-len 0))
+            (dolist (c body-children)
+              (setq plain-len (+ plain-len (length (etaf-web--clean-text c))))
+              (setq block-count
+                    (+ block-count
+                       (length (etaf-web--find-all
+                                c (lambda (n)
+                                    (memq (dom-tag n)
+                                          '(p pre ul ol table blockquote
+                                              figure dl details))))))))
+            (or (>= block-count 4) (> plain-len 600)))))))
+
+(defun etaf-web--details-heading-level (summary-node body-children)
+  "Return Markdown heading level (2..6) for an unwrapped `<details open>'."
+  (let* ((sum-h (and summary-node
+                     (etaf-web--find-first
+                      summary-node
+                      (lambda (n) (memq (dom-tag n) '(h1 h2 h3 h4 h5 h6))))))
+         (base (if sum-h
+                   (max 2 (string-to-number (substring (symbol-name (dom-tag sum-h)) 1)))
+                 2))
+         (body-min nil))
+    (dolist (c body-children)
+      (dolist (h (etaf-web--find-all
+                  c (lambda (n) (memq (dom-tag n) '(h1 h2 h3 h4 h5 h6)))))
+        (let ((lvl (max 2 (string-to-number (substring (symbol-name (dom-tag h)) 1)))))
+          (when (or (null body-min) (< lvl body-min))
+            (setq body-min lvl)))))
+    (if (and body-min (<= body-min base))
+        (max 2 (1- body-min))
+      base)))
+
 (defun etaf-web--emit-details (node ctx)
-  "Emit `<details>' DOM NODE as a `:::details' container under CTX."
+  "Emit `<details>' DOM NODE under CTX as a section or `:::details' container."
   (let* ((open-p (and (assq 'open (dom-attributes node))
                       (not (equal (downcase (or (etaf-web--attr node 'open) ""))
                                   "false"))))
@@ -2390,16 +2488,30 @@ Return `(STATE . REST-CHILDREN)' where STATE is `checked', `unchecked' or nil."
                (eq (dom-tag child) 'summary))
           (setq summary-node child)
         (push child rest-children)))
-    (let* ((title (and summary-node
-                       (etaf-web--sanitize-attr-value
-                        (etaf-web--clean-text summary-node))))
-           (body (etaf-web--emit-children-blocks (nreverse rest-children) ctx))
-           (attrs (concat (when (and title (not (string-empty-p title)))
-                            (format "title=\"%s\" " title))
-                          (format "open=%s" (if open-p "true" "false")))))
-      (if (string-empty-p body)
-          (format ":::details {%s}\n:::" attrs)
-        (format ":::details {%s}\n%s\n:::" attrs body)))))
+    (setq rest-children (nreverse rest-children))
+    (if (etaf-web--details-unwrap-p open-p summary-node rest-children)
+        (let* ((level (etaf-web--details-heading-level summary-node rest-children))
+               (heading (and summary-node
+                             (etaf-web--emit-heading-text
+                              (dom-children summary-node) ctx)))
+               (body (etaf-web--emit-children-blocks rest-children ctx))
+               (head-line (when (and heading (not (string-empty-p heading)))
+                            (concat (make-string level ?#) " " heading))))
+          (cond
+           ((and head-line (not (string-empty-p body)))
+            (concat head-line "\n\n" body))
+           (head-line head-line)
+           (t body)))
+      (let* ((title (and summary-node
+                         (etaf-web--sanitize-attr-value
+                          (etaf-web--clean-text summary-node))))
+             (body (etaf-web--emit-children-blocks rest-children ctx))
+             (attrs (concat (when (and title (not (string-empty-p title)))
+                              (format "title=\"%s\" " title))
+                            (format "open=%s" (if open-p "true" "false")))))
+        (if (string-empty-p body)
+            (format ":::details {%s}\n:::" attrs)
+          (format ":::details {%s}\n%s\n:::" attrs body))))))
 
 (defun etaf-web--callout-title-node-p (node)
   "Return non-nil when DOM NODE is an explicit title inside a callout."
@@ -2609,12 +2721,33 @@ and (when ALLOW-FIRST-LINK is non-nil) a leading `<a>' title link."
     (when (and title (not (string-empty-p (etaf-web--sanitize-attr-value title))))
       (list (etaf-web--sanitize-attr-value title) href body))))
 
+(defun etaf-web--card-has-large-media-p (item)
+  "Return non-nil when ITEM contains a non-icon image (unsized or > 120 px)."
+  (cl-some (lambda (media)
+             (let* ((img (if (eq (dom-tag media) 'picture)
+                             (etaf-web--find-first
+                              media (lambda (n) (eq (dom-tag n) 'img)))
+                           media))
+                    (dims (etaf-web--extract-img-dims img))
+                    (w (car dims))
+                    (h (cdr dims)))
+               (or (and (null w) (null h))
+                   (and w (> w 120))
+                   (and h (> h 120)))))
+           (etaf-web--find-all
+            item (lambda (n) (memq (dom-tag n) '(img picture))))))
+
 (defun etaf-web--card-disqualified-p (item)
   "Return non-nil when ITEM contains block structures unsuitable for a card."
   (or (not (etaf-web--node-p item))
       (etaf-web--find-first
        item (lambda (n)
-              (or (memq (dom-tag n) '(pre table h1))
+              (or (memq (dom-tag n) '(pre table h1 details blockquote dl))
+                  (and (memq (dom-tag n) '(ul ol))
+                       (or (>= (length (etaf-web--find-all
+                                        n (lambda (c) (eq (dom-tag c) 'li))))
+                               4)
+                           (> (length (etaf-web--clean-text n)) 120)))
                   (etaf-web--tablist-node-p n)
                   (etaf-web--steps-class-p n)
                   (etaf-web--timeline-class-p n))))))
@@ -2710,10 +2843,17 @@ body-length bounds to avoid false positives on prose."
           (let ((title (plist-get card :title))
                 (body (plist-get card :body))
                 (plain-len (plist-get card :plain-len))
-                (max-len (if strict-p 240 400)))
+                (max-len (if strict-p 240 400))
+                (large-media (etaf-web--card-has-large-media-p item))
+                (p-count (length (etaf-web--find-all
+                                  item (lambda (n) (eq (dom-tag n) 'p))))))
             (when (and (not (string-empty-p title))
                        (<= (length title) (if strict-p 80 100))
                        (<= plain-len max-len)
+                       ;; Reject cards combining large/unsized images with
+                       ;; multi-paragraph or long prose; they read far better
+                       ;; as sequential blocks than squeezed inside a card grid.
+                       (not (and large-media (or (> plain-len 120) (>= p-count 2))))
                        (if strict-p
                            (and (> plain-len 0) (not (string-empty-p body)))
                          (or (not (string-empty-p body))
@@ -2775,6 +2915,21 @@ body-length bounds to avoid false positives on prose."
         (format ":::col\n:::card {%s}\n:::\n:::" attrs)
       (format ":::col\n:::card {%s}\n%s\n:::\n:::" attrs body))))
 
+(defun etaf-web--card-grid-coherent-p (elems cards)
+  "Return non-nil when ELEMS and extracted CARDS form a coherent grid.
+Requires homogeneous element tags and balanced card body lengths so
+heterogeneous sections or lopsided prose blocks degrade cleanly into
+sequential top-level blocks instead of tall bordered columns with blank voids."
+  (and elems cards
+       (let ((first-tag (dom-tag (car elems))))
+         (cl-every (lambda (el) (eq (dom-tag el) first-tag)) elems))
+       (let* ((lens (mapcar (lambda (c) (or (plist-get c :plain-len) 0)) cards))
+              (max-len (apply #'max lens))
+              (min-len (apply #'min lens)))
+         (not (and (> max-len 140)
+                   (or (= min-len 0)
+                       (> max-len (* 4 min-len))))))))
+
 (defun etaf-web--try-emit-card-grid (node ctx)
   "Compile card-grid DOM NODE into `:::columns' + `:::card' blocks, or nil."
   (when (and (not (etaf-web--ctx-in-card ctx))
@@ -2795,11 +2950,12 @@ body-length bounds to avoid false positives on prose."
            (explicit (or class-grid row-flattened))
            (count (length elems)))
       (cond
-       ;; Explicit class/CSS-grid container: >= 2 valid cards, no upper cap.
+       ;; Explicit class/CSS-grid container: >= 2 homogeneous, balanced cards.
        ((and explicit (>= count 2))
         (let ((cards (mapcar (lambda (el) (etaf-web--extract-card el ctx nil))
                              elems)))
-          (when (cl-every #'identity cards)
+          (when (and (cl-every #'identity cards)
+                     (etaf-web--card-grid-coherent-p elems cards))
             (mapconcat
              (lambda (group)
                (format ":::columns {columns=\"%d\" min-width=\"22ch\" divider=false}\n%s\n:::"
@@ -2818,7 +2974,8 @@ body-length bounds to avoid false positives on prose."
                (cl-every (lambda (el) (eq (dom-tag el) first-tag)) elems)))
         (let ((cards (mapcar (lambda (el) (etaf-web--extract-card el ctx t))
                              elems)))
-          (when (cl-every #'identity cards)
+          (when (and (cl-every #'identity cards)
+                     (etaf-web--card-grid-coherent-p elems cards))
             (mapconcat
              (lambda (group)
                (format ":::columns {columns=\"%d\" min-width=\"22ch\" divider=false}\n%s\n:::"
@@ -3184,14 +3341,14 @@ Requires >= 2 events with either an explicit timestamp or a substantive body
              (not (etaf-web--find-first
                    node (lambda (n)
                           (memq (dom-tag n)
-                                '(h1 h2 h3 h4 h5 h6 pre blockquote table
+                                '(h1 h2 h3 h4 h5 h6 p pre code blockquote table
                                      figure img picture ul ol dl details
                                      hr br input))))))
     (let ((text (etaf-web--clean-text node)))
       (and (not (string-empty-p text))
            (<= (length text) 24)
            (not (string-match-p "\n" text))
-           (or (<= (length text) 12)
+           (or (< (length text) 6)
                (not (string-match-p "[。！？.!?]\\'" text)))))))
 
 (defun etaf-web--try-emit-meta-list (node ctx)
@@ -3520,9 +3677,7 @@ Return `(PANELS . REMAINING-NODES)'."
       ((and tag (guard (memq tag '(h1 h2 h3 h4 h5 h6))))
        (unless (eq node (etaf-web--ctx-skip-heading ctx))
          (let* ((level (string-to-number (substring (symbol-name tag) 1)))
-                (text (string-trim
-                       (etaf-web--collapse-ws
-                        (etaf-web--emit-inlines (dom-children node) ctx)))))
+                (text (etaf-web--emit-heading-text (dom-children node) ctx)))
            (unless (string-empty-p text)
              (concat (make-string level ?#) " " text)))))
       ('p

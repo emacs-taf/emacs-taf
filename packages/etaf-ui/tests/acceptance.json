@@ -1189,6 +1189,11 @@
       "purpose": "A rendered link carries the accent-soft hover face while code spans keep their code background."
     },
     {
+      "name": "etaf-ui-markdown-link-hover-can-be-disabled",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "Passing `:link-hover nil' in the markdown rendering environment omits `mouse-face' hover highlights on links while preserving hand pointer and link activation."
+    },
+    {
       "name": "etaf-ui-markdown-table-keeps-short-cjk-cells-whole",
       "file": "tests/etaf-ui-markdown-tests.el",
       "purpose": "A starved table column still fits a short CJK word on one line instead of splitting it between characters."
@@ -1352,6 +1357,11 @@
       "name": "etaf-ui-markdown-html-media-forwards-declared-dimensions",
       "file": "tests/etaf-ui-markdown-tests.el",
       "purpose": "Raw HTML `<img>' blocks parse positive pixel `width' and `height' attributes (quoted, unquoted or `px'-suffixed, ignoring percentages) and forward `:width' and `:height' to `:render-media'."
+    },
+    {
+      "name": "etaf-ui-markdown-heading-underline-can-be-disabled",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "Setting `:heading-underline nil' in ENV suppresses H1/H2 bottom border rules and underlines on links inside headings while keeping heading links clickable and body links underlined."
     }
   ]
 }

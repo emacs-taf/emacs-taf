@@ -1945,6 +1945,11 @@
 ;; `:important-soft'); every color is read through it, so a palette change
 ;; never leaks a half-updated set of colors, and an unknown key signals
 ;; `etaf-ui-markdown-error'.  `:open-link' is called with a link URL;
+;; `:link-hover' controls whether rendered links carry an `:accent-soft' hover
+;; background (default t when omitted; nil suppresses link hover highlights);
+;; `:heading-underline' controls whether headings draw a bottom rule on levels
+;; 1–2 and underline inline links inside headings (default t when omitted; nil
+;; suppresses both while keeping heading links active and body links underlined);
 ;; `:footnote-jump' with a footnote label; `:render-media (kind node env)'
 ;; returns the View for media, where KIND is `image', `video', `inline-image'
 ;; or `html-media' (without it media renders as its alt text or URL);

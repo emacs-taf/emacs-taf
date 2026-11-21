@@ -147,10 +147,18 @@ step wrote."
   (etaf-md-render env (etaf-md-children env)))
 
 (defun etaf-md-render (env nodes)
-  "Return NODES painted as one view, stacked in document order."
-  (etaf-view
-   (column :width 'stretch :item-gap '(lh 0)
-     (expr (mapcar (lambda (node) (etaf-md--paint node env)) nodes)))))
+  "Return NODES painted as one view, stacked in document order.
+Separates adjacent block views inside containers with one blank line, matching
+top-level document block rhythm."
+  (let ((views
+         (delq nil
+               (mapcar (lambda (node) (etaf-md--paint node env))
+                       (cl-remove-if
+                        (lambda (node) (eq (plist-get node :type) 'blank))
+                        nodes)))))
+    (etaf-view
+     (column :width 'stretch :item-gap '(lh 1)
+       (expr views)))))
 
 (defun etaf-md--palette-value (palette key)
   "Return KEY's colour from PALETTE, in alist or plist form.

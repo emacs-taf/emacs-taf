@@ -27,6 +27,7 @@
 ;;; Code:
 
 (require 'cl-lib)
+(require 'color)
 (require 'subr-x)
 (require 'etaf)
 (require 'etaf-ui)
@@ -45,6 +46,17 @@
 ;;; ---------------------------------------------------------------------------
 ;;; Theme palette (derives from active Emacs theme in `auto' mode)
 ;;; ---------------------------------------------------------------------------
+
+(defun etaf-web--blend-color (fg bg ratio)
+  "Return hex color blending FG toward BG by RATIO (0.0 = BG, 1.0 = FG)."
+  (let ((c1 (ignore-errors (color-name-to-rgb fg)))
+        (c2 (ignore-errors (color-name-to-rgb bg))))
+    (if (and c1 c2)
+        (apply #'color-rgb-to-hex
+               (append (cl-mapcar (lambda (a b) (+ (* ratio a) (* (- 1.0 ratio) b)))
+                                  c1 c2)
+                       '(2)))
+      fg)))
 
 (defun etaf-web--face-color (face attr fallback)
   "Return valid color string for FACE ATTR on the selected frame, or FALLBACK."
@@ -92,10 +104,13 @@ so the shell blends seamlessly with the user's frame background."
                                         (if dark-p "#dcdfe4" "#1f2328")))
               (muted (etaf-web--face-color 'shadow :foreground
                                            (if dark-p "#8b99a4" "#59636e")))
-              (border (etaf-web--face-color 'vertical-border :foreground
-                                            (if dark-p "#3b474f" "#d1d9e0")))
-              (accent (etaf-web--face-color 'link :foreground
-                                            (if dark-p "#61afef" "#0969da")))
+              (border (etaf-web--blend-color fg bg 0.22))
+              (raw-accent (etaf-web--face-color 'link :foreground
+                                                (if dark-p "#61afef" "#0969da")))
+              (accent (if (equal (downcase raw-accent) (downcase fg))
+                          (etaf-web--face-color 'font-lock-function-name-face :foreground
+                                                (if dark-p "#61afef" "#0969da"))
+                        raw-accent))
               (danger (etaf-web--face-color 'error :foreground
                                             (if dark-p "#e06c75" "#d1242f")))
               (success (etaf-web--face-color 'success :foreground
@@ -105,9 +120,10 @@ so the shell blends seamlessly with the user's frame background."
               (track (etaf-web--face-color 'hl-line :background
                                            (if dark-p "#313b42" "#eef1f4")))
               (soft (etaf-web--face-color 'region :background
-                                          (if dark-p "#2b3842" "#ddf4ff"))))
+                                          (if dark-p "#2b3842" "#ddf4ff")))
+              (dim (etaf-web--blend-color fg bg 0.40)))
          (list :bg bg :fg fg :panel bg :track track
-               :border border :muted muted :dim muted
+               :border border :muted muted :dim dim
                :accent accent :accent-fg "#ffffff"
                :accent-soft soft
                :success success :success-bg bg :success-border success
@@ -180,6 +196,7 @@ Narrow (<72ch): [‹ › ⟳/×] │ [https://host/…tail] [38%]."
          (can-back (etaf-value (plist-get session :can-back)))
          (can-forward (etaf-value (plist-get session :can-forward)))
          (editing (etaf-value (plist-get session :address-editing)))
+         (chrome-gen (etaf-value (plist-get session :chrome-gen)))
          (draft (plist-get session :address-draft))
          (callbacks (plist-get session :callbacks))
          (parts (etaf-web--url-display-parts url))
@@ -188,7 +205,7 @@ Narrow (<72ch): [‹ › ⟳/×] │ [https://host/…tail] [38%]."
          (path (nth 2 parts))
          (left-reserve (if narrow 10 21))
          (right-reserve (cond
-                         (editing (if narrow 10 26))
+                         (editing (if narrow 10 31))
                          (loading-p (if narrow 6 22))
                          (narrow 4)
                          (t 10)))
@@ -208,12 +225,11 @@ Narrow (<72ch): [‹ › ⟳/×] │ [https://host/…tail] [38%]."
                          ('error (etaf-theme-token :ui-danger-fg "#e06c75"))
                          (_ (etaf-theme-token :ui-muted-fg "#8b99a4"))))
          (border-line (etaf-web--border-token :ui-border "#3b474f" 1))
-         (accent-line (etaf-web--border-token :ui-accent "#61afef" 1))
          (fg-tok (etaf-theme-token :ui-fg "#dcdfe4"))
          (muted-tok (etaf-theme-token :ui-muted-fg "#8b99a4"))
+         (dim-tok (etaf-theme-token :ui-disabled-fg "#55626c"))
          (sep-tok (etaf-theme-token :ui-border "#3b474f"))
-         (danger-tok (etaf-theme-token :ui-danger-fg "#e06c75"))
-         (accent-soft-tok (etaf-theme-token :ui-accent-soft-bg "#2b3842")))
+         (danger-tok (etaf-theme-token :ui-danger-fg "#e06c75")))
     (etaf-node
      'flex
      (list :ref 'web-header :id "web-header"
@@ -221,51 +237,61 @@ Narrow (<72ch): [‹ › ⟳/×] │ [https://host/…tail] [38%]."
            :align-items 'center
            :column-gap '(ch 1)
            :padding '((lh 0) (ch 1))
-           :border-bottom (if editing accent-line border-line))
+           :border-bottom border-line)
      (list
       ;; Left: fixed-order, fixed-width actions (disabled stays muted, never hidden).
-      (etaf-view
-       (etaf-button
-        :label (if narrow "‹" "后退")
-        :variant 'ghost :ref 'web-back
-        :disabled (not can-back)
-        :color fg-tok
-        :aria-label "后退" :help-echo "后退 (M-← / B)"
-        :padding '((lh 0) (ch 0))
-        :on-press (plist-get callbacks :back)))
-      (etaf-view
-       (etaf-button
-        :label (if narrow "›" "前进")
-        :variant 'ghost :ref 'web-forward
-        :disabled (not can-forward)
-        :color fg-tok
-        :aria-label "前进" :help-echo "前进 (M-→ / F)"
-        :padding '((lh 0) (ch 0))
-        :on-press (plist-get callbacks :forward)))
-      (if loading-p
-          (etaf-view
-           (etaf-button
-            :label (if narrow "×" "停止")
-            :variant 'ghost :ref 'web-stop
-            :color danger-tok
-            :aria-label "停止加载" :help-echo "停止加载 (x)"
-            :padding '((lh 0) (ch 0))
-            :on-press (plist-get callbacks :stop)))
+      (etaf-node
+       'flex
+       (list :key (format "web-actions-%d" chrome-gen)
+             :align-items 'center :column-gap '(ch 1) :flex-shrink 0)
+       (list
         (etaf-view
          (etaf-button
-          :label (if narrow "⟳" "刷新")
-          :variant 'ghost :ref 'web-reload
-          :color fg-tok
-          :aria-label "刷新" :help-echo "重新抓取当前页 (r)"
+          :label (if narrow "‹" "后退")
+          :variant 'ghost :ref 'web-back
+          :disabled (not can-back)
+          :pointer (when can-back 'hand)
+          :color (if can-back fg-tok dim-tok)
+          :aria-label "后退" :help-echo "后退 (M-← / B)"
           :padding '((lh 0) (ch 0))
-          :on-press (plist-get callbacks :reload))))
+          :on-press (plist-get callbacks :back)))
+        (etaf-view
+         (etaf-button
+          :label (if narrow "›" "前进")
+          :variant 'ghost :ref 'web-forward
+          :disabled (not can-forward)
+          :pointer (when can-forward 'hand)
+          :color (if can-forward fg-tok dim-tok)
+          :aria-label "前进" :help-echo "前进 (M-→ / F)"
+          :padding '((lh 0) (ch 0))
+          :on-press (plist-get callbacks :forward)))
+        (if loading-p
+            (etaf-view
+             (etaf-button
+              :label (if narrow "×" "停止")
+              :variant 'ghost :ref 'web-stop
+              :pointer 'hand
+              :color danger-tok
+              :aria-label "停止加载" :help-echo "停止加载 (x)"
+              :padding '((lh 0) (ch 0))
+              :on-press (plist-get callbacks :stop)))
+          (etaf-view
+           (etaf-button
+            :label (if narrow "⟳" "刷新")
+            :variant 'ghost :ref 'web-reload
+            :pointer 'hand
+            :color fg-tok
+            :aria-label "刷新" :help-echo "重新抓取当前页 (r)"
+            :padding '((lh 0) (ch 0))
+            :on-press (plist-get callbacks :reload))))))
       (etaf-node 'box (list :flex-shrink 0)
                  (list (etaf-node 'text (list :color sep-tok) (list "│"))))
       ;; Middle: full URL (ALWAYS showing scheme + host + path) or inline editor.
       (if editing
           (etaf-node
            'box
-           (list :flex-grow 1 :flex-basis '(ch 0) :min-width '(ch 10))
+           (list :flex-grow 1 :flex-basis '(ch 0) :min-width '(ch 10)
+                 :on-focus-enter (plist-get callbacks :address-focus-return))
            (list
             (etaf-view
              (etaf-text-input
@@ -283,13 +309,13 @@ Narrow (<72ch): [‹ › ⟳/×] │ [https://host/…tail] [38%]."
               :on-cancel (plist-get callbacks :address-cancel)))))
         (etaf-node
          'flex
-         (list :ref 'web-address :id "web-address"
+         (list :key (format "web-address-%d" chrome-gen)
+               :ref 'web-address :id "web-address"
                :flex-grow 1 :flex-basis '(ch 0) :min-width '(ch 10)
                :align-items 'center
                :role 'button :tab-index 0 :pointer 'hand
                :aria-label (format "地址 %s" url)
                :help-echo "按 g / C-l 或点击编辑地址"
-               :hover-style (list :background-color accent-soft-tok)
                :on-press (plist-get callbacks :focus-address))
          (delq nil
                (list
@@ -313,7 +339,7 @@ Narrow (<72ch): [‹ › ⟳/×] │ [https://host/…tail] [38%]."
             (etaf-node 'text (list :color muted-tok)
                        (list (if narrow
                                  "RET · ESC"
-                               "RET 打开 · TAB 补全 · ESC")))
+                               "RET 打开 · TAB 补全 · ESC 取消")))
           (etaf-node 'text
                      (list :ref 'web-status :id "web-status"
                            :color status-color)
@@ -390,12 +416,14 @@ Narrow (<72ch): [‹ › ⟳/×] │ [https://host/…tail] [38%]."
                (list
                 (etaf-view
                  (etaf-button :label "[重试 (r)]" :variant 'ghost
+                              :pointer 'hand
                               :color accent-tok
                               :padding '((lh 0) (ch 0))
                               :ref 'web-error-retry
                               :on-press (plist-get callbacks :reload)))
                 (etaf-view
                  (etaf-button :label "[外部浏览器 (o)]" :variant 'ghost
+                              :pointer 'hand
                               :color fg-tok
                               :padding '((lh 0) (ch 0))
                               :ref 'web-error-browser
@@ -403,6 +431,7 @@ Narrow (<72ch): [‹ › ⟳/×] │ [https://host/…tail] [38%]."
                 (when can-back
                   (etaf-view
                    (etaf-button :label "[返回上页 (B)]" :variant 'ghost
+                                :pointer 'hand
                                 :color fg-tok
                                 :padding '((lh 0) (ch 0))
                                 :ref 'web-error-back
@@ -410,6 +439,7 @@ Narrow (<72ch): [‹ › ⟳/×] │ [https://host/…tail] [38%]."
                 (when has-cache
                   (etaf-view
                    (etaf-button :label "[查看旧缓存]" :variant 'ghost
+                                :pointer 'hand
                                 :color muted-tok
                                 :padding '((lh 0) (ch 0))
                                 :ref 'web-error-cached
@@ -417,20 +447,25 @@ Narrow (<72ch): [‹ › ⟳/×] │ [https://host/…tail] [38%]."
 
 (defun etaf-web--body-view (session measure)
   "Render main content area for SESSION inside MEASURE columns.
-During in-tab loading, keeps the previous `etaf-md-view' in-place without
-inserting an extra banner row so vertical geometry never jitters."
+Wraps `etaf-md-view' under a `:key' tied to `:md-gen' so installing a new
+document cleanly remounts `etaf-md-app' with fresh `:bindings' (never stuck on
+the previous page), while in-tab loading keeps the previous key and stays
+in-place with zero vertical jitter."
   (let ((phase (etaf-value (plist-get session :phase)))
-        (md-session (etaf-value (plist-get session :md-session))))
+        (md-session (etaf-value (plist-get session :md-session)))
+        (md-gen (etaf-value (plist-get session :md-gen))))
     (pcase phase
       ('error
        (etaf-web--error-card-view session measure))
       ('loading
        (if md-session
-           (etaf-md-view md-session)
+           (etaf-node 'box (list :key md-gen :width 'stretch)
+                      (list (etaf-md-view md-session)))
          (etaf-web--loading-skeleton-view session measure)))
       (_
        (if md-session
-           (etaf-md-view md-session)
+           (etaf-node 'box (list :key md-gen :width 'stretch)
+                      (list (etaf-md-view md-session)))
          (etaf-web--loading-skeleton-view session measure))))))
 
 (etaf-define-component etaf-web--browser-app (&key session keys)
@@ -450,6 +485,8 @@ inserting an extra banner row so vertical geometry never jitters."
   (let* ((vw (max 44 (or (etaf-value (plist-get session :viewport-width)) 96)))
          (narrow (< vw etaf-web--narrow-breakpoint))
          (measure (min etaf-web--max-measure (max etaf-web--min-measure (- vw 4))))
+         (editing (etaf-value (plist-get session :address-editing)))
+         (callbacks (plist-get session :callbacks))
          (cur-mode (etaf-value mode))
          (bg-tok (unless (eq cur-mode 'auto)
                    (etaf-theme-token :ui-bg "#191a1c")))
@@ -461,7 +498,9 @@ inserting an extra banner row so vertical geometry never jitters."
                    :color fg-tok
                    :aria-label "ETAF Web 浏览器")
              (when bg-tok
-               (list :background-color bg-tok)))
+               (list :background-color bg-tok))
+             (when editing
+               (list :on-dismiss (plist-get callbacks :address-dismiss))))
      (list
       (etaf-web--header-view session vw narrow)
       (etaf-web--body-view session measure)))))

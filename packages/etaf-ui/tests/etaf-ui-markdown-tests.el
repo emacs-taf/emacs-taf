@@ -955,6 +955,22 @@ its columns need."
                        (plist-get (get-text-property position 'mouse-face)
                                   :background)))))))
 
+(ert-deftest etaf-ui-markdown-link-hover-can-be-disabled ()
+  "Setting `:link-hover nil' in ENV removes link `mouse-face' while keeping links active."
+  (let ((clicked nil))
+    (etaf-ui-markdown-test--with-mount
+        "A [site](https://example.com) here.\n"
+        (etaf-ui-markdown-test--env
+         :link-hover nil
+         :open-link (lambda (url) (push url clicked)))
+      (with-current-buffer buffer-name
+        (let ((position (1+ (string-match "site" (buffer-string)))))
+          (should-not (get-text-property position 'mouse-face))
+          (should (eq 'hand (get-text-property position 'pointer)))
+          (goto-char position)
+          (call-interactively (key-binding (kbd "RET")))
+          (should (equal clicked '("https://example.com"))))))))
+
 (ert-deftest etaf-ui-markdown-html-media-forwards-declared-dimensions ()
   "Raw HTML media tags pass declared pixel `:width' and `:height' to `:render-media'."
   (let ((calls nil))
@@ -977,6 +993,36 @@ its columns need."
                        '((image "icon.svg" "ETAF" 52 52)
                          (image "logo.svg" "" 40 40)
                          (image "banner.png" nil 240 nil))))))))
+
+(ert-deftest etaf-ui-markdown-heading-underline-can-be-disabled ()
+  "Setting `:heading-underline nil' suppresses H1/H2 rules and heading link underlines."
+  (let ((clicked nil))
+    (cl-labels ((face-underlined-p (f)
+                  (cond
+                   ((not (listp f)) nil)
+                   ((keywordp (car f)) (and (plist-get f :underline) t))
+                   (t (cl-some #'face-underlined-p f)))))
+      (etaf-ui-markdown-test--with-mount
+          (concat "# Top Heading\n\n"
+                  "## [Linked Heading](https://example.com/h)\n\n"
+                  "Read [Body Link](https://example.com/b) text.\n")
+          (etaf-ui-markdown-test--env
+           :heading-underline nil
+           :open-link (lambda (url) (push url clicked)))
+        (with-current-buffer buffer-name
+          (let ((plain (buffer-substring-no-properties (point-min) (point-max))))
+            (should-not (string-match-p "^[ \t]*─\\{8,\\}[ \t]*$" plain)))
+          (let* ((text (buffer-substring-no-properties (point-min) (point-max)))
+                 (hpos (1+ (string-match "Linked Heading" text)))
+                 (hface (get-text-property hpos 'face))
+                 (bpos (1+ (string-match "Body Link" text)))
+                 (bface (get-text-property bpos 'face)))
+            (should-not (face-underlined-p hface))
+            (should (eq 'hand (get-text-property hpos 'pointer)))
+            (should (face-underlined-p bface))
+            (goto-char hpos)
+            (call-interactively (key-binding (kbd "RET")))
+            (should (equal clicked '("https://example.com/h")))))))))
 
 (provide 'etaf-ui-markdown-tests)
 ;;; etaf-ui-markdown-tests.el ends here

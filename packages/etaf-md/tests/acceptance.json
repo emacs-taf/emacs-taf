@@ -514,6 +514,26 @@
       "name": "etaf-md-tests-html-img-declared-dimensions-bound-render-size",
       "file": "tests/etaf-md-tests.el",
       "purpose": "Raw HTML `<img>' blocks declaring CSS pixel `width'/`height' render at their declared size (preserving natural aspect ratio for single-axis bounds, left-aligning compact icons without blank captions) rather than inflating to the underlying file's larger intrinsic pixel dimensions."
+    },
+    {
+      "name": "etaf-md-tests-link-hover-option-disables-mouse-face",
+      "file": "tests/etaf-md-tests.el",
+      "purpose": "Passing `:link-hover nil' to `etaf-md-create' omits `mouse-face' hover highlights on rendered links while preserving hand pointer and `:on-link' activation."
+    },
+    {
+      "name": "etaf-md-tests-container-blocks-keep-blank-line-separation",
+      "file": "tests/etaf-md-tests.el",
+      "purpose": "Multi-block containers (such as `:::details') render one blank line between adjacent paragraph, code and list child blocks instead of smashing them onto consecutive rows."
+    },
+    {
+      "name": "etaf-md-tests-svg-viewbox-preserves-aspect-and-caps-height",
+      "file": "tests/etaf-md-tests.el",
+      "purpose": "SVGs declaring `viewBox' without explicit `width'/`height' attributes preserve their natural aspect ratio when sized by a single HTML `width' attribute (never collapsing into a square), and tall portrait figures cap row height while scaling width proportionally."
+    },
+    {
+      "name": "etaf-md-tests-heading-underline-option-suppresses-heading-rules-and-link-underlines",
+      "file": "tests/etaf-md-tests.el",
+      "purpose": "Passing `:heading-underline nil' to `etaf-md-create' omits H1/H2 bottom border rules and underlines on links inside headings while keeping heading links active and body paragraph links underlined."
     }
   ]
 }

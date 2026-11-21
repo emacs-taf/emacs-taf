@@ -205,21 +205,41 @@ PATH without readable attributes is probed directly."
 
 (defun etaf-md--svg-declared-size (path)
   "Return the size PATH declares in its own header, or nil.
-A vector states the size it should occupy.  Reading that costs a few hundred
-bytes; asking the image loader for it rasterises the whole drawing instead, and
-a diagram with filters takes seconds that way - a page paid it once per picture
-every time it published."
+A vector states the size it should occupy via explicit numeric `width'/`height'
+attributes (ignoring percentage values) or its `viewBox' width and height.
+Reading that header costs a few hundred bytes without rasterising the drawing,
+and falling back to `viewBox' keeps responsive SVGs at their true aspect ratio."
   (with-temp-buffer
     (set-buffer-multibyte nil)
     (when (ignore-errors (insert-file-contents-literally path nil 0 4096))
       (goto-char (point-min))
-      (when (re-search-forward "<svg\\b[^>]*>" nil t)
-        (let* ((tag (match-string-no-properties 0))
-               (width (and (string-match "\\bwidth=\"\\([0-9.]+\\)" tag)
-                           (string-to-number (match-string 1 tag))))
-               (height (and (string-match "\\bheight=\"\\([0-9.]+\\)" tag)
-                            (string-to-number (match-string 1 tag)))))
-          (and width height (> width 0) (> height 0) (cons width height)))))))
+      (let ((case-fold-search t))
+        (when (re-search-forward "<svg\\b[^>]*>" nil t)
+          (let* ((tag (match-string-no-properties 0))
+                 (width (and (string-match
+                              "\\bwidth=[\"']\\([0-9]+\\(?:\\.[0-9]+\\)?\\)\\(?:px\\)?[\"']"
+                              tag)
+                             (string-to-number (match-string 1 tag))))
+                 (height (and (string-match
+                               "\\bheight=[\"']\\([0-9]+\\(?:\\.[0-9]+\\)?\\)\\(?:px\\)?[\"']"
+                               tag)
+                              (string-to-number (match-string 1 tag))))
+                 (vb (when (string-match
+                            "\\bviewbox=[\"'][ \t]*[-+0-9.eE]+[ \t,]+[-+0-9.eE]+[ \t,]+\\([0-9.eE]+\\)[ \t,]+\\([0-9.eE]+\\)[ \t]*[\"']"
+                            tag)
+                       (cons (string-to-number (match-string 1 tag))
+                             (string-to-number (match-string 2 tag)))))
+                 (vb-w (and vb (> (car vb) 0) (car vb)))
+                 (vb-h (and vb (> (cdr vb) 0) (cdr vb))))
+            (cond
+             ((and width height (> width 0) (> height 0))
+              (cons width height))
+             ((and width (> width 0) vb-w vb-h)
+              (cons width (* vb-h (/ (float width) vb-w))))
+             ((and height (> height 0) vb-w vb-h)
+              (cons (* vb-w (/ (float height) vb-h)) height))
+             ((and vb-w vb-h)
+              (cons vb-w vb-h)))))))))
 
 (defun etaf-md--probe-image-pixels (path)
   "Return PATH's image pixel size as (WIDTH . HEIGHT), or nil.
@@ -235,9 +255,10 @@ than the previous render."
 
 (defun etaf-md--image-pixels (path)
   "Return PATH's pixel size as (WIDTH . HEIGHT), or nil.
-Pixel measurement needs a graphic frame; a terminal frame renders the media
-placeholder without probing.  Unchanged files reuse their cached probe."
-  (when (display-graphic-p)
+SVG headers are parsed directly without requiring a graphic frame; raster pixel
+measurement needs a graphic frame.  Unchanged files reuse their cached probe."
+  (when (or (display-graphic-p)
+            (and (stringp path) (string-suffix-p ".svg" (downcase path))))
     (etaf-md--media-pixels-cached
      path #'etaf-md--probe-image-pixels)))
 
@@ -286,24 +307,30 @@ one."
       (cons (min max-columns 48) 14)
     (etaf-md--media-grid-cells pixels max-columns)))
 
+(defconst etaf-md--media-max-rows 20
+  "Maximum character-row height for a standalone media card.
+Prevents tall portrait diagrams or screenshots from dominating the viewport;
+when the ceiling applies, width scales down proportionally to preserve the
+source aspect ratio.")
+
 (defun etaf-md--media-grid-cells (pixels max-columns)
   "Return the (COLUMNS . ROWS) grid for measured PIXELS inside MAX-COLUMNS.
-A picture is drawn at its own size and scaled down as a whole only when it is
-wider than the reading measure.  The width decides first, because that is the
-side a page cannot grow: a picture that is whole cells wide, and a height that
-follows from those columns, keeps the drawing inside the column it starts in.
-Choosing the rows first and the columns from them rounded the height up to a
-whole cell and handed back a picture up to a few percent wider than the
-measure, which the window then cut off on the right."
+A picture is drawn at its own size and scaled down proportionally when it
+exceeds MAX-COLUMNS or `etaf-md--media-max-rows', keeping the drawing inside
+the column and preserving the source aspect ratio in both dimensions."
   (let* ((cell (etaf-md--cell-metrics))
-         (cell-width (car cell))
-         (cell-height (cdr cell))
+         (cell-width (float (car cell)))
+         (cell-height (float (cdr cell)))
          (natural-width (float (car pixels)))
          (natural-height (float (cdr pixels)))
-         (fitted (min natural-width (* max-columns cell-width)))
-         (columns (max 1 (min max-columns (round (/ fitted cell-width)))))
+         (max-w (* max-columns cell-width))
+         (max-h (* etaf-md--media-max-rows cell-height))
+         (scale (min 1.0 (/ max-w natural-width) (/ max-h natural-height)))
+         (columns (max 1 (min max-columns
+                              (round (/ (* natural-width scale) cell-width)))))
          (fitted-height (* natural-height (/ (* columns cell-width) natural-width)))
-         (rows (max 1 (round (/ fitted-height cell-height)))))
+         (rows (max 1 (min etaf-md--media-max-rows
+                           (round (/ fitted-height cell-height))))))
     (cons columns rows)))
 
 (defun etaf-md--media-grid (path kind max-columns)

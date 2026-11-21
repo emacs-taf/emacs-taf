@@ -37,14 +37,17 @@
   failed download no longer leaves placeholders until the cache is cleared.
 - Interactive Emacs-native browser shell: inherits the active Emacs theme's
   frame background with zero chrome background slabs or bottom footer bar;
-  independent `*Web: <host>*` buffers per page; constant-height `1lh` top bar
-  (`后退 前进 刷新/停止 │ https://host/path   状态`) with full scheme always
-  visible, retained-Host pure-text loading progress (`阶段 38% · 2.4s`) on the
-  same row without vertical jitter; per-buffer history stack with scroll
+  independent `*Web: <host>*` buffers per page; constant-height `1lh` sticky
+  top bar (`:sticky 'top`, pinned and clickable in header-line while scrolling)
+  with clickable `后退 前进 刷新/停止 │ https://host/path   状态`, full scheme
+  always visible, retained-Host pure-text loading progress (`阶段 38% · 2.4s`)
+  on the same row without vertical jitter; per-buffer history stack with scroll
   restoration (`etaf-web-back`, `etaf-web-forward`), cache-bypassing reload
-  (`etaf-web-reload`), in-flight cancellation (`etaf-web-stop`), inline plain
-  address editing with URL history completion (`etaf-web-focus-address`),
-  external browser handoff (`etaf-web-open-external`), clean close
+  (`etaf-web-reload`), in-flight cancellation (`etaf-web-stop`), plain inline
+  address editing (`etaf-web-focus-address`, zero underline/fill/border change,
+  muted right hint, URL history completion, exiting on both `ESC` and native
+  `C-g`), reliable click and `point + RET` link activation with zero hover
+  highlight, external browser handoff (`etaf-web-open-external`), clean close
   (`etaf-web-close`), state snapshot (`etaf-web-state`), narrow-viewport
   folding (`‹ › ⟳` `< 72ch`), and an Emacs-plain error recovery block.
 - Non-blocking asynchronous loading pipeline: async HTTP fetching (`curl` via
@@ -53,12 +56,20 @@
   --virtual-time-budget=3000` + shared disk cache), text-first display with
   concurrent background image backfill, and retained-Host progress updates
   without full-page rerenders.
-- Universal HTML layout/extraction compiler improvements (compiler version 10):
+- Universal HTML layout/extraction compiler improvements (compiler version 11):
   pruning inline hidden nodes (preserving `role="tabpanel"`), ARIA overlays
-  (`tooltip`/`menu`/`dialog`/`alertdialog`), non-form short search bars and
-  lone punctuation/pipe leaf blocks; gating `:::timeline` against counter bars;
-  clustering 2–6 consecutive short metadata siblings into single ` · `-joined
-  lines; formatting repeated homogeneous entry streams as headings + prose
-  summary + metadata line + `---`; dropping empty-alt inline images, degrading
-  badge image runs to `alt` text, and stripping PUA / variation selectors while
-  preserving standard emoji.
+  (`tooltip`/`menu`/`dialog`/`alertdialog`), short non-`<form>` search bars and
+  lone punctuation/pipe leaf blocks; unwrapping chapter-level `<details open>`
+  sections into normal headings and blank-line-separated blocks (preserving
+  closed and short `<details>`); stripping same-page `#anchor` wrappers and
+  `<br>` line breaks inside headings; suppressing heading underlines and H1/H2
+  bottom rules in reading view (`:heading-underline nil`) while keeping body
+  links underlined and external heading links active; bounding declared `<img>`
+  output to images where all declared dimensions are `<= 480` px (ignoring CSS
+  percentages); tightening `:::columns` card-grid gates for tag homogeneity,
+  length balance and large-image+prose fallback; gating `:::timeline` against
+  counter bars; clustering 2–6 consecutive short metadata siblings into single
+  ` · `-joined lines; formatting repeated homogeneous entry streams as headings
+  + prose summary + metadata line + `---`; dropping empty-alt inline images,
+  degrading badge image runs to `alt` text, and stripping PUA / variation
+  selectors while preserving standard emoji.

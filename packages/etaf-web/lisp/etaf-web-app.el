@@ -27,7 +27,9 @@
   "Seconds between smooth progress-bar easing frames (retained span patch).")
 
 (defconst etaf-web--keys
-  '(("M-<left>"  etaf-web-back "后退")
+  '(("RET"       etaf-web--activate-at-point "激活当前链接或控件")
+    ("<return>"  etaf-web--activate-at-point "激活当前链接或控件")
+    ("M-<left>"  etaf-web-back "后退")
     ("B"         etaf-web-back "后退")
     ("M-<right>" etaf-web-forward "前进")
     ("F"         etaf-web-forward "前进")
@@ -45,6 +47,10 @@
     ("C-c h"     etaf-help "查看快捷键")
     ("q"         etaf-web-close "关闭页面"))
   "Root Host key bindings for an `etaf-web' browser buffer.")
+
+(defconst etaf-web--toolbar-focus-refs
+  '(web-back web-forward web-reload web-stop web-address web-address-input)
+  "Toolbar Host references whose logical focus should not outlive navigation.")
 
 ;;; ---------------------------------------------------------------------------
 ;;; Session helpers
@@ -112,6 +118,88 @@
           (goto-char pt)
           (when (window-live-p win)
             (set-window-start win st t)))))))
+
+(defun etaf-web--bump-chrome-if-focused (session)
+  "Bump SESSION's `:chrome-gen' when a toolbar Host holds stale logical focus.
+Replacing the toolbar action group's `:key' releases stale toolbar focus via
+ETAF's own lifecycle so subsequent `point + RET' on body links is never
+redirected back to the toolbar."
+  (let* ((buf (plist-get session :buffer))
+         (rt (and (buffer-live-p buf) (etaf-runtime-for-buffer buf))))
+    (when (and rt (etaf-runtime-mounted-p rt)
+               (memq (etaf-focused-host-ref rt) etaf-web--toolbar-focus-refs))
+      (etaf-set-value (plist-get session :chrome-gen)
+                      (1+ (or (etaf-value (plist-get session :chrome-gen)) 0))))))
+
+(defun etaf-web--ret-command-at (pos)
+  "Return the RET command bound in the text-property keymap at POS, or nil."
+  (when (and (integer-or-marker-p pos)
+             (<= (point-min) pos) (< pos (point-max))
+             (not (eq (char-after pos) ?\n)))
+    (let* ((km (get-text-property pos 'keymap))
+           (cmd (and (keymapp km) (lookup-key km (kbd "RET")))))
+      (and (commandp cmd) cmd))))
+
+(defun etaf-web--line-link-position ()
+  "Return the nearest position on the current body line with a RET keymap, or nil.
+Skips row 1 (the sticky toolbar) so padding spaces on the toolbar never trigger
+accidental button activation, while leading/trailing padding on centered heading
+links in the reading column resolves cleanly to the link run."
+  (when (> (line-number-at-pos) 1)
+    (let* ((here (point))
+           (bol (line-beginning-position))
+           (eol (line-end-position))
+           (best nil)
+           (best-dist most-positive-fixnum)
+           (p bol))
+      (while (< p eol)
+        (let ((next (next-single-property-change p 'keymap nil eol)))
+          (when (etaf-web--ret-command-at p)
+            (let ((dist (cond ((< here p) (- p here))
+                              ((>= here next) (1+ (- here next)))
+                              (t 0))))
+              (when (< dist best-dist)
+                (setq best p best-dist dist))))
+          (setq p next)))
+      best)))
+
+(defun etaf-web--activate-at-point ()
+  "Activate the link or control at point, or the link on the current body line.
+When point rests on leading or trailing padding of a centered heading link
+(where the inner link run's keymap does not paint padding cells), resolves to
+that line's link run instead of failing with `No Ebox RET command at position'."
+  (interactive)
+  (let* ((session (etaf-web--current-session))
+         (buf (plist-get session :buffer))
+         (rt (and (buffer-live-p buf) (etaf-runtime-for-buffer buf)))
+         (focused (and rt (etaf-runtime-mounted-p rt) (etaf-focused-host-ref rt)))
+         (at-focused (and focused
+                          (eql (point) (etaf-host-ref-position rt focused)))))
+    (cond
+     (at-focused
+      (etaf-activate rt))
+     ((etaf-web--ret-command-at (point))
+      (when (memq focused etaf-web--toolbar-focus-refs)
+        (etaf-web--bump-chrome-if-focused session)
+        (when rt (etaf-runtime-flush rt)))
+      (let ((cmd (etaf-web--ret-command-at (point))))
+        (if cmd
+            (let ((last-input-event ?\r))
+              (command-execute cmd))
+          (etaf-activate rt))))
+     (t
+      (if-let* ((target (etaf-web--line-link-position)))
+          (progn
+            (when (memq focused etaf-web--toolbar-focus-refs)
+              (etaf-web--bump-chrome-if-focused session)
+              (when rt (etaf-runtime-flush rt)))
+            (goto-char target)
+            (let ((cmd (etaf-web--ret-command-at target)))
+              (if cmd
+                  (let ((last-input-event ?\r))
+                    (command-execute cmd))
+                (etaf-activate rt))))
+        (etaf-activate rt))))))
 
 (defun etaf-web--sync-history-refs (session)
   "Update reactive `:can-back' and `:can-forward' refs on SESSION."
@@ -225,6 +313,8 @@
               :file index-file
               :title title
               :theme (if (eq theme-mode 'auto) 'auto theme-mode)
+              :link-hover nil
+              :heading-underline nil
               :on-link
               (lambda (url)
                 (cond
@@ -235,15 +325,18 @@
                   (etaf-web--jump-anchor session (substring url 1))
                   t)
                  ((etaf-web--http-url-p url)
-                  (etaf-web--navigate session url :push t)
+                  (let* ((frag (and (string-match "#\\(.+\\)\\'" url)
+                                    (match-string 1 url))))
+                    (etaf-web--navigate session url :push t :fragment frag))
                   t)
                  (t nil))))))
     md))
 
-(cl-defun etaf-web--navigate (session source &key push force restore-scroll)
+(cl-defun etaf-web--navigate (session source &key push force restore-scroll fragment)
   "Load SOURCE inside browser SESSION asynchronously.
 When PUSH is non-nil, records a new history entry (truncating forward stack).
-When FORCE is non-nil, bypasses cache.  RESTORE-SCROLL is `(SCROLL . POINT)'."
+When FORCE is non-nil, bypasses cache.  RESTORE-SCROLL is `(SCROLL . POINT)'.
+Optional FRAGMENT jumps to the matching heading after the page renders."
   (let* ((validated (etaf-web--validate-source source))
          (canonical (plist-get validated :canonical)))
     (etaf-web--save-scroll-position session)
@@ -282,7 +375,12 @@ When FORCE is non-nil, bypasses cache.  RESTORE-SCROLL is `(SCROLL . POINT)'."
                            (buffer-live-p (plist-get session :buffer)))
                   (etaf-set-value (plist-get session :stage-label) label)
                   (etaf-set-value (plist-get session :progress-target) prog)
-                  (etaf-web--patch-progress-hosts session)))
+                  ;; Skip out-of-band span patch for synchronous cache hits:
+                  ;; `:on-ready' immediately follows in the same turn and
+                  ;; commits the clean ready header (including sticky mirror).
+                  (when (and (eq (etaf-value (plist-get session :phase)) 'loading)
+                             (not (equal label "缓存")))
+                    (etaf-web--patch-progress-hosts session))))
               :on-ready
               (lambda (info)
                 (when (and (eql gen (plist-get session :generation))
@@ -300,10 +398,13 @@ When FORCE is non-nil, bypasses cache.  RESTORE-SCROLL is `(SCROLL . POINT)'."
                       (etaf-set-value (plist-get session :title) title)
                       (etaf-set-value (plist-get session :cached) cached)
                       (etaf-set-value (plist-get session :md-session) md)
+                      (etaf-set-value (plist-get session :md-gen)
+                                      (1+ (or (etaf-value (plist-get session :md-gen)) 0)))
                       (etaf-set-value (plist-get session :stage-label)
                                 (if cached "缓存" "完成"))
                       (etaf-set-value (plist-get session :progress-target) 1.0)
-                      (etaf-set-value (plist-get session :phase) 'ready))
+                      (etaf-set-value (plist-get session :phase) 'ready)
+                      (etaf-web--bump-chrome-if-focused session))
                     (etaf-web--finish-progress-bar session)
                     (let ((buf (plist-get session :buffer)))
                       (when (buffer-live-p buf)
@@ -316,13 +417,20 @@ When FORCE is non-nil, bypasses cache.  RESTORE-SCROLL is `(SCROLL . POINT)'."
                               (rename-buffer (etaf-web--buffer-name-for-source canonical) t))))
                         (when-let* ((rt (etaf-runtime-for-buffer buf)))
                           (etaf-runtime-flush rt))
-                        (if restore-scroll
-                            (etaf-web--restore-scroll-position
-                             session (car restore-scroll) (cdr restore-scroll))
+                        (etaf-web--patch-progress-hosts session)
+                        (cond
+                         (restore-scroll
+                          (etaf-web--restore-scroll-position
+                           session (car restore-scroll) (cdr restore-scroll)))
+                         (fragment
+                          (unless (etaf-web--jump-anchor session fragment)
+                            (with-current-buffer buf
+                              (goto-char (point-min)))))
+                         (t
                           (with-current-buffer buf
                             (goto-char (point-min))
                             (when-let* ((win (get-buffer-window buf t)))
-                              (set-window-start win (point-min) t)))))))))
+                              (set-window-start win (point-min) t))))))))))
               :on-images
               (lambda (_index-file)
                 (when (and (eql gen (plist-get session :generation))
@@ -345,9 +453,11 @@ When FORCE is non-nil, bypasses cache.  RESTORE-SCROLL is `(SCROLL . POINT)'."
                   (etaf-batch
                     (etaf-set-value (plist-get session :error-info) err-info)
                     (etaf-set-value (plist-get session :stage-label) "失败")
-                    (etaf-set-value (plist-get session :phase) 'error))
+                    (etaf-set-value (plist-get session :phase) 'error)
+                    (etaf-web--bump-chrome-if-focused session))
                   (when-let* ((rt (etaf-runtime-for-buffer (plist-get session :buffer))))
-                    (etaf-runtime-flush rt)))))))
+                    (etaf-runtime-flush rt))
+                  (etaf-web--patch-progress-hosts session))))))
         (plist-put session :active-job job)
         job))))
 
@@ -394,6 +504,8 @@ HTML files; network and HTTP errors render inside the page's error card."
                 :cached (etaf-ref nil :name 'web-cached)
                 :error-info (etaf-ref nil :name 'web-error)
                 :md-session (etaf-ref nil :name 'web-md-session)
+                :md-gen (etaf-ref 0 :name 'web-md-gen)
+                :chrome-gen (etaf-ref 0 :name 'web-chrome-gen)
                 :can-back (etaf-ref nil :name 'web-can-back)
                 :can-forward (etaf-ref nil :name 'web-can-forward)
                 :address-editing (etaf-ref nil :name 'web-address-editing)
@@ -404,6 +516,7 @@ HTML files; network and HTTP errors render inside the page's error card."
                 :history-index -1
                 :active-job nil
                 :anim-timer nil
+                :pre-edit-pos nil
                 :started-at (float-time)
                 :spin-index 0
                 :generation 0))
@@ -426,7 +539,7 @@ HTML files; network and HTTP errors render inside the page's error card."
       :focus-address (lambda () (etaf-web--do-focus-address session))
       :address-capf #'etaf-web--address-capf
       :address-submit (lambda (text)
-                        (etaf-set-value (plist-get session :address-editing) nil)
+                        (etaf-web--exit-address-editing session nil)
                         (let ((target (etaf-web--normalize-user-input text)))
                           (unless (string-empty-p target)
                             (condition-case err
@@ -434,7 +547,11 @@ HTML files; network and HTTP errors render inside the page's error card."
                               (etaf-web-error
                                (message "%s" (error-message-string err)))))))
       :address-cancel (lambda (_text)
-                        (etaf-set-value (plist-get session :address-editing) nil))))
+                        (etaf-web--exit-address-editing session t))
+      :address-focus-return (lambda ()
+                              (etaf-web--maybe-exit-address-editing session))
+      :address-dismiss (lambda ()
+                         (etaf-web--exit-address-editing session t))))
     (when other-window
       (etaf-web--select-other-window))
     (let ((buffer
@@ -522,17 +639,108 @@ HTML files; network and HTTP errors render inside the page's error card."
         (etaf-set-value (plist-get session :stage-label) "已取消")
         (etaf-set-value (plist-get session :phase) 'error)))))
 
+(defun etaf-web--exit-address-editing (session &optional restore-scroll)
+  "Exit inline address editing in SESSION cleanly and release temporary hooks.
+When RESTORE-SCROLL is non-nil and editing began while scrolled below the
+sticky header, restores the pre-edit scroll position; otherwise keeps the top
+viewport intact so the content start line never shifts."
+  (let* ((buf (plist-get session :buffer))
+         (rt (and (buffer-live-p buf) (etaf-runtime-for-buffer buf)))
+         (saved (plist-get session :pre-edit-pos)))
+    (plist-put session :pre-edit-pos nil)
+    (when (buffer-live-p buf)
+      (with-current-buffer buf
+        (remove-hook 'pre-command-hook #'etaf-web--address-pre-command t)
+        (remove-hook 'post-command-hook #'etaf-web--sync-address-editing t)))
+    (when (and rt (etaf-text-input-active-p rt))
+      (etaf-text-input-end 'blur))
+    (when (etaf-value (plist-get session :address-editing))
+      (etaf-batch
+        (etaf-set-value (plist-get session :address-editing) nil)
+        (etaf-web--bump-chrome-if-focused session))
+      (when (and rt (etaf-runtime-mounted-p rt))
+        (etaf-runtime-flush rt)))
+    (when (and restore-scroll (buffer-live-p buf) saved)
+      (with-current-buffer buf
+        (let* ((win (get-buffer-window buf t))
+               (saved-ws (car saved))
+               (saved-pt (cdr saved)))
+          (cond
+           ((and (integer-or-marker-p saved-ws) (> saved-ws (point-min)))
+            (etaf-web--restore-scroll-position session saved-ws saved-pt))
+           ((window-live-p win)
+            (set-window-start win (point-min) t)
+            (when (integer-or-marker-p saved-pt)
+              (goto-char (max (point-min) (min (point-max) saved-pt)))))))))))
+
+(defun etaf-web--maybe-exit-address-editing (session)
+  "Exit inline address editing if SESSION's native text-input session ended."
+  (let* ((buf (plist-get session :buffer))
+         (rt (and (buffer-live-p buf) (etaf-runtime-for-buffer buf))))
+    (when (and (etaf-value (plist-get session :address-editing))
+               (not (and rt (etaf-text-input-active-p rt))))
+      (etaf-web--exit-address-editing session t))))
+
+(defun etaf-web--address-pre-command ()
+  "Clean up inline address editing before Emacs runs native `keyboard-quit'.
+Does not bind or alter `C-g': Emacs keeps its native quit binding and
+interruption semantics while temporary inline editing state is released."
+  (when (memq this-command '(keyboard-quit keyboard-escape-quit))
+    (let ((session (ignore-errors (etaf-web--current-session))))
+      (if (not session)
+          (remove-hook 'pre-command-hook #'etaf-web--address-pre-command t)
+        (when (etaf-value (plist-get session :address-editing))
+          (etaf-web--exit-address-editing session t))))))
+
+(defun etaf-web--sync-address-editing ()
+  "Exit inline address editing if the native text-input session ended."
+  (let ((session (ignore-errors (etaf-web--current-session))))
+    (if (not session)
+        (remove-hook 'post-command-hook #'etaf-web--sync-address-editing t)
+      (etaf-web--maybe-exit-address-editing session))))
+
+(defun etaf-web--start-address-input (session)
+  "Begin native text-input editing on SESSION's address field once mounted."
+  (let* ((buf (plist-get session :buffer))
+         (rt (and (buffer-live-p buf) (etaf-runtime-for-buffer buf))))
+    (when (and rt (etaf-value (plist-get session :address-editing)))
+      (unless (etaf-text-input-active-p rt)
+        (etaf-runtime-flush rt)
+        (etaf-text-input-begin rt 'web-address-input))
+      (when (etaf-text-input-active-p rt)
+        (with-current-buffer buf
+          (when-let* ((win (get-buffer-window buf t)))
+            (when (> (window-start win) (point-min))
+              (set-window-start win (point-min) t)))
+          (add-hook 'pre-command-hook #'etaf-web--address-pre-command -50 t)
+          (add-hook 'post-command-hook #'etaf-web--sync-address-editing t t))))))
+
 (defun etaf-web--do-focus-address (session)
   "Open the inline editable address bar in SESSION and begin editing."
-  (let ((url (etaf-value (plist-get session :url)))
-        (buf (plist-get session :buffer)))
+  (let* ((url (etaf-value (plist-get session :url)))
+         (buf (plist-get session :buffer)))
+    (when (and (buffer-live-p buf)
+               (not (etaf-value (plist-get session :address-editing))))
+      (with-current-buffer buf
+        (let* ((win (get-buffer-window buf t))
+               (ws (and (window-live-p win) (window-start win))))
+          (plist-put session :pre-edit-pos (cons ws (point))))))
     (etaf-batch
       (etaf-set-value (plist-get session :address-draft) (or url ""))
       (etaf-set-value (plist-get session :address-editing) t))
     (when (buffer-live-p buf)
+      (with-current-buffer buf
+        (add-hook 'pre-command-hook #'etaf-web--address-pre-command -50 t))
       (when-let* ((rt (etaf-runtime-for-buffer buf)))
-        (etaf-runtime-flush rt)
-        (etaf-text-input-begin rt 'web-address-input)))))
+        (etaf-web--start-address-input session)
+        ;; When invoked from an `:on-press' handler (clicking the URL, whether
+        ;; inline or in the mirrored `:sticky top' header line), ETAF flushes
+        ;; the newly mounted input after the press batch settles, so start
+        ;; native editing on the next tick once the batch and any header-line
+        ;; `save-excursion' have completed.
+        (unless (etaf-text-input-active-p rt)
+          (etaf-next-tick
+           (lambda () (etaf-web--start-address-input session))))))))
 
 (defun etaf-web--do-open-external (session)
   "Open SESSION's current URL in the user's external browser."

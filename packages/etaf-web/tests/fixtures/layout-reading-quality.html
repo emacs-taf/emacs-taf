@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Flexbox Layout Reading Guide</title>
+</head>
+<body>
+  <main>
+    <article>
+      <h1>Flexbox Layout Reading Guide</h1>
+
+      <details open>
+        <summary><h3><a href="#chapter-properties">CSS Flexbox Properties</a></h3></summary>
+        <h2><a href="https://example.com/guide#parent-props">Properties for the Parent<br>(Flex Container)</a></h2>
+
+        <h4><code>flex-direction</code></h4>
+        <img src="assets/flex-dir.svg" alt="Flex direction" width="350">
+        <p>First line of direction note.<br>Second short line preserved.<br><br>New paragraph after double break.</p>
+        <pre><code class="language-css">.container {
+  flex-direction: row | column;
+}</code></pre>
+        <ul>
+          <li><code>row</code>: left to right</li>
+          <li><code>column</code>: top to bottom</li>
+        </ul>
+
+        <p>See the <a href="https://example.com/almanac">almanac reference</a> for details.</p>
+      </details>
+
+      <details open>
+        <summary>Short Note</summary>
+        <p>Single short note kept inside a disclosure box.</p>
+      </details>
+
+      <details>
+        <summary>Collapsed Reference</summary>
+        <p>Hidden by default until toggled open.</p>
+      </details>
+
+      <h2>Media Sizing &amp; Grid Fallback</h2>
+      <p><img src="assets/wide-banner.png" alt="Wide banner" width="844" height="246"></p>
+      <p><img src="assets/responsive.png" alt="Responsive figure" style="width: 100%; height: auto;"></p>
+
+      <section class="cards">
+        <div class="card">
+          <h3>Tall Diagram &amp; Prose</h3>
+          <img src="assets/large-diagram.png" alt="Diagram" width="400" height="300">
+          <p>This first column mixes a large non-icon illustration with multiple paragraphs of detailed explanatory text that should never be squeezed into a narrow card column.</p>
+          <p>A second full paragraph further confirms this block belongs in normal reading flow rather than a bordered grid.</p>
+        </div>
+        <div class="card">
+          <h3>Brief</h3>
+          <p>Tiny note.</p>
+        </div>
+      </section>
+
+      <section class="cards">
+        <article class="card">
+          <h3>Heterogeneous Article</h3>
+          <p>First child uses an article element tag.</p>
+        </article>
+        <div class="card">
+          <h3>Heterogeneous Div</h3>
+          <p>Second child uses a different div element tag.</p>
+        </div>
+      </section>
+
+      <h3><a href="https://example.com/spec">External Spec Heading</a></h3>
+    </article>
+  </main>
+</body>
+</html>

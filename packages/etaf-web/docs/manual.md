@@ -22,13 +22,16 @@ pages can remain open side by side.  Pass a non-nil `other-window` argument
 
 The browser shell inherits the active Emacs theme's frame background (no tinted
 chrome panels, no input box fill, and no bottom footer bar).  A single
-constant-height `1lh` top bar separated by a thin hairline renders, from left
-to right: fixed-width actions (`后退`, `前进`, `刷新`, switching to `停止` with
-the same width during loading; disabled items stay muted so layout never
-shifts), the full URL always including `https://` (muted scheme, bold host,
-muted path; editable inline in-place without changing row height), and a
-right-hand text status slot (`渲染中 38% · 2.4s` while loading, `缓存` or empty
-when ready, `失败` on error).  No second progress row or in-tab transition
+constant-height `1lh` sticky top bar (`:sticky 'top`, mirrored into Emacs's
+header line when scrolling so it stays pinned and clickable at the top of the
+window) separated by a thin hairline renders, from left to right: fixed-width
+clickable controls (`后退`, `前进`, `刷新`, switching to `停止` with the same
+width during loading; disabled items stay muted so layout never shifts), the
+full URL always including `https://` (muted scheme, bold host, muted path;
+clicking enters plain in-place editing with a caret and muted right-side hint
+`RET 打开 · TAB 补全 · ESC 取消` — no underline, fill or border color change),
+and a right-hand text status slot (`渲染中 38% · 2.4s` while loading, `缓存` or
+empty when ready, `失败` on error).  No second progress row or in-tab transition
 banner is inserted, so vertical height never jitters.  On narrow windows
 (`< 72ch`), the three actions fold to single-cell glyphs (`‹ › ⟳`, or `×` while
 loading), the URL middle-truncates its path while keeping scheme and host, the
@@ -42,6 +45,7 @@ All commands are bound through the root Host's `:keys` and appear in `?`:
 
 | Key | Command | Action |
 | --- | --- | --- |
+| `RET` | activate at point | Activate the link or control at point (or on the current body line) |
 | `M-<left>` / `B` | `etaf-web-back` | Go back in history and restore scroll position |
 | `M-<right>` / `F` | `etaf-web-forward` | Go forward in history and restore scroll position |
 | `r` | `etaf-web-reload` | Re-fetch and recompile current page bypassing cache |
@@ -56,6 +60,9 @@ All commands are bound through the root Host's `:keys` and appear in `?`:
 Activating an `http://` or `https://` link inside a page navigates within the
 browser buffer (pushing onto its history stack); `#anchor` links jump to the
 matching heading in-document; `browser:` links hand off to `browse-url`.
+Reading-view links and the address line omit hover background highlights so
+moving the pointer stays visually quiet; clicking the address line enters
+inline editing immediately (`RET` opens, `ESC`/`C-g` cancels).
 
 Inspect a buffer's current browser state from Lisp via `(etaf-web-state &optional buffer)`.
 
@@ -86,30 +93,44 @@ Universal compilation and layout recovery rules:
 - Lazy-loaded images prefer `data-src`, `data-original`, `data-lazy-src`,
   `data-actualsrc`, `data-original-src` and `data-url` (plus the widest
   candidate in `data-srcset` / `srcset`) before falling back to `src`.
-- Standalone images declaring bounded CSS pixel dimensions (`<= 480` px via
-  `width`/`height` attributes or inline `style` `width`/`height`/`max-width`/
-  `max-height`) emit standard HTML `<img src="..." alt="..." width="..."
-  height="...">` blocks so icons, avatars and Retina thumbnails render at
-  their intended page size in `etaf-md`.  Tracking pixels (`<= 4` px) and
-  empty-alt decorative inline images are dropped.  Consecutive runs of inline
-  badge images degrade to `alt` text joined with ` · `.  Private-use glyphs
-  (`U+E000–U+F8FF`) and variation selectors (`U+FE0E`/`U+FE0F`) are stripped
-  while standard Unicode emoji in prose stay intact.
+- Standalone images where all declared CSS pixel dimensions are bounded
+  (`<= 480` px via `width`/`height` attributes or inline `style`
+  `width`/`height`/`max-width`/`max-height`, ignoring percentages like
+  `width: 100%`) emit standard HTML `<img src="..." alt="..." width="..."
+  height="...">` blocks so compact icons, avatars and small diagrams render at
+  their intended page size in `etaf-md`; wider declared images emit standard
+  Markdown `![alt](url)` and scale proportionally to the reading column.
+  Tracking pixels (`<= 4` px) and empty-alt decorative inline images are
+  dropped.  Consecutive runs of inline badge images degrade to `alt` text
+  joined with ` · `.  Private-use glyphs (`U+E000–U+F8FF`) and variation
+  selectors (`U+FE0E`/`U+FE0F`) are stripped while standard Unicode emoji in
+  prose stay intact.
+- Headings unwrap same-page `#anchor` links into plain text and turn inline
+  `<br>` into spaces (no literal backslashes).  In the reading view, headings
+  render without underlines or H1/H2 bottom rules (`:heading-underline nil`);
+  external links inside headings remain clickable while body links keep their
+  underline.
+- Chapter-level `<details open>` elements (containing a heading in `<summary>`
+  or body, `>= 4` substantive blocks, or `> 600` characters) unwrap into normal
+  headings and top-level blocks instead of tall vertical accordion borders;
+  closed and short single-topic `<details>` remain `:::details`.
 - Primary content extraction uses semantic landmarks (`<article>` / `<main>`),
   bottom-up Readability-style prose scoring with continuous link-density
   weighting, structural wrapper tightening, interactive `<form>` widget and
   orphan-heading pruning, and layout-table unwrapping (while preserving real
   data tables with `<th>` / `<thead>`).
 - Consecutive 2–6 short single-line metadata siblings (`<= 24` chars, non-heading/
-  code/image, outside `:::card`) merge into one `项1 · 项2 · 项3` line.
+  paragraph/code/image, outside `:::card`) merge into one `项1 · 项2 · 项3` line.
 - Repeated homogeneous entry streams (`>= 3` compact same-tag entries each
   carrying a primary title link) compile to `### [标题](url)`, unwrapped
   plain-prose summary, single-line metadata, and `---` separators.
 - Structured page layouts preserve their visual structure using `etaf-md`
-  containers: card grids (`:::columns` + `:::col` + `:::card`), documentation
-  tabs (`:::tabs` + `@tab`), numbered steps (`:::steps` + `:::step`), and
-  timelines (`:::timeline` + `:::event`, gated so entries require `<time>` or
-  substantive `> 15`-char text rather than counter/action bars).
+  containers: homogeneous balanced card grids (`:::columns` + `:::col` +
+  `:::card`, degrading heterogeneous, lopsided, or large-image+prose sections to
+  sequential blocks), documentation tabs (`:::tabs` + `@tab`), numbered steps
+  (`:::steps` + `:::step`), and timelines (`:::timeline` + `:::event`, gated so
+  entries require `<time>` or substantive `> 15`-char text rather than
+  counter/action bars).
 
 ## Asynchronous loading and script-driven pages
 

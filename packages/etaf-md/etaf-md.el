@@ -172,7 +172,7 @@
 ;; `etaf-md-create' to mount a real document yourself with
 ;; `etaf-mount', for example inside a tab or a larger layout.
 ;;
-;; Function: etaf-md-create (&key file text title theme flavor on-link on-media)
+;; Function: etaf-md-create (&key file text title theme flavor on-link on-media (link-hover t) (heading-underline t))
 ;; Return a new headless preview session.
 ;; Exactly one of FILE (a markdown document read from disk) or TEXT (the
 ;; document itself) is required; a missing or unreadable FILE signals
@@ -189,7 +189,12 @@
 ;; when media is activated, where KIND is the symbol `image' or `video' and
 ;; PATH is the resolved local path or remote URL; returning non-nil marks the
 ;; activation handled, and returning nil falls back to inline video playback
-;; or opening the media.  The session owns no buffer, so it is a complete
+;; or opening the media.  LINK-HOVER controls whether rendered links carry a
+;; hover background highlight (default t; nil suppresses hover highlights while
+;; keeping links clickable).  HEADING-UNDERLINE controls whether headings draw
+;; a bottom rule on levels 1–2 and underline inline links inside headings
+;; (default t; nil suppresses both while keeping heading links clickable and
+;; body links underlined).  The session owns no buffer, so it is a complete
 ;; headless preview for scripts and tests.
 ;;
 ;; Function: etaf-md-state (session)

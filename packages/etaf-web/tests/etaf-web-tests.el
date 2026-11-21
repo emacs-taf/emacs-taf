@@ -1499,5 +1499,341 @@ HANDLER receives `(METHOD PATH)' and returns a plist with optional keys
         (with-current-buffer buf (etaf-web-close)))
       (delete-directory cache t))))
 
+(ert-deftest etaf-web-tests-links-hoverless-buttons-clickable-and-cached-nav ()
+  "Links navigate even on cached pages, hover adds no mouse-face, toolbar buttons are real controls."
+  (let* ((cache (make-temp-file "etaf-web-ux-" t))
+         (etaf-web-cache-directory cache)
+         (etaf-web-download-images nil)
+         (buf nil))
+    (unwind-protect
+        (etaf-web-tests--with-http base
+            (lambda (_m path)
+              (pcase path
+                ("/list"
+                 (list :status "200 OK"
+                       :body (concat "<article><h1>Article List</h1>"
+                                     "<h3><a href=\"/post\">Read Deep Article</a></h3>"
+                                     "<p>Summary text long enough for extraction.</p></article>")))
+                ("/post"
+                 (list :status "200 OK"
+                       :body (concat "<article><h1>Deep Article Body</h1>"
+                                     "<p>Full content inside the second page.</p></article>")))
+                (_ (list :status "404 Not Found" :body "404"))))
+          (let ((u-list (concat base "/list"))
+                (u-post (concat base "/post")))
+            (setq buf (etaf-web-open u-list))
+            (etaf-web-tests--wait-phase buf 'ready)
+            (switch-to-buffer buf)
+            ;; 1. Zero hover highlight (`mouse-face` nil) on address URL AND reading-view link;
+            ;;    disabled Back has no hand pointer; enabled Reload has hand pointer.
+            (let ((addr-pos (save-excursion (goto-char (point-min))
+                                            (search-forward "http://")
+                                            (match-beginning 0)))
+                  (link-pos (save-excursion (goto-char (point-min))
+                                            (search-forward "Read Deep Article")
+                                            (match-beginning 0)))
+                  (back-pos (save-excursion (goto-char (point-min))
+                                            (search-forward "后退")
+                                            (match-beginning 0)))
+                  (reload-pos (save-excursion (goto-char (point-min))
+                                              (search-forward "刷新")
+                                              (match-beginning 0))))
+              (should-not (get-text-property addr-pos 'mouse-face))
+              (should (eq 'hand (get-text-property addr-pos 'pointer)))
+              (should-not (get-text-property link-pos 'mouse-face))
+              (should (eq 'hand (get-text-property link-pos 'pointer)))
+              (should-not (get-text-property back-pos 'pointer))
+              (should (eq 'hand (get-text-property reload-pos 'pointer))))
+            ;; 2. Activating address bar enters inline editing directly; ESC cancels cleanly.
+            (let ((rt (etaf-runtime-for-buffer buf)))
+              (etaf-focus rt 'web-address)
+              (execute-kbd-macro (kbd "RET"))
+              (should (plist-get (etaf-web-state buf) :address-editing))
+              (execute-kbd-macro (kbd "<escape>"))
+              (should-not (plist-get (etaf-web-state buf) :address-editing))
+              ;; 3. Activating heading link navigates to `/post' and updates rendered body!
+              (goto-char (point-min))
+              (should (search-forward "Read Deep Article" nil t))
+              (goto-char (match-beginning 0))
+              (call-interactively (key-binding (kbd "RET")))
+              (should (etaf-web-tests--wait-until
+                       (lambda ()
+                         (let ((st (etaf-web-state buf)))
+                           (and (equal (plist-get st :url) u-post)
+                                (eq (plist-get st :phase) 'ready))))))
+              (let ((body2 (buffer-substring-no-properties (point-min) (point-max))))
+                (should (string-match-p "Full content inside the second page" body2))
+                (should-not (string-match-p "Read Deep Article" body2)))
+              ;; 4. Back button (`后退') is now enabled with hand pointer and activates via etaf-focus + RET,
+              ;;    updating body BACK to Page 1 even though Page 1 is a synchronous cache hit!
+              (let ((back-pos (save-excursion (goto-char (point-min))
+                                              (search-forward "后退")
+                                              (match-beginning 0))))
+                (should (eq 'hand (get-text-property back-pos 'pointer))))
+              (etaf-focus rt 'web-back)
+              (execute-kbd-macro (kbd "RET"))
+              (should (etaf-web-tests--wait-until
+                       (lambda ()
+                         (let ((st (etaf-web-state buf)))
+                           (and (equal (plist-get st :url) u-list)
+                                (eq (plist-get st :phase) 'ready))))))
+              (let ((body-back (buffer-substring-no-properties (point-min) (point-max))))
+                (should (string-match-p "Read Deep Article" body-back))
+                (should-not (string-match-p "Full content inside the second page" body-back)))
+              ;; 5. Forward button (`前进') is now enabled with hand pointer and returns to cached Page 2!
+              (let ((fwd-pos (save-excursion (goto-char (point-min))
+                                             (search-forward "前进")
+                                             (match-beginning 0))))
+                (should (eq 'hand (get-text-property fwd-pos 'pointer))))
+              (etaf-focus rt 'web-forward)
+              (execute-kbd-macro (kbd "RET"))
+              (should (etaf-web-tests--wait-until
+                       (lambda ()
+                         (let ((st (etaf-web-state buf)))
+                           (and (equal (plist-get st :url) u-post)
+                                (eq (plist-get st :phase) 'ready))))))
+              (let ((body-fwd (buffer-substring-no-properties (point-min) (point-max))))
+                (should (string-match-p "Full content inside the second page" body-fwd))))))
+      (when (and buf (buffer-live-p buf))
+        (with-current-buffer buf (etaf-web-close)))
+      (delete-directory cache t))))
+
+(ert-deftest etaf-web-tests-toolbar-single-row-and-scrolling ()
+  "The toolbar stays one row and the page still scrolls and follows links."
+  (let* ((cache (make-temp-file "etaf-web-toolbar-" t))
+         (etaf-web-cache-directory cache)
+         (etaf-web-download-images nil)
+         (long-body (lambda (title link-href link-label)
+                      (concat "<article><h1>" title "</h1>"
+                              (if link-href
+                                  (format "<h3><a href=\"%s\">%s</a></h3>" link-href link-label)
+                                "")
+                              (mapconcat (lambda (i)
+                                           (format "<p>Scrollable line %d of %s with enough prose to pass extraction.</p>"
+                                                   i title))
+                                         (number-sequence 1 40) "")
+                              "</article>")))
+         (buf nil))
+    (unwind-protect
+        (etaf-web-tests--with-http base
+            (lambda (_m path)
+              (pcase path
+                ("/p1" (list :status "200 OK"
+                             :body (funcall long-body "Toolbar One" "/p2" "Jump To Two")))
+                ("/p2" (list :status "200 OK"
+                             :body (funcall long-body "Toolbar Two" nil nil)))
+                (_ (list :status "404 Not Found" :body "404"))))
+          (let ((u1 (concat base "/p1"))
+                (u2 (concat base "/p2")))
+            (setq buf (etaf-web-open u1))
+            (etaf-web-tests--wait-phase buf 'ready)
+            (switch-to-buffer buf)
+            ;; One row of chrome: the toolbar is line 1 and nothing mirrors above it.
+            (with-current-buffer buf
+              (should (null header-line-format))
+              (should (string-match-p "后退" (save-excursion
+                                               (goto-char (point-min))
+                                               (buffer-substring-no-properties
+                                                (line-beginning-position)
+                                                (line-end-position)))))
+              (should (> (count-lines (point-min) (point-max)) 20)))
+            ;; Activate the link through its own mouse-1 binding.
+            (let* ((link-pos (save-excursion
+                               (goto-char (point-min))
+                               (should (search-forward "Jump To Two" nil t))
+                               (match-beginning 0)))
+                   (km (get-text-property link-pos 'keymap))
+                   (m1 (and (keymapp km) (lookup-key km [mouse-1])))
+                   (win (get-buffer-window buf t))
+                   (ev (list 'mouse-1 (posn-at-point link-pos win))))
+              (should (commandp m1))
+              (let ((last-input-event ev)
+                    (last-command-event ev))
+                (funcall m1 ev)))
+            (should (etaf-web-tests--wait-until
+                     (lambda ()
+                       (let ((st (etaf-web-state buf)))
+                         (and (equal (plist-get st :url) u2)
+                              (eq (plist-get st :phase) 'ready))))))
+            ;; Scrolling moves the window; the page is not pinned.
+            (with-current-buffer buf
+              (let* ((win (get-buffer-window buf t))
+                     (before (window-start win)))
+                (should win)
+                (execute-kbd-macro (kbd "C-v"))
+                (should (> (window-start win) before))))))
+      (when (and buf (buffer-live-p buf))
+        (with-current-buffer buf (etaf-web-close)))
+      (delete-directory cache t))))
+
+(ert-deftest etaf-web-tests-address-edit-plain-style-and-esc-cg-exit ()
+  "Address edit stays 1lh without border color change, exits on ESC/C-g, and preserves link RET."
+  (let* ((cache (make-temp-file "etaf-web-edit-" t))
+         (etaf-web-cache-directory cache)
+         (etaf-web-download-images nil)
+         (buf nil))
+    (unwind-protect
+        (etaf-web-tests--with-http base
+            (lambda (_m path)
+              (pcase path
+                ("/home"
+                 (list :status "200 OK"
+                       :body (concat "<article><h1>Home Index</h1>"
+                                     "<h3><a href=\"/detail\">Open Detail Article</a></h3>"
+                                     "<p>Enough body text for reliable extraction in tests.</p></article>")))
+                ("/detail"
+                 (list :status "200 OK"
+                       :body "<article><h1>Detail Page</h1><p>Reached detail content cleanly.</p></article>"))
+                (_ (list :status "404 Not Found" :body "404"))))
+          (let ((u-home (concat base "/home"))
+                (u-detail (concat base "/detail")))
+            (setq buf (etaf-web-open u-home))
+            (etaf-web-tests--wait-phase buf 'ready)
+            (switch-to-buffer buf)
+            (let* ((rt (etaf-runtime-for-buffer buf))
+                   (content-line-before
+                    (save-excursion
+                      (goto-char (point-min))
+                      (should (search-forward "Open Detail Article" nil t))
+                      (line-number-at-pos)))
+                   (border-face-before (get-text-property (point-min) 'face)))
+              ;; Enter editing via `g' -> verify constant content line, identical border face,
+              ;; no input background fill, and muted hint on the same 1lh row.
+              (execute-kbd-macro "g")
+              (should (plist-get (etaf-web-state buf) :address-editing))
+              (should (etaf-text-input-active-p rt))
+              (let ((line1 (buffer-substring-no-properties
+                            (point-min)
+                            (save-excursion (goto-char (point-min)) (line-end-position))))
+                    (content-line-during
+                     (save-excursion
+                       (goto-char (point-min))
+                       (should (search-forward "Open Detail Article" nil t))
+                       (line-number-at-pos)))
+                    (border-face-during (get-text-property (point-min) 'face)))
+                (should (= content-line-during content-line-before))
+                (should (equal border-face-during border-face-before))
+                (should (string-match-p "RET 打开 · TAB 补全 · ESC 取消" line1)))
+              ;; ESC exits editing cleanly and keeps content start line unchanged.
+              (execute-kbd-macro [escape])
+              (should-not (plist-get (etaf-web-state buf) :address-editing))
+              (should-not (etaf-text-input-active-p rt))
+              (let ((content-line-after
+                     (save-excursion
+                       (goto-char (point-min))
+                       (should (search-forward "Open Detail Article" nil t))
+                       (line-number-at-pos))))
+                (should (= content-line-after content-line-before)))
+              ;; Re-enter editing via `g' -> C-g stays native `keyboard-quit' AND exits editing!
+              (execute-kbd-macro "g")
+              (should (plist-get (etaf-web-state buf) :address-editing))
+              (should (eq (key-binding (kbd "C-g")) 'keyboard-quit))
+              (condition-case nil
+                  (execute-kbd-macro (kbd "C-g"))
+                (quit nil))
+              (should-not (plist-get (etaf-web-state buf) :address-editing))
+              (should-not (etaf-text-input-active-p rt))
+              ;; Pressing RET even from leading padding on the heading link line navigates reliably!
+              (goto-char (point-min))
+              (should (search-forward "Open Detail Article" nil t))
+              (goto-char (line-beginning-position))
+              (execute-kbd-macro (kbd "RET"))
+              (should (etaf-web-tests--wait-until
+                       (lambda ()
+                         (let ((st (etaf-web-state buf)))
+                           (and (equal (plist-get st :url) u-detail)
+                                (eq (plist-get st :phase) 'ready)))))))))
+      (when (and buf (buffer-live-p buf))
+        (with-current-buffer buf (etaf-web-close)))
+      (delete-directory cache t))))
+
+(ert-deftest etaf-web-tests-unwraps-chapter-details-and-separates-blocks ()
+  "Chapter-level `<details open>' unwraps into headings and blocks while short/closed stay `:::details'."
+  (let* ((html (etaf-web-tests--read-file
+                (etaf-web-tests--fixture "layout-reading-quality.html")))
+         (md (etaf-web-to-markdown html :base-url "https://example.com/guide")))
+    ;; Chapter-level `<details open>' with heading in `<summary>' unwraps to heading + body.
+    (should-not (string-match-p ":::details {title=\"CSS Flexbox Properties\"" md))
+    (should (string-match-p "^## CSS Flexbox Properties$" md))
+    ;; Short open `<details>' and closed `<details>' stay as `:::details'.
+    (should (string-match-p "^:::details {title=\"Short Note\" open=true}$" md))
+    (should (string-match-p "^:::details {title=\"Collapsed Reference\" open=false}$" md))
+    ;; Blank line separates paragraph, fenced code block, and bullet list.
+    (should (string-match-p "New paragraph after double break\\.\n\n```css" md))
+    (should (string-match-p "```\n\n- `row`: left to right" md))
+    ;; Single `<br>' keeps hard break; double `<br><br>' splits into two paragraphs.
+    (should (string-match-p "First line of direction note\\.\\\\\nSecond short line preserved\\.\n\nNew paragraph after double break\\." md))))
+
+(ert-deftest etaf-web-tests-headings-strip-anchors-breaks-and-render-without-underline ()
+  "Headings unwrap same-page `#anchor' links and `<br>', and render without underlines while body links stay underlined."
+  (let* ((html (etaf-web-tests--read-file
+                (etaf-web-tests--fixture "layout-reading-quality.html")))
+         (md (etaf-web-to-markdown html :base-url "https://example.com/guide")))
+    ;; Same-page `#anchor' and `base-url#anchor' inside headings unwrap to plain text;
+    ;; `<br>' inside heading turns into a space (no literal backslash).
+    (should (string-match-p "^## CSS Flexbox Properties$" md))
+    (should-not (string-match-p "\\[CSS Flexbox Properties\\]" md))
+    (should (string-match-p "^## Properties for the Parent (Flex Container)$" md))
+    (should-not (string-match-p "Parent\\\\" md))
+    ;; External heading link remains clickable in Markdown.
+    (should (string-match-p "^### \\[External Spec Heading\\](https://example\\.com/spec)$" md))
+    ;; Opening the page in `etaf-web-open' renders all headings without underline or bottom rule,
+    ;; while keeping external heading links clickable and body links underlined.
+    (let* ((cache (make-temp-file "etaf-web-heading-ul-" t))
+           (page (expand-file-name "guide.html" cache))
+           (buf nil))
+      (unwind-protect
+          (etaf-web-tests--with-cache cache
+            (with-temp-file page (insert html))
+            (setq buf (etaf-web-open page))
+            (etaf-web-tests--wait-phase buf 'ready)
+            (with-current-buffer buf
+              (let ((plain (buffer-substring-no-properties (point-min) (point-max))))
+                ;; Headings do not render with literal backslashes.
+                (should (string-match-p "Properties for the Parent (Flex Container)" plain))
+                (should-not (string-match-p "Parent\\\\" plain)))
+              ;; External linked heading carries no `:underline' yet stays interactive.
+              (cl-labels ((face-underlined-p (f)
+                            (cond
+                             ((not (listp f)) nil)
+                             ((keywordp (car f)) (and (plist-get f :underline) t))
+                             (t (cl-some #'face-underlined-p f)))))
+                (goto-char (point-min))
+                (should (search-forward "External Spec Heading" nil t))
+                (let* ((hpos (match-beginning 0))
+                       (hface (get-text-property hpos 'face)))
+                  (should-not (face-underlined-p hface))
+                  (should (eq 'hand (get-text-property hpos 'pointer))))
+                ;; Body paragraph link keeps `:underline'.
+                (goto-char (point-min))
+                (should (search-forward "almanac reference" nil t))
+                (let* ((bpos (match-beginning 0))
+                       (bface (get-text-property bpos 'face)))
+                  (should (face-underlined-p bface))))))
+        (when (and buf (buffer-live-p buf))
+          (with-current-buffer buf (etaf-web-close)))
+        (delete-directory cache t)))))
+
+(ert-deftest etaf-web-tests-bounds-image-dimensions-and-tightens-card-grid-gate ()
+  "Oversized or percentage images emit responsive Markdown, and imbalanced/heterogeneous grids degrade to normal flow."
+  (let* ((html (etaf-web-tests--read-file
+                (etaf-web-tests--fixture "layout-reading-quality.html")))
+         (md (etaf-web-to-markdown html :base-url "https://example.com/guide")))
+    ;; Bounded `width=350' image keeps `<img width="350">'.
+    (should (string-match-p "<img src=\"https://example\\.com/assets/flex-dir\\.svg\" alt=\"Flex direction\" width=\"350\">" md))
+    ;; Oversized `width=844 height=246' degrades to Markdown image (never emits `width="844"').
+    (should (string-match-p "!\\[Wide banner\\](https://example\\.com/assets/wide-banner\\.png)" md))
+    (should-not (string-match-p "width=\"844\"" md))
+    ;; Percentage `style="width: 100%"' never leaks as pixel `width="100"'.
+    (should (string-match-p "!\\[Responsive figure\\](https://example\\.com/assets/responsive\\.png)" md))
+    (should-not (string-match-p "width=\"100\"" md))
+    ;; Neither the large-image+prose lopsided `.cards` nor heterogeneous `<article>`+`<div>`
+    ;; `.cards` becomes a `:::columns` grid; both degrade cleanly to sequential headings & prose.
+    (should-not (string-match-p ":::columns" md))
+    (should-not (string-match-p ":::card" md))
+    (should (string-match-p "^### Tall Diagram & Prose$" md))
+    (should (string-match-p "^### Heterogeneous Article$" md))
+    (should (string-match-p "^### Heterogeneous Div$" md))))
+
 (provide 'etaf-web-tests)
 ;;; etaf-web-tests.el ends here

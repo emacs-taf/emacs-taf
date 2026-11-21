@@ -101,6 +101,12 @@ The palette may provide `:code-bg'; without it code uses `:panel'."
   (etaf-ui-markdown--env-color
    env (if (assq :code-bg (plist-get env :palette)) :code-bg :panel)))
 
+(defun etaf-ui-markdown--heading-underline-p (env)
+  "Return non-nil when headings in ENV draw rules and link underlines."
+  (if (plist-member env :heading-underline)
+      (plist-get env :heading-underline)
+    t))
+
 (defun etaf-ui-markdown--run-props (run env)
   "Return the ETAF style props of inline RUN in ENV."
   (let ((props nil))
@@ -117,7 +123,8 @@ The palette may provide `:code-bg'; without it code uses `:panel'."
         (when mono (setq props (plist-put props :font-family mono)))))
     (when (plist-get run :link)
       (setq props (plist-put props :color (etaf-ui-markdown--env-color env :accent)))
-      (setq props (plist-put props :text-decoration-line '(underline))))
+      (unless (plist-get run :no-underline)
+        (setq props (plist-put props :text-decoration-line '(underline)))))
     (when (plist-get run :muted)
       (setq props (plist-put props :color (etaf-ui-markdown--env-color env :muted))))
     (when (plist-get run :math)
@@ -125,7 +132,8 @@ The palette may provide `:code-bg'; without it code uses `:panel'."
       ;; line height, which a raised or lowered glyph would not.
       (setq props (plist-put props :font-style 'italic)))
     (when-let* ((title (plist-get run :abbreviation)))
-      (setq props (plist-put props :text-decoration-line '(underline)))
+      (unless (plist-get run :no-underline)
+        (setq props (plist-put props :text-decoration-line '(underline))))
       (setq props (plist-put props :help-echo title)))
     (when (plist-member run :mark)
       ;; A marker is a fill behind the text.  The run also takes the page ink:
@@ -371,16 +379,22 @@ BASE is a run-attribute plist (`:bold', `:italic', `:strike', `:code',
                (help (or (cdr code-link) url))
                (open (plist-get env :open-link))
                (props (if url
-                          (let ((result (append props
-                                                (list :role 'link :tab-index 0 :help-echo help
-                                                      :hover-style
-                                                      (list :background-color
-                                                            (etaf-ui-markdown--env-color
-                                                             env :accent-soft))))))
+                          (let* ((hover-p (if (plist-member env :link-hover)
+                                              (plist-get env :link-hover)
+                                            t))
+                                 (result (append props
+                                                 (list :role 'link :tab-index 0
+                                                       :pointer 'hand :help-echo help)
+                                                 (when hover-p
+                                                   (list :hover-style
+                                                         (list :background-color
+                                                               (etaf-ui-markdown--env-color
+                                                                env :accent-soft)))))))
                             ;; A code link may share a span with its own text
                             ;; decoration; a second entry would be a duplicate
                             ;; View property.
-                            (when code-link
+                            (when (and code-link
+                                       (not (plist-get attributes :no-underline)))
                               (setq result (plist-put
                                             result :text-decoration-line '(underline))))
                             (append result
@@ -428,13 +442,17 @@ text, which sets the level apart even in a theme whose heading color is its
 body color."
   (let* ((level (plist-get block :level))
          (grid (plist-get env :line-grid))
+         (heading-underline (etaf-ui-markdown--heading-underline-p env))
          (color (cond ((>= level 5) (etaf-ui-markdown--env-color env :muted))
                       ((and grid (= level 1))
                        (etaf-ui-markdown--env-color env :accent))
                       (t (etaf-ui-markdown--env-color env :heading))))
+         (base (append (list :bold t)
+                       (unless heading-underline
+                         (list :no-underline t))))
          (children
           (etaf-ui-markdown--runs-view
-           (plist-get block :children) env (list :bold t)
+           (plist-get block :children) env base
            (append (unless grid
                      (list :font-size (etaf-ui-markdown--heading-ratio level)))
                    (list :color color)))))
@@ -451,7 +469,7 @@ body color."
                         (list '(px 3) 'solid
                               (etaf-ui-markdown--env-color env :accent))
                         :padding-left '(ch 1)))
-                (when (and (not grid) (<= level 2))
+                (when (and (not grid) heading-underline (<= level 2))
                   (list :border-bottom
                         (list '(px 1) 'solid
                               (etaf-ui-markdown--env-color-or

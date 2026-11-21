@@ -910,7 +910,8 @@ and passed back as PUBLISHED by the next parse."
     (cons (plist-put (copy-sequence document) :children entries)
           (etaf-md--published-table entries))))
 
-(cl-defun etaf-md-create (&key file text title theme flavor on-link on-media)
+(cl-defun etaf-md-create (&key file text title theme flavor on-link on-media
+                               (link-hover t) (heading-underline t))
   "Create a headless preview session and return it.
 FILE names a markdown document to read; TEXT supplies the document directly
 for buffers and tests.  Exactly one source is required.  TITLE overrides the
@@ -925,7 +926,12 @@ activation handled, while nil falls back to the default anchor, browser or
 file opening.  ON-MEDIA, when non-nil, is called as (funcall ON-MEDIA KIND
 PATH) on media activation, where KIND is `image' or `video' and PATH is the
 resolved local file path or remote URL; returning non-nil marks the
-activation handled, while nil falls back to inline playback or opening."
+activation handled, while nil falls back to inline playback or opening.
+LINK-HOVER (default t) controls whether rendered links display a hover
+background highlight; nil disables hover highlights while keeping links active.
+HEADING-UNDERLINE (default t) controls whether headings draw a bottom rule on
+levels 1–2 and underline inline links inside headings; nil suppresses both
+while keeping heading links active and body links underlined."
   (when (and on-link (not (functionp on-link)))
     (signal 'etaf-md-error
             (list (format "etaf-md-create: :on-link must be a function: %S"
@@ -954,6 +960,8 @@ activation handled, while nil falls back to inline playback or opening."
                         :features nil
                         :on-link on-link
                         :on-media on-media
+                        :link-hover (and link-hover t)
+                        :heading-underline (and heading-underline t)
                         :dir (if file (file-name-directory file)
                                default-directory)
                         :document (etaf-ref nil :name 'etaf-md-document)
@@ -1558,6 +1566,8 @@ re-render after a theme switch instead of keeping the faces it first read."
         :features (plist-get session :features)
         :open-url (lambda (url) (etaf-md--open-url session url))
         :open-link (lambda (url) (etaf-md--open-url session url))
+        :link-hover (plist-get session :link-hover)
+        :heading-underline (plist-get session :heading-underline)
         :open-media (lambda (kind path) (etaf-md--open-media session kind path))
         :open-file #'etaf-md--open-file
         :render-media #'etaf-md--render-media

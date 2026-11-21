@@ -215,6 +215,36 @@
       "name": "etaf-web-tests-error-card-actions-and-narrow-viewport",
       "file": "tests/etaf-web-tests.el",
       "purpose": "Failed loads render an interactive error card whose Retry, External Browser and Back buttons activate via `etaf-focus' + `RET' and recover cleanly."
+    },
+    {
+      "name": "etaf-web-tests-links-hoverless-buttons-clickable-and-cached-nav",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "In-tab link activation and cached Back/Forward navigation remount the new page body, toolbar buttons expose real hand-pointer/focusable controls (with disabled buttons muted), and both the address line and reading-view links carry zero `mouse-face' hover highlight while clicking the address line enters inline edit directly."
+    },
+    {
+      "name": "etaf-web-tests-toolbar-single-row-and-scrolling",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "The browser toolbar occupies exactly one row with no mirrored duplicate, links activate through their own mouse-1 binding, and the page still scrolls."
+    },
+    {
+      "name": "etaf-web-tests-address-edit-plain-style-and-esc-cg-exit",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "Inline address editing keeps constant 1lh height, identical border/text styling (no accent underline or box) and muted right-side hint, exits cleanly on both `ESC' and native `C-g' without shifting the content start line, and preserves reliable `point + RET' link activation even from heading line padding."
+    },
+    {
+      "name": "etaf-web-tests-unwraps-chapter-details-and-separates-blocks",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "Chapter-level `<details open>' containers unwrap into normal headings and blank-line-separated blocks while short open and closed `<details>' remain `:::details', preserving `<br>' hard breaks and `<br><br>' paragraph splits."
+    },
+    {
+      "name": "etaf-web-tests-headings-strip-anchors-breaks-and-render-without-underline",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "Headings unwrap same-page `#anchor' wrappers and turn `<br>' into spaces during compilation, and rendered web pages suppress heading underlines and H1/H2 bottom rules while keeping external heading links clickable and body links underlined."
+    },
+    {
+      "name": "etaf-web-tests-bounds-image-dimensions-and-tightens-card-grid-gate",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "Images with declared pixel dimensions exceeding 480 px or CSS percentages emit responsive Markdown instead of fixed oversized HTML dimensions, and heterogeneous or large-image+prose grids degrade to sequential blocks instead of `:::columns'."
     }
   ]
 }

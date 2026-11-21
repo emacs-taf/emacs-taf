@@ -2514,3 +2514,132 @@ proportionally below the unsized width."
     (should (> (nth 0 scaled) (nth 0 compact)))
     (should (< (nth 0 scaled) (nth 0 unsized)))
     (should (nth 2 scaled))))
+
+(ert-deftest etaf-md-tests-link-hover-option-disables-mouse-face ()
+  "Passing `:link-hover nil' to `etaf-md-create' suppresses link `mouse-face' while keeping activation."
+  (let* ((clicks nil)
+         (session (etaf-md-create :text "See [Example](https://example.com) now.\n"
+                                  :link-hover nil
+                                  :on-link (lambda (u) (push u clicks) t)))
+         (buf (etaf-md-open session)))
+    (unwind-protect
+        (with-current-buffer buf
+          (goto-char (point-min))
+          (should (search-forward "Example" nil t))
+          (let ((pos (match-beginning 0)))
+            (should-not (get-text-property pos 'mouse-face))
+            (should (eq 'hand (get-text-property pos 'pointer)))
+            (goto-char pos)
+            (call-interactively (key-binding (kbd "RET")))
+            (should (equal clicks '("https://example.com")))))
+      (when (buffer-live-p buf)
+        (with-current-buffer buf (etaf-md-close))))))
+
+(ert-deftest etaf-md-tests-container-blocks-keep-blank-line-separation ()
+  "Multi-block containers keep one blank line between paragraph, code and list blocks."
+  (let* ((doc (concat ":::details {title=\"Section\" open=true}\n"
+                      "First paragraph inside details.\n\n"
+                      "```css\n.box { display: flex; }\n```\n\n"
+                      "- Alpha item\n"
+                      "- Beta item\n"
+                      ":::\n"))
+         (session (etaf-md-create :text doc :theme 'dark)))
+    (etaf-md-tests--with-mount session
+      (let* ((lines (split-string
+                     (buffer-substring-no-properties (point-min) (point-max))
+                     "\n"))
+             (idx-para (cl-position-if
+                        (lambda (l) (string-match-p "First paragraph inside details\\." l))
+                        lines))
+             (idx-code (cl-position-if
+                        (lambda (l) (string-match-p "display: flex" l))
+                        lines))
+             (idx-list (cl-position-if
+                        (lambda (l) (string-match-p "Alpha item" l))
+                        lines)))
+        (should idx-para)
+        (should idx-code)
+        (should idx-list)
+        ;; At least one blank interior line between paragraph and code block,
+        ;; and between code block and list (not smashed onto consecutive rows).
+        (should (cl-some (lambda (i)
+                           (string-match-p "\\`[ \t│]*\\'" (nth i lines)))
+                         (number-sequence (1+ idx-para) (1- idx-code))))
+        (should (cl-some (lambda (i)
+                           (string-match-p "\\`[ \t│]*\\'" (nth i lines)))
+                         (number-sequence (1+ idx-code) (1- idx-list))))))))
+
+(ert-deftest etaf-md-tests-svg-viewbox-preserves-aspect-and-caps-height ()
+  "ViewBox-only SVGs preserve natural aspect ratio (not a square) and cap tall height."
+  (let* ((dir (make-temp-file "etaf-md-svg-" t))
+         (wide-svg (expand-file-name "wide.svg" dir))
+         (tall-svg (expand-file-name "tall.svg" dir)))
+    (unwind-protect
+        (progn
+          (with-temp-file wide-svg
+            (insert "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 490 225.27\"><rect width=\"490\" height=\"225\"/></svg>"))
+          (with-temp-file tall-svg
+            (insert "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 490 820\"><rect width=\"490\" height=\"820\"/></svg>"))
+          (let ((measure
+                 (lambda (svg-path)
+                   (let ((session (etaf-md-create
+                                   :text (format "<img src=\"%s\" alt=\"Diagram\" width=\"350\">\n"
+                                                 svg-path)
+                                   :theme 'dark)))
+                     (etaf-md-tests--with-mount session
+                       (etaf-md-tests--media-grid-shape))))))
+            (let* ((wide (funcall measure wide-svg))
+                   (tall (funcall measure tall-svg))
+                   (wide-cols (car wide))
+                   (wide-rows (cdr wide))
+                   (tall-cols (car tall))
+                   (tall-rows (cdr tall)))
+              (should (> wide-cols 0))
+              (should (> wide-rows 0))
+              ;; Wide 490x225 SVG with width=350 must stay compact landscape, not ~20-row square.
+              (should (<= wide-rows 14))
+              (should (> wide-cols (* 2 wide-rows)))
+              ;; Tall 490x820 portrait SVG caps rows at <= 20 and narrows columns proportionally.
+              (should (> tall-rows wide-rows))
+              (should (<= tall-rows 20))
+              (should (< tall-cols wide-cols)))))
+      (delete-directory dir t))))
+
+(ert-deftest etaf-md-tests-heading-underline-option-suppresses-heading-rules-and-link-underlines ()
+  "Passing `:heading-underline nil' drops H1/H2 rules and heading link underlines while keeping body links underlined."
+  (cl-labels ((face-underlined-p (f)
+                (cond
+                 ((not (listp f)) nil)
+                 ((keywordp (car f)) (and (plist-get f :underline) t))
+                 (t (cl-some #'face-underlined-p f)))))
+    (let* ((clicks nil)
+           (doc (concat "# Main Title\n\n"
+                        "## [Linked Section](https://example.com/sec)\n\n"
+                        "Read [Body Link](https://example.com/body) carefully.\n"))
+           (session (etaf-md-create :text doc
+                                    :heading-underline nil
+                                    :on-link (lambda (u) (push u clicks) t)))
+           (buf (etaf-md-open session)))
+      (unwind-protect
+          (with-current-buffer buf
+            (let ((plain (buffer-substring-no-properties (point-min) (point-max))))
+              ;; No H1/H2 bottom border rule line drawn under headings.
+              (should-not (string-match-p "^[ \t]*─\\{8,\\}[ \t]*$" plain)))
+            ;; Heading link stays clickable with hand pointer, but carries no underline.
+            (goto-char (point-min))
+            (should (search-forward "Linked Section" nil t))
+            (let* ((hpos (match-beginning 0))
+                   (hface (get-text-property hpos 'face)))
+              (should-not (face-underlined-p hface))
+              (should (eq 'hand (get-text-property hpos 'pointer)))
+              (goto-char hpos)
+              (call-interactively (key-binding (kbd "RET")))
+              (should (equal clicks '("https://example.com/sec"))))
+            ;; Body paragraph link still carries underline.
+            (goto-char (point-min))
+            (should (search-forward "Body Link" nil t))
+            (let* ((bpos (match-beginning 0))
+                   (bface (get-text-property bpos 'face)))
+              (should (face-underlined-p bface))))
+        (when (buffer-live-p buf)
+          (with-current-buffer buf (etaf-md-close)))))))
