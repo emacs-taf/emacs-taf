@@ -128,8 +128,9 @@ table names the framework packages each one uses:
 | [etaf-video-player](https://github.com/emacs-taf/etaf-video-player) | Local video and streams as image frames, density characters or true-color half blocks, with sound | etaf, etaf-ui, ebox |
 | [etaf-bili](https://github.com/emacs-taf/etaf-bili) | Bilibili client: popular feed, ranking and search with in-buffer playback | etaf, etaf-ui, ebox |
 | [etaf-screensaver](https://github.com/emacs-taf/etaf-screensaver) | Idle screensavers: canvas-only animation, input dismissal, grouped playback and adapted recorded animations | etaf, ebox |
+| [etaf-web](https://github.com/emacs-taf/etaf-web) | Web article reader: compiles HTML to `etaf-md` intermediate language with local caching and opens it in an `etaf-md` reading buffer | etaf-md, etaf, etaf-ui, ebox |
 
-`etaf-bili`, `etaf-reader`, `etaf-rss` and `etaf-screensaver` live and pass
+`etaf-bili`, `etaf-reader`, `etaf-rss`, `etaf-screensaver` and `etaf-web` live and pass
 their checks in this checkout but are not in the package archive yet;
 `M-x etaf-install` does not list them.
 

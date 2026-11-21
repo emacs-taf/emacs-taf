@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Documentation Containers Reference</title>
+</head>
+<body>
+  <nav><a href="/">Docs Home</a></nav>
+  <main>
+    <h1>Documentation Containers Reference</h1>
+
+    <div class="admonition tip">
+      <p class="admonition-title">Quick Start</p>
+      <p>Run <code>make check</code> before publishing.</p>
+    </div>
+
+    <div class="callout warning">
+      <p>Cache keys include the compiler version.</p>
+    </div>
+
+    <div class="alert alert-danger">
+      <p class="alert-title">Breaking Change</p>
+      <p>Do not mix <code>jj</code> and <code>jjosh</code>.</p>
+    </div>
+
+    <div role="note">
+      <p>Standalone ARIA note block.</p>
+    </div>
+
+    <details open>
+      <summary>Expanded Build Details</summary>
+      <p>Emacs 29.1+ compiles all Lisp files cleanly.</p>
+    </details>
+
+    <details>
+      <summary>Collapsed Troubleshooting</summary>
+      <p>Delete the page directory under the cache root to force a refresh.</p>
+    </details>
+
+    <h2>Compatibility Matrix</h2>
+    <table>
+      <thead>
+        <tr>
+          <th colspan="2">Platform</th>
+          <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td rowspan="2">Unix</td>
+          <td>macOS</td>
+          <td><p>Uses a|b pipe</p><p>Verified locally</p></td>
+        </tr>
+        <tr>
+          <td>Linux</td>
+          <td>Standard GTK build</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>Plain Preformatted Output</h2>
+    <pre><code>plain output without language class
+line two
+</code></pre>
+  </main>
+  <footer>Docs Footer Noise</footer>
+</body>
+</html>

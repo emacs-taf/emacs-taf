@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Fallback Page Title</title>
+  <meta property="og:title" content="Building Text Renderers in Emacs">
+  <meta name="author" content="Ada Lovelace">
+  <meta property="article:published_time" content="2026-03-15">
+  <meta property="og:site_name" content="ETAF Engineering">
+  <style>.hero { color: red; } /* must be stripped */</style>
+  <script>window.__tracking = "evil-script-payload";</script>
+</head>
+<body>
+  <header class="site-header">
+    <nav class="navbar">
+      <a href="/home">Home Nav Link</a>
+      <a href="/about">About Nav Link</a>
+    </nav>
+  </header>
+
+  <div class="ad-banner advertisement">Buy Super Widgets Now!</div>
+
+  <aside class="sidebar">
+    <div class="widget">Sidebar Trending Noise</div>
+  </aside>
+
+  <article onclick="stealCookies()">
+    <h1>Building Text Renderers in Emacs</h1>
+    <p>Line one<br>Line two with <em>italic</em>, <strong>bold</strong>, <del>old</del>,
+      <mark>highlighted</mark>, <kbd>Ctrl + C</kbd>, H<sub>2</sub>O, and 2<sup>10</sup>.</p>
+    <p>Inline code with backticks: <code>use ``foo`` inside</code> and a
+      <a href="guide/layout.html">relative guide</a>,
+      <a href="https://example.org/spec">external spec</a>,
+      <a href="#architecture">local jump</a>,
+      <a href="javascript:alert(1)">Evil JS Link</a>,
+      <a href="vbscript:msgbox(1)">Evil VBS Link</a>,
+      <a href="data:text/html,&lt;script&gt;x&lt;/script&gt;">Evil Data Link</a>.</p>
+
+    <svg><text>INLINE_SVG_NOISE</text></svg>
+    <iframe src="https://ads.example/frame">IFRAME_NOISE</iframe>
+    <noscript>NOSCRIPT_NOISE</noscript>
+    <template><p>TEMPLATE_NOISE</p></template>
+
+    <h2 id="architecture">Architecture Overview</h2>
+    <p>Every layout pass stays pure<sup><a href="#fn-1">1</a></sup> and predictable<sup><a href="#fn-2">2</a></sup>.</p>
+
+    <figure>
+      <picture>
+        <source srcset="sample.avif" type="image/avif">
+        <source srcset="sample.png 1x" type="image/png">
+        <img src="fallback.png" alt="Pipeline diagram">
+      </picture>
+      <figcaption>Figure 1: Rendering pipeline stages.</figcaption>
+    </figure>
+
+    <pre><code class="language-elisp">(defun render-box (node)
+  "Render NODE into lines."
+  (list node))
+</code></pre>
+
+    <h3>Task Checklist and Nesting</h3>
+    <ul>
+      <li><input type="checkbox" checked> Parse HTML with libxml</li>
+      <li><input type="checkbox"> Add TOC drawer later
+        <ol>
+          <li>Design SVG first</li>
+          <li>Verify in GUI</li>
+        </ol>
+      </li>
+    </ul>
+
+    <dl>
+      <dt>IR</dt>
+      <dd>Text-level Markdown plus container blocks.</dd>
+      <dt>Measure</dt>
+      <dd>Centered reading column width.</dd>
+    </dl>
+
+    <blockquote>
+      <p>Keep the core small and predictable.</p>
+    </blockquote>
+
+    <hr>
+    <p>   </p>
+
+    <div class="share-buttons">Share on Mastodon / X</div>
+    <div class="newsletter subscribe">Subscribe to our weekly newsletter</div>
+    <section class="related-posts"><p>Related post noise</p></section>
+    <section class="comments"><p>User comment noise</p></section>
+
+    <section class="footnotes" role="doc-endnotes">
+      <ol>
+        <li id="fn-1"><p>Purity makes offline snapshot testing trivial. <a href="#ref-1" class="footnote-backref">↩</a></p></li>
+        <li id="fn-2"><p>Predictable row counts prevent cursor jitter. <a href="#ref-2" role="doc-backlink">↑</a></p></li>
+      </ol>
+    </section>
+  </article>
+
+  <footer class="site-footer">Copyright 2026 Footer Noise</footer>
+</body>
+</html>

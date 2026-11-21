@@ -1,0 +1,65 @@
+{
+  "schema": 1,
+  "load_path": [
+    ".",
+    "tests",
+    "../etaf-md",
+    "../etaf",
+    "../etaf-ui",
+    "../ebox",
+    "../ecss"
+  ],
+  "support": [],
+  "cases": [
+    {
+      "name": "etaf-web-tests-article-ir-elements",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "Article HTML compiles into normalized IR with YAML front matter, ATX headings, inline styles, dynamic code-span fences, resolved links, preserved anchors, decodable picture source, figure caption, language-tagged code block, nested task list, definition list, blockquote, rule and GFM footnotes."
+    },
+    {
+      "name": "etaf-web-tests-boilerplate-and-density-extraction",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "Navigation, sidebars, ads, share bars, newsletter prompts, related posts, comments and footers are pruned; pages without article or main landmarks fall back to text-density extraction."
+    },
+    {
+      "name": "etaf-web-tests-details-callouts-and-tables",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "HTML details/summary, docs callout classes and ARIA roles, spanned and multi-block pipe tables, and language-less code fences map to etaf-md containers and GFM blocks."
+    },
+    {
+      "name": "etaf-web-tests-sanitizes-dangerous-tags-and-links",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "Script, style, noscript, iframe, svg, template, event attributes and javascript:/vbscript:/data:text/html links are stripped from the compiled IR."
+    },
+    {
+      "name": "etaf-web-tests-open-local-fixture-renders-in-buffer",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "Opening a local HTML fixture writes cache files and renders the title, code block and figure caption inside the etaf-md preview buffer."
+    },
+    {
+      "name": "etaf-web-tests-url-fetch-caches-and-skips-refetch",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "Stubbed HTTP fetch decodes meta charset, writes index.md, meta.json and cached assets while degrading failed images gracefully, and reuses the cached index.md without refetching on repeat open."
+    },
+    {
+      "name": "etaf-web-tests-disable-image-downloads-and-error-conditions",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "Disabling `etaf-web-download-images' skips image fetches and keeps remote URLs, while invalid inputs and unreadable files signal `etaf-web-error'."
+    },
+    {
+      "name": "etaf-web-tests-http-link-navigation-and-anchor-jump",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "Inside an `etaf-web-open' preview buffer, activating an HTTP(S) link opens the target page through `etaf-web-open' instead of the external browser while `#anchor' stays in-document."
+    },
+    {
+      "name": "etaf-web-tests-deduplicates-leading-h1-only",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "A leading `<h1>' whose plain text matches the front-matter `title' is omitted so the title appears once, while mid-body and trailing `<h1>' headings are preserved."
+    },
+    {
+      "name": "etaf-web-tests-figure-figcaption-replaces-alt-without-extra-paragraph",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "An image `<figure>' with `<figcaption>' emits a single image whose alt is the caption's plain text with no trailing italic caption paragraph, while figures without `<figcaption>' retain their original alt."
+    }
+  ]
+}

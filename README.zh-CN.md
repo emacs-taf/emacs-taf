@@ -87,8 +87,9 @@ Emacs 包会自动安装，但原生 `telega-server` 不会：先安装 TDLib，
 | [etaf-video-player](https://github.com/emacs-taf/etaf-video-player) | 在 Emacs 里播放本地视频与流：图像帧、密度字符或真彩半块，带声音 | etaf、etaf-ui、ebox |
 | [etaf-bili](https://github.com/emacs-taf/etaf-bili) | B 站客户端：热门、排行榜与搜索，可在 buffer 内直接播放 | etaf、etaf-ui、ebox |
 | [etaf-screensaver](https://github.com/emacs-taf/etaf-screensaver) | 空闲屏保：纯画布动画、输入唤回、组合播放与适配的外部录制动画 | etaf、ebox |
+| [etaf-web](https://github.com/emacs-taf/etaf-web) | 网页文章阅读器：将 HTML 编译为 `etaf-md` 中间语言并做本地缓存，由 `etaf-md` 渲染进 Emacs buffer | etaf-md、etaf、etaf-ui、ebox |
 
-`etaf-bili`、`etaf-reader`、`etaf-rss`、`etaf-screensaver` 已在本检出中开发并通过检查，但还没有进入包归档；`M-x etaf-install` 不会列出它们。
+`etaf-bili`、`etaf-reader`、`etaf-rss`、`etaf-screensaver`、`etaf-web` 已在本检出中开发并通过检查，但还没有进入包归档；`M-x etaf-install` 不会列出它们。
 
 ### 游戏
 

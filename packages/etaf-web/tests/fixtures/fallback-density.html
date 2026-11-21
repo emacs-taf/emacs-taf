@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Density Fallback Article</title>
+</head>
+<body>
+  <div id="topbar">
+    <a href="/a">Link A</a>
+    <a href="/b">Link B</a>
+    <a href="/c">Link C</a>
+    <a href="/d">Link D</a>
+  </div>
+
+  <div class="layout">
+    <div class="sidebar">
+      <ul>
+        <li><a href="/1">Side 1</a></li>
+        <li><a href="/2">Side 2</a></li>
+        <li><a href="/3">Side 3</a></li>
+      </ul>
+    </div>
+
+    <div class="post-content">
+      <h1>Density Extraction Works Without Semantic Landmarks</h1>
+      <p>Many older technical blogs wrap their prose in plain div elements instead of using semantic article or main landmarks. A text-density heuristic finds this column reliably because it holds long paragraphs and structured technical blocks rather than dense link lists.</p>
+      <p>Once extracted, the compiler emits the same normalized Markdown and container blocks as modern documentation sites, keeping code samples, tables and disclosures intact.</p>
+
+      <pre><code data-lang="python">def score(text_len, link_len):
+    return max(0, text_len - link_len)
+</code></pre>
+
+      <details open="open">
+        <summary>Why Density Scoring</summary>
+        <p>Zero external dependencies keeps startup instant inside Emacs.</p>
+      </details>
+
+      <table>
+        <tr><th>Heuristic</th><th>Signal</th></tr>
+        <tr><td>Paragraphs</td><td>High non-link text</td></tr>
+      </table>
+    </div>
+
+    <div class="promo">Sponsored banner text</div>
+  </div>
+
+  <div class="comments">Reader comment block to drop</div>
+</body>
+</html>

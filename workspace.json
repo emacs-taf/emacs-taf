@@ -107,6 +107,11 @@
       "branch": "main",
       "role": "application"
     },
+    "etaf-web": {
+      "url": "https://github.com/emacs-taf/etaf-web.git",
+      "branch": "main",
+      "role": "application"
+    },
     "etaf-weread": {
       "url": "https://github.com/emacs-taf/etaf-weread.git",
       "branch": "main",
