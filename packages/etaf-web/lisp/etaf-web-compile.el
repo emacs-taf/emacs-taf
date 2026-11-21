@@ -21,7 +21,7 @@
 
 (define-error 'etaf-web-error "ETAF Web error")
 
-(defconst etaf-web--compiler-version "2"
+(defconst etaf-web--compiler-version "4"
   "Version tag folded into page cache keys.")
 
 (defconst etaf-web--drop-tags
@@ -39,7 +39,8 @@
 (defconst etaf-web--boilerplate-token-regexp
   (concat
    "\\`\\(?:"
-   "nav\\|navbar\\|navigation\\|menu\\|menubar\\|breadcrumb\\|breadcrumbs\\|"
+   "nav\\|navbar\\|navigation\\|nav-panel\\|navpanel\\|node-nav\\|"
+   "menu\\|menubar\\|breadcrumb\\|breadcrumbs\\|crumb\\|crumbs\\|"
    "footer\\|site-footer\\|page-footer\\|site-header\\|topbar\\|top-bar\\|"
    "sidebar\\|side-bar\\|aside\\|widget\\|widgets\\|"
    "comment\\|comments\\|comment-list\\|disqus\\|respond\\|"
@@ -210,6 +211,21 @@ while keeping quoted strings intact."
          (t (push pair result)))))
     (nreverse result)))
 
+(defun etaf-web--permalink-anchor-p (node)
+  "Return non-nil when DOM NODE is a heading/section permalink marker."
+  (when (and (etaf-web--node-p node) (eq (dom-tag node) 'a))
+    (let* ((href (string-trim (or (etaf-web--attr node 'href) "")))
+           (text (etaf-web--clean-text node))
+           (classes (etaf-web--class-list node)))
+      (and (string-prefix-p "#" href)
+           (or (string-match-p "\\`[¶§#🔗]+\\'" text)
+               (and (<= (length text) 4)
+                    (cl-some (lambda (c)
+                               (member c '("copiable-link" "headerlink"
+                                           "header-anchor" "anchor-link"
+                                           "permalink" "hash-link")))
+                             classes)))))))
+
 (defun etaf-web--sanitize-dom (node)
   "Return a sanitized copy of DOM NODE, or nil when NODE must be dropped."
   (cond
@@ -223,6 +239,7 @@ while keeping quoted strings intact."
        ((and (eq tag 'a)
              (etaf-web--dangerous-url-p (etaf-web--attr node 'href)))
         nil)
+       ((etaf-web--permalink-anchor-p node) nil)
        (t
         (let ((attrs (etaf-web--sanitize-attrs (dom-attributes node)))
               (children (delq nil (mapcar #'etaf-web--sanitize-dom
@@ -266,6 +283,32 @@ while keeping quoted strings intact."
                        (not (string-empty-p (string-trim val))))
              return (string-trim (etaf-web--collapse-ws val)))))
 
+(defun etaf-web--normalize-date (raw)
+  "Normalize ISO 8601 or numeric date RAW to `YYYY-MM-DD' when unambiguous.
+Recognizes `YYYY-MM-DD[T ...]', `YYYY/M/D[ ...]', `YYYY.M.D[ ...]' and
+year-month `YYYY-MM' / `YYYY/M' (normalized to `YYYY-MM-01').  Unrecognized
+strings stay untouched."
+  (when (stringp raw)
+    (let ((s (string-trim (etaf-web--collapse-ws raw))))
+      (cond
+       ((string-empty-p s) nil)
+       ((string-match
+         "\\`\\([0-9]\\{4\\}\\)[-/.]\\([0-9]\\{1,2\\}\\)[-/.]\\([0-9]\\{1,2\\}\\)\\(?:[T ].*\\)?\\'"
+         s)
+        (let ((y (string-to-number (match-string 1 s)))
+              (m (string-to-number (match-string 2 s)))
+              (d (string-to-number (match-string 3 s))))
+          (if (and (<= 1 m 12) (<= 1 d 31))
+              (format "%04d-%02d-%02d" y m d)
+            s)))
+       ((string-match "\\`\\([0-9]\\{4\\}\\)[-/.]\\([0-9]\\{1,2\\}\\)\\'" s)
+        (let ((y (string-to-number (match-string 1 s)))
+              (m (string-to-number (match-string 2 s))))
+          (if (<= 1 m 12)
+              (format "%04d-%02d-01" y m)
+            s)))
+       (t s)))))
+
 (defun etaf-web--extract-meta (dom main-node base-url)
   "Extract metadata alist from DOM and MAIN-NODE using BASE-URL."
   (let* ((og-title (or (etaf-web--meta-content dom 'property '("og:title"))
@@ -303,15 +346,16 @@ while keeping quoted strings intact."
                        (and s (not (string-empty-p s)) s))))
          (time-node (etaf-web--find-first
                      main-node (lambda (n) (eq (dom-tag n) 'time))))
-         (date (or (etaf-web--meta-content
-                    dom 'property '("article:published_time" "og:updated_time"))
-                   (etaf-web--meta-content
-                    dom 'name '("date" "pubdate" "publish-date" "dc.date"))
-                   (when time-node
-                     (let ((dt (or (etaf-web--attr time-node 'datetime)
-                                   (etaf-web--clean-text time-node))))
-                       (and dt (not (string-empty-p (string-trim dt)))
-                            (string-trim (etaf-web--collapse-ws dt)))))))
+         (date (etaf-web--normalize-date
+                (or (etaf-web--meta-content
+                     dom 'property '("article:published_time" "og:updated_time"))
+                    (etaf-web--meta-content
+                     dom 'name '("date" "pubdate" "publish-date" "dc.date"))
+                    (when time-node
+                      (let ((dt (or (etaf-web--attr time-node 'datetime)
+                                    (etaf-web--clean-text time-node))))
+                        (and dt (not (string-empty-p (string-trim dt)))
+                             (string-trim (etaf-web--collapse-ws dt))))))))
          (site (or (etaf-web--meta-content dom 'property '("og:site_name"))
                    (etaf-web--meta-content dom 'name '("application-name" "site_name"))))
          (pairs nil))
@@ -433,12 +477,234 @@ Recognizes `role=\"note|alert\"' and common docs callout/admonition classes."
                            (etaf-web--contains-landmark-p child))))
                 (dom-children node))))
 
+(defun etaf-web--has-block-child-p (node)
+  "Return non-nil when DOM NODE has any block-level descendant."
+  (and (etaf-web--node-p node)
+       (cl-some (lambda (child)
+                  (and (etaf-web--node-p child)
+                       (or (memq (dom-tag child) etaf-web--block-tags)
+                           (etaf-web--has-block-child-p child))))
+                (dom-children node))))
+
+(defun etaf-web--non-link-text (node)
+  "Return plain text inside DOM NODE excluding text inside `<a>' elements."
+  (cond
+   ((stringp node) node)
+   ((not (etaf-web--node-p node)) "")
+   ((eq (dom-tag node) 'a) "")
+   (t (mapconcat #'etaf-web--non-link-text (dom-children node) ""))))
+
+(defun etaf-web--bracket-nav-line-p (node)
+  "Return non-nil when NODE is a line of bracketed nav links like `[Contents]'."
+  (when (and (etaf-web--node-p node)
+             (memq (dom-tag node) '(p div span))
+             (not (etaf-web--has-block-child-p node)))
+    (let* ((text (etaf-web--clean-text node))
+           (links (etaf-web--find-all node (lambda (n) (eq (dom-tag n) 'a))))
+           (non-link (string-trim (etaf-web--collapse-ws
+                                   (etaf-web--non-link-text node)))))
+      (and (>= (length links) 1)
+           (<= (length text) 160)
+           (string-match-p
+            "\\`\\(?:\\[[[:alnum:] _-]+\\][ \t|·/,-]*\\)+\\'"
+            text)
+           (string-match-p "\\`[][ \t|·/,-]*\\'" non-link)))))
+
+(defun etaf-web--makeinfo-nav-block-p (node)
+  "Return non-nil when DOM NODE is a makeinfo/texinfo navigation paragraph."
+  (when (and (etaf-web--node-p node)
+             (memq (dom-tag node) '(p div span))
+             (not (etaf-web--has-block-child-p node)))
+    (let ((text (etaf-web--clean-text node))
+          (case-fold-search nil))
+      (and (<= (length text) 400)
+           (or (and (string-match-p "\\`\\(?:Next\\|Previous\\|Up\\):[ \t]" text)
+                    (etaf-web--find-first node (lambda (n) (eq (dom-tag n) 'a)))
+                    (or (string-match-p "\\b\\(?:Next\\|Previous\\|Up\\):[ \t]"
+                                        text 1)
+                        (string-match-p "\\[\\(?:Contents\\|Index\\|Top\\)\\]"
+                                        text)
+                        (etaf-web--find-first
+                         node
+                         (lambda (n)
+                           (and (eq (dom-tag n) 'a)
+                                (member (downcase (or (etaf-web--attr n 'rel) ""))
+                                        '("next" "prev" "previous" "up"
+                                          "contents" "index")))))))
+               (etaf-web--bracket-nav-line-p node))))))
+
+(defun etaf-web--breadcrumb-block-p (node)
+  "Return non-nil when DOM NODE is a short breadcrumb trail of links."
+  (when (and (etaf-web--node-p node)
+             (memq (dom-tag node) '(p div))
+             (not (etaf-web--has-block-child-p node)))
+    (let* ((links (etaf-web--find-all node (lambda (n) (eq (dom-tag n) 'a))))
+           (text (etaf-web--clean-text node))
+           (non-link (string-trim (etaf-web--collapse-ws
+                                   (etaf-web--non-link-text node)))))
+      (and (> (length links) 2)
+           (<= (length text) 160)
+           (not (string-empty-p non-link))
+           (or (and (string-match-p "\\`[ \t>/›»·|]+\\'" non-link)
+                    (string-match-p "[>/›»]" non-link))
+               (and (string-match "\\`\\([ \t>/›»·|]+\\)\\([^>/›»]+\\)\\'"
+                                  non-link)
+                    (>= (length (replace-regexp-in-string
+                                 "[^>/›»]" "" (match-string 1 non-link)))
+                        2)
+                    (<= (length (string-trim (match-string 2 non-link))) 40)))))))
+
+(defun etaf-web--decorative-anchor-block-p (node)
+  "Return non-nil when NODE is a short block of only in-page `#anchor' link(s)."
+  (when (and (etaf-web--node-p node)
+             (memq (dom-tag node) '(p div))
+             (not (etaf-web--has-block-child-p node)))
+    (let* ((links (etaf-web--find-all node (lambda (n) (eq (dom-tag n) 'a))))
+           (text (etaf-web--clean-text node))
+           (non-link (string-trim (etaf-web--collapse-ws
+                                   (etaf-web--non-link-text node)))))
+      (and links
+           (not (string-empty-p text))
+           (<= (length text) 10)
+           (cl-every (lambda (a)
+                       (let ((href (string-trim (or (etaf-web--attr a 'href) ""))))
+                         (string-prefix-p "#" href)))
+                     links)
+           (not (string-match-p "[[:alnum:]\u4e00-\u9fff]" non-link))))))
+
+(defconst etaf-web--noise-container-substr-regexp
+  (concat
+   "breadcrumb\\|crumbs?\\|share\\|social\\|related\\|recommend\\|"
+   "statement\\|disclaimer\\|app-download\\|download-app\\|down[-_]app\\|"
+   "comment\\|ad-tips\\|ad-box\\|ad-wrap")
+  "Class or id substrings identifying non-article chrome containers.")
+
+(defconst etaf-web--noise-tag-token-regexp
+  "\\(?:\\`\\|[-_]\\)\\(?:tags?\\|keywords?\\)\\(?:\\'\\|[-_]\\)"
+  "Class or id word-bounded pattern for tag/keyword containers.")
+
+(defconst etaf-web--noise-section-heading-regexp
+  (concat
+   "\\`\\(?:"
+   "相关文章\\|相关阅读\\|相关推荐\\|延伸阅读\\|推荐阅读\\|精彩推荐\\|"
+   "猜你喜欢\\|你可能还喜欢\\|热门推荐\\|热点推荐\\|"
+   "关键词\\|标签\\|文章标签\\|"
+   "分享\\|分享到\\|分享本文\\|"
+   "声明\\|广告声明\\|免责声明\\|版权声明\\|"
+   "related articles?\\|related posts?\\|related reading\\|"
+   "recommended\\|recommended reading\\|you may also like\\|"
+   "tags?\\|keywords?\\|share\\|share this\\|disclaimer"
+   "\\)[：:]*\\'")
+  "Heading titles whose entire section is dropped as site noise.")
+
+(defun etaf-web--noise-heading-level (node)
+  "Return heading level (2..4) when NODE is a noise-section heading, else nil."
+  (when (and (etaf-web--node-p node) (memq (dom-tag node) '(h2 h3 h4)))
+    (let ((text (downcase (etaf-web--clean-text node))))
+      (when (string-match-p etaf-web--noise-section-heading-regexp text)
+        (string-to-number (substring (symbol-name (dom-tag node)) 1))))))
+
+(defun etaf-web--heading-level (node)
+  "Return heading level (1..6) for DOM NODE, or nil."
+  (when (and (etaf-web--node-p node)
+             (memq (dom-tag node) '(h1 h2 h3 h4 h5 h6)))
+    (string-to-number (substring (symbol-name (dom-tag node)) 1))))
+
+(defun etaf-web--noise-section-container-p (node)
+  "Return non-nil when section/div NODE opens directly with a noise heading."
+  (when (and (etaf-web--node-p node)
+             (memq (dom-tag node) '(section div)))
+    (let ((first (etaf-web--first-content-block node)))
+      (and first (etaf-web--noise-heading-level first) t))))
+
+(defun etaf-web--button-only-block-p (node)
+  "Return non-nil when block NODE contains only `<button>' UI controls."
+  (when (and (etaf-web--node-p node)
+             (memq (dom-tag node) '(div p)))
+    (let ((significant (cl-remove-if
+                        (lambda (c) (and (stringp c) (string-blank-p c)))
+                        (dom-children node))))
+      (and significant
+           (cl-every (lambda (c)
+                       (and (etaf-web--node-p c) (eq (dom-tag c) 'button)))
+                     significant)))))
+
+(defun etaf-web--action-noise-block-p (node)
+  "Return non-nil when leaf block NODE is a disclaimer or pure action prompt."
+  (when (and (etaf-web--node-p node)
+             (memq (dom-tag node) '(p div a))
+             (not (etaf-web--has-block-child-p node)))
+    (let ((text (etaf-web--clean-text node))
+          (case-fold-search t))
+      (cond
+       ((string-empty-p text) nil)
+       ;; Legal / ad disclaimer boilerplate paragraph.
+       ((and (<= (length text) 220)
+             (string-match-p "\\`\\(?:广告声明\\|免责声明\\|版权声明\\)[：:]" text))
+        t)
+       ;; Short keyword/tag metadata strip (e.g. `关键词：Steam').
+       ((and (<= (length text) 80)
+             (string-match-p "\\`\\(?:关键词\\|标签\\|tags?\\|keywords?\\)[：:]" text)
+             (or (etaf-web--find-first node (lambda (n) (eq (dom-tag n) 'a)))
+                 (and (<= (length text) 40)
+                      (not (string-match-p "。" text)))))
+        t)
+       ;; Short pure-action lines: download app, check-in, subscribe, complain, fix.
+       ((and (<= (length text) 40)
+             (not (string-match-p "。." text))
+             (or (string-match-p "下载.*\\(?:app\\|客户端\\|应用\\)" text)
+                 (string-match-p "签到.*\\(?:金币\\|积分\\|豪礼\\|领\\|赚\\)" text)
+                 (and (<= (length text) 24)
+                      (string-match-p
+                       "\\`\\(?:点击\\|立即\\|免费\\|我要\\)?\\(?:投诉\\|举报\\|纠错\\|订阅\\|签到\\|分享到?\\)"
+                       text))))
+        t)
+       (t nil)))))
+
+(defun etaf-web--link-heavy-block-p (node)
+  "Return non-nil when paragraph/list NODE has >= 3 links and minimal prose."
+  (when (and (etaf-web--node-p node)
+             (or (memq (dom-tag node) '(ul ol))
+                 (and (memq (dom-tag node) '(p div))
+                      (not (etaf-web--has-block-child-p node))))
+             (not (etaf-web--find-first
+                   node (lambda (n) (memq (dom-tag n) '(pre table code))))))
+    (let* ((links (etaf-web--find-all node (lambda (n) (eq (dom-tag n) 'a))))
+           (text (etaf-web--clean-text node))
+           (total-no-ws (length (replace-regexp-in-string "[ \t\n\r]+" "" text)))
+           (link-len (etaf-web--link-text-length node))
+           (non-link-raw (etaf-web--non-link-text node))
+           (non-link-words (replace-regexp-in-string
+                            "[^[:alnum:]\u4e00-\u9fff]+" "" non-link-raw)))
+      (and (>= (length links) 3)
+           (> total-no-ws 0)
+           (>= (/ (float link-len) total-no-ws) 0.85)
+           (<= (length non-link-words) 15)))))
+
+(defun etaf-web--nav-chrome-p (node)
+  "Return non-nil when DOM NODE is nav chrome whose adjacent `<hr>' is noise."
+  (when (etaf-web--node-p node)
+    (let ((tag (dom-tag node))
+          (role (downcase (string-trim (or (etaf-web--attr node 'role) ""))))
+          (tokens (etaf-web--class-tokens node)))
+      (or (eq tag 'nav)
+          (equal role "navigation")
+          (cl-some (lambda (tok)
+                     (string-match-p
+                      "\\`\\(?:nav\\|navbar\\|navigation\\|nav-panel\\|navpanel\\|node-nav\\)\\'"
+                      tok))
+                   tokens)
+          (etaf-web--makeinfo-nav-block-p node)
+          (etaf-web--breadcrumb-block-p node)))))
+
 (defun etaf-web--boilerplate-node-p (node inside-primary)
   "Return non-nil when DOM NODE should be pruned as page chrome.
 INSIDE-PRIMARY is non-nil once traversal is inside the chosen article/main."
   (when (etaf-web--node-p node)
     (let* ((tag (dom-tag node))
+           (block-like (memq tag etaf-web--block-tags))
            (role (downcase (string-trim (or (etaf-web--attr node 'role) ""))))
+           (aria-label (downcase (string-trim (or (etaf-web--attr node 'aria-label) ""))))
            (tokens (etaf-web--class-tokens node))
            (hidden (or (assq 'hidden (dom-attributes node))
                        (equal (downcase (or (etaf-web--attr node 'aria-hidden) ""))
@@ -452,14 +718,33 @@ INSIDE-PRIMARY is non-nil once traversal is inside the chosen article/main."
        ((memq tag etaf-web--boilerplate-tags) t)
        ((and (eq tag 'header) (not inside-primary)) t)
        ((member role etaf-web--boilerplate-roles) t)
+       ((string-match-p "breadcrumb\\|crumbs?" aria-label) t)
        ((cl-some (lambda (tok)
-                   (string-match-p etaf-web--boilerplate-token-regexp tok))
+                   (or (string-match-p etaf-web--boilerplate-token-regexp tok)
+                       (string-match-p etaf-web--noise-container-substr-regexp tok)
+                       (and block-like
+                            (string-match-p etaf-web--noise-tag-token-regexp tok))))
                  tokens)
         t)
+       ((etaf-web--button-only-block-p node) t)
+       ((etaf-web--noise-section-container-p node) t)
+       ((etaf-web--makeinfo-nav-block-p node) t)
+       ((etaf-web--breadcrumb-block-p node) t)
+       ((etaf-web--decorative-anchor-block-p node) t)
+       ((etaf-web--action-noise-block-p node) t)
+       ((etaf-web--link-heavy-block-p node) t)
        (t nil)))))
 
+(defun etaf-web--next-nonblank-node (nodes)
+  "Return first non-blank DOM node in NODES, or nil."
+  (cl-find-if (lambda (n)
+                (not (and (stringp n) (string-blank-p n))))
+              nodes))
+
 (defun etaf-web--prune-boilerplate (node &optional inside-primary)
-  "Return a copy of NODE with navigation, sidebars, footers and ads removed."
+  "Return a copy of NODE with navigation, sidebars, footers and ads removed.
+Drops `<hr>' immediately adjacent to pruned nav chrome and drops noise-titled
+sections (`h2'–`h4') up to the next peer or higher heading."
   (cond
    ((stringp node) node)
    ((not (etaf-web--node-p node)) nil)
@@ -467,11 +752,40 @@ INSIDE-PRIMARY is non-nil once traversal is inside the chosen article/main."
    (t
     (let* ((tag (dom-tag node))
            (primary (or inside-primary (memq tag '(article main))))
-           (children (delq nil
-                           (mapcar (lambda (c)
-                                     (etaf-web--prune-boilerplate c primary))
-                                   (dom-children node)))))
-      (cons tag (cons (dom-attributes node) children))))))
+           (kept nil)
+           (prev-was-nav nil)
+           (skip-section-level nil)
+           (rest (dom-children node)))
+      (while rest
+        (let ((child (pop rest)))
+          (cond
+           (skip-section-level
+            (let ((lvl (etaf-web--heading-level child)))
+              (if (and lvl (<= lvl skip-section-level))
+                  (progn
+                    (setq skip-section-level nil)
+                    (push child rest))
+                nil)))
+           ((and (stringp child) (string-blank-p child))
+            (push child kept))
+           ((etaf-web--noise-heading-level child)
+            (setq skip-section-level (etaf-web--noise-heading-level child)
+                  prev-was-nav nil))
+           ((etaf-web--boilerplate-node-p child primary)
+            (setq prev-was-nav (etaf-web--nav-chrome-p child)))
+           ((and (etaf-web--node-p child)
+                 (eq (dom-tag child) 'hr)
+                 (or prev-was-nav
+                     (let ((next (etaf-web--next-nonblank-node rest)))
+                       (and next
+                            (etaf-web--boilerplate-node-p next primary)
+                            (etaf-web--nav-chrome-p next)))))
+            (setq prev-was-nav nil))
+           (t
+            (setq prev-was-nav nil)
+            (when-let* ((pruned (etaf-web--prune-boilerplate child primary)))
+              (push pruned kept))))))
+      (cons tag (cons (dom-attributes node) (nreverse kept)))))))
 
 (defun etaf-web--link-text-length (node)
   "Return total character count of text inside `<a>' elements under NODE."
@@ -621,11 +935,45 @@ INSIDE-PRIMARY is non-nil once traversal is inside the chosen article/main."
   "Compilation state threaded through DOM emission."
   base-url
   image-rewriter
+  doc-title        ; front-matter title for alt deduplication
   skip-heading     ; DOM node of leading h1 duplicating front matter title
   heading-ids      ; hash-table: html-id -> etaf-md heading slug
   fn-defs          ; hash-table: id -> DOM node
   fn-order         ; list of referenced ids (reversed while collecting)
   fn-numbers)      ; hash-table: id -> 1-based integer
+
+(defun etaf-web--title-candidates (title)
+  "Return TITLE and progressively site-suffix-stripped candidate prefixes."
+  (when (and (stringp title) (not (string-blank-p title)))
+    (let* ((cur (string-trim (etaf-web--collapse-ws title)))
+           (cands (list cur))
+           (keep-going t))
+      (while keep-going
+        (let ((next
+               (cond
+                ((string-match "\\`\\(.+?\\)[ \t]+[-—–|·][ \t]+[^-—–|·]+\\'" cur)
+                 (string-trim (match-string 1 cur)))
+                ((string-match "\\`\\(.+?\\)_[^_]+\\'" cur)
+                 (string-trim (match-string 1 cur)))
+                (t nil))))
+          (if (and next (not (string-empty-p next)) (not (equal next cur)))
+              (progn
+                (push next cands)
+                (setq cur next))
+            (setq keep-going nil))))
+      (nreverse cands))))
+
+(defun etaf-web--heading-matches-title-p (heading title)
+  "Return non-nil when HEADING duplicates TITLE (exact, suffix-stripped or prefix)."
+  (when (and (stringp heading) (stringp title))
+    (let* ((h (string-trim (etaf-web--collapse-ws heading)))
+           (cands (etaf-web--title-candidates title)))
+      (and (not (string-empty-p h))
+           cands
+           (or (member h cands)
+               (and (>= (length h) 2)
+                    (cl-some (lambda (cand) (string-prefix-p h cand))
+                             cands)))))))
 
 (defun etaf-web--first-content-block (node)
   "Return the first substantive content block DOM node inside NODE, or nil."
@@ -655,11 +1003,11 @@ INSIDE-PRIMARY is non-nil once traversal is inside the chosen article/main."
 (defun etaf-web--leading-duplicate-h1 (main-node title)
   "Return MAIN-NODE's first content block if it is an `<h1>' matching TITLE."
   (when (and (stringp title) (not (string-empty-p title)))
-    (let ((norm-title (string-trim (etaf-web--collapse-ws title)))
-          (first (etaf-web--first-content-block main-node)))
+    (let ((first (etaf-web--first-content-block main-node)))
       (when (and (etaf-web--node-p first)
                  (eq (dom-tag first) 'h1)
-                 (equal (etaf-web--clean-text first) norm-title))
+                 (etaf-web--heading-matches-title-p
+                  (etaf-web--clean-text first) title))
         first))))
 
 (defun etaf-web--heading-slug (text)
@@ -750,12 +1098,94 @@ SKIP-HEADING, when non-nil, is omitted because it will not be emitted."
       (format "<%s>" (replace-regexp-in-string "[<>]" "" url))
     url))
 
-(defun etaf-web--parse-srcset-first (srcset)
-  "Return the first URL candidate from an HTML SRCSET attribute, or nil."
+(defconst etaf-web--lazy-img-attrs
+  '(data-src data-original data-lazy-src data-actualsrc data-original-src data-url)
+  "Ordered lazy-load image attributes checked before `src'.")
+
+(defun etaf-web--valid-img-url (raw)
+  "Return trimmed RAW when it is a non-empty, non-`data:', safe image URL."
+  (when (stringp raw)
+    (let ((trimmed (string-trim raw)))
+      (when (and (not (string-empty-p trimmed))
+                 (not (string-prefix-p "data:" (downcase trimmed)))
+                 (not (etaf-web--dangerous-url-p trimmed)))
+        trimmed))))
+
+(defun etaf-web--parse-srcset-best (srcset)
+  "Return the highest-width/density URL candidate from HTML SRCSET, or nil.
+Handles width descriptors such as `url 1200w' and density descriptors `2x'
+while tolerating commas inside URL query parameters."
   (when (and (stringp srcset) (not (string-blank-p srcset)))
-    (let* ((first (string-trim (car (split-string srcset "," t))))
-           (url (car (split-string first "[ \t\n\r]+" t))))
-      (and url (not (string-empty-p url)) url))))
+    (let ((pos 0)
+          (len (length srcset))
+          (best-url nil)
+          (best-kind nil) ; `w' > `x' > nil
+          (best-val -1.0))
+      (while (< pos len)
+        ;; Skip leading whitespace and commas.
+        (while (and (< pos len) (memq (aref srcset pos) '(?\s ?\t ?\n ?\r ?,)))
+          (setq pos (1+ pos)))
+        (when (< pos len)
+          ;; Read URL token up to whitespace.
+          (let ((start pos))
+            (while (and (< pos len)
+                        (not (memq (aref srcset pos) '(?\s ?\t ?\n ?\r))))
+              (setq pos (1+ pos)))
+            (let* ((token (substring srcset start pos))
+                   (ends-comma (string-suffix-p "," token))
+                   (url (if ends-comma (substring token 0 -1) token))
+                   (kind nil)
+                   (val 0.0))
+              (unless ends-comma
+                ;; Skip whitespace and inspect optional descriptor up to comma.
+                (while (and (< pos len) (memq (aref srcset pos) '(?\s ?\t ?\n ?\r)))
+                  (setq pos (1+ pos)))
+                (let ((dstart pos))
+                  (while (and (< pos len) (not (eq (aref srcset pos) ?,)))
+                    (setq pos (1+ pos)))
+                  (let ((desc (string-trim (substring srcset dstart pos))))
+                    (cond
+                     ((string-match "\\`\\([0-9]+\\(?:\\.[0-9]+\\)?\\)[wW]\\'" desc)
+                      (setq kind 'w val (string-to-number (match-string 1 desc))))
+                     ((string-match "\\`\\([0-9]+\\(?:\\.[0-9]+\\)?\\)[xX]\\'" desc)
+                      (setq kind 'x val (string-to-number (match-string 1 desc)))))))
+                (when (and (< pos len) (eq (aref srcset pos) ?,))
+                  (setq pos (1+ pos))))
+              (when (etaf-web--valid-img-url url)
+                (let ((better
+                       (cond
+                        ((null best-url) t)
+                        ((and (eq kind 'w) (not (eq best-kind 'w))) t)
+                        ((and (eq kind best-kind) (> val best-val)) t)
+                        ((and (eq kind 'x) (null best-kind) (> val 0.0)) t)
+                        (t nil))))
+                  (when better
+                    (setq best-url url
+                          best-kind kind
+                          best-val val))))))))
+      best-url)))
+
+(defun etaf-web--img-raw-url (img-node)
+  "Extract best raw image URL from `<img>' IMG-NODE using lazy-load priority."
+  (when (etaf-web--node-p img-node)
+    (or (cl-loop for attr in etaf-web--lazy-img-attrs
+                 for val = (etaf-web--valid-img-url (etaf-web--attr img-node attr))
+                 when val return val)
+        (etaf-web--parse-srcset-best (etaf-web--attr img-node 'data-srcset))
+        (etaf-web--parse-srcset-best (etaf-web--attr img-node 'srcset))
+        (etaf-web--valid-img-url (etaf-web--attr img-node 'src)))))
+
+(defun etaf-web--clean-image-alt (alt ctx)
+  "Return ALT cleaned for Markdown, dropping overlong or title-duplicate text."
+  (let ((clean (string-trim (etaf-web--collapse-ws (or alt ""))))
+        (doc-title (and ctx (etaf-web--ctx-doc-title ctx))))
+    (cond
+     ((string-empty-p clean) "")
+     ((> (length clean) 60) "")
+     ((and doc-title
+           (member clean (etaf-web--title-candidates doc-title)))
+      "")
+     (t clean))))
 
 (defun etaf-web--decodable-source-p (source-node url)
   "Return non-nil when `<source>' node SOURCE-NODE with URL is decodable."
@@ -779,36 +1209,33 @@ SKIP-HEADING, when non-nil, is omitted because it will not be emitted."
               (or (cl-loop for child in (dom-children node)
                            when (and (etaf-web--node-p child)
                                      (eq (dom-tag child) 'source))
-                           for candidate = (etaf-web--parse-srcset-first
-                                            (or (etaf-web--attr child 'srcset)
-                                                (etaf-web--attr child 'src)))
+                           for candidate =
+                           (or (etaf-web--parse-srcset-best
+                                (etaf-web--attr child 'data-srcset))
+                               (etaf-web--parse-srcset-best
+                                (etaf-web--attr child 'srcset))
+                               (cl-loop for attr in etaf-web--lazy-img-attrs
+                                        for v = (etaf-web--valid-img-url
+                                                 (etaf-web--attr child attr))
+                                        when v return v)
+                               (etaf-web--valid-img-url
+                                (etaf-web--attr child 'src)))
                            when (and candidate
-                                     (not (etaf-web--dangerous-url-p candidate))
                                      (etaf-web--decodable-source-p child candidate))
                            return candidate)
-                  (and img (or (etaf-web--attr img 'src)
-                               (etaf-web--attr img 'data-src)
-                               (etaf-web--attr img 'data-original)
-                               (etaf-web--parse-srcset-first
-                                (etaf-web--attr img 'srcset)))))
-            (or (let ((s (etaf-web--attr node 'src)))
-                  (and s (not (string-prefix-p "data:" (downcase (string-trim s)))) s))
-                (etaf-web--attr node 'data-src)
-                (etaf-web--attr node 'data-original)
-                (etaf-web--parse-srcset-first (etaf-web--attr node 'srcset))
-                (etaf-web--attr node 'src))))
+                  (etaf-web--img-raw-url img))
+            (etaf-web--img-raw-url node)))
          (resolved (and raw-url
-                        (not (string-prefix-p "data:" (downcase (string-trim raw-url))))
                         (etaf-web--resolve-url raw-url (etaf-web--ctx-base-url ctx))))
          (final-url (if (and resolved (etaf-web--ctx-image-rewriter ctx))
                         (or (funcall (etaf-web--ctx-image-rewriter ctx) resolved)
                             resolved)
                       resolved))
-         (alt (string-trim
-               (etaf-web--collapse-ws
-                (or (and img (etaf-web--attr img 'alt))
-                    (and img (etaf-web--attr img 'title))
-                    "")))))
+         (alt (etaf-web--clean-image-alt
+               (or (and img (etaf-web--attr img 'alt))
+                   (and img (etaf-web--attr img 'title))
+                   "")
+               ctx)))
     (when final-url
       (cons final-url alt))))
 
@@ -1455,6 +1882,7 @@ called with each resolved image URL and returns a replacement URL or path."
          (ctx (etaf-web--ctx-create
                :base-url base-url
                :image-rewriter image-rewriter
+               :doc-title title
                :skip-heading skip-heading
                :heading-ids heading-ids
                :fn-defs fn-defs

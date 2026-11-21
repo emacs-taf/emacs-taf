@@ -60,6 +60,46 @@
       "name": "etaf-web-tests-figure-figcaption-replaces-alt-without-extra-paragraph",
       "file": "tests/etaf-web-tests.el",
       "purpose": "An image `<figure>' with `<figcaption>' emits a single image whose alt is the caption's plain text with no trailing italic caption paragraph, while figures without `<figcaption>' retain their original alt."
+    },
+    {
+      "name": "etaf-web-tests-fetch-timeout-and-distinct-errors",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "`etaf-web-fetch-timeout' is forwarded to `url-retrieve-synchronously', and HTTP status errors (e.g. 403), timeouts and connection failures each report distinct `etaf-web-error' messages."
+    },
+    {
+      "name": "etaf-web-tests-strips-makeinfo-nav-and-permalinks",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "Makeinfo Next/Previous/Up navigation blocks, bracket-only navigation link lines, decorative navigation rules and heading permalink `[¶]` markers are stripped while real prose rules and headings stay."
+    },
+    {
+      "name": "etaf-web-tests-strips-breadcrumbs-and-anchor-noise",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "Breadcrumbs (by nav/crumb class or multi-link separator trail) and short `#anchor'-only decorative paragraphs are removed while real prose and in-sentence anchor links remain."
+    },
+    {
+      "name": "etaf-web-tests-lazy-images-and-srcset-max-width",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "Lazy-load image attributes (`data-src', `data-original', etc.) override placeholder `src', and `srcset' / `<picture><source srcset>' select the widest decodable candidate."
+    },
+    {
+      "name": "etaf-web-tests-prunes-site-tail-noise-without-false-positives",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "Disclaimers, button-only complaint bars, share/app-download blocks, link-heavy noise blocks and related/recommended sections are dropped while normal prose mentioning keywords or sharing stays intact."
+    },
+    {
+      "name": "etaf-web-tests-deduplicates-title-with-site-suffix-and-prefix",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "Leading `<h1>' deduplication strips common site suffixes (` - X | Y', `_X', etc.) and matches prefixes while leaving mid-body `<h1>' headings untouched."
+    },
+    {
+      "name": "etaf-web-tests-normalizes-front-matter-dates",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "ISO 8601 timestamps, slash-delimited dates and year-month values normalize to `YYYY-MM-DD', while unrecognized date strings stay untouched."
+    },
+    {
+      "name": "etaf-web-tests-cleans-overlong-and-title-duplicate-image-alt",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "Image alt text exceeding 60 characters or matching the document title (including stripped suffix) becomes empty, while short distinct alts and `<figcaption>` text are kept."
     }
   ]
 }

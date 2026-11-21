@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lazy Images and Srcset</title>
+</head>
+<body>
+<article>
+  <p>Lazy image via data-src:</p>
+  <p><img src="//img.example.com/images/v2/t.png" data-src="https://img.example.com/uploads/real-photo.png" alt="Real photo"></p>
+  <p>Lazy image via data-original:</p>
+  <p><img src="//img.example.com/images/v2/t.png" data-original="https://img.example.com/uploads/orig.png?x-bce-process=image/format,f_auto" alt="Original photo"></p>
+  <p>Responsive srcset picks widest candidate:</p>
+  <p><img src="fallback-300.jpg" srcset="small-400.jpg 400w, huge-1600.jpg?f=auto,q=80 1600w, mid-800.jpg 800w" alt="Responsive hero"></p>
+  <figure>
+    <picture>
+      <source srcset="hero-2000.avif 2000w" type="image/avif">
+      <source srcset="hero-600.png 600w, hero-1400.png 1400w" type="image/png">
+      <img src="hero-fallback.png" alt="Ignored alt">
+    </picture>
+    <figcaption>Picture widest decodable source</figcaption>
+  </figure>
+</article>
+</body>
+</html>

@@ -86,7 +86,7 @@
     (should (string-match-p
              "\\[stay\\](#raw-anchor)"
              (etaf-web-to-markdown
-              "<p><a href=\"#raw-anchor\">stay</a></p>"
+              "<p>Jump to <a href=\"#raw-anchor\">stay</a> section.</p>"
               :base-url "https://example.com/posts/1/")))
     ;; Picture picks first decodable source (png over avif); figcaption becomes alt.
     (should (string-match-p
@@ -430,6 +430,197 @@
     ;; Figure without figcaption keeps original alt.
     (should (string-match-p
              "^!\\[无图注保留原值\\](https://example\\.com/demo/solo\\.png)$"
+             md))))
+
+(ert-deftest etaf-web-tests-fetch-timeout-and-distinct-errors ()
+  "`etaf-web-fetch-timeout' is passed to fetcher; HTTP, timeout and connection errors differ."
+  (let* ((cache-root (make-temp-file "etaf-web-timeout-cache-" t))
+         (etaf-web-cache-directory cache-root)
+         (etaf-web-download-images nil)
+         (etaf-web-fetch-timeout 42.5)
+         (sample-html (etaf-web-tests--read-file
+                       (etaf-web-tests--fixture "mdn-fetch-snippet.html")))
+         (seen-timeout nil)
+         (buf nil))
+    (unwind-protect
+        (progn
+          ;; 1. Passes `etaf-web-fetch-timeout' through to `url-retrieve-synchronously'.
+          (cl-letf (((symbol-function 'url-retrieve-synchronously)
+                     (lambda (_url _silent _inhibit timeout)
+                       (setq seen-timeout timeout)
+                       (etaf-web-tests--make-http-buffer
+                        "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8"
+                        sample-html))))
+            (setq buf (etaf-web-open "https://docs.example.test/api/fetch"))
+            (should (eql seen-timeout 42.5))
+            (when (buffer-live-p buf)
+              (with-current-buffer buf (etaf-md-close))
+              (setq buf nil)))
+          ;; 2. HTTP 403 reports status code distinctly.
+          (cl-letf (((symbol-function 'url-retrieve-synchronously)
+                     (lambda (&rest _)
+                       (etaf-web-tests--make-http-buffer
+                        "HTTP/1.1 403 Forbidden\r\nContent-Type: text/html"
+                        "<h1>Forbidden</h1>"))))
+            (let ((err (should-error
+                        (etaf-web-open "https://docs.example.test/forbidden")
+                        :type 'etaf-web-error)))
+              (should (string-match-p "403" (error-message-string err)))))
+          ;; 3. Timeout (nil return) reports timeout distinctly from connection failure.
+          (let ((timeout-msg nil)
+                (conn-msg nil))
+            (cl-letf (((symbol-function 'url-retrieve-synchronously)
+                       (lambda (&rest _) nil)))
+              (let ((err (should-error
+                          (etaf-web-open "https://docs.example.test/slow")
+                          :type 'etaf-web-error)))
+                (setq timeout-msg (error-message-string err))))
+            (cl-letf (((symbol-function 'url-retrieve-synchronously)
+                       (lambda (&rest _)
+                         (signal 'file-error '("Connection refused")))))
+              (let ((err (should-error
+                          (etaf-web-open "https://docs.example.test/down")
+                          :type 'etaf-web-error)))
+                (setq conn-msg (error-message-string err))))
+            (should (string-match-p "Timed out" timeout-msg))
+            (should (string-match-p "42\\.5" timeout-msg))
+            (should (string-match-p "Connection failed" conn-msg))
+            (should-not (equal timeout-msg conn-msg))))
+      (when (buffer-live-p buf)
+        (with-current-buffer buf (etaf-md-close)))
+      (delete-directory cache-root t))))
+
+(ert-deftest etaf-web-tests-strips-makeinfo-nav-and-permalinks ()
+  "Makeinfo Next/Previous/Up nav, bracket nav, adjacent hr and `[¶]` markers are stripped."
+  (let* ((html (etaf-web-tests--read-file
+                (etaf-web-tests--fixture "gnu-makeinfo.html")))
+         (md (etaf-web-to-markdown
+              html
+              :base-url "https://docs.example.test/manual/Keyboard-Macros.html")))
+    ;; Nav panels, bracket-only nav lines and trailing makeinfo nav are dropped.
+    (should-not (string-match-p "Next:" md))
+    (should-not (string-match-p "Previous:" md))
+    (should-not (string-match-p "File Handling" md))
+    (should-not (string-match-p "\\[Contents\\]" md))
+    (should-not (string-match-p "\\[Index\\]" md))
+    ;; Heading permalink markers `[¶]' are stripped; clean headings remain.
+    (should-not (string-match-p "¶" md))
+    (should (string-match-p "^## 19 Keyboard Macros$" md))
+    (should (string-match-p "^### Basic Use$" md))
+    ;; Leading decorative hr after nav is dropped; body starts with heading.
+    (should (string-match-p "---\n\n## 19 Keyboard Macros$" md))
+    ;; Mid-article real hr stays intact.
+    (should (string-match-p "conveniently later\\.\n\n---\n\nA keyboard macro" md))))
+
+(ert-deftest etaf-web-tests-strips-breadcrumbs-and-anchor-noise ()
+  "Breadcrumbs (class/nav/link-trail) and short `#anchor' paragraphs are dropped."
+  (let* ((html (etaf-web-tests--read-file
+                (etaf-web-tests--fixture "breadcrumb-news.html")))
+         (md (etaf-web-to-markdown
+              html :base-url "https://www.example.com/0/750/000.htm")))
+    ;; Both class-based and link-trail breadcrumbs are dropped.
+    (should-not (string-match-p "站点" md))
+    (should-not (string-match-p "游戏之家" md))
+    (should-not (string-match-p "游戏快报" md))
+    ;; Short `#anchor'-only decorative paragraphs are dropped.
+    (should-not (string-match-p "评论：" md))
+    (should-not (string-match-p "#post_comm" md))
+    (should-not (string-match-p "返回顶部" md))
+    ;; Real prose, inline `#anchor' links and headings stay intact.
+    (should (string-match-p "^title: Steam 2024 年远程同乐游戏节公布$" md))
+    (should (string-match-p "\\[活动时间\\](#活动时间)" md))
+    (should (string-match-p "^## 活动时间$" md))
+    (should (string-match-p "支持与好友远程联机" md))))
+
+(ert-deftest etaf-web-tests-lazy-images-and-srcset-max-width ()
+  "Lazy-load attributes override placeholder `src' and `srcset' picks max width."
+  (let* ((html (etaf-web-tests--read-file
+                (etaf-web-tests--fixture "lazy-images.html")))
+         (md (etaf-web-to-markdown html :base-url "https://img.example.com/post/")))
+    ;; `data-src' and `data-original' override `v2/t.png' placeholder.
+    (should-not (string-match-p "v2/t\\.png" md))
+    (should (string-match-p
+             "!\\[Real photo\\](https://img\\.example\\.com/uploads/real-photo\\.png)"
+             md))
+    (should (string-match-p
+             "!\\[Original photo\\](https://img\\.example\\.com/uploads/orig\\.png\\?x-bce-process=image/format,f_auto)"
+             md))
+    ;; `srcset' picks the widest (1600w) candidate even with comma in query.
+    (should (string-match-p
+             "!\\[Responsive hero\\](https://img\\.example\\.com/post/huge-1600\\.jpg\\?f=auto,q=80)"
+             md))
+    (should-not (string-match-p "small-400\\.jpg\\|fallback-300\\.jpg" md))
+    ;; `<picture><source srcset>' picks widest decodable png (1400w over 600w/avif).
+    (should (string-match-p
+             "!\\[Picture widest decodable source\\](https://img\\.example\\.com/post/hero-1400\\.png)"
+             md))))
+
+(ert-deftest etaf-web-tests-prunes-site-tail-noise-without-false-positives ()
+  "Site tail noise is dropped while normal prose mentioning keywords/sharing stays."
+  (let* ((html (etaf-web-tests--read-file
+                (etaf-web-tests--fixture "tail-noise.html")))
+         (md (etaf-web-to-markdown html :base-url "https://example.com/news/1")))
+    ;; Tail noise blocks all removed.
+    (dolist (noise '("广告声明" "投诉水文" "我要纠错" "分享到QQ" "分享到微信"
+                     "下载客户端APP" "下载本站APP" "链接一" "相关文章"
+                     "相关新闻一" "关键词：" "推荐阅读" "猜你喜欢"))
+      (should-not (string-match-p (regexp-quote noise) md)))
+    ;; Real prose mentioning 关键词 and 分享 stays intact.
+    (should (string-match-p "围绕关键词检索展开，并分享我们在实际项目" md))
+    (should (string-match-p "活动持续一周" md))))
+
+(ert-deftest etaf-web-tests-deduplicates-title-with-site-suffix-and-prefix ()
+  "Leading h1 deduplication handles site suffixes, prefixes and keeps mid-body h1."
+  (let* ((mdn-md (etaf-web-to-markdown
+                  (etaf-web-tests--read-file
+                   (etaf-web-tests--fixture "title-suffixes.html"))))
+         (prefix-md (etaf-web-to-markdown
+                     (concat "<html><head><title>Fetch API Complete Reference</title></head>"
+                             "<body><article><h1>Fetch API</h1><p>Body.</p></article></body></html>")))
+         (underscore-md (etaf-web-to-markdown
+                         (concat "<html><head><title>深度解析_技术专栏</title></head>"
+                                 "<body><article><h1>深度解析</h1><p>正文。</p></article></body></html>"))))
+    ;; MDN-style suffix stripped: leading h1 removed, mid-body h1 preserved.
+    (should (string-match-p "^title: Fetch API - Web APIs | MDN$" mdn-md))
+    (should (string-match-p "---\n\nThe Fetch API provides" mdn-md))
+    (should (= (etaf-web-tests--count-occurrences "# Fetch API" mdn-md) 1))
+    (should (string-match-p "^# Fetch API\n\nMid-body h1" mdn-md))
+    ;; Prefix match removes leading h1.
+    (should-not (string-match-p "^# Fetch API$" prefix-md))
+    (should (string-match-p "Body\\." prefix-md))
+    ;; Underscore suffix stripped.
+    (should-not (string-match-p "^# 深度解析$" underscore-md))
+    (should (string-match-p "正文。" underscore-md))))
+
+(ert-deftest etaf-web-tests-normalizes-front-matter-dates ()
+  "ISO timestamps, slash dates and year-month normalize to YYYY-MM-DD; unknown stays raw."
+  (let ((iso-md (etaf-web-to-markdown
+                 (etaf-web-tests--read-file
+                  (etaf-web-tests--fixture "title-suffixes.html"))))
+        (slash-md (etaf-web-to-markdown
+                   "<html><head><meta name=\"date\" content=\"2026/6/8\"><title>A</title></head><body><p>x</p></body></html>"))
+        (ym-md (etaf-web-to-markdown
+                "<html><head><meta name=\"date\" content=\"2026-6\"><title>B</title></head><body><p>x</p></body></html>"))
+        (raw-md (etaf-web-to-markdown
+                 "<html><head><meta name=\"date\" content=\"Spring 2026\"><title>C</title></head><body><p>x</p></body></html>")))
+    (should (string-match-p "^date: 2026-06-08$" iso-md))
+    (should-not (string-match-p "T12:44:07" iso-md))
+    (should (string-match-p "^date: 2026-06-08$" slash-md))
+    (should (string-match-p "^date: 2026-06-01$" ym-md))
+    (should (string-match-p "^date: Spring 2026$" raw-md))))
+
+(ert-deftest etaf-web-tests-cleans-overlong-and-title-duplicate-image-alt ()
+  "Overlong (>60 chars) and title-duplicate alts become empty; short alt and figcaption stay."
+  (let* ((html (etaf-web-tests--read-file
+                (etaf-web-tests--fixture "image-alt-cleanup.html")))
+         (md (etaf-web-to-markdown html)))
+    (should (string-match-p "!\\[\\](https://img\\.example\\.com/same-title\\.png)" md))
+    (should (string-match-p "!\\[\\](https://img\\.example\\.com/too-long\\.png)" md))
+    (should (string-match-p
+             "!\\[Architecture overview\\](https://img\\.example\\.com/short\\.png)"
+             md))
+    (should (string-match-p
+             "!\\[Figure 2: A detailed caption that intentionally exceeds sixty characters is still preserved from figcaption\\](https://img\\.example\\.com/fig\\.png)"
              md))))
 
 (provide 'etaf-web-tests)

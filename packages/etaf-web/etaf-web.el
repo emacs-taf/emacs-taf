@@ -55,6 +55,10 @@
 ;; `assets/' directory (capped at 5 MB per image and 30 images per page).  When
 ;; nil, remote image URLs remain untouched and render as placeholder cards.
 ;;
+;; Variable: etaf-web-fetch-timeout (default 30)
+;; Timeout in seconds (integer or float) for synchronous HTTP(S) fetches
+;; performed by `etaf-web-open'.
+;;
 ;; Error: etaf-web-error
 ;; Invalid HTML input, missing libxml support, unreadable source file or HTTP
 ;; fetch failure.  Catch this condition with `condition-case'.

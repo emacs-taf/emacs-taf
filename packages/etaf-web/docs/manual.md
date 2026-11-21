@@ -36,11 +36,18 @@ intermediate language text without touching the disk or network:
 To avoid duplicate headings and captions when rendered by `etaf-md`:
 
 - If the first content block is an `<h1>` whose plain text matches the front
-  matter `title`, that leading `<h1>` is omitted while later `<h1>` headings in
-  the body are kept.
+  matter `title` (exact match, after stripping common site suffixes such as
+  ` - Site` / ` | Site`, or as a prefix), that leading `<h1>` is omitted while
+  later `<h1>` headings in the body are kept.
+- ISO 8601 and numeric dates in metadata are normalized to `YYYY-MM-DD`;
+  unrecognized date formats are kept verbatim.
+- Lazy-loaded images prefer `data-src`, `data-original`, `data-lazy-src`,
+  `data-actualsrc`, `data-original-src` and `data-url` (plus the widest
+  candidate in `data-srcset` / `srcset`) before falling back to `src`.
 - For an image `<figure>` with a `<figcaption>`, the caption's plain text
   becomes the image's alt text and no separate caption paragraph is emitted;
-  without `<figcaption>`, the image keeps its original `alt`.
+  for plain images without `<figcaption>`, alt text longer than 60 characters
+  or identical to the document title is omitted.
 
 ## Cache layout and image limits
 
@@ -68,11 +75,15 @@ image downloads entirely.
 
 ## Errors and recovery
 
-All user-facing failures signal `etaf-web-error`:
+`etaf-web-fetch-timeout` controls the synchronous HTTP(S) fetch timeout in
+seconds (default `30`, integer or float).
+
+All user-facing failures signal `etaf-web-error` with distinct diagnostics:
 
 - Non-string HTML input or an Emacs build lacking libxml support.
 - Unreadable or missing local HTML files.
-- Network timeouts or HTTP 4xx/5xx responses when fetching a page.
+- HTTP error responses (`HTTP <status> ...`, e.g. 403/404/500), fetch timeouts
+  (`Timed out after <N>s ...`), and connection failures (`Connection failed ...`).
 
 To force a fresh fetch of a cached URL, remove its directory under
 `etaf-web-cache-directory`.

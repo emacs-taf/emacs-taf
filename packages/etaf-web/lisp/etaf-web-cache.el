@@ -30,14 +30,17 @@ When nil, remote image URLs remain untouched and render as placeholders."
   :type 'boolean
   :group 'etaf-web)
 
+(defcustom etaf-web-fetch-timeout 30
+  "Timeout in seconds for synchronous HTTP(S) fetches.
+May be an integer or floating-point number of seconds."
+  :type 'number
+  :group 'etaf-web)
+
 (defconst etaf-web--max-image-bytes (* 5 1024 1024)
   "Hard upper bound in bytes for a single downloaded image (5 MB).")
 
 (defconst etaf-web--max-images-per-page 30
   "Hard upper bound on images cached per page.")
-
-(defconst etaf-web--fetch-timeout 15
-  "Timeout in seconds for synchronous HTTP(S) fetches.")
 
 ;;; ---------------------------------------------------------------------------
 ;;; URL normalization & cache paths
@@ -133,8 +136,13 @@ normalizes an empty path to `/'."
   "Parse HTTP response headers and raw body bytes from BUFFER for URL."
   (with-current-buffer buffer
     (set-buffer-multibyte nil)
+    (when (zerop (buffer-size))
+      (signal 'etaf-web-error
+              (list (format "Connection failed while fetching %s: empty response"
+                            url))))
     (goto-char (point-min))
     (let ((status 200)
+          (reason nil)
           (content-type nil)
           (content-length nil)
           (etag nil)
@@ -143,9 +151,12 @@ normalizes an empty path to `/'."
         (setq body-start (match-end 0))
         (let ((header-text (buffer-substring-no-properties
                             (point-min) (match-beginning 0))))
-          (when (string-match "\\`HTTP/[0-9.]+[ \t]+\\([0-9]\\{3\\}\\)"
-                              header-text)
-            (setq status (string-to-number (match-string 1 header-text))))
+          (when (string-match
+                 "\\`HTTP/[0-9.]+[ \t]+\\([0-9]\\{3\\}\\)\\(?:[ \t]+\\([^\r\n]+\\)\\)?"
+                 header-text)
+            (setq status (string-to-number (match-string 1 header-text))
+                  reason (and (match-string 2 header-text)
+                              (string-trim (match-string 2 header-text)))))
           (let ((case-fold-search t))
             (when (string-match "^content-type:[ \t]*\\([^\r\n]+\\)" header-text)
               (setq content-type (string-trim (match-string 1 header-text))))
@@ -155,7 +166,9 @@ normalizes an empty path to `/'."
               (setq etag (string-trim (match-string 1 header-text)))))))
       (when (>= status 400)
         (signal 'etaf-web-error
-                (list (format "HTTP %d while fetching %s" status url))))
+                (list (if (and reason (not (string-empty-p reason)))
+                          (format "HTTP %d %s while fetching %s" status reason url)
+                        (format "HTTP %d while fetching %s" status url)))))
       (list :status status
             :content-type content-type
             :content-length content-length
@@ -164,18 +177,29 @@ normalizes an empty path to `/'."
 
 (defun etaf-web--fetch-raw (url)
   "Synchronously fetch URL and return parsed HTTP plist."
-  (let* ((url-request-method "GET")
+  (let* ((timeout (if (and (numberp etaf-web-fetch-timeout)
+                           (> etaf-web-fetch-timeout 0))
+                      etaf-web-fetch-timeout
+                    30))
+         (url-request-method "GET")
          (url-show-status nil)
          (url-automatic-caching nil)
-         (buffer (condition-case err
-                     (url-retrieve-synchronously url t t etaf-web--fetch-timeout)
-                   (error
-                    (signal 'etaf-web-error
-                            (list (format "Failed to fetch %s: %s"
-                                          url (error-message-string err))))))))
+         (buffer
+          (condition-case err
+              (url-retrieve-synchronously url t t timeout)
+            (error
+             (let ((msg (error-message-string err)))
+               (if (string-match-p "timed? out\\|timeout" (downcase msg))
+                   (signal 'etaf-web-error
+                           (list (format "Timed out after %ss while fetching %s"
+                                         timeout url)))
+                 (signal 'etaf-web-error
+                         (list (format "Connection failed while fetching %s: %s"
+                                       url msg)))))))))
     (unless (buffer-live-p buffer)
       (signal 'etaf-web-error
-              (list (format "No response while fetching %s" url))))
+              (list (format "Timed out after %ss while fetching %s"
+                            timeout url))))
     (unwind-protect
         (etaf-web--parse-http-buffer buffer url)
       (when (buffer-live-p buffer)
