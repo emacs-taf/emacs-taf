@@ -6,6 +6,10 @@ All notable user-visible changes to ETAF Weread.
 
 ### Changed
 
+- Reissued as 0.2.7 after package-loading and workspace updates since 0.2.6.
+
+### Changed
+
 - Reissued: the source had moved ahead of this version without a
   release, so the published file no longer matched it.  Changed since
   0.2.5 was cut: `lisp/etaf-weread-views.el`.

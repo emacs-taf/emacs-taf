@@ -8,14 +8,14 @@
 
 | 包 | 版本 | 配套版本 |
 | --- | --- | --- |
-| `ecss` | 0.1.1 | Emacs 28.1 |
-| `ekp` | 1.0.2 | Emacs 29.1 |
-| `ebox` | 3.1.3 | Emacs 29.1、`ecss 0.1.1` |
-| `etaf` | 0.3.6 | Emacs 29.1、`ebox 3.1.3`、`ecss 0.1.1` |
-| `etaf-ui` | 0.3.4 | Emacs 29.1、`etaf 0.3.6`、`ebox 3.1.3` |
-| `etaf-db` | 0.1.0 | Emacs 29.1、`etaf 0.3.6` |
-| `etaf-posframe` | 0.3.1 | Emacs 29.1、`etaf 0.3.6`、`etaf-ui 0.3.4`、Posframe 0.9.0 |
-| `etaf-manual` | 0.1.12 | Emacs 29.1、`etaf 0.3.6`、`etaf-ui 0.3.4` |
+| `ecss` | 0.1.2 | Emacs 28.1 |
+| `ekp` | 1.0.3 | Emacs 29.1 |
+| `ebox` | 3.1.4 | Emacs 29.1、`ecss 0.1.2` |
+| `etaf` | 0.3.7 | Emacs 29.1、`ebox 3.1.4`、`ecss 0.1.2` |
+| `etaf-ui` | 0.3.5 | Emacs 29.1、`etaf 0.3.7`、`ebox 3.1.4` |
+| `etaf-db` | 0.1.1 | Emacs 29.1、`etaf 0.3.7` |
+| `etaf-posframe` | 0.3.2 | Emacs 29.1、`etaf 0.3.7`、`etaf-ui 0.3.5`、Posframe 0.9.0 |
+| `etaf-manual` | 0.1.13 | Emacs 29.1、`etaf 0.3.7`、`etaf-ui 0.3.5` |
 
 第三列是本版记录的版本组合。每个包在 `Package-Requires` 头里声明它能安装的最低版本，可能更低。
 

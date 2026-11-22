@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+
+- Reissued as 0.3.5 after package-loading and workspace updates since 0.3.4.
+
 ### Fixed
 
 - A window title, a desktop taskbar label and a statistic's value show the

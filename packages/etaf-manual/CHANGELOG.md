@@ -4,6 +4,10 @@ All notable changes to the ETAF Reference Manual and the `etaf-manual` package a
 
 ## Unreleased
 
+### Changed
+
+- Reissued as 0.1.13 after package-loading and workspace updates since 0.1.12.
+
 ### Fixed
 
 - The book documents the nineteen interfaces and six variables that `etaf'

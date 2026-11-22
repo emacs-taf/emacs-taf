@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Reissued as 0.3.2 after package-loading and workspace updates since 0.3.1.
+
 ## 0.3.1
 
 ### Changed

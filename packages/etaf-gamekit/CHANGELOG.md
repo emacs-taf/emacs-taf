@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+
+- Reissued as 0.2.2 after package-loading and workspace updates since 0.2.1.
+
 ### Fixed
 
 - A failed session reports the engine's own message.  The engine's error

@@ -4,6 +4,10 @@ All notable changes to Ebox are documented here.
 
 ## Unreleased
 
+### Changed
+
+- Reissued as 3.1.4 after package-loading and workspace updates since 3.1.3.
+
 ### Fixed
 
 - Sizes render the same in batch as in a window.  The default face height

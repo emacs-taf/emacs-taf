@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+
+- Reissued as 0.2.1 after package-loading and workspace updates since 0.2.0.
+
 ### Fixed
 
 - Raw HTML `<img>` blocks with declared CSS pixel `width`/`height` attributes

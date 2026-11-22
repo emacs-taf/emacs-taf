@@ -3,7 +3,7 @@
 ;; Copyright (C) 2026 ETAF contributors
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 ;; Author: ETAF contributors
-;; Version: 0.3.1
+;; Version: 0.3.2
 ;; Package-Requires: ((emacs "29.1") (etaf "0.3.0") (etaf-ui "0.3.0") (posframe "0.9.0"))
 ;; Keywords: frames, ui
 ;; URL: https://github.com/emacs-taf/etaf-posframe

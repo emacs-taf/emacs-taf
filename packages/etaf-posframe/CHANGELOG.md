@@ -4,6 +4,10 @@
 
 ### Changed
 
+- Reissued as 0.3.2 after package-loading and workspace updates since 0.3.1.
+
+### Changed
+
 - Reissued: the source had moved ahead of this version without a
   release, so the published file no longer matched it.  Changed since
   0.3.0 was cut: `CHANGELOG.md`, `README.md`, `etaf-posframe.el`.

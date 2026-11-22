@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+
+- Reissued as 0.1.1 after package-loading and workspace updates since 0.1.0.
+
 ### Removed
 
 - The package manual `docs/manual.md` is replaced by [the SQLite backend chapter](https://etaf.top/sqlite-backend/) of the ETAF Reference Manual, which the README and the package Commentary link.

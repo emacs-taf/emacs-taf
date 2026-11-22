@@ -4,6 +4,10 @@
 
 ### Changed
 
+- Reissued as 0.2.3 after package-loading and workspace updates since 0.2.2.
+
+### Changed
+
 - Reissued: the source had moved ahead of this version without a
   release, so the published file no longer matched it.  Changed since
   0.2.1 was cut: `lisp/etaf-video-player-app.el`, `lisp/etaf-video-player-views.el`.

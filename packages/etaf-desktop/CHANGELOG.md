@@ -4,6 +4,10 @@ All notable changes to ETAF Desktop are documented here.
 
 ## Unreleased
 
+### Changed
+
+- Reissued as 0.1.9 after package-loading and workspace updates since 0.1.8.
+
 ### Fixed
 
 - The title and content type sizes reach the window again.  Desktop keeps a

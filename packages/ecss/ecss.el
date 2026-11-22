@@ -4,7 +4,7 @@
 
 ;; Author: Geekinney <vhkdzszh@gmail.com>
 ;; URL: https://github.com/geekinney/ecss
-;; Version: 0.1.1
+;; Version: 0.1.2
 ;; Package-Requires: ((emacs "28.1"))
 ;; Keywords: lisp, extensions
 ;; SPDX-License-Identifier: GPL-3.0-or-later

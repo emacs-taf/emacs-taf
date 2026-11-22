@@ -6,6 +6,10 @@ All notable user-visible changes to ETAF NCM.
 
 ### Changed
 
+- Reissued as 0.2.5 after package-loading and workspace updates since 0.2.4.
+
+### Changed
+
 - Reissued: the source had moved ahead of this version without a
   release, so the published file no longer matched it.  Changed since
   0.2.3 was cut: `CHANGELOG.md`, `README.md`, `backends/netease/mpv-ctl.mjs`, `backends/netease/netease-api.mjs` and 7 more.

@@ -8,6 +8,10 @@ project aims to follow [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Reissued as 1.0.3 after package-loading and workspace updates since 1.0.2.
+
+### Changed
+
 - Reissued: the source had moved ahead of this version without a
   release, so the published file no longer matched it.  Changed since
   1.0.1 was cut: `README.md`, `README.zh-CN.md`, `ekp.el`, `ekp-buffer.el` and 3 more.

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+
+- Reissued as 0.2.20 after package-loading and workspace updates since 0.2.19.
+
 ### Added
 
 - The archive ships `maillist` as an application target. `M-x etaf-install`

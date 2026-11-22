@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Reissued as 0.2.11 after package-loading and workspace updates since 0.2.10.
+
 ## [0.2.10] - 2026-10-27
 
 ### Fixed
