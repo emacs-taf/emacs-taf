@@ -521,11 +521,7 @@ client opens the one it opened last."
                                   (plist-get session :list-width)
                                   (max 240 (* 62 (maillist--char-pixel-width
                                                   window))))))))
-                  :on-close (lambda () (maillist-dispose session))
-                  :mount-options
-                  (lambda (window)
-                    (list :viewport-width (window-body-width window t)
-                          :viewport-height (window-body-height window))))))
+                  :on-close (lambda () (maillist-dispose session)))))
     (with-current-buffer buffer
       (setq-local maillist--session session))
     (maillist--apply-view session t)

@@ -266,8 +266,8 @@ a stored SMTP password; the password is only needed when the mail goes out."
                                           (maillist--archive-list-p session))
                                  (maillist-refresh session t)))))
               nil t)
-    ;; Place point in the message body ready for typing.
-    (goto-char (point-max))
+    ;; Place point at the start of the message body so headers remain visible.
+    (message-goto-body)
     (pop-to-buffer buffer)
     buffer))
 

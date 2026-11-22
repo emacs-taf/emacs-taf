@@ -4,6 +4,19 @@ All notable user-visible changes to maillist are recorded here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project uses [Semantic Versioning](https://semver.org/).
 
+## [0.4.2] - 2026-11-22
+
+### Fixed
+
+- Removed pinned `:mount-options` viewport overrides in `maillist-open` so
+  ETAF dynamically refits the Ebox canvas after splitting, unsplitting
+  (`C-x 1`) or switching archives (`L`) in a narrow window; prevents the right
+  half of the reader and `?` keyboard help dialog from being clipped after
+  widening back to full frame width.
+- `maillist-reply` / `maillist-reply-all` now place point at the start of the
+  message body (`message-goto-body`) instead of scrolling past long quoted
+  patches so `To:`, `In-Reply-To:` and `References:` headers stay visible.
+
 ## [0.4.1] - 2026-11-22
 
 ### Fixed
