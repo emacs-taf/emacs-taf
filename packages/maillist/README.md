@@ -1,65 +1,120 @@
 # maillist
 
-[ETAF](https://github.com/emacs-taf/etaf) mailing-list client for Emacs. It
-reads public-inbox archives — the thread list, the conversation and each
-message — and keeps the reader's own read and starred marks, last-read
-snapshots, settings and cached bodies in a local SQLite file. Replies and new
-posts open in `message-mode` and leave through smtpmail or Emacs's own
-`message-send-mail-function`.
+A native mailing-list archive client for Emacs, built with
+[ETAF](https://github.com/emacs-taf/etaf). Read, search and reply to
+public-inbox archives (`emacs-devel`, `emacs-bugs`, `emacs-user`,
+`emacs-tangents`, or any custom public-inbox source) directly in an ordinary
+Emacs buffer (`*maillist*`) — with local read/star state, fast persistent NNTP
+sync, SQLite caching, unified diff highlighting and automatic GNU Debbugs
+reply routing, while preserving your Emacs theme and mode-line.
 
-At a wide frame the list and the open thread share the window; the divider
-between them is draggable and remembers its width:
+[Demo Video (1080p, 2 min)](https://www.bilibili.com/video/BV1oCyLzPEu8) ·
+[Direct MP4](https://vhkd.top/share/maillist-demo-v0.4.2.mp4) ·
+[ETAF Package Page](https://etaf.top/packages/maillist/) ·
+[User Manual](docs/manual.md) ·
+[Changelog](CHANGELOG.md)
 
-![The client at a wide frame](examples/maillist-wide.png)
+![Live emacs-devel in maillist: date-grouped threads, unread/star marks, nested quotes, rectangular search bar, action toast and native mode-line](examples/maillist-wide.png)
 
-Below `maillist-narrow-width` the two columns become one: the list first, then
-the open thread with a way back above it.
+## Why maillist?
 
-![The client at a narrow frame](examples/maillist-narrow.png)
+- **Zero mail-sync boilerplate** — no `mbsync`, `notmuch`, IMAP folders or
+  Gnus scoring rules to maintain; open `M-x maillist-open` and start reading
+  live `emacs-devel` / `emacs-bugs` immediately.
+- **Fast persistent NNTP + 0 ms SQLite cache** — syncs incrementally via
+  non-blocking NNTP (`GROUP` + `XOVER` + pipelined `ARTICLE` bursts, with
+  automatic HTTP fallback), reopens unchanged cached threads in 0 ms, warms
+  unread bodies quietly on idle, and stays readable offline.
+- **Built for mailing-list workflows** — detects new replies on previously read
+  discussions, opens massive threads newest-first with incremental expansion
+  (`e`), highlights inline patches, folds long quotes (`Q`), copies `t.mbox.gz`
+  URLs (`m`), views raw RFC 5322 messages (`v`), and routes `emacs-bugs`
+  replies straight to `<bug>@debbugs.gnu.org`.
+- **Native Emacs citizen** — lives in a normal buffer (`*maillist*`), derives
+  its entire palette dynamically from your active Emacs theme, keeps your
+  original mode-line, and collapses cleanly into a single-column pane inside
+  `C-x 3` splits.
 
-A short window keeps the header, the rows and the reader without stretching
-either column past the canvas:
+## Visual tour
 
-![The client in a short window](examples/maillist-short.png)
+### Patch and unified diff review (`emacs-bugs`)
+
+Inline patches and unified diffs (`diff --git`, `@@`, `-`, `+`) render with
+semantic red/green highlighting, per-message focus (`[` / `]`), signature
+dimming, extracted clickable links, raw RFC 5322 viewing (`v`) and one-key
+`t.mbox.gz` copying (`m`):
+
+![Reading a live src/xdisp.c patch on emacs-bugs with unified diff highlighting and focused follow-up reply](examples/maillist-diff.png)
+
+### Automatic Debbugs routing and RFC 5322 threading
+
+Pressing `r` (reply to list), `R` (reply all) or `C-u r` (reply privately)
+targets the focused message in `message-mode`, preserves canonical
+`In-Reply-To` and ancestor-chain `References`, and inside `emacs-bugs`
+automatically addresses `<bug>@debbugs.gnu.org` instead of filing a new bug:
+
+![Replying to bug#82298 in message-mode with automatic 82298@debbugs.gnu.org routing and full References chain](examples/maillist-debbugs-reply.png)
+
+### Side-by-side split workflow (`C-x 3`)
+
+Below `maillist-narrow-width` (for example in a `C-x 3` split beside code),
+`*maillist*` automatically collapses into a single-column list/reader view with
+a `← 列表` (`u`) back bar and full-width search box, and refits smoothly back
+to two columns on `C-x 1`:
+
+![Coding alongside maillist in a C-x 3 split with automatic single-column narrow reader layout](examples/maillist-split-narrow.png)
+
+### Live Emacs theme adaptation
+
+All surfaces, borders, quote bars, diff tints and selection states are derived
+from the active Emacs theme — switching between dark and light themes (such as
+`modus-operandi`) repaints the entire interface immediately:
+
+![Live emacs-devel rendered in the modus-operandi light theme](examples/maillist-light.png)
+
+### Searchable in-buffer keyboard help (`?`)
+
+Press `?` anywhere inside `*maillist*` to open the centered, read-only
+two-column keyboard reference (with `/` live filtering across commands and
+notes) alongside `M-g` region jumps (`f` search, `t` list, `v` reader):
+
+![Centered two-column keyboard help dialog opened with ?](examples/maillist-help.png)
 
 ## Capabilities
 
-- Thread list with date grouping, unread (`+`) and starred (`*`) markers,
-  all/unread/starred scopes, and automatic new-reply detection when a
-  previously read discussion gains new messages.
-- Conversation reader with fixed header, per-message focus (`[` / `]`),
-  collapse-all (`z`), long-quote folding (`Q`), nested quote bars, full unified
-  diff highlighting, signature dimming, raw RFC 5322 viewer (`v`), mbox patch
-  link (`m`), and extracted clickable links.
-- Search in mail-client syntax (`from:`, `to:`, `subject:`, `body:`,
-  `message:`, negated `-field:`, `after:`, `before:`, `is:unread`, `is:read`,
-  `is:starred`, `-is:...`). Local mark queries filter live; remote queries run
-  on `RET` and fall back to structured local search over cached threads and
-  bodies when offline.
-- Read marks with last-read snapshots: opening a thread marks it read once its
-  body is on screen, `M-u` puts it back in the queue, `A` clears a scope, and
-  offline cached threads stay readable when a refresh fails.
-- Older mail loads via the archive's native `?t=...` index pagination when
-  available, or timestamped date search with automatic offset stepping.
-- Multiple archives (`emacs-devel`, `emacs-user`, `emacs-bugs`,
-  `emacs-tangents`, plus custom sources added via `L` or `M-x maillist-add-source`)
-  stored per list without cross-post collisions.
-- Scheduled quiet sync (`maillist-auto-refresh`) with new-thread and new-reply
-  counts, plus ETAF regions (`M-g f` / `M-g t` / `M-g v`) and in-buffer `?`
-  help.
-- Reply to any focused message (`r` list, `R` reply-all, `C-u r` author) or
-  post anew (`c`), with canonical RFC 5322 `In-Reply-To` and ancestor-chain
-  `References`, and automatic `<bug>@debbugs.gnu.org` routing for `emacs-bugs`.
+- **Thread list & local state**: date grouping (`今天` / `昨天` / `本周` /
+  `更早`), simultaneous starred (`*`) and unread (`+`) indicators,
+  all / unread / starred scopes (`1` / `2` / `3`) with dedicated empty states,
+  bottom-right action notices, `M-u` mark-unread, `A` mark-scope-read, and
+  automatic `新回复` detection when a read thread receives new mail.
+- **Conversation reader**: fixed thread header over a scrollable conversation,
+  incremental expansion (`e`) for long threads, per-message focus (`[` / `]`),
+  collapse-all (`z`), long-quote folding (`Q`), nested quote bars, unified diff
+  highlighting, signature dimming, raw RFC 5322 viewer (`v`), mbox URL copy
+  (`m`), `<Message-ID>` copy (`w`) and extracted clickable links.
+- **Structured search**: mail-client query syntax (`from:`, `to:`, `subject:`,
+  `body:`, `message:`, negated `-field:`, `after:`, `before:`, `is:unread`,
+  `is:read`, `is:starred`, `-is:...`). Local mark queries filter live with zero
+  network calls; remote queries run on `RET` and fall back to structured local
+  search over cached threads and bodies when offline.
+- **Multiple archives & custom sources**: ships with `emacs-devel`,
+  `emacs-user`, `emacs-bugs` and `emacs-tangents`, remembers the last opened
+  list, and lets you add any public-inbox archive via `L` or
+  `M-x maillist-add-source` with per-list SQLite isolation.
+- **Scheduled quiet sync & native paging**: background refresh
+  (`maillist-auto-refresh`, 300 s) surfaces new-thread and new-reply counts
+  without disturbing active searches; `o` pages older mail via NNTP `XOVER` or
+  native `?t=...` archive cursors.
 
 ## Requirements
 
-- Emacs 29.1 or newer, built with SQLite.
-- For a checkout, the provider repositories on `load-path`: `etaf`, `etaf-ui`,
-  `ebox`, `ecss`, `etaf-db`.
+- Emacs 29.1 or newer, built with SQLite support.
+- Providers (installed automatically via `etaf-install`): `etaf` (>= 0.3.6),
+  `etaf-ui` (>= 0.3.4), `etaf-db` (>= 0.1.0), `ebox`, `ecss`.
 
 ## Install
 
-From the ETAF package archive:
+### Recommended: ETAF package archive
 
 ```elisp
 (require 'package)
@@ -69,54 +124,75 @@ From the ETAF package archive:
 (package-install 'etaf-install)
 ```
 
-Then `M-x etaf-install`, pick Maillist, and the installer brings ETAF, ETAF UI
-and ETAF DB with it. `M-x maillist-open` starts the client.
+Then run `M-x etaf-install` and pick `maillist` — the installer pulls ETAF,
+ETAF UI, ETAF DB and their dependencies automatically. Start the client with
+`M-x maillist-open` (or manage upgrades later with `M-x etaf-install-manage`).
 
-From a checkout, add this repository and the provider roots to `load-path`:
+### From a source checkout
+
+Add this repository and the provider roots (`etaf`, `etaf-ui`, `etaf-db`,
+`ebox`, `ecss`) to `load-path`, then:
 
 ```elisp
 (require 'maillist)
-M-x maillist-open
+;; M-x maillist-open
 ```
 
 ## Keys
 
+### List and marks
+
 | Key | Action |
 | --- | --- |
 | `j` / `k` | next / previous thread |
-| `RET` or click | open the thread |
+| `RET` or click | open the selected thread |
 | `n` / `p` | next / previous unread thread |
-| `<` / `G` | jump to the first / last row |
-| `]` / `[` | focus next / previous message in the open thread |
-| `SPC` / `DEL` / `S-SPC` / wheel | page down / up inside the reader (or list) |
-| `1` `2` `3` | all, unread only, starred only |
+| `<` / `G` | jump to the first / last thread |
+| `1` / `2` / `3` | switch scope: all / unread / starred |
+| `s` | star or unstar the selected thread |
 | `M-u` | mark the selected thread unread |
-| `A` | mark every shown row read |
-| `s` | star or unstar |
+| `A` | mark all shown rows read |
+
+### Conversation reader
+
+| Key | Action |
+| --- | --- |
+| `]` / `[` | focus next / previous message in the open thread |
+| `SPC` / `DEL` / `S-SPC` | page down / up inside the reader (or list) |
 | `e` | expand older messages held back in a long thread |
-| `z` | collapse or expand every message in the open thread |
+| `z` | collapse or expand all messages in the open thread |
 | `Q` | fold or unfold long quoted blocks (3+ lines) |
 | `v` | view raw RFC 5322 email and full headers of the focused message |
 | `m` / `w` | copy thread `t.mbox.gz` URL / copy focused `<Message-ID>` |
-| `o` | load mail older than the list |
-| `/` | focus search field (`RET` runs remote search; empty restores list) |
-| `M-p` / `M-n` | recall previous / next search |
-| `g` | sync again (re-runs the active search when searching) |
-| `C` / `B` | copy / open the archive page of the thread |
+| `C` / `B` | copy / open the thread's archive web page |
+
+### Search, paging and archives
+
+| Key | Action |
+| --- | --- |
+| `/` | focus search box (`RET` runs remote search; empty restores list) |
+| `M-p` / `M-n` | recall previous / next search query |
+| `o` | load mail older than the current list |
+| `g` | sync again (re-runs the active query when searching) |
+| `L` or click list name | switch archive or add a custom public-inbox source |
+
+### Replying, posting and layout
+
+| Key | Action |
+| --- | --- |
 | `r` / `R` / `C-u r` | reply to list (or Debbugs bug) / reply-all / reply to author |
-| `c` | post a new message |
-| `L` | switch archive or add a new public-inbox source |
-| `u` | back from the thread to the list (narrow layout) |
-| `M-g` / `Tab` / `?` | jump region (`f` search, `t` list, `v` reader) / next region / help |
-| drag the divider | resize the list (saved automatically; arrows move when focused) |
+| `c` | compose a new post to the current list |
+| `u` | return from reader to list (narrow layout) |
+| `M-g` / `Tab` / `?` | jump region (`f` search, `t` list, `v` reader) / next control / help |
+| drag divider | resize list pane (saved automatically; arrows move when focused) |
 
 ## Search syntax
 
 | Form | Effect |
 | --- | --- |
-| `from:` `to:` `subject:` `body:` `message:` | matching archive field (prefix `-` to exclude) |
+| `from:` `to:` `subject:` `body:` `message:` | match archive field (prefix `-` to exclude) |
 | `after:2026-10-01` `before:2026-10-10` | date range |
-| `is:unread` `is:read` `is:starred` | local marks (`-is:...` negates), no request |
+| `is:unread` `is:read` `is:starred` | local mark filters (`-is:...` negates), instant with no request |
 | `"two words"` | exact phrase |
 
 Local-only mark queries filter the archive list in place; remote queries run on
@@ -126,45 +202,41 @@ list immediately.
 
 ## Sending
 
-Sending defaults to smtpmail. Store the account's application password in
-auth-source once:
+Sending defaults to `smtpmail`. Store the account's application password in
+`auth-source` once:
 
 ```elisp
 (setq maillist-mail-address "you@gmail.com")
 ;; then M-x maillist-mail-configure and paste the application password
 ```
 
-The defaults are `smtp.gmail.com:465` with SSL; change
-`maillist-smtp-server`, `maillist-smtp-service` and
-`maillist-smtp-stream-type` for another provider, or set
-`maillist-send-mail-function` to `'inherit` to use Emacs's own
+Defaults target `smtp.gmail.com:465` over SSL; adjust `maillist-smtp-server`,
+`maillist-smtp-service` and `maillist-smtp-stream-type` for another provider,
+or set `maillist-send-mail-function` to `'inherit` to reuse Emacs's existing
 `message-send-mail-function` (such as `msmtp`, `sendmail` or `gmi`). Replying
 inside `emacs-bugs` automatically targets `<bug>@debbugs.gnu.org`.
 
 ## Data and network
 
-- Threads, marks, cached bodies and settings live in
-  `~/.emacs.d/maillist/store.sqlite3` (`maillist-store-file`) in WAL mode.
-  Threads are keyed by `(list, id)` and messages by `(thread, id)`, so
-  cross-posted discussions and sub-threads never clobber each other.
-- Retention is bounded per archive (`maillist-thread-limit` 2000,
-  `maillist-body-limit` 400); starred threads and marks are never dropped, and
-  freed pages are reclaimed incrementally without blocking the UI.
-- **Fast persistent NNTP sync & reading**: the four built-in `yhetil.org`
-  archives sync incrementally via NNTP (`GROUP` + `XOVER` with authors and
-  threading included) and fetch thread messages via pipelined `ARTICLE` bursts
-  with automatic HTTP fallback; unchanged cached threads open in 0 ms and top
-  unread threads warm quietly in the background (`maillist-prefetch-bodies`).
-- `maillist-network-route` picks the leading route (`auto`, `proxy`, `direct`)
-  with sticky working-route caching, disabled broken HTTP/1.1 keep-alive reuse,
-  and fallback after `maillist-route-attempt-timeout` seconds (10).
-  `maillist-proxy` names an HTTP(S) proxy (`HOST:PORT`), falling back to
-  `url-proxy-services` or `HTTP(S)_PROXY` (ignoring SOCKS addresses).
-- `maillist-auto-refresh` (300 seconds by default) syncs an open client
-  quietly without disturbing an active search view.
+- **SQLite storage**: threads, marks, cached bodies and settings live in
+  `~/.emacs.d/maillist/store.sqlite3` (`maillist-store-file`) in WAL mode,
+  keyed per archive (`(list_name, id)` and `(thread, id)`) so cross-posted
+  discussions never collide.
+- **Bounded retention**: `maillist-thread-limit` (2000) and
+  `maillist-body-limit` (400) prune per list with non-blocking incremental
+  vacuum while never dropping starred threads or read marks.
+- **Transport & routing**: `maillist-transport` (`auto`, `nntp`, `http`) uses
+  persistent NNTP on the four built-in `yhetil.org` archives with automatic
+  HTTP fallback; `maillist-network-route` (`auto`, `proxy`, `direct`) caches
+  the working route and falls back after `maillist-route-attempt-timeout`
+  (10 s). `maillist-proxy` configures an HTTP(S) proxy (`HOST:PORT`), falling
+  back to `url-proxy-services` or `HTTP(S)_PROXY`.
+- **Background prefetch & sync**: `maillist-prefetch-bodies` (10) warms top
+  uncached unread threads on idle; `maillist-auto-refresh` (300 s) syncs an
+  open client quietly.
 
-`docs/manual.md` covers the workflows, every configuration variable, the
-storage layout and what to do when a sync, a search or a send fails.
+See [docs/manual.md](docs/manual.md) for full workflows, configuration
+variables, storage schema details and troubleshooting.
 
 ## Development
 
@@ -175,8 +247,6 @@ make gui       # drive the maintained GUI scenario on a running Emacs server
 make clean
 ```
 
-The acceptance scenarios read the fixture archive under
-`tests/fixtures/archive` over `file:` URLs and loopback HTTP sockets, so they
-need no network. `make gui` takes `SERVER=<name>` for a dedicated instance and
-prints the evidence directory of the run; the frames it saves are what a UI
-change is reviewed against.
+Acceptance scenarios run offline against `tests/fixtures/archive` over `file:`
+URLs and loopback sockets. `make gui` accepts `SERVER=<name>` for a dedicated
+Emacs instance and records frames and assertions to a fresh evidence directory.
