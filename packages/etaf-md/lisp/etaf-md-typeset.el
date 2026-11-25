@@ -80,13 +80,19 @@ changes their font size gets a formula that still matches the text."
   "Render in flight by block key, so one block never renders twice.")
 
 (defvar etaf-md-typeset--prefer-native t
-  "When non-nil, prefer the embedded QuickJS native module when built.")
+  "When non-nil, prefer the embedded QuickJS native module when installed.")
 
-(defvar etaf-md-typeset--native-checked nil
-  "Non-nil once the native module has been probed on disk.")
+(defconst etaf-md-typeset--native-version "1"
+  "Native dynamic module ABI/content version expected by this Elisp layer.")
+
+(defvar etaf-md-typeset--native-failed nil
+  "Cons of (PATH . MTIME) when loading that native binary failed.")
 
 (defvar etaf-md-typeset--native-loaded nil
   "Path of the loaded native typesetting module, or nil.")
+
+(defvar etaf-md-typeset--native-hinted nil
+  "Non-nil after hinting once per session about prebuilt native rendering.")
 
 (defvar etaf-md-typeset--native-channel nil
   "Emacs pipe process woken by the native worker thread on job completion.")
@@ -149,32 +155,58 @@ not retried on every keystroke that republishes the page.")
               ((not (string-suffix-p ".eln" entry))))
     (file-name-directory entry)))
 
-(defun etaf-md-typeset--native-module-path ()
-  "Return the compiled native typesetting module path if present on disk."
+(defun etaf-md-typeset--native-cache-path ()
+  "Return the unified user-cache path for the prebuilt native typeset module."
   (when (and module-file-suffix (stringp module-file-suffix))
-    (when-let* ((root (etaf-md-typeset--package-root)))
-      (let* ((name (concat "etaf-md-typeset-native" module-file-suffix))
-             (candidates (list (expand-file-name name (expand-file-name "native" root))
-                               (expand-file-name name root))))
-        (cl-find-if #'file-exists-p candidates)))))
+    (let* ((cache-root
+            (or (and (boundp 'etaf-install-native-directory)
+                     etaf-install-native-directory)
+                (expand-file-name
+                 "emacs-taf/native"
+                 (or (let ((xdg (getenv "XDG_CACHE_HOME")))
+                       (and xdg (not (string-empty-p xdg)) xdg))
+                     (expand-file-name "~/.cache")))))
+           (name (concat "etaf-md-typeset-native" module-file-suffix)))
+      (expand-file-name
+       name
+       (expand-file-name (concat "etaf-md/" etaf-md-typeset--native-version)
+                         cache-root)))))
+
+(defun etaf-md-typeset--native-module-path ()
+  "Return the native typesetting module path if present in checkout or cache."
+  (when (and module-file-suffix (stringp module-file-suffix))
+    (let* ((root (etaf-md-typeset--package-root))
+           (name (concat "etaf-md-typeset-native" module-file-suffix))
+           (candidates
+            (delq nil
+                  (list (and root (expand-file-name name (expand-file-name "native" root)))
+                        (and root (expand-file-name name root))
+                        (etaf-md-typeset--native-cache-path)))))
+      (cl-find-if #'file-exists-p candidates))))
 
 (defun etaf-md-typeset--ensure-native ()
   "Ensure the native QuickJS module is loaded and its wakeup pipe is live.
 Return non-nil when the native module is ready to accept jobs."
   (when (and etaf-md-typeset--prefer-native module-file-suffix)
-    (unless (or (featurep 'etaf-md-typeset-native)
-                etaf-md-typeset--native-checked)
-      (setq etaf-md-typeset--native-checked t)
-      (when-let* ((path (etaf-md-typeset--native-module-path)))
-        (condition-case err
-            (progn
-              (load path nil t t)
-              (when (featurep 'etaf-md-typeset-native)
-                (setq etaf-md-typeset--native-loaded path)))
-          (error
-           (message "etaf-md native typeset module could not be loaded: %s"
-                    (error-message-string err))))))
+    (unless (featurep 'etaf-md-typeset-native)
+      (when-let* ((path (etaf-md-typeset--native-module-path))
+                  (mtime (file-attribute-modification-time (file-attributes path))))
+        (unless (and (consp etaf-md-typeset--native-failed)
+                     (equal (car etaf-md-typeset--native-failed) path)
+                     (equal (cdr etaf-md-typeset--native-failed) mtime))
+          (condition-case err
+              (progn
+                (load path nil t t)
+                (when (featurep 'etaf-md-typeset-native)
+                  (setq etaf-md-typeset--native-loaded path
+                        etaf-md-typeset--native-failed nil)))
+            (error
+             (setq etaf-md-typeset--native-failed (cons path mtime))
+             (message "etaf-md native typeset module could not be loaded: %s"
+                      (error-message-string err)))))))
     (when (featurep 'etaf-md-typeset-native)
+      (unless etaf-md-typeset--native-loaded
+        (setq etaf-md-typeset--native-loaded (or (etaf-md-typeset--native-module-path) t)))
       (unless (process-live-p etaf-md-typeset--native-channel)
         (setq etaf-md-typeset--native-channel
               (make-pipe-process
@@ -1083,25 +1115,30 @@ Uses the embedded QuickJS native module when available, falling back to
   "Start the renders SESSION's page needs and does not show yet.
 Reads blocks from the published document (including nested containers) and
 skips any block already cached, in flight, or recorded as a syntax failure."
-  (when (etaf-md-typeset-available-p)
+  (when etaf-md-typeset
     (let* ((env (etaf-md--env session))
            (blocks (mapcar (lambda (entry) (plist-get entry :block))
                            (plist-get (etaf-md--read session :document) :children)))
            (wanted (etaf-md--typeset-collect-blocks blocks env nil)))
       (when wanted
-        (run-at-time
-         0 nil
-         (lambda ()
-           (dolist (entry (nreverse wanted))
-             (let ((kind (nth 0 entry))
-                   (source (nth 1 entry))
-                   (key (nth 2 entry)))
-               (unless (or (etaf-md--typeset-picture key)
-                           (gethash key etaf-md-typeset--running)
-                           (gethash key etaf-md-typeset--failed))
-                 (etaf-md--typeset-start
-                  key kind source env
-                  (lambda () (etaf-md--typeset-changed session))))))))))))
+        (if (etaf-md-typeset-available-p)
+            (run-at-time
+             0 nil
+             (lambda ()
+               (dolist (entry (nreverse wanted))
+                 (let ((kind (nth 0 entry))
+                       (source (nth 1 entry))
+                       (key (nth 2 entry)))
+                   (unless (or (etaf-md--typeset-picture key)
+                               (gethash key etaf-md-typeset--running)
+                               (gethash key etaf-md-typeset--failed))
+                     (etaf-md--typeset-start
+                      key kind source env
+                      (lambda () (etaf-md--typeset-changed session))))))))
+          (when (and (not noninteractive)
+                     (not etaf-md-typeset--native-hinted))
+            (setq etaf-md-typeset--native-hinted t)
+            (message "etaf-md: Mermaid/math kept as source; run M-x etaf-install-native to enable fast zero-browser SVG rendering.")))))))
 
 (defun etaf-md--typeset-changed (session)
   "Repaint SESSION once, however many pictures arrive together."

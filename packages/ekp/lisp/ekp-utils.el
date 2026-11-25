@@ -358,24 +358,47 @@ by merging boxes."
 (defvar ekp-c-module-loaded nil
   "Non-nil if C module is loaded.")
 
+(defconst ekp-c-module-required-version "1.6"
+  "Minimum C module version compatible with this Elisp code.")
+
+(defun ekp--native-cache-file ()
+  "Return the unified user-cache path for the prebuilt EKP C module."
+  (let ((cache-root
+         (or (and (boundp 'etaf-install-native-directory)
+                  etaf-install-native-directory)
+             (expand-file-name
+              "emacs-taf/native"
+              (or (let ((xdg (getenv "XDG_CACHE_HOME")))
+                    (and xdg (not (string-empty-p xdg)) xdg))
+                  (expand-file-name "~/.cache")))))
+        (filename (cond ((eq system-type 'darwin) "ekp.dylib")
+                        ((eq system-type 'windows-nt) "ekp.dll")
+                        (t "ekp.so"))))
+    (expand-file-name
+     filename
+     (expand-file-name (concat "ekp/" ekp-c-module-required-version)
+                       cache-root))))
+
 (defun ekp-c-module-dir ()
   "Return the C module directory."
   (when-let* ((root-dir (ekp-root-dir)))
     (expand-file-name "native" root-dir)))
 
 (defun ekp-c-module-file ()
-  "Return path to compiled C module."
-  (when-let* ((module-dir (ekp-c-module-dir))
-              (filename (cond ((eq system-type 'darwin) "ekp.dylib")
-                              ((eq system-type 'windows-nt) "ekp.dll")
-                              (t "ekp.so"))))
-    (expand-file-name filename module-dir)))
+  "Return path to compiled C module, checking checkout `native/' then user cache."
+  (let* ((module-dir (ekp-c-module-dir))
+         (filename (cond ((eq system-type 'darwin) "ekp.dylib")
+                         ((eq system-type 'windows-nt) "ekp.dll")
+                         (t "ekp.so")))
+         (local (and module-dir (expand-file-name filename module-dir)))
+         (cached (ekp--native-cache-file)))
+    (cond
+     ((and local (file-exists-p local)) local)
+     ((and cached (file-exists-p cached)) cached)
+     (t local))))
 
 (defalias 'ekp-c-module-reload #'ekp--module-reload
   "Load MODULE from a temp copy to allow rebuilding.")
-
-(defconst ekp-c-module-required-version "1.6"
-  "Minimum C module version compatible with this Elisp code.")
 
 (defun ekp--c-build-finished (profile process _event)
   "Handle completion of PROCESS building C PROFILE."
@@ -411,12 +434,12 @@ Refuses to enable a module older than
                 (progn
                   (setq ekp-c-module-loaded nil)
                   (message "ekp-c module version %s is too old (need %s+). \
-Run 'make' in native/ to rebuild; falling back to Elisp."
+Run M-x etaf-install-native (or 'make' in a source checkout's native/) to update; falling back to Elisp."
                            (ekp-c-version) ekp-c-module-required-version))
               (setq ekp-c-module-loaded t)
               (message "ekp-c module loaded (version %s, %d threads)"
                        (ekp-c-version) (ekp-c-thread-count)))))
-      (message "C module not found. Run 'make' in native/ directory."))))
+      (message "C module not found. Run M-x etaf-install-native (select ekp) or M-x ekp-c-module-build."))))
 
 ;;;###autoload
 (defun ekp-c-module-build (&optional profile)

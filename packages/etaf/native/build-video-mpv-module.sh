@@ -5,20 +5,36 @@
 set -eu
 root=$(cd "$(dirname "$0")/.." && pwd)
 emacs=${EMACS:-emacs}
-include=${EMACS_MODULE_INCLUDE:-$("$emacs" --batch --eval \
-  '(princ (expand-file-name "../include" data-directory))' 2>/dev/null)}
+include=${EMACS_MODULE_INCLUDE:-${EMACS_INCLUDE:-$("$emacs" -Q --batch --eval \
+  '(princ (file-name-directory (or (locate-file "emacs-module.h" (list (expand-file-name "../include" invocation-directory) (expand-file-name "../../../include" invocation-directory) (expand-file-name "../include" data-directory) "/Applications/Emacs.app/Contents/Resources/include" "/opt/homebrew/include" "/usr/local/include" "/usr/include")) "./emacs-module.h")))' 2>/dev/null)}}
 extension=so
 extra_flags=""
+arch_flags=""
 case "$(uname -s)" in
-  Darwin) extension=dylib ;;
-  MINGW*|CYGWIN*|MSYS*) extension=dll ;;
+  Darwin)
+    extension=dylib
+    arch_flags="-Wl,-install_name,etaf-video-mpv.dylib"
+    if [ "${PORTABLE:-0}" = "1" ]; then
+      arch_flags="$arch_flags -mmacosx-version-min=12.0"
+    fi
+    if [ -n "${ARCH:-}" ]; then
+      arch_flags="$arch_flags -arch $ARCH"
+    fi
+    ;;
+  MINGW*|CYGWIN*|MSYS*)
+    extension=dll
+    if [ "${PORTABLE:-0}" = "1" ]; then
+      extra_flags="-static-libgcc"
+    fi
+    ;;
   *) extra_flags="-ldl" ;;
 esac
 canvas_flag=""
-if [ -f "$include/emacs-module.h" ] && grep -q "canvas_data" "$include/emacs-module.h"; then
+if [ "${PORTABLE:-0}" != "1" ] && [ -f "$include/emacs-module.h" ] && grep -q "canvas_data" "$include/emacs-module.h"; then
   canvas_flag="-DETAF_EMACS_HAS_CANVAS=1"
 fi
 "${CC:-cc}" -std=c11 -shared -fPIC -O2 -Wall -Wextra \
+  $arch_flags \
   $canvas_flag \
   -I "$include" \
   "$root/native/etaf-video-mpv.c" \

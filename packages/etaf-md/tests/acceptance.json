@@ -674,6 +674,11 @@
       "name": "etaf-md-tests-wide-table-adapts-across-viewport-widths",
       "file": "tests/etaf-md-tests.el",
       "purpose": "Wide multi-column tables break out cleanly on wide viewports while keeping prose at reading measure, compress into aligned full-column grids on medium viewports, and fold into stacked cards on narrow viewports without clipping or breaching side gutters."
+    },
+    {
+      "name": "etaf-md-tests-doctor-recommends-prebuilt-native-install",
+      "file": "tests/etaf-md-tests.el",
+      "purpose": "`etaf-md-doctor' directs users to `M-x etaf-install-native' instead of an unshipped `make native-build' when `typeset-native' is not active."
     }
   ]
 }

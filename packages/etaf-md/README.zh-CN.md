@@ -24,7 +24,7 @@ ETAF Markdown Preview 把本地 Markdown 文档渲染为 Emacs 原生的现代�
 
 - **完整 Markdown + GFM + ETAF 扩展语法**：覆盖 CommonMark 块与行内语法、带完整行列网格线与对齐的管道表格、可交互回写源文件的任务复选框（`- [x]`）、带跳转与 `↩` 回跳的编号脚注、YAML front matter、GitHub / Obsidian 可折叠提示块（`> [!NOTE]`）、`==高亮==`、`!!遮罩!!`、`[+批注]`、`*[ABBR]:` 术语卡片、`[[双向链接]]`、`:kbd[...]`、`:badge[...]`、`:color[...]`、`:sym[...]`，并支持通过 `:flavor` 选择 `etaf`、`gfm`、`commonmark` 或细粒度特性列表。
 - **增强代码块**：支持 `title=`、`:line-numbers[=N]`、`:collapsed-lines[=N]`、`{1,4-7}`、`/word/` 与 `[!code highlight|focus|++|--|warning|error|word:...]` 行标记、`:whitespace`、`:indent-guides` 以及一键复制。
-- **零浏览器原生 Mermaid 与 MathJax 渲染**：编译内置 QuickJS 原生动态模块（`make native-build`，架构借鉴 [LuciusChen/pele.el](https://github.com/LuciusChen/pele.el)）后，`mermaid` 代码块经由内嵌 [Obsidian Pele](https://github.com/obsidianmd/pele) + CoreText / Pango 原生文本测量直接渲染为清晰矢量 SVG，`$$` 块级公式经由内嵌 [MathJax](https://github.com/mathjax/MathJax-src) TeX-to-SVG 在独立后台线程中渲染——无需 Chromium、无需 Node.js、零子进程开销，结果落盘缓存；实时编辑期间保留上一帧有效图片不闪烁，未编译原生模块或遇到 Pele 未实现的图种时自动回退至 [mermaid-cli](https://github.com/mermaid-js/mermaid-cli) + KaTeX。
+- **零浏览器原生 Mermaid 与 MathJax 渲染**：通过 `M-x etaf-install-native` 一键下载校验预编译 QuickJS 原生动态模块（架构借鉴 [LuciusChen/pele.el](https://github.com/LuciusChen/pele.el)，全程无需本机编译器）后，`mermaid` 代码块经由内嵌 [Obsidian Pele](https://github.com/obsidianmd/pele) + CoreText / Pango 原生文本测量直接渲染为清晰矢量 SVG，`$$` 块级公式经由内嵌 [MathJax](https://github.com/mathjax/MathJax-src) TeX-to-SVG 在独立后台线程中渲染——无需 Chromium、无需 Node.js、零子进程开销，结果落盘缓存；实时编辑期间保留上一帧有效图片不闪烁，未安装原生模块或遇到 Pele 未实现的图种时自动回退至 [mermaid-cli](https://github.com/mermaid-js/mermaid-cli) + KaTeX。
 - **可扩展 `:::` 文档容器与活文档工作台**：内置 35+ 种文档构件（`card`、`columns`、`box`、`steps`、`timeline`、`stats`、`field`、`file-tree`、`chat`、`tabs`、`code-tabs`、`accordion`、`details`、`table`、`window`、`panel`、`tab-panel`、`form`、`chart`、`progress`、`keymap`、`breadcrumb`、`diff`、`pros-cons`、`demo`、`qrcode`、`code-tree`、`npm-to`、`image-card`、`link-card`），以及受工作区沙箱保护的 Emacs 活文档组件（`include`、`code-ref`、`symbol`、`project-tree`、`git-log`、`git-diff`）和受信任门禁控制的 `run` 运行块。支持用 `etaf-md-define-node` 自定义节点类型，详见[扩展语法](docs/extensions.zh-CN.md)。
 - **增量实时编辑与极简全局命令面**：全局 `M-x` 仅暴露两个入口命令——`M-x etaf-md-open`（单窗全宽阅读，按 `q` 原地切回源码）与 `M-x etaf-md-preview`（源码右侧非破坏性实时对照分屏，自带滚动跟随）。编辑改动按 16 ms 帧节拍合并，仅对受影响的块切片增量解析与重绘，其余块的组件实例与交互状态完好保留。
 - **媒体播放、页内灯箱与大纲导航**：本地图片与异步缓存的远程 HTTP(S) 图片（`etaf-md-remote-images`）、按 `RET` 开启页内灯箱看图（同时支持图片与 Mermaid 图表）、内嵌视频组件就地播放（`ffmpeg`）、右侧独立 `*ETAF Outline*` 大纲窗（`C-c t`）、标题跳转（`n`/`p`、`C-c j`）、跳回源码（`e`/`o`）、链接与符号浮卡预览（`K`）、全局遮罩显隐（`S`）、配色轮换（`t`）、版心宽度调节（`[`/`]`）与页内可搜索帮助面板（`?`）。
@@ -35,7 +35,7 @@ ETAF Markdown Preview 把本地 Markdown 文档渲染为 Emacs 原生的现代�
 | --- | --- | --- |
 | Emacs 29.1 或更新版本 | 运行 ETAF 与 Ebox | `emacs --version` |
 | ETAF（`>= 0.3.6`）、ETAF UI（`>= 0.3.4`）、Ebox 与 ECSS | 渲染与共享组件目录 | 通过 `etaf-install` 自动安装 |
-| C11 编译器 + Python 3（可选，推荐） | 编译 `native/etaf-md-typeset-native`（`make native-build`），启用零浏览器高速 Mermaid 与公式渲染（macOS 用 CoreText，Linux 优先用 Pango） | `cc --version` |
+| 预编译原生模块（可选，推荐） | 无需本地编译器，通过 `M-x etaf-install-native` 一键下载并校验至 `~/.cache/emacs-taf/native/`，启用零浏览器高速 Mermaid 与公式渲染 | `M-x etaf-install-doctor` |
 | ffmpeg（可选） | 视频就地播放与终端图片转换 | `ffmpeg -version` |
 | Node.js 18 + mermaid-cli（可选兜底） | 未编译原生模块或遇到未支持 Mermaid 图种时的自动回退后端 | `mmdc --version` |
 | qrencode（可选） | 渲染 `qrcode` 二维码块 | `qrencode -V` |
@@ -53,15 +53,9 @@ ETAF Markdown Preview 把本地 Markdown 文档渲染为 Emacs 原生的现代�
 (package-install 'etaf-install)
 ```
 
-随后运行 `M-x etaf-install` 并选择 `etaf-md`，安装器会自动拉取并配置 `etaf`、`etaf-ui`、`ebox` 与 `ecss`。
+随后运行 `M-x etaf-install` 并选择 `etaf-md`：安装器会一步完成 `etaf`、`etaf-ui`、`ebox`、`ecss` 依赖安装，并自动下载对应平台的预编译 QuickJS Mermaid 与 MathJax 原生渲染模块、校验 SHA-256 后缓存至 `~/.cache/emacs-taf/native/`（升级 `etaf-md` 不丢失，无需本机 C 编译器、Node.js 或 `make`）并立即热加载生效，装完直接可用。
 
-若要开启零浏览器高速 Mermaid 与 MathJax 原生渲染（全部上游源码已内嵌在 `native/vendor/`，无需联网下载），只需在已安装的 `etaf-md` 包目录下执行一次：
-
-```sh
-cd ~/.emacs.d/elpa/etaf-md-* && make native-build
-```
-
-随时可以运行 `M-x etaf-install-doctor`（或求值 `(etaf-md-doctor)`）查看 `typeset-native`、`ffmpeg`、`mmdc`、`qrencode` 与 `git` 的就绪状态。
+如果此前在离线环境或通过 `package-install` 直接安装了 `etaf-md`，随时可运行 `M-x etaf-install-native`（或在 `M-x etaf-install-manage` 选中 `etaf-md` 按 `n`）补装或刷新预编译二进制；运行 `M-x etaf-install-doctor`（或求值 `(etaf-md-doctor)`）可查看 `typeset-native`、`ffmpeg`、`mmdc`、`qrencode` 与 `git` 的就绪状态。
 
 ### 从源码检出使用
 
@@ -85,7 +79,7 @@ M-x etaf-md-open         # 在当前窗口全宽阅读当前 .md 文件（或选
 M-x etaf-md-preview      # 在源码右侧开关双栏实时对照预览
 ```
 
-包内自带三份演示文档供直接体验：`examples/all-syntax.markdown` 在一页内集中展示全部 Markdown 语法、容器构件与 20+ 种图表；`examples/widgets-showcase.markdown` 展示编辑型容器与 Emacs 活文档组件；`examples/sample.markdown` 是接近真实场景的长文档手册。
+安装完成后直接对任意本地 `.md` 文件运行 `M-x etaf-md-open` 或 `M-x etaf-md-preview` 即可体验（ELPA 归档包刻意省略了开发用的 `Makefile` 与 `examples/` 以保持精简；源码检出仓库中保留了 `examples/all-syntax.markdown`、`examples/widgets-showcase.markdown` 与 `examples/sample.markdown` 供开发与性能回归使用）。
 
 | 按键 | 作用 |
 | --- | --- |

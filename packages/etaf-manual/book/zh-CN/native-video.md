@@ -302,7 +302,7 @@
 
 `etaf-video` 使用的播放引擎：`auto`（默认）、`mpv` 或 `ffmpeg`。
 
-**语义。** `auto` 在图形帧的 `image` 模式下优先启用跨平台 `libmpv` 动态模块（`native/etaf-video-mpv`），提供真音画同步、无缝调节音量/倍速/缩放、多音轨、原生 `libass` / 双语字幕、硬件解码与画面滤镜；否则自动回退到 `ffmpeg` 子进程管线。`mpv` 强制使用 `libmpv`；`ffmpeg` 强制使用子进程管线。在包根目录执行 `sh native/build-video-mpv-module.sh` 即可构建，编译期仅依赖 `emacs-module.h`，运行期动态加载 `libmpv`。
+**语义。** `auto` 在图形帧的 `image` 模式下优先启用跨平台 `libmpv` 动态模块（`native/etaf-video-mpv`），提供真音画同步、无缝调节音量/倍速/缩放、多音轨、原生 `libass` / 双语字幕、硬件解码与画面滤镜；否则自动回退到 `ffmpeg` 子进程管线。`mpv` 强制使用 `libmpv`；`ffmpeg` 强制使用子进程管线。通过 `M-x etaf-install` 安装时会自动免编译器下载并校验预编译模块至用户缓存目录（也可通过 `M-x etaf-install-native` 按需补装或刷新）；从源码检出时也可在包根目录执行 `sh native/build-video-mpv-module.sh` 本地构建，编译期仅依赖 `emacs-module.h`，运行期动态加载 `libmpv`。
 
 **参见。** `etaf-video-mpv-available-p`、`etaf-video-mpv-library`、`etaf-video-set-property`。
 

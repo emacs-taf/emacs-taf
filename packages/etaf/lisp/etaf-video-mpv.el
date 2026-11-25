@@ -41,11 +41,14 @@ pipeline.")
   "Optional explicit path to the libmpv shared library (`dylib', `so' or `dll').
 When nil, the native module searches standard system library paths.")
 
+(defconst etaf-video-mpv--native-version "1"
+  "Native dynamic module ABI/content version expected by this Elisp layer.")
+
 (defvar etaf-video-mpv--module-file nil
   "Loaded path of the `etaf-video-mpv' dynamic module, or nil.")
 
 (defvar etaf-video-mpv--module-failed nil
-  "Non-nil after loading the `etaf-video-mpv' module failed once.")
+  "Cons of (FILE . MTIME) when loading that `etaf-video-mpv' binary failed.")
 
 (defun etaf-video-mpv--module-extension ()
   "Return the native dynamic module extension for the current platform."
@@ -54,28 +57,63 @@ When nil, the native module searches standard system library paths.")
     ('windows-nt "dll")
     (_ "so")))
 
+(defun etaf-video-mpv--native-cache-path ()
+  "Return the unified user-cache path for the prebuilt `etaf-video-mpv' module."
+  (let ((cache-root
+         (or (and (boundp 'etaf-install-native-directory)
+                  etaf-install-native-directory)
+             (expand-file-name
+              "emacs-taf/native"
+              (or (let ((xdg (getenv "XDG_CACHE_HOME")))
+                    (and xdg (not (string-empty-p xdg)) xdg))
+                  (expand-file-name "~/.cache"))))))
+    (expand-file-name
+     (format "etaf-video-mpv.%s" (etaf-video-mpv--module-extension))
+     (expand-file-name (concat "etaf/" etaf-video-mpv--native-version)
+                       cache-root))))
+
+(defun etaf-video-mpv--module-path ()
+  "Return the `etaf-video-mpv' dynamic module path if present in checkout or cache."
+  (let* ((root (or (let ((lib (ignore-errors (locate-library "etaf"))))
+                     (and lib (not (string-suffix-p ".eln" lib))
+                          (file-name-directory lib)))
+                   (and load-file-name
+                        (not (string-suffix-p ".eln" load-file-name))
+                        (expand-file-name
+                         ".." (file-name-directory load-file-name)))))
+         (ext (etaf-video-mpv--module-extension))
+         (candidates (delq nil
+                           (list (and root
+                                      (expand-file-name
+                                       (format "native/etaf-video-mpv.%s" ext) root))
+                                 (etaf-video-mpv--native-cache-path)))))
+    (cl-find-if #'file-exists-p candidates)))
+
 (defun etaf-video-mpv--load-module ()
-  "Load the optional `etaf-video-mpv' dynamic module once, or return nil."
-  (unless etaf-video-mpv--module-failed
-    (or etaf-video-mpv--module-file
-        (let* ((root (or (ignore-errors
-                           (file-name-directory (locate-library "etaf")))
-                         (and load-file-name
-                              (expand-file-name
-                               ".." (file-name-directory load-file-name)))))
-               (file (and root
-                          (expand-file-name
-                           (format "native/etaf-video-mpv.%s"
-                                   (etaf-video-mpv--module-extension))
-                           root))))
-          (if (and file (file-exists-p file)
-                   (fboundp 'module-load)
-                   (condition-case nil
-                       (progn (module-load file) t)
-                     (error nil)))
-              (setq etaf-video-mpv--module-file file)
-            (setq etaf-video-mpv--module-failed t)
-            nil)))))
+  "Load the optional `etaf-video-mpv' dynamic module once, or return nil.
+Re-probes automatically when a new prebuilt module appears in the user cache."
+  (or etaf-video-mpv--module-file
+      (and (fboundp 'etaf-video-mpv--native-available-p)
+           (setq etaf-video-mpv--module-file
+                 (or (etaf-video-mpv--module-path) t)))
+      (let* ((file (etaf-video-mpv--module-path))
+             (mtime (and file (file-attribute-modification-time
+                               (file-attributes file)))))
+        (cond
+         ((null file) nil)
+         ((and (consp etaf-video-mpv--module-failed)
+               (equal (car etaf-video-mpv--module-failed) file)
+               (equal (cdr etaf-video-mpv--module-failed) mtime))
+          nil)
+         ((and (fboundp 'module-load)
+               (condition-case nil
+                   (progn (module-load file) t)
+                 (error nil)))
+          (setq etaf-video-mpv--module-failed nil
+                etaf-video-mpv--module-file file))
+         (t
+          (setq etaf-video-mpv--module-failed (cons file mtime))
+          nil)))))
 
 ;;;###autoload
 (defun etaf-video-mpv-available-p ()
@@ -201,7 +239,7 @@ When nil, the native module searches standard system library paths.")
           (audio nil) (volume 100) (playing t) on-frame on-state canvas-spec-fn)
   "Create and start a libmpv playback session for normalized SPEC."
   (unless (etaf-video-mpv-available-p)
-    (user-error "libmpv is not available; build native/etaf-video-mpv and install libmpv"))
+    (user-error "libmpv is not available; run M-x etaf-install-native (select etaf) and install libmpv"))
   (let* ((target (or (plist-get spec :target)
                      (plist-get spec :file)
                      (plist-get spec :url)))

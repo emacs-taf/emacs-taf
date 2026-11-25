@@ -165,6 +165,7 @@ def check(root, files=None, notices=None):
     def fail(path, message): errors.append(f'{path}: {message}')
     if workspace:
         errors.extend(install_selection_errors(root))
+        errors.extend(archive_consistency_errors(root))
         # One workspace owns every checkout: a nested workspace root would fork
         # the registry, its shared tooling and its integration checkpoint again.
         for name in sorted(allowed_dirs - DIRS):
@@ -185,6 +186,24 @@ def check(root, files=None, notices=None):
                     if (packages_dir / name / vcs).exists():
                         fail(f'packages/{name}/{vcs}',
                              'nested VCS directory inside packages/; keep one shared checkout')
+            valid_roles = {'framework', 'extension', 'application', 'game'}
+            for name, meta in sorted(registered.items()):
+                if not isinstance(meta, dict):
+                    continue
+                role = meta.get('role')
+                if role is None:
+                    continue
+                if role not in valid_roles:
+                    fail('workspace.json',
+                         f'{name}: unknown role {role!r}; expected one of {sorted(valid_roles)}')
+                elif role == 'extension':
+                    entry_path = packages_dir / name / f'{name}.el'
+                    if entry_path.is_file():
+                        head = entry_path.read_text(encoding='utf-8', errors='replace')
+                        req = re.search(r'^;; Package-Requires: (.+)$', head, re.M)
+                        if not req or not re.search(r'\(etaf-ext\s+"[^"]+"\)', req.group(1)):
+                            fail(f'packages/{name}/{name}.el',
+                                 'role "extension" requires declaring etaf-ext in Package-Requires')
     # A package inside a shared container borrows the tooling the container
     # owns; only a root that stands alone carries its own copies.
     required = ['README.md', 'Makefile']
@@ -370,6 +389,77 @@ def install_selection_errors(root):
         errors.append(f'etaf-install.el: target {name} is not in release-dependencies targets')
     for name in sorted(gated - targets):
         errors.append(f'release-dependencies.json: target {name} is not an installer target')
+    return errors
+
+
+BROKEN_ELPA_DOC = re.compile(
+    r"elpa/[^\n\"']*\s&&\s*(?:make\b|sh\s+native/build-)", re.IGNORECASE
+)
+BROKEN_DOCTOR_REMEDY = re.compile(
+    r"(?:elpa/[^\n\"']*\s&&\s*make\b|run\s+['`\"]make\s+native-build['`\"]|run\s+['`\"]sh\s+native/build-)",
+    re.IGNORECASE,
+)
+
+
+def archive_consistency_errors(root):
+    """Validate release resource paths, native manifests and archive-safe remedies.
+
+    Catches drift where a package README or `*-doctor' tells archive users to
+    run an unshipped root Makefile or shell build script inside `elpa/', or
+    where a shipped `native/manifest.json' fails schema/checksum validation.
+    """
+    selection_path = root / 'release-dependencies.json'
+    packages_dir = root / 'packages'
+    if not selection_path.is_file() or not packages_dir.is_dir():
+        return []
+    try:
+        selection = json.loads(selection_path.read_text(encoding='utf-8'))
+        packages = selection.get('packages') or {}
+    except (OSError, ValueError, TypeError) as error:
+        return [f'release-dependencies.json: {error}']
+    errors = []
+    native_validator = None
+    native_script = root / 'scripts' / 'native-release.py'
+    if native_script.is_file():
+        spec = importlib.util.spec_from_file_location('native_release', native_script)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        native_validator = module.validate_manifest
+
+    for name, options in sorted(packages.items()):
+        pkg_dir = packages_dir / name
+        if not pkg_dir.is_dir():
+            continue
+        resources = (options or {}).get('resources') or []
+        for resource in resources:
+            rel = PurePosixPath(resource)
+            target = pkg_dir / resource
+            if (rel.is_absolute() or not rel.parts or any(part in ('.', '..') for part in rel.parts)
+                    or not (target.is_dir() or target.is_file())):
+                errors.append(f'release-dependencies.json: {name}: missing resource {resource}')
+        manifest_path = pkg_dir / 'native' / 'manifest.json'
+        if manifest_path.is_file() and native_validator is not None:
+            try:
+                doc = json.loads(manifest_path.read_text(encoding='utf-8'))
+            except (OSError, ValueError) as error:
+                errors.append(f'packages/{name}/native/manifest.json: invalid JSON: {error}')
+            else:
+                for err in native_validator(doc, expected_package=name):
+                    errors.append(f'packages/{name}/native/manifest.json: {err}')
+        # Archive packages never ship a root Makefile; doctor remedies and ELPA
+        # install guides must not tell archive users to run one.
+        for doc_name, pattern in (('README.md', BROKEN_ELPA_DOC),
+                                  ('README.zh-CN.md', BROKEN_ELPA_DOC),
+                                  (f'{name}.el', BROKEN_DOCTOR_REMEDY)):
+            path = pkg_dir / doc_name
+            if not path.is_file():
+                continue
+            text = path.read_text(encoding='utf-8', errors='replace')
+            match = pattern.search(text)
+            if match:
+                errors.append(
+                    f'packages/{name}/{doc_name}: archive users do not receive root Makefile/build scripts; '
+                    f'replace {match.group(0)!r} with M-x etaf-install-native')
     return errors
 
 

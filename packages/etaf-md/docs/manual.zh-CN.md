@@ -71,7 +71,7 @@
 | `etaf-md-flavor` | `nil`（`etaf`） | `etaf-md-create` 没收到 `:flavor` 时用的方言（`etaf`、`gfm`、`commonmark` 或特性 plist）。 |
 | `etaf-md-width-min` | `40` | 最窄的阅读宽度，单位是字符格。 |
 | `etaf-md-width-max` | `96` | 最宽的阅读宽度；窗口更宽时保持这个值并把这一列居中。 |
-| `etaf-md-typeset` | `t` | 通过内置 QuickJS 原生模块（`make native-build`，借鉴 [LuciusChen/pele.el](https://github.com/LuciusChen/pele.el)）或回退的 `mermaid-cli`，将 `mermaid` 围栏与 `$$` 显示公式渲染为 SVG 图片。 |
+| `etaf-md-typeset` | `t` | 通过预编译 QuickJS 原生模块（`M-x etaf-install-native`，借鉴 [LuciusChen/pele.el](https://github.com/LuciusChen/pele.el)）或回退的 `mermaid-cli`，将 `mermaid` 围栏与 `$$` 显示公式渲染为 SVG 图片。 |
 | `etaf-md-node-directory` | `~/.emacs.d/etaf-md-nodes` | 存放自定义 `:::` 容器节点 `.el` 定义文件的目录。 |
 | `etaf-md-allow-local-read` | `t` | 是否允许只读活文档组件（`include`、`code-ref`、`project-tree`、`git-log`、`git-diff`）在工作区根内读盘。 |
 | `etaf-md-allow-actions` | `ask` | 控制可执行 `run` 块策略：`ask` 执行前确认、`t` 直接运行、`nil` 彻底禁用。 |
@@ -129,4 +129,4 @@
 - **视频用系统播放器打开，没在原地播。** `exec-path` 上没有 ffmpeg，卡片保留了海报回退。
 - **播放完的视频按 `RET` 会从头再来。** 播完的视频没有暂停状态可恢复，下一次按下就是重播；在那之前画布上留着最后一帧，短片可能在下次按键之前就播完了。
 - **换主题后共享组件没重画。** 预览只给自己的子树发布配色，外层的应用保持它自己的主题上下文。
-- **Mermaid 图表或 `$$` 公式仍显示源码。** 运行 `M-x etaf-install-doctor`（或求值 `(etaf-md-doctor)`）查看 `typeset-native` 与 `mmdc` 是否就绪。在 `etaf-md` 包目录执行一次 `make native-build` 即可编译内置 QuickJS + Pele + MathJax 原生渲染模块（无需浏览器和 Node.js，架构借鉴 [LuciusChen/pele.el](https://github.com/LuciusChen/pele.el)），或安装 `@mermaid-js/mermaid-cli` 作为兜底。
+- **Mermaid 图表或 `$$` 公式仍显示源码。** 运行 `M-x etaf-install-doctor`（或求值 `(etaf-md-doctor)`）查看 `typeset-native` 与 `mmdc` 是否就绪。执行 `M-x etaf-install-native`（选择 `etaf-md`，或在 `M-x etaf-install-manage` 中按 `n`）即可一键下载校验预编译 QuickJS + Pele + MathJax 原生渲染模块到 `~/.cache/emacs-taf/native/` 并即时生效（无需浏览器、Node.js 或本地编译器，架构借鉴 [LuciusChen/pele.el](https://github.com/LuciusChen/pele.el)），也可安装 `@mermaid-js/mermaid-cli` 作为兜底；源码检出开发者仍可用 `make native-build` 本地编译。

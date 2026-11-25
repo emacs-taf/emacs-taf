@@ -1,0 +1,143 @@
+name: Prebuilt native modules
+on:
+  workflow_dispatch:
+    inputs:
+      packages:
+        description: Comma-separated package names (blank = all registered native packages)
+        required: false
+        default: ''
+  push:
+    paths:
+      - 'packages/etaf-md/native/**'
+      - 'packages/etaf/native/**'
+      - 'packages/ekp/native/**'
+      - 'scripts/native-release.py'
+      - '.github/workflows/native-modules.yml'
+  pull_request:
+    paths:
+      - 'packages/etaf-md/native/**'
+      - 'packages/etaf/native/**'
+      - 'packages/ekp/native/**'
+      - 'scripts/native-release.py'
+      - '.github/workflows/native-modules.yml'
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: macOS arm64 + x86_64
+            os: macos-latest
+            platform_group: darwin
+            packages: etaf-md etaf ekp
+          - label: Linux x86_64 (glibc 2.35, dlopen Pango)
+            os: ubuntu-22.04
+            platform_group: linux-x86_64
+            packages: etaf-md etaf ekp
+          - label: Linux arm64 (dlopen Pango)
+            os: ubuntu-24.04-arm
+            platform_group: linux-arm64
+            packages: etaf-md etaf ekp
+          - label: Windows x86_64
+            os: windows-latest
+            platform_group: windows-x86_64
+            packages: etaf ekp
+    env:
+      PYTHONUTF8: '1'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+      # Compile against Emacs 29.1 headers so every dynamic module uses the
+      # baseline ABI compatible with Emacs 29, 30 and 31.
+      - name: Install Emacs 29.1 (Linux/macOS)
+        if: runner.os != 'Windows'
+        uses: purcell/setup-emacs@34c6ded44899fd1bf74d2889558befd1750e61a7
+        with:
+          version: '29.1'
+      - name: Install Emacs 29.1 (Windows)
+        if: runner.os == 'Windows'
+        uses: jcs090218/setup-emacs-windows@3ad415b5f6575fe0bb8218cb35c199a93b1fb833
+        with:
+          version: '29.1'
+      - name: Build and smoke-test native modules
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="${RUNNER_TEMP}/native-out"
+          mkdir -p "${OUT}"
+          SELECTED="${{ inputs.packages }}"
+          PKGS="${{ matrix.packages }}"
+          ARGS=()
+          for p in ${PKGS}; do
+            if [ -z "${SELECTED}" ] || [[ ",${SELECTED}," == *",${p},"* ]]; then
+              ARGS+=(--package "${p}")
+            fi
+          done
+          if [ "${#ARGS[@]}" -eq 0 ]; then
+            echo "No matching packages for this runner"
+            exit 0
+          fi
+          if [ "${{ matrix.platform_group }}" = "darwin" ]; then
+            python3 scripts/native-release.py build --output "${OUT}" --arch arm64 "${ARGS[@]}"
+            python3 scripts/native-release.py build --output "${OUT}" --arch x86_64 "${ARGS[@]}"
+          else
+            python3 scripts/native-release.py build --output "${OUT}" "${ARGS[@]}"
+          fi
+      - name: Upload built platform artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: native-${{ matrix.platform_group }}
+          path: ${{ runner.temp }}/native-out
+          if-no-files-found: ignore
+          retention-days: 14
+
+  assemble:
+    name: Assemble and verify native release manifest
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+      - name: Download all platform artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: native-*
+          path: ${{ runner.temp }}/merged
+          merge-multiple: true
+      - name: Assemble verified manifests and staged native tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/native-release.py manifest \
+            --input "${RUNNER_TEMP}/merged" \
+            --write-packages \
+            --stage "${RUNNER_TEMP}/staged-native"
+          python3 scripts/native-release.py verify --all --stage "${RUNNER_TEMP}/staged-native"
+          mkdir -p "${RUNNER_TEMP}/package-manifests"
+          for f in packages/*/native/manifest.json; do
+            pkg=$(basename "$(dirname "$(dirname "$f")")")
+            cp "$f" "${RUNNER_TEMP}/package-manifests/${pkg}-manifest.json"
+          done
+      - name: Upload verified native release bundle
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: etaf-native-release
+          path: |
+            ${{ runner.temp }}/staged-native
+            ${{ runner.temp }}/package-manifests
+          retention-days: 30

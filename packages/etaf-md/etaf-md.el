@@ -329,9 +329,11 @@
 ;; Variable: etaf-md-typeset (default t)
 ;; Whether a mermaid fence and a `$$' display formula are drawn as pictures.
 ;; Both are source in the markdown and crisp SVGs on the page when the
-;; embedded QuickJS native module (`make native-build', combining vendored
+;; embedded QuickJS native module (installed automatically by `M-x etaf-install'
+;; or `M-x etaf-install-native', or built from a source checkout with
+;; `make native-build', combining vendored
 ;; Obsidian Pele + native CoreText/Pango text measurement and MathJax
-;; TeX-to-SVG, inspired by LuciusChen/pele.el) is built; `mermaid-cli' +
+;; TeX-to-SVG, inspired by LuciusChen/pele.el) is available; `mermaid-cli' +
 ;; KaTeX serves as an automatic fallback when the native module is absent or
 ;; for diagram dialects Pele does not implement.  A render runs in the
 ;; background and is cached by its source and the page's colours, keeping the
@@ -437,7 +439,7 @@ tells which block keeps its source text without it."
                       (plist-get native-info :pele)
                       (plist-get native-info :mathjax)
                       (plist-get native-info :text-backend))
-            "Optional: run 'make native-build' in etaf-md for fast zero-browser Mermaid and math SVG rendering.")))
+            "Optional: run M-x etaf-install-native (select etaf-md) to download the prebuilt QuickJS renderer for fast zero-browser Mermaid and math SVG rendering.")))
     (list :required nil
           :optional
           (list (list "typeset-native" native-ok native-remedy)

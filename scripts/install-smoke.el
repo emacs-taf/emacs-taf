@@ -77,9 +77,12 @@ report it immediately instead of retrying and hiding it."
         (message "Archives still empty after %d attempts: %S" attempt missing)))))
 
 (defvar etaf-install-archive-url)
+(defvar etaf-install-native-directory)
+(defvar etaf-install-native-url)
 
 (declare-function etaf-install "etaf-install" (&optional package no-open))
 (declare-function etaf-install-doctor "etaf-install" (&optional package))
+(declare-function etaf-install-status "etaf-install" (&optional package))
 (declare-function etaf-ui-gallery-open "etaf-ui" (&optional buffer-or-name))
 (declare-function etaf-manual-book "etaf-manual" (&optional language))
 (declare-function etaf-unmount "etaf" (&optional runtime))
@@ -99,12 +102,14 @@ report it immediately instead of retrying and hiding it."
 (let* ((archive (getenv "ETAF_INSTALL_ARCHIVE"))
        (profile (getenv "ETAF_INSTALL_PROFILE"))
        (target (intern (or (getenv "ETAF_INSTALL_TARGET") "etaf-ui")))
-       (direct (getenv "ETAF_INSTALL_DIRECT")))
+       (direct (getenv "ETAF_INSTALL_DIRECT"))
+       (native-url (getenv "ETAF_INSTALL_NATIVE_URL")))
   (unless (and archive profile (file-directory-p profile))
     (error "Set ETAF_INSTALL_ARCHIVE and a disposable ETAF_INSTALL_PROFILE"))
   (setq user-emacs-directory (file-name-as-directory profile)
         package-user-dir (expand-file-name "elpa" profile)
         custom-file (expand-file-name "custom.el" profile)
+        etaf-install-native-directory (expand-file-name "native-cache" profile)
         package-directory-list nil
         ;; Mirror the archives the installer registers: a direct
         ;; `package-install` of a target that depends on a package from a
@@ -125,8 +130,16 @@ report it immediately instead of retrying and hiding it."
       (progn (package-install target) (require target))
     (package-install 'etaf-install)
     (require 'etaf-install)
-    (setq etaf-install-archive-url (file-name-as-directory archive))
+    (setq etaf-install-archive-url (file-name-as-directory archive)
+          etaf-install-native-directory (expand-file-name "native-cache" profile)
+          etaf-install-native-url (and native-url (not (string-empty-p native-url)) native-url))
     (etaf-install target (not (eq target 'etaf-ui)))
+    (when (and etaf-install-native-url
+               (memq target '(etaf-md etaf ekp etaf-video-player)))
+      (let ((status (etaf-install-status target)))
+        (unless (eq (plist-get status :native) 'installed)
+          (error "etaf-install did not automatically install native modules for %s: %S"
+                 target status))))
     ;; Framework targets must be usable immediately. An application's external
     ;; tools are runtime capabilities: the package installs, opening waits.
     (when (memq target '(etaf-ui etaf etaf-manual ekp etaf-db))
@@ -138,7 +151,8 @@ report it immediately instead of retrying and hiding it."
         (error "Installed package escaped the disposable profile: %s" (car entry)))))
   ;; Opening an installed target must not refresh or download again.
   (unless direct
-    (let ((etaf-install-archive-url "/nonexistent-offline-archive/"))
+    (let ((etaf-install-archive-url "/nonexistent-offline-archive/")
+          (etaf-install-native-url nil))
       (etaf-install target (not (eq target 'etaf-ui)))))
   (when (featurep 'etaf)
     (eval
@@ -210,6 +224,51 @@ report it immediately instead of retrying and hiding it."
           (dolist (fact (plist-get facts section))
             (unless (and (listp fact) (stringp (car fact)) (nth 2 fact))
               (error "%s-doctor returned a malformed fact: %S" target fact)))))))
+  ;; Packages that ship a native module manifest must install it intact.
+  (when (memq target '(etaf-md etaf ekp))
+    (let* ((desc (cadr (assq target package-alist)))
+           (dir (and desc (package-desc-dir desc)))
+           (manifest (and dir (expand-file-name "native/manifest.json" dir))))
+      (unless (and manifest (file-readable-p manifest))
+        (error "Installed %s is missing native/manifest.json" target))
+      (let ((doc (with-temp-buffer
+                   (insert-file-contents manifest)
+                   (json-parse-buffer :object-type 'hash-table :array-type 'list))))
+        (unless (and (eql (gethash "schema" doc) 1)
+                     (equal (gethash "package" doc) (symbol-name target))
+                     (consp (gethash "modules" doc)))
+          (error "Installed %s has malformed native/manifest.json" target)))))
+  (when (eq target 'etaf-md)
+    (let* ((desc (cadr (assq 'etaf-md package-alist)))
+           (dir (and desc (package-desc-dir desc))))
+      (dolist (unexpected '("Makefile" "examples" "native/vendor" "native/build"))
+        (when (file-exists-p (expand-file-name unexpected dir))
+          (error "Installed etaf-md should not ship %s" unexpected)))
+      (unless (file-readable-p (expand-file-name "scripts/mermaid-render.mjs" dir))
+        (error "Installed etaf-md is missing scripts/mermaid-render.mjs"))
+      (let* ((facts (funcall (intern "etaf-md-doctor")))
+             (native-fact (assoc "typeset-native" (plist-get facts :optional))))
+        (unless native-fact
+          (error "Installed etaf-md-doctor is missing typeset-native"))
+        (when (string-match-p "make native-build" (nth 2 native-fact))
+          (error "Installed etaf-md-doctor still references unshipped make native-build")))
+      ;; Rendering a document with Mermaid and display math must degrade cleanly
+      ;; in a fresh archive install before the optional native binary is fetched.
+      (eval
+       '(let* ((session (etaf-md-create
+                         :text "# Archive Smoke\n\n```mermaid\nflowchart LR\n  A --> B\n```\n\n$$\nx^2 + y^2 = z^2\n$$\n"))
+               (buffer (etaf-mount (generate-new-buffer " *etaf-md-install-smoke*")
+                                   (etaf-md-view session)
+                                   '(:viewport-width 96 :viewport-height 40))))
+          (unwind-protect
+              (with-current-buffer buffer
+                (let ((text (buffer-substring-no-properties (point-min) (point-max))))
+                  (unless (string-match-p "Archive Smoke" text)
+                    (error "Installed etaf-md failed to render heading"))))
+            (when (buffer-live-p buffer)
+              (with-current-buffer buffer (etaf-unmount))
+              (kill-buffer buffer))))
+       t)))
   (when (eq target 'etaf-manual)
     (unless (plist-get (etaf-manual-book "en") :chapters)
       (error "Installed reference manual has no book data")))

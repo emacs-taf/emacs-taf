@@ -548,8 +548,8 @@ GUI 保持实际运行时的 GC 策略与用户设置，测量工具不能额外
 | 类别 | 例子 | 归属与机制 |
 | --- | --- | --- |
 | Emacs 包（自有或公共） | `etaf-db`、`telega` | 在 `Package-Requires` 声明；`etaf-install` 注册所需归档（`etaf`、`gnu`、`nongnu`、`melpa`），由 `package.el` 自动解析安装；不关闭签名校验、不改用户其它源。归档包与安装目标由 `release-dependencies.json` 选择；`workspace.json` 只登记检出单元与远端，整仓提交就是发布版本 |
-| 自有组件（CLI、Node 后端、可编译模块） | `weread` 后端、`ebook-parse`、EKP C 模块 | 源码放在**应用仓内**，随包同一 tar 发布并计入 sha256；安装到 `package-user-dir/etaf/<包>/<版本>/`；需要 `npm ci` 或 `make` 时在该目录执行，输出进日志、失败可重试；启动时握手校验组件版本与包版本一致 |
-| 系统程序与账号 | ffmpeg、mpv、node、TDLib、Godot、OpenSpiel、平台登录 | 只检测，给出按平台生成的一条可复制命令；不代跑 `sudo`/`brew`/`apt`。游戏引擎是唯一例外：包内自带固定版本与校验值的安装脚本，用户显式执行一条命令时装进 ETAF 缓存目录；安装器与启动路径都不自行下载 |
+| 自有组件与原生模块（脚本后端、Emacs C 动态模块） | `weread` 后端、`etaf-md` QuickJS 模块、`etaf` `libmpv` 模块、EKP C 模块 | 纯源码后端随包同一 tar 发布并计入 sha256；C 动态模块在源码仓维护并通过 CI 按 `(OS, Arch)` 矩阵对 Emacs 29.1 基线头文件预编译，包内只随 tar 发布带固定版本、HTTPS 镜像与 SHA-256 的 `native/manifest.json`；用户执行 `M-x etaf-install`（或 `M-x etaf-install-update`）时按依赖闭包自动下载、校验并热加载到 `${XDG_CACHE_HOME:-~/.cache}/emacs-taf/native/<包>/<版本>/`（不进 tar、不依赖本地编译器、升级包不丢失，且网络或平台不可用时优雅回退不阻断安装），也可随时用 `M-x etaf-install-native`（或在 `M-x etaf-install-manage` 按 `n`）手动重试或强制重装；源码检出仍保留本地 `native/` 构建路径 |
+| 系统程序与账号 | ffmpeg、mpv、node、TDLib、Godot、OpenSpiel、平台登录 | 只检测，给出按平台生成的一条可复制命令；不代跑 `sudo`/`brew`/`apt`。游戏引擎与预编译原生模块是受控下载路径：包内自带固定版本与 SHA-256 校验值的清单或脚本，仅在用户执行安装/更新命令（`M-x etaf-install` / `M-x etaf-install-native` / `M-x etaf-gamekit-install-*`）时下载并校验后写入 ETAF 缓存目录（`etaf-install-auto-native` 可设为 nil 关闭自动拉取）；包加载与启动路径绝不静默下载 |
 
 自有组件的源码必须跟随应用仓，不留在别的仓库或技能目录：一个版本一次提升，Lisp 与组件原子发布，避免跨仓版本对齐。引擎安装脚本属于包内组件，随同一个 tar 发布并计入 sha256，所以归档安装也能执行它。
 
@@ -566,11 +566,11 @@ GUI 保持实际运行时的 GC 策略与用户设置，测量工具不能额外
 
 ### 13.5 缺依赖时怎么说
 
-菜单条目直接显示状态；缺自有组件给一键安装，缺系统程序给一条命令并提示“装完回来按 `r` 重新检测”，缺账号交给应用内的一次性配置。Godot 的那一条是 `M-x etaf-gamekit-install-godot`：后台执行包内脚本，进度写进 `*ETAF engine install*`，成败在 echo area 报告。阻塞与降级分开：缺 ffmpeg 只影响视频，允许打开并提示受限；缺 `telega-server` 或游戏引擎就明确拒绝启动。错误必须是一句人话加可复制命令，不输出 Lisp 堆栈。
+菜单条目直接显示状态；缺可选预编译原生模块给出 `M-x etaf-install-native`（或在 `M-x etaf-install-manage` 按 `n`），绝不要求归档用户进入 `elpa/` 目录手工执行 `make` 或 shell 构建脚本；缺系统程序给一条命令并提示“装完回来按 `r` 重新检测”，缺账号交给应用内的一次性配置。Godot 的那一条是 `M-x etaf-gamekit-install-godot`：后台执行包内脚本，进度写进 `*ETAF engine install*`，成败在 echo area 报告。阻塞与降级分开：缺 ffmpeg、缺 `typeset-native` 或缺 `ekp` C 模块只影响对应加速/媒体能力，允许打开并提示受限；缺 `telega-server` 或游戏引擎就明确拒绝启动。错误必须是一句人话加可复制命令，不输出 Lisp 堆栈。
 
 ### 13.6 明确不做
 
-不代跑系统包管理器或 `sudo`，不静默改写用户配置（归档注册除外，且只增不减、不禁用签名），不关闭 TLS 或签名校验，不替换同名版本，不发布未封口代码，不把第三方二进制塞进归档。不下载未固定版本或未通过校验值的第三方二进制：引擎运行时只能由用户显式执行的安装命令下载固定版本，写进 ETAF 缓存目录，不进归档。
+不代跑系统包管理器或 `sudo`，不静默改写用户配置（归档注册除外，且只增不减、不禁用签名），不关闭 TLS 或签名校验，不替换同名版本，不发布未封口代码，不把平台二进制塞进 ELPA `.tar` 归档。不下载未固定版本或未通过 SHA-256 校验的二进制：游戏引擎与预编译原生动态模块只能由用户执行的安装/更新命令（`M-x etaf-install` / `M-x etaf-install-update` / `M-x etaf-install-native` / `M-x etaf-gamekit-install-*`）按包内固定清单下载并校验后写入 ETAF 缓存目录，不进包目录也不进 ELPA 归档，包加载和启动路径不联网下载。
 
 ### 13.6.1 发布清单的三层含义
 
@@ -584,7 +584,7 @@ GUI 保持实际运行时的 GC 策略与用户设置，测量工具不能额外
 - `etaf-telega` 通过声明 `telega` 与注册 MELPA 自动装齐依赖；`telega-server` 与账号仍未纳入（只检测）。
 - `etaf-weread` 与 `etaf-ncm` 的后端已随应用仓发布，提示、数据目录与检测都指向包内后端；系统侧只检测 Node.js、mpv 等程序。
 - 不在本检出的应用与游戏（例如 `etaf-salvage`、`etaf-solitaire`、`etaf-mario`）尚未纳入检查点，也没有引擎检测。`etaf-gamekit` 的 Godot 与 OpenSpiel 运行时由归档内的安装脚本提供，分别由 `M-x etaf-gamekit-install-godot` 与 `M-x etaf-gamekit-install-openspiel` 安装，写进 `~/.cache/emacs-taf/game-engines`；两者都不再要求源码检出。
-- 组件的托管目录安装（`npm ci`/`make` 到 `package-user-dir/etaf/<包>/<版本>/`）与版本握手仍未实现。当前归档内的后端都是纯源码（Node、Python、Shell），随 tar 解包即可运行，所以这两个应用的“装完即用”不依赖它；需要托管安装的是将来带构建步骤的组件。
+- 原生动态模块分发已通过统一协议落地：`etaf-md`、`etaf`（`etaf-video-mpv`）与 `ekp` 均随包携带 `native/manifest.json`，由 `scripts/native-release.py` 与 `.github/workflows/native-modules.yml` 按 `(OS, Arch)` 矩阵对 Emacs 29.1 基线头文件预编译并托管到 `https://etaf.top/native/`（辅以 GitHub Releases 镜像）；`M-x etaf-install` 与 `M-x etaf-install-update` 在安装/升级时按依赖闭包自动下载校验并热加载至 `~/.cache/emacs-taf/native/<包>/<版本>/`（也可通过 `M-x etaf-install-native` 或 `M-x etaf-install-manage` 中的 `n` 键手动重试/重装，或设 `etaf-install-auto-native` 为 nil 关闭自动拉取）。纯源码后端（Node、Python、Shell）继续随 tar 解包即可运行。
 
 ### 13.8 新增应用上架
 

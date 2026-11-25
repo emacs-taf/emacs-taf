@@ -1,0 +1,58 @@
+{
+  "schema": 1,
+  "package": "etaf",
+  "modules": [
+    {
+      "name": "etaf-video-mpv",
+      "version": "1",
+      "description": "Cross-platform libmpv native video playback module",
+      "platforms": {
+        "darwin-arm64": {
+          "file": "etaf-video-mpv-v1-darwin-arm64.dylib",
+          "urls": [
+            "https://etaf.top/native/etaf/1/etaf-video-mpv-v1-darwin-arm64.dylib",
+            "https://github.com/emacs-taf/etaf/releases/download/native-v1/etaf-video-mpv-v1-darwin-arm64.dylib"
+          ],
+          "sha256": "259e7083c3f10dfd14ec5ec099dfad4bcb397143601a37581609924d775681bc",
+          "size": 34808
+        },
+        "darwin-x86_64": {
+          "file": "etaf-video-mpv-v1-darwin-x86_64.dylib",
+          "urls": [
+            "https://etaf.top/native/etaf/1/etaf-video-mpv-v1-darwin-x86_64.dylib",
+            "https://github.com/emacs-taf/etaf/releases/download/native-v1/etaf-video-mpv-v1-darwin-x86_64.dylib"
+          ],
+          "sha256": "2f0b0833ab5293c886f5bca84204880de72e2176cd3c870c5a81360617568844",
+          "size": 22088
+        },
+        "linux-arm64": {
+          "file": "etaf-video-mpv-v1-linux-arm64.so",
+          "urls": [
+            "https://etaf.top/native/etaf/1/etaf-video-mpv-v1-linux-arm64.so",
+            "https://github.com/emacs-taf/etaf/releases/download/native-v1/etaf-video-mpv-v1-linux-arm64.so"
+          ],
+          "sha256": "73f89bb9881df64dcdce4a1a86fd99dcbd14ac3f2189510d8f2852cad0c72c6b",
+          "size": 72368
+        },
+        "linux-x86_64": {
+          "file": "etaf-video-mpv-v1-linux-x86_64.so",
+          "urls": [
+            "https://etaf.top/native/etaf/1/etaf-video-mpv-v1-linux-x86_64.so",
+            "https://github.com/emacs-taf/etaf/releases/download/native-v1/etaf-video-mpv-v1-linux-x86_64.so"
+          ],
+          "sha256": "1ec0e821f1998b977dd7c71d0e21f5ddb268e42de7838f845991d62575d489ba",
+          "size": 25648
+        },
+        "windows-x86_64": {
+          "file": "etaf-video-mpv-v1-windows-x86_64.dll",
+          "urls": [
+            "https://etaf.top/native/etaf/1/etaf-video-mpv-v1-windows-x86_64.dll",
+            "https://github.com/emacs-taf/etaf/releases/download/native-v1/etaf-video-mpv-v1-windows-x86_64.dll"
+          ],
+          "sha256": "a9d754601477b3b73bba5414bce2e1887977936254ed6e3907ab540c6e1277bc",
+          "size": 111437
+        }
+      }
+    }
+  ]
+}

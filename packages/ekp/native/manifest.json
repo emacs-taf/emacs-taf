@@ -1,0 +1,58 @@
+{
+  "schema": 1,
+  "package": "ekp",
+  "modules": [
+    {
+      "name": "ekp",
+      "version": "1.6",
+      "description": "Multi-threaded C Knuth-Plass line-breaking engine",
+      "platforms": {
+        "darwin-arm64": {
+          "file": "ekp-v1.6-darwin-arm64.dylib",
+          "urls": [
+            "https://etaf.top/native/ekp/1.6/ekp-v1.6-darwin-arm64.dylib",
+            "https://github.com/emacs-taf/ekp/releases/download/native-v1.6/ekp-v1.6-darwin-arm64.dylib"
+          ],
+          "sha256": "552aeffe91eca8a16134b3ce9901f3a640d68ba9338a6e6616efd8591f8e7c62",
+          "size": 52184
+        },
+        "darwin-x86_64": {
+          "file": "ekp-v1.6-darwin-x86_64.dylib",
+          "urls": [
+            "https://etaf.top/native/ekp/1.6/ekp-v1.6-darwin-x86_64.dylib",
+            "https://github.com/emacs-taf/ekp/releases/download/native-v1.6/ekp-v1.6-darwin-x86_64.dylib"
+          ],
+          "sha256": "9911591ef6348c0653ceabcb9d212792bb8a74adcaee3df09024f84922634dd7",
+          "size": 31176
+        },
+        "linux-arm64": {
+          "file": "ekp-v1.6-linux-arm64.so",
+          "urls": [
+            "https://etaf.top/native/ekp/1.6/ekp-v1.6-linux-arm64.so",
+            "https://github.com/emacs-taf/ekp/releases/download/native-v1.6/ekp-v1.6-linux-arm64.so"
+          ],
+          "sha256": "1fbe0921cc958bed3d693a46e1f727d8a8071cbf8fc2067f332829a2385327ac",
+          "size": 72360
+        },
+        "linux-x86_64": {
+          "file": "ekp-v1.6-linux-x86_64.so",
+          "urls": [
+            "https://etaf.top/native/ekp/1.6/ekp-v1.6-linux-x86_64.so",
+            "https://github.com/emacs-taf/ekp/releases/download/native-v1.6/ekp-v1.6-linux-x86_64.so"
+          ],
+          "sha256": "cd94093c1a45fdded8e73a110a85db03dc6e3932de8375e7aba41b1a71590918",
+          "size": 38216
+        },
+        "windows-x86_64": {
+          "file": "ekp-v1.6-windows-x86_64.dll",
+          "urls": [
+            "https://etaf.top/native/ekp/1.6/ekp-v1.6-windows-x86_64.dll",
+            "https://github.com/emacs-taf/ekp/releases/download/native-v1.6/ekp-v1.6-windows-x86_64.dll"
+          ],
+          "sha256": "bdfd3a17afd82aed45096b07b1618652d503f7b926af5c7be31bde0fd9eaf1fb",
+          "size": 310987
+        }
+      }
+    }
+  ]
+}

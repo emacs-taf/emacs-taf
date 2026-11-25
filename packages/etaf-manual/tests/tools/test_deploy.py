@@ -258,6 +258,60 @@ class DeploymentTests(unittest.TestCase):
         self.assertIn("Site-only", result.stderr)
         self.assertEqual((self.base / "current/index.html").read_text(), "stable")
 
+    def native_payload(self, artifacts):
+        """Build a native-only payload from {relpath: (pkg, mod, ver, plat, bytes)}."""
+        import hashlib
+        self.sequence += 1
+        output = self.work / f"native-payload-{self.sequence}.tgz"
+        records = []
+        with tarfile.open(output, "w:gz") as archive:
+            for rel, (pkg, mod, ver, plat, data) in sorted(artifacts.items()):
+                records.append({
+                    "package": pkg, "module": mod, "version": ver,
+                    "platform": plat, "path": rel,
+                    "sha256": hashlib.sha256(data).hexdigest(), "size": len(data),
+                })
+                member = tarfile.TarInfo("native/" + rel)
+                member.size = len(data)
+                archive.addfile(member, io.BytesIO(data))
+            manifest_bytes = (json.dumps({"schema": 1, "artifacts": records}, indent=2) + "\n").encode()
+            member = tarfile.TarInfo("native/manifest.json")
+            member.size = len(manifest_bytes)
+            archive.addfile(member, io.BytesIO(manifest_bytes))
+        return output
+
+    def test_native_artifacts_publish_merge_preserve_and_enforce_immutability(self):
+        self.deploy(self.payload(page="site one", packages=self.package()), "combined")
+        arm_rel = "etaf-md/1/etaf-md-typeset-native-v1-darwin-arm64.dylib"
+        x64_rel = "etaf-md/1/etaf-md-typeset-native-v1-linux-x86_64.so"
+        self.deploy(self.native_payload({
+            arm_rel: ("etaf-md", "etaf-md-typeset-native", "1", "darwin-arm64", b"arm64-bytes"),
+        }), "native")
+        self.assertEqual((self.base / "current/native" / arm_rel).read_bytes(), b"arm64-bytes")
+
+        # Incremental platform upload merges rather than wiping earlier platforms.
+        self.deploy(self.native_payload({
+            x64_rel: ("etaf-md", "etaf-md-typeset-native", "1", "linux-x86_64", b"linux-bytes"),
+        }), "native")
+        self.assertEqual((self.base / "current/native" / arm_rel).read_bytes(), b"arm64-bytes")
+        self.assertEqual((self.base / "current/native" / x64_rel).read_bytes(), b"linux-bytes")
+        manifest = json.loads((self.base / "current/native/manifest.json").read_text())
+        self.assertEqual([item["path"] for item in manifest["artifacts"]], [arm_rel, x64_rel])
+
+        # Subsequent site and package deploys preserve native/ intact.
+        self.deploy(self.payload(page="site two"), "site")
+        self.deploy(self.payload(packages=self.package("1.1.0")), "packages")
+        self.assertEqual((self.base / "current/native" / arm_rel).read_bytes(), b"arm64-bytes")
+        self.assertEqual((self.base / "current/native" / x64_rel).read_bytes(), b"linux-bytes")
+
+        # Re-uploading a different byte payload under an existing versioned path is refused.
+        previous = (self.base / "current").readlink()
+        result = self.deploy(self.native_payload({
+            arm_rel: ("etaf-md", "etaf-md-typeset-native", "1", "darwin-arm64", b"tampered"),
+        }), "native", success=False)
+        self.assertIn("Immutable native artifact differs", result.stderr)
+        self.assertEqual((self.base / "current").readlink(), previous)
+
 
 if __name__ == "__main__":
     unittest.main()

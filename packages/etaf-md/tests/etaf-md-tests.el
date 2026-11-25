@@ -3865,3 +3865,14 @@ grid on medium viewports, and folds into stacked cards on narrow viewports."
           (let ((blank (etaf-md-tests--page-margin-pixels)))
             (should (>= (car blank) margin))
             (should (>= (cdr blank) margin))))))))
+
+(ert-deftest etaf-md-tests-doctor-recommends-prebuilt-native-install ()
+  "When `typeset-native' is inactive, `etaf-md-doctor' points archive users to `M-x etaf-install-native' rather than an unshipped `make native-build'."
+  (let* ((etaf-md-typeset nil)
+         (optional (plist-get (etaf-md-doctor) :optional))
+         (entry (assoc "typeset-native" optional))
+         (remedy (nth 2 entry)))
+    (should entry)
+    (should-not (cadr entry))
+    (should (string-match-p "etaf-install-native" remedy))
+    (should-not (string-match-p "make native-build" remedy))))

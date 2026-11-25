@@ -302,7 +302,7 @@ Three variables name the external programs video playback uses. Each accepts an 
 
 Playback engine used by `etaf-video`: `auto` (default), `mpv` or `ffmpeg`.
 
-**Semantics.** `auto` uses the optional cross-platform `libmpv` dynamic module (`native/etaf-video-mpv`) on graphical frames in `image` mode when available, giving frame-accurate A/V sync, seamless live volume/speed/resize, multi-track audio, native `libass` / dual subtitles, hardware decoding and video filters; otherwise it falls back to the `ffmpeg` subprocess pipeline. `mpv` requires `libmpv`; `ffmpeg` forces the subprocess pipeline. Build the optional module with `sh native/build-video-mpv-module.sh`; compilation needs only `emacs-module.h` and loads `libmpv` dynamically at runtime.
+**Semantics.** `auto` uses the optional cross-platform `libmpv` dynamic module (`native/etaf-video-mpv`) on graphical frames in `image` mode when available, giving frame-accurate A/V sync, seamless live volume/speed/resize, multi-track audio, native `libass` / dual subtitles, hardware decoding and video filters; otherwise it falls back to the `ffmpeg` subprocess pipeline. `mpv` requires `libmpv`; `ffmpeg` forces the subprocess pipeline. Installing via `M-x etaf-install` automatically downloads and verifies the prebuilt module into the ETAF user cache without a compiler (and `M-x etaf-install-native` fetches or refreshes it on demand); from a source checkout, `sh native/build-video-mpv-module.sh` builds it locally using only `emacs-module.h` and resolves `libmpv` dynamically at runtime.
 
 **See also.** `etaf-video-mpv-available-p`, `etaf-video-mpv-library`, `etaf-video-set-property`.
 

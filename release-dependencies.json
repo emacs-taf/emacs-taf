@@ -40,8 +40,8 @@
     },
     "etaf-md": {
       "resources": [
-        "scripts",
-        "native"
+        "scripts/mermaid-render.mjs",
+        "native/manifest.json"
       ]
     },
     "etaf-org-preview": {

@@ -19,6 +19,9 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#ifdef ETAF_MD_USE_PANGO_DLOPEN
+#include <dlfcn.h>
+#endif
 #ifdef ETAF_MD_USE_PANGO
 #include <pango/pangocairo.h>
 #endif
@@ -124,6 +127,190 @@ static int interrupted(JSRuntime *runtime, void *opaque) {
     }
     return 0;
 }
+
+#ifdef ETAF_MD_USE_PANGO_DLOPEN
+/* Runtime-loaded Pango/Cairo/Fontconfig ABI subset so one portable Linux .so
+ * works across distributions without link-time soname coupling, falling back to
+ * Pele's built-in estimator when Pango is absent on headless servers. */
+enum {
+    ETAF_PANGO_SCALE = 1024,
+    ETAF_PANGO_WEIGHT_NORMAL = 400,
+    ETAF_PANGO_WEIGHT_BOLD = 700,
+    ETAF_PANGO_STYLE_NORMAL = 0,
+    ETAF_PANGO_STYLE_ITALIC = 2,
+    ETAF_CAIRO_HINT_METRICS_OFF = 1
+};
+
+typedef struct {
+    int x;
+    int y;
+    int width;
+    int height;
+} etaf_pango_rect;
+
+typedef struct {
+    void *lib_pangocairo;
+    void *lib_pango;
+    void *lib_cairo;
+    void *lib_gobject;
+    void *lib_fontconfig;
+    void *lib_pangoft2;
+    void *(*pango_cairo_font_map_new)(void);
+    void *(*pango_font_map_create_context)(void *);
+    void (*pango_cairo_context_set_resolution)(void *, double);
+    void (*pango_cairo_context_set_font_options)(void *, const void *);
+    void (*pango_context_set_round_glyph_positions)(void *, int);
+    void *(*pango_layout_new)(void *);
+    void *(*pango_font_description_new)(void);
+    void (*pango_font_description_set_family)(void *, const char *);
+    void (*pango_font_description_set_absolute_size)(void *, double);
+    void (*pango_font_description_set_weight)(void *, int);
+    void (*pango_font_description_set_style)(void *, int);
+    void (*pango_font_description_free)(void *);
+    void (*pango_layout_set_font_description)(void *, const void *);
+    void (*pango_layout_set_text)(void *, const char *, int);
+    void (*pango_layout_get_extents)(void *, etaf_pango_rect *, etaf_pango_rect *);
+    void *(*cairo_font_options_create)(void);
+    void (*cairo_font_options_set_hint_metrics)(void *, int);
+    void (*cairo_font_options_destroy)(void *);
+    void (*g_object_unref)(void *);
+    unsigned char *(*fc_config_filename)(const unsigned char *);
+    void (*fc_str_free)(unsigned char *);
+    void *(*fc_config_create)(void);
+    int (*fc_config_parse_memory)(void *, const unsigned char *, int);
+    int (*fc_config_build_fonts)(void *);
+    void (*fc_config_destroy)(void *);
+    void (*pango_fc_font_map_set_config)(void *, void *);
+    void *fonts;
+    void *context;
+    void *layout;
+    bool ready;
+} text_engine;
+
+static atomic_bool pango_dlopen_active = false;
+
+static void close_pango_dlopen(text_engine *text) {
+    if (text->layout && text->g_object_unref) text->g_object_unref(text->layout);
+    if (text->context && text->g_object_unref) text->g_object_unref(text->context);
+    if (text->fonts && text->g_object_unref) text->g_object_unref(text->fonts);
+    text->layout = NULL;
+    text->context = NULL;
+    text->fonts = NULL;
+    if (text->lib_pangoft2) dlclose(text->lib_pangoft2);
+    if (text->lib_fontconfig) dlclose(text->lib_fontconfig);
+    if (text->lib_pangocairo) dlclose(text->lib_pangocairo);
+    if (text->lib_pango) dlclose(text->lib_pango);
+    if (text->lib_cairo) dlclose(text->lib_cairo);
+    if (text->lib_gobject) dlclose(text->lib_gobject);
+    memset(text, 0, sizeof(*text));
+}
+
+static bool init_pango_dlopen(text_engine *text) {
+    memset(text, 0, sizeof(*text));
+    text->lib_pangocairo = dlopen("libpangocairo-1.0.so.0", RTLD_LAZY | RTLD_LOCAL);
+    text->lib_pango = dlopen("libpango-1.0.so.0", RTLD_LAZY | RTLD_LOCAL);
+    text->lib_cairo = dlopen("libcairo.so.2", RTLD_LAZY | RTLD_LOCAL);
+    text->lib_gobject = dlopen("libgobject-2.0.so.0", RTLD_LAZY | RTLD_LOCAL);
+    if (!text->lib_pangocairo || !text->lib_pango || !text->lib_cairo || !text->lib_gobject) {
+        close_pango_dlopen(text);
+        return false;
+    }
+#define LOAD_SYM(handle, field, sym)                                      \
+    do {                                                                  \
+        *(void **)(&text->field) = dlsym(handle, sym);                    \
+        if (!text->field) { close_pango_dlopen(text); return false; }     \
+    } while (0)
+    LOAD_SYM(text->lib_pangocairo, pango_cairo_font_map_new, "pango_cairo_font_map_new");
+    LOAD_SYM(text->lib_pangocairo, pango_cairo_context_set_resolution, "pango_cairo_context_set_resolution");
+    LOAD_SYM(text->lib_pangocairo, pango_cairo_context_set_font_options, "pango_cairo_context_set_font_options");
+    LOAD_SYM(text->lib_pango, pango_font_map_create_context, "pango_font_map_create_context");
+    LOAD_SYM(text->lib_pango, pango_context_set_round_glyph_positions, "pango_context_set_round_glyph_positions");
+    LOAD_SYM(text->lib_pango, pango_layout_new, "pango_layout_new");
+    LOAD_SYM(text->lib_pango, pango_font_description_new, "pango_font_description_new");
+    LOAD_SYM(text->lib_pango, pango_font_description_set_family, "pango_font_description_set_family");
+    LOAD_SYM(text->lib_pango, pango_font_description_set_absolute_size, "pango_font_description_set_absolute_size");
+    LOAD_SYM(text->lib_pango, pango_font_description_set_weight, "pango_font_description_set_weight");
+    LOAD_SYM(text->lib_pango, pango_font_description_set_style, "pango_font_description_set_style");
+    LOAD_SYM(text->lib_pango, pango_font_description_free, "pango_font_description_free");
+    LOAD_SYM(text->lib_pango, pango_layout_set_font_description, "pango_layout_set_font_description");
+    LOAD_SYM(text->lib_pango, pango_layout_set_text, "pango_layout_set_text");
+    LOAD_SYM(text->lib_pango, pango_layout_get_extents, "pango_layout_get_extents");
+    LOAD_SYM(text->lib_cairo, cairo_font_options_create, "cairo_font_options_create");
+    LOAD_SYM(text->lib_cairo, cairo_font_options_set_hint_metrics, "cairo_font_options_set_hint_metrics");
+    LOAD_SYM(text->lib_cairo, cairo_font_options_destroy, "cairo_font_options_destroy");
+    LOAD_SYM(text->lib_gobject, g_object_unref, "g_object_unref");
+#undef LOAD_SYM
+
+    text->fonts = text->pango_cairo_font_map_new();
+    if (!text->fonts) {
+        close_pango_dlopen(text);
+        return false;
+    }
+    /* Optional fontconfig fallback when system fonts.conf is missing. */
+    text->lib_fontconfig = dlopen("libfontconfig.so.1", RTLD_LAZY | RTLD_LOCAL);
+    text->lib_pangoft2 = dlopen("libpangoft2-1.0.so.0", RTLD_LAZY | RTLD_LOCAL);
+    if (text->lib_fontconfig && text->lib_pangoft2) {
+        *(void **)(&text->fc_config_filename) = dlsym(text->lib_fontconfig, "FcConfigFilename");
+        *(void **)(&text->fc_str_free) = dlsym(text->lib_fontconfig, "FcStrFree");
+        *(void **)(&text->fc_config_create) = dlsym(text->lib_fontconfig, "FcConfigCreate");
+        *(void **)(&text->fc_config_parse_memory) = dlsym(text->lib_fontconfig, "FcConfigParseAndLoadFromMemory");
+        *(void **)(&text->fc_config_build_fonts) = dlsym(text->lib_fontconfig, "FcConfigBuildFonts");
+        *(void **)(&text->fc_config_destroy) = dlsym(text->lib_fontconfig, "FcConfigDestroy");
+        *(void **)(&text->pango_fc_font_map_set_config) = dlsym(text->lib_pangoft2, "pango_fc_font_map_set_config");
+        if (text->fc_config_filename && text->fc_str_free && text->fc_config_create
+            && text->fc_config_parse_memory && text->fc_config_build_fonts
+            && text->fc_config_destroy && text->pango_fc_font_map_set_config) {
+            unsigned char *filename = text->fc_config_filename(NULL);
+            bool readable = false;
+            if (filename) {
+                readable = access((const char *)filename, R_OK) == 0;
+                text->fc_str_free(filename);
+            }
+            if (!readable) {
+                const unsigned char fallback[] =
+                    "<fontconfig><dir>/usr/share/fonts</dir><dir>/usr/local/share/fonts</dir>"
+                    "<dir prefix=\"xdg\">fonts</dir><dir>~/.fonts</dir>"
+                    "<cachedir prefix=\"xdg\">fontconfig</cachedir>"
+                    "<include ignore_missing=\"yes\" prefix=\"xdg\">fontconfig/fonts.conf</include>"
+                    "<include ignore_missing=\"yes\" prefix=\"xdg\">fontconfig/conf.d</include>"
+                    "<alias><family>sans-serif</family><prefer><family>DejaVu Sans</family></prefer></alias>"
+                    "<alias><family>serif</family><prefer><family>DejaVu Serif</family></prefer></alias>"
+                    "<alias><family>monospace</family><prefer><family>DejaVu Sans Mono</family></prefer></alias>"
+                    "</fontconfig>";
+                void *config = text->fc_config_create();
+                if (config) {
+                    if (text->fc_config_parse_memory(config, fallback, 1)
+                        && text->fc_config_build_fonts(config)) {
+                        text->pango_fc_font_map_set_config(text->fonts, config);
+                    }
+                    text->fc_config_destroy(config);
+                }
+            }
+        }
+    }
+    text->context = text->pango_font_map_create_context(text->fonts);
+    if (!text->context) {
+        close_pango_dlopen(text);
+        return false;
+    }
+    text->pango_cairo_context_set_resolution(text->context, 96.0);
+    void *font_options = text->cairo_font_options_create();
+    if (font_options) {
+        text->cairo_font_options_set_hint_metrics(font_options, ETAF_CAIRO_HINT_METRICS_OFF);
+        text->pango_cairo_context_set_font_options(text->context, font_options);
+        text->cairo_font_options_destroy(font_options);
+    }
+    text->pango_context_set_round_glyph_positions(text->context, 0);
+    text->layout = text->pango_layout_new(text->context);
+    if (!text->layout) {
+        close_pango_dlopen(text);
+        return false;
+    }
+    text->ready = true;
+    atomic_store(&pango_dlopen_active, true);
+    return true;
+}
+#endif
 
 #ifdef ETAF_MD_USE_PANGO
 typedef struct {
@@ -240,7 +427,7 @@ static CTFontRef find_font(const char *family, double size, int32_t style) {
 }
 #endif
 
-#if defined(ETAF_MD_USE_PANGO) || defined(ETAF_MD_USE_CORETEXT)
+#if defined(ETAF_MD_USE_PANGO) || defined(ETAF_MD_USE_PANGO_DLOPEN) || defined(ETAF_MD_USE_CORETEXT)
 static JSValue measure_text(JSContext *context, JSValueConst this_value,
                             int argc, JSValueConst *args) {
     (void)this_value;
@@ -263,7 +450,22 @@ static JSValue measure_text(JSContext *context, JSValueConst this_value,
         JS_FreeCString(context, label);
         return JS_EXCEPTION;
     }
-#ifdef ETAF_MD_USE_PANGO
+#ifdef ETAF_MD_USE_PANGO_DLOPEN
+    text_engine *text = JS_GetContextOpaque(context);
+    void *font = text->pango_font_description_new();
+    text->pango_font_description_set_family(font, family);
+    text->pango_font_description_set_absolute_size(font, size * ETAF_PANGO_SCALE);
+    text->pango_font_description_set_weight(
+        font, style & 1 ? ETAF_PANGO_WEIGHT_BOLD : ETAF_PANGO_WEIGHT_NORMAL);
+    text->pango_font_description_set_style(
+        font, style & 2 ? ETAF_PANGO_STYLE_ITALIC : ETAF_PANGO_STYLE_NORMAL);
+    text->pango_layout_set_font_description(text->layout, font);
+    text->pango_layout_set_text(text->layout, label, (int)length);
+    etaf_pango_rect logical = {0, 0, 0, 0};
+    text->pango_layout_get_extents(text->layout, NULL, &logical);
+    text->pango_font_description_free(font);
+    double width = (double)logical.width / ETAF_PANGO_SCALE;
+#elif defined(ETAF_MD_USE_PANGO)
     text_engine *text = JS_GetContextOpaque(context);
     PangoFontDescription *font = pango_font_description_new();
     pango_font_description_set_family(font, family);
@@ -341,7 +543,7 @@ static void *worker(void *unused) {
 
     JSRuntime *runtime = JS_NewRuntime();
     JSContext *context = NULL;
-#ifdef ETAF_MD_USE_PANGO
+#if defined(ETAF_MD_USE_PANGO) || defined(ETAF_MD_USE_PANGO_DLOPEN)
     text_engine text = {0};
 #endif
     JSValue render = JS_UNDEFINED;
@@ -359,7 +561,16 @@ static void *worker(void *unused) {
     if (!context) {
         initialization_error = strdup("Could not create the JavaScript runtime");
     } else {
-#ifdef ETAF_MD_USE_PANGO
+#ifdef ETAF_MD_USE_PANGO_DLOPEN
+        if (init_pango_dlopen(&text)) {
+            JS_SetContextOpaque(context, &text);
+            JSValue global = JS_GetGlobalObject(context);
+            JS_SetPropertyStr(
+                context, global, "__etafMdMeasureText",
+                JS_NewCFunction(context, measure_text, "__etafMdMeasureText", 4));
+            JS_FreeValue(context, global);
+        }
+#elif defined(ETAF_MD_USE_PANGO)
         text.fonts = pango_cairo_font_map_new();
 #ifdef ETAF_MD_USE_FONTCONFIG
         configure_fonts(text.fonts);
@@ -489,7 +700,9 @@ static void *worker(void *unused) {
         JS_FreeValue(context, render);
         JS_FreeContext(context);
     }
-#ifdef ETAF_MD_USE_PANGO
+#ifdef ETAF_MD_USE_PANGO_DLOPEN
+    close_pango_dlopen(&text);
+#elif defined(ETAF_MD_USE_PANGO)
     if (text.layout) g_object_unref(text.layout);
     if (text.context) g_object_unref(text.context);
     if (text.fonts) g_object_unref(text.fonts);
@@ -693,6 +906,8 @@ static emacs_value engine_info(emacs_env *env, ptrdiff_t nargs, emacs_value *arg
     (void)data;
 #ifdef ETAF_MD_USE_CORETEXT
     const char *backend = "coretext";
+#elif defined(ETAF_MD_USE_PANGO_DLOPEN)
+    const char *backend = atomic_load(&pango_dlopen_active) ? "pango" : "pango-dlopen";
 #elif defined(ETAF_MD_USE_PANGO)
     const char *backend = "pango";
 #else

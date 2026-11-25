@@ -134,7 +134,7 @@ Building the module needs an Emacs with dynamic module support, in which `module
 | `debug` | `-O0 -g3`, for use in a debugger |
 | `sanitize` | `-O1 -g3` with the address and undefined behavior sanitizers |
 
-The module is a file in the `native/` directory, named `ekp` with the suffix `.dylib` on macOS, `.dll` on Windows and `.so` elsewhere. Requiring EKP does not load it. `ekp-c-module-load` loads it and reports the result in the echo area:
+The module is located in the package's `native/` directory or in the unified user cache (`~/.cache/emacs-taf/native/ekp/<version>/`, automatically populated without a compiler by `M-x etaf-install` or on demand via `M-x etaf-install-native`), named `ekp` with the suffix `.dylib` on macOS, `.dll` on Windows and `.so` elsewhere. Requiring EKP does not load it. `ekp-c-module-load` loads it and reports the result in the echo area:
 
 - When the file does not exist, it reports that the module was not found, and EKP keeps using Emacs Lisp.
 - When the module is older than the version that this EKP requires, it reports that the module is too old, and EKP keeps using Emacs Lisp. Build the module again.

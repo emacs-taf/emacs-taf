@@ -72,10 +72,14 @@ def source_files(root, name, resources=(), paths=()):
         raise ValueError(f"{name}: Lisp implementation directory cannot be a symlink")
     for resource in resources:
         path = PurePosixPath(resource)
+        target = root / resource
         if (path.is_absolute() or not path.parts or any(part in (".", "..") for part in path.parts)
+                or any(part.startswith(".") for part in path.parts)
                 or any(root.joinpath(*path.parts[:index + 1]).is_symlink() for index in range(len(path.parts)))
-                or not (root / resource).is_dir()):
-            raise ValueError(f"{name}: invalid or missing resource directory: {resource}")
+                or not (target.is_dir() or target.is_file())):
+            raise ValueError(f"{name}: invalid or missing resource path: {resource}")
+        if target.is_file() and (target.suffix in GENERATED or target.name.endswith("-pkg.el")):
+            raise ValueError(f"{name}: generated file cannot be a resource: {resource}")
     files = {}
     if paths:
         for pattern in paths:
@@ -99,12 +103,25 @@ def source_files(root, name, resources=(), paths=()):
     resource_paths = tuple(PurePosixPath(resource) for resource in resources)
     for parent, directories, names in os.walk(root):
         relative_parent = Path(parent).relative_to(root)
+        relative_parent_posix = PurePosixPath(relative_parent.as_posix())
         directories[:] = sorted(directory for directory in directories
                                 if not directory.startswith(".")
-                                and directory not in ("__pycache__", "node_modules", "target"))
+                                and directory not in ("__pycache__", "node_modules", "target", "build"))
         if relative_parent == Path("."):
             directories[:] = [directory for directory in directories if directory == "lisp"
                               or any(path.parts[0] == directory for path in resource_paths)]
+        else:
+            # Prune subdirectories that cannot reach or lie inside any declared resource.
+            directories[:] = [
+                directory for directory in directories
+                if relative_parent_posix.parts[0] == "lisp"
+                or any(
+                    (relative_parent_posix / directory) == resource
+                    or resource in (relative_parent_posix / directory).parents
+                    or (relative_parent_posix / directory) in resource.parents
+                    for resource in resource_paths
+                )
+            ]
         for filename in sorted([*directories, *names]):
             path = Path(parent) / filename
             relative = path.relative_to(root)

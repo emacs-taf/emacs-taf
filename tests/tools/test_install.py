@@ -317,7 +317,7 @@ class InstallTests(unittest.TestCase):
     (etaf-install-manage))
   (let ((latest (car messages)))
     (unless latest (error "Opening manage buffer produced no echo message"))
-    (dolist (hint '("i install" "u update" "U update all"
+    (dolist (hint '("i install" "n native" "u update" "U update all"
                     "d remove" "RET open" "? doctor" "g refresh"
                     "l packages" "q quit"))
       (unless (string-match-p (regexp-quote hint) latest)
@@ -376,7 +376,7 @@ class InstallTests(unittest.TestCase):
     (error "Unexpected manage mode-line-format: %S" mode-line-format))
   (cl-letf (((symbol-function 'window-width) (lambda (&rest _) 80)))
     (let ((ml (substring-no-properties (eval (cadr mode-line-format)))))
-      (unless (string-match-p "i · d · RET · g · q" ml)
+      (unless (string-match-p "i · n · d · RET · g · q" ml)
         (error "80-column mode line collapsed keys prematurely: %S" ml))))
   (cl-letf (((symbol-function 'window-width) (lambda (&rest _) 120)))
     (let* ((raw (eval (cadr mode-line-format)))
@@ -446,6 +446,307 @@ class InstallTests(unittest.TestCase):
 (unless (package-installed-p 'etaf) (error "Shared etaf dependency was removed"))
 (unless (package-installed-p 'ebox) (error "Shared ebox dependency was removed"))
 (when (memq 'etaf-ui package-selected-packages) (error "Target selection remained"))
+""")
+
+    def _add_native_etaf_md_fixture(self, binary_bytes, version="0.3.0",
+                                    platform_key="darwin-arm64", suffix=".dylib",
+                                    urls=None):
+        import hashlib
+        sha = hashlib.sha256(binary_bytes).hexdigest()
+        filename = f"etaf-md-typeset-native-v1-{platform_key}{suffix}"
+        src = self.sources / "etaf-md"
+        (src / "native").mkdir(parents=True, exist_ok=True)
+        (src / "etaf-md.el").write_text(
+            ';;; -*- lexical-binding: t; -*-\n;;; etaf-md.el --- Native fixture\n'
+            f';; Version: {version}\n;; Package-Requires: ((emacs "29.1") (etaf "0.2.1") (etaf-ui "0.1.0"))\n'
+            '(defun etaf-md-open () (interactive))\n'
+            '(defun etaf-md-doctor () (list :required nil :optional (list (list "typeset-native" nil "Run M-x etaf-install-native."))))\n'
+            "(provide 'etaf-md)\n")
+        (src / "native/manifest.json").write_text(json.dumps({
+            "schema": 1,
+            "package": "etaf-md",
+            "modules": [{
+                "name": "etaf-md-typeset-native",
+                "version": "1",
+                "description": "Fixture native renderer",
+                "platforms": {
+                    platform_key: {
+                        "file": filename,
+                        "urls": urls or [f"https://etaf.top/native/etaf-md/1/{filename}"],
+                        "sha256": sha,
+                        "size": len(binary_bytes),
+                    }
+                },
+            }],
+        }, indent=2) + "\n")
+        if self.archive.exists():
+            shutil.rmtree(self.archive)
+        command = [sys.executable, str(ROOT / "scripts/package_archive.py"), "build",
+                   "--directory", str(self.archive)]
+        for source in sorted(self.sources.iterdir()):
+            command.extend(["--package", f"{source.name}={source}"])
+        command.extend(["--resource", "etaf-md=native/manifest.json"])
+        result = subprocess.run(command, capture_output=True, text=True, timeout=20)
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        return filename, sha
+
+    def test_install_native_downloads_over_http_verifies_caches_and_survives_upgrade(self):
+        import functools
+        from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+        import threading
+
+        native_root = self.base / "native-server"
+        payload = b"verified-prebuilt-native-module-bytes-v1"
+        filename, sha = self._add_native_etaf_md_fixture(payload)
+        served_file = native_root / "etaf-md" / "1" / filename
+        served_file.parent.mkdir(parents=True)
+        served_file.write_bytes(payload)
+
+        class QuietHandler(SimpleHTTPRequestHandler):
+            def log_message(self, *_args):
+                pass
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0),
+                                     functools.partial(QuietHandler, directory=str(native_root)))
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        self.addCleanup(lambda: (server.shutdown(), server.server_close(), thread.join(timeout=5)))
+        native_url = f"http://127.0.0.1:{server.server_port}"
+        cache_dir = self.base / "native-cache"
+
+        self.run_lisp(f"""
+(setq etaf-install-auto-native nil
+      etaf-install-native-directory {json.dumps(str(cache_dir))}
+      etaf-install-native-url {json.dumps(native_url)}
+      etaf-install--native-platform-override "darwin-arm64")
+(etaf-install 'etaf-md t)
+(let ((before (etaf-install-status 'etaf-md)))
+  (unless (eq (plist-get before :native) 'available)
+    (error "Expected native available before download: %S" before))
+  (unless (equal (plist-get before :runtime) "Ready · native: n")
+    (error "Wrong runtime label before download: %S" before)))
+(let (loaded-paths)
+  (cl-letf (((symbol-function 'module-load) (lambda (path) (push path loaded-paths) t)))
+    (let ((report (etaf-install-native 'etaf-md)))
+      (unless (equal (plist-get report :platform) "darwin-arm64")
+        (error "Wrong platform in report: %S" report))
+      (unless (= 1 (length (plist-get report :installed)))
+        (error "Expected 1 installed native module: %S" report))
+      (unless (= 1 (length loaded-paths))
+        (error "Installed native module was not activated")))
+    ;; Second call hits the verified cache without re-downloading.
+    (let ((second (etaf-install-native 'etaf-md)))
+      (unless (null (plist-get second :installed))
+        (error "Second install re-downloaded cached binary: %S" second))
+      (unless (= 1 (length (plist-get second :skipped)))
+        (error "Second install did not report cache hit: %S" second))
+      (when (plist-get second :restart)
+        (error "Cache hit should not request restart: %S" second)))
+    ;; Force re-download of an already-loaded module flags :restart t without reloading.
+    (let ((forced (etaf-install-native 'etaf-md t)))
+      (unless (= 1 (length (plist-get forced :installed)))
+        (error "Force re-install did not download binary: %S" forced))
+      (unless (plist-get forced :restart)
+        (error "Force re-install of loaded module did not set :restart t: %S" forced))
+      (unless (= 1 (length loaded-paths))
+        (error "Force re-install must not call module-load again in same Emacs: %S" loaded-paths)))))
+(let ((after (etaf-install-status 'etaf-md)))
+  (unless (eq (plist-get after :native) 'installed)
+    (error "Expected native installed after download: %S" after))
+  (unless (equal (plist-get after :runtime) "Ready · native")
+    (error "Wrong runtime label after download: %S" after)))
+""")
+        # Upgrade etaf-md from 0.3.0 -> 0.3.1: cached native binary MUST survive outside elpa/.
+        self._add_native_etaf_md_fixture(payload, version="0.3.1")
+        self.run_lisp(f"""
+(setq etaf-install-native-directory {json.dumps(str(cache_dir))}
+      etaf-install-native-url "/nonexistent-offline-native/"
+      etaf-install--native-platform-override "darwin-arm64")
+(package-initialize)
+(etaf-install-update 'etaf-md)
+(unless (package-installed-p 'etaf-md '(0 3 1))
+  (error "etaf-md did not upgrade to 0.3.1"))
+(let ((status (etaf-install-status 'etaf-md)))
+  (unless (eq (plist-get status :native) 'installed)
+    (error "Cached native binary was lost across package upgrade: %S" status)))
+""")
+
+    def test_install_native_rejects_tampered_binary_and_cleans_partial(self):
+        native_dir = self.base / "native-local"
+        expected = b"authentic-module-bytes"
+        filename, _sha = self._add_native_etaf_md_fixture(expected)
+        tampered = native_dir / "etaf-md" / "1" / filename
+        tampered.parent.mkdir(parents=True)
+        tampered.write_bytes(b"corrupted-module-bytes")
+        cache_dir = self.base / "native-cache-bad"
+
+        self.run_lisp(f"""
+(setq etaf-install-auto-native nil
+      etaf-install-native-directory {json.dumps(str(cache_dir))}
+      etaf-install-native-url {json.dumps(str(native_dir))}
+      etaf-install--native-platform-override "darwin-arm64")
+(etaf-install 'etaf-md t)
+(let (err-msg)
+  (condition-case err
+      (etaf-install-native 'etaf-md)
+    (user-error (setq err-msg (error-message-string err))))
+  (unless (and err-msg (string-match-p "SHA-256 mismatch" err-msg))
+    (error "Tampered binary was not rejected with SHA-256 mismatch: %S" err-msg)))
+(when (directory-files-recursively {json.dumps(str(cache_dir))} "\\\\.dylib\\\\|\\\\.partial\\\\'")
+  (error "Corrupt or partial binary remained in cache"))
+""")
+
+    def test_manage_n_key_installs_native_module_and_refreshes_status(self):
+        native_dir = self.base / "native-manage"
+        payload = b"manage-key-native-module"
+        filename, _sha = self._add_native_etaf_md_fixture(payload)
+        target = native_dir / "etaf-md" / "1" / filename
+        target.parent.mkdir(parents=True)
+        target.write_bytes(payload)
+        cache_dir = self.base / "native-cache-manage"
+
+        self.run_lisp(f"""
+(setq etaf-install-auto-native nil
+      etaf-install-native-directory {json.dumps(str(cache_dir))}
+      etaf-install-native-url {json.dumps(str(native_dir))}
+      etaf-install--native-platform-override "darwin-arm64")
+(etaf-install 'etaf-md t)
+(etaf-install-manage)
+(with-current-buffer "*ETAF Packages*"
+  (goto-char (point-min))
+  (unless (search-forward "etaf-md" nil t)
+    (error "etaf-md missing from manage buffer"))
+  (beginning-of-line)
+  (unless (string-match-p "Ready · native: n" (buffer-substring (line-beginning-position) (line-end-position)))
+    (error "Expected native prompt in manage row"))
+  (cl-letf (((symbol-function 'module-load) (lambda (_path) t)))
+    (execute-kbd-macro "n"))
+  (goto-char (point-min))
+  (search-forward "etaf-md")
+  (beginning-of-line)
+  (unless (string-match-p "Ready · native" (buffer-substring (line-beginning-position) (line-end-position)))
+    (error "Manage row did not refresh after installing native module")))
+""")
+
+    def test_install_auto_installs_native_modules_including_dependencies(self):
+        import hashlib
+        # Add etaf native manifest (etaf-video-mpv) AND etaf-video-player depending on etaf,
+        # plus etaf-md native manifest, and stage binaries in sibling native/ beside archive.
+        mpv_payload = b"prebuilt-etaf-video-mpv-v1"
+        mpv_sha = hashlib.sha256(mpv_payload).hexdigest()
+        mpv_file = "etaf-video-mpv-v1-darwin-arm64.dylib"
+        etaf_src = self.sources / "etaf"
+        (etaf_src / "native").mkdir(exist_ok=True)
+        (etaf_src / "native/manifest.json").write_text(json.dumps({
+            "schema": 1,
+            "package": "etaf",
+            "modules": [{
+                "name": "etaf-video-mpv",
+                "version": "1",
+                "description": "Fixture mpv module",
+                "platforms": {
+                    "darwin-arm64": {
+                        "file": mpv_file,
+                        "urls": [f"https://etaf.top/native/etaf/1/{mpv_file}"],
+                        "sha256": mpv_sha,
+                        "size": len(mpv_payload),
+                    }
+                },
+            }],
+        }, indent=2) + "\n")
+
+        vp_src = self.sources / "etaf-video-player"
+        vp_src.mkdir(exist_ok=True)
+        (vp_src / "etaf-video-player.el").write_text(
+            ";;; etaf-video-player.el --- Video player fixture -*- lexical-binding: t; -*-\n"
+            ";; Version: 0.3.0\n"
+            ';; Package-Requires: ((emacs "29.1") (etaf "0.1.0"))\n'
+            "(require 'etaf)\n"
+            "(defun etaf-video-player-open () (interactive))\n"
+            "(provide 'etaf-video-player)\n")
+
+        md_payload = b"prebuilt-etaf-md-typeset-v1"
+        md_file, _md_sha = self._add_native_etaf_md_fixture(md_payload)
+
+        # Rebuild archive including etaf's native/manifest.json as well.
+        shutil.rmtree(self.archive)
+        command = [sys.executable, str(ROOT / "scripts/package_archive.py"), "build",
+                   "--directory", str(self.archive)]
+        for source in sorted(self.sources.iterdir()):
+            command.extend(["--package", f"{source.name}={source}"])
+        command.extend(["--resource", "etaf-md=native/manifest.json",
+                        "--resource", "etaf=native/manifest.json"])
+        result = subprocess.run(command, capture_output=True, text=True, timeout=20)
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+
+        # Stage binaries in sibling directory `native/` beside `self.archive` (auto-discovered!).
+        sibling_native = self.archive.parent / "native"
+        (sibling_native / "etaf-md" / "1").mkdir(parents=True, exist_ok=True)
+        (sibling_native / "etaf-md" / "1" / md_file).write_bytes(md_payload)
+        (sibling_native / "etaf" / "1").mkdir(parents=True, exist_ok=True)
+        (sibling_native / "etaf" / "1" / mpv_file).write_bytes(mpv_payload)
+        cache_dir = self.base / "native-cache-auto"
+
+        # Single `etaf-install` on etaf-video-player auto-fetches transitive dependency etaf's module,
+        # and single `etaf-install` on etaf-md auto-fetches etaf-md's module — zero extra commands!
+        self.run_lisp(f"""
+(setq etaf-install-native-directory {json.dumps(str(cache_dir))}
+      etaf-install--native-platform-override "darwin-arm64")
+(let (loaded)
+  (cl-letf (((symbol-function 'module-load) (lambda (p) (push p loaded) t)))
+    (etaf-install 'etaf-video-player t)
+    (unless (eq (plist-get (etaf-install-status 'etaf-video-player) :native) 'installed)
+      (error "etaf-install did not auto-install transitive etaf native module for etaf-video-player"))
+    (unless (cl-some (lambda (p) (string-match-p "etaf-video-mpv" p)) loaded)
+      (error "etaf-video-mpv was not activated during etaf-install: %S" loaded))
+    (etaf-install 'etaf-md t)
+    (unless (eq (plist-get (etaf-install-status 'etaf-md) :native) 'installed)
+      (error "etaf-install did not auto-install etaf-md native module"))
+    (unless (cl-some (lambda (p) (string-match-p "etaf-md-typeset-native" p)) loaded)
+      (error "etaf-md-typeset-native was not activated during etaf-install: %S" loaded))))
+""")
+
+        # Upgrade etaf-md with a new native binary digest: etaf-install-update auto-downloads it!
+        md_payload_v2 = b"prebuilt-etaf-md-typeset-v2-updated"
+        md_file_v2, _ = self._add_native_etaf_md_fixture(md_payload_v2, version="0.3.1")
+        (sibling_native / "etaf-md" / "1" / md_file_v2).write_bytes(md_payload_v2)
+        self.run_lisp(f"""
+(setq etaf-install-native-directory {json.dumps(str(cache_dir))}
+      etaf-install--native-platform-override "darwin-arm64")
+(package-initialize)
+(cl-letf (((symbol-function 'module-load) (lambda (_p) t)))
+  (let ((report (etaf-install-update 'etaf-md)))
+    (unless (package-installed-p 'etaf-md '(0 3 1))
+      (error "etaf-md did not upgrade to 0.3.1"))
+    (unless (= 1 (length (plist-get report :native-installed)))
+      (error "etaf-install-update did not auto-download updated native binary: %S" report))))
+(unless (eq (plist-get (etaf-install-status 'etaf-md) :native) 'installed)
+  (error "Updated native binary is not marked installed"))
+""")
+
+    def test_install_auto_native_failure_keeps_elisp_working(self):
+        native_dir = self.base / "native-broken"
+        filename, _sha = self._add_native_etaf_md_fixture(b"authentic-bytes")
+        tampered = native_dir / "etaf-md" / "1" / filename
+        tampered.parent.mkdir(parents=True)
+        tampered.write_bytes(b"corrupted-bytes")
+        cache_dir = self.base / "native-cache-resilient"
+
+        # Default etaf-install-auto-native = t: bad native mirror must NOT fail or roll back etaf-md!
+        self.run_lisp(f"""
+(setq etaf-install-native-directory {json.dumps(str(cache_dir))}
+      etaf-install-native-url {json.dumps(str(native_dir))}
+      etaf-install--native-platform-override "darwin-arm64")
+(etaf-install 'etaf-md t)
+(unless (package-installed-p 'etaf-md)
+  (error "Optional native download failure rolled back etaf-md installation"))
+(unless (featurep 'etaf-md)
+  (error "etaf-md failed to load when optional native binary was corrupt"))
+(unless (eq (plist-get (etaf-install-status 'etaf-md) :native) 'available)
+  (error "Expected native status to remain available for retry"))
+(when (and (file-directory-p {json.dumps(str(cache_dir))})
+           (directory-files-recursively {json.dumps(str(cache_dir))} "\\\\.dylib\\\\|\\\\.partial\\\\'"))
+  (error "Corrupt or partial binary remained in cache after resilient auto-install"))
 """)
 
 

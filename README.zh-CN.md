@@ -32,7 +32,7 @@ make -C packages/etaf-ui check
 (call-interactively #'etaf-install)
 ```
 
-以后运行 `M-x etaf-install` 即可；已安装的目标可以离线重开。用 `M-x etaf-install-manage` 查看已安装/可用版本、更新、卸载或打开目标并查看 doctor；`M-x list-packages` 仍是高级包菜单。依赖安装、本地字节编译、更新和卸载均由 package.el 管理，不需要 Git、Python、系统编译器或 Pi，也不替换现有 Emacs 配置。
+以后运行 `M-x etaf-install` 即可；已安装的目标可以离线重开。安装或更新目标时，`etaf-install` 会按依赖闭包自动下载、校验 SHA-256 并热加载可用的预编译原生动态模块（如 `etaf-md` 的 QuickJS Mermaid/MathJax 渲染器、`etaf` 的 `libmpv` 播放桥、`ekp` 的 C 排版引擎）到 `~/.cache/emacs-taf/native/`，全程无需本机编译器也无需第二条命令（可通过 `etaf-install-auto-native` 设为 nil 关闭，或用 `M-x etaf-install-native` / `M-x etaf-install-manage` 中的 `n` 键手动重试或重装）。用 `M-x etaf-install-manage` 查看已安装/可用版本、管理预编译原生模块（`n`）、更新、卸载或打开目标并查看 doctor；`M-x list-packages` 仍是高级包菜单。依赖安装、本地字节编译、更新和卸载均由 package.el 管理，不需要 Git、Python、系统编译器或 Pi，也不替换现有 Emacs 配置。
 
 安装入口按框架、应用与游戏分组：框架含 `etaf-install`、组件画廊（`etaf-ui`）、`etaf`、`ebox`、`ecss`、`ekp`、`etaf-db`、`etaf-gamekit`、`etaf-posframe`；应用含 `etaf-manual`、`etaf-md`、`etaf-org-preview`、`etaf-video-player`、`etaf-desktop`、`etaf-telega`、`etaf-weread`、`etaf-ncm`、`etaf-pomodoro`、`maillist`；游戏含 `etaf-xiangqi`、`etaf-tanks`。每个条目在打开前报告缺少什么。SQLite 需要 Emacs 本身具备 SQLite 支持；`M-x etaf-install-doctor` 只检查必需和可选能力，不执行安装。外部服务账号与媒体程序只检测、不代装；应用自己的后端随包发布。Telega 的 `telega`
 Emacs 包会自动安装，但原生 `telega-server` 不会：先安装 TDLib，再运行

@@ -134,7 +134,7 @@ EKP 可以用 C 动态模块计算断行：最优化计算在 C 里进行，多�
 | `debug` | `-O0 -g3`，供调试器使用 |
 | `sanitize` | `-O1 -g3`，加上地址检查和未定义行为检查 |
 
-模块是 `native/` 目录里的一个文件，名为 `ekp`，后缀在 macOS 上是 `.dylib`，在 Windows 上是 `.dll`，其他系统上是 `.so`。require EKP 不会加载它。`ekp-c-module-load` 负责加载，并在回显区报告结果：
+模块位于包的 `native/` 目录或统一用户缓存目录（`~/.cache/emacs-taf/native/ekp/<version>/`，通过 `M-x etaf-install` 安装时自动免编译器下载校验，也可按需运行 `M-x etaf-install-native`），名为 `ekp`，后缀在 macOS 上是 `.dylib`，在 Windows 上是 `.dll`，其他系统上是 `.so`。require EKP 不会加载它。`ekp-c-module-load` 负责加载，并在回显区报告结果：
 
 - 文件不存在时，报告找不到模块，EKP 继续用 Emacs Lisp。
 - 模块比当前 EKP 要求的版本旧时，报告模块过旧，EKP 继续用 Emacs Lisp。这时要重新构建模块。

@@ -24,7 +24,7 @@ Light, dark, sepia and face-derived `auto` palettes (`t` to cycle), keeping ever
 
 - **Full Markdown + GFM + ETAF extensions**: CommonMark blocks and inlines, pipe tables with full grid borders and alignment, interactive task checkboxes (`- [x]` writing back to source), numbered footnotes with jump & `↩` back-link, YAML front matter, GitHub / Obsidian collapsible alerts (`> [!NOTE]`), `==highlights==`, `!!spoilers!!`, `[+annotations]`, `*[ABBR]:` cards, `[[wiki-links]]`, `:kbd[...]`, `:badge[...]`, `:color[...]`, `:sym[...]` and selectable dialects (`etaf`, `gfm`, `commonmark`, or feature plists).
 - **Rich fenced code blocks**: `title=`, `:line-numbers[=N]`, `:collapsed-lines[=N]`, `{1,4-7}`, `/word/` and `[!code highlight|focus|++|--|warning|error|word:...]` markers, `:whitespace`, `:indent-guides` and one-click copy.
-- **Native zero-browser Mermaid & MathJax**: with the optional embedded QuickJS dynamic module (`make native-build`, architecture inspired by [LuciusChen/pele.el](https://github.com/LuciusChen/pele.el)), `mermaid` fences render via vendored [Obsidian Pele](https://github.com/obsidianmd/pele) with native CoreText / Pango label measurement and `$$` display formulas render via vendored [MathJax](https://github.com/mathjax/MathJax-src) TeX-to-SVG inside a sandboxed background thread — zero Chromium, zero Node.js, crisp standalone SVGs cached on disk, stale-while-revalidate during live edits, and automatic fallback to [mermaid-cli](https://github.com/mermaid-js/mermaid-cli) + KaTeX for unsupported dialects or builds without the native module.
+- **Native zero-browser Mermaid & MathJax**: with the optional prebuilt QuickJS dynamic module (`M-x etaf-install-native`, architecture inspired by [LuciusChen/pele.el](https://github.com/LuciusChen/pele.el)), `mermaid` fences render via vendored [Obsidian Pele](https://github.com/obsidianmd/pele) with native CoreText / Pango label measurement and `$$` display formulas render via vendored [MathJax](https://github.com/mathjax/MathJax-src) TeX-to-SVG inside a sandboxed background thread — zero Chromium, zero Node.js, zero local compiler required, crisp standalone SVGs cached on disk, stale-while-revalidate during live edits, and automatic fallback to [mermaid-cli](https://github.com/mermaid-js/mermaid-cli) + KaTeX for unsupported dialects or builds without the native module.
 - **Extensible `:::` documentation containers & living docs**: over 35 built-in containers (`card`, `columns`, `box`, `steps`, `timeline`, `stats`, `field`, `file-tree`, `chat`, `tabs`, `code-tabs`, `accordion`, `details`, `table`, `window`, `panel`, `tab-panel`, `form`, `chart`, `progress`, `keymap`, `breadcrumb`, `diff`, `pros-cons`, `demo`, `qrcode`, `code-tree`, `npm-to`, `image-card`, `link-card`) plus sandboxed workspace living-document widgets (`include`, `code-ref`, `symbol`, `project-tree`, `git-log`, `git-diff`) and trust-gated Runbook `run` blocks. Add custom node types with `etaf-md-define-node`; see [the extension syntax](docs/extensions.md).
 - **Incremental live editing & minimal command surface**: global `M-x` exposes strictly two commands — `M-x etaf-md-open` (full-width single-window reader, `q` restores the source buffer) and `M-x etaf-md-preview` (non-destructive right-split live preview with proportional scroll-follow). Edits coalesce onto a 16 ms frame tick and splice-repaint only the changed block slice while preserving every other block's interactive state.
 - **Media, lightbox & navigation**: local images and async-cached remote HTTP(S) images (`etaf-md-remote-images`), in-buffer media lightbox (`RET` on images and Mermaid diagrams), inline video playback via ETAF's video Component (`ffmpeg`), independent `*ETAF Outline*` side window (`C-c t`), outline jumps (`n`/`p`, `C-c j`), reverse jump to source (`e`/`o`), link/symbol preview (`K`), spoiler toggle (`S`), theme cycle (`t`), measure bounds (`[`/`]`) and in-buffer searchable help (`?`).
@@ -35,7 +35,7 @@ Light, dark, sepia and face-derived `auto` palettes (`t` to cycle), keeping ever
 | --- | --- | --- |
 | Emacs 29.1 or newer | the ETAF runtime and Ebox | `emacs --version` |
 | ETAF (`>= 0.3.6`), ETAF UI (`>= 0.3.4`), Ebox and ECSS | rendering and the component catalog | installed automatically via `etaf-install` |
-| C11 compiler + Python 3 (optional, recommended) | builds `native/etaf-md-typeset-native` (`make native-build`) for fast zero-browser Mermaid and math SVGs (macOS uses CoreText; Linux uses Pango when available) | `cc --version` |
+| Prebuilt native module (optional, recommended) | fast zero-browser Mermaid and math SVGs without a local compiler (downloaded & SHA-256 verified into `~/.cache/emacs-taf/native/` via `M-x etaf-install-native`) | `M-x etaf-install-doctor` |
 | ffmpeg (optional) | inline video playback and terminal image conversion | `ffmpeg -version` |
 | Node.js 18 + mermaid-cli (optional fallback) | fallback renderer when the native module is not built or for unsupported Mermaid dialects | `mmdc --version` |
 | qrencode (optional) | renders `qrcode` blocks | `qrencode -V` |
@@ -53,15 +53,9 @@ Light, dark, sepia and face-derived `auto` palettes (`t` to cycle), keeping ever
 (package-install 'etaf-install)
 ```
 
-Then run `M-x etaf-install` and select `etaf-md` — the installer automatically fetches `etaf`, `etaf-ui`, `ebox` and `ecss`.
+Then run `M-x etaf-install` and select `etaf-md` — in one step the installer fetches `etaf`, `etaf-ui`, `ebox` and `ecss`, downloads the checksum-verified prebuilt QuickJS Mermaid & MathJax native module for your platform into `~/.cache/emacs-taf/native/` (preserved across package upgrades, with no C compiler, Node.js or `make` required), and activates it immediately before opening `etaf-md`.
 
-To enable the fast zero-browser QuickJS Mermaid & MathJax renderer (all upstream sources are bundled under `native/vendor/`, no network required), run `make native-build` once inside the installed `etaf-md` package directory:
-
-```sh
-cd ~/.emacs.d/elpa/etaf-md-* && make native-build
-```
-
-Run `M-x etaf-install-doctor` (or evaluate `(etaf-md-doctor)`) at any time to inspect whether `typeset-native`, `ffmpeg`, `mmdc`, `qrencode` and `git` are active.
+If you installed offline or directly via `package-install`, run `M-x etaf-install-native` and select `etaf-md` (or press `n` on `etaf-md` in `M-x etaf-install-manage`) anytime to fetch or refresh the prebuilt binary. Run `M-x etaf-install-doctor` (or evaluate `(etaf-md-doctor)`) to inspect whether `typeset-native`, `ffmpeg`, `mmdc`, `qrencode` and `git` are active.
 
 ### From a source checkout
 
@@ -85,7 +79,7 @@ M-x etaf-md-open         # read current .md file (or pick a file) in current win
 M-x etaf-md-preview      # toggle side-by-side live preview beside source buffer
 ```
 
-Try the bundled example pages right away: `examples/all-syntax.markdown` exercises every supported Markdown feature, container and diagram type in one page; `examples/widgets-showcase.markdown` demonstrates editorial containers and Emacs living-document widgets; `examples/sample.markdown` is a realistic long manual used as the performance workload.
+Open any local `.md` file and run `M-x etaf-md-open` or `M-x etaf-md-preview` right away (in a source checkout, `examples/all-syntax.markdown`, `examples/widgets-showcase.markdown` and `examples/sample.markdown` provide full feature and benchmark pages; ELPA packages intentionally omit `Makefile` and `examples/` to stay compact).
 
 | Key | Action |
 | --- | --- |

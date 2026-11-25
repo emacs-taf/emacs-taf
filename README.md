@@ -42,14 +42,7 @@ gallery is the default):
 (call-interactively #'etaf-install)
 ```
 
-Afterward, use `M-x etaf-install`; installed targets reopen offline. Use
-`M-x etaf-install-manage` to see installed and available versions, update,
-remove or open targets, and read the doctor; one window holds the table and the
-mode line names the keys (`i` install, `u` update, `U` update all, `d` remove,
-`RET` open, `?` doctor, `g` refresh, `l` list-packages, `q` quit). `M-x list-packages` remains the
-advanced package menu. Package.el owns dependency installation, local byte
-compilation, updates and removal. No Git, Python, system compiler, Pi or
-replacement Emacs configuration is required.
+Afterward, use `M-x etaf-install`; installed targets reopen offline. When installing or updating a target, `etaf-install` automatically downloads, verifies (SHA-256) and activates any prebuilt native dynamic modules declared by that target or its ETAF dependencies (such as `etaf-md`'s QuickJS Mermaid/MathJax renderer, `etaf`'s `libmpv` bridge or `ekp`'s C line-breaking engine) directly into `~/.cache/emacs-taf/native/` without a compiler or a second command (set `etaf-install-auto-native` to nil to opt out, or run `M-x etaf-install-native` / press `n` in `M-x etaf-install-manage` to retry or force-refresh). Use `M-x etaf-install-manage` to see installed and available versions, update, remove or open targets, manage native modules (`n`), and read the doctor; one window holds the table and the mode line names the keys (`i` install, `n` native, `u` update, `U` update all, `d` remove, `RET` open, `?` doctor, `g` refresh, `l` list-packages, `q` quit). `M-x list-packages` remains the advanced package menu. Package.el owns dependency installation, local byte compilation, updates and removal. No Git, Python, system compiler, Pi or replacement Emacs configuration is required.
 
 The installer groups its targets: framework (`etaf-install`, the `etaf-ui`
 gallery, `etaf`, `ebox`, `ecss`, `ekp`, `etaf-db`, `etaf-gamekit`,

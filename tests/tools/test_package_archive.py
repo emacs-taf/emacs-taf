@@ -170,6 +170,41 @@ class PackageArchiveTests(unittest.TestCase):
         self.build(self.base / "archive", "--resource", "sample=data", success=False)
         self.assertFalse((self.base / "archive").exists())
 
+    def test_explicit_file_resources_ship_only_named_files_and_skip_build_dirs(self):
+        (self.source / "native/vendor/big").mkdir(parents=True)
+        (self.source / "native/vendor/big/source.c").write_text("heavy vendor source\n")
+        (self.source / "native/build").mkdir(parents=True)
+        (self.source / "native/build/bundles.c").write_text("generated\n")
+        (self.source / "native/Makefile").write_text("all:\n")
+        (self.source / "native/manifest.json").write_text('{"schema": 1}\n')
+        (self.source / "scripts").mkdir()
+        (self.source / "scripts/worker.mjs").write_text("export default 1;\n")
+        (self.source / "scripts/dev-probe.el").write_text("; dev only\n")
+        (self.source / "Makefile").write_text("check:\n")
+        (self.source / "examples").mkdir()
+        (self.source / "examples/demo.md").write_text("# Demo\n")
+        output = self.base / "archive-files"
+        self.build(output,
+                   "--resource", "sample=native/manifest.json",
+                   "--resource", "sample=scripts/worker.mjs")
+        with tarfile.open(output / "sample-1.2.3.tar") as archive:
+            names = sorted(archive.getnames())
+        self.assertIn("sample-1.2.3/native/manifest.json", names)
+        self.assertIn("sample-1.2.3/scripts/worker.mjs", names)
+        self.assertNotIn("sample-1.2.3/native/Makefile", names)
+        self.assertNotIn("sample-1.2.3/native/vendor/big/source.c", names)
+        self.assertNotIn("sample-1.2.3/native/build/bundles.c", names)
+        self.assertNotIn("sample-1.2.3/scripts/dev-probe.el", names)
+        self.assertNotIn("sample-1.2.3/Makefile", names)
+        self.assertNotIn("sample-1.2.3/examples/demo.md", names)
+        # Directory resource still excludes generated `build/` subdirectories.
+        output_dir = self.base / "archive-dir"
+        self.build(output_dir, "--resource", "sample=native")
+        with tarfile.open(output_dir / "sample-1.2.3.tar") as archive:
+            dir_names = sorted(archive.getnames())
+        self.assertIn("sample-1.2.3/native/manifest.json", dir_names)
+        self.assertNotIn("sample-1.2.3/native/build/bundles.c", dir_names)
+
 
 if __name__ == "__main__":
     unittest.main()

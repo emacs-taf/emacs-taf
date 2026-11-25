@@ -341,5 +341,66 @@ class PolicyTests(unittest.TestCase):
         errors = '\n'.join(POLICY.check(self.root, files=[f for f in POLICY.inventory(self.root) if not f.startswith('packages/')]))
         self.assertIn('registered package is missing under packages/: alpha', errors)
 
+    def test_extension_role_requires_etaf_ext_dependency_and_rejects_unknown_roles(self):
+        self.write('AGENTS.md', '# Workspace instructions\n')
+        self.write('docs/architecture.zh-CN.md', '# Ecosystem contract\n')
+        (self.root / 'package.el').unlink()
+        (self.root / 'packages/etaf-ext').mkdir(parents=True)
+        (self.root / 'packages/etaf-ext/etaf-ext.el').write_text(
+            ';;; etaf-ext.el --- Engine -*- lexical-binding: t; -*-\n'
+            ';; Version: 0.1.0\n;; Package-Requires: ((emacs "29.1"))\n(provide \'etaf-ext)\n')
+        (self.root / 'packages/my-ext').mkdir(parents=True)
+        (self.root / 'packages/my-ext/my-ext.el').write_text(
+            ';;; my-ext.el --- Extension -*- lexical-binding: t; -*-\n'
+            ';; Version: 0.1.0\n;; Package-Requires: ((emacs "29.1") (etaf-ext "0.1.0"))\n(provide \'my-ext)\n')
+        self.write('workspace.json', json.dumps({'schema': 2, 'packages': {
+            'etaf-ext': {'url': 'https://example.invalid/etaf-ext.git', 'branch': 'main', 'role': 'framework'},
+            'my-ext': {'url': 'https://example.invalid/my-ext.git', 'branch': 'main', 'role': 'extension'},
+        }}))
+        files = [f for f in POLICY.inventory(self.root) if not f.startswith('packages/')]
+        self.assertEqual('', '\n'.join(POLICY.check(self.root, files=files)))
+
+        # Extension without etaf-ext in Package-Requires is rejected.
+        (self.root / 'packages/my-ext/my-ext.el').write_text(
+            ';;; my-ext.el --- Not an etaf-ext extension -*- lexical-binding: t; -*-\n'
+            ';; Version: 0.1.0\n;; Package-Requires: ((emacs "29.1") (etaf "0.3.8"))\n(provide \'my-ext)\n')
+        errors = '\n'.join(POLICY.check(self.root, files=files))
+        self.assertIn('role "extension" requires declaring etaf-ext in Package-Requires', errors)
+
+        # Misspelled/unknown role is rejected.
+        self.write('workspace.json', json.dumps({'schema': 2, 'packages': {
+            'etaf-ext': {'url': 'https://example.invalid/etaf-ext.git', 'branch': 'main', 'role': 'framework'},
+            'my-ext': {'url': 'https://example.invalid/my-ext.git', 'branch': 'main', 'role': 'extention'},
+        }}))
+        errors = '\n'.join(POLICY.check(self.root, files=files))
+        self.assertIn("unknown role 'extention'", errors)
+
+    def test_archive_consistency_rejects_elpa_make_remedy_and_bad_native_manifest(self):
+        self.write('AGENTS.md', '# Workspace instructions\n')
+        self.write('docs/architecture.zh-CN.md', '# Ecosystem contract\n')
+        shutil.copyfile(ROOT / 'scripts/native-release.py', self.root / 'scripts/native-release.py')
+        (self.root / 'package.el').unlink()
+        self.write('workspace.json', json.dumps({'schema': 2, 'packages': {
+            'demo': {'url': 'https://example.invalid/demo.git', 'branch': 'main', 'role': 'application'},
+        }}))
+        self.installer_fixture(['demo'], ['demo'], ['demo'])
+        self.write('release-dependencies.json', json.dumps({
+            'schema': 1,
+            'packages': {'demo': {'resources': ['native/manifest.json']}},
+            'targets': ['demo'],
+        }))
+        self.write('packages/demo/demo.el',
+                   ';;; demo.el --- Demo -*- lexical-binding: t; -*-\n'
+                   ';; Version: 0.1.0\n;; Package-Requires: ((emacs "29.1"))\n'
+                   '(defun demo-doctor () (list :optional (list (list "native" nil "Run \'make native-build\'"))))\n'
+                   '(provide \'demo)\n')
+        self.write('packages/demo/README.md',
+                   '# Demo\n\ncd ~/.emacs.d/elpa/demo-* && make native-build\n')
+        self.write('packages/demo/native/manifest.json', '{"schema": 2, "package": "wrong", "modules": []}\n')
+        errors = '\n'.join(POLICY.archive_consistency_errors(self.root))
+        self.assertIn('README.md: archive users do not receive root Makefile', errors)
+        self.assertIn('demo.el: archive users do not receive root Makefile', errors)
+        self.assertIn('native/manifest.json: expected schema 1', errors)
+
 
 if __name__ == '__main__':unittest.main()

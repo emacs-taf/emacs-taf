@@ -32,6 +32,8 @@ else
 endif
 
 PROFILE ?= portable
+PORTABLE ?= 0
+ARCH ?=
 COMMON_CFLAGS := -std=c11 -Wall -Wextra -Wpedantic -fPIC
 COMMON_CFLAGS += -D_POSIX_C_SOURCE=200809L
 
@@ -55,20 +57,43 @@ ifeq ($(UNAME), Darwin)
     # macOS
     MODULE_EXT := dylib
     LDFLAGS := -shared -lpthread
-    # Find Emacs headers (check Emacs.app, homebrew, /usr/local)
-    EMACS_INCLUDE := $(shell find /Applications/Emacs.app/Contents/Resources/include /opt/homebrew /usr/local -name emacs-module.h -exec dirname {} \; 2>/dev/null | head -1)
-    ifdef EMACS_INCLUDE
+    ifeq ($(PORTABLE),1)
+        CFLAGS += -mmacosx-version-min=12.0
+        LDFLAGS += -mmacosx-version-min=12.0
+    endif
+    ifneq ($(strip $(ARCH)),)
+        CFLAGS += -arch $(ARCH)
+        LDFLAGS += -arch $(ARCH)
+    endif
+    # Find Emacs headers (check Emacs, Emacs.app, homebrew, /usr/local)
+    EMACS_INCLUDE ?= $(shell $(EMACS) -Q --batch --eval '(princ (file-name-directory (or (locate-file "emacs-module.h" (list (expand-file-name "../include" invocation-directory) (expand-file-name "../../../include" invocation-directory) "/Applications/Emacs.app/Contents/Resources/include" "/opt/homebrew/include" "/usr/local/include" "/usr/include")) "")))' 2>/dev/null)
+    ifeq ($(strip $(EMACS_INCLUDE)),)
+        EMACS_INCLUDE := $(shell find /Applications/Emacs.app/Contents/Resources/include /opt/homebrew /usr/local -name emacs-module.h -exec dirname {} \; 2>/dev/null | head -1)
+    endif
+    ifneq ($(strip $(EMACS_INCLUDE)),)
         CFLAGS += -I$(EMACS_INCLUDE)
     endif
 else ifeq ($(UNAME), Linux)
     # Linux
     MODULE_EXT := so
     LDFLAGS := -shared -lpthread -lm
+    EMACS_INCLUDE ?= $(shell $(EMACS) -Q --batch --eval '(princ (file-name-directory (or (locate-file "emacs-module.h" (list (expand-file-name "../include" invocation-directory) (expand-file-name "../../../include" invocation-directory) "/usr/include" "/usr/local/include")) "")))' 2>/dev/null)
+    ifneq ($(strip $(EMACS_INCLUDE)),)
+        CFLAGS += -I$(EMACS_INCLUDE)
+    endif
 else ifeq ($(UNAME), Windows)
     # Windows (MinGW)
     MODULE_EXT := dll
-    LDFLAGS := -shared -lpthread
-    CFLAGS += -I$(EMACS_ROOT)/include
+    ifeq ($(PORTABLE),1)
+        LDFLAGS := -shared -static-libgcc -Wl,-Bstatic -lpthread -Wl,-Bdynamic
+    else
+        LDFLAGS := -shared -lpthread
+    endif
+    ifneq ($(strip $(EMACS_INCLUDE)),)
+        CFLAGS += -I$(EMACS_INCLUDE)
+    else
+        CFLAGS += -I$(EMACS_ROOT)/include
+    endif
 else
     # Fallback / Unknown
     MODULE_EXT := so

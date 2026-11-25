@@ -29,10 +29,14 @@ PANGO_CFLAGS := $(shell pkg-config --cflags $(PANGO_PACKAGES) 2>/dev/null)
 PANGO_LIBS := $(shell pkg-config --libs $(PANGO_PACKAGES) 2>/dev/null)
 
 TEXT_BACKEND ?= auto
+PORTABLE ?= 0
+ARCH ?=
 FONT_BACKEND := $(TEXT_BACKEND)
 ifeq ($(FONT_BACKEND),auto)
 ifeq ($(UNAME_S),Darwin)
 FONT_BACKEND := coretext
+else ifeq ($(PORTABLE),1)
+FONT_BACKEND := pango-dlopen
 else ifneq ($(strip $(PANGO_LIBS)),)
 FONT_BACKEND := pango
 else
@@ -43,13 +47,26 @@ endif
 CPPFLAGS += -D_GNU_SOURCE -DCONFIG_VERSION='"2026-06-04"' -isystem vendor/quickjs -Ibuild -I$(EMACS_INCLUDE)
 CFLAGS ?= -O2
 CFLAGS += -std=gnu11 -fPIC -fvisibility=hidden -pthread
+ifeq ($(UNAME_S),Darwin)
+ifeq ($(PORTABLE),1)
+CFLAGS += -mmacosx-version-min=12.0
+LDFLAGS += -mmacosx-version-min=12.0
+endif
+ifneq ($(strip $(ARCH)),)
+CFLAGS += -arch $(ARCH)
+LDFLAGS += -arch $(ARCH)
+endif
+endif
 
 CORE := quickjs dtoa libregexp libunicode cutils
 OBJECTS := $(addprefix build/,$(addsuffix .o,$(CORE))) build/bundles.o build/etaf_md_typeset.o
 
-ifeq ($(FONT_BACKEND),pango)
+ifeq ($(FONT_BACKEND),pango-dlopen)
+CPPFLAGS += -DETAF_MD_USE_PANGO_DLOPEN
+LDLIBS += -ldl
+else ifeq ($(FONT_BACKEND),pango)
 ifeq ($(strip $(PANGO_LIBS)),)
-$(error Pango not found: install the pangocairo development package or build with TEXT_BACKEND=estimate)
+$(error Pango not found: install the pangocairo development package or build with TEXT_BACKEND=pango-dlopen)
 endif
 CPPFLAGS += -DETAF_MD_USE_PANGO $(PANGO_CFLAGS)
 LDLIBS += $(PANGO_LIBS)

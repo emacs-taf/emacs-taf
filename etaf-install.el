@@ -20,6 +20,11 @@
 ;; target may expose a `<package>-doctor' returning the same :required and
 ;; :optional facts as `etaf-install-doctor', which are merged into its report.  NO-OPEN suppresses opening, for batch installation.  Return the
 ;; installed package symbol.  Already installed targets can be opened offline.
+;; When `etaf-install-auto-native' is non-nil (the default), any prebuilt native
+;; dynamic modules declared by PACKAGE or its installed ETAF dependencies are
+;; automatically downloaded, verified (SHA-256), cached and activated before
+;; opening so users need no compiler and no second command; an unavailable or
+;; unreachable native prebuild never fails the Lisp installation.
 ;; Missing mandatory Emacs capabilities or a conflicting source checkout signal
 ;; user-error before installation.  An upgrade of a loaded dependency also
 ;; requires a restart before installation.  A target's runtime tools are
@@ -49,8 +54,10 @@
 ;;
 ;; Function: etaf-install-update (&optional package)
 ;; Refresh the ETAF and standard archives and upgrade PACKAGE, or every
-;; installed target plus the installer.  Return a report.  Restart Emacs when
-;; an update replaces loaded Lisp.
+;; installed target plus the installer.  When `etaf-install-auto-native' is
+;; non-nil, also fetch any newly required or updated prebuilt native modules
+;; declared by upgraded packages.  Return a report.  Restart Emacs when an
+;; update replaces loaded Lisp.
 ;;
 ;; Function: etaf-install-remove (package &optional no-confirm)
 ;; Remove PACKAGE's package files and its `package-selected-packages' entry.
@@ -59,6 +66,29 @@
 ;; Function: etaf-install-status (&optional package)
 ;; Return installed and available versions, the update flag and runtime facts
 ;; for PACKAGE or every supported target.
+;;
+;; Function: etaf-install-native (&optional package force)
+;; Download, verify (SHA-256) and install the prebuilt native dynamic module(s)
+;; declared by PACKAGE or its installed ETAF dependencies into
+;; `etaf-install-native-directory', activating them immediately when possible.
+;; No compiler, Make or Python is required.  With FORCE (prefix argument),
+;; re-download even when a verified copy is already cached.
+;;
+;; Variable: etaf-install-auto-native
+;; Non-nil (the default) to automatically download, verify and activate
+;; available prebuilt native dynamic modules during `etaf-install' and
+;; `etaf-install-update' so users need only M-x etaf-install.  Set to nil to
+;; opt out and invoke `etaf-install-native' manually instead.
+;;
+;; Variable: etaf-install-native-directory
+;; User cache directory holding verified prebuilt native dynamic modules.
+;; Defaults to nil, resolving to `${XDG_CACHE_HOME:-~/.cache}/emacs-taf/native/'.
+;; Stored outside `package-user-dir' so package upgrades preserve compatible
+;; native modules and read-only package directories keep working.
+;;
+;; Variable: etaf-install-native-url
+;; Optional HTTPS base URL or existing local directory overriding the download
+;; URLs in `native/manifest.json' (for mirrors, offline installs or tests).
 ;;
 ;; Setup once using the installation block in the workspace README, then use
 ;; M-x etaf-install.  Credentials and external application backends are outside
@@ -71,6 +101,9 @@
 (require 'subr-x)
 (require 'tabulated-list)
 
+(defvar url-http-response-status)
+(declare-function ekp-c-module-load "ekp" ())
+
 (defgroup etaf-install nil
   "Install the ETAF framework and its Lisp applications."
   :group 'applications)
@@ -78,6 +111,28 @@
 (defcustom etaf-install-archive-url "https://etaf.top/packages/"
   "ETAF package archive URL, or an absolute local archive directory."
   :type 'string
+  :group 'etaf-install)
+
+(defcustom etaf-install-auto-native t
+  "When non-nil, automatically download and activate prebuilt native modules.
+Applies during `etaf-install' and `etaf-install-update' for the target and its
+installed ETAF dependencies so users need no compiler and no second command.
+Missing or unreachable native prebuilds fall back cleanly without failing the
+Lisp installation."
+  :type 'boolean
+  :group 'etaf-install)
+
+(defcustom etaf-install-native-directory nil
+  "Directory holding verified prebuilt native dynamic modules, or nil.
+When nil, resolves to `${XDG_CACHE_HOME:-~/.cache}/emacs-taf/native/'."
+  :type '(choice (const :tag "Default XDG cache" nil) directory)
+  :group 'etaf-install)
+
+(defcustom etaf-install-native-url nil
+  "Optional override HTTPS base URL or local directory for native binaries.
+When nil, uses the pinned HTTPS mirrors declared in each package's
+`native/manifest.json'."
+  :type '(choice (const :tag "Use package manifest mirrors" nil) string)
   :group 'etaf-install)
 
 (defconst etaf-install--targets
@@ -92,11 +147,11 @@
     (etaf "ETAF framework" framework nil)
     (etaf-db "ETAF SQLite backend" framework nil sqlite)
     (ekp "Knuth-Plass paragraph layout" framework nil)
+    (etaf-manual "ETAF reference manual" application etaf-manual-open)
     (etaf-md "Markdown reading view" application etaf-md-open)
     (etaf-org-preview "Org reading view" application etaf-org-preview-open)
     (etaf-video-player "Video with sound in a buffer" application etaf-video-player-open)
     (etaf-desktop "Windows and workspaces" application etaf-desktop-open)
-    (etaf-manual "ETAF reference manual" application etaf-manual-open)
     ;; MELPA supplies Telega and Transient; Transient needs Compat from GNU ELPA.
     (etaf-telega "Telegram client" application etaf-telega-open melpa gnu)
     (etaf-weread "WeChat Reading" application etaf-weread-open)
@@ -424,7 +479,11 @@ INSTALLED-ONLY checks offline reopening without computing an upgrade plan."
            (signal (car error-data) (cdr error-data))))))
     (etaf-install--check-plan (cadr (assq package package-alist)) t)
     (require package)
-    (let ((missing (cl-remove-if #'cadr (plist-get (etaf-install-doctor package) :required))))
+    (let* ((native-auto (etaf-install--native-ensure-best-effort package))
+           (native-installed (plist-get native-auto :installed))
+           (native-failed (plist-get native-auto :failed))
+           (native-restart (plist-get native-auto :restart))
+           (missing (cl-remove-if #'cadr (plist-get (etaf-install-doctor package) :required))))
       (if missing
           (message "ETAF: %s is installed; missing for use: %s. %s Run M-x etaf-install-doctor for all details."
                    package
@@ -432,8 +491,511 @@ INSTALLED-ONLY checks offline reopening without computing an upgrade plan."
                    (nth 2 (car missing)))
         (when (and (not no-open) (nth 3 target))
           (call-interactively (nth 3 target)))
-        (message "ETAF: %s is ready.  M-x etaf-install opens installed targets; M-x etaf-install-manage updates or removes them." package)))
+        (cond
+         (native-failed
+          (message "ETAF: %s is ready (using fallback; native download failed: %s; retry with M-x etaf-install-native)."
+                   package (cdar native-failed)))
+         (native-installed
+          (message "ETAF: %s is ready (prebuilt native acceleration active%s).  M-x etaf-install opens installed targets; M-x etaf-install-manage updates or removes them."
+                   package (if native-restart "; restart Emacs to switch to the updated binary" "")))
+         ((eq (etaf-install--native-status package) 'available)
+          (message "ETAF: %s is ready. Optional prebuilt native acceleration available: run M-x etaf-install-native." package))
+         (t
+          (message "ETAF: %s is ready.  M-x etaf-install opens installed targets; M-x etaf-install-manage updates or removes them." package)))))
     package))
+
+;;; Prebuilt native dynamic modules
+
+(defvar etaf-install--native-platform-override nil
+  "Internal test override for `etaf-install--native-platform'.")
+
+(defun etaf-install--native-cache-root ()
+  "Return the root directory where verified native dynamic modules live."
+  (file-name-as-directory
+   (expand-file-name
+    (or etaf-install-native-directory
+        (expand-file-name "emacs-taf/native"
+                          (or (let ((xdg (getenv "XDG_CACHE_HOME")))
+                                (and xdg (not (string-empty-p xdg)) xdg))
+                              (expand-file-name "~/.cache")))))))
+
+(defun etaf-install--native-platform ()
+  "Return the normalized platform key for this Emacs, or nil if unsupported."
+  (or etaf-install--native-platform-override
+      (let* ((cfg (downcase (or system-configuration "")))
+             (arch (cond
+                    ((string-match-p "\\(aarch64\\|arm64\\)" cfg) "arm64")
+                    ((string-match-p "\\(x86_64\\|amd64\\)" cfg) "x86_64")
+                    (t nil)))
+             (os (pcase system-type
+                   ('darwin "darwin")
+                   ('gnu/linux "linux")
+                   ('windows-nt "windows")
+                   (_ nil))))
+        (when (and os arch)
+          (format "%s-%s" os arch)))))
+
+(defun etaf-install--native-suffix (&optional platform)
+  "Return the dynamic module file suffix for PLATFORM or this Emacs."
+  (cond
+   ((and platform (string-prefix-p "darwin-" platform)) ".dylib")
+   ((and platform (string-prefix-p "windows-" platform)) ".dll")
+   ((and platform (string-prefix-p "linux-" platform)) ".so")
+   ((and (boundp 'module-file-suffix) (stringp module-file-suffix))
+    module-file-suffix)
+   ((eq system-type 'darwin) ".dylib")
+   ((eq system-type 'windows-nt) ".dll")
+   (t ".so")))
+
+(defun etaf-install--package-directory (package)
+  "Return the installed or source directory for PACKAGE, or nil."
+  (let* ((desc (cadr (assq package (bound-and-true-p package-alist))))
+         (pkg-dir (and desc (fboundp 'package-desc-dir) (package-desc-dir desc)))
+         (lib (unless (and pkg-dir (file-directory-p pkg-dir))
+                (locate-library (symbol-name package)))))
+    (cond
+     ((and pkg-dir (file-directory-p pkg-dir))
+      (file-name-as-directory pkg-dir))
+     ((and lib (not (string-suffix-p ".eln" lib)))
+      (file-name-directory lib)))))
+
+(defun etaf-install--native-manifest-path (package)
+  "Return PACKAGE's `native/manifest.json' path if present on disk."
+  (when-let* ((dir (etaf-install--package-directory package))
+              (path (expand-file-name "native/manifest.json" dir))
+              ((file-readable-p path)))
+    path))
+
+(defun etaf-install--native-read-manifest (package)
+  "Read and validate PACKAGE's `native/manifest.json', or return nil."
+  (when-let* ((path (etaf-install--native-manifest-path package)))
+    (let ((doc (with-temp-buffer
+                 (insert-file-contents path)
+                 (json-parse-buffer :object-type 'hash-table
+                                    :array-type 'list
+                                    :null-object nil))))
+      (unless (and (hash-table-p doc)
+                   (eql (gethash "schema" doc) 1)
+                   (equal (gethash "package" doc) (symbol-name package))
+                   (listp (gethash "modules" doc)))
+        (error "Invalid native manifest in %s" path))
+      doc)))
+
+(defun etaf-install--native-module-cache-path (package version module &optional platform)
+  "Return the cached path for PACKAGE VERSION's native MODULE."
+  (expand-file-name
+   (concat module (etaf-install--native-suffix platform))
+   (expand-file-name (format "%s/%s" package version)
+                     (etaf-install--native-cache-root))))
+
+(defun etaf-install--native-local-checkout-path (package module &optional platform)
+  "Return PACKAGE's in-tree built native MODULE path if it exists."
+  (when-let* ((dir (etaf-install--package-directory package))
+              (file (expand-file-name
+                     (concat "native/" module (etaf-install--native-suffix platform))
+                     dir))
+              ((file-exists-p file)))
+    file))
+
+(defun etaf-install--native-cached-p (dest expected-sha)
+  "Return non-nil when DEST exists and its recorded SHA-256 matches EXPECTED-SHA."
+  (let ((marker (concat dest ".sha256")))
+    (and (file-exists-p dest)
+         (file-readable-p marker)
+         (equal (string-trim
+                 (with-temp-buffer
+                   (insert-file-contents marker)
+                   (buffer-string)))
+                expected-sha))))
+
+(defun etaf-install--installed-dependency-closure (package)
+  "Return PACKAGE followed by its installed dependency closure as symbols."
+  (let ((seen (list package))
+        (result (list package))
+        (pending (list package)))
+    (while pending
+      (let* ((name (pop pending))
+             (desc (or (cadr (assq name package-alist))
+                       (cadr (assq name package-archive-contents)))))
+        (when desc
+          (dolist (req (package-desc-reqs desc))
+            (let ((dep (car req)))
+              (unless (or (eq dep 'emacs) (memq dep seen))
+                (push dep seen)
+                (when (package-installed-p dep)
+                  (push dep result)
+                  (push dep pending))))))))
+    (nreverse result)))
+
+(defun etaf-install--native-packages-for-target (package)
+  "Return installed packages in PACKAGE's closure declaring native manifests."
+  (let ((closure (if (package-installed-p package)
+                     (etaf-install--installed-dependency-closure package)
+                   (list package))))
+    (cl-remove-if-not #'etaf-install--native-manifest-path closure)))
+
+(defun etaf-install--native-local-archive-dir ()
+  "Return a local native staging dir beside `etaf-install-archive-url', if any."
+  (when (and (stringp etaf-install-archive-url)
+             (file-name-absolute-p etaf-install-archive-url)
+             (file-directory-p etaf-install-archive-url))
+    (let* ((archive (directory-file-name (expand-file-name etaf-install-archive-url)))
+           (child (expand-file-name "native" archive))
+           (sibling (expand-file-name "native" (file-name-directory archive))))
+      (cond
+       ((file-directory-p child) child)
+       ((file-directory-p sibling) sibling)))))
+
+(defun etaf-install--native-auto-source-available-p ()
+  "Return non-nil when automatic native download has a configured source.
+Prevents offline local-archive runs from making unintended internet requests
+unless `etaf-install-native-url' or a local staged `native/' directory exists."
+  (or (and etaf-install-native-url t)
+      (and (stringp etaf-install-archive-url)
+           (string-prefix-p "https://" etaf-install-archive-url))
+      (and (etaf-install--native-local-archive-dir) t)))
+
+(defun etaf-install--native-single-status (package)
+  "Return native module status for PACKAGE itself.
+Returns nil, `installed', `available', or `unavailable'."
+  (when-let* ((doc (ignore-errors (etaf-install--native-read-manifest package)))
+              (modules (gethash "modules" doc)))
+    (let ((platform (etaf-install--native-platform))
+          (all-installed t)
+          (any-available nil)
+          (dynamic-ok (and (boundp 'module-file-suffix) module-file-suffix
+                           (fboundp 'module-load))))
+      (dolist (mod modules)
+        (let* ((name (gethash "name" mod))
+               (version (gethash "version" mod))
+               (platforms (gethash "platforms" mod))
+               (entry (and platform (hash-table-p platforms)
+                           (gethash platform platforms)))
+               (sha (and (hash-table-p entry) (gethash "sha256" entry)))
+               (dest (etaf-install--native-module-cache-path
+                      package version name platform))
+               (local (etaf-install--native-local-checkout-path
+                       package name platform))
+               (present (or local
+                            (and sha (etaf-install--native-cached-p dest sha))
+                            (and (null sha) (file-exists-p dest)))))
+          (unless present
+            (setq all-installed nil)
+            (when (and dynamic-ok entry)
+              (setq any-available t)))))
+      (cond
+       (all-installed 'installed)
+       (any-available 'available)
+       (t 'unavailable)))))
+
+(defun etaf-install--native-status (package)
+  "Return aggregated native module status for PACKAGE and its dependencies.
+Returns nil, `installed', `available', or `unavailable'."
+  (let ((pkgs (etaf-install--native-packages-for-target package)))
+    (when pkgs
+      (let ((statuses (delq nil (mapcar #'etaf-install--native-single-status pkgs))))
+        (when statuses
+          (cond
+           ((cl-every (lambda (s) (eq s 'installed)) statuses) 'installed)
+           ((memq 'available statuses) 'available)
+           (t 'unavailable)))))))
+
+(defun etaf-install--file-sha256 (file)
+  "Return the lowercase hex SHA-256 digest of FILE's raw bytes."
+  (with-temp-buffer
+    (set-buffer-multibyte nil)
+    (insert-file-contents-literally file)
+    (downcase (secure-hash 'sha256 (current-buffer)))))
+
+(defun etaf-install--native-download-url (url destination)
+  "Download binary URL to DESTINATION via HTTPS or loopback HTTP."
+  (unless (or (string-prefix-p "https://" url)
+              (string-prefix-p "http://127.0.0.1:" url)
+              (string-prefix-p "http://localhost:" url))
+    (error "Refusing non-HTTPS native binary URL: %s" url))
+  (let ((buffer (url-retrieve-synchronously url t t 30)))
+    (unless buffer
+      (error "No response from %s" url))
+    (unwind-protect
+        (with-current-buffer buffer
+          (let ((status (and (boundp 'url-http-response-status)
+                             url-http-response-status)))
+            (unless (and (integerp status) (= status 200))
+              (error "HTTP %s from %s" (or status "error") url)))
+          (set-buffer-multibyte nil)
+          (goto-char (point-min))
+          (unless (re-search-forward "\r?\n\r?\n" nil t)
+            (error "Malformed HTTP response from %s" url))
+          (let ((coding-system-for-write 'no-conversion))
+            (write-region (point) (point-max) destination nil 'silent)))
+      (when (buffer-live-p buffer)
+        (kill-buffer buffer)))))
+
+(defun etaf-install--native-fetch-verified (package version entry destination)
+  "Fetch, verify size and SHA-256 for ENTRY, and atomically install to DESTINATION."
+  (let* ((file (gethash "file" entry))
+         (expected-sha (gethash "sha256" entry))
+         (expected-size (gethash "size" entry))
+         (urls (gethash "urls" entry))
+         (override (or etaf-install-native-url
+                       (etaf-install--native-local-archive-dir)))
+         (partial (concat destination ".partial"))
+         (errors nil))
+    (unless (and (stringp file)
+                 (string-match-p "\\`[a-z0-9][a-z0-9._-]*\\.\\(dylib\\|so\\|dll\\)\\'" file))
+      (error "Invalid artifact file name in native manifest: %S" file))
+    (unless (and (stringp expected-sha)
+                 (string-match-p "\\`[0-9a-f]\\{64\\}\\'" expected-sha))
+      (error "Invalid SHA-256 checksum in native manifest for %s" file))
+    (unless (and (integerp expected-size) (> expected-size 0))
+      (error "Invalid artifact size in native manifest for %s" file))
+    (make-directory (file-name-directory destination) t)
+    (let ((sources
+           (cond
+            ((and override
+                  (file-name-absolute-p override)
+                  (file-directory-p override))
+             (list (cons 'local
+                         (let ((nested (expand-file-name
+                                        (format "%s/%s/%s" package version file)
+                                        override)))
+                           (if (file-exists-p nested)
+                               nested
+                             (expand-file-name file override))))))
+            ((and override
+                  (or (string-prefix-p "https://" override)
+                      (string-prefix-p "http://127.0.0.1:" override)
+                      (string-prefix-p "http://localhost:" override)))
+             (list (cons 'url
+                         (format "%s/%s/%s/%s"
+                                 (directory-file-name override)
+                                 package version file))))
+            (override
+             (user-error "ETAF native URL must use HTTPS or an existing local directory"))
+            (t
+             (mapcar (lambda (u) (cons 'url u)) urls)))))
+      (unless sources
+        (error "No download mirrors declared for %s" file))
+      (let ((ok nil))
+        (dolist (source sources)
+          (unless ok
+            (unwind-protect
+                (condition-case err
+                    (progn
+                      (when (file-exists-p partial) (delete-file partial))
+                      (if (eq (car source) 'local)
+                          (progn
+                            (unless (file-readable-p (cdr source))
+                              (error "Missing local artifact %s" (cdr source)))
+                            (copy-file (cdr source) partial t))
+                        (etaf-install--native-download-url (cdr source) partial))
+                      (let ((actual-size (file-attribute-size (file-attributes partial))))
+                        (unless (eql actual-size expected-size)
+                          (error "Size mismatch for %s: expected %d bytes, got %s"
+                                 file expected-size actual-size)))
+                      (let ((actual-sha (etaf-install--file-sha256 partial)))
+                        (unless (equal actual-sha expected-sha)
+                          (error "SHA-256 mismatch for %s: expected %s, got %s"
+                                 file expected-sha actual-sha)))
+                      (set-file-modes partial #o755)
+                      (rename-file partial destination t)
+                      (with-temp-file (concat destination ".sha256")
+                        (insert expected-sha "\n"))
+                      (setq ok t))
+                  (error
+                   (push (format "%s: %s" (cdr source) (error-message-string err)) errors)))
+              (when (file-exists-p partial)
+                (ignore-errors (delete-file partial))))))
+        (unless ok
+          (user-error "Failed to download verified native module %s: %s"
+                      file (mapconcat #'identity (nreverse errors) "; ")))))))
+
+(defvar etaf-install--native-loaded-modules nil
+  "Native dynamic module names loaded by `etaf-install-native' in this session.")
+
+(defun etaf-install--native-module-loaded-p (module)
+  "Return non-nil when dynamic module MODULE is already loaded in this Emacs.
+Avoids relying on bare `featurep', because an Elisp library (such as
+`etaf-video-mpv') may share the module's feature name before the native
+binary is loaded, while `module-load' does not record into `load-history'."
+  (let ((suffix (etaf-install--native-suffix))
+        (needle (regexp-quote module))
+        (feature (intern-soft module))
+        (prefix (concat module "-")))
+    (or (member module etaf-install--native-loaded-modules)
+        (cl-some (lambda (entry)
+                   (let ((file (car entry)))
+                     (and (stringp file)
+                          (string-suffix-p suffix file)
+                          (string-match-p needle (file-name-nondirectory file)))))
+                 load-history)
+        (and feature
+             (featurep feature)
+             (not (cl-some (lambda (entry)
+                             (and (stringp (car entry))
+                                  (not (string-suffix-p suffix (car entry)))
+                                  (member (cons 'provide feature) (cdr entry))))
+                           load-history)))
+        (and (fboundp 'module-function-p)
+             (let (found)
+               (mapatoms
+                (lambda (sym)
+                  (when (and (not found)
+                             (fboundp sym)
+                             (string-prefix-p prefix (symbol-name sym))
+                             (module-function-p (symbol-function sym)))
+                    (setq found t))))
+               found)))))
+
+(defun etaf-install--native-activate (package module dest newly-installed)
+  "Activate native MODULE at DEST for PACKAGE.
+Return non-nil when Emacs must be restarted because an older copy is loaded."
+  (cond
+   ((and (eq package 'ekp) (fboundp 'ekp-c-module-load))
+    (ekp-c-module-load)
+    (cl-pushnew module etaf-install--native-loaded-modules :test #'equal)
+    nil)
+   ((etaf-install--native-module-loaded-p module)
+    newly-installed)
+   ((fboundp 'module-load)
+    (module-load dest)
+    (cl-pushnew module etaf-install--native-loaded-modules :test #'equal)
+    nil)
+   (t nil)))
+
+(defun etaf-install--native-candidates ()
+  "Return completion candidates (LABEL . PACKAGE) for packages with native modules."
+  (let (choices)
+    (dolist (target (etaf-install--available-targets))
+      (let* ((pkg (car target))
+             (status (etaf-install--native-status pkg)))
+        (when status
+          (push (cons (format "%s — %s (%s)"
+                              pkg (nth 1 target)
+                              (pcase status
+                                ('installed "installed")
+                                ('available "available")
+                                (_ "no prebuild for this platform")))
+                      pkg)
+                choices))))
+    (nreverse choices)))
+
+(defun etaf-install--read-native-target ()
+  "Prompt for an installed ETAF package that declares a native module."
+  (unless package--initialized (package-initialize))
+  (let ((choices (etaf-install--native-candidates)))
+    (unless choices
+      (user-error "No installed ETAF package declares a prebuilt native module"))
+    (let ((choice (completing-read "Install native module for: "
+                                   (mapcar #'car choices) nil t nil nil (caar choices))))
+      (or (cdr (assoc choice choices))
+          (user-error "No package selected")))))
+
+(defun etaf-install--native-install-one (package platform force)
+  "Download, verify and activate native modules for a single PACKAGE on PLATFORM.
+Return a plist with :installed, :skipped and :restart."
+  (let* ((doc (or (etaf-install--native-read-manifest package)
+                  (user-error "%s is not installed or declares no native module manifest" package)))
+         (modules (gethash "modules" doc))
+         installed skipped restart)
+    (dolist (mod modules)
+      (let* ((name (gethash "name" mod))
+             (version (gethash "version" mod))
+             (platforms (gethash "platforms" mod))
+             (entry (and (hash-table-p platforms) (gethash platform platforms)))
+             (dest (etaf-install--native-module-cache-path package version name platform)))
+        (unless (hash-table-p entry)
+          (let (available)
+            (when (hash-table-p platforms)
+              (maphash (lambda (k _v) (push k available)) platforms))
+            (user-error
+             "No prebuilt native module for %s on %s yet%s.%s"
+             package platform
+             (if available
+                 (format " (published: %s)" (mapconcat #'identity (sort available #'string<) ", "))
+               "")
+             (cond
+              ((eq package 'ekp) " Run M-x ekp-c-module-build to compile locally.")
+              ((etaf-install--native-manifest-path package)
+               " The package continues working with its fallback backend.")
+              (t "")))))
+        (let* ((expected-sha (gethash "sha256" entry))
+               (cached (and (not force) (etaf-install--native-cached-p dest expected-sha))))
+          (if cached
+              (push (cons name dest) skipped)
+            (message "ETAF: downloading %s (%s)…" name platform)
+            (etaf-install--native-fetch-verified package version entry dest)
+            (push (cons name dest) installed))
+          (when (etaf-install--native-activate package name dest (not cached))
+            (setq restart t)))))
+    (list :installed (nreverse installed)
+          :skipped (nreverse skipped)
+          :restart (and restart t))))
+
+(defun etaf-install--native-ensure-best-effort (package)
+  "Automatically fetch available prebuilt native modules for PACKAGE's closure.
+Never signals an error so optional native download failures do not fail Lisp
+installation or updates.  Return a plist (:installed :skipped :failed :restart)."
+  (let (installed skipped failed restart)
+    (when (and etaf-install-auto-native
+               (boundp 'module-file-suffix) module-file-suffix
+               (fboundp 'module-load)
+               (etaf-install--native-auto-source-available-p))
+      (let ((platform (etaf-install--native-platform)))
+        (when platform
+          (dolist (native-pkg (etaf-install--native-packages-for-target package))
+            (when (eq (etaf-install--native-single-status native-pkg) 'available)
+              (condition-case err
+                  (let ((one (etaf-install--native-install-one native-pkg platform nil)))
+                    (setq installed (append installed (plist-get one :installed))
+                          skipped (append skipped (plist-get one :skipped)))
+                    (when (plist-get one :restart)
+                      (setq restart t)))
+                (error
+                 (push (cons native-pkg (error-message-string err)) failed))))))))
+    (list :installed installed
+          :skipped skipped
+          :failed (nreverse failed)
+          :restart (and restart t))))
+
+;;;###autoload
+(defun etaf-install-native (&optional package force)
+  "Download and verify prebuilt native dynamic module(s) for PACKAGE.
+Covers PACKAGE and any installed ETAF dependencies declaring
+`native/manifest.json'.  Installs into `etaf-install-native-directory'
+\(`~/.cache/emacs-taf/native/' by default), outside `package-user-dir', so
+upgrades preserve compatible binaries and no compiler is needed.  With prefix
+argument FORCE, re-download even when a verified copy is already cached.
+Return a report plist."
+  (interactive
+   (list (etaf-install--read-native-target) current-prefix-arg))
+  (unless package--initialized (package-initialize))
+  (unless (and (boundp 'module-file-suffix) module-file-suffix (fboundp 'module-load))
+    (user-error "This Emacs was built without dynamic module support (`module-load')"))
+  (let* ((package (or package (etaf-install--read-native-target)))
+         (native-pkgs (etaf-install--native-packages-for-target package))
+         (platform (or (etaf-install--native-platform)
+                       (user-error "Unsupported platform for prebuilt native modules (%s / %s)"
+                                   system-type system-configuration)))
+         installed skipped restart)
+    (unless native-pkgs
+      (user-error "%s is not installed or declares no native module manifest" package))
+    (dolist (native-pkg native-pkgs)
+      (let ((one (etaf-install--native-install-one native-pkg platform force)))
+        (setq installed (append installed (plist-get one :installed))
+              skipped (append skipped (plist-get one :skipped)))
+        (when (plist-get one :restart)
+          (setq restart t))))
+    (let ((report (list :package package
+                        :packages native-pkgs
+                        :platform platform
+                        :installed installed
+                        :skipped skipped
+                        :restart (and restart t))))
+      (message "ETAF: native module for %s is ready (%s)%s."
+               package platform
+               (if restart "; restart Emacs to activate the new version" ""))
+      report)))
 
 ;;; Target management
 
@@ -488,10 +1050,15 @@ dependencies rather than only direct requirements."
          (installed-p (not (null installed)))
          (update (and installed available (version-list-< installed available)))
          (runtime-fact (and installed-p (etaf-install--target-runtime-fact package)))
+         (native-status (and installed-p (etaf-install--native-status package)))
          (runtime (cond ((not installed-p) "—")
                         (runtime-fact (format "%s missing" (car runtime-fact)))
+                        ((eq native-status 'installed) "Ready · native")
+                        ((eq native-status 'available) "Ready · native: n")
                         (t "Ready")))
-         (remedy (nth 2 runtime-fact))
+         (remedy (or (nth 2 runtime-fact)
+                     (and (eq native-status 'available)
+                          "Optional prebuilt native module available: press `n' or run M-x etaf-install-native.")))
          (descriptor (or (cadr (assq package package-archive-contents))
                          (cadr (assq package package-alist)))))
     (list :package package
@@ -502,6 +1069,7 @@ dependencies rather than only direct requirements."
           :installed-p installed-p
           :update update
           :ready (and installed-p (null runtime-fact))
+          :native native-status
           :runtime runtime
           :remedy remedy
           :dependencies (and descriptor (etaf-install--dependency-names descriptor)))))
@@ -553,21 +1121,28 @@ package.el remains the package manager."
                 (package-upgrade name)
                 (push (cons name (etaf-install--version-string available)) updated)))
           (error (push (cons name (error-message-string error)) failed)))))
-    (when updated
-      (setq etaf-install--restart-needed t))
-    (let ((report (list :updated (nreverse updated)
-                        :failed (nreverse failed)
-                        :restart (and updated t))))
-      (when (called-interactively-p 'interactive)
-        (message "ETAF: %s%s%s"
-                 (if updated
-                     (format "updated %s"
-                             (mapconcat (lambda (item) (format "%s %s" (car item) (cdr item)))
-                                        updated ", "))
-                   "no updates")
-                 (if failed (format "; %d failed" (length failed)) "")
-                 (if updated "; restart Emacs to use it" "")))
-      report)))
+    (let (native-installed native-failed)
+      (when updated
+        (setq etaf-install--restart-needed t)
+        (dolist (item updated)
+          (let ((one (etaf-install--native-ensure-best-effort (car item))))
+            (setq native-installed (append native-installed (plist-get one :installed))
+                  native-failed (append native-failed (plist-get one :failed))))))
+      (let ((report (list :updated (nreverse updated)
+                          :failed (nreverse failed)
+                          :native-installed native-installed
+                          :native-failed native-failed
+                          :restart (and updated t))))
+        (when (called-interactively-p 'interactive)
+          (message "ETAF: %s%s%s"
+                   (if updated
+                       (format "updated %s"
+                               (mapconcat (lambda (item) (format "%s %s" (car item) (cdr item)))
+                                          updated ", "))
+                     "no updates")
+                   (if failed (format "; %d failed" (length failed)) "")
+                   (if updated "; restart Emacs to use it" "")))
+        report))))
 
 ;;;###autoload
 (defun etaf-install-remove (package &optional no-confirm)
@@ -639,7 +1214,8 @@ installed.  With NO-CONFIRM, skip the prompt."
   "Return the runtime cell for STATUS."
   (let ((runtime (plist-get status :runtime)))
     (propertize runtime
-                'face (cond ((equal runtime "Ready") 'success)
+                'face (cond ((or (equal runtime "Ready")
+                                 (string-prefix-p "Ready" runtime)) 'success)
                             ((equal runtime "—") 'shadow)
                             (t 'warning)))))
 
@@ -669,6 +1245,7 @@ installed.  With NO-CONFIRM, skip the prompt."
 
 (defconst etaf-install--manage-keys
   '(("i" . "install")
+    ("n" . "native")
     ("u" . "update")
     ("U" . "update all")
     ("d" . "remove")
@@ -682,12 +1259,13 @@ installed.  With NO-CONFIRM, skip the prompt."
 (defconst etaf-install--manage-mode-line-tiers
   (list etaf-install--manage-keys
         '(("i" . "install")
+          ("n" . "native")
           ("u" . "update")
           ("d" . "remove")
           ("RET" . "open")
           ("g" . "refresh")
           ("q" . "quit"))
-        '(("i") ("d") ("RET") ("g") ("q"))
+        '(("i") ("n") ("d") ("RET") ("g") ("q"))
         '(("C-h m" . "keys")))
   "Mode-line key hint tiers as lists of (KEY . LABEL), longest first.")
 
@@ -703,14 +1281,6 @@ installed.  With NO-CONFIRM, skip the prompt."
 The longest hint list that fits beside a summary and the refresh button wins,
 so narrow windows keep actionable keys visible instead of collapsing early.")
 
-(defconst etaf-install--manage-action-commands
-  '(etaf-install--manage-install
-    etaf-install--manage-update
-    etaf-install--manage-update-all
-    etaf-install--manage-remove
-    etaf-install--manage-refresh-archives)
-  "Manage commands whose own status message is kept above the key hints.")
-
 (defun etaf-install--manage-format-tier (tier &optional help-echo)
   "Format TIER of (KEY . LABEL) pairs with high-contrast key faces.
 When HELP-ECHO is non-nil, attach it as the tooltip text."
@@ -724,6 +1294,15 @@ When HELP-ECHO is non-nil, attach it as the tooltip text."
     (if help-echo
         (propertize text 'help-echo help-echo)
       text)))
+
+(defconst etaf-install--manage-action-commands
+  '(etaf-install--manage-install
+    etaf-install--manage-install-native
+    etaf-install--manage-update
+    etaf-install--manage-update-all
+    etaf-install--manage-remove
+    etaf-install--manage-refresh-archives)
+  "Manage commands whose own status message is kept above the key hints.")
 
 (defvar etaf-install--manage-refresh-map
   (let ((map (make-sparse-keymap)))
@@ -911,6 +1490,15 @@ When HEADLINE is non-nil, display it above the key hints in the echo area."
       (user-error "%s has no open command" package))
     (call-interactively open)))
 
+(defun etaf-install--manage-install-native (&optional force)
+  "Install prebuilt native module(s) for the target at point."
+  (interactive "P")
+  (let ((package (etaf-install--manage-current-target)))
+    (unless (package-installed-p package)
+      (user-error "Install %s first (press `i')" package))
+    (etaf-install-native package force)
+    (etaf-install--manage-reprint (current-message))))
+
 (defun etaf-install--manage-doctor ()
   "Show the doctor report for the target at point."
   (interactive)
@@ -943,6 +1531,7 @@ reopened."
   (let ((map (make-sparse-keymap)))
     (set-keymap-parent map tabulated-list-mode-map)
     (define-key map (kbd "i") #'etaf-install--manage-install)
+    (define-key map (kbd "n") #'etaf-install--manage-install-native)
     (define-key map (kbd "u") #'etaf-install--manage-update)
     (define-key map (kbd "U") #'etaf-install--manage-update-all)
     (define-key map (kbd "d") #'etaf-install--manage-remove)
@@ -975,10 +1564,10 @@ reopened."
 The buffer is the whole interface: a native tabulated list of every target with
 its status, versions, runtime and dependencies, plus the archive's community
 packages.  The echo area shows the selected target's details and the key hints.
-`i' installs, `u' updates, `U' updates all, `d' removes, RET opens, `?'
-reports capabilities, `g' refreshes the archives, `l' shows the standard
-package menu and `q' quits.  Removal deletes package files only; application
-data, logins and caches stay."
+`i' installs, `n' installs native modules, `u' updates, `U' updates all, `d'
+removes, RET opens, `?' reports capabilities, `g' refreshes the archives, `l'
+shows the standard package menu and `q' quits.  Removal deletes package files
+only; application data, logins and caches stay."
   (interactive)
   (unless package--initialized (package-initialize))
   (etaf-install--archive)

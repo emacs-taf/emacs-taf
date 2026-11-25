@@ -26,6 +26,10 @@ import package_archive
 RELEASE = re.compile(r"[0-9]{8}T[0-9]{6}Z(?:-[0-9a-f]{8})?\Z")
 PACKAGE = re.compile(r"[a-z][a-z0-9-]*-[0-9]+(?:\.[0-9]+)*\.tar\Z")
 NAME = re.compile(r"[a-z][a-z0-9-]*\Z")
+VERSION = re.compile(r"[0-9]+(?:\.[0-9]+)*\Z")
+SHA256 = re.compile(r"[0-9a-f]{64}\Z")
+NATIVE_FILE = re.compile(r"[a-z0-9][a-z0-9._-]*\.(?:dylib|so|dll)\Z")
+NATIVE_PLATFORMS = {"darwin-arm64", "darwin-x86_64", "linux-x86_64", "linux-arm64", "windows-x86_64"}
 SITE_PAGES = ("index.html", "zh-cn/index.html", "introduction/index.html",
               "zh-cn/introduction/index.html", "symbol-index/index.html", "zh-cn/symbol-index/index.html")
 
@@ -132,12 +136,101 @@ def packages(directory, *, historical=False, partial=False):
     return manifest
 
 
+def native_artifacts(directory, *, partial=False):
+    """Validate public native/ manifest and artifact allowlist."""
+    if directory.is_symlink() or not directory.is_dir():
+        raise ValueError("Invalid public native directory")
+    manifest_path = directory / "manifest.json"
+    if manifest_path.is_symlink() or not manifest_path.is_file():
+        raise ValueError("Native directory is missing manifest.json")
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if manifest.get("schema") != 1 or not isinstance(manifest.get("artifacts"), list):
+        raise ValueError("Expected a schema 1 native artifact manifest")
+    if set(manifest) != {"schema", "artifacts"}:
+        raise ValueError("Native manifest contains non-public fields")
+    indexed = {}
+    for item in manifest["artifacts"]:
+        if (not isinstance(item, dict)
+                or set(item) != {"package", "module", "version", "platform", "path", "sha256", "size"}
+                or not NAME.fullmatch(str(item["package"]))
+                or not NAME.fullmatch(str(item["module"]))
+                or not VERSION.fullmatch(str(item["version"]))
+                or item["platform"] not in NATIVE_PLATFORMS
+                or not SHA256.fullmatch(str(item["sha256"]))
+                or not isinstance(item["size"], int) or isinstance(item["size"], bool) or item["size"] <= 0):
+            raise ValueError("Invalid native artifact record")
+        rel = PurePosixPath(str(item["path"]))
+        if (rel.is_absolute() or len(rel.parts) != 3
+                or rel.parts[:2] != (item["package"], item["version"])
+                or not NATIVE_FILE.fullmatch(rel.parts[2])
+                or rel.as_posix() in indexed):
+            raise ValueError(f"Invalid or duplicate native artifact path: {item['path']}")
+        indexed[rel.as_posix()] = item
+        target = directory.joinpath(*rel.parts)
+        if partial and not target.exists():
+            continue
+        if target.is_symlink() or not target.is_file():
+            raise ValueError(f"Missing or invalid native artifact: {rel.as_posix()}")
+        if target.stat().st_size != item["size"] or digest(target) != item["sha256"]:
+            raise ValueError(f"Native artifact checksum mismatch: {rel.as_posix()}")
+    present = set()
+    for path in directory.rglob("*"):
+        if path.is_symlink():
+            raise ValueError(f"Non-public native symlink: {path.relative_to(directory)}")
+        if path.is_file():
+            rel = path.relative_to(directory).as_posix()
+            if rel != "manifest.json":
+                present.add(rel)
+    if not (present <= set(indexed)) or (not partial and set(indexed) != present):
+        raise ValueError("A native payload may contain only its indexed artifacts")
+    return manifest
+
+
+def preserve_native(previous, candidate, mode):
+    """Carry immutable native artifacts across site/package deploys, or merge a native payload."""
+    old = previous / "native" if previous else None
+    new = candidate / "native"
+    if mode != "native":
+        if new.exists():
+            raise ValueError(f"{mode.capitalize()} payloads must not replace native/")
+        if old and old.exists():
+            native_artifacts(old)
+            shutil.copytree(old, new)
+        return set()
+    incoming = native_artifacts(new, partial=True)
+    merged = {item["path"]: item for item in incoming["artifacts"]}
+    shipped = {"native/manifest.json"}
+    for item in incoming["artifacts"]:
+        if (new / item["path"]).is_file():
+            shipped.add("native/" + item["path"])
+    if old and old.exists():
+        prior = native_artifacts(old)
+        for item in prior["artifacts"]:
+            rel = item["path"]
+            old_file = old / rel
+            new_file = new / rel
+            if rel in merged:
+                if merged[rel]["sha256"] != item["sha256"] or merged[rel]["size"] != item["size"]:
+                    raise ValueError(f"Immutable native artifact differs: {rel}; increment native version")
+                if not new_file.exists():
+                    new_file.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copyfile(old_file, new_file)
+            else:
+                merged[rel] = item
+                new_file.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(old_file, new_file)
+    final_manifest = {"schema": 1, "artifacts": sorted(merged.values(), key=lambda entry: entry["path"])}
+    (new / "manifest.json").write_text(json.dumps(final_manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    native_artifacts(new)
+    return shipped
+
+
 def preserve_packages(previous, candidate, mode):
     old = previous / "packages" if previous else None
     new = candidate / "packages"
-    if mode == "site":
+    if mode in ("site", "native"):
         if new.exists():
-            raise ValueError("Site-only payloads must not replace packages")
+            raise ValueError(f"{mode.capitalize()}-only payloads must not replace packages")
         if old and old.exists():
             packages(old, historical=True)
             shutil.copytree(old, new)
@@ -191,6 +284,9 @@ def verify_http(release, url, stamp, complete=()):
     if (release / "packages").is_dir():
         paths.extend(path.relative_to(release)
                      for path in sorted((release / "packages").rglob("*")) if path.is_file())
+    if (release / "native").is_dir():
+        paths.extend(path.relative_to(release)
+                     for path in sorted((release / "native").rglob("*")) if path.is_file())
     for path in paths:
         route = "/" + path.as_posix()
         if path.name == "index.html":
@@ -200,7 +296,7 @@ def verify_http(release, url, stamp, complete=()):
         with urlopen(request, timeout=30) as response:
             if response.status != 200:
                 raise ValueError(f"Published path is not served: {route}")
-            if path.name not in complete:
+            if path.name not in complete and path.as_posix() not in complete:
                 continue
             result = hashlib.sha256()
             for block in iter(lambda: response.read(1024 * 1024), b""):
@@ -241,13 +337,14 @@ def deploy(args):
             candidate = Path(work) / "site"
             candidate.mkdir()
             extract(args.archive, candidate)
-            if args.mode == "packages":
-                if {path.name for path in candidate.iterdir()} != {"packages"}:
-                    raise ValueError("Package-only payload must contain only packages/")
+            if args.mode in ("packages", "native"):
+                expected_dir = args.mode
+                if {path.name for path in candidate.iterdir()} != {expected_dir}:
+                    raise ValueError(f"{expected_dir.capitalize()}-only payload must contain only {expected_dir}/")
                 if not previous or not (previous / "index.html").is_file():
-                    raise ValueError("Package-only publication requires an existing site")
+                    raise ValueError(f"{expected_dir.capitalize()}-only publication requires an existing site")
                 for path in previous.iterdir():
-                    if path.name == "packages":
+                    if path.name in ("packages", "native"):
                         continue
                     if path.is_symlink() or any(child.is_symlink() for child in path.rglob("*")):
                         raise ValueError("Existing site contains a symlink")
@@ -258,6 +355,7 @@ def deploy(args):
             if any(not (candidate / page).is_file() for page in SITE_PAGES):
                 raise ValueError("Site payload is missing an English/Chinese entry or reference page")
             shipped = preserve_packages(previous, candidate, args.mode)
+            shipped |= preserve_native(previous, candidate, args.mode)
             # mkdtemp is private, but its moved child must be readable by Caddy.
             for path in [candidate, *candidate.rglob("*")]:
                 path.chmod(0o755 if path.is_dir() else 0o644)
@@ -300,7 +398,7 @@ def main():
     parser.add_argument("--base", type=Path, default=Path("/srv/etaf.top"))
     parser.add_argument("--archive", type=Path, required=True)
     parser.add_argument("--release", required=True)
-    parser.add_argument("--mode", choices=("site", "packages", "combined"), required=True)
+    parser.add_argument("--mode", choices=("site", "packages", "combined", "native"), required=True)
     parser.add_argument("--keep", type=int, default=5)
     parser.add_argument("--verify-url", default="https://etaf.top")
     args = parser.parse_args()
