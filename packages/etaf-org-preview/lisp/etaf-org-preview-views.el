@@ -1644,7 +1644,19 @@ the section it changes."
                     (plist-get document :preamble-entries))))
     (etaf-node 'column
                (append (list :width '(vw 100) :cross-align 'center
-                             :aria-label "Org 预览")
+                             :aria-label "Org 预览"
+                             :on-direction
+                             (lambda (direction)
+                               (pcase direction
+                                 ('down
+                                  (when-let* ((rt (etaf-runtime-for-buffer (current-buffer))))
+                                    (etaf-scroll-viewport rt 1))
+                                  'handled)
+                                 ('up
+                                  (when-let* ((rt (etaf-runtime-for-buffer (current-buffer))))
+                                    (etaf-scroll-viewport rt -1))
+                                  'handled)
+                                 (_ 'release))))
                        (when background
                          (list :background-color background)))
                (list

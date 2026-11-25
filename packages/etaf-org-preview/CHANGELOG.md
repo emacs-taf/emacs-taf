@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+
+- Up and down arrow keys now scroll the Org reading viewport one line at a time instead of jumping between focusable controls.
+
 ### Changed
 
 - Reissued as 0.3.2 after package-loading and workspace updates since 0.3.1.

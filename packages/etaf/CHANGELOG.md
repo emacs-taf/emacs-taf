@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Added
+
+- `etaf-scroll-viewport` scrolls the active reading viewport (enclosing scrollable Host at point first, then the Emacs window) by an explicit line delta so continuous document views can bind up/down arrow keys to line-by-line scrolling without calling Ebox directly.
+- Cross-application live activity (`etaf-activity-publish`, `etaf-activity-remove`, `etaf-activity-get`, `etaf-activity-list`, `etaf-activity-ref`, `etaf-activity-invoke`, `etaf-activity-change-functions`) and notification (`etaf-notify`, `etaf-notify-dismiss`, `etaf-notify-clear`, `etaf-notify-list`, `etaf-notify-ref`, `etaf-notify-functions`) reactive registries for shells and extensions.
+
+### Fixed
+
+- Directional arrow fallback scrolling moves one line per keypress instead of three, keeping mouse wheel scrolling at `ebox-scroll-step`.
+- `etaf-runtime-set-key-layer` validates all entries atomically before mutating the keymap, and `etaf-runtime-clear-key-layer` / layer updates prune stale key sequences and empty prefix submaps so rebinding shorter keys on a previously used prefix succeeds cleanly.
+
 ### Changed
 
 - Reissued: the source had moved ahead of this version without a release, so the published file no longer matched it.  Changed since 0.3.5 was cut: `CHANGELOG.md`, `etaf.el`, `etaf-animation-example.el`, `etaf-help.el` and 3 more.

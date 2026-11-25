@@ -170,15 +170,55 @@ conflicting Runtime is reported instead of shadowed.")
 (defvar etaf--keys-sequences (make-hash-table :test #'eq :weakness 'key)
   "Map from a Runtime key map to the key sequences defined in it.")
 
+(defvar etaf--keys-base-sequences (make-hash-table :test #'eq :weakness 'key)
+  "Map from a Runtime key map to framework and Host key sequences.")
+
 (defun etaf--keys-prefix-p (prefix sequence)
   "Return non-nil when PREFIX is a proper prefix of SEQUENCE."
   (and (< (length prefix) (length sequence))
        (equal prefix (substring sequence 0 (length prefix)))))
 
-(defun etaf--keys-define (map event)
+(defun etaf--keys-keymap-empty-p (keymap)
+  "Return non-nil when KEYMAP contains no active non-nil bindings."
+  (and (keymapp keymap)
+       (let ((empty t))
+         (map-keymap
+          (lambda (_ev binding)
+            (when (and binding (not (etaf--keys-keymap-empty-p binding)))
+              (setq empty nil)))
+          keymap)
+         empty)))
+
+(defun etaf--keys-undefine (map event)
+  "Remove EVENT from MAP and prune any empty prefix submaps left behind."
+  (puthash map (cl-delete event (gethash map etaf--keys-sequences) :test #'equal)
+           etaf--keys-sequences)
+  (define-key map event nil)
+  (let ((len (length event)))
+    (while (> len 1)
+      (setq len (1- len))
+      (let* ((prefix (substring event 0 len))
+             (sub (lookup-key map prefix)))
+        (if (etaf--keys-keymap-empty-p sub)
+            (define-key map prefix nil)
+          (setq len 0))))))
+
+(defun etaf--keys-prune-layers (runtime old-events)
+  "Undefine events in OLD-EVENTS no longer used by RUNTIME's base or layers."
+  (when-let* ((map (etaf-runtime-keymap runtime)))
+    (let ((keep (copy-sequence (gethash map etaf--keys-base-sequences))))
+      (dolist (pair (etaf-runtime-key-layers runtime))
+        (dolist (entry (plist-get (cdr pair) :entries))
+          (push (car entry) keep)))
+      (dolist (ev old-events)
+        (unless (member ev keep)
+          (etaf--keys-undefine map ev))))))
+
+(defun etaf--keys-define (map event &optional layer-p)
   "Bind key sequence EVENT in MAP to its dynamic scoped resolution, once.
 A sequence that extends or prefixes another bound sequence is a render error:
-one key cannot both run a command and start a longer sequence."
+one key cannot both run a command and start a longer sequence.
+When LAYER-P is nil, EVENT is recorded as a framework/Host base sequence."
   (let ((defined (gethash map etaf--keys-sequences)))
     (unless (member event defined)
       (when (cl-find-if (lambda (other)
@@ -191,7 +231,11 @@ one key cannot both run a command and start a longer sequence."
       (puthash map (cons event defined) etaf--keys-sequences)
       (define-key map event
                   (list 'menu-item "" nil
-                        :filter (lambda (_binding) (etaf--keys-binding event)))))))
+                        :filter (lambda (_binding) (etaf--keys-binding event)))))
+    (unless layer-p
+      (let ((base (gethash map etaf--keys-base-sequences)))
+        (unless (member event base)
+          (puthash map (cons event base) etaf--keys-base-sequences))))))
 
 (defun etaf--keys-install (runtime)
   "Give RUNTIME's buffer its scoped key map with the framework defaults."
@@ -556,17 +600,24 @@ without disturbing the application.  Return the list of active key strings."
     (signal 'etaf-runtime-error (list "Key layer entries must be a list" entries)))
   (when (and label (not (stringp label)))
     (signal 'etaf-runtime-error (list "Key layer label must be a string or nil" label)))
-  (let ((prio (or priority 50)))
+  (let ((prio (or priority 50))
+        (old-events (mapcar #'car
+                            (plist-get (cdr (assq key (etaf-runtime-key-layers runtime)))
+                                       :entries))))
     (unless (integerp prio)
       (signal 'etaf-runtime-error (list "Key layer priority must be an integer" prio)))
     (if (null entries)
         (progn
           (setf (etaf-runtime-key-layers runtime)
                 (assq-delete-all key (etaf-runtime-key-layers runtime)))
+          (etaf--keys-prune-layers runtime old-events)
           nil)
-      (let ((normalized nil)
+      (let ((validated nil)
+            (normalized nil)
             (active nil)
             (map (etaf-runtime-keymap runtime)))
+        ;; Validate all entries before mutating the keymap so errors leave the
+        ;; previous layer intact.
         (dolist (item entries)
           (unless (and (proper-list-p item) (>= (length item) 2) (<= (length item) 3))
             (signal 'etaf-runtime-error (list "Invalid key layer entry" item)))
@@ -586,10 +637,20 @@ without disturbing the application.  Return the list of active key strings."
                 (signal 'etaf-runtime-error
                         (list "Extension key layer cannot bind reserved key"
                               (key-description event))))
-              (unless (and map (etaf--keys-layer-prefix-conflict-p map event))
-                (when map (etaf--keys-define map event))
-                (push (list event cmd desc) normalized)
-                (push (key-description event) active)))))
+              (push (list event cmd desc) validated))))
+        ;; Prune replaced layer's previous sequences first so rebinding inside
+        ;; the same layer does not self-conflict with its own stale prefix.
+        (setf (etaf-runtime-key-layers runtime)
+              (assq-delete-all key (etaf-runtime-key-layers runtime)))
+        (etaf--keys-prune-layers runtime old-events)
+        (dolist (item (nreverse validated))
+          (let ((event (nth 0 item))
+                (cmd (nth 1 item))
+                (desc (nth 2 item)))
+            (unless (and map (etaf--keys-layer-prefix-conflict-p map event))
+              (when map (etaf--keys-define map event t))
+              (push (list event cmd desc) normalized)
+              (push (key-description event) active))))
         (let* ((others (assq-delete-all key (etaf-runtime-key-layers runtime)))
                (entry (cons key (list :priority prio
                                       :label label
@@ -611,13 +672,17 @@ Return the number of layers removed."
     (signal 'etaf-runtime-error (list "Key layer key must be a symbol or nil" key)))
   (let ((layers (etaf-runtime-key-layers runtime)))
     (if (null key)
-        (let ((n (length layers)))
+        (let ((n (length layers))
+              (old-events (cl-loop for (_k . l) in layers
+                                   append (mapcar #'car (plist-get l :entries)))))
           (setf (etaf-runtime-key-layers runtime) nil)
+          (etaf--keys-prune-layers runtime old-events)
           n)
-      (if (assq key layers)
-          (progn
+      (if-let* ((found (assq key layers)))
+          (let ((old-events (mapcar #'car (plist-get (cdr found) :entries))))
             (setf (etaf-runtime-key-layers runtime)
                   (assq-delete-all key layers))
+            (etaf--keys-prune-layers runtime old-events)
             1)
         0))))
 
@@ -834,8 +899,8 @@ Host reference or nil."
                                               (etaf--keys-scope-root runtime ref))))
           (etaf-runtime-node-host-ref runtime node)
         (pcase direction
-          ('down (ebox-scroll-down))
-          ('up (ebox-scroll-up)))
+          ('down (ebox-scroll-down 1))
+          ('up (ebox-scroll-up 1)))
         nil))))
 
 ;;;###autoload

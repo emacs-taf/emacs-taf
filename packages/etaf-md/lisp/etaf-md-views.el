@@ -1114,7 +1114,19 @@ edits never create spurious damage outside the edited block."
     (etaf-node 'column
                (append (list :width '(vw 100) :cross-align 'center
                              :aria-label "Markdown 预览"
-                             :help "链接和图片可直接激活；C-c t 开关目录，S 开关遮罩，K 预览光标处链接。")
+                             :help "上下方向键按行滚动；TAB 切换链接与控件，RET 激活；C-c t 开关目录，S 开关遮罩，K 预览光标处链接。"
+                             :on-direction
+                             (lambda (direction)
+                               (pcase direction
+                                 ('down
+                                  (when-let* ((rt (etaf-runtime-for-buffer (current-buffer))))
+                                    (etaf-scroll-viewport rt 1))
+                                  'handled)
+                                 ('up
+                                  (when-let* ((rt (etaf-runtime-for-buffer (current-buffer))))
+                                    (etaf-scroll-viewport rt -1))
+                                  'handled)
+                                 (_ 'release))))
                        (when background
                          (list :background-color background)))
                (delq nil

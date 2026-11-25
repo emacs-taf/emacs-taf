@@ -591,6 +591,19 @@
                            (plist-get ext-group :entries)))
           (should-not (cl-some (lambda (e) (equal (plist-get e :label) "Shadowed Ext Z"))
                                (plist-get ext-group :entries))))
+        (should (= 1 (etaf-runtime-clear-key-layer runtime 'demo-ext)))
+        ;; Clearing a multi-key layer prunes its prefix stub so rebinding a
+        ;; shorter key on the same prefix succeeds cleanly.
+        (should (etaf-runtime-set-key-layer
+                 runtime 'demo-ext
+                 (list (list "C-c y a" (lambda () (cl-incf ext-hit)) "Nested Y A"))
+                 "Demo Ext"))
+        (should (= 1 (etaf-runtime-clear-key-layer runtime 'demo-ext)))
+        (should (equal (etaf-runtime-set-key-layer
+                        runtime 'demo-ext
+                        (list (list "C-c y" (lambda () (cl-incf ext-hit)) "Shorter Y"))
+                        "Demo Ext")
+                       '("C-c y")))
         (should (= 1 (etaf-runtime-clear-key-layer runtime 'demo-ext)))))))
 
 (provide 'etaf-presentation-tests)

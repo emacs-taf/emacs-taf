@@ -2,6 +2,12 @@
 
 All notable user-visible changes to `etaf-md` are documented in this file.
 
+## Unreleased
+
+### Fixed
+
+- Up and down arrow keys now scroll the Markdown reading viewport smoothly one line at a time instead of jumping between focusable controls, and unfocused code-tree blocks let page scrolling glide past them.
+
 ## [0.3.0] - 2026-11-25
 
 ### Added

@@ -257,7 +257,21 @@ ETAF 层为 Host 包装同样的偏移。Host 属性 `:on-scroll` 中继到 Ebox
 
 **错误。** 未知 HOST-REF 报错。
 
-**参见。** `etaf-scroll-to`、`etaf-scroll-offset`。
+**参见。** `etaf-scroll-to`、`etaf-scroll-offset`、`etaf-scroll-viewport`。
+
+#### Function: etaf-scroll-viewport (runtime delta)
+
+把已挂载 RUNTIME 当前所在的阅读视口滚动 DELTA 行（负数向上）并返回 DELTA。
+
+**参数。** RUNTIME 是已挂载 Runtime；DELTA 是整型行数。
+
+**语义。** 优先由光标处最内层的可滚动 Host 消费 DELTA（使嵌入滚动面板的阅读视图直接滚动外层面板），未消费部分再落回显示 RUNTIME 缓冲区的 Emacs 窗口，并在首尾边界平滑夹取。长文档阅读视图在 `:on-direction` 中调用它，即可让上下方向键按行滚动而不直接依赖 Ebox。
+
+**返回。** DELTA。
+
+**错误。** RUNTIME 未挂载时报 `error→ etaf-runtime-error`；DELTA 非整数时报 `wrong-type-argument`。
+
+**参见。** `etaf-scroll-by`、`etaf-direction`。
 
 #### Function: etaf-scroll-into-view (runtime host-ref &optional align)
 

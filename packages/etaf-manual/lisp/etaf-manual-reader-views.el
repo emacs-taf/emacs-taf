@@ -515,7 +515,19 @@ remainder is split between both sides instead of collecting on the right."
                    :min-width '(px 0)
                    :overflow 'scroll
                    :cross-align 'center
-                   :background-color (etaf-manual-reader--color env :bg))
+                   :background-color (etaf-manual-reader--color env :bg)
+                   :on-direction
+                   (lambda (direction)
+                     (pcase direction
+                       ('down
+                        (when-let* ((rt (etaf-runtime-for-buffer (current-buffer))))
+                          (etaf-scroll-by rt etaf-manual-reader--article-ref 1))
+                        'handled)
+                       ('up
+                        (when-let* ((rt (etaf-runtime-for-buffer (current-buffer))))
+                          (etaf-scroll-by rt etaf-manual-reader--article-ref -1))
+                        'handled)
+                       (_ 'release))))
              (list (etaf-node 'etaf-manual-reader--article-view
                               (list :session session :env env)
                               nil))))

@@ -257,7 +257,21 @@ Scroll a Host by DELTA lines (negative scrolls up); return the new offset.
 
 **Errors.** An unknown HOST-REF signals an error.
 
-**See also.** `etaf-scroll-to`, `etaf-scroll-offset`.
+**See also.** `etaf-scroll-to`, `etaf-scroll-offset`, `etaf-scroll-viewport`.
+
+#### Function: etaf-scroll-viewport (runtime delta)
+
+Scroll the active reading viewport in mounted RUNTIME by DELTA lines (negative scrolls up) and return DELTA.
+
+**Arguments.** RUNTIME is a mounted Runtime; DELTA is an integer line count.
+
+**Semantics.** Consumes DELTA from any enclosing scrollable Host at point first (so embedded reading Views scroll their surrounding panel), then falls back to scrolling the window displaying RUNTIME's buffer, clamping cleanly at both ends. Continuous document views use this inside `:on-direction` so the up and down arrow keys scroll one line at a time without calling Ebox directly.
+
+**Returns.** DELTA.
+
+**Errors.** `error→ etaf-runtime-error` when RUNTIME is not mounted; `wrong-type-argument` when DELTA is not an integer.
+
+**See also.** `etaf-scroll-by`, `etaf-direction`.
 
 #### Function: etaf-scroll-into-view (runtime host-ref &optional align)
 

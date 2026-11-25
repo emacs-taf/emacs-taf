@@ -113,6 +113,124 @@ An application declares its commands in the `:keys` of its root Host, as [Keyboa
 - RET on the root acts on the application's selection, yet a focused button nearer than the root still receives RET.
 - A pointer event, such as `<wheel-down>`, resolves from the Host under the pointer, so a pane can scroll itself with its own wheel binding.
 
+## Cross-application activities and notifications
+
+<!-- index: activity; live activity; notification; cross-application protocol -->
+
+Applications often need to report ongoing background work or transient events to shell surfaces such as a floating Dynamic Island, a desktop top bar or a screensaver without depending on any shell package. ETAF provides two reactive registries for this purpose: live *activities* for ongoing state (`media`, `timer`, `task`, `inbox`, `schedule` or `status`) and *notifications* for transient alerts. Producers publish plain data and action callbacks; shells subscribe through shared reactive refs without polling.
+
+#### Function: etaf-activity-publish (id plist)
+
+Publish or update live cross-application activity ID from PLIST.
+
+**Arguments.**
+
+- ID is a non-nil symbol, nonempty string or cons cell compared with `equal`.
+- PLIST is a proper plist carrying `:title` (required nonempty string) and optional `:app`, `:kind` (`media`, `timer`, `task`, `inbox`, `schedule` or `status`, default `status`), `:state` (`active`, `paused` or `idle`, default `active`), `:priority` (number, default 50), `:subtitle`, `:compact`, `:icon`, `:tone` (`info`, `success`, `warning`, `danger` or `neutral`), `:progress` (plist), `:meter` (level-sampling function), `:actions` (list of plists each carrying `:id` symbol, `:label` string and `:fn` function), `:open` (zero-argument function) and `:owner-runtime` (mounted Runtime whose unmount removes ID automatically).
+
+**Semantics.** When the payload matches the existing record for ID ignoring `:updated-at`, the update is a no-op so unchanged background polls avoid redundant repaints. Otherwise the registry updates `etaf-activity-ref` and runs `etaf-activity-change-functions` with `(publish ID ENTRY)`.
+
+**Returns.** A detached copy of the stored activity plist.
+
+**Errors.** `error→ etaf-runtime-error` on invalid ID, non-plist input, missing `:title`, unsupported `:kind`, `:state`, `:tone` or malformed `:actions`.
+
+#### Function: etaf-activity-remove (id)
+
+Remove live cross-application activity ID and return non-nil if it existed.
+
+**Semantics.** Removing a present entry updates `etaf-activity-ref` and notifies `etaf-activity-change-functions` with `(remove ID nil)`.
+
+**Returns.** t when ID was present, nil otherwise.
+
+#### Function: etaf-activity-get (id)
+
+Return a detached copy of live cross-application activity ID, or nil.
+
+**Returns.** A detached activity plist or nil.
+
+#### Function: etaf-activity-list (&optional kind)
+
+Return ordered detached snapshots of live activities, optionally for KIND.
+
+**Semantics.** Active entries precede paused entries, which precede idle entries; ties break by descending `:priority` and newest `:updated-at`.
+
+**Returns.** A list of detached activity plists.
+
+**Errors.** `error→ etaf-runtime-error` when KIND is non-nil and not a recognized activity kind.
+
+#### Function: etaf-activity-ref ()
+
+Return the shared reactive ref holding ordered live activity snapshots.
+
+**Returns.** A read-only reactive ref updated whenever activities are published or removed.
+
+#### Function: etaf-activity-invoke (id action-id)
+
+Invoke ACTION-ID (or `open`) declared on live activity ID.
+
+**Semantics.** Looks up `:open` when ACTION-ID is `open`, or the matching `:id` entry in `:actions`, and calls its function with no arguments.
+
+**Returns.** The action function's return value.
+
+**Errors.** `error→ etaf-runtime-error` when ID is unknown or declares no matching action.
+
+#### Hook: etaf-activity-change-functions
+
+Hook run with `(EVENT ID ENTRY)` when live activities change.
+
+**Semantics.** EVENT is `publish` or `remove`, ID is the activity key, and ENTRY is a detached activity plist (or nil on removal). Individual observer errors are isolated.
+
+#### Function: etaf-notify (title &key id app detail (variant 'info) (ttl 5.0) group actions)
+
+Publish notification TITLE to ETAF shell consumers and return a detached entry.
+
+**Arguments.**
+
+- TITLE is a nonempty string.
+- ID optionally supplies a stable identifier; omitted values receive a monotonic integer.
+- APP is an optional source symbol.
+- DETAIL is optional supporting text.
+- VARIANT is `info`, `success`, `warning` or `danger` (default `info`).
+- TTL is nonnegative seconds before auto-collapse (default 5.0; 0 disables auto-collapse).
+- GROUP is an optional key compared with `equal`; a matching existing entry is replaced in place with an incremented `:count`.
+- ACTIONS is an optional list of action plists (`:id`, `:label`, `:fn`).
+
+**Semantics.** Prepends the entry to the bounded notification store, updates `etaf-notify-ref` and runs `etaf-notify-functions`. When `etaf-notify-functions` is empty in an interactive session, falls back to `message` so alerts are not lost.
+
+**Returns.** A detached copy of the notification plist.
+
+**Errors.** `error→ etaf-runtime-error` on empty TITLE, invalid VARIANT, negative TTL or malformed ACTIONS.
+
+#### Function: etaf-notify-dismiss (&optional id)
+
+Dismiss notification ID (or the newest entry when nil) and return remaining list.
+
+**Returns.** Detached list of remaining notifications, newest first.
+
+#### Function: etaf-notify-clear ()
+
+Clear all stored ETAF notifications and return nil.
+
+**Returns.** nil.
+
+#### Function: etaf-notify-list ()
+
+Return detached list of stored ETAF notifications, newest first.
+
+**Returns.** A list of detached notification plists.
+
+#### Function: etaf-notify-ref ()
+
+Return the shared reactive ref holding stored ETAF notifications.
+
+**Returns.** A reactive ref holding the detached notification list.
+
+#### Hook: etaf-notify-functions
+
+Hook run with `(ENTRY)` when `etaf-notify` records a notification.
+
+**Semantics.** Individual observer errors are isolated. Installing at least one observer suppresses the echo-area `message` fallback.
+
 ## Errors and recovery
 
 Opening never leaves a half-open application: when a step fails, the close function runs, the buffer is killed and the condition propagates, so the caller can fix the cause and open again. A close function should not signal; when it does, `etaf-app-close` reports the error after the buffer is gone and killing the buffer reports it as a message. Either way the application is closed and its name can be opened again.

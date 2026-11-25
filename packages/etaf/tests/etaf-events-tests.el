@@ -192,6 +192,13 @@
       (should (equal (etaf-test-lines) '("head" "item 4" "item 5" "foot")))
       (should (= (etaf-scroll-to runtime 'log 'start) 0))
       (should (= (etaf-scroll-by runtime 'log 1) 1))
+      (save-excursion
+        (goto-char (etaf-host-ref-position runtime 'log))
+        (should (= (etaf-scroll-viewport runtime 1) 1))
+        (should (= (etaf-scroll-offset runtime 'log) 2))
+        (should (= (etaf-scroll-viewport runtime -1) -1))
+        (should (= (etaf-scroll-offset runtime 'log) 1)))
+      (should-error (etaf-scroll-viewport runtime 'one) :type 'wrong-type-argument)
       (etaf-set-value items (number-sequence 1 6))
       (should (equal (etaf-test-lines) '("head" "item 2" "item 3" "foot")))
       (should (eq (etaf-scroll-into-view runtime 'item-5) 'item-5))

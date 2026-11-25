@@ -2722,6 +2722,17 @@ proportionally below the unsized width."
           (let ((rt (etaf-runtime-for-buffer buf)))
             (with-current-buffer buf
               (should (= 0 (etaf-scroll-offset rt 'outer-scroll)))
+              ;; Up/down arrows scroll the enclosing reading viewport 1 line at a time
+              ;; rather than leaping between focusable controls.
+              (goto-char (etaf-host-ref-position rt 'outer-scroll))
+              (etaf-direction 'down rt)
+              (should (= 1 (etaf-scroll-offset rt 'outer-scroll)))
+              (etaf-direction 'down rt)
+              (should (= 2 (etaf-scroll-offset rt 'outer-scroll)))
+              (etaf-direction 'up rt)
+              (should (= 1 (etaf-scroll-offset rt 'outer-scroll)))
+              (etaf-direction 'up rt)
+              (should (= 0 (etaf-scroll-offset rt 'outer-scroll)))
               (should-not (string-match-p "Deep Target Heading"
                                           (buffer-substring-no-properties (point-min) (point-max))))
               (let ((pos (etaf-md-locate session 1)))

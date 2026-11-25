@@ -21,6 +21,7 @@ Run `M-x etaf-md-open` from any Markdown buffer to read it full-width in the cur
 | `K` / `S` | Preview link or symbol at point / reveal or hide all spoilers |
 | `?`, `C-c h` | Search the current key bindings in an in-buffer help modal |
 | `q` | Close the preview (restores originating buffer, or closes live split) |
+| `↑` / `↓` | Scroll the reading viewport line by line (1 line per keypress) |
 | `C-s`, `C-v`, `M-v`, wheel | Native isearch and scrolling |
 
 The buffer is an ordinary Emacs buffer, so isearch, `occur`, window splitting, `C-x C-s`-style buffer handling and `imenu` all keep working. `M-x imenu` lists the document outline. Help stays in the preview window and follows its theme. `/` searches; Escape first leaves search editing, then closes help. Clicking outside the panel also closes it and restores the reading focus.

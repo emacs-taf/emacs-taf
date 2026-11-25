@@ -62,6 +62,7 @@ ETAF has the largest module set. Its core is the authoring model; the Runtime is
 | `lisp/etaf-observer.el` | The observation port scoped to one dynamic operation | — |
 | `lisp/etaf-runtime.el` | Mounting, the retained segment tree, commits and Host maps | `lisp/etaf-view.el`, `lisp/etaf-component.el`, `lisp/etaf-reactive.el`, `lisp/etaf-behavior.el`, `lisp/etaf-context.el`, `lisp/etaf-observer.el`, Ebox |
 | `lisp/etaf-app.el` | Application buffers: canvas, theme face, fitting and single close | `lisp/etaf-runtime.el`, `lisp/etaf-reactive.el`, Ebox |
+| `lisp/etaf-activity.el` | Cross-application live activities and notifications | `lisp/etaf-reactive.el`, `lisp/etaf-runtime.el` |
 | `lisp/etaf-events.el` | Runtime event entry points into Host callbacks | `lisp/etaf-runtime.el`, `lisp/etaf-reactive.el`, Ebox |
 | `lisp/etaf-actions.el` | Named Actions and their dispatch | `lisp/etaf-runtime.el`, `lisp/etaf-reactive.el` |
 | `lisp/etaf-keys.el` | Host key tables, help and hint keys | `lisp/etaf-runtime.el`, `lisp/etaf-events.el`, `lisp/etaf-regions.el`, `lisp/etaf-reactive.el`, Ebox |

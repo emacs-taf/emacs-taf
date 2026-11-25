@@ -2278,11 +2278,15 @@ window-top Y coordinates."
   "Scroll the selected window by LINES that no scroller consumed.
 A mounted tree that fits its window keeps its pinned top and bottom rows in
 place: the canvas already shows everything, so scrolling it would slide the
-whole page instead of revealing content."
-  (if (> lines 0)
-      (unless (ebox--tree-fits-window-p (selected-window))
-        (scroll-up lines))
-    (scroll-down (- lines))))
+whole page instead of revealing content.  Downward scrolling also stops once
+the last line of the buffer is fully visible."
+  (let ((win (selected-window)))
+    (if (> lines 0)
+        (unless (or (ebox--tree-fits-window-p win)
+                    (and (window-live-p win)
+                         (pos-visible-in-window-p (point-max) win)))
+          (scroll-up lines))
+      (scroll-down (- lines)))))
 
 (defun ebox-scroll-down (&optional n)
   "Scroll the content at point down by N lines (default `ebox-scroll-step')."

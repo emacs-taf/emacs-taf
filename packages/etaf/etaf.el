@@ -3,8 +3,8 @@
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 
 ;; Author: ETAF contributors
-;; Version: 0.3.9
-;; Package-Requires: ((emacs "29.1") (ebox "3.1.5") (ecss "0.1.0"))
+;; Version: 0.3.10
+;; Package-Requires: ((emacs "29.1") (ebox "3.1.6") (ecss "0.1.0"))
 ;; Keywords: ui, tools, convenience
 ;; URL: https://github.com/emacs-taf/etaf
 
@@ -1199,6 +1199,13 @@
 ;; Function: etaf-scroll-by (runtime host-ref delta)
 ;;;###autoload (autoload 'etaf-scroll-by "etaf" nil nil)
 ;; Scroll a Host by DELTA lines (negative scrolls up); return the new offset.
+;;
+;; Function: etaf-scroll-viewport (runtime delta)
+;;;###autoload (autoload 'etaf-scroll-viewport "etaf" nil nil)
+;; Scroll the active reading viewport in mounted RUNTIME by DELTA lines
+;; (negative scrolls up): scrolls any enclosing scrollable Host at point first,
+;; then falls back to scrolling the window displaying RUNTIME's buffer.
+;; Return DELTA.
 ;;
 ;; Function: etaf-scroll-into-view (runtime host-ref &optional align)
 ;;;###autoload (autoload 'etaf-scroll-into-view "etaf" nil nil)
@@ -2698,6 +2705,77 @@
 ;; Call it when the owning session is disposed; a disarmed cache reports no
 ;; background work even after its entries grow old.
 ;;
+;; Function: etaf-activity-publish (id plist)
+;;;###autoload (autoload 'etaf-activity-publish "etaf" nil nil)
+;; Publish or update live cross-application activity ID from PLIST.
+;; ID is a non-nil symbol, nonempty string or cons cell compared with `equal'.
+;; PLIST carries `:title' (required nonempty string) and optional `:app',
+;; `:kind' (`media', `timer', `task', `inbox', `schedule' or `status'),
+;; `:state' (`active', `paused' or `idle'), `:priority' (number, default 50),
+;; `:subtitle', `:compact', `:icon', `:tone', `:progress', `:meter',
+;; `:actions', `:open' and `:owner-runtime' (auto-removes on unmount).
+;; Returns a detached copy of the stored activity plist.  Signals
+;; `etaf-runtime-error' on invalid arguments.
+;;
+;; Function: etaf-activity-remove (id)
+;;;###autoload (autoload 'etaf-activity-remove "etaf" nil nil)
+;; Remove live cross-application activity ID and return non-nil if it existed.
+;;
+;; Function: etaf-activity-get (id)
+;;;###autoload (autoload 'etaf-activity-get "etaf" nil nil)
+;; Return a detached copy of live cross-application activity ID, or nil.
+;;
+;; Function: etaf-activity-list (&optional kind)
+;;;###autoload (autoload 'etaf-activity-list "etaf" nil nil)
+;; Return ordered detached snapshots of live activities, optionally for KIND.
+;; Active activities precede paused and idle ones; ties break by descending
+;; `:priority' and newest `:updated-at'.  Signals `etaf-runtime-error' on an
+;; unknown KIND.
+;;
+;; Function: etaf-activity-ref ()
+;;;###autoload (autoload 'etaf-activity-ref "etaf" nil nil)
+;; Return the shared reactive ref holding ordered live activity snapshots.
+;; Shells subscribe to this ref instead of polling applications.
+;;
+;; Function: etaf-activity-invoke (id action-id)
+;;;###autoload (autoload 'etaf-activity-invoke "etaf" nil nil)
+;; Invoke ACTION-ID (or `open') declared on live activity ID.
+;; Signals `etaf-runtime-error' when ID or ACTION-ID is not registered.
+;;
+;; Hook: etaf-activity-change-functions
+;; Hook run with `(EVENT ID ENTRY)' when live activities change.
+;; EVENT is `publish' or `remove'; ENTRY is a detached plist or nil.
+;; Individual observer errors are isolated.
+;;
+;; Function: etaf-notify (title &key id app detail (variant 'info) (ttl 5.0) group actions)
+;;;###autoload (autoload 'etaf-notify "etaf" nil nil)
+;; Publish notification TITLE to ETAF shell consumers and return a detached entry.
+;; VARIANT is `info', `success', `warning' or `danger'; TTL is nonnegative
+;; seconds (0 disables auto-collapse).  When GROUP matches an existing entry,
+;; replaces it in place with an incremented `:count'.  Falls back to `message'
+;; when `etaf-notify-functions' has no observers.
+;;
+;; Function: etaf-notify-dismiss (&optional id)
+;;;###autoload (autoload 'etaf-notify-dismiss "etaf" nil nil)
+;; Dismiss notification ID (or the newest entry when nil) and return remaining list.
+;;
+;; Function: etaf-notify-clear ()
+;;;###autoload (autoload 'etaf-notify-clear "etaf" nil nil)
+;; Clear all stored ETAF notifications and return nil.
+;;
+;; Function: etaf-notify-list ()
+;;;###autoload (autoload 'etaf-notify-list "etaf" nil nil)
+;; Return detached list of stored ETAF notifications, newest first.
+;;
+;; Function: etaf-notify-ref ()
+;;;###autoload (autoload 'etaf-notify-ref "etaf" nil nil)
+;; Return the shared reactive ref holding stored ETAF notifications.
+;;
+;; Hook: etaf-notify-functions
+;; Hook run with `(ENTRY)' when `etaf-notify' records a notification.
+;; Individual observer errors are isolated.  Presence of an observer suppresses
+;; the fallback echo-area message.
+;;
 ;;; Code:
 
 ;;;###autoload
@@ -2742,6 +2820,7 @@
 (require 'etaf-video-component)
 (require 'etaf-projection)
 (require 'etaf-inspect)
+(require 'etaf-activity)
 
 (autoload 'etaf-animation-example-open "examples/etaf-animation-example" nil t)
 (autoload 'etaf-retained-resize-open "examples/etaf-retained-resize" nil t)

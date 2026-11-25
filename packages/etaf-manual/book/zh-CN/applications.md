@@ -113,6 +113,124 @@ View 只绘制它画出的单元格。窗口其余部分（例如短 View 下面
 - 根上的 RET 作用于应用的选中项，但比根更近的聚焦按钮仍会收到 RET。
 - 指针事件（例如 `<wheel-down>`）从指针下的 Host 开始解析，所以一个窗格可以用自己的滚轮绑定滚动自己。
 
+## 跨应用活动与通知
+
+<!-- index: 活动; 实时活动; 通知; 跨应用协议 -->
+
+应用常常需要把持续进行的后台工作或瞬时事件汇报给悬浮灵动岛、桌面顶栏或屏保等系统外壳，而又不依赖任何具体外壳包。ETAF 为此提供两组响应式注册表：承载持续状态的实时*活动*（`media`、`timer`、`task`、`inbox`、`schedule` 或 `status`），以及承载瞬时提醒的*通知*。发布者只提交纯数据与动作回调，外壳通过共享响应式 ref 订阅，无需轮询。
+
+#### Function: etaf-activity-publish (id plist)
+
+用 PLIST 发布或更新跨应用实时活动 ID。
+
+**参数。**
+
+- ID 为非 nil 符号、非空字符串或 cons 单元，按 `equal` 比较。
+- PLIST 为合法 plist，必填非空字符串 `:title`，可选 `:app`、`:kind`（`media`、`timer`、`task`、`inbox`、`schedule` 或 `status`，默认 `status`）、`:state`（`active`、`paused` 或 `idle`，默认 `active`）、`:priority`（数值，默认 50）、`:subtitle`、`:compact`、`:icon`、`:tone`（`info`、`success`、`warning`、`danger` 或 `neutral`）、`:progress`（plist）、`:meter`（电平采样函数）、`:actions`（动作 plist 列表，每项含 `:id` 符号、`:label` 字符串与 `:fn` 函数）、`:open`（零参打开函数）以及 `:owner-runtime`（已挂载 Runtime，其卸载时自动移除 ID）。
+
+**语义。** 当忽略 `:updated-at` 后载荷与现有记录一致时跳过发布，避免无变化的后台轮询触发多余重绘。否则更新 `etaf-activity-ref` 并以 `(publish ID ENTRY)` 运行 `etaf-activity-change-functions`。
+
+**返回。** 已存储活动 plist 的独立副本。
+
+**错误。** 非法 ID、非 plist、缺少 `:title`、不支持的 `:kind`、`:state`、`:tone` 或非法 `:actions` 触发 `error→ etaf-runtime-error`。
+
+#### Function: etaf-activity-remove (id)
+
+移除跨应用实时活动 ID，若此前存在则返回非 nil。
+
+**语义。** 移除已存在条目时会更新 `etaf-activity-ref` 并以 `(remove ID nil)` 通知 `etaf-activity-change-functions`。
+
+**返回。** ID 原先存在时返回 t，否则返回 nil。
+
+#### Function: etaf-activity-get (id)
+
+返回跨应用实时活动 ID 的独立副本，不存在则返回 nil。
+
+**返回。** 独立活动 plist 或 nil。
+
+#### Function: etaf-activity-list (&optional kind)
+
+返回按序排列的实时活动独立快照，可选按 KIND 过滤。
+
+**语义。** `active` 活动排在 `paused` 之前，`paused` 排在 `idle` 之前；同级按 `:priority` 降序及最新 `:updated-at` 排列。
+
+**返回。** 独立活动 plist 列表。
+
+**错误。** KIND 非 nil 且不是受支持的活动类型时触发 `error→ etaf-runtime-error`。
+
+#### Function: etaf-activity-ref ()
+
+返回承载有序实时活动快照的共享响应式 ref。
+
+**返回。** 随活动发布或移除自动更新的响应式 ref。
+
+#### Function: etaf-activity-invoke (id action-id)
+
+调用实时活动 ID 声明的动作 ACTION-ID（或 `open`）。
+
+**语义。** ACTION-ID 为 `open` 时查找 `:open`，否则在 `:actions` 中按 `:id` 查找，并零参调用其函数。
+
+**返回。** 动作函数的返回值。
+
+**错误。** ID 未知或未声明对应动作时触发 `error→ etaf-runtime-error`。
+
+#### Hook: etaf-activity-change-functions
+
+实时活动发生变化时以 `(EVENT ID ENTRY)` 运行的钩子。
+
+**语义。** EVENT 为 `publish` 或 `remove`，ID 为活动键，ENTRY 为独立活动 plist（移除时为 nil）。单个观察者的错误被隔离。
+
+#### Function: etaf-notify (title &key id app detail (variant 'info) (ttl 5.0) group actions)
+
+向 ETAF 外壳消费者发布通知 TITLE，并返回独立条目副本。
+
+**参数。**
+
+- TITLE 为非空字符串。
+- ID 可选指定稳定标识，省略时自动分配递增整数。
+- APP 为可选来源符号。
+- DETAIL 为可选补充说明文本。
+- VARIANT 为 `info`、`success`、`warning` 或 `danger`（默认 `info`）。
+- TTL 为自动折叠秒数（非负数，默认 5.0；0 表示不自动折叠）。
+- GROUP 为可选分组键，按 `equal` 比较；命中已有条目时原地替换并递增 `:count`。
+- ACTIONS 为可选动作 plist 列表（`:id`、`:label`、`:fn`）。
+
+**语义。** 将条目插入有界通知历史、更新 `etaf-notify-ref` 并运行 `etaf-notify-functions`。交互会话中若 `etaf-notify-functions` 为空，自动回退到 `message` 以防提醒丢失。
+
+**返回。** 通知 plist 的独立副本。
+
+**错误。** 空 TITLE、非法 VARIANT、负 TTL 或非法 ACTIONS 触发 `error→ etaf-runtime-error`。
+
+#### Function: etaf-notify-dismiss (&optional id)
+
+忽略通知 ID（为 nil 时忽略最新一条）并返回剩余列表。
+
+**返回。** 剩余通知的独立列表，最新在前。
+
+#### Function: etaf-notify-clear ()
+
+清空全部已存储的 ETAF 通知并返回 nil。
+
+**返回。** nil。
+
+#### Function: etaf-notify-list ()
+
+返回已存储 ETAF 通知的独立列表，最新在前。
+
+**返回。** 独立通知 plist 列表。
+
+#### Function: etaf-notify-ref ()
+
+返回承载已存储 ETAF 通知的共享响应式 ref。
+
+**返回。** 承载独立通知列表的响应式 ref。
+
+#### Hook: etaf-notify-functions
+
+`etaf-notify` 记录通知时以 `(ENTRY)` 运行的钩子。
+
+**语义。** 单个观察者的错误被隔离。安装至少一个观察者后即抑制回显区 `message` 回退。
+
 ## 错误与恢复
 
 打开从不留下半开的应用：某一步失败时，关闭函数运行、缓冲区被杀掉、条件向外传播，调用者可以修正原因后再次打开。关闭函数不应该发出信号；如果发出了，`etaf-app-close` 在缓冲区消失之后报告该错误，杀掉缓冲区则以消息报告它。无论哪种情况，应用都已关闭，它的名字可以再次打开。

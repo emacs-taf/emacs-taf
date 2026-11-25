@@ -4,7 +4,13 @@ All notable changes to the ETAF Reference Manual and the `etaf-manual` package a
 
 ## Unreleased
 
+### Added
+
+- The manual documents `etaf-scroll-viewport` plus the cross-application live activity (`etaf-activity-*`) and notification (`etaf-notify*`) APIs in both English and Simplified Chinese.
+
 ### Fixed
+
+- Up and down arrow keys in the interactive manual reader scroll the article pane one line at a time.
 
 - The book documents the nineteen interfaces and six variables that `etaf' and `etaf-ui' publish and the appendix was missing, so every definition a reader follows from a code span resolves.
 

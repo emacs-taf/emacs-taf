@@ -6,6 +6,8 @@ All notable changes to Ebox are documented here.
 
 ### Fixed
 
+- Downward window scrolling stops once the last line of the mounted buffer is fully visible, preventing blank overscroll past the end of a page.
+
 - Repainting a mounted buffer aligns restored window starts to column 0 of their row rather than preserving a mid-line column offset, so a truncated engine row never loses its leading cells (such as container left padding).
 
 - Sizes render the same in batch as in a window.  The default face height was read in points without its tenths outside a window system, so a ratio written for a heading came out ten times smaller than the same ratio drawn on screen.

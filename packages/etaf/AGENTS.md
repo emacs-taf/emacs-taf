@@ -29,6 +29,7 @@ The enclosing workspace `AGENTS.md` (`../AGENTS.md`) carries the shared engineer
 | Optional observation and recording | `etaf-observer`, `etaf-performance` |
 | Source projection of painted cells | `etaf-projection` |
 | On-demand Runtime introspection for developer tools | `etaf-inspect` |
+| Cross-application live activities and notifications | `etaf-activity` |
 
 `docs/architecture.md` states concepts, ownership, data flow and invariants; it is not an implementation map, so do not look there for "which file". User workflows are in the [ETAF Reference Manual](https://etaf.top/introduction/), the GUI verification procedure is in the workspace tool manual, and the `etaf.el` Commentary is the authoritative public API inventory.
 

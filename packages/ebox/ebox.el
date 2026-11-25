@@ -2,7 +2,7 @@
 
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 ;; Author: ebox contributors
-;; Version: 3.1.5
+;; Version: 3.1.6
 ;; Package-Requires: ((emacs "29.1") (ecss "0.1.0"))
 ;; Keywords: ui, graphics, convenience
 ;; URL: https://github.com/emacs-taf/ebox

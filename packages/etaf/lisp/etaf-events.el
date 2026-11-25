@@ -333,6 +333,32 @@ Reaching the end pins a `:scroll-anchor end' Host so it follows new content."
   (let ((node (etaf--scroll-node runtime host-ref)))
     (ebox-node-set-scroll node (+ (ebox-node-scroll-offset node) delta))))
 
+(defun etaf-scroll-viewport (runtime delta)
+  "Scroll the active reading viewport in mounted RUNTIME by DELTA lines.
+Negative DELTA scrolls up toward earlier lines; positive DELTA scrolls down.
+Consumes DELTA from any enclosing scrollable Host at point first, then falls
+back to scrolling the window displaying RUNTIME's buffer.  Return DELTA."
+  (setq runtime (etaf-runtime-require-mounted runtime))
+  (unless (integerp delta)
+    (signal 'wrong-type-argument (list 'integerp delta)))
+  (unless (zerop delta)
+    (let* ((buffer (etaf-runtime-buffer runtime))
+           (win (or (let ((sel (selected-window)))
+                      (and (window-live-p sel)
+                           (eq (window-buffer sel) buffer)
+                           sel))
+                    (get-buffer-window buffer t))))
+      (with-current-buffer buffer
+        (if (window-live-p win)
+            (with-selected-window win
+              (if (> delta 0)
+                  (ebox-scroll-down delta)
+                (ebox-scroll-up (- delta))))
+          (if (> delta 0)
+              (ebox-scroll-down delta)
+            (ebox-scroll-up (- delta)))))))
+  delta)
+
 (defun etaf-scroll-into-view (runtime host-ref &optional align)
   "Scroll the scrolling Hosts around HOST-REF in RUNTIME so it shows.
 Each enclosing scroller moves the least distance; return HOST-REF.

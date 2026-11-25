@@ -482,14 +482,20 @@ language row fixed above the body that scrolls under it."
                :on-scroll (lambda (_offset) nil)
                :on-direction
                (lambda (direction)
-                 (when (memq direction '(up down))
-                   ;; `etaf-scroll-to' clamps to the content, so the last rows
-                   ;; stop at the last rows instead of scrolling past them.
-                   (let ((runtime (etaf-runtime-for-buffer (current-buffer))))
-                     (etaf-scroll-to runtime scroll-ref
-                                     (+ (etaf-scroll-offset runtime scroll-ref)
-                                        (if (eq direction 'up) -1 1)))))
-                 'handled)
+                 (pcase direction
+                   ((or 'up 'down)
+                    ;; Only capture scrolling inside the code pane when it has
+                    ;; keyboard focus; otherwise keep scrolling the page.
+                    (let ((runtime (etaf-runtime-for-buffer (current-buffer)))
+                          (delta (if (eq direction 'up) -1 1)))
+                      (when runtime
+                        (if (eq (etaf-focused-host-ref runtime) scroll-ref)
+                            (etaf-scroll-to runtime scroll-ref
+                                            (+ (etaf-scroll-offset runtime scroll-ref)
+                                               delta))
+                          (etaf-scroll-viewport runtime delta))))
+                    'handled)
+                   (_ 'release)))
                :aria-label "代码，滚动查看"
             (expr (list (etaf-md--code-tree-code env (cdr selected))))))))))
 

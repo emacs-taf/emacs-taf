@@ -1347,6 +1347,21 @@
       "name": "etaf-video-tests-master-clock-holds-video-until-audio-ready",
       "file": "tests/etaf-video-tests.el",
       "purpose": "The ffmpeg video backend shows Frame 0 immediately, holds while ffplay reports nan during startup, and locks frame presentation to ffplay's live audio clock."
+    },
+    {
+      "name": "etaf-activity-publish-order-actions-and-reactive-ref",
+      "file": "tests/etaf-activity-tests.el",
+      "purpose": "Live activities validate inputs, sort by active state and priority, return detached snapshots, update the reactive ref, invoke publisher actions and isolate observer errors."
+    },
+    {
+      "name": "etaf-activity-auto-removes-when-owner-runtime-unmounts",
+      "file": "tests/etaf-activity-tests.el",
+      "purpose": "A live activity bound to `:owner-runtime' is automatically removed when that Runtime unmounts."
+    },
+    {
+      "name": "etaf-notify-grouping-dismissal-and-observer-isolation",
+      "file": "tests/etaf-activity-tests.el",
+      "purpose": "`etaf-notify' merges grouped alerts with incremented counts, updates the reactive notification ref, isolates observer errors and supports single dismissal and full clearing."
     }
   ]
 }
