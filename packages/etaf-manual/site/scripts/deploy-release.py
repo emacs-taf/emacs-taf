@@ -179,7 +179,7 @@ def native_artifacts(directory, *, partial=False):
             raise ValueError(f"Non-public native symlink: {path.relative_to(directory)}")
         if path.is_file():
             rel = path.relative_to(directory).as_posix()
-            if rel != "manifest.json":
+            if rel not in ("manifest.json", "index.html"):
                 present.add(rel)
     if not (present <= set(indexed)) or (not partial and set(indexed) != present):
         raise ValueError("A native payload may contain only its indexed artifacts")
@@ -200,11 +200,15 @@ def preserve_native(previous, candidate, mode):
     incoming = native_artifacts(new, partial=True)
     merged = {item["path"]: item for item in incoming["artifacts"]}
     shipped = {"native/manifest.json"}
+    if (new / "index.html").is_file():
+        shipped.add("native/index.html")
     for item in incoming["artifacts"]:
         if (new / item["path"]).is_file():
             shipped.add("native/" + item["path"])
     if old and old.exists():
         prior = native_artifacts(old)
+        if not (new / "index.html").is_file() and (old / "index.html").is_file():
+            shutil.copyfile(old / "index.html", new / "index.html")
         for item in prior["artifacts"]:
             rel = item["path"]
             old_file = old / rel

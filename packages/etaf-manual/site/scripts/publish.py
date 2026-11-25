@@ -154,6 +154,9 @@ def publish(args):
                             "verify", "--stage", str(native_input.resolve())],
                            check=True, timeout=120)
             shutil.copytree(native_input.resolve(), work / "native")
+            native_report = archive_pages.native_pages(work / "native")
+            print(f"Native index page for {native_report['packages']} package(s), "
+                  f"{native_report['artifacts']} artifact(s)")
         elif package_input:
             # This command rejects partial/stale evidence and developer archives,
             # then copies an explicit public allowlist. Logs stay on this host.

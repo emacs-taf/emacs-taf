@@ -258,7 +258,7 @@ class DeploymentTests(unittest.TestCase):
         self.assertIn("Site-only", result.stderr)
         self.assertEqual((self.base / "current/index.html").read_text(), "stable")
 
-    def native_payload(self, artifacts):
+    def native_payload(self, artifacts, index_html=None):
         """Build a native-only payload from {relpath: (pkg, mod, ver, plat, bytes)}."""
         import hashlib
         self.sequence += 1
@@ -278,6 +278,11 @@ class DeploymentTests(unittest.TestCase):
             member = tarfile.TarInfo("native/manifest.json")
             member.size = len(manifest_bytes)
             archive.addfile(member, io.BytesIO(manifest_bytes))
+            if index_html is not None:
+                index_bytes = index_html.encode()
+                member = tarfile.TarInfo("native/index.html")
+                member.size = len(index_bytes)
+                archive.addfile(member, io.BytesIO(index_bytes))
         return output
 
     def test_native_artifacts_publish_merge_preserve_and_enforce_immutability(self):
@@ -286,8 +291,9 @@ class DeploymentTests(unittest.TestCase):
         x64_rel = "etaf-md/1/etaf-md-typeset-native-v1-linux-x86_64.so"
         self.deploy(self.native_payload({
             arm_rel: ("etaf-md", "etaf-md-typeset-native", "1", "darwin-arm64", b"arm64-bytes"),
-        }), "native")
+        }, index_html="<h1>Native v1</h1>"), "native")
         self.assertEqual((self.base / "current/native" / arm_rel).read_bytes(), b"arm64-bytes")
+        self.assertEqual((self.base / "current/native/index.html").read_text(), "<h1>Native v1</h1>")
 
         # Incremental platform upload merges rather than wiping earlier platforms.
         self.deploy(self.native_payload({
@@ -295,6 +301,7 @@ class DeploymentTests(unittest.TestCase):
         }), "native")
         self.assertEqual((self.base / "current/native" / arm_rel).read_bytes(), b"arm64-bytes")
         self.assertEqual((self.base / "current/native" / x64_rel).read_bytes(), b"linux-bytes")
+        self.assertEqual((self.base / "current/native/index.html").read_text(), "<h1>Native v1</h1>")
         manifest = json.loads((self.base / "current/native/manifest.json").read_text())
         self.assertEqual([item["path"] for item in manifest["artifacts"]], [arm_rel, x64_rel])
 
@@ -303,6 +310,7 @@ class DeploymentTests(unittest.TestCase):
         self.deploy(self.payload(packages=self.package("1.1.0")), "packages")
         self.assertEqual((self.base / "current/native" / arm_rel).read_bytes(), b"arm64-bytes")
         self.assertEqual((self.base / "current/native" / x64_rel).read_bytes(), b"linux-bytes")
+        self.assertEqual((self.base / "current/native/index.html").read_text(), "<h1>Native v1</h1>")
 
         # Re-uploading a different byte payload under an existing versioned path is refused.
         previous = (self.base / "current").readlink()

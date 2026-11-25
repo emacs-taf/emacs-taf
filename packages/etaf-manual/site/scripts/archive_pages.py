@@ -39,13 +39,14 @@ REPOSITORIES = {"etaf-install": "emacs-taf/emacs-taf"}
 # from readers.  A package another author publishes states its own group.
 GROUPS = (
     ("Framework", {"etaf-install", "etaf-ui", "etaf", "ebox", "ecss", "ekp", "etaf-db",
-                   "etaf-posframe"}),
-    ("Applications", {"etaf-md", "etaf-org-preview", "etaf-rss", "etaf-reader", "etaf-algo-lab",
+                   "etaf-posframe", "etaf-ext", "etaf-gamekit", "etaf-devtools", "etaf-manual"}),
+    ("Extensions", {"etaf-translate", "etaf-highlight", "etaf-hints", "etaf-export"}),
+    ("Applications", {"etaf-md", "etaf-org", "etaf-org-preview", "etaf-rss", "etaf-reader", "etaf-algo-lab",
                       "etaf-screensaver", "etaf-desktop", "etaf-miniflux", "etaf-ncm",
                       "etaf-weread", "etaf-bili", "etaf-youtube", "etaf-pi", "etaf-telega",
                       "etaf-ascii-video", "etaf-video-player", "etaf-video-studio",
-                      "etaf-manual", "etaf-pomodoro", "maillist"}),
-    ("Games", {"etaf-gamekit", "etaf-solitaire", "etaf-xiangqi", "etaf-tanks", "etaf-salvage"}),
+                      "etaf-pomodoro", "etaf-web", "etaf-agenda", "etaf-island", "maillist"}),
+    ("Games", {"etaf-balatro", "etaf-solitaire", "etaf-xiangqi", "etaf-tanks", "etaf-salvage"}),
 )
 
 MANUAL = "https://etaf.top/introduction/"
@@ -662,7 +663,7 @@ def archive_pages(package_dir):
 <section class="hero">
 <p class="eyebrow">package.el archive</p>
 <h1>ETAF package archive</h1>
-<p class="lead">One archive for all of ETAF: the framework, its applications and its games.
+<p class="lead">One archive for all of ETAF: the framework, its extensions, its applications and its games.
 Add it once, then <code>M-x etaf-install</code> pulls everything a target needs.</p>
 <p class="meta"><span><strong>{len(packages)}</strong> packages</span>
 <span class="dot" aria-hidden="true">·</span>
@@ -700,7 +701,7 @@ versioned file never changes bytes.</p>
     (package_dir / "index.html").write_text(page(
         "ETAF package archive", body,
         canonical="https://etaf.top/packages/",
-        description="ETAF package archive: framework, applications and games for Emacs 29.1 "
+        description="ETAF package archive: framework, extensions, applications and games for Emacs 29.1 "
                     "and newer. One package.el entry installs everything."))
     used_by = {name: [] for name in names}
     for item in packages:
@@ -828,6 +829,116 @@ The archive is built from the commit above; rebuild it from that commit to compa
         f"{source_name(item, origin)} — ETAF package archive", body, "../downloads.json",
         canonical=f"https://etaf.top/packages/{name}/",
         description=item.get("summary", "")))
+
+
+NATIVE_DESCRIPTIONS = {
+    "etaf-md": "Embedded QuickJS renderer for Mermaid diagrams and MathJax display formulas (CoreText on macOS, runtime dlopen Pango on Linux).",
+    "etaf": "Cross-platform libmpv dynamic module for hardware-accelerated native video playback in ETAF buffers.",
+    "ekp": "Multi-threaded C Knuth–Plass line-breaking engine for high-throughput paragraph layout.",
+}
+
+
+def format_bytes(size):
+    """Return a concise human-readable byte size string."""
+    if size >= 1024 * 1024:
+        return f"{size / (1024 * 1024):.2f} MB"
+    return f"{max(1, round(size / 1024))} KB"
+
+
+def native_pages(native_dir):
+    """Write a browsable index.html for the hosted prebuilt native modules."""
+    manifest = json.loads((native_dir / "manifest.json").read_text(encoding="utf-8"))
+    artifacts = sorted(manifest.get("artifacts", []),
+                       key=lambda item: (item["package"], item["module"], item["version"], item["platform"]))
+    by_package = {}
+    for item in artifacts:
+        by_package.setdefault(item["package"], []).append(item)
+    platforms = sorted({item["platform"] for item in artifacts})
+    sections = []
+    for pkg in sorted(by_package):
+        items = by_package[pkg]
+        safe_pkg = html.escape(pkg)
+        desc = html.escape(NATIVE_DESCRIPTIONS.get(pkg, f"Prebuilt native dynamic module(s) for {pkg}."))
+        rows = []
+        for item in items:
+            plat = html.escape(item["platform"])
+            mod = html.escape(item["module"])
+            ver = html.escape(item["version"])
+            path = html.escape(item["path"])
+            filename = html.escape(Path(item["path"]).name)
+            sha = html.escape(item["sha256"])
+            size = html.escape(format_bytes(item["size"]))
+            search = html.escape(f"{pkg} {item['module']} {item['platform']} {filename}".lower())
+            rows.append(
+                f'<tr data-search="{search}">'
+                f'<td class="pkg"><a href="{path}"><strong>{plat}</strong></a>'
+                f'<span class="summary"><code>{filename}</code></span></td>'
+                f'<td class="version-cell"><span class="version">{mod} v{ver}</span></td>'
+                f'<td class="num">{size}</td>'
+                f'<td class="requires"><code title="{sha}">{sha[:16]}…{sha[-8:]}</code></td>'
+                f'<td class="src"><a class="tar-link" href="{path}" title="Download {filename}" '
+                f'aria-label="Download {filename}">{TAR_ICON}</a></td>'
+                "</tr>")
+        sections.append(f"""<section class="group" id="{safe_pkg}">
+<div class="group-head"><h2><a href="../packages/{safe_pkg}/">{safe_pkg}</a></h2>
+<span class="tag" data-count="{len(items)}">{len(items)} artifacts</span></div>
+<p class="note">{desc}</p>
+<table>
+<thead><tr><th scope="col">Platform</th><th scope="col">Module</th>
+<th scope="col" class="num">Size</th><th scope="col" class="requires">SHA-256</th>
+<th scope="col" class="src"><span class="visually-hidden">Download</span></th></tr></thead>
+<tbody>
+{chr(10).join(rows)}
+</tbody>
+</table>
+</section>""")
+    body = f"""<main class="wrap">
+<nav class="crumbs" aria-label="Breadcrumb"><a href="/">ETAF</a>
+<span aria-hidden="true">/</span><a href="/packages/">Packages</a>
+<span aria-hidden="true">/</span><span>Native modules</span></nav>
+<section class="hero">
+<p class="eyebrow">Prebuilt Emacs dynamic modules</p>
+<h1>ETAF native binaries</h1>
+<p class="lead">Checksum-verified prebuilt C dynamic modules for ETAF packages.
+<code>M-x etaf-install</code> downloads, verifies (SHA-256) and activates the matching binary automatically
+into <code>~/.cache/emacs-taf/native/</code> — no C compiler, Make or manual build required.</p>
+<p class="meta"><span><strong>{len(by_package)}</strong> packages</span>
+<span class="dot" aria-hidden="true">·</span>
+<span><strong>{len(artifacts)}</strong> binaries</span>
+<span class="dot" aria-hidden="true">·</span>
+<span>{len(platforms)} platforms ({html.escape(", ".join(platforms))})</span>
+<span class="dot" aria-hidden="true">·</span>
+<span>Emacs 29.1+ ABI</span></p>
+</section>
+<section class="install" aria-labelledby="install-title">
+<div class="install-head"><h2 id="install-title">Automatic installation</h2>
+<button class="copy" type="button" data-copy="#bootstrap">Copy</button></div>
+<pre id="bootstrap"><code>{BOOTSTRAP}</code></pre>
+<p class="note">Selecting a target such as <code>etaf-md</code>, <code>etaf-video-player</code>,
+<code>etaf</code> or <code>ekp</code> in <code>M-x etaf-install</code> automatically installs matching
+native binaries for the target and its dependencies. You can also run <code>M-x etaf-install-native</code>
+(or press <code>n</code> in <code>M-x etaf-install-manage</code>) at any time, or inspect
+<a href="manifest.json"><code>manifest.json</code></a> for the full machine-readable index.</p>
+</section>
+<div class="filter" data-filter-box hidden>
+<label class="visually-hidden" for="native-filter">Filter native artifacts</label>
+<input id="native-filter" type="search" data-filter autocomplete="off" spellcheck="false"
+ placeholder="Filter by package, module or platform (e.g. darwin-arm64, linux-x86_64)">
+<kbd>/</kbd>
+</div>
+<p class="note" data-filter-empty hidden>No native artifact matches that filter.</p>
+{chr(10).join(sections)}
+<footer class="site-footer">
+<p>This page is generated from <a href="manifest.json">manifest.json</a> on every native release.
+Every binary is immutable under its versioned path and verified by SHA-256 before loading.</p>
+</footer>
+</main>"""
+    (native_dir / "index.html").write_text(page(
+        "ETAF prebuilt native modules", body, "",
+        canonical="https://etaf.top/native/",
+        description="Checksum-verified prebuilt Emacs dynamic modules for ETAF packages (macOS, Linux, Windows)."),
+        encoding="utf-8")
+    return {"packages": len(by_package), "artifacts": len(artifacts)}
 
 
 def main():
