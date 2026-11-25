@@ -1,0 +1,315 @@
+#+TITLE: ETAF Org 扩展组件与活文档展厅
+#+SUBTITLE: 原生 Org 语法 × 书刊阅读流 × Org 工作区活文档
+#+AUTHOR: ETAF Contributors
+#+DATE: 2026-11-23
+#+TODO: TODO NEXT WAIT | DONE CANCELLED
+#+OPTIONS: toc:nil num:nil ^:{}
+#+FILETAGS: :etaf:org:showcase:
+
+这是一份展示 =etaf-org= 书刊排版与活文档组件的展厅文档：按 [[kbd:v]] 切换单窗全宽与左右对照分屏，按 [[kbd:C-c t]] 开关独立右侧大纲窗，按 [[kbd:t]] 切换主题，按 [[kbd:e]] 跳回对应源码行。
+
+状态：[[badge:success:就绪]]  强调色 [[color:#0969da]]  符号 [[sym:etaf-org-open]]  图标 [[icon:check]] 通过。
+
+关键结论 ==零 I/O 渲染与统一节点体系== ，而点击或按 [[kbd:S]] 可揭开 !!原生 Org 语法与书刊级交互组件无须割裂!!。
+
+* 原生 Org 语法增强 :core:
+
+预算范围在 $100 到 $200 之间（不会误解析为公式），真正的行内公式是 $E = mc^2$ 与 $\alpha + \beta$。见脚注[fn:multi]。
+
+#+begin_verse
+第一行 *星号加粗* 与 /斜线斜体/
+    第二行保留缩进与 =逐字代码=
+        第三行支持日期 <2026-11-23 Mon 09:00-11:00>
+#+end_verse
+
+#+attr_etaf: :title "核心入口（支持行标、词高亮、空行与折叠）" :line-numbers t :collapsed-lines 7 :word "etaf-org"
+#+begin_src elisp :tangle lisp/demo.el
+(defun etaf-org-demo-greet (name) ; [!code highlight]
+  "向 NAME 致意，同时在长行场景下按词自然折行而不切断英文标识符。"
+  (let ((old (format "Hi %s" name)) ; [!code --]
+        (msg (format "你好，%s！" name))) ; [!code ++]
+
+    (message "%s" msg)
+    msg))
+;; 折叠后的注释行，点击展开可见
+(etaf-org-demo-greet "ETAF")
+#+end_src
+#+RESULTS:
+: 你好，ETAF！
+
+* 语义卡片、底色层级与多栏容器 :surfaces:
+
+** 六种语义强调卡片与居中排版
+
+#+begin_columns :columns 3 :gap "2ch"
+#+begin_col
+#+begin_card :title "Primary 主色" :accent primary
+默认强调蓝色，用于核心概念与推荐路径。
+#+end_card
+#+end_col
+#+begin_col
+#+begin_card :title "Success 成功" :accent success
+语义绿色，用于通过状态与正向结论。
+#+end_card
+#+end_col
+#+begin_col
+#+begin_card :title "Warning 警示" :accent warning
+琥珀色，用于注意事项与迁移提醒。
+#+end_card
+#+end_col
+#+end_columns
+
+#+begin_columns :columns 3 :gap "2ch"
+#+begin_col
+#+begin_card :title "Danger 危险" :accent danger
+语义红色，用于阻断错误与安全边界。
+#+end_card
+#+end_col
+#+begin_col
+#+begin_card :title "Important 重要" :accent important
+语义紫色，保留清晰标题色与 3px 左侧强调竖条。
+#+end_card
+#+end_col
+#+begin_col
+#+begin_card :title "Neutral 居中卡片" :accent neutral :text-align center
+正文通过 =:text-align center= 水平居中排布，保留克制中性边框。
+#+end_card
+#+end_col
+#+end_columns
+
+** 七种 =box= 底色层级与多栏比例控制
+
+#+begin_columns :columns 4 :gap "1ch"
+#+begin_col
+#+begin_box :surface none :padding "1ch"
+=none= 透明
+#+end_box
+#+end_col
+#+begin_col
+#+begin_box :surface page :padding "1ch"
+=page= 页底
+#+end_box
+#+end_col
+#+begin_col
+#+begin_box :surface raised :padding "1ch"
+=raised= 浮起
+#+end_box
+#+end_col
+#+begin_col
+#+begin_box :surface sunken :padding "1ch"
+=sunken= 下沉
+#+end_box
+#+end_col
+#+end_columns
+
+#+begin_columns :columns 3 :gap "1ch"
+#+begin_col
+#+begin_box :surface quote :padding "1ch"
+=quote= 引用底色
+#+end_box
+#+end_col
+#+begin_col
+#+begin_box :surface table-header :padding "1ch"
+=table-header= 表头底色
+#+end_box
+#+end_col
+#+begin_col
+#+begin_box :surface table-stripe :padding "1ch"
+=table-stripe= 隔行条纹
+#+end_box
+#+end_col
+#+end_columns
+
+#+begin_columns :gap "2ch" :divider t :justify-content between :wrap t
+#+begin_col :grow 2
+#+begin_box :surface raised :padding "1ch"
+=:grow 2= 主内容栏：与右侧配重栏之间由 1px 细竖线自然分隔，窄窗下自动换行。
+#+end_box
+#+end_col
+#+begin_col :grow 1
+#+begin_box :surface sunken :padding "1ch"
+=:grow 1= 侧栏补充。
+#+end_box
+#+end_col
+#+end_columns
+
+* 书刊数据、交互与对比组件 :widgets:
+
+#+begin_tabs
+#+tab: 声明样式
+使用 =etaf-org-set-attr= 对标题、表格、卡片或自定义节点施加样式规则：
+
+#+begin_src elisp
+(etaf-org-set-attr '(headline :level 1) '((prefix "§ ") (numbering decimal)))
+#+end_src
+#+tab: 交互状态
+每个块拥有独立的局部响应槽，切换页签、排序表头或展开代码不会重绘相邻章节。
+#+tab: 安全降级
+任何非法属性名、越界数值或嵌套过深都会在原位显示行号诊断，绝不阻塞文档其余部分。
+#+end_tabs
+
+#+NAME: quarterly-metrics
+#+attr_etaf: :sortable t :copy t :zebra t :highlight-rows "2" :align center
+#+CAPTION: 季度核心指标（整表居中、三线书刊表、点击表头排序与复制表格）
+| 季度 | 活跃文档 | 同比 |
+|------+----------+------|
+| Q1   |      120 | +12% |
+| Q2   |      195 | +62% |
+| Q3   |      260 | +33% |
+| Q4   |      340 | +31% |
+
+#+begin_stats :from quarterly-metrics :columns 4
+#+end_stats
+
+#+begin_chart :type bar :label "季度活跃文档趋势（绑定自 quarterly-metrics）" :from quarterly-metrics :unit "篇"
+#+end_chart
+
+#+begin_chart :type stacked :label "组件占比（百分比单位不重复标注）" :values "L0 排版:58,Org 活文档:27,工作区 L1/L2:15" :unit "%"
+#+end_chart
+
+#+begin_timeline :orientation horizontal :card t
+#+begin_event :title "命令体系收束与单窗直开" :time "Phase 1" :status success
+全局公共命令与 =etaf-md= 严格对齐，仅保留 =etaf-org-open= 单窗直开与 =etaf-org-preview= 实时对照分屏。
+#+end_event
+#+begin_event :title "书刊组件对齐与视觉重构" :time "Phase 2" :status info
+精简冗余组件，独立右侧大纲窗与四级叶级 Hover 全量对齐 =etaf-md=。
+#+end_event
+#+begin_event :title "真机多主题与窄窗验收" :time "Phase 3" :status success
+覆盖 68 列窄窗自动退化、三主题对比度与并发公式渲染互斥锁。
+#+end_event
+#+end_timeline
+
+#+begin_diff :title "打开命令演进对比"
+#+before: 旧版行为
+#+begin_src elisp
+(defun etaf-org-old-open (file)
+  ;; 强行分屏并污染 M-x 补全列表
+  (let ((doc (parse-file file)))
+    (split-window-right)
+    (render-doc doc 'dark)))
+#+end_src
+#+after: 现行规范
+#+begin_src elisp
+(defun etaf-org-open (&optional source)
+  ;; 当前窗口全宽直开，按 v 随时切换对照分屏
+  (let ((session (etaf-org-create :file source :theme 'auto)))
+    (display-reading-view session)))
+#+end_src
+#+end_diff
+
+#+begin_pros-cons :title "纯文本 Org 活文档设计权衡"
+#+pro: 语义可读且工具链兼容
+所有扩展块都是合法 Org 特殊块，导出、版本控制与普通编辑器打开均不破坏结构。
+#+con: 外部矢量图形为可选依赖
+Mermaid 与 KaTeX 依赖 =mmdc= 与 =node=，缺失时自动优雅回退为清晰源码。
+#+end_pros-cons
+
+#+begin_demo :title "效果画布与底部轻条源码对照"
+#+begin_tip :title "实时渲染提示"
+上方画布纯净呈现排版效果，点击底部轻条按需展开原始 Org 写法。
+#+end_tip
+#+end_demo
+
+#+begin_keymap :title "核心阅读快捷键"
+- v : 一键切换单窗全宽阅读与左右对照分屏
+- e / o : 跳回 Org 源码对应行（单窗时原地切换）
+- g / r : 重新解析并刷新当前预览
+- C-c t : 开关独立右侧大纲窗口
+- C-c / : 按 TODO、标签或关键词筛选章节
+#+end_keymap
+
+#+begin_columns :columns 2 :gap "2ch"
+#+begin_col
+#+begin_file-tree :title "带连线文件树（含高亮项）" :lines t
+- packages/etaf-org/
+  - *etaf-org.el* # 唯一公开入口
+  - lisp/
+    - ++ etaf-org-app.el # 单窗与侧边大纲
+    - etaf-org-nodes.el # 统一节点与组件
+#+end_file-tree
+#+end_col
+#+begin_col
+#+begin_file-tree :title "无连线紧凑文件树（lines=false）" :lines nil
+- packages/etaf-org/
+  - **README.md** # 包说明文档
+  - scripts/
+    - mermaid-render.mjs # 公式互斥锁
+#+end_file-tree
+#+end_col
+#+end_columns
+
+#+begin_code-tree :height 9
+#+file: lisp/etaf-org-app.el
+#+begin_src elisp
+(defun etaf-org-toggle-split ()
+  "在单窗全宽阅读与左源码右预览之间切换。"
+  (interactive)
+  (let ((session (etaf-org--current-session)))
+    (unless session
+      (user-error "当前缓冲区不是 ETAF Org 预览"))
+    (if (etaf-org--split-active-p session)
+        (etaf-org--collapse-split session)
+      (etaf-org--expand-split session))))
+#+end_src
+#+file: lisp/etaf-org-theme.el
+#+begin_src elisp
+(defun etaf-org-theme-tokens (theme-or-palette)
+  "返回全部颜色均规范化为 6 位 #RRGGBB 的主题 Token 表。"
+  (let ((palette (etaf-org--resolve-palette theme-or-palette)))
+    (etaf-ui-theme-tokens palette)))
+#+end_src
+#+end_code-tree
+
+* Org 专属任务与工作区活文档 :orglive:
+
+** TODO [#A] 完善实时分屏预览与大纲跟随 :dev:ux:
+DEADLINE: <2026-11-28 Sat>
+:LOGBOOK:
+CLOCK: [2026-11-21 Sat 14:00]--[2026-11-21 Sat 15:30] =>  1:30
+:END:
+
+- [X] 实现 =etaf-org-open= 单窗零弹窗直开与源码行定位
+- [X] 实现 =etaf-org-preview= 非破坏右侧分屏与干净回收
+- [ ] 在多主题与窄窗下完成真机 GUI 逐屏验收
+
+** NEXT [#B] 验证独立右侧大纲窗与 O(Δ) 局部刷新 :perf:
+SCHEDULED: <2026-11-23 Mon>
+:LOGBOOK:
+CLOCK: [2026-11-22 Sun 10:00]--[2026-11-22 Sun 11:15] =>  1:15
+:END:
+
+单段落编辑仅更新单个块槽的响应式引用，避免全文档重绘。
+
+** DONE [#A] 完成四级叶级 Hover 纪律与三主题校准 :core:
+CLOSED: [2026-11-23 Mon 17:00]
+:LOGBOOK:
+CLOCK: [2026-11-23 Mon 08:30]--[2026-11-23 Mon 09:45] =>  1:15
+:END:
+
+全量 Hover 审计在 dark、light、sepia 三主题下均达成零违规。
+
+** 实时看板、工时与代码符号
+
+#+begin_org-query :title "进行中的任务" :todo "TODO,NEXT" :sort deadline
+#+end_org-query
+
+#+begin_kanban :title "本文档任务看板" :columns "TODO NEXT DONE"
+#+end_kanban
+
+#+begin_clock-summary :title "本文档工时汇总"
+#+end_clock-summary
+
+#+begin_code-ref :src "etaf-org-demo.el" :symbol "etaf-org-demo" :title "etaf-org-demo.el · 平衡 Elisp 表单抓取"
+#+end_code-ref
+
+#+begin_symbol :name "etaf-org-open"
+#+end_symbol
+
+#+begin_git-log :limit 4 :title "最近版本提交（兼容 Git 与 Jujutsu）"
+#+end_git-log
+
+* 脚注
+
+[fn:multi] 这是第一段脚注正文，用于说明多段落脚注支持。
+
+这是第二段脚注补充，点击下方「↩ 返回正文」可跳回引用处。

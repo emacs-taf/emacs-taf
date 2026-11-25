@@ -209,7 +209,7 @@ report it immediately instead of retrying and hiding it."
                     (kill-buffer example))))))
         (with-current-buffer buffer (etaf-unmount))
         (kill-buffer buffer))))
-  (when (memq target '(etaf-md etaf-org-preview etaf-video-player etaf-desktop
+  (when (memq target '(etaf-md etaf-org etaf-video-player etaf-desktop
                    etaf-telega etaf-xiangqi etaf-tanks etaf-weread etaf-ncm
                    etaf-pomodoro maillist))
     ;; Applications install and load like any package; their external tools are
@@ -241,11 +241,20 @@ report it immediately instead of retrying and hiding it."
   (when (eq target 'etaf-md)
     (let* ((desc (cadr (assq 'etaf-md package-alist)))
            (dir (and desc (package-desc-dir desc))))
-      (dolist (unexpected '("Makefile" "examples" "native/vendor" "native/build"))
+      (dolist (unexpected '("native/build"))
         (when (file-exists-p (expand-file-name unexpected dir))
           (error "Installed etaf-md should not ship %s" unexpected)))
-      (unless (file-readable-p (expand-file-name "scripts/mermaid-render.mjs" dir))
-        (error "Installed etaf-md is missing scripts/mermaid-render.mjs"))
+      (dolist (expected '("Makefile"
+                          "examples/all-syntax.markdown"
+                          "docs/manual.md"
+                          "scripts/mermaid-render.mjs"
+                          "tests/etaf-md-tests.el"
+                          "benchmarks/performance-scenarios.el"
+                          "native/manifest.json"
+                          "native/Makefile"
+                          "native/etaf_md_typeset.c"))
+        (unless (file-readable-p (expand-file-name expected dir))
+          (error "Installed etaf-md is missing %s" expected)))
       (let* ((facts (funcall (intern "etaf-md-doctor")))
              (native-fact (assoc "typeset-native" (plist-get facts :optional))))
         (unless native-fact
@@ -269,6 +278,17 @@ report it immediately instead of retrying and hiding it."
               (with-current-buffer buffer (etaf-unmount))
               (kill-buffer buffer))))
        t)))
+  (when (eq target 'etaf-org)
+    (let* ((desc (cadr (assq 'etaf-org package-alist)))
+           (dir (and desc (package-desc-dir desc))))
+      (dolist (expected '("Makefile"
+                          "examples/complete-gallery.org"
+                          "docs/manual.md"
+                          "scripts/mermaid-render.mjs"
+                          "tests/etaf-org-tests.el"
+                          "benchmarks/performance-scenarios.el"))
+        (unless (file-readable-p (expand-file-name expected dir))
+          (error "Installed etaf-org is missing %s" expected)))))
   (when (eq target 'etaf-manual)
     (unless (plist-get (etaf-manual-book "en") :chapters)
       (error "Installed reference manual has no book data")))

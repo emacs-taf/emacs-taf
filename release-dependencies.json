@@ -55,13 +55,23 @@
     },
     "etaf-md": {
       "resources": [
-        "scripts/mermaid-render.mjs",
-        "native/manifest.json"
+        "examples",
+        "docs",
+        "scripts",
+        "tests",
+        "benchmarks",
+        "Makefile",
+        "native"
       ]
     },
-    "etaf-org-preview": {
+    "etaf-org": {
       "resources": [
-        "scripts"
+        "examples",
+        "docs",
+        "scripts",
+        "tests",
+        "benchmarks",
+        "Makefile"
       ]
     },
     "etaf-video-player": {
@@ -120,7 +130,7 @@
     "etaf-translate",
     "etaf-export",
     "etaf-md",
-    "etaf-org-preview",
+    "etaf-org",
     "etaf-video-player",
     "etaf-desktop",
     "etaf-telega",

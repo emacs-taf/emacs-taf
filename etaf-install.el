@@ -1,7 +1,7 @@
 ;;; -*- lexical-binding: t; -*-
 ;;; etaf-install.el --- Install ETAF with the Emacs package manager
 
-;; Version: 0.2.25
+;; Version: 0.2.26
 ;; Package-Requires: ((emacs "29.1"))
 ;; URL: https://github.com/emacs-taf/emacs-taf
 ;; Keywords: convenience
@@ -154,7 +154,7 @@ When nil, uses the pinned HTTPS mirrors declared in each package's
     (etaf-export "Vector PDF and SVG export extension" extension nil melpa)
     (etaf-manual "ETAF reference manual" application etaf-manual-open)
     (etaf-md "Markdown reading view" application etaf-md-open)
-    (etaf-org-preview "Org reading view" application etaf-org-preview-open)
+    (etaf-org "Org reading view and living documents" application etaf-org-open)
     (etaf-video-player "Video with sound in a buffer" application etaf-video-player-open)
     (etaf-desktop "Windows and workspaces" application etaf-desktop-open)
     ;; MELPA supplies Telega and Transient; Transient needs Compat from GNU ELPA.

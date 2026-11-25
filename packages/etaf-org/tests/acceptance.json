@@ -1,0 +1,444 @@
+{
+  "schema": 1,
+  "load_path": [
+    ".",
+    "tests",
+    "../etaf",
+    "../etaf-ui",
+    "../ebox",
+    "../ecss"
+  ],
+  "support": [],
+  "cases": [
+    {
+      "name": "etaf-org-tests-narrow-heading-keeps-its-chips",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "A heading keeps its keyword, priority and title at a narrow measure."
+    },
+    {
+      "name": "etaf-org-tests-footnotes-in-lists-share-one-sequence",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "Footnote references inside list items share the document sequence."
+    },
+    {
+      "name": "etaf-org-tests-toc-skips-commented-sections",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "A COMMENT section stays out of the table of contents and stays folded."
+    },
+    {
+      "name": "etaf-org-tests-file-title-drops-the-extension",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "A document without a title names itself by its file, without the .org suffix."
+    },
+    {
+      "name": "etaf-org-tests-children-fold-leaves-subheadings-openable",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "A section shown as children still lets its subheadings open."
+    },
+    {
+      "name": "etaf-org-tests-metadata-and-counts",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "A document reports its title, outline, section count, status counts and degradation count through a state snapshot."
+    },
+    {
+      "name": "etaf-org-tests-outline-carries-keyword-priority-tags",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "The outline exposes each headline's level, title, id, keyword and tags so navigation and tests see the same document model."
+    },
+    {
+      "name": "etaf-org-tests-create-requires-a-source",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "Creating a session without a file or text signals `etaf-org-error' instead of returning a half-built session."
+    },
+    {
+      "name": "etaf-org-tests-create-reports-a-missing-file",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "An unreadable document names the missing path in the preview's own error type."
+    },
+    {
+      "name": "etaf-org-tests-refresh-rereads-the-file",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "Refreshing a file session republishes the file's current heading and body, replacing the stale render."
+    },
+    {
+      "name": "etaf-org-tests-refresh-keeps-the-document-on-failure",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "A failed refresh keeps the last good document published and signals the preview error."
+    },
+    {
+      "name": "etaf-org-tests-state-is-detached",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "Mutating a state snapshot never changes the session, so callers can inspect and cache it safely."
+    },
+    {
+      "name": "etaf-org-tests-fold-hides-the-body",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "Folding a section removes its body and every descendant body from the visible buffer while keeping the headline."
+    },
+    {
+      "name": "etaf-org-tests-fold-children-keeps-child-headlines",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "The children fold state shows child headlines and hides both the parent body and the child bodies."
+    },
+    {
+      "name": "etaf-org-tests-sections-open-by-default",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "Every ordinary section body is rendered in the reader."
+    },
+    {
+      "name": "etaf-org-tests-fold-all-updates-every-section",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "A document-wide fold writes every section's cell and reports the same state for all of them."
+    },
+    {
+      "name": "etaf-org-tests-fold-unknown-section-errors",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "An unknown section or fold state signals `etaf-org-error' rather than silently doing nothing."
+    },
+    {
+      "name": "etaf-org-tests-fold-publishes-one-region",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "Folding one section publishes a small buffer update, proving the document is not re-rendered as a whole."
+    },
+    {
+      "name": "etaf-org-tests-inline-emphasis-and-code-faces",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "Bold, italic, underline, strike-through and verbatim spans render their own face attributes and drop their markers."
+    },
+    {
+      "name": "etaf-org-tests-entities-and-subscripts",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "Org entities, subscripts and superscripts render as Unicode characters inside ordinary text."
+    },
+    {
+      "name": "etaf-org-tests-link-stays-in-the-paragraph",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "A link renders inside its paragraph, so the text around it stays on one line instead of a block break."
+    },
+    {
+      "name": "etaf-org-tests-timestamp-renders-as-a-date",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "An active timestamp renders as a date with the Chinese weekday and the time."
+    },
+    {
+      "name": "etaf-org-tests-planning-line-shows-both-dates",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "SCHEDULED and DEADLINE render together on the planning line below the headline."
+    },
+    {
+      "name": "etaf-org-tests-checkbox-states-are-distinct",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "Empty, done and in-progress checkboxes render three different marks."
+    },
+    {
+      "name": "etaf-org-tests-description-list-keeps-the-term",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "A description list item renders its term and its description on one row."
+    },
+    {
+      "name": "etaf-org-tests-table-renders-every-cell",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "A table renders its header row and every body cell."
+    },
+    {
+      "name": "etaf-org-tests-code-block-keeps-its-source",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "A source block shows its language label and its body text."
+    },
+    {
+      "name": "etaf-org-tests-callouts-are-initialized-by-kind",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "Warning and quote blocks render written labels and their content, not their uppercase block names."
+    },
+    {
+      "name": "etaf-org-tests-footnotes-are-numbered-and-listed",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "A footnote reference is numbered and the footnote text is listed at the end of the document."
+    },
+    {
+      "name": "etaf-org-tests-comments-are-folded-initially",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "A COMMENT headline starts folded, hides its body, and reveals it when the section is opened."
+    },
+    {
+      "name": "etaf-org-tests-unknown-block-counts-as-degraded",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "An unclosed block keeps its text visible and is counted in the document's degradation count."
+    },
+    {
+      "name": "etaf-org-tests-missing-image-becomes-a-card",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "A link to a missing image renders a placeholder card instead of signaling during render."
+    },
+    {
+      "name": "etaf-org-tests-theme-cycles-and-rejects-unknown",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "Cycling selects the next fixed palette, an unknown palette signals the preview error, and a mounted document repaints."
+    },
+    {
+      "name": "etaf-org-tests-width-adjust-stays-in-range",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "The reading measure clamps to the configured minimum and maximum."
+    },
+    {
+      "name": "etaf-org-tests-toc-toggle-hides-the-contents-card",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "Hiding the table of contents removes the contents card from the mounted document."
+    },
+    {
+      "name": "etaf-org-tests-narrow-window-keeps-the-measure",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "A narrow viewport still mounts and renders the document's headlines without signaling."
+    },
+    {
+      "name": "etaf-org-tests-locate-moves-to-the-heading",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "Locating an outline entry moves point to that headline's row, so navigation and imenu use the mounted tree's own positions."
+    },
+    {
+      "name": "etaf-org-tests-heading-navigation-round-trips",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "Next and previous heading move between headlines and return to the same row, so outline navigation never gets stuck on one heading."
+    },
+    {
+      "name": "etaf-org-tests-unknown-drawer-content-is-reachable",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "An unknown drawer keeps a named chip and show-hidden reveals its text, so no drawer content disappears silently."
+    },
+    {
+      "name": "etaf-org-tests-targets-render-as-anchors-and-links",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "A radio target renders as a quiet anchor and its reference as link text instead of leaking << markers."
+    },
+    {
+      "name": "etaf-org-tests-export-snippets-show-only-their-payload",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "An inline export snippet shows its payload in source style without the @@backend: markers, and is never interpreted."
+    },
+    {
+      "name": "etaf-org-tests-src-line-numbers-follow-the-n-switch",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "A source block with the -n switch numbers its lines from the requested start in a gutter."
+    },
+    {
+      "name": "etaf-org-tests-typeset-disabled-keeps-the-formula-source",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "Disabling drawing leaves a display formula as readable source instead of removing it."
+    },
+    {
+      "name": "etaf-org-tests-live-edit-follows-the-unsaved-buffer",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "An unsaved edit in the source buffer repaints the preview, so a preview can sit beside editing."
+    },
+    {
+      "name": "etaf-org-tests-inline-source-shows-only-its-code",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "An inline source snippet renders its code without the src_LANG{ marker."
+    },
+    {
+      "name": "etaf-org-tests-ordered-lists-keep-their-style-and-counter",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "A parenthesized ordered list keeps its own markers, and a counter cookie overrides only its own item."
+    },
+    {
+      "name": "etaf-org-tests-source-blocks-use-syntax-colours",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "A named source block paints its tokens with the language's own syntax colours through the shared highlighter."
+    },
+    {
+      "name": "etaf-org-tests-table-rows-do-not-add-a-blank-line",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "A table paints its rows one after another without an empty bordered row between them."
+    },
+    {
+      "name": "etaf-org-tests-logbook-without-properties-still-summarises",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "A logbook that opens a section body is summarised as a chip instead of falling through as an unknown drawer."
+    },
+    {
+      "name": "etaf-org-tests-multiple-todo-sequences",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "Multiple #+TODO keyword lines accumulate across sequences without overwriting earlier keywords."
+    },
+    {
+      "name": "etaf-org-tests-options-num-subscripts-and-flavor",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "#+OPTIONS honors heading numbering depth, brace-only subscripts (^:{}) and etaf:nil standard flavor."
+    },
+    {
+      "name": "etaf-org-tests-currency-dollars-never-become-math",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "Currency expressions like $100 to $200 stay plain text while strict $x^2$ renders as inline math."
+    },
+    {
+      "name": "etaf-org-tests-multiparagraph-footnote-and-return",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "Multi-paragraph footnote definitions preserve all paragraphs and render a clickable return button."
+    },
+    {
+      "name": "etaf-org-tests-verse-block-preserves-indent-and-inlines",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "Verse blocks keep leading indentation and parse inline Org formatting."
+    },
+    {
+      "name": "etaf-org-tests-paired-results-and-table-results",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "#+RESULTS: fixed-width and table outputs pair cleanly beneath their source blocks."
+    },
+    {
+      "name": "etaf-org-tests-real-overdue-and-clock-minutes",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "Real overdue counts (excluding DONE sections) and total clock minutes are derived against :today."
+    },
+    {
+      "name": "etaf-org-tests-toc-directives-tables-and-listings",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "#+TOC: tables and #+TOC: listings generate interactive table and code indices."
+    },
+    {
+      "name": "etaf-org-tests-setupfile-include-and-bibliography",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "Workspace #+SETUPFILE:, #+INCLUDE:, #+BIBLIOGRAPHY:, org-cite and #+PRINT_BIBLIOGRAPHY: resolve cleanly."
+    },
+    {
+      "name": "etaf-org-tests-node-define-extend-undefine-and-describe",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "Users can define, describe, inspect derived attributes of, and cleanly undefine custom nodes."
+    },
+    {
+      "name": "etaf-org-tests-style-rules-on-headline-and-table",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "Style rules apply uniformly to core Org nodes (headline, table) and forbid writing derived attributes."
+    },
+    {
+      "name": "etaf-org-tests-set-view-delegates-to-default-view",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "etaf-org-set-view wraps shipped views via etaf-org-default-view and restores cleanly when passed nil."
+    },
+    {
+      "name": "etaf-org-tests-node-validation-degrades-inline",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "Malformed container attributes show inline non-blocking diagnostics while sibling blocks continue rendering."
+    },
+    {
+      "name": "etaf-org-tests-standard-flavor-disables-extensions",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "Standard Org flavor disables extended inline marks, spoilers and custom link micro-widgets."
+    },
+    {
+      "name": "etaf-org-tests-l0-containers-and-marker-tabs",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "L0 containers (card, marker tabs, steps, timeline, file-tree, chat) render their structured layouts."
+    },
+    {
+      "name": "etaf-org-tests-data-bound-stats-and-chart",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "stats and chart widgets bind directly to named Org tables via :from."
+    },
+    {
+      "name": "etaf-org-tests-cognitive-widgets-and-inline-micro-widgets",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "Cognitive widgets, inline micro-widgets and global spoiler toggling render and update accurately."
+    },
+    {
+      "name": "etaf-org-tests-code-enhancements-and-table-options",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "#+attr_etaf: enables code block titles, folding, line markers and sortable/copyable Org tables."
+    },
+    {
+      "name": "etaf-org-tests-l1-include-coderef-symbol-project-tree",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "L1 workspace widgets read bounded project files and reject paths escaping the workspace root."
+    },
+    {
+      "name": "etaf-org-tests-org-exclusive-query-kanban-clock-transclude",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "Org-exclusive org-query, kanban, clock-summary, transclude and clocktable dynamic blocks render live Org data."
+    },
+    {
+      "name": "etaf-org-tests-l2-actions-respect-trust-gate-and-update-block",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "L2 widgets respect etaf-org-allow-actions and etaf-org-update-block dynamically replaces a named block view."
+    },
+    {
+      "name": "etaf-org-tests-preview-split-goto-source-and-close",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "etaf-org-preview opens a non-destructive right split, goto-source jumps to the Org line, and toggle/close cleans up."
+    },
+    {
+      "name": "etaf-org-tests-live-filter-and-toc-toggle",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "Live section filtering narrows visible sections non-destructively and clears back to the full document."
+    },
+    {
+      "name": "etaf-org-tests-callbacks-on-link-and-on-media",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "Consumer :on-link callback intercepts link activation through the public session constructor."
+    },
+    {
+      "name": "etaf-org-tests-edit-mode-clean-teardown",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "etaf-org-edit-mode provides live CAPF completion from the node registry and leaves source text intact on disable."
+    },
+    {
+      "name": "etaf-org-tests-doctor-reports-capabilities",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "etaf-org-doctor reports zero required external tools and structured optional tool capabilities."
+    },
+    {
+      "name": "etaf-org-tests-src-renderer-hook",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "etaf-org-src-renderers allows consumers to plug a custom view renderer for any source language."
+    },
+    {
+      "name": "etaf-org-tests-timestamp-repeater-range-and-list-citations",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "Timestamps with repeater/warning delays and date ranges, citations inside list items, and single-semicolon [!code] markers render accurately."
+    },
+    {
+      "name": "etaf-org-tests-complete-gallery-mounts-cleanly",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "The categorized complete-gallery.org showcase mounts with zero degraded blocks and renders all widget families cleanly."
+    },
+    {
+      "name": "etaf-org-tests-auto-theme-derives-colored-headings",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "Auto theme derives chromatic heading colors distinct from body ink even when link and button faces are unspecified."
+    },
+    {
+      "name": "etaf-org-tests-command-surface-and-mx-predicates",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "Global M-x surface exposes strictly etaf-org-open and etaf-org-preview (matching etaf-md), etaf-org-view is non-interactive, and preview keybindings dispatch cleanly."
+    },
+    {
+      "name": "etaf-org-tests-open-single-window-and-split-toggle",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "etaf-org-open opens full-width without splitting, v toggles side-by-side split, e/o jumps in place, and q restores origin buffer."
+    },
+    {
+      "name": "etaf-org-tests-independent-outline-side-window",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "etaf-org-toggle-toc displays and cleanly tears down an independent right-side *ETAF Org Outline* Emacs window."
+    },
+    {
+      "name": "etaf-org-tests-four-tier-hover-discipline",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "Strict 4-tier leaf-only hover discipline (missing-hand=0, contrast>=3.0, ink preserved, no stacked active or static hover) holds across dark, light and sepia themes."
+    },
+    {
+      "name": "etaf-org-tests-card-accents-box-surfaces-and-tokens",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "etaf-org-theme-tokens emits strictly 6-digit hex colors, dark sunken is strictly darker than page, and card semantic accents plus box surfaces render cleanly."
+    },
+    {
+      "name": "etaf-org-tests-editorial-widget-contracts",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "Editorial widgets satisfy columns/file-tree/stacked-%/diff-order/narrow-timeline/balanced-sexp code-ref/symbol docstring contracts."
+    },
+    {
+      "name": "etaf-org-tests-code-blank-line-has-no-svg-cursor-box",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "Blank lines inside rendered source blocks carry no SVG image display property that would trigger a full-row GUI cursor box."
+    }
+  ]
+}

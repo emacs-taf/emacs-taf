@@ -77,8 +77,8 @@
       "branch": "main",
       "role": "application"
     },
-    "etaf-org-preview": {
-      "url": "https://github.com/emacs-taf/etaf-org-preview.git",
+    "etaf-org": {
+      "url": "https://github.com/emacs-taf/etaf-org.git",
       "branch": "main",
       "role": "application"
     },

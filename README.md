@@ -44,20 +44,7 @@ gallery is the default):
 
 Afterward, use `M-x etaf-install`; installed targets reopen offline. When installing or updating a target, `etaf-install` automatically downloads, verifies (SHA-256) and activates any prebuilt native dynamic modules declared by that target or its ETAF dependencies (such as `etaf-md`'s QuickJS Mermaid/MathJax renderer, `etaf`'s `libmpv` bridge or `ekp`'s C line-breaking engine) directly into `~/.cache/emacs-taf/native/` without a compiler or a second command (set `etaf-install-auto-native` to nil to opt out, or run `M-x etaf-install-native` / press `n` in `M-x etaf-install-manage` to retry or force-refresh). Use `M-x etaf-install-manage` to see installed and available versions, update, remove or open targets, manage native modules (`n`), and read the doctor; one window holds the table and the mode line names the keys (`i` install, `n` native, `u` update, `U` update all, `d` remove, `RET` open, `?` doctor, `g` refresh, `l` list-packages, `q` quit). `M-x list-packages` remains the advanced package menu. Package.el owns dependency installation, local byte compilation, updates and removal. No Git, Python, system compiler, Pi or replacement Emacs configuration is required.
 
-The installer groups its targets: framework (`etaf-install`, the `etaf-ui`
-gallery, `etaf`, `ebox`, `ecss`, `ekp`, `etaf-db`, `etaf-gamekit`,
-`etaf-posframe`), applications (`etaf-manual`, `etaf-md`,
-`etaf-org-preview`, `etaf-video-player`, `etaf-desktop`, `etaf-telega`,
-`etaf-weread`, `etaf-ncm`, `etaf-pomodoro`, `maillist`) and games
-(`etaf-xiangqi`, `etaf-tanks`). Each entry reports what is missing before
-opening. SQLite needs an Emacs build with SQLite support;
-`M-x etaf-install-doctor` reports required and optional capabilities without
-installing anything. External service accounts and media programs are detected,
-not installed; an application's own backend ships in its package.  For Telega
-the installer installs the Emacs `telega` package but not the native
-`telega-server`: install TDLib, run `M-x telega-server-build` (or follow the
-Telega installation guide), and put `telega-server` on `exec-path`.  The
-install message, `M-x etaf-install-doctor` and the `?` key in
+The installer groups its targets: framework (`etaf-install`, the `etaf-ui` gallery, `etaf`, `ebox`, `ecss`, `ekp`, `etaf-db`, `etaf-gamekit`, `etaf-posframe`, `etaf-ext`), extensions (`etaf-hints`, `etaf-highlight`, `etaf-translate`, `etaf-export`), applications (`etaf-manual`, `etaf-md`, `etaf-org`, `etaf-video-player`, `etaf-desktop`, `etaf-telega`, `etaf-weread`, `etaf-ncm`, `etaf-pomodoro`, `maillist`) and games (`etaf-xiangqi`, `etaf-tanks`). Each entry reports what is missing before opening. SQLite needs an Emacs build with SQLite support; `M-x etaf-install-doctor` reports required and optional capabilities without installing anything. External service accounts and media programs are detected, not installed; an application's own backend ships in its package.  For Telega the installer installs the Emacs `telega` package but not the native `telega-server`: install TDLib, run `M-x telega-server-build` (or follow the Telega installation guide), and put `telega-server` on `exec-path`.  The install message, `M-x etaf-install-doctor` and the `?` key in
 `M-x etaf-install-manage` print this remedy.
 
 Use `M-x etaf-install-manage` for the supported targets and `M-x list-packages`
@@ -112,7 +99,7 @@ table names the framework packages each one uses:
 | [etaf-ncm](https://github.com/emacs-taf/etaf-ncm) | NetEase Cloud Music player: library browsing, playback control, lyrics and queue | etaf, etaf-ui, ebox |
 | [etaf-weread](https://github.com/emacs-taf/etaf-weread) | WeChat Reading client: shelf, notebook, highlights, store search and statistics | etaf, etaf-ui, etaf-db, ebox |
 | [etaf-md](https://github.com/emacs-taf/etaf-md) | Native Markdown renderer and live previewer: centered measure, full-grid tables, 35+ extended `:::` containers, zero-browser QuickJS Mermaid/MathJax SVGs, interactive widgets and lockstep split preview | etaf, etaf-ui, ebox |
-| [etaf-org-preview](https://github.com/emacs-taf/etaf-org-preview) | Org reading view: structural folding, headline keywords and planning, lists, tables, code, callouts, footnotes and a table of contents | etaf, etaf-ui, ebox |
+| [etaf-org](https://github.com/emacs-taf/etaf-org) | Org reading view and living documents: native Org syntax, extensible node engine, editorial and live workspace widgets, Mermaid/KaTeX diagrams, outline side window and O(Δ) live split preview | etaf, etaf-ui, ebox |
 | [etaf-rss](https://github.com/emacs-taf/etaf-rss) | RSS reader: subscriptions, folders, unread and starred scopes, reading pane, search and OPML, over a local JSON store or a Miniflux server | etaf, etaf-ui, ebox |
 | [maillist](https://github.com/emacs-taf/maillist) | Mailing-list client: public-inbox thread list with unread and starred scopes, a fixed-header reader, local read/star state and replies through smtpmail | etaf, etaf-ui, etaf-db, ebox |
 | [etaf-reader](https://github.com/emacs-taf/etaf-reader) | Local ebook reader: EPUB/TXT/Markdown/HTML/FB2/PDF import, paged reading, annotations and progress | etaf, etaf-ui, etaf-db, ebox |

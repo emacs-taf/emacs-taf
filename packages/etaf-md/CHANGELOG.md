@@ -4,6 +4,10 @@ All notable user-visible changes to `etaf-md` are documented in this file.
 
 ## Unreleased
 
+### Changed
+
+- The official ETAF package archive now ships `examples/`, `docs/`, `scripts/`, `tests/`, `benchmarks/`, `Makefile`, and `native/` sources (still excluding `native/build/` and compiled binaries) so archive installations include all example documents, documentation, and local source-build files.
+
 ### Fixed
 
 - Up and down arrow keys now scroll the Markdown reading viewport smoothly one line at a time instead of jumping between focusable controls, and unfocused code-tree blocks let page scrolling glide past them.

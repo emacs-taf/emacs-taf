@@ -578,7 +578,7 @@ GUI 保持实际运行时的 GC 策略与用户设置，测量工具不能额外
 
 ### 13.7 当前差距
 
-- 归档的安装目标覆盖框架、应用与游戏三段：框架 8 个（`etaf-ui`、`etaf-posframe`、`etaf`、`ebox`、`ecss`、`ekp`、`etaf-db`、`etaf-gamekit`），应用 10 个（`etaf-manual`、`etaf-md`、`etaf-org-preview`、`etaf-video-player`、`etaf-desktop`、`etaf-telega`、`etaf-weread`、`etaf-ncm`、`etaf-pomodoro`、`maillist`），游戏 2 个（`etaf-xiangqi`、`etaf-tanks`）。`etaf-install` 是安装入口，同时作为框架菜单项出现，但不计入 `release-dependencies.json` 的 `targets`。
+- 归档的安装目标覆盖框架、扩展、应用与游戏四段：框架 9 个（`etaf-ui`、`etaf-posframe`、`etaf-ext`、`etaf`、`ebox`、`ecss`、`ekp`、`etaf-db`、`etaf-gamekit`），扩展 4 个（`etaf-hints`、`etaf-highlight`、`etaf-translate`、`etaf-export`），应用 10 个（`etaf-manual`、`etaf-md`、`etaf-org`、`etaf-video-player`、`etaf-desktop`、`etaf-telega`、`etaf-weread`、`etaf-ncm`、`etaf-pomodoro`、`maillist`），游戏 2 个（`etaf-xiangqi`、`etaf-tanks`）。`etaf-install` 是安装入口，同时作为框架菜单项出现，但不计入 `release-dependencies.json` 的 `targets`。
 - 检出内的 `etaf-bili`、`etaf-reader`、`etaf-rss` 与 `etaf-screensaver` 已通过各自检查，但还没有进入归档，也不在安装器菜单中；把它们上架要走 13.8 的固定步骤。
 - `etaf-posframe` 是框架包：应用只暴露 View，浮动面板由它承载，所以归档必须先能装上它，应用的“作为面板打开”才成立。它依赖的窗口管理器 `posframe` 来自 GNU ELPA，因此该目标的能力清单声明 `gnu`，安装器才会注册那个归档。应用以 `<包>-open` 展示自己，安装器菜单与发布门禁都按这个约定检查；`etaf-pomodoro` 因此在 0.2.0 把 `etaf-pomodoro-start` 改名为 `etaf-pomodoro-open`，成为安装目标。
 - `etaf-telega` 通过声明 `telega` 与注册 MELPA 自动装齐依赖；`telega-server` 与账号仍未纳入（只检测）。

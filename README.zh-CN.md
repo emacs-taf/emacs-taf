@@ -34,11 +34,7 @@ make -C packages/etaf-ui check
 
 以后运行 `M-x etaf-install` 即可；已安装的目标可以离线重开。安装或更新目标时，`etaf-install` 会按依赖闭包自动下载、校验 SHA-256 并热加载可用的预编译原生动态模块（如 `etaf-md` 的 QuickJS Mermaid/MathJax 渲染器、`etaf` 的 `libmpv` 播放桥、`ekp` 的 C 排版引擎）到 `~/.cache/emacs-taf/native/`，全程无需本机编译器也无需第二条命令（可通过 `etaf-install-auto-native` 设为 nil 关闭，或用 `M-x etaf-install-native` / `M-x etaf-install-manage` 中的 `n` 键手动重试或重装）。用 `M-x etaf-install-manage` 查看已安装/可用版本、管理预编译原生模块（`n`）、更新、卸载或打开目标并查看 doctor；`M-x list-packages` 仍是高级包菜单。依赖安装、本地字节编译、更新和卸载均由 package.el 管理，不需要 Git、Python、系统编译器或 Pi，也不替换现有 Emacs 配置。
 
-安装入口按框架、应用与游戏分组：框架含 `etaf-install`、组件画廊（`etaf-ui`）、`etaf`、`ebox`、`ecss`、`ekp`、`etaf-db`、`etaf-gamekit`、`etaf-posframe`；应用含 `etaf-manual`、`etaf-md`、`etaf-org-preview`、`etaf-video-player`、`etaf-desktop`、`etaf-telega`、`etaf-weread`、`etaf-ncm`、`etaf-pomodoro`、`maillist`；游戏含 `etaf-xiangqi`、`etaf-tanks`。每个条目在打开前报告缺少什么。SQLite 需要 Emacs 本身具备 SQLite 支持；`M-x etaf-install-doctor` 只检查必需和可选能力，不执行安装。外部服务账号与媒体程序只检测、不代装；应用自己的后端随包发布。Telega 的 `telega`
-Emacs 包会自动安装，但原生 `telega-server` 不会：先安装 TDLib，再运行
-`M-x telega-server-build`（或按 Telega README 手工构建），把 `telega-server`
-放进 `exec-path`。安装消息、`M-x etaf-install-doctor` 和
-`M-x etaf-install-manage` 里的 `?` 都会显示这条提示。
+安装入口按框架、扩展、应用与游戏分组：框架含 `etaf-install`、组件画廊（`etaf-ui`）、`etaf`、`ebox`、`ecss`、`ekp`、`etaf-db`、`etaf-gamekit`、`etaf-posframe`、`etaf-ext`；扩展含 `etaf-hints`、`etaf-highlight`、`etaf-translate`、`etaf-export`；应用含 `etaf-manual`、`etaf-md`、`etaf-org`、`etaf-video-player`、`etaf-desktop`、`etaf-telega`、`etaf-weread`、`etaf-ncm`、`etaf-pomodoro`、`maillist`；游戏含 `etaf-xiangqi`、`etaf-tanks`。每个条目在打开前报告缺少什么。SQLite 需要 Emacs 本身具备 SQLite 支持；`M-x etaf-install-doctor` 只检查必需和可选能力，不执行安装。外部服务账号与媒体程序只检测、不代装；应用自己的后端随包发布。Telega 的 `telega` Emacs 包会自动安装，但原生 `telega-server` 不会：先安装 TDLib，再运行 `M-x telega-server-build`（或按 Telega README 手工构建），把 `telega-server` 放进 `exec-path`。安装消息、`M-x etaf-install-doctor` 和 `M-x etaf-install-manage` 里的 `?` 都会显示这条提示。
 
 支持的目标用 `M-x etaf-install-manage` 更新或卸载；高级或第三方包用 `M-x list-packages`。更新后重启 Emacs；卸载只删包文件，应用数据、登录与缓存保留，共享依赖不删。安装失败时只清理本次新增的包，报告清理失败并保留旧安装；由于已加载的部分 Lisp 无法回滚，重试前需要重启。同一依赖不要混用源码检出和包安装。详见[安装参考](https://etaf.top/zh-cn/introduction/#安装)。下面的源码检出说明面向开发者。
 
@@ -78,7 +74,7 @@ Emacs 包会自动安装，但原生 `telega-server` 不会：先安装 TDLib，
 | [etaf-ncm](https://github.com/emacs-taf/etaf-ncm) | 网易云音乐播放器：曲库浏览、播放控制、歌词与队列 | etaf、etaf-ui、ebox |
 | [etaf-weread](https://github.com/emacs-taf/etaf-weread) | 微信读书客户端：书架、笔记本、划线、书店搜索与统计 | etaf、etaf-ui、etaf-db、ebox |
 | [etaf-md](https://github.com/emacs-taf/etaf-md) | Emacs 原生 Markdown 全语法与拓展容器渲染器：居中版心、完整网格表格、35+ `:::` 拓展容器与交互组件、内置 QuickJS 零浏览器 Mermaid/MathJax 矢量渲染、双栏实时对照预览 | etaf、etaf-ui、ebox |
-| [etaf-org-preview](https://github.com/emacs-taf/etaf-org-preview) | Org 阅读视图：结构折叠、标题关键字与计划、列表、表格、代码、提示块、脚注与目录 | etaf、etaf-ui、ebox |
+| [etaf-org](https://github.com/emacs-taf/etaf-org) | Org 阅读视图与活文档引擎：完整 Org 语法、可扩展节点与样式规则、编辑/活文档组件、Mermaid/KaTeX 渲染、独立大纲侧窗与 O(Δ) 双栏实时预览 | etaf、etaf-ui、ebox |
 | [etaf-rss](https://github.com/emacs-taf/etaf-rss) | RSS 阅读器：订阅、分组、未读与收藏、阅读栏、搜索与 OPML，可读本地存储或 Miniflux 服务器 | etaf、etaf-ui、ebox |
 | [maillist](https://github.com/emacs-taf/maillist) | 邮件列表客户端：public-inbox 主题列表、未读与星标、固定顶栏阅读、本地状态与 smtpmail 回复 | etaf、etaf-ui、etaf-db、ebox |
 | [etaf-reader](https://github.com/emacs-taf/etaf-reader) | 本地电子书阅读器：EPUB/TXT/Markdown/HTML/FB2/PDF 导入、翻页阅读、标注与进度 | etaf、etaf-ui、etaf-db、ebox |
