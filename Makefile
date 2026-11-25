@@ -44,13 +44,17 @@ clean:
 	@set -e; order="$$($(PACKAGE_ORDER))"; for repo in $$order; do $(MAKE) -C "packages/$$repo" clean; done
 
 RELEASE_DIR ?= /tmp/etaf-release
-.PHONY: installer-compile release-build release-check release-publish release-tool-tests
+.PHONY: installer-compile release-build release-drift release-check release-check-full release-publish release-tool-tests
 installer-compile:
 	python3 scripts/elisp.py run --emacs "$(EMACS)" -L . -e '(require (quote bytecomp)) (let ((byte-compile-error-on-warn t)) (dolist (file (quote ("etaf-install.el" "scripts/install-smoke.el"))) (unless (byte-compile-file file) (error "Compilation failed: %s" file))))'
 release-build:
 	python3 scripts/package-release.py build --directory "$(RELEASE_DIR)"
+release-drift:
+	python3 scripts/archive-drift.py --directory "$(RELEASE_DIR)"
 release-check:
-	python3 scripts/package-release.py verify --directory "$(RELEASE_DIR)" --emacs "$(EMACS)"
+	python3 scripts/package-release.py verify --directory "$(RELEASE_DIR)" --emacs "$(EMACS)" --scope auto
+release-check-full:
+	python3 scripts/package-release.py verify --directory "$(RELEASE_DIR)" --emacs "$(EMACS)" --scope full
 release-publish:
 	python3 scripts/package-release.py publish --directory "$(RELEASE_DIR)"
 release-tool-tests:

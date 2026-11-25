@@ -482,5 +482,61 @@ class PackageReleasePublishedTests(unittest.TestCase):
         self.assertIn("error=release", result.stderr)
 
 
+class PackageReleaseAutoScopeTests(unittest.TestCase):
+    """Auto scope checks immutable drift before Emacs runs and narrows to changed targets."""
+
+    def make_archive(self, directory, packages):
+        directory.mkdir(parents=True, exist_ok=True)
+        for p in packages:
+            (directory / p["file"]).write_bytes(p["_bytes"])
+        public = [{k: v for k, v in p.items() if not k.startswith("_")} for p in packages]
+        sys.path.insert(0, str(ROOT / "scripts"))
+        import package_archive
+        package_archive.write_index(directory, public)
+
+    def pkg(self, name, version, reqs, body):
+        digest = hashlib.sha256(body).hexdigest()
+        return {"name": name, "version": version, "requirements": reqs,
+                "summary": name, "file": f"{name}-{version}.tar",
+                "sha256": digest, "_bytes": body}
+
+    def test_auto_scope_fails_fast_listing_all_drifting_packages(self):
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            live = base / "live"
+            built = base / "built"
+            self.make_archive(live, [
+                self.pkg("etaf-install", "0.2.0", [["emacs", "29.1"]], b"inst-old"),
+                self.pkg("maillist", "0.4.2", [["emacs", "29.1"]], b"mail-old"),
+            ])
+            self.make_archive(built, [
+                self.pkg("etaf-install", "0.2.0", [["emacs", "29.1"]], b"inst-new"),
+                self.pkg("maillist", "0.4.2", [["emacs", "29.1"]], b"mail-new"),
+            ])
+            with self.assertRaises(ValueError) as caught:
+                release_module().resolve_auto_scope(built, ["maillist"], live.as_uri() + "/")
+            msg = str(caught.exception)
+            self.assertIn("bump etaf-install past 0.2.0", msg)
+            self.assertIn("bump maillist past 0.4.2", msg)
+
+    def test_auto_scope_narrows_to_changed_leaf_and_dependents(self):
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            live = base / "live"
+            built = base / "built"
+            inst = self.pkg("etaf-install", "0.2.0", [["emacs", "29.1"]], b"inst-same")
+            etaf = self.pkg("etaf", "0.3.8", [["emacs", "29.1"]], b"etaf-same")
+            mail = self.pkg("maillist", "0.4.3", [["etaf", "0.3.8"]], b"mail-same")
+            md_old = self.pkg("etaf-md", "0.2.1", [["etaf", "0.3.8"]], b"md-old")
+            md_new = self.pkg("etaf-md", "0.3.0", [["etaf", "0.3.8"]], b"md-new")
+            self.make_archive(live, [inst, etaf, mail, md_old])
+            self.make_archive(built, [inst, etaf, mail, md_new])
+            scope, targets, reason = release_module().resolve_auto_scope(
+                built, ["etaf", "maillist", "etaf-md"], live.as_uri() + "/")
+            self.assertEqual(scope, "selected")
+            self.assertEqual(targets, ["etaf-md"])
+            self.assertIn("etaf-md", reason)
+
+
 if __name__ == "__main__":
     unittest.main()

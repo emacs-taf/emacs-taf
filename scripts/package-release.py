@@ -46,6 +46,78 @@ STANDARD_ARCHIVE_CACHE = Path(os.environ.get(
 # five minutes on a quiet machine, and this gate decides correctness, not
 # latency.
 INSTALL_TIMEOUT = 900
+DEFAULT_ARCHIVE_URL = "https://etaf.top/packages/"
+PROXY_ENV_VARS = (
+    "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY",
+    "http_proxy", "https_proxy", "all_proxy", "no_proxy",
+)
+
+
+def direct_urlopen(url, timeout=30):
+    """Open URL bypassing shell proxy env vars that break localhost or etaf.top."""
+    from urllib.request import ProxyHandler, build_opener
+    return build_opener(ProxyHandler({})).open(url, timeout=timeout)
+
+
+def resolve_auto_scope(directory, declared_targets, live_url):
+    """Compare DIRECTORY against LIVE_URL before running Emacs verification.
+
+    1) Fail fast if ANY built package modifies bytes under an already-published
+       version (avoids wasting an entire install matrix + SSH upload only to
+       discover immutable drift on the archive host).
+    2) When only a subset of packages changed (and not etaf-install), narrow
+       verification to the changed targets and their transitive dependents.
+    Returns (scope, targets, reason).
+    """
+    manifest = package_archive.verify(directory)
+    url = live_url.rstrip("/")
+    if not url.endswith(".json"):
+        url = url + "/manifest.json"
+    try:
+        with direct_urlopen(url, timeout=20) as response:
+            live = json.loads(response.read())
+    except Exception:
+        return "full", list(declared_targets), None
+
+    live_by_file = {item["file"]: item["sha256"] for item in live.get("packages", ())}
+    live_by_name = {item["name"]: item["sha256"] for item in live.get("packages", ())}
+    built = {item["name"]: item for item in manifest["packages"]}
+
+    drifting = [
+        (item["name"], item["version"])
+        for item in sorted(manifest["packages"], key=lambda x: x["name"])
+        if item["file"] in live_by_file and live_by_file[item["file"]] != item["sha256"]
+    ]
+    if drifting:
+        lines = [f"  bump {name} past {ver}" for name, ver in drifting]
+        raise ValueError(
+            f"Immutable package(s) differ from {url}; bump Version before verifying:\n"
+            + "\n".join(lines)
+        )
+
+    changed = {name for name, item in built.items() if live_by_name.get(name) != item["sha256"]}
+    if not changed or "etaf-install" in changed:
+        return "full", list(declared_targets), None
+
+    def installed_closure(name):
+        found, stack = set(), [dep for dep, _ver in built.get(name, {}).get("requirements", ())]
+        while stack:
+            dep = stack.pop()
+            if dep not in found:
+                found.add(dep)
+                stack.extend(d for d, _v in built.get(dep, {}).get("requirements", ()))
+        return found
+
+    community_only = set(manifest.get("community", {}))
+    all_candidates = list(dict.fromkeys([*declared_targets, *sorted(community_only)]))
+    selected = [
+        name for name in all_candidates
+        if name != "etaf-install" and (name in changed or bool(installed_closure(name) & changed))
+    ]
+    if not selected or set(selected) >= {n for n in all_candidates if n != "etaf-install"}:
+        return "full", list(declared_targets), None
+    reason = "shipped bytes changed for " + ", ".join(sorted(changed))
+    return "selected", selected, reason
 
 
 def checkpoint_sources(document):
@@ -504,6 +576,10 @@ def check_installation(directory, emacs, target, entry, names, community, standa
         env.pop("ETAF_INSTALL_STANDARD_ARCHIVES", None)
         if standard_base:
             env["ETAF_INSTALL_STANDARD_ARCHIVES"] = standard_base
+            # Emacs url.el ignores NO_PROXY and routes 127.0.0.1 through system
+            # proxies, causing spurious gnutls-error failures during local gates.
+            for var in PROXY_ENV_VARS:
+                env.pop(var, None)
         if entry == "package-install":
             env["ETAF_INSTALL_DIRECT"] = "1"
         started = time.monotonic()
@@ -543,7 +619,7 @@ def standard_snapshot(explicit, emacs, refresh=False):
 
 
 def verify(directory, emacs, targets, paths=("etaf-install",), standard_archives=None,
-           scope="full", jobs=None, reason=None):
+           scope="full", jobs=None, reason=None, live_url=DEFAULT_ARCHIVE_URL):
     """Exercise PATHS in separate disposable profiles.
 
     `etaf-install' is the documented entry, and it installs through package.el,
@@ -560,6 +636,12 @@ def verify(directory, emacs, targets, paths=("etaf-install",), standard_archives
     report = directory / "installation.json"
     report.unlink(missing_ok=True)
     manifest = package_archive.verify(directory)
+    if scope == "auto":
+        scope, targets, auto_reason = resolve_auto_scope(directory, targets, live_url)
+        reason = reason or auto_reason
+        if scope == "selected":
+            print(f"Auto-selected {len(targets)} target(s): {', '.join(targets)} ({reason})",
+                  flush=True)
     names = [item["name"] for item in manifest["packages"]]
     manifest_digest = hashlib.sha256((directory / "manifest.json").read_bytes()).hexdigest()
     standard_digest = None
@@ -575,10 +657,12 @@ def verify(directory, emacs, targets, paths=("etaf-install",), standard_archives
         # open it and cannot check its capabilities, so it is verified through
         # package.el only, which is how a visitor installs it.
         community_only = set(manifest.get("community", {}))
-        pairs = installation_pairs([*targets, *community_only], paths, community_only)
-        # Each profile byte-compiles the same tree, so a few at a time keeps
-        # the machine responsive; more workers mostly add contention.
-        workers = max(1, min(jobs or 4, len(pairs)))
+        run_targets = list(targets) if scope == "selected" else [*targets, *community_only]
+        pairs = installation_pairs(run_targets, paths, community_only)
+        # Scale parallelism to available CPUs (capped at 8) to keep gates fast
+        # without saturating the machine.
+        default_jobs = min(os.cpu_count() or 4, 8)
+        workers = max(1, min(jobs or default_jobs, len(pairs)))
         with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
             futures = {pool.submit(check_installation, directory, emacs, target, entry,
                                    names, community_only, standard_base, smoke): (target, entry)
@@ -619,8 +703,7 @@ def published(url):
     The manifest, not a hand-kept list, is the answer to "what is published";
     this command exists so nobody has to curl and eyeball it.
     """
-    from urllib.request import urlopen
-    with urlopen(url.rstrip("/") + "/manifest.json", timeout=30) as response:
+    with direct_urlopen(url.rstrip("/") + "/manifest.json", timeout=30) as response:
         manifest = json.loads(response.read())
     if manifest.get("schema") != 2 or not manifest.get("packages"):
         raise ValueError("The archive does not serve a schema 2 manifest")
@@ -758,8 +841,10 @@ def main():
                                  default="etaf-install",
                                  help="Installation paths to verify (default: etaf-install)")
             command.add_argument("--target", action="append")
-            command.add_argument("--scope", choices=("full", "selected"), default="full",
-                                 help="Record a full gate or a gate of the named targets")
+            command.add_argument("--scope", choices=("full", "selected", "auto"), default="full",
+                                 help="Record a full gate, a named selection, or auto-select changed targets with drift preflight")
+            command.add_argument("--live-url", default=DEFAULT_ARCHIVE_URL,
+                                 help="Live archive URL used by --scope auto for drift preflight and change selection")
             command.add_argument("--reason", help="Why a selected gate covers these targets")
             command.add_argument("--standard-archives", type=Path,
                                  help="Serve this prefetched snapshot instead of the cached one")
@@ -788,7 +873,7 @@ def main():
                standard_snapshot(
                    args.standard_archives.resolve() if args.standard_archives else None,
                    args.emacs, args.refresh_standard_archives),
-               args.scope, args.jobs, args.reason)
+               args.scope, args.jobs, args.reason, args.live_url)
     elif args.command == "stage":
         stage(args.directory.resolve(), args.output.resolve())
     elif args.command == "published":

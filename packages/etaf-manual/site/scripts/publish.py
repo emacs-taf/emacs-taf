@@ -104,9 +104,10 @@ def published_digests(url="https://etaf.top/packages/manifest.json", timeout=30)
     An unreadable manifest means nothing is reused: the deployment then behaves
     exactly as it did before the manifest was consulted.
     """
-    from urllib.request import urlopen
+    from urllib.request import ProxyHandler, build_opener
     try:
-        with urlopen(url, timeout=timeout) as response:
+        opener = build_opener(ProxyHandler({}))
+        with opener.open(url, timeout=timeout) as response:
             manifest = json.loads(response.read())
     except Exception:
         return {}
@@ -194,10 +195,12 @@ def publish(args):
             if archive_input:
                 # The deployer proves served bytes; this proves the pages say
                 # what the manifest means, so a grouping mistake cannot ship.
+                direct_env = {k: v for k, v in os.environ.items()
+                              if k.lower() not in ("http_proxy", "https_proxy", "all_proxy", "no_proxy")}
                 checked = subprocess.run(
                     [sys.executable, str(SITE / "scripts/check-archive.py"),
                      "--archive", "https://etaf.top/packages/"],
-                    capture_output=True, text=True, timeout=120)
+                    capture_output=True, text=True, timeout=120, env=direct_env)
                 print(checked.stdout.strip())
                 if checked.returncode:
                     raise ValueError(f"Published pages do not match the manifest:\n{checked.stdout}")

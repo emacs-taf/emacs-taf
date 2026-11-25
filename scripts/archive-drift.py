@@ -13,7 +13,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from urllib.request import urlopen
+from urllib.request import ProxyHandler, build_opener
 
 DEFAULT_URL = "https://etaf.top/packages/manifest.json"
 
@@ -21,7 +21,8 @@ DEFAULT_URL = "https://etaf.top/packages/manifest.json"
 def served_digests(url=DEFAULT_URL, timeout=30):
     """Return {file: sha256} for the archive URL currently serves, or {}."""
     try:
-        with urlopen(url, timeout=timeout) as response:
+        opener = build_opener(ProxyHandler({}))
+        with opener.open(url, timeout=timeout) as response:
             manifest = json.loads(response.read())
     except Exception:
         return {}
