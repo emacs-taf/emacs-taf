@@ -594,6 +594,9 @@ installed.  With NO-CONFIRM, skip the prompt."
 (defvar-local etaf-install--manage-cache nil
   "Cached status plists for the ETAF Packages buffer.")
 
+(defvar-local etaf-install--manage-last-status nil
+  "Pending status headline set by a manage action for `post-command-hook'.")
+
 (defun etaf-install--manage-statuses ()
   "Return cached target status plists for this buffer."
   (or etaf-install--manage-cache
@@ -664,14 +667,63 @@ installed.  With NO-CONFIRM, skip the prompt."
                    (etaf-install--manage-dependency-cell status))))
    (etaf-install--manage-statuses)))
 
+(defconst etaf-install--manage-keys
+  '(("i" . "install")
+    ("u" . "update")
+    ("U" . "update all")
+    ("d" . "remove")
+    ("RET" . "open")
+    ("?" . "doctor")
+    ("g" . "refresh")
+    ("l" . "packages")
+    ("q" . "quit"))
+  "Key-to-action hint pairs shown in the ETAF Packages buffer.")
+
+(defconst etaf-install--manage-mode-line-tiers
+  (list etaf-install--manage-keys
+        '(("i" . "install")
+          ("u" . "update")
+          ("d" . "remove")
+          ("RET" . "open")
+          ("g" . "refresh")
+          ("q" . "quit"))
+        '(("i") ("d") ("RET") ("g") ("q"))
+        '(("C-h m" . "keys")))
+  "Mode-line key hint tiers as lists of (KEY . LABEL), longest first.")
+
 (defconst etaf-install--manage-key-hints
-  '("i install · u update · U update all · d remove · RET open · ? doctor · g refresh · l packages · q quit"
-    "i install · u update · d remove · RET open · g refresh · q quit"
-    "i · d · RET · g · q"
-    "C-h m keys")
-  "Key hints for the mode line, longest first.
-The longest one that fits next to the summary and the refresh button is shown,
-so a narrow frame never drops the keys entirely.")
+  (mapcar (lambda (tier)
+            (mapconcat (lambda (entry)
+                         (if (cdr entry)
+                             (format "%s %s" (car entry) (cdr entry))
+                           (car entry)))
+                       tier " · "))
+          etaf-install--manage-mode-line-tiers)
+  "Plain-text key hints for the mode line, longest first.
+The longest hint list that fits beside a summary and the refresh button wins,
+so narrow windows keep actionable keys visible instead of collapsing early.")
+
+(defconst etaf-install--manage-action-commands
+  '(etaf-install--manage-install
+    etaf-install--manage-update
+    etaf-install--manage-update-all
+    etaf-install--manage-remove
+    etaf-install--manage-refresh-archives)
+  "Manage commands whose own status message is kept above the key hints.")
+
+(defun etaf-install--manage-format-tier (tier &optional help-echo)
+  "Format TIER of (KEY . LABEL) pairs with high-contrast key faces.
+When HELP-ECHO is non-nil, attach it as the tooltip text."
+  (let ((text (mapconcat
+               (lambda (entry)
+                 (let ((key (propertize (car entry) 'face 'help-key-binding)))
+                   (if (cdr entry)
+                       (concat key " " (cdr entry))
+                     key)))
+               tier " · ")))
+    (if help-echo
+        (propertize text 'help-echo help-echo)
+      text)))
 
 (defvar etaf-install--manage-refresh-map
   (let ((map (make-sparse-keymap)))
@@ -703,65 +755,128 @@ so a narrow frame never drops the keys entirely.")
   "Return the mode line for the ETAF Packages buffer.
 The buffer holds the table only: the summary, the keys and the refresh button
 sit on this line, so no second window is needed to show them.  The longest
-summary that still leaves room for a key hint wins, so the keys stay visible in
-a narrow window instead of being cut off."
+hint list that still leaves room for a summary wins, so the keys stay visible
+in a narrow window instead of being cut off."
   (let* ((button (propertize " Refresh " 'face 'mode-line-highlight
                              'mouse-face 'highlight
                              'keymap etaf-install--manage-refresh-map
                              'help-echo "Refresh package archives (g)"))
-         (fitted (cl-loop for summary in (reverse (etaf-install--manage-summaries))
-                          for room = (- (window-width) (length summary) (length button) 2)
-                          for hints = (cl-find-if (lambda (text) (<= (length text) room))
-                                                  etaf-install--manage-key-hints)
-                          when hints
-                          collect (cons summary hints) into found
-                          finally return (or (car (last found))
-                                             (cons (car (etaf-install--manage-summaries)) nil))))
+         (summaries (etaf-install--manage-summaries))
+         (full-help (car etaf-install--manage-key-hints))
+         (fitted (cl-loop for tier in etaf-install--manage-mode-line-tiers
+                          for hints = (etaf-install--manage-format-tier tier full-help)
+                          for room = (- (window-width) (length hints) (length button) 3)
+                          for summary = (cl-find-if (lambda (text) (<= (length text) room))
+                                                    summaries)
+                          when summary
+                          return (cons summary hints)
+                          finally return (cons (car (last summaries)) nil)))
          (summary (car fitted))
          (hints (cdr fitted))
          (padding (max 1 (- (window-width) (length summary) (length hints)
                             (length button) (if hints 1 0)))))
     (concat (propertize summary 'face 'mode-line-buffer-id)
             (make-string padding ?\s)
-            (when hints (concat (propertize hints 'face 'shadow) " "))
+            (when hints (concat hints " "))
             button)))
 
-(defun etaf-install--manage-show-current ()
-  "Describe the target at point in the echo area."
+(defun etaf-install--manage-format-key-hints (&optional width)
+  "Return the formatted keybinding hint string for the echo area.
+When WIDTH is positive, wrap between items so no hint breaks across lines."
+  (let* ((sep (propertize " · " 'face 'shadow))
+         (sep-width (string-width sep))
+         (limit (or width (if noninteractive 120 (max 20 (- (frame-width) 2)))))
+         (lines nil)
+         (line "")
+         (line-width 0))
+    (dolist (entry etaf-install--manage-keys)
+      (let* ((item (concat (propertize (car entry) 'face 'help-key-binding)
+                           " "
+                           (cdr entry)))
+             (item-width (string-width item)))
+        (cond
+         ((= line-width 0)
+          (setq line item
+                line-width item-width))
+         ((<= (+ line-width sep-width item-width) limit)
+          (setq line (concat line sep item)
+                line-width (+ line-width sep-width item-width)))
+         (t
+          (push line lines)
+          (setq line item
+                line-width item-width)))))
+    (when (> line-width 0)
+      (push line lines))
+    (mapconcat #'identity (nreverse lines) "\n")))
+
+(defun etaf-install--manage-current-summary ()
+  "Return the single-line summary for the target at point, or nil."
   (let ((package (tabulated-list-get-id)))
     (when package
       (let ((status (cl-find package (etaf-install--manage-statuses)
                              :key (lambda (item) (plist-get item :package)))))
         (when status
-          (message "%s — %s%s%s"
-                   (plist-get status :label)
-                   (plist-get status :runtime)
-                   (if (plist-get status :remedy)
-                       (format " · %s" (plist-get status :remedy))
-                     "")
-                   (if (plist-get status :dependencies)
-                       (format " · depends: %s"
-                               (mapconcat #'symbol-name
-                                          (plist-get status :dependencies) " · "))
-                     "")))))))
+          (format "%s — %s%s%s"
+                  (plist-get status :label)
+                  (plist-get status :runtime)
+                  (if (plist-get status :remedy)
+                      (format " · %s" (plist-get status :remedy))
+                    "")
+                  (if (plist-get status :dependencies)
+                      (format " · depends: %s"
+                              (mapconcat #'symbol-name
+                                         (plist-get status :dependencies) " · "))
+                    "")))))))
+
+(defun etaf-install--manage-echo (headline)
+  "Display HEADLINE (when non-nil) and the manage key hints in the echo area."
+  (let ((hints (etaf-install--manage-format-key-hints))
+        (message-log-max nil))
+    (if (and headline (not (string-empty-p headline)))
+        (message "%s\n%s" headline hints)
+      (message "%s" hints))))
+
+(defun etaf-install--manage-show-current (&optional headline)
+  "Describe the target at point and show key hints in the echo area.
+When HEADLINE is non-nil, show it above the key hints instead of the
+target summary."
+  (etaf-install--manage-echo
+   (or headline (etaf-install--manage-current-summary))))
+
+(defun etaf-install--manage-post-command ()
+  "Refresh the echo-area target summary and key hints after a command."
+  (let ((pending etaf-install--manage-last-status))
+    (setq etaf-install--manage-last-status nil)
+    (unless (or (active-minibuffer-window)
+                (eq this-command 'etaf-install--manage-quit))
+      (let ((msg (or pending (current-message))))
+        (cond
+         ((and msg (memq this-command etaf-install--manage-action-commands))
+          (etaf-install--manage-echo (car (split-string msg "\n"))))
+         ((and this-command msg (not (eq this-command 'etaf-install-manage)))
+          nil)
+         (t
+          (etaf-install--manage-show-current)))))))
 
 (defun etaf-install--manage-current-target ()
   "Return the target at point or signal a user error."
   (or (tabulated-list-get-id)
       (user-error "No ETAF target on this line")))
 
-(defun etaf-install--manage-reprint ()
-  "Invalidate the cache and reprint the manage buffer."
+(defun etaf-install--manage-reprint (&optional headline)
+  "Invalidate the cache and reprint the manage buffer.
+When HEADLINE is non-nil, display it above the key hints in the echo area."
   (etaf-install--manage-invalidate)
   (tabulated-list-revert)
-  (etaf-install--manage-show-current))
+  (setq etaf-install--manage-last-status headline)
+  (etaf-install--manage-show-current headline))
 
 (defun etaf-install--manage-install ()
   "Install the target at point."
   (interactive)
   (let ((package (etaf-install--manage-current-target)))
     (etaf-install package t)
-    (etaf-install--manage-reprint)))
+    (etaf-install--manage-reprint (current-message))))
 
 (defun etaf-install--manage-update ()
   "Update the target at point."
@@ -782,7 +897,7 @@ a narrow window instead of being cut off."
   (interactive)
   (let ((package (etaf-install--manage-current-target)))
     (etaf-install-remove package)
-    (etaf-install--manage-reprint)))
+    (etaf-install--manage-reprint (current-message))))
 
 (defun etaf-install--manage-open ()
   "Open the installed target at point."
@@ -807,8 +922,9 @@ a narrow window instead of being cut off."
   (unless package--initialized (package-initialize))
   (etaf-install--refresh-archives
    (cons 'etaf-install (etaf-install--installed-targets)))
-  (etaf-install--manage-reprint)
-  (message "ETAF: package archives refreshed"))
+  (let ((status-message "ETAF: package archives refreshed"))
+    (message "%s" status-message)
+    (etaf-install--manage-reprint status-message)))
 
 (defun etaf-install--manage-list-packages ()
   "Open the standard package menu beside the ETAF list.
@@ -848,7 +964,7 @@ reopened."
   (setq tabulated-list-padding 1)
   (setq tabulated-list-sort-key nil)
   (add-hook 'tabulated-list-revert-hook #'etaf-install--manage-invalidate nil t)
-  (add-hook 'post-command-hook #'etaf-install--manage-show-current nil t)
+  (add-hook 'post-command-hook #'etaf-install--manage-post-command nil t)
   (setq-local mode-line-format '(:eval (etaf-install--manage-mode-line)))
   (hl-line-mode 1)
   (tabulated-list-init-header))
@@ -858,10 +974,11 @@ reopened."
   "Show and manage installed and available ETAF targets.
 The buffer is the whole interface: a native tabulated list of every target with
 its status, versions, runtime and dependencies, plus the archive's community
-packages.  `i' installs, `u' updates, `U' updates all, `d' removes, RET
-opens, `?' reports capabilities, `g' refreshes the archives, `l' shows the
-standard package menu and `q' quits.  Removal deletes package files only;
-application data, logins and caches stay."
+packages.  The echo area shows the selected target's details and the key hints.
+`i' installs, `u' updates, `U' updates all, `d' removes, RET opens, `?'
+reports capabilities, `g' refreshes the archives, `l' shows the standard
+package menu and `q' quits.  Removal deletes package files only; application
+data, logins and caches stay."
   (interactive)
   (unless package--initialized (package-initialize))
   (etaf-install--archive)
