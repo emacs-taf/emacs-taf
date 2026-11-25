@@ -1,0 +1,38 @@
+{
+  "schema": 1,
+  "load_path": [
+    ".",
+    "lisp",
+    "tests",
+    "../ebox",
+    "../ecss",
+    "../ekp",
+    "../etaf",
+    "../etaf-ui",
+    "../etaf-posframe",
+    "../etaf-ext"
+  ],
+  "support": [],
+  "cases": [
+    {
+      "name": "etaf-export-registers-with-etaf-ext-and-exposes-key-layer",
+      "file": "tests/etaf-export-tests.el",
+      "purpose": "etaf-export registers cleanly with etaf-ext (icon, tone, commands), contributes export bindings to etaf-help-data, opens its floating popup, and reports rsvg-convert status via etaf-export-doctor."
+    },
+    {
+      "name": "etaf-export-svg-and-pdf-paginated-a4-single-and-light-remap",
+      "file": "tests/etaf-export-tests.el",
+      "purpose": "etaf-export exports a mounted multi-section dark ETAF page to multi-page A4 PDF, continuous single-page PDF, and light-remapped white-paper SVG/PDF without mutating the live buffer."
+    },
+    {
+      "name": "etaf-export-embeds-vector-svg-with-scoped-ids-and-raster-images",
+      "file": "tests/etaf-export-tests.el",
+      "purpose": "etaf-export embeds inline vector SVG graphics with scoped fragment IDs (avoiding rasterization) alongside PNG images and produces a valid vector PDF."
+    },
+    {
+      "name": "etaf-export-signals-structured-errors-for-invalid-inputs",
+      "file": "tests/etaf-export-tests.el",
+      "purpose": "etaf-export-pdf and etaf-export-svg reject invalid page-mode, theme, missing runtime or missing rsvg-convert with etaf-export-error."
+    }
+  ]
+}

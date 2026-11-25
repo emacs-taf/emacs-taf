@@ -37,10 +37,30 @@
       "branch": "main",
       "role": "application"
     },
+    "etaf-export": {
+      "url": "https://github.com/emacs-taf/etaf-export.git",
+      "branch": "main",
+      "role": "extension"
+    },
+    "etaf-ext": {
+      "url": "https://github.com/emacs-taf/etaf-ext.git",
+      "branch": "main",
+      "role": "framework"
+    },
     "etaf-gamekit": {
       "url": "https://github.com/emacs-taf/etaf-gamekit.git",
       "branch": "main",
       "role": "framework"
+    },
+    "etaf-highlight": {
+      "url": "https://github.com/emacs-taf/etaf-highlight.git",
+      "branch": "main",
+      "role": "extension"
+    },
+    "etaf-hints": {
+      "url": "https://github.com/emacs-taf/etaf-hints.git",
+      "branch": "main",
+      "role": "extension"
     },
     "etaf-manual": {
       "url": "https://github.com/emacs-taf/etaf-manual.git",
@@ -96,6 +116,11 @@
       "url": "https://github.com/emacs-taf/etaf-telega.git",
       "branch": "main",
       "role": "application"
+    },
+    "etaf-translate": {
+      "url": "https://github.com/emacs-taf/etaf-translate.git",
+      "branch": "main",
+      "role": "extension"
     },
     "etaf-ui": {
       "url": "https://github.com/emacs-taf/etaf-ui.git",

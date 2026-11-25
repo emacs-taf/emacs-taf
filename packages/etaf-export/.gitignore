@@ -1,0 +1,6 @@
+*.elc
+lisp/*.elc
+tests/*.elc
+*~
+.#*
+\#*#

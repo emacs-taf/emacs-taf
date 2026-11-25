@@ -27,6 +27,10 @@
     "entry": "etaf-desktop",
     "url": "https://github.com/emacs-taf/etaf-desktop.git"
   },
+  "etaf-ext": {
+    "entry": "etaf-ext",
+    "url": "https://github.com/emacs-taf/etaf-ext.git"
+  },
   "etaf-gamekit": {
     "entry": "etaf-gamekit",
     "url": "https://github.com/emacs-taf/etaf-gamekit.git"
@@ -42,6 +46,10 @@
   "etaf-posframe": {
     "entry": "etaf-posframe",
     "url": "https://github.com/emacs-taf/etaf-posframe.git"
+  },
+  "etaf-translate": {
+    "entry": "etaf-translate",
+    "url": "https://github.com/emacs-taf/etaf-translate.git"
   },
   "etaf-ui": {
     "entry": "etaf-ui",

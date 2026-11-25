@@ -78,7 +78,7 @@ def main():
     parser.add_argument('--url', required=True, help='repository the package publishes to')
     parser.add_argument('--branch', default='main')
     parser.add_argument('--role', default='application',
-                        choices=('framework', 'application', 'game'))
+                        choices=('framework', 'extension', 'application', 'game'))
     parser.add_argument('--dry-run', action='store_true', help='print the steps instead')
     args = parser.parse_args()
 

@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "load_path": [
+    ".",
+    "tests",
+    "../ebox",
+    "../ecss",
+    "../ekp",
+    "../etaf",
+    "../etaf-ui",
+    "../etaf-ext",
+    "../etaf-hints",
+    "../etaf-translate"
+  ],
+  "support": [],
+  "cases": [
+    {
+      "name": "etaf-highlight-decorates-notes-and-persists-across-remount",
+      "file": "tests/etaf-highlight-tests.el",
+      "purpose": "etaf-highlight paints theme-adapted span faces and companion note cards, persists per URI in SQLite, auto-restores across remount, and deletes cleanly."
+    },
+    {
+      "name": "etaf-highlight-coexists-with-translate-and-hints-packages",
+      "file": "tests/etaf-highlight-tests.el",
+      "purpose": "Independent packages etaf-highlight, etaf-hints, and etaf-translate coexist simultaneously on the same paragraph through etaf-ext, tear down independently, and obey Pure Mode."
+    }
+  ]
+}

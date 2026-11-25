@@ -1,0 +1,55 @@
+{
+  "schema": 1,
+  "load_path": [
+    ".",
+    "tests",
+    "../ebox",
+    "../ecss",
+    "../ekp",
+    "../etaf",
+    "../etaf-ui"
+  ],
+  "support": [],
+  "cases": [
+    {
+      "name": "etaf-ext-manifest-validation-matching-and-per-app-policies",
+      "file": "tests/etaf-ext-tests.el",
+      "purpose": "Manifest validation rejects invalid specs; Runtime matching reacts to metadata updates and respects persisted per-app allow and deny policies."
+    },
+    {
+      "name": "etaf-ext-strict-permission-gating-on-context-primitives",
+      "file": "tests/etaf-ext-tests.el",
+      "purpose": "Every permission-gated context primitive signals etaf-ext-permission-error when the extension manifest omits its required capability."
+    },
+    {
+      "name": "etaf-ext-isolated-sqlite-storage-and-memory-fallback",
+      "file": "tests/etaf-ext-tests.el",
+      "purpose": "Per-extension KV storage isolates namespaces across extensions, persists via SQLite WAL when available, and degrades cleanly to in-memory storage."
+    },
+    {
+      "name": "etaf-ext-shared-tree-cache-circuit-breaker-and-pure-mode",
+      "file": "tests/etaf-ext-tests.el",
+      "purpose": "Host tree snapshots share across extensions per commit revision, consecutive failures trip the circuit breaker and clean up without affecting siblings, and Pure Mode hides and restores extensions cleanly."
+    },
+    {
+      "name": "etaf-ext-multi-owner-decorate-companion-overlay-and-theme",
+      "file": "tests/etaf-ext-tests.el",
+      "purpose": "Independent extensions coexist across decorate, priority-ordered companions and root overlays via public etaf-ext primitives and tear down independently."
+    },
+    {
+      "name": "etaf-ext-manager-ui-opens-filters-toggles-and-closes-cleanly",
+      "file": "tests/etaf-ext-tests.el",
+      "purpose": "etaf-ext-manage opens with preserved mode-line targeting a live Runtime, reflects extension key layers in etaf-help-data, syncs live enablement changes, and disposes cleanly."
+    },
+    {
+      "name": "etaf-ext-key-conflict-firewall-overrides-and-unified-dispatch",
+      "file": "tests/etaf-ext-tests.el",
+      "purpose": "Key resolver blocks global-prefix, global-key, printing-char and lower-priority extension conflicts, executes commands through the unified two-step prefix dispatcher, enforces keybinding policies, and persists user overrides."
+    },
+    {
+      "name": "etaf-ext-activity-and-notify-bridge",
+      "file": "tests/etaf-ext-tests.el",
+      "purpose": "Extensions publish runtime-scoped live activities that auto-clean on detach and route etaf-ext-notify through etaf-notify."
+    }
+  ]
+}

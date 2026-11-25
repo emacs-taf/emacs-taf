@@ -1,7 +1,7 @@
 ;;; -*- lexical-binding: t; -*-
 ;;; etaf-install.el --- Install ETAF with the Emacs package manager
 
-;; Version: 0.2.24
+;; Version: 0.2.25
 ;; Package-Requires: ((emacs "29.1"))
 ;; URL: https://github.com/emacs-taf/emacs-taf
 ;; Keywords: convenience
@@ -16,7 +16,7 @@
 ;; Function: etaf-install (&optional package no-open)
 ;; Install PACKAGE from the official archive and open its existing application.
 ;; Interactive use offers the supported targets grouped as framework,
-;; applications and games, with the component gallery as the default.  Each
+;; extensions, applications and games, with the component gallery as the default.  Each
 ;; target may expose a `<package>-doctor' returning the same :required and
 ;; :optional facts as `etaf-install-doctor', which are merged into its report.  NO-OPEN suppresses opening, for batch installation.  Return the
 ;; installed package symbol.  Already installed targets can be opened offline.
@@ -144,9 +144,14 @@ When nil, uses the pinned HTTPS mirrors declared in each package's
     ;; The window manager itself comes from MELPA, which the installer only
     ;; registers when a target asks for it.
     (etaf-posframe "Floating panel host" framework nil melpa)
+    (etaf-ext "Universal extension engine and manager" framework etaf-ext-manage melpa)
     (etaf "ETAF framework" framework nil)
     (etaf-db "ETAF SQLite backend" framework nil sqlite)
     (ekp "Knuth-Plass paragraph layout" framework nil)
+    (etaf-hints "Quick jump hints extension" extension nil melpa)
+    (etaf-highlight "Highlighter and notes extension" extension nil melpa)
+    (etaf-translate "Immersive page translation extension" extension nil melpa)
+    (etaf-export "Vector PDF and SVG export extension" extension nil melpa)
     (etaf-manual "ETAF reference manual" application etaf-manual-open)
     (etaf-md "Markdown reading view" application etaf-md-open)
     (etaf-org-preview "Org reading view" application etaf-org-preview-open)
@@ -161,7 +166,8 @@ When nil, uses the pinned HTTPS mirrors declared in each package's
     (etaf-xiangqi "Xiangqi" game etaf-xiangqi-open)
     (etaf-tanks "Tank battle" game etaf-tanks-open))
   "Installable targets as (PACKAGE LABEL GROUP OPEN &rest CAPABILITIES).
-GROUP groups the menu: `framework', `application' or `game'.  OPEN is the
+GROUP groups the menu: `framework', `extension', `application' or `game'.
+Only packages built on `etaf-ext' use `extension'.  OPEN is the
 command that presents the installed target, or nil.  CAPABILITIES lists extra
 required features, such as `sqlite'.")
 
@@ -245,13 +251,14 @@ so the ETAF manager and later upgrades through `M-x list-packages` resolve them.
       (user-error "Unsupported target %s; run M-x etaf-install to choose one" package)))
 
 (defconst etaf-install--group-labels
-  '((framework . "Framework") (application . "Application") (game . "Game"))
+  '((framework . "Framework") (extension . "Extension")
+    (application . "Application") (game . "Game"))
   "Menu prefix for each target group.")
 
 (defun etaf-install--target-choices ()
   "Return completion candidates as (LABEL . PACKAGE), grouped in menu order."
   (let (choices)
-    (dolist (group '(framework application game))
+    (dolist (group '(framework extension application game))
       (dolist (target (cl-remove-if-not (lambda (entry) (eq (nth 2 entry) group))
                                   (etaf-install--available-targets)))
         (push (cons (format "%s — %s (%s)"

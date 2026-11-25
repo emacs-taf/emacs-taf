@@ -1,0 +1,21 @@
+{
+  "schema": 1,
+  "load_path": [
+    ".",
+    "tests",
+    "../ebox",
+    "../ecss",
+    "../ekp",
+    "../etaf",
+    "../etaf-ui",
+    "../etaf-ext"
+  ],
+  "support": [],
+  "cases": [
+    {
+      "name": "etaf-hints-overlays-targets-activates-press-and-cleans-up",
+      "file": "tests/etaf-hints-tests.el",
+      "purpose": "etaf-hints exposes M-f via the extension key layer, overlays prefix-free codes on visible interactive Hosts, activates semantic press on input, and cleans up on completion or cancel."
+    }
+  ]
+}

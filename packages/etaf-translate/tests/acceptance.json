@@ -1,0 +1,96 @@
+{
+  "schema": 1,
+  "load_path": [
+    ".",
+    "tests",
+    "../ebox",
+    "../ecss",
+    "../ekp",
+    "../etaf",
+    "../etaf-ui",
+    "../etaf-ext"
+  ],
+  "support": [],
+  "cases": [
+    {
+      "name": "etaf-translate-rich-inline-preserves-links-code-and-malformed-fallback",
+      "file": "tests/etaf-translate-tests.el",
+      "purpose": "Rich paragraphs preserve inline code atoms, forward translated link presses to the original Host, and survive malformed tags without dropping text."
+    },
+    {
+      "name": "etaf-translate-exclusions-and-scope-control",
+      "file": "tests/etaf-translate-tests.el",
+      "purpose": "Content scope skips :translate no, code blocks, UI controls and target-language text, while full scope translates constrained chrome safely in place."
+    },
+    {
+      "name": "etaf-translate-instant-mode-style-cycling-uses-cache",
+      "file": "tests/etaf-translate-tests.el",
+      "purpose": "Switching styles and cycling bilingual-stacked, replace and off reuses L1 cache without extra engine requests."
+    },
+    {
+      "name": "etaf-translate-survives-live-reactive-commits-incrementally",
+      "file": "tests/etaf-translate-tests.el",
+      "purpose": "Application commits incrementally translate only newly added or edited paragraphs and dispose companions for removed items cleanly."
+    },
+    {
+      "name": "etaf-translate-async-cancellation-and-error-retry",
+      "file": "tests/etaf-translate-tests.el",
+      "purpose": "Disabling cancels in-flight async requests and ignores late replies, while failed units expose an isolated retry action."
+    },
+    {
+      "name": "etaf-translate-rules-l2-cache-and-provider-extensibility",
+      "file": "tests/etaf-translate-tests.el",
+      "purpose": "Declarative auto-translate rules, pluggable L2 cache persistence and virtualized content providers integrate through public APIs."
+    },
+    {
+      "name": "etaf-translate-real-markdown-document-with-table-and-code",
+      "file": "tests/etaf-translate-tests.el",
+      "purpose": "End-to-end translation of an etaf-ui-markdown document translates headings, prose, quotes and table cells while skipping fenced code blocks."
+    },
+    {
+      "name": "etaf-translate-overflow-scroll-viewport-lazy-promotion",
+      "file": "tests/etaf-translate-tests.el",
+      "purpose": "Inside an :overflow scroll container, far off-screen paragraphs stay deferred without loading placeholders and promote automatically when scrolled into view."
+    },
+    {
+      "name": "etaf-translate-streaming-incremental-delivery-and-partial-retry",
+      "file": "tests/etaf-translate-tests.el",
+      "purpose": "Streaming :on-unit-done renders completed paragraphs immediately while still in flight, and async partial failures auto-retry only undelivered units solo."
+    },
+    {
+      "name": "etaf-translate-skips-technical-lists-and-suppresses-identical-companions",
+      "file": "tests/etaf-translate-tests.el",
+      "purpose": "Comma-separated package/identifier lists are skipped before dispatch, and translations identical to source text clear loading without rendering duplicate bilingual bars."
+    },
+    {
+      "name": "etaf-translate-sqlite-l2-cache-and-persisted-site-rules",
+      "file": "tests/etaf-translate-tests.el",
+      "purpose": "Native SQLite L2 cache serves fresh L1 instances with zero extra engine calls, and remembered site rules and glossary terms persist cleanly across disk reloads."
+    },
+    {
+      "name": "etaf-translate-profiles-context-and-fallback-engine",
+      "file": "tests/etaf-translate-tests.el",
+      "purpose": "Named engine profiles forward document title context and prompt style, and automatically cascade failed units to the configured fallback engine."
+    },
+    {
+      "name": "etaf-translate-minimal-panel-pure-popup-and-3-styles",
+      "file": "tests/etaf-translate-tests.el",
+      "purpose": "Enforces the 5-command interactive surface, 3 editorial bilingual styles, slim reactive control panel, and pure-translation quick popup without repeating original text."
+    },
+    {
+      "name": "etaf-translate-latex-math-protection-and-paragraph-toggle",
+      "file": "tests/etaf-translate-tests.el",
+      "purpose": "Inline and display LaTeX math expressions are protected as atomic placeholders without misclassifying currency, and etaf-translate-paragraph toggles a single paragraph on and off."
+    },
+    {
+      "name": "etaf-translate-etaf-reader-provider-and-page-switch",
+      "file": "tests/etaf-translate-tests.el",
+      "purpose": "Built-in etaf-reader provider merges fixed 1-line visual slots into logical paragraphs, attaches unclipped companions, and updates cleanly across page turns."
+    },
+    {
+      "name": "etaf-translate-maillist-logical-paragraphs",
+      "file": "tests/etaf-translate-tests.el",
+      "purpose": "Built-in maillist provider joins 72-column wrapped prose and quote lines into logical paragraphs, strips repeated quote prefixes, skips sidebars/diffs/signatures, and switches cleanly between bilingual and replace modes."
+    }
+  ]
+}

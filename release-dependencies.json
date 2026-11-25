@@ -26,6 +26,21 @@
         "posframe"
       ]
     },
+    "etaf-ext": {
+      "resources": []
+    },
+    "etaf-hints": {
+      "resources": []
+    },
+    "etaf-highlight": {
+      "resources": []
+    },
+    "etaf-translate": {
+      "resources": []
+    },
+    "etaf-export": {
+      "resources": []
+    },
     "etaf-db": {},
     "ekp": {
       "resources": [
@@ -92,6 +107,7 @@
   "targets": [
     "etaf-ui",
     "etaf-posframe",
+    "etaf-ext",
     "etaf",
     "etaf-manual",
     "etaf-db",
@@ -99,6 +115,10 @@
     "ebox",
     "ecss",
     "etaf-gamekit",
+    "etaf-hints",
+    "etaf-highlight",
+    "etaf-translate",
+    "etaf-export",
     "etaf-md",
     "etaf-org-preview",
     "etaf-video-player",

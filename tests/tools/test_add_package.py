@@ -68,6 +68,15 @@ class RegistryTests(unittest.TestCase):
                           'branch': 'main', 'role': 'application'})
         self.assertIn('etaf', written['packages'])
 
+    def test_dry_run_accepts_extension_role(self):
+        result = subprocess.run(
+            [sys.executable, str(ROOT / 'scripts/add-package.py'),
+             'etaf-probe-ext', '--url', 'https://example.invalid/etaf-probe-ext.git',
+             '--role', 'extension', '--dry-run'],
+            capture_output=True, text=True, timeout=60, cwd=ROOT)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('register etaf-probe-ext in workspace.json as extension', result.stdout)
+
 
 if __name__ == '__main__':
     unittest.main()
