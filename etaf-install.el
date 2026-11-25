@@ -1,7 +1,7 @@
 ;;; -*- lexical-binding: t; -*-
 ;;; etaf-install.el --- Install ETAF with the Emacs package manager
 
-;; Version: 0.2.23
+;; Version: 0.2.24
 ;; Package-Requires: ((emacs "29.1"))
 ;; URL: https://github.com/emacs-taf/emacs-taf
 ;; Keywords: convenience
@@ -1254,46 +1254,7 @@ installed.  With NO-CONFIRM, skip the prompt."
     ("g" . "refresh")
     ("l" . "packages")
     ("q" . "quit"))
-  "Key-to-action hint pairs shown in the ETAF Packages buffer.")
-
-(defconst etaf-install--manage-mode-line-tiers
-  (list etaf-install--manage-keys
-        '(("i" . "install")
-          ("n" . "native")
-          ("u" . "update")
-          ("d" . "remove")
-          ("RET" . "open")
-          ("g" . "refresh")
-          ("q" . "quit"))
-        '(("i") ("n") ("d") ("RET") ("g") ("q"))
-        '(("C-h m" . "keys")))
-  "Mode-line key hint tiers as lists of (KEY . LABEL), longest first.")
-
-(defconst etaf-install--manage-key-hints
-  (mapcar (lambda (tier)
-            (mapconcat (lambda (entry)
-                         (if (cdr entry)
-                             (format "%s %s" (car entry) (cdr entry))
-                           (car entry)))
-                       tier " · "))
-          etaf-install--manage-mode-line-tiers)
-  "Plain-text key hints for the mode line, longest first.
-The longest hint list that fits beside a summary and the refresh button wins,
-so narrow windows keep actionable keys visible instead of collapsing early.")
-
-(defun etaf-install--manage-format-tier (tier &optional help-echo)
-  "Format TIER of (KEY . LABEL) pairs with high-contrast key faces.
-When HELP-ECHO is non-nil, attach it as the tooltip text."
-  (let ((text (mapconcat
-               (lambda (entry)
-                 (let ((key (propertize (car entry) 'face 'help-key-binding)))
-                   (if (cdr entry)
-                       (concat key " " (cdr entry))
-                     key)))
-               tier " · ")))
-    (if help-echo
-        (propertize text 'help-echo help-echo)
-      text)))
+  "Key-to-action hint pairs shown in the echo area for `*ETAF Packages*'.")
 
 (defconst etaf-install--manage-action-commands
   '(etaf-install--manage-install
@@ -1332,44 +1293,33 @@ When HELP-ECHO is non-nil, attach it as the tooltip text."
 
 (defun etaf-install--manage-mode-line ()
   "Return the mode line for the ETAF Packages buffer.
-The buffer holds the table only: the summary, the keys and the refresh button
-sit on this line, so no second window is needed to show them.  The longest
-hint list that still leaves room for a summary wins, so the keys stay visible
-in a narrow window instead of being cut off."
+The mode line shows only the summary and the refresh button; key hints are
+displayed in the echo area."
   (let* ((button (propertize " Refresh " 'face 'mode-line-highlight
                              'mouse-face 'highlight
                              'keymap etaf-install--manage-refresh-map
                              'help-echo "Refresh package archives (g)"))
          (summaries (etaf-install--manage-summaries))
-         (full-help (car etaf-install--manage-key-hints))
-         (fitted (cl-loop for tier in etaf-install--manage-mode-line-tiers
-                          for hints = (etaf-install--manage-format-tier tier full-help)
-                          for room = (- (window-width) (length hints) (length button) 3)
-                          for summary = (cl-find-if (lambda (text) (<= (length text) room))
-                                                    summaries)
-                          when summary
-                          return (cons summary hints)
-                          finally return (cons (car (last summaries)) nil)))
-         (summary (car fitted))
-         (hints (cdr fitted))
-         (padding (max 1 (- (window-width) (length summary) (length hints)
-                            (length button) (if hints 1 0)))))
+         (room (- (window-width) (length button) 1))
+         (summary (or (cl-find-if (lambda (text) (<= (length text) room))
+                                  summaries)
+                      (car (last summaries))))
+         (padding (max 1 (- (window-width) (length summary) (length button)))))
     (concat (propertize summary 'face 'mode-line-buffer-id)
             (make-string padding ?\s)
-            (when hints (concat hints " "))
             button)))
 
 (defun etaf-install--manage-format-key-hints (&optional width)
   "Return the formatted keybinding hint string for the echo area.
 When WIDTH is positive, wrap between items so no hint breaks across lines."
-  (let* ((sep (propertize " · " 'face 'shadow))
+  (let* ((sep "   ")
          (sep-width (string-width sep))
          (limit (or width (if noninteractive 120 (max 20 (- (frame-width) 2)))))
          (lines nil)
          (line "")
          (line-width 0))
     (dolist (entry etaf-install--manage-keys)
-      (let* ((item (concat (propertize (car entry) 'face 'help-key-binding)
+      (let* ((item (concat (propertize (car entry) 'face 'bold)
                            " "
                            (cdr entry)))
              (item-width (string-width item)))
@@ -1388,27 +1338,9 @@ When WIDTH is positive, wrap between items so no hint breaks across lines."
       (push line lines))
     (mapconcat #'identity (nreverse lines) "\n")))
 
-(defun etaf-install--manage-current-summary ()
-  "Return the single-line summary for the target at point, or nil."
-  (let ((package (tabulated-list-get-id)))
-    (when package
-      (let ((status (cl-find package (etaf-install--manage-statuses)
-                             :key (lambda (item) (plist-get item :package)))))
-        (when status
-          (format "%s — %s%s%s"
-                  (plist-get status :label)
-                  (plist-get status :runtime)
-                  (if (plist-get status :remedy)
-                      (format " · %s" (plist-get status :remedy))
-                    "")
-                  (if (plist-get status :dependencies)
-                      (format " · depends: %s"
-                              (mapconcat #'symbol-name
-                                         (plist-get status :dependencies) " · "))
-                    "")))))))
-
-(defun etaf-install--manage-echo (headline)
-  "Display HEADLINE (when non-nil) and the manage key hints in the echo area."
+(defun etaf-install--manage-echo (&optional headline)
+  "Display the manage key hints in the echo area.
+When HEADLINE is non-nil, show it above the key hints."
   (let ((hints (etaf-install--manage-format-key-hints))
         (message-log-max nil))
     (if (and headline (not (string-empty-p headline)))
@@ -1416,14 +1348,12 @@ When WIDTH is positive, wrap between items so no hint breaks across lines."
       (message "%s" hints))))
 
 (defun etaf-install--manage-show-current (&optional headline)
-  "Describe the target at point and show key hints in the echo area.
-When HEADLINE is non-nil, show it above the key hints instead of the
-target summary."
-  (etaf-install--manage-echo
-   (or headline (etaf-install--manage-current-summary))))
+  "Show the manage key hints in the echo area.
+When HEADLINE is non-nil, display it above the key hints."
+  (etaf-install--manage-echo headline))
 
 (defun etaf-install--manage-post-command ()
-  "Refresh the echo-area target summary and key hints after a command."
+  "Refresh the echo-area key hints after a command."
   (let ((pending etaf-install--manage-last-status))
     (setq etaf-install--manage-last-status nil)
     (unless (or (active-minibuffer-window)
@@ -1563,7 +1493,7 @@ reopened."
   "Show and manage installed and available ETAF targets.
 The buffer is the whole interface: a native tabulated list of every target with
 its status, versions, runtime and dependencies, plus the archive's community
-packages.  The echo area shows the selected target's details and the key hints.
+packages.  The echo area shows the key hints.
 `i' installs, `n' installs native modules, `u' updates, `U' updates all, `d'
 removes, RET opens, `?' reports capabilities, `g' refreshes the archives, `l'
 shows the standard package menu and `q' quits.  Removal deletes package files

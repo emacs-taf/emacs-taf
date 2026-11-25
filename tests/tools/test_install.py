@@ -315,8 +315,10 @@ class InstallTests(unittest.TestCase):
              (lambda (format-string &rest args)
                (push (apply #'format format-string args) messages))))
     (etaf-install-manage))
-  (let ((latest (car messages)))
+  (let ((latest (and (car messages) (substring-no-properties (car messages)))))
     (unless latest (error "Opening manage buffer produced no echo message"))
+    (when (string-match-p "Install ETAF" latest)
+      (error "Open echo message still includes target details: %S" latest))
     (dolist (hint '("i install" "n native" "u update" "U update all"
                     "d remove" "RET open" "? doctor" "g refresh"
                     "l packages" "q quit"))
@@ -331,12 +333,16 @@ class InstallTests(unittest.TestCase):
                (lambda (format-string &rest args)
                  (push (apply #'format format-string args) messages))))
       (run-hooks 'post-command-hook))
-    (let ((latest (car messages)))
-      (unless (and latest
-                   (string-match-p "ETAF components and gallery" latest)
-                   (string-match-p "i install" latest)
+    (let* ((raw (car messages))
+           (latest (and raw (substring-no-properties raw)))
+           (pos (and latest (string-match "i install" latest))))
+      (unless (and latest pos
+                   (not (string-match-p "ETAF components and gallery" latest))
                    (string-match-p "q quit" latest))
-        (error "Navigation echo missing summary or key hints: %S" latest))))
+        (error "Navigation echo should show only key hints: %S" latest))
+      (unless (eq (get-text-property pos 'face raw) 'bold)
+        (error "Echo key hint did not use bold face: %S"
+               (get-text-property pos 'face raw)))))
   (goto-char (point-max))
   (let (messages)
     (cl-letf (((symbol-function 'message)
@@ -354,7 +360,7 @@ class InstallTests(unittest.TestCase):
       (let ((noninteractive nil))
         (run-hooks 'post-command-hook)))
     (let* ((latest (and (car messages) (substring-no-properties (car messages))))
-           (hint-lines (and latest (cdr (split-string latest "\n")))))
+           (hint-lines (and latest (split-string latest "\n"))))
       (unless (and hint-lines
                    (= (length hint-lines) 2)
                    (cl-every (lambda (line) (<= (length line) 78)) hint-lines)
@@ -366,29 +372,20 @@ class InstallTests(unittest.TestCase):
                (lambda (format-string &rest args)
                  (push (apply #'format format-string args) messages))))
       (execute-kbd-macro "g"))
-    (let ((latest (car messages)))
+    (let ((latest (and (car messages) (substring-no-properties (car messages)))))
       (unless (and latest
                    (string-match-p "package archives refreshed" latest)
                    (string-match-p "i install" latest))
-        (error "Refresh echo lost status or key hints: %S"
-               (and latest (substring-no-properties latest))))))
+        (error "Refresh echo lost status or key hints: %S" latest))))
   (unless (and (consp mode-line-format) (eq (car mode-line-format) :eval))
     (error "Unexpected manage mode-line-format: %S" mode-line-format))
-  (cl-letf (((symbol-function 'window-width) (lambda (&rest _) 80)))
+  (cl-letf (((symbol-function 'window-width) (lambda (&rest _) 180)))
     (let ((ml (substring-no-properties (eval (cadr mode-line-format)))))
-      (unless (string-match-p "i · n · d · RET · g · q" ml)
-        (error "80-column mode line collapsed keys prematurely: %S" ml))))
-  (cl-letf (((symbol-function 'window-width) (lambda (&rest _) 120)))
-    (let* ((raw (eval (cadr mode-line-format)))
-           (ml (substring-no-properties raw))
-           (pos (string-match "i install" ml)))
-      (unless pos
-        (error "120-column mode line omitted key labels: %S" ml))
-      (unless (eq (get-text-property pos 'face raw) 'help-key-binding)
-        (error "Mode-line key hint did not use help-key-binding face: %S"
-               (get-text-property pos 'face raw)))
-      (when (eq (get-text-property (+ pos 2) 'face raw) 'shadow)
-        (error "Mode-line key hint label still uses unreadable shadow face")))))
+      (unless (and (string-match-p "ETAF Packages" ml)
+                   (string-match-p "Refresh" ml))
+        (error "Mode line missing summary or Refresh button: %S" ml))
+      (when (string-match-p "i install" ml)
+        (error "Mode line should not duplicate key hints: %S" ml)))))
 """)
 
     def test_missing_runtime_reports_remedy_without_claiming_ready(self):
@@ -414,13 +411,10 @@ class InstallTests(unittest.TestCase):
   (goto-char (point-min))
   (unless (search-forward "etaf-telega" nil t) (error "Target missing from manage buffer"))
   (beginning-of-line)
-  (let (messages)
-    (cl-letf (((symbol-function 'message)
-               (lambda (format-string &rest args)
-                 (push (apply #'format format-string args) messages))))
-      (run-hooks 'post-command-hook))
-    (unless (cl-some (lambda (message) (string-match-p "telega-server-build" message)) messages)
-      (error "Manage echo has no remedy: %S" messages))))
+  (execute-kbd-macro "?")
+  (with-current-buffer "*ETAF Installation*"
+    (unless (string-match-p "telega-server-build" (buffer-string))
+      (error "Doctor buffer from manage view has no remedy"))))
 """)
 
     def test_update_upgrades_an_installed_target_from_the_archive(self):
