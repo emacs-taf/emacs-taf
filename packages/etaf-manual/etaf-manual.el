@@ -2,7 +2,7 @@
 
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 ;; Author: ETAF contributors
-;; Version: 0.1.14
+;; Version: 0.1.15
 ;; Package-Requires: ((emacs "29.1") (etaf "0.3.8") (etaf-ui "0.3.6"))
 ;; URL: https://github.com/emacs-taf/etaf-manual
 
