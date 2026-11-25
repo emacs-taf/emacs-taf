@@ -762,9 +762,13 @@ def stage(directory, output):
     declared = [name for name in declare if name != "etaf-install"]
     declared += sorted(community_only - set(declared))
     scope = report.get("scope", "full")
+    recorded_paths = tuple(report.get("paths") or ("etaf-install",))
+    if (not recorded_paths or "etaf-install" not in recorded_paths
+            or any(path not in ("etaf-install", "package-install") for path in recorded_paths)):
+        raise ValueError("Publication requires the recorded targets through etaf-install")
     def entries(name):
         # Community packages have no ETAF entry; only package.el installs them.
-        return ("package-install",) if name in community_only else ("etaf-install",)
+        return ("package-install",) if name in community_only else recorded_paths
 
     if scope == "full":
         expected = {(name, entry) for name in declared for entry in entries(name)}

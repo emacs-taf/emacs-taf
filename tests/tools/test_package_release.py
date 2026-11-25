@@ -82,6 +82,17 @@ class PackageReleaseVerificationTests(unittest.TestCase):
         self.archive = self.base / "archive"
 
     def build(self, body=""):
+        (self.source / "native").mkdir(exist_ok=True)
+        (self.source / "native/manifest.json").write_text(json.dumps({
+            "schema": 1,
+            "package": "ekp",
+            "modules": [{
+                "name": "ekp",
+                "version": "1.6",
+                "description": "Fixture EKP C module",
+                "platforms": {},
+            }],
+        }) + "\n")
         (self.source / "ekp.el").write_text(
             ';;; -*- lexical-binding: t; -*-\n;;; ekp.el --- Release fixture\n'
             ';; Version: 1.0.0\n;; Package-Requires: ((emacs "29.1"))\n'
@@ -90,6 +101,7 @@ class PackageReleaseVerificationTests(unittest.TestCase):
         result = subprocess.run(
             [sys.executable, str(ROOT / "scripts/package_archive.py"), "build",
              "--directory", str(self.archive), "--package", f"ekp={self.source}",
+             "--resource", "ekp=native/manifest.json",
              "--package", f"etaf-install={ROOT}"], capture_output=True, text=True, timeout=20)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
