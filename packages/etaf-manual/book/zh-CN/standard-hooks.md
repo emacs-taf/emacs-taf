@@ -12,6 +12,12 @@
 | [`ebox-viewport-change-functions`](viewport.md#hook-ebox-viewport-change-functions) | 视口尺寸变化后——窗口缩放或 `ebox-mount-set-viewport`——新尺寸的重排完成时。 | 缓冲区 | 一个函数出错不阻止其余函数。 |
 | [`ebox-display-change-functions`](viewport.md#hook-ebox-display-change-functions) | 缓冲区文本缩放稳定且保留树完成重新测量后，固定尺寸视口也会收到通知。 | 缓冲区 | 回调错误由视口任务报告；中断后未开始的工作留在队列里。 |
 | [`ebox-display-window-change-functions`](viewport.md#hook-ebox-display-window-change-functions) | 窗口变化稳定且挂载已 refit，窗口刚成为缓冲区的显示窗口或其正文像素尺寸变了；固定视口也会收到，借走的行不算。 | 缓冲区和它的显示窗口 | 出错会中止该 frame 这一批的剩余工作，由视口任务报告。 |
+| [`etaf-runtime-mount-functions`](runtime.md#hook-etaf-runtime-mount-functions) | `etaf-mount` 完成首次发布并登记 Runtime 之后。 | Runtime | 单个函数的错误被隔离，不影响挂载与其余观察者。 |
+| [`etaf-runtime-after-commit-functions`](runtime.md#hook-etaf-runtime-after-commit-functions) | 已挂载 Runtime 提交了一次应用变更之后（不含首次挂载与纯呈现层 flush）。 | Runtime | 单个函数的错误被隔离。 |
+| [`etaf-runtime-after-flush-functions`](runtime.md#hook-etaf-runtime-after-flush-functions) | RUNTIME 缓冲区完成一次非呈现层 Ebox flush 之后（含 `:overflow scroll` 滚动、refit 与应用提交）。 | Runtime | 单个函数的错误被隔离。 |
+| [`etaf-runtime-unmount-functions`](runtime.md#hook-etaf-runtime-unmount-functions) | 已挂载 Runtime 开始卸载时，在保留段与缓冲区绑定释放之前。 | Runtime | 单个函数的错误被隔离。 |
+| [`etaf-runtime-meta-change-functions`](runtime.md#hook-etaf-runtime-meta-change-functions) | 已挂载 Runtime 的解析后元数据快照经由 `etaf-runtime-set-meta` 或响应式元数据来源发生变化时。 | Runtime 与独立的元数据 plist | 单个函数的错误被隔离。 |
+| [`etaf-runtime-focus-change-functions`](runtime.md#hook-etaf-runtime-focus-change-functions) | 已挂载 Runtime 内的逻辑 Host 焦点发生变化时。 | Runtime、前一个 Host ID（或 nil）与新 Host ID（或 nil） | 单个函数的错误被隔离。 |
 
 ## 说明
 

@@ -2,9 +2,9 @@
 
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 ;; Author: ETAF contributors
-;; Version: 0.3.5
+;; Version: 0.3.6
 ;; Keywords: ui, convenience
-;; Package-Requires: ((emacs "29.1") (etaf "0.2.2"))
+;; Package-Requires: ((emacs "29.1") (etaf "0.3.8"))
 ;; URL: https://github.com/emacs-taf/etaf-ui
 
 ;;; Commentary:
@@ -60,9 +60,9 @@
 ;; Return the catalog's color Theme tokens for application PALETTE, a plist
 ;; of #RRGGBB roles: `:bg' and `:fg' are required; `:panel', `:track',
 ;; `:border', `:muted', `:dim', `:accent', `:accent-fg', `:accent-soft' and
-;; the status roles `:success', `:warning', `:danger' and `:info' (each with
-;; `-bg' and `-border' variants) are derived when omitted.  Append the result
-;; to the application's own Theme keys and provide it with
+;; the status roles `:success', `:warning', `:danger', `:info' and `:important'
+;; (each with `-bg' and `-border' variants) are derived when omitted.  Append
+;; the result to the application's own Theme keys and provide it with
 ;; `etaf-theme-provide'; a key placed before the result overrides it, since
 ;; the first value of a key wins.  An unknown role, a non-string value or a
 ;; missing `:bg' or `:fg' signals `wrong-type-argument'.
@@ -171,6 +171,26 @@
 ;; the grid does not run timers or maintain a second selection/board state.
 ;; Invalid dimensions, callbacks or text signal etaf-component-call-error.
 ;; Use (etaf-view (etaf-tile-grid :rows 8 :columns 12 ...)).
+;;
+;; Component: etaf-svg-stage (&key rows columns cell-width cell-height tile-width tile-height cell-svg sprites cell-text cell-background cell-color cell-label cell-ref on-cell-press on-cell-focus graphic)
+;; Parameters:
+;; :rows, :columns — Required positive integers. Grid dimensions in cells.
+;; :cell-width, :cell-height — Positive integers; defaults 2 character columns and 1 text line per cell.
+;; :tile-width, :tile-height — Optional positive integer pixel dimensions per tile; nil derives from cell size (8px/ch, 16px/lh).
+;; :cell-svg — Required pure function (row column tile-width tile-height) returning SVG inner markup in stage coordinates.
+;; :sprites — Optional sprite list, reactive source or zero-argument function returning plists (:x :y :width :height :markup) in stage pixel coordinates.
+;; :cell-text, :cell-background, :cell-color, :cell-label, :cell-ref, :on-cell-press, :on-cell-focus — Optional tile-grid coordinate callbacks; text and color callbacks serve text terminals.
+;; :graphic — Optional auto (default), t or nil. Selects SVG tile rendering or text fallback.
+;;
+;; Render a fixed tiled SVG stage with dirty-tile sprite compositing over
+;; `etaf-tile-grid'.  Each cell clips the shared stage coordinate space with
+;; its own viewBox `(col*tw row*th tw th)'; only tiles whose rectangle overlaps
+;; a sprite's bounding box rebuild their image descriptor when the sprite moves,
+;; while untouched tiles reuse cached descriptors.  On text displays (or when
+;; `:graphic' is nil), the stage falls back cleanly to `:cell-text' and cell
+;; colors without changing layout or grid navigation.
+;; Invalid dimensions, callbacks or sprite records signal `etaf-component-call-error'.
+;; Use (etaf-view (etaf-svg-stage :rows 4 :columns 4 :cell-svg ... :sprites ...)).
 ;;
 ;; Component: etaf-playing-card (&key rank suit face-down empty selected disabled on-press label ref columns lines)
 ;; Parameters:
@@ -1174,7 +1194,7 @@
 ;; The application root must reserve a canvas height for floating content.
 ;; Ebox owns clipping, flipping, occlusion and layout. No child frame is created.
 ;;
-;; Component: etaf-dialog (&key open title width height compact close-label on-close backdrop keys on-direction)
+;; Component: etaf-dialog (&key open title width height compact close-label on-close backdrop keys on-direction animated)
 ;; Parameters:
 ;; :open — Value/ref/computed; default nil (closed). Caller owns visibility and form state.
 ;; :title — String; default "Dialog". Header caption.
@@ -1186,6 +1206,7 @@
 ;; :backdrop — Optional flag; default t. Dim/block the background; nil leaves outside-click policy to the caller.
 ;; :keys — Optional scoped ETAF key declarations; default nil. Entries (key callback label) follow the Host :keys contract.
 ;; :on-direction — Optional function (direction); default nil. Return handled/release according to the Host direction contract.
+;; :animated — Optional flag; default nil. Smoothly dim the modal backdrop on open via the shared animation clock.
 ;;
 ;; Show a controlled modal panel using the same floating surface as Popover.
 ;; TITLE defaults to Dialog and WIDTH to (ch 48).  HEIGHT optionally fixes the
@@ -1228,7 +1249,7 @@
 ;; or extra mount.  Compose directly as (etaf-key-help :data snapshot
 ;; :on-close close) when owning a separate controlled dialog lifecycle.
 ;;
-;; Component: etaf-media-viewer (&key open kind src source-size title subtitle caption duration on-close on-previous on-next autoplay)
+;; Component: etaf-media-viewer (&key open kind src source-size title subtitle caption duration on-close on-previous on-next on-ended autoplay audio volume)
 ;; Parameters:
 ;; :open — Value/ref/computed; default nil (closed). Caller controls lifetime.
 ;; :kind — image/video/audio; default image.
@@ -1238,7 +1259,10 @@
 ;; :duration — Optional nonnegative number of seconds; default nil. Audio total duration.
 ;; :on-close — Required function (), even while closed. Caller closes the viewer.
 ;; :on-previous, :on-next — Optional functions (); default nil (no corresponding browse action). Caller switches media.
+;; :on-ended — Optional function (); default nil. Invoked once when video or audio finishes naturally.
 ;; :autoplay — Optional flag; default t. Start audio/video playback on open; does not affect images.
+;; :audio — Optional flag or :default (follows etaf-video-audio); default :default. Initial sound state.
+;; :volume — Optional number in 0..100 or nil (follows etaf-video-audio-volume); default nil. Initial sound volume.
 ;;
 ;; Show one image, video or audio file in a controlled modal viewer over the
 ;; application, inside the same buffer.  KIND is `image' (default), `video'
@@ -1324,12 +1348,13 @@
 ;;
 ;; Render a horizontal or vertical separator, optionally with a centered label.
 ;;
-;; Component: etaf-progress (&key value max label variant)
+;; Component: etaf-progress (&key value max label variant animated)
 ;; Parameters:
 ;; :value — Required number/ref/computed; 0 <= value <= max. Display only, no change callback.
 ;; :max — Positive number/ref/computed; default 100. Total work units.
 ;; :label — Optional display value/ref/computed; default nil (empty caption).
 ;; :variant — neutral/success/warning/danger/info; default success. Fill color.
+;; :animated — Optional flag; default nil. Smoothly transition fill width and percentage on the shared animation clock when mounted.
 ;;
 ;; Render a determinate progress bar. VALUE and MAX are numeric (or reactive)
 ;; with 0 <= VALUE <= MAX and MAX > 0. LABEL is optional.
@@ -1345,9 +1370,10 @@
 ;; Render an alert with semantic styling. A dismissible alert invokes ON-DISMISS;
 ;; the caller decides whether its state remains visible.
 ;;
-;; Component: etaf-statistic (&key label value trend)
+;; Component: etaf-statistic (&key label value trend animated)
 ;; Parameters:
 ;; :label, :value, :trend — Optional display values/refs/computeds; default nil. Muted caption, emphasized metric and success-colored trend respectively; no arithmetic is performed.
+;; :animated — Optional flag; default nil. Smoothly roll numeric values on the shared animation clock when mounted.
 ;;
 ;; Render a compact metric card from caller-owned display values.
 ;;
@@ -1360,20 +1386,32 @@
 ;;
 ;; Render an empty state with optional action callback.
 ;;
-;; Component: etaf-skeleton (&key width height)
+;; Component: etaf-skeleton (&key width height animated)
 ;; Parameters:
 ;; :width — Host length; default stretch. Horizontal extent, e.g. (ch 24).
 ;; :height — Host length; default (lh 1). Vertical extent in standard rows when using lh.
+;; :animated — Optional flag; default nil. Gently pulse the placeholder surface on the shared animation clock when mounted.
 ;;
 ;; Render a neutral loading placeholder without owning loading state.
+;;
+;; Component: etaf-spinner (&key style label variant interval)
+;; Parameters:
+;; :style — braille (default), dots, line or meter. Fixed-width glyph sequence.
+;; :label — Optional string; default nil. Muted caption shown beside the glyph.
+;; :variant — neutral/success/warning/danger/info; default info. Glyph color.
+;; :interval — Positive number of seconds per frame; default 0.09.
+;;
+;; Render a shared-clock loading indicator whose Scope owns its frame sequence.
+;; Fixed glyph width keeps adjacent labels stationary on every frame.  Invalid
+;; style, label or interval signals `etaf-component-call-error'.
 
 ;; Component: etaf-card (&key title description icon variant width text-align on-press)
 ;; Parameters:
 ;; :title, :description — Optional display values/refs/computeds; default nil (omit row). Heading and muted summary.
 ;; :icon — Optional icon name; default nil. Draws the set's glyph before the title on the title's row.
-;; :variant — Optional style name; default default. Adds a class; does not select a built-in alternative paint scheme.
-;; :width, :text-align — Optional size and alignment; default stretch and start.
-;; :on-press — Optional function; default nil. Makes the whole surface activate.
+;; :variant — Optional style name; default default. Adds a class; semantic accents (`primary', `info', `success', `warning', `danger', `important') tint the title and draw a left accent border from the Theme.
+;; :width, :text-align — Optional size and alignment; default stretch and start (aligns header and body content).
+;; :on-press — Optional function; default nil. Makes the whole surface activate with a hand pointer.
 ;;
 ;; Render a reusable titled surface with default content slots.
 ;; Card supplies a summary description; use Panel for a named header slot.
@@ -1950,7 +1988,11 @@
 ;; `:heading-underline' controls whether headings draw a bottom rule on levels
 ;; 1–2 and underline inline links inside headings (default t when omitted; nil
 ;; suppresses both while keeping heading links active and body links underlined);
-;; `:footnote-jump' with a footnote label; `:render-media (kind node env)'
+;; `:footnote-jump' with a footnote label; `:footnote-ref (label)' returns a
+;; host `:ref' symbol attached to the footnote definition box; `:footnote-back
+;; (label)' appends a clickable `↩' return control on each footnote definition;
+;; `:on-copy (kind text lines)' is called after the code block copy button
+;; copies TEXT into the kill ring; `:render-media (kind node env)'
 ;; returns the View for media, where KIND is `image', `video', `inline-image'
 ;; or `html-media' (without it media renders as its alt text or URL);
 ;; `:render-code-block (block env)' may return a View for a code block and
@@ -2085,6 +2127,7 @@ nothing about where the package directory is.")
 (require 'etaf-ui-table)
 (require 'etaf-ui-data)
 (require 'etaf-ui-tile-grid)
+(require 'etaf-ui-svg-stage)
 (require 'etaf-ui-text-grid)
 (require 'etaf-ui-cell-line)
 (require 'etaf-ui-sheet)

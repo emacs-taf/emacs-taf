@@ -6,17 +6,17 @@
 
 <!-- index: etaf-media-viewer; modal viewer; transport bar; keyboard playback -->
 
-#### Component: etaf-media-viewer (&key open kind src source-size title subtitle caption duration on-close on-previous on-next autoplay)
+#### Component: etaf-media-viewer (&key open kind src source-size title subtitle caption duration on-close on-previous on-next on-ended autoplay audio volume)
 
 在应用之上的受控模态查看器里显示一个图片、视频或音频文件，且不离开同一个 buffer。
 
-**参数。** OPEN 是值、ref 或 computed。KIND 是 `image`（默认）、`video` 或 `audio`。SRC 对 image 是 image Host 来源——文件或图像描述符，包括图标辅助构建的 SVG 描述符；对 video 是 `etaf-video` 来源；对 audio 是经 ffplay 播放的音频文件。SOURCE-SIZE 是媒体的像素 `(WIDTH . HEIGHT)`；没有它时查看器读取图片或探测一次视频。TITLE、SUBTITLE 与 CAPTION 是可选字符串：header 显示前两者，图片的 footer 与音频舞台显示 caption。DURATION（秒）给音频文件总时长。AUTOPLAY 默认 t。ON-CLOSE 必需；ON-PREVIOUS 与 ON-NEXT 是可选的浏览回调。
+**参数。** OPEN 是值、ref 或 computed。KIND 是 `image`（默认）、`video` 或 `audio`。SRC 对 image 是 image Host 来源——文件或图像描述符，包括图标辅助构建的 SVG 描述符；对 video 是 `etaf-video` 来源；对 audio 是经 ffplay 播放的音频文件。SOURCE-SIZE 是媒体的像素 `(WIDTH . HEIGHT)`；没有它时查看器读取图片或探测一次视频。TITLE、SUBTITLE 与 CAPTION 是可选字符串：header 显示前两者，图片的 footer 与音频舞台显示 caption。DURATION（秒）给音频文件总时长。AUTOPLAY 默认 t。AUDIO 默认 `:default`（跟随 `etaf-video-audio`），VOLUME 默认 nil（跟随 `etaf-video-audio-volume`，0 到 100）。ON-CLOSE 必需；ON-PREVIOUS、ON-NEXT 与 ON-ENDED 是可选回调。
 
-**语义。** 查看器坐在覆盖 root 画布第一个视口的固定暗色 scrim 上，使用独立于应用主题的自己的调色板，因此请把它挂进根为一行高窗口的应用，例如 `(vh 100)` 的 shell。媒体保持宽高比并适配实时视口、跟随窗口缩放：图片不放大超过自然尺寸，视频填满舞台。图片 footer 显示 CAPTION；视频与音频在 AUTOPLAY 时开始播放，并得到传输条：播放与暂停、前后十秒、已播与总时长、seek 条、播放倍速与声音——点击媒体切换播放。提供 ON-PREVIOUS 或 ON-NEXT 时查看器增加侧箭头、`p` 与 `n` 键以及双指滑动来浏览画廊；图片时方向键也浏览，视频时方向键 seek 五秒。打开期间查看器的键优先于应用键，其它可打印键不做任何事，关闭后焦点回到此前的控件。
+**语义。** 查看器坐在覆盖当前视口的固定暗色 scrim 上，使用独立于应用主题的自己的调色板，因此请把它挂进根为一行高窗口的应用，例如 `(vh 100)` 的 shell。媒体保持宽高比并适配实时视口、跟随窗口缩放：图片不放大超过自然尺寸，视频填满舞台。图片 footer 显示 CAPTION；视频与音频在 AUTOPLAY 时开始播放，并得到传输条：播放与暂停、前后十秒（`j`/`l`）、已播与总时长、seek 条、播放倍速（`.`）、音量（`[`/`]`）与声音（`m`）——点击媒体切换播放。提供 ON-PREVIOUS 或 ON-NEXT 时查看器增加侧箭头、`p` 与 `n` 键以及双指滑动来浏览画廊；图片时方向键也浏览，视频时方向键 seek 十秒。ON-ENDED 在播放自然结束时触发一次。打开期间查看器的键优先于应用键，其它可打印键不做任何事，关闭后焦点回到此前的控件。
 
 **返回。** 一个 View。
 
-**错误。** KIND 不是三者之一、DURATION 既不是 nil 也不是非负数、ON-CLOSE 不是函数、ON-PREVIOUS 或 ON-NEXT 既不是函数也不是 nil、SOURCE-SIZE 既不是 nil 也不是正的像素对、或 TITLE/SUBTITLE/CAPTION 既不是字符串也不是 nil 时报 `error→ etaf-component-call-error`。
+**错误。** KIND 不是三者之一、DURATION 既不是 nil 也不是非负数、VOLUME 既不是 nil 也不在 0..100 之间、ON-CLOSE 不是函数、ON-PREVIOUS/ON-NEXT/ON-ENDED 既不是函数也不是 nil、SOURCE-SIZE 既不是 nil 也不是正的像素对、或 TITLE/SUBTITLE/CAPTION 既不是字符串也不是 nil 时报 `error→ etaf-component-call-error`。
 
 **示例。**
 

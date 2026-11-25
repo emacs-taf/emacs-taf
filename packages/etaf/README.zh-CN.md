@@ -20,9 +20,7 @@ ETAF 在独立的 [Ebox](https://github.com/emacs-taf/ebox/blob/main/) 布局与
 
 ## 第一个 View
 
-从 `etaf-view` 和 `etaf-mount` 开始。`(name :property value ... child ...)`
-中属性在前、子节点在后，属性值是普通 Elisp。求值下面完整例子，切换到
-`*etaf-hello*`，即可激活 “Say hello”：
+从 `etaf-view` 和 `etaf-mount` 开始。`(name :property value ... child ...)` 中属性在前、子节点在后，属性值是普通 Elisp。求值下面完整例子，切换到 `*etaf-hello*`，即可激活 “Say hello”：
 
 <!-- etaf-example: hello -->
 ```elisp
@@ -39,10 +37,7 @@ ETAF 在独立的 [Ebox](https://github.com/emacs-taf/ebox/blob/main/) 布局与
       "Say hello"))))
 ```
 
-Component 通过声明的 props 接收业务输入，通过 slot 接收内容。调用时使用
-`etaf-define-component` 中的准确名称，注册表不会自动生成 alias。
-`(expr FORM)` 执行一个子节点表达式：结构位置可以返回 nil、字符串、typed
-Host 或 Component View，或这些值组成的 proper sequence；`text` 内的表达式必须返回字符串。
+Component 通过声明的 props 接收业务输入，通过 slot 接收内容。调用时使用 `etaf-define-component` 中的准确名称，注册表不会自动生成 alias。`(expr FORM)` 执行一个子节点表达式：结构位置可以返回 nil、字符串、typed Host 或 Component View，或这些值组成的 proper sequence；`text` 内的表达式必须返回字符串。
 
 <!-- etaf-example: card -->
 ```elisp
@@ -64,8 +59,7 @@ Host 或 Component View，或这些值组成的 proper sequence；`text` 内的�
     (slot :name 'footer (text "Footer")))))
 ```
 
-用 `:bindings` 为每个保留实例初始化一次命名状态，视图与回调直接使用这些句柄。
-需要生命周期工作时再增加 `:setup`；程序构造视图仍可使用 `:render` 与 `etaf-node`。
+用 `:bindings` 为每个保留实例初始化一次命名状态，视图与回调直接使用这些句柄。需要生命周期工作时再增加 `:setup`；程序构造视图仍可使用 `:render` 与 `etaf-node`。
 
 <!-- etaf-example: counter -->
 ```elisp
@@ -84,21 +78,13 @@ Host 或 Component View，或这些值组成的 proper sequence；`text` 内的�
 (etaf-mount "*etaf-counter*" (etaf-view (demo-counter)))
 ```
 
-把 `etaf-value` 放在需要更新的属性或 `expr` 内，保留局部更新边界。
-事件回调直接捕获命名句柄和该次渲染的词法 props。可复用应用代码放进
-启用 lexical-binding 的 `.el` 文件。程序化构造 View 时也可使用 `etaf-node`。
-Context、Data、Behavior 和命名 Action 按需学习，简单回调不需要注册 Action。
+把 `etaf-value` 放在需要更新的属性或 `expr` 内，保留局部更新边界。事件回调直接捕获命名句柄和该次渲染的词法 props。可复用应用代码放进启用 lexical-binding 的 `.el` 文件。程序化构造 View 时也可使用 `etaf-node`。Context、Data、Behavior 和命名 Action 按需学习，简单回调不需要注册 Action。
 
-加载 `(require 'etaf-ui)` 后，使用 `etaf-button` 等准确目录名称。
-Core 不加载 `.etaf` 文件；Playground 将它们作为 inert 结构，由其显式的 companion
-注册入口管理可执行 Elisp。
+加载 `(require 'etaf-ui)` 后，使用 `etaf-button` 等准确目录名称。Core 不加载 `.etaf` 文件；Playground 将它们作为 inert 结构，由其显式的 companion 注册入口管理可执行 Elisp。
 
 ## 性能记录面板
 
-ETAF 提供一个独立、按需加载、与具体应用无关的性能记录器。它消费 Runtime
-公共 observer 报告，不使用 advice 或私有跨包探针。Event、Action、mount、flush
-和 unmount 等 Runtime operation 会自动记录；同一 operation 内的 Ebox layout 与 buffer 发布、Data、
-Resource 和 SQLite 等 provider 阶段按 sequence 关联到同一条记录。
+ETAF 提供一个独立、按需加载、与具体应用无关的性能记录器。它消费 Runtime 公共 observer 报告，不使用 advice 或私有跨包探针。Event、Action、mount、flush 和 unmount 等 Runtime operation 会自动记录；同一 operation 内的 Ebox layout 与 buffer 发布、Data、Resource 和 SQLite 等 provider 阶段按 sequence 关联到同一条记录。
 
 ```elisp
 (require 'etaf)
@@ -108,30 +94,11 @@ Resource 和 SQLite 等 provider 阶段按 sequence 关联到同一条记录。
 (etaf-performance-show)
 ```
 
-交互采集时先执行 `M-x etaf-performance-clear`，复现一组操作后，在面板按
-`c`（或执行 `M-x etaf-performance-copy-report`）即可把完整报告复制到剪贴板；
-按 `w`（或执行 `M-x etaf-performance-export`）可保存为 `.eld` 文件。报告包含
-Emacs/显示环境、电源来源、低功耗模式、native JIT 状态、系统负载、分组
-p50/p95/max、每次 operation、GC 增量和有序 provider 阶段；面板 header 也显示
-同一环境信息，避免把整机降频误判成某个包的热点。
+交互采集时先执行 `M-x etaf-performance-clear`，复现一组操作后，在面板按 `c`（或执行 `M-x etaf-performance-copy-report`）即可把完整报告复制到剪贴板；按 `w`（或执行 `M-x etaf-performance-export`）可保存为 `.eld` 文件。报告包含 Emacs/显示环境、电源来源、低功耗模式、native JIT 状态、系统负载、分组 p50/p95/max、每次 operation、GC 增量和有序 provider 阶段；面板 header 也显示同一环境信息，避免把整机降频误判成某个包的热点。
 
-`*ETAF Performance*` 面板会显示 operation ID、revision 变化、总耗时、GC
-增量，以及 flat provider 阶段的顺序和各自耗时。provider 阶段可能重叠，因此
-不会伪装成 exclusive/self 时间。记录数量由 `etaf-performance-max-records`
-限制；关闭 mode 只会解除当前 Runtime 的 observer，不修改任何函数。
-`etaf-performance-summary` 会按需计算 operation 的 p50/p95/max，
-`etaf-performance-operation-stage-summary` 则按 provider category 汇总单次
-operation 的 flat 阶段。`etaf-performance-records` 返回 operation/stage 的防御性
-副本，调用方修改返回值不会改写已保留的历史。
-向 `etaf-performance-records` 传入 observer 报告中的数字 runtime ID，可以隔离
-同名 buffer 重建前后的记录。summary/report 函数省略参数时读取全部历史，
-显式传入 `nil` 时保持空结果。导出的环境是生成报告时的状态，不是每次历史操作
-的状态；同步 operation 耗时也不等于物理输入到画面呈现的延迟。逐次 GUI 条件
-检查使用 [README.md](README.md) 中的测量入口。
+`*ETAF Performance*` 面板会显示 operation ID、revision 变化、总耗时、GC 增量，以及 flat provider 阶段的顺序和各自耗时。provider 阶段可能重叠，因此不会伪装成 exclusive/self 时间。记录数量由 `etaf-performance-max-records` 限制；关闭 mode 只会解除当前 Runtime 的 observer，不修改任何函数。`etaf-performance-summary` 会按需计算 operation 的 p50/p95/max，`etaf-performance-operation-stage-summary` 则按 provider category 汇总单次 operation 的 flat 阶段。`etaf-performance-records` 返回 operation/stage 的防御性副本，调用方修改返回值不会改写已保留的历史。向 `etaf-performance-records` 传入 observer 报告中的数字 runtime ID，可以隔离同名 buffer 重建前后的记录。summary/report 函数省略参数时读取全部历史，显式传入 `nil` 时保持空结果。导出的环境是生成报告时的状态，不是每次历史操作的状态；同步 operation 耗时也不等于物理输入到画面呈现的延迟。逐次 GUI 条件检查使用 [README.md](README.md) 中的测量入口。
 
-没有内置公共边界的任意操作，可以使用
-`etaf-performance-call-operation` 或 `etaf-performance-with-operation`
-包裹；它们直接委托同一个 Runtime operation 边界，不建立第二套计时器。
+没有内置公共边界的任意操作，可以使用 `etaf-performance-call-operation` 或 `etaf-performance-with-operation` 包裹；它们直接委托同一个 Runtime operation 边界，不建立第二套计时器。
 
 ## 可执行示例
 
@@ -162,9 +129,7 @@ operation 的 flat 阶段。`etaf-performance-records` 返回 operation/stage �
 
 ## 源码开发
 
-源码开发时先加载 ECSS，再加载 Ebox，最后加载 ETAF。ETAF 直接声明 ECSS 依赖，
-以便主题解析保留延迟层叠值。ETAF 使用 Ebox 作为保留节点、布局、焦点、
-输入和 buffer 引擎；应用只使用 ETAF 公共 API。
+源码开发时先加载 ECSS，再加载 Ebox，最后加载 ETAF。ETAF 直接声明 ECSS 依赖，以便主题解析保留延迟层叠值。ETAF 使用 Ebox 作为保留节点、布局、焦点、输入和 buffer 引擎；应用只使用 ETAF 公共 API。
 
 开发时先把同级 Ebox 检出目录加入 `load-path`：
 
@@ -175,10 +140,7 @@ operation 的 flat 阶段。`etaf-performance-records` 返回 operation/stage �
 (require 'etaf)
 ```
 
-为了交互速度，每次更新后在 Ebox 和 ETAF 检出目录中运行 `make native`。它会字节
-编译对应的包，并把原生代码存入你的 `eln-cache`；即使关闭了 JIT 原生编译，Emacs
-也会自动用它代替字节码，无需额外配置。之后修改过的源文件在下次 `make native`
-前以字节码运行。
+为了交互速度，每次更新后在 Ebox 和 ETAF 检出目录中运行 `make native`。它会字节编译对应的包，并把原生代码存入你的 `eln-cache`；即使关闭了 JIT 原生编译，Emacs 也会自动用它代替字节码，无需额外配置。之后修改过的源文件在下次 `make native` 前以字节码运行。
 
 运行完整本地门禁：
 

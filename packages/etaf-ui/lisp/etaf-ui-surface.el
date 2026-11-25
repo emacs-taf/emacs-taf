@@ -119,7 +119,8 @@ removes the body's vertical air; SPACIOUS separates body items by one row."
 
 (etaf-define-component etaf-ui--open-surface
     (&key anchor (placement 'bottom-start) side (width '(ch 32)) height
-          title on-close modal center compact (backdrop t) keys on-direction)
+          title on-close modal center compact (backdrop t) keys on-direction
+          animated)
   "Render one open floating surface and own its keyboard attachment."
   :bindings
   ((panel (etaf-local-ref 'panel))
@@ -131,10 +132,17 @@ removes the body's vertical air; SPACIOUS separates body items by one row."
      (delq nil (cons (when-let* ((runtime (etaf-runtime-for-buffer buffer)))
                        (etaf-focused-host-ref runtime))
                      (copy-sequence (cdar etaf-ui--surface-return-stack))))))
+   (backdrop-target (when (and animated modal backdrop) (etaf-ref 1.0)))
+   (backdrop-level (when backdrop-target
+                     (etaf-transition backdrop-target
+                                      :duration 0.15 :easing 'ease-out
+                                      :name 'etaf-modal-backdrop)))
    (cleanup nil)
    (registration nil))
   :setup
   (progn
+    (when backdrop-target
+      (setf (etaf-value backdrop-target) etaf-ui--modal-backdrop-brightness))
     (etaf-on-mounted
      (lambda ()
        (setq cleanup (etaf-ui--surface-return buffer return-focus))
@@ -259,7 +267,13 @@ removes the body's vertical air; SPACIOUS separates body items by one row."
                                      :class "etaf-modal-backdrop"
                                      :backdrop-filter
                                      (list 'brightness
-                                           etaf-ui--modal-backdrop-brightness)
+                                           (if backdrop-level
+                                               (max etaf-ui--modal-backdrop-brightness
+                                                    (min 1.0
+                                                         (etaf-animation-quantize
+                                                          (etaf-value backdrop-level)
+                                                          0.05)))
+                                             etaf-ui--modal-backdrop-brightness))
                                      :role 'presentation :keymap nil :tab-index -1
                                      :on-press (lambda ()
                                                  (when (etaf-event-pointer-p)
@@ -293,7 +307,8 @@ removes the body's vertical air; SPACIOUS separates body items by one row."
 
 (etaf-define-component etaf-dialog
     (&key open (title "Dialog") (width '(ch 48)) height compact
-          (close-label "Close") on-close (backdrop t) keys on-direction)
+          (close-label "Close") on-close (backdrop t) keys on-direction
+          animated)
   "Show a controlled modal panel with default content and a footer slot.
 A pointer press on the backdrop requests ON-CLOSE without activating the
 background; presses inside the panel do not close it.  When BACKDROP is nil,
@@ -325,7 +340,8 @@ keyboard commands and direction handler, not the backdrop's."
     (etaf-node 'etaf-ui--open-surface
                (list :modal t :center t :backdrop backdrop :title title
                      :width width :height height :compact compact
-                     :on-close on-close :keys keys :on-direction on-direction)
+                     :on-close on-close :keys keys :on-direction on-direction
+                     :animated animated)
                (etaf-current-slot 'default)
                (list (cons 'footer
                            (append (etaf-current-slot 'footer)

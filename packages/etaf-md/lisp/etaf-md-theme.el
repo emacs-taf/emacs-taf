@@ -22,12 +22,13 @@
              (:accent . "#4493f8")
              (:accent-soft . "#152c4d")
              (:border . "#303338")
-             (:panel . "#202225")
-             (:panel2 . "#25272b")
+             (:panel . "#212328")
+             (:sunken . "#121316")
+             (:panel2 . "#282b31")
              (:quote-bar . "#43464b")
-             (:quote-bg . "#1c1e21")
-             (:table-header . "#202225")
-             (:table-stripe . "#1c1e21")
+             (:quote-bg . "#1d1f23")
+             (:table-header . "#25282e")
+             (:table-stripe . "#1b1d20")
              (:heading . "#e6edf3")
              (:heading-rule . "#303338")
              (:ok . "#3fb950")
@@ -46,11 +47,12 @@
               (:accent-soft . "#ddf4ff")
               (:border . "#d1d9e0")
               (:panel . "#f6f8fa")
-              (:panel2 . "#eef1f4")
+              (:sunken . "#eaeef2")
+              (:panel2 . "#e6ebf1")
               (:quote-bar . "#d1d9e0")
-              (:quote-bg . "#f9fbfd")
-              (:table-header . "#f0f3f6")
-              (:table-stripe . "#fbfcfd")
+              (:quote-bg . "#f3f6fa")
+              (:table-header . "#edf1f5")
+              (:table-stripe . "#f9fbfd")
               (:heading . "#1f2328")
               (:heading-rule . "#d1d9e0")
               (:ok . "#1a7f37")
@@ -68,12 +70,13 @@
               (:accent . "#b3541e")
               (:accent-soft . "#efddc4")
               (:border . "#d8c9ab")
-              (:panel . "#efe3cc")
+              (:panel . "#fbf5e8")
+              (:sunken . "#e6d8bc")
               (:panel2 . "#e9dcc2")
               (:quote-bar . "#c9b694")
-              (:quote-bg . "#f0e6d2")
-              (:table-header . "#eadcc0")
-              (:table-stripe . "#f1e8d6")
+              (:quote-bg . "#efe4cd")
+              (:table-header . "#eadbc0")
+              (:table-stripe . "#f2e9d6")
               (:heading . "#3b3024")
               (:heading-rule . "#d8c9ab")
               (:ok . "#3f6212")
@@ -95,11 +98,11 @@ three paint a fixed page palette.")
 (defcustom etaf-md-theme 'auto
   "Initial palette of `etaf-md-create' and the page it paints.
 `auto' derives the document colors from the active frame's own faces
-(`default', `shadow', `outline-1' and the semantic faces) and paints no page
+\\(`default', `shadow', `outline-1' and the semantic faces) and paints no page
 background, so the preview matches whatever Emacs theme is active.  `dark',
 `light' and `sepia' select a fixed palette explicitly, including its page
-background; `etaf-md-set-theme' and `etaf-md-cycle-theme'
-always select one of those fixed palettes."
+background; `etaf-md-set-theme' selects `auto' or a fixed palette, and
+`etaf-md-cycle-theme' cycles `dark' -> `light' -> `sepia' -> `auto'."
   :type '(choice (const :tag "Follow the Emacs theme" auto)
                  (const :tag "Dark page" dark)
                  (const :tag "Light page" light)
@@ -243,11 +246,14 @@ theme that was active when it was first read."
           (cons :accent-soft (etaf-md--mix-color background link 0.18))
           (cons :border (etaf-md--mix-color background foreground 0.18))
           (cons :panel (etaf-md--mix-color background foreground 0.06))
-          (cons :panel2 (etaf-md--mix-color background foreground 0.10))
+          (cons :sunken (if (< (or (etaf-md--luminance background) 1.0) 0.5)
+                            (etaf-md--mix-color background "#000000" 0.28)
+                          (etaf-md--mix-color background foreground 0.09)))
+          (cons :panel2 (etaf-md--mix-color background foreground 0.11))
           (cons :quote-bar (etaf-md--mix-color background foreground 0.22))
-          (cons :quote-bg (etaf-md--mix-color background foreground 0.03))
-          (cons :table-header (etaf-md--mix-color background foreground 0.07))
-          (cons :table-stripe (etaf-md--mix-color background foreground 0.03))
+          (cons :quote-bg (etaf-md--mix-color background foreground 0.045))
+          (cons :table-header (etaf-md--mix-color background foreground 0.08))
+          (cons :table-stripe (etaf-md--mix-color background foreground 0.022))
           (cons :heading heading)
           (cons :heading-rule (etaf-md--mix-color background foreground 0.18))
           (cons :ok ok)
@@ -306,8 +312,7 @@ PALETTE, when given, supplies the colors instead of THEME's named palette
 \(used by the face-derived `auto' appearance).  The application provides this
 plist through `etaf-theme-provide', so shared ETAF UI Components follow the
 previewer's colors."
-  (let* ((dark (eq theme 'dark))
-         (lookup (lambda (key)
+  (let* ((lookup (lambda (key)
                    (or (cdr (assq key palette))
                        (etaf-md-color key theme))))
          (bg (funcall lookup :bg))
@@ -317,19 +322,30 @@ previewer's colors."
          (line (funcall lookup :border))
          (muted (funcall lookup :muted))
          (accent (funcall lookup :accent))
-         (accent-soft (funcall lookup :accent-soft)))
+         (accent-soft (funcall lookup :accent-soft))
+         (ok (funcall lookup :ok))
+         (ok-soft (funcall lookup :ok-soft))
+         (warn (funcall lookup :warn))
+         (warn-soft (funcall lookup :warn-soft))
+         (danger (funcall lookup :danger))
+         (danger-soft (funcall lookup :danger-soft))
+         (important (funcall lookup :important))
+         (important-soft (funcall lookup :important-soft)))
     (etaf-ui-theme-tokens
      (list :bg bg :fg ink :panel panel :track panel2 :border line :muted muted
            :accent accent :accent-fg "#ffffff" :accent-soft accent-soft
-           :success (if dark "#3fb950" "#1a7f37")
-           :success-bg (if dark "#12261e" "#dafbe1")
-           :success-border (if dark "#2ea04366" "#aceebb")
-           :warning (if dark "#d29922" "#9a6700")
-           :warning-bg (if dark "#272115" "#fff8c5")
-           :warning-border (if dark "#d2992266" "#d4a72c")
-           :danger (if dark "#f85149" "#d1242f")
-           :danger-bg (if dark "#2a1518" "#ffebe9")
-           :danger-border (if dark "#f8514966" "#ff818266")
+           :success ok
+           :success-bg ok-soft
+           :success-border (etaf-md--mix-color bg ok 0.35)
+           :warning warn
+           :warning-bg warn-soft
+           :warning-border (etaf-md--mix-color bg warn 0.35)
+           :danger danger
+           :danger-bg danger-soft
+           :danger-border (etaf-md--mix-color bg danger 0.35)
+           :important important
+           :important-bg important-soft
+           :important-border (etaf-md--mix-color bg important 0.35)
            :info accent :info-bg accent-soft :info-border line))))
 
 (provide 'etaf-md-theme)

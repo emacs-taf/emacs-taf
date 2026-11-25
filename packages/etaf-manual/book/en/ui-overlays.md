@@ -42,11 +42,11 @@ Show controlled OPEN content on Ebox's root layer, anchored to a unique semantic
 
 <!-- index: etaf-dialog; modal panel; backdrop; fixed height -->
 
-#### Component: etaf-dialog (&key open title width height compact close-label on-close backdrop keys on-direction)
+#### Component: etaf-dialog (&key open title width height compact close-label on-close backdrop keys on-direction animated)
 
 Show a controlled modal panel using the same floating surface as Popover.
 
-**Arguments.** OPEN is a value, ref or computed. TITLE defaults to `"Dialog"`. WIDTH defaults to `(ch 48)`. HEIGHT is nil or `(lh N)` with positive N, bounding the panel to text rows within the visible window. COMPACT removes the body's vertical air so short forms stay dense. CLOSE-LABEL defaults to `"Close"`; nil omits the default footer button so the footer slot orders every action. BACKDROP defaults to t. ON-CLOSE is required. KEYS and ON-DIRECTION declare the panel Host's scoped `:keys` and `:on-direction`, never those of its backdrop.
+**Arguments.** OPEN is a value, ref or computed. TITLE defaults to `"Dialog"`. WIDTH defaults to `(ch 48)`. HEIGHT is nil or `(lh N)` with positive N, bounding the panel to text rows within the visible window. COMPACT removes the body's vertical air so short forms stay dense. CLOSE-LABEL defaults to `"Close"`; nil omits the default footer button so the footer slot orders every action. BACKDROP defaults to t. ON-CLOSE is required. KEYS and ON-DIRECTION declare the panel Host's scoped `:keys` and `:on-direction`, never those of its backdrop. ANIMATED, when non-nil (default nil), smoothly dims the modal backdrop over the shared animation clock on open.
 
 **Semantics.** The dialog centers itself in the window that displays its buffer when that window is graphical, and it never moves the application's geometry or global focus policy. The header shows TITLE and a pointer-only `x` that requests ON-CLOSE, and Escape does the same, so a modal always has a keyboard exit. With BACKDROP (the default) the backdrop dims the root canvas while keeping the covered application, text and images included, visible; covered controls and their focus targets stay blocked. A pointer press on the backdrop requests ON-CLOSE without clicking through to the background; a press inside the panel does not dismiss it. Nested modal backdrops dismiss their own topmost surface, not the covered parent. With BACKDROP nil no backdrop is painted at all and the caller owns any outside-click policy. A fixed HEIGHT needs the body rows plus five for the header, body air and footer; a too-short window clips the dialog body instead of overflowing the frame. Dialogs own no form data.
 

@@ -155,7 +155,7 @@ the buffer alive."
 
 ;;;###autoload
 (cl-defun etaf-app-open (name view &key state on-fit on-close background foreground
-                              (cursor 'inherit) mode-line (display t) mount-options)
+                              (cursor 'inherit) mode-line (display t) mount-options meta)
   "Open VIEW as the application buffer NAME and return the buffer.
 An open application of the same NAME closes first, running its ON-CLOSE.
 The buffer gets canvas display settings, then shows through DISPLAY: t
@@ -175,8 +175,10 @@ value becomes `mode-line-format'.  STATE is returned by `etaf-app-state'.
 MOUNT-OPTIONS, a plist or a function of the display window (nil when
 undisplayed) that returns one, are passed to `etaf-mount'; a function runs
 in the buffer after ON-FIT, so options such as a fixed viewport height can
-come from the fitted state.  If mounting fails the application closes, the
-buffer is killed and the error propagates."
+come from the fitted state.  META, when non-nil, is a Runtime metadata plist
+merged into `:meta' mount options (identifying `:app', `:kind', `:uri',
+`:title' or reactive sources for observers).  If mounting fails the application
+closes, the buffer is killed and the error propagates."
   (unless (stringp name)
     (signal 'wrong-type-argument (list 'stringp name)))
   (when-let* ((existing (get-buffer name)))
@@ -210,10 +212,13 @@ buffer is killed and the error propagates."
           (let ((window (get-buffer-window buffer t)))
             (when (and window on-fit)
               (with-current-buffer buffer (funcall on-fit window)))
-            (let ((options (if (functionp mount-options)
-                               (with-current-buffer buffer
-                                 (funcall mount-options window))
-                             mount-options)))
+            (let* ((raw-options (if (functionp mount-options)
+                                    (with-current-buffer buffer
+                                      (funcall mount-options window))
+                                  mount-options))
+                   (options (if (and meta (not (plist-member raw-options :meta)))
+                                (append (copy-sequence raw-options) (list :meta meta))
+                              raw-options)))
               (etaf-mount buffer view options)
               ;; Hiding the mode line gives the window one more row, but its
               ;; cached geometry keeps the old body height until Emacs

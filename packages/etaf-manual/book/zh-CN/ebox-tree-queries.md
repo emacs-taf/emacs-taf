@@ -186,6 +186,30 @@ NODE 是文本节点时返回非 nil。
 
 **参见。** `ebox-node-geometry`。
 
+#### Function: ebox-node-box-metrics (node)
+
+返回已布局 NODE 解析后的盒模型度量，未布局时返回 nil。
+
+**语义。** 直接读取 NODE 已缓存的布局度量，不触发重排也不改动缓存。横向值（`:x`、`:margin` 左右、`:border` 左右、`:padding` 左右、`:border-box` 宽、`:content-box` 宽、`:natural-width`）单位为像素；纵向值（`:y`、`:margin` 上下、`:border` 上下、`:padding` 上下、`:border-box` 高、`:content-box` 高、`:viewport-height`、`:scroll`）单位为 root 行。
+
+**返回。** 包含 `:x`、`:y`、`:margin`、`:border`、`:padding`、`:border-box`、`:content-box`、`:viewport-height`、`:scroll`、`:layout-kind`、`:gap` 与 `:natural-width` 的独立 plist，NODE 未布局时返回 nil。
+
+**错误。** NODE 不是 Ebox 节点时抛出 `wrong-type-argument`。
+
+**参见。** `ebox-node-geometry`、`ebox-node-inspect-style`。
+
+#### Function: ebox-node-inspect-style (node)
+
+按需返回已计算样式的 NODE 的 ECSS 层叠与来源细节，未计算时返回 nil。
+
+**语义。** 仅为 NODE 单独运行带 provenance 的 `ecss-compute-style`，使常规布局不承担任何来源追踪开销。返回规范公开属性值、显式声明的属性关键字、自定义属性、非初始值的胜出者来源、当前选择器状态、诊断信息，以及带逐条 `:winner` 标记的行内与作用域命中规则。
+
+**返回。** 包含 `:values`、`:specified`、`:custom-properties`、`:provenance`、`:matched-rules`、`:states` 与 `:diagnostics` 的独立 plist，NODE 尚未计算样式时返回 nil。
+
+**错误。** NODE 不是 Ebox 节点时抛出 `wrong-type-argument`。
+
+**参见。** `ebox-node-box-metrics`、`ebox-style-scope-create`。
+
 ## 绘制区间
 
 #### Function: ebox-node-bounds (node &optional all-lines)
@@ -216,6 +240,18 @@ NODE 是文本节点时返回非 nil。
 ```
 
 **参见。** `ebox-node-position`、`ebox-node-at`、`ebox-node-geometry`。
+
+#### Function: ebox-node-row-spans (node)
+
+返回 NODE 各可见绘制行的精确缓冲区区间 `(LINE BEG . END)`。
+
+**语义。** 与跨行返回单个连续区间的 `ebox-node-bounds` 不同，本函数为每个可见的 0 基 root 行返回一条记录。每对 `(BEG . END)` 仅覆盖 NODE 在该行自身的横向范围（在 Flex 或 Grid 多栏布局中绝不串入相邻列），并与所有外层 `:overflow` 裁剪祖先求交。
+
+**返回。** 按行号递增排列的 `(LINE BEG . END)` 列表，NODE 未挂载、隐藏或完全被裁剪出视野时返回 nil。
+
+**错误。** NODE 不是 Ebox 节点时抛出 `wrong-type-argument`。
+
+**参见。** `ebox-node-bounds`、`ebox-node-geometry`。
 
 #### Function: ebox-node-position (node)
 

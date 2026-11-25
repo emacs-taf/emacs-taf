@@ -2,7 +2,7 @@
 
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 ;; Author: ebox contributors
-;; Version: 3.1.4
+;; Version: 3.1.5
 ;; Package-Requires: ((emacs "29.1") (ecss "0.1.0"))
 ;; Keywords: ui, graphics, convenience
 ;; URL: https://github.com/emacs-taf/ebox
@@ -358,6 +358,27 @@
 ;;;###autoload (autoload 'ebox-node-geometry "ebox" nil nil)
 ;; Return NODE's border box as a plist (:x :y :width :height).
 ;;
+;; Function: ebox-node-box-metrics (node)
+;;;###autoload (autoload 'ebox-node-box-metrics "ebox" nil nil)
+;; Return resolved box-model metrics for laid-out NODE, or nil.
+;; The detached plist holds :x, :y, :margin, :border, :padding, :border-box,
+;; :content-box, :viewport-height, :scroll, :layout-kind, :gap and
+;; :natural-width.  Horizontal sizes are pixels; vertical sizes are root lines.
+;;
+;; Function: ebox-node-row-spans (node)
+;;;###autoload (autoload 'ebox-node-row-spans "ebox" nil nil)
+;; Return exact painted (LINE BEG . END) buffer spans for visible rows of NODE.
+;; LINE is 0-based; each span covers only NODE's horizontal extent on that row
+;; and intersects enclosing clipping containers.  Return nil when unmounted or
+;; clipped out of view.
+;;
+;; Function: ebox-node-inspect-style (node)
+;;;###autoload (autoload 'ebox-node-inspect-style "ebox" nil nil)
+;; Return on-demand ECSS cascade and provenance details for styled NODE, or nil.
+;; Computes provenance only for NODE without mutating caches or buffers.  Return
+;; a detached plist with :values, :specified, :custom-properties, :provenance,
+;; :matched-rules, :states and :diagnostics.
+;;
 ;; Function: ebox-node-root-line (node)
 ;;;###autoload (autoload 'ebox-node-root-line "ebox" nil nil)
 ;; Return the root line of NODE's border-box top, or nil when not laid out.
@@ -528,6 +549,13 @@
 ;; Keymap of mounted Ebox buffers: scrolling, focus navigation and activation.
 ;; Arrows and C-n/C-p/C-b/C-f call `ebox-focus-direction', scrolling when no
 ;; stop lies above or below; Home/End and M-</M-> call `ebox-focus-edge'.
+;;
+;; Variable: ebox-allow-text-selection
+;; Whether a mounted canvas allows native Emacs mark and pointer selection.
+;; Nil by default so canvas applications keep presses from painting regions;
+;; set it buffer-locally to non-nil in reading or browser buffers where the
+;; user selects and copies painted text.  Interactive controls keep their own
+;; press and drag gestures.
 ;;
 ;;;; Input sessions
 ;;

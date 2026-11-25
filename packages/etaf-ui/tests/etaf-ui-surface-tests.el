@@ -614,5 +614,31 @@ props, so the catalog resolves it before the mouse face reaches Ebox."
         (when-let* ((runtime (etaf-runtime-for-buffer (current-buffer))))
           (etaf-unmount runtime))))))
 
+(ert-deftest etaf-ui-media-viewer-supports-audio-volume-and-playback-keys ()
+  "MediaViewer accepts `:audio', `:volume', `:on-ended' and handles j/l and [/] keys."
+  (with-temp-buffer
+    (let ((open (etaf-ref t)))
+      (unwind-protect
+          (progn
+            (etaf-mount
+             (current-buffer)
+             (etaf-view
+              (column :width '(ch 80) :height '(lh 24)
+                (etaf-media-viewer
+                 :open open :kind 'audio :src "missing.ogg" :duration 90
+                 :title "Audio clip" :autoplay nil
+                 :audio t :volume 80 :on-ended #'ignore
+                 :on-close (lambda () (setf (etaf-value open) nil))))))
+            (should (string-match-p "0:00 / 1:30" (buffer-string)))
+            (etaf-ui-surface-test--key "l")
+            (should (string-match-p "0:10 / 1:30" (buffer-string)))
+            (etaf-ui-surface-test--key "j")
+            (should (string-match-p "0:00 / 1:30" (buffer-string)))
+            (etaf-ui-surface-test--key "[")
+            (etaf-ui-surface-test--key "]")
+            (should (etaf-value open)))
+        (when-let* ((runtime (etaf-runtime-for-buffer (current-buffer))))
+          (etaf-unmount runtime))))))
+
 (provide 'etaf-ui-surface-tests)
 ;;; etaf-ui-surface-tests.el ends here

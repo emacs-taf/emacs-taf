@@ -15,11 +15,15 @@
 (require 'cl-lib)
 (require 'subr-x)
 
+(require 'etaf)
 (require 'etaf-ui)
 (require 'etaf-md-node)
 (require 'etaf-md-env)
+(require 'etaf-md-cache)
 
 (declare-function etaf-md--typeset-changed "etaf-md-typeset" (session))
+(declare-function etaf-md--refresh-block-assets "etaf-md-model" (session))
+(declare-function etaf-md--read "etaf-md-model" (session key))
 (declare-function etaf-md--media-picture "etaf-md-views" (url env max-columns max-rows))
 (declare-function etaf-md--component-view-env "etaf-md-components" (env))
 
@@ -74,20 +78,31 @@ the square shape the scanner expects at any font metric."
     (when (and path (file-exists-p path))
       (etaf-md--media-picture path (etaf-md--component-view-env env) 24 24))))
 
-(defun etaf-md-qrcode--write (text file)
-  "Draw TEXT's code into PNG FILE; return non-nil when it was written."
+(defun etaf-md-qrcode--write-async (text file done)
+  "Draw TEXT's QR PNG into FILE asynchronously via `etaf-process-run'.
+Calls DONE with non-nil when FILE was written, or nil on failure."
   (make-directory (file-name-directory file) t)
   (let ((temporary (make-temp-file "etaf-md-qr-" nil ".png")))
-    (unwind-protect
-        (when (zerop (call-process "qrencode" nil nil nil
-                                   "-t" "PNG" "-s" "8" "-m" "2"
-                                   "-o" temporary text))
-          (rename-file temporary file t)
-          t)
-      (when (file-exists-p temporary) (delete-file temporary)))))
+    (etaf-process-run
+     (list "qrencode" "-t" "PNG" "-s" "8" "-m" "2" "-o" temporary text)
+     :name "etaf-md-qrencode"
+     :timeout 10
+     :callback
+     (lambda (res)
+       (let ((ok nil))
+         (unwind-protect
+             (when (and (eq (plist-get res :status) 'exit)
+                        (eql (plist-get res :exit) 0)
+                        (file-exists-p temporary))
+               (rename-file temporary file t)
+               (etaf-md-cache-prune-directory etaf-md-qrcode--cache-directory)
+               (setq ok t))
+           (when (file-exists-p temporary)
+             (ignore-errors (delete-file temporary))))
+         (funcall done ok))))))
 
 (defun etaf-md-qrcode-request (session)
-  "Start the drawings SESSION's page needs and does not show yet."
+  "Start the asynchronous QR drawings SESSION's page needs and does not show."
   (when (etaf-md-qrcode-available-p)
     (dolist (entry (plist-get (etaf-md--read session :document) :children))
       (let* ((block (plist-get entry :block))
@@ -97,14 +112,16 @@ the square shape the scanner expects at any font metric."
                    (not (file-exists-p file))
                    (not (gethash file etaf-md-qrcode--running)))
           (puthash file t etaf-md-qrcode--running)
-          (run-at-time
-           0 nil
-           (lambda ()
-             (unwind-protect
-                 (when (etaf-md-qrcode--write text file)
-                   (when (fboundp 'etaf-md--typeset-changed)
-                     (etaf-md--typeset-changed session)))
-               (remhash file etaf-md-qrcode--running)))))))))
+          (etaf-md-qrcode--write-async
+           text file
+           (lambda (ok)
+             (remhash file etaf-md-qrcode--running)
+             (when ok
+               (cond
+                ((fboundp 'etaf-md--typeset-changed)
+                 (etaf-md--typeset-changed session))
+                ((fboundp 'etaf-md--refresh-block-assets)
+                 (etaf-md--refresh-block-assets session)))))))))))
 
 (provide 'etaf-md-qrcode)
 

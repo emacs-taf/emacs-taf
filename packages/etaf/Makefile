@@ -4,8 +4,8 @@ EMACS ?= emacs
 LOAD_PATH = -L . -L lisp -L examples -L scripts -L benchmarks -L ../ebox -L ../ecss
 SOURCES = lisp/etaf-view.el lisp/etaf-compiler.el lisp/etaf-component.el lisp/etaf-reactive.el lisp/etaf-animation.el lisp/etaf-observer.el lisp/etaf-context.el lisp/etaf-async.el lisp/etaf-resource.el lisp/etaf-data.el lisp/etaf-list-cache.el lisp/etaf-runtime.el lisp/etaf-behavior.el lisp/etaf-controlled-behavior.el lisp/etaf-actions.el lisp/etaf-events.el lisp/etaf-keys.el lisp/etaf-regions.el lisp/etaf-help.el lisp/etaf-viewport.el lisp/etaf-app.el lisp/etaf-process.el lisp/etaf-performance.el lisp/etaf-measure.el etaf.el scripts/emacs-gui-verifier.el
 SOURCES += scripts/resource-gui-scenarios.el benchmarks/performance-scenarios.el
-SOURCES += lisp/etaf-video-source.el lisp/etaf-video-audio.el lisp/etaf-video-session.el lisp/etaf-video-component.el
-SOURCES += lisp/etaf-projection.el
+SOURCES += lisp/etaf-video-source.el lisp/etaf-video-audio.el lisp/etaf-video-mpv.el lisp/etaf-video-session.el lisp/etaf-video-component.el
+SOURCES += lisp/etaf-projection.el lisp/etaf-inspect.el
 EXAMPLES = examples/etaf-animation-example.el examples/etaf-counter-example.el examples/etaf-data-example.el examples/etaf-resource-example.el examples/etaf-retained-resize.el
 TESTS = $(filter-out tests/etaf-docs-tests.el,$(wildcard tests/*-tests.el))
 

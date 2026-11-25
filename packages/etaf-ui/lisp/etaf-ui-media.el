@@ -119,7 +119,7 @@ Keep the aspect ratio; enlarge beyond the natural size only when UPSCALE."
 
 (etaf-define-component etaf-ui--media-viewer-open
     (&key kind src source-size title subtitle caption duration on-close
-          on-previous on-next autoplay)
+          on-previous on-next on-ended autoplay audio volume)
   "Render the open viewer and own its keys and video polling."
   :bindings
   ((panel (etaf-local-ref 'panel))
@@ -136,11 +136,17 @@ Keep the aspect ratio; enlarge beyond the natural size only when UPSCALE."
    (close-input (etaf-prop 'on-close))
    (previous-input (etaf-prop 'on-previous))
    (next-input (etaf-prop 'on-next))
+   (ended-input (etaf-prop 'on-ended))
    (playing (etaf-ref nil :name "media-playing"))
    (position (etaf-ref 0 :name "media-position"))
    (total-time (etaf-ref 0 :name "media-duration"))
    (speed (etaf-ref 1 :name "media-speed"))
-   (audio (etaf-ref etaf-video-audio :name "media-audio"))
+   (audio-ref (etaf-ref (if (eq audio :default) etaf-video-audio (and audio t))
+                        :name "media-audio"))
+   (volume-ref (etaf-ref (max 0 (min 100 (round (or volume etaf-video-audio-volume))))
+                         :name "media-volume"))
+   (ended-seen nil)
+   (ended-src nil)
    (duration-value
     (lambda ()
       (if (eq (etaf-value kind-input) 'audio)
@@ -191,12 +197,14 @@ Keep the aspect ratio; enlarge beyond the natural size only when UPSCALE."
       (funcall audio-stop)
       (let ((process (etaf-ui--media-audio-start
                       (etaf-value src-input) at (etaf-value speed)
-                      (if (etaf-value audio) etaf-video-audio-volume 0)
+                      (if (etaf-value audio-ref) (etaf-value volume-ref) 0)
                       (lambda (ended)
                         (when (eq ended audio-process)
                           (setq audio-process nil)
                           (etaf-set-value playing nil)
-                          (etaf-set-value position (funcall duration-value)))))))
+                          (etaf-set-value position (funcall duration-value))
+                          (let ((cb (etaf-value ended-input)))
+                            (when (functionp cb) (funcall cb))))))))
         (when (and process (process-live-p process))
           (setq audio-process process
                 audio-base at
@@ -209,10 +217,19 @@ Keep the aspect ratio; enlarge beyond the natural size only when UPSCALE."
              (when (and audio-process (etaf-value playing))
                (etaf-set-value position (funcall audio-position))))
             ((funcall video-p)
+             (let ((cur-src (etaf-value src-input)))
+               (unless (equal cur-src ended-src)
+                 (setq ended-src cur-src ended-seen nil)))
              (when-let* ((state (ignore-errors (etaf-video-state handle))))
                (etaf-set-value playing (and (plist-get state :playing) t))
                (etaf-set-value position (or (plist-get state :position) 0))
-               (etaf-set-value total-time (or (plist-get state :duration) 0)))))))
+               (etaf-set-value total-time (or (plist-get state :duration) 0))
+               (if (plist-get state :ended)
+                   (unless ended-seen
+                     (setq ended-seen t)
+                     (let ((cb (etaf-value ended-input)))
+                       (when (functionp cb) (funcall cb))))
+                 (setq ended-seen nil)))))))
    (toggle (lambda ()
              (cond
               ((funcall audio-p)
@@ -254,9 +271,16 @@ Keep the aspect ratio; enlarge beyond the natural size only when UPSCALE."
                   (when (and (funcall audio-p) audio-process (etaf-value playing))
                     (funcall audio-start (funcall audio-position)))))
    (toggle-audio (lambda ()
-                   (etaf-update-value audio #'not)
+                   (etaf-update-value audio-ref #'not)
                    (when (and (funcall audio-p) audio-process (etaf-value playing))
                      (funcall audio-start (funcall audio-position)))))
+   (change-volume (lambda (delta)
+                    (let ((next (max 0 (min 100 (+ (etaf-value volume-ref) delta)))))
+                      (etaf-set-value volume-ref next)
+                      (when (and (> next 0) (not (etaf-value audio-ref)))
+                        (etaf-set-value audio-ref t))
+                      (when (and (funcall audio-p) audio-process (etaf-value playing))
+                        (funcall audio-start (funcall audio-position))))))
    (navigate (lambda (direction)
                (let ((callback (etaf-value (if (eq direction 'next)
                                                next-input
@@ -279,6 +303,14 @@ Keep the aspect ratio; enlarge beyond the natural size only when UPSCALE."
    (keys
     (list (list "q" close "Close")
           (list "SPC" toggle "Play or pause")
+          (list "j" (lambda () (when (or (funcall video-p) (funcall audio-p))
+                                 (funcall seek-by -10))) "Back 10 seconds")
+          (list "l" (lambda () (when (or (funcall video-p) (funcall audio-p))
+                                 (funcall seek-by 10))) "Forward 10 seconds")
+          (list "[" (lambda () (when (or (funcall video-p) (funcall audio-p))
+                                 (funcall change-volume -10))) "Volume down")
+          (list "]" (lambda () (when (or (funcall video-p) (funcall audio-p))
+                                 (funcall change-volume 10))) "Volume up")
           (list "p" (lambda () (funcall navigate 'previous)) "Previous")
           (list "n" (lambda () (funcall navigate 'next)) "Next")
           (list "m" toggle-audio "Mute or unmute")
@@ -333,7 +365,7 @@ Keep the aspect ratio; enlarge beyond the natural size only when UPSCALE."
            (when (etaf-host-ref-position runtime target)
              (ignore-errors (etaf-focus runtime target))))))))
   :render
-  (let* ((viewport (etaf-runtime-viewport))
+  (let* ((viewport (or (etaf-viewport) (etaf-runtime-viewport)))
          (lines (max 8 (or (cdr viewport) 24)))
          (cw (max 1 (car (etaf-ui--canvas-cell))))
          (video (eq kind 'video))
@@ -418,7 +450,7 @@ Keep the aspect ratio; enlarge beyond the natural size only when UPSCALE."
                 (etaf-node 'etaf-video
                            (list :src src :columns (car grid) :rows (cdr grid)
                                  :handle handle :autoplay autoplay
-                                 :audio audio :speed speed)
+                                 :audio audio-ref :volume volume-ref :speed speed)
                            nil))
                ((eq kind 'audio)
                 (etaf-node 'flex (list :flex-direction 'column :justify-content 'center
@@ -483,10 +515,10 @@ Keep the aspect ratio; enlarge beyond the natural size only when UPSCALE."
                                :on-press cycle-speed)
                          nil)
               (etaf-node 'etaf-ui-toggle-icon
-                         (list :value audio :off 'volume-mute :on 'volume :set 'svg
+                         (list :value audio-ref :off 'volume-mute :on 'volume :set 'svg
                                :size 0.9 :min-width 4
                                :color (etaf-ui--media-color :control)
-                               :help-echo "Sound (m)"
+                               :help-echo "Sound (m), Volume ([ / ])"
                                :on-press toggle-audio)
                          nil)))
           (etaf-node 'box (list :ref footer :width 'stretch :height '(lh 1)
@@ -497,7 +529,7 @@ Keep the aspect ratio; enlarge beyond the natural size only when UPSCALE."
 
 (etaf-define-component etaf-media-viewer
     (&key open (kind 'image) src source-size title subtitle caption duration on-close
-          on-previous on-next (autoplay t))
+          on-previous on-next on-ended (autoplay t) (audio :default) volume)
   "Show SRC of KIND in a controlled modal viewer over the application."
   :validate
   (progn
@@ -513,6 +545,12 @@ Keep the aspect ratio; enlarge beyond the natural size only when UPSCALE."
                      "a function or nil")
     (etaf-check-prop :on-next on-next (or (null on-next) (functionp on-next))
                      "a function or nil")
+    (etaf-check-prop :on-ended on-ended (or (null on-ended) (functionp on-ended))
+                     "a function or nil")
+    (etaf-check-prop :volume volume
+                     (or (null volume)
+                         (and (numberp volume) (<= 0 volume 100)))
+                     "nil or a number between 0 and 100")
     (etaf-check-prop :source-size source-size
                      (or (null source-size)
                          (and (consp source-size)
@@ -530,7 +568,8 @@ Keep the aspect ratio; enlarge beyond the natural size only when UPSCALE."
                (list :kind kind :src src :source-size source-size :title title
                      :subtitle subtitle :caption caption :duration duration
                      :on-close on-close
-                     :on-previous on-previous :on-next on-next :autoplay autoplay)
+                     :on-previous on-previous :on-next on-next :on-ended on-ended
+                     :autoplay autoplay :audio audio :volume volume)
                (etaf-current-slot 'default))))
 
 (provide 'etaf-ui-media)

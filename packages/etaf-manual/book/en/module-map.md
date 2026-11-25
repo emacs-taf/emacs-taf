@@ -76,8 +76,9 @@ ETAF has the largest module set. Its core is the authoring model; the Runtime is
 | `lisp/etaf-performance.el` | The optional performance recorder | `lisp/etaf-runtime.el` |
 | `lisp/etaf-video-source.el` | Video source normalization, probing and frame filtering | — |
 | `lisp/etaf-video-audio.el` | The audio sidecar of a playback session | `lisp/etaf-video-source.el` |
+| `lisp/etaf-video-mpv.el` | Optional cross-platform libmpv playback backend | `lisp/etaf-video-source.el` |
 | `lisp/etaf-video-session.el` | The playback session: frame producer, sidecar and timer | `lisp/etaf-video-source.el`, `lisp/etaf-video-audio.el` |
-| `lisp/etaf-video-component.el` | The `etaf-video` Component | `lisp/etaf-video-source.el`, `lisp/etaf-video-session.el`, `lisp/etaf-video-audio.el`, `lisp/etaf-component.el`, `lisp/etaf-reactive.el`, `lisp/etaf-runtime.el` |
+| `lisp/etaf-video-component.el` | The `etaf-video` Component | `lisp/etaf-video-source.el`, `lisp/etaf-video-session.el`, `lisp/etaf-video-audio.el`, `lisp/etaf-video-mpv.el`, `lisp/etaf-component.el`, `lisp/etaf-reactive.el`, `lisp/etaf-runtime.el` |
 
 The Runtime is required by every capability module and requires none of them, which is what makes Actions, keys, regions, viewport regions and the performance recorder optional layers rather than parts of the core. The video modules form their own small stack: source, audio sidecar, session and finally the Component. The entry loads all of them, so requiring `etaf` loads the whole framework.
 

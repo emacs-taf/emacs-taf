@@ -33,6 +33,7 @@
 (require 'etaf-reactive)
 (require 'etaf-runtime)
 (require 'etaf-video-audio)
+(require 'etaf-video-mpv)
 (require 'etaf-video-session)
 (require 'etaf-video-source)
 
@@ -168,7 +169,7 @@ it on unmount, so the control functions always address a live session.")
 
 (cl-defstruct (etaf-video--instance (:constructor etaf-video--instance--make))
   "Mounted state owned by one `etaf-video' Component instance."
-  handle ref cell sources runtime session applied image-scale
+  handle ref cell sources runtime session applied autoplay image-scale
   image-max-width image-max-height image-last canvas-spec canvas-key)
 
 (defun etaf-video--instance-view-content (instance)
@@ -264,10 +265,30 @@ backend instead of breaking video playback."
   "Return INSTANCE's rendering backend after the capability fallback.
 A `canvas' or `auto' request falls back to `image' when this Emacs cannot
 display canvas images or the buffer is not in a graphical frame."
-  (if (and (eq etaf-video-render-backend 'canvas)
+  (if (and (memq etaf-video-render-backend '(canvas auto))
            (etaf-video--instance-canvas-p instance))
       'canvas
     'image))
+
+(defun etaf-video--instance-effective-engine (instance)
+  "Return INSTANCE's playback engine: `mpv' or `ffmpeg'."
+  (let* ((applied (etaf-video--instance-applied instance))
+         (src (plist-get applied :src))
+         (kind (and (consp src) (plist-get src :kind)))
+         (demo-p (or (null src) (eq kind 'demo)
+                     (and (consp src) (or (eq (car src) :demo) (plist-get src :demo)))))
+         (mode (etaf-video--instance-effective-mode instance)))
+    (pcase etaf-video-engine
+      ('ffmpeg 'ffmpeg)
+      ('mpv (if demo-p 'ffmpeg 'mpv))
+      (_ (if (and (not demo-p)
+                  (eq mode 'image)
+                  (etaf-video--instance-graphic-p instance)
+                  (or (etaf-video--instance-canvas-p instance)
+                      (image-type-available-p 'pbm))
+                  (etaf-video-mpv-available-p))
+             'mpv
+           'ffmpeg)))))
 
 (defun etaf-video--canvas-cell (runtime frame)
   "Return the cell RUNTIME draws as (CHAR-WIDTH . LINE-HEIGHT) pixels.
@@ -338,16 +359,27 @@ logical pixels for image display, and MAX-WIDTH and MAX-HEIGHT cap the
 displayed image (nil for the raw modes)."
   (let* ((applied (etaf-video--instance-applied instance))
          (columns (plist-get applied :columns))
-         (rows (plist-get applied :rows)))
-    (if (eq (etaf-video--instance-effective-backend instance) 'canvas)
-        ;; The canvas buffer is logical-resolution, so the producer must
-        ;; write exactly that many pixels; a device-resolution frame would
-        ;; overflow the canvas and crash the module.
-        (etaf-video--instance-pixel-frame-size instance 'bgra 1.0)
+         (rows (plist-get applied :rows))
+         (engine (etaf-video--instance-effective-engine instance)))
+    (cond
+     ((eq engine 'mpv)
+      (if (eq (etaf-video--instance-effective-backend instance) 'canvas)
+          (etaf-video--instance-pixel-frame-size instance 'canvas 1.0)
+        (pcase (etaf-video--instance-effective-mode instance)
+          ('image (etaf-video--instance-pixel-frame-size
+                   instance 'ppm (or (plist-get applied :device-pixel-ratio) 1.0)))
+          ('color (list 'rgb24 columns (* 2 rows) 1.0 nil nil))
+          (_ (list 'gray columns rows 1.0 nil nil)))))
+     ((eq (etaf-video--instance-effective-backend instance) 'canvas)
+      ;; The canvas buffer is logical-resolution, so the producer must
+      ;; write exactly that many pixels; a device-resolution frame would
+      ;; overflow the canvas and crash the module.
+      (etaf-video--instance-pixel-frame-size instance 'bgra 1.0))
+     (t
       (pcase (etaf-video--instance-effective-mode instance)
         ('image (etaf-video--instance-pixel-frame-size instance 'mjpeg))
         ('color (list 'rgb24 columns (* 2 rows) 1.0 nil nil))
-        (_ (list 'gray columns rows 1.0 nil nil))))))
+        (_ (list 'gray columns rows 1.0 nil nil)))))))
 
 (defun etaf-video--image-ascent (frame &optional line)
   "Return the image ascent percentage that keeps a row at the canvas line.
@@ -400,7 +432,12 @@ place chrome under it."
 (defun etaf-video--instance-present (instance frame)
   "Draw FRAME for INSTANCE through its effective backend."
   (if (eq (etaf-video--instance-effective-backend instance) 'canvas)
-      (etaf-video--instance-present-canvas instance frame)
+      (if (etaf-video-mpv--session-p (etaf-video--instance-session instance))
+          (when (and frame (etaf-video--instance-runtime instance)
+                     (etaf-runtime-mounted-p (etaf-video--instance-runtime instance)))
+            (canvas-refresh frame)
+            (redisplay))
+        (etaf-video--instance-present-canvas instance frame))
     (etaf-video--instance-present-image instance frame)))
 
 (defun etaf-video--display-canvas (display)
@@ -510,15 +547,21 @@ frame does not pay for an ordinary ETAF publication."
              (cell (etaf-video--instance-cell instance))
              (ref (etaf-video--instance-ref instance))
              (mode (etaf-video--instance-effective-mode instance))
+             (session (etaf-video--instance-session instance))
+             (img-type (if (and (etaf-video-mpv--session-p session)
+                                (eq (etaf-video-mpv--session-format session) 'ppm))
+                           'pbm
+                         'jpeg))
              (image (and (eq mode 'image)
-                         (create-image frame 'jpeg t
-                                       :ascent (etaf-video--image-ascent
-                                                (etaf-video--instance-frame instance)
-                                                (cdr (etaf-video--canvas-cell
-                                                      runtime frame)))
-                                       :scale (etaf-video--instance-image-scale instance)
-                                       :max-width (etaf-video--instance-image-max-width instance)
-                                       :max-height (etaf-video--instance-image-max-height instance))))
+                         (let ((win-frame (etaf-video--instance-frame instance)))
+                           (create-image frame img-type t
+                                         :ascent (etaf-video--image-ascent
+                                                  win-frame
+                                                  (cdr (etaf-video--canvas-cell
+                                                        runtime win-frame)))
+                                         :scale (etaf-video--instance-image-scale instance)
+                                         :max-width (etaf-video--instance-image-max-width instance)
+                                         :max-height (etaf-video--instance-image-max-height instance)))))
              (content
               (pcase mode
                 ('image (etaf-video--image-grid-text instance image))
@@ -546,7 +589,10 @@ frame does not pay for an ordinary ETAF publication."
                 (ignore-errors (image-flush previous)))
               (setf (etaf-video--instance-image-last instance) image))
           (etaf-runtime-error
-           (etaf-video-session-destroy (etaf-video--instance-session instance))
+           (let ((sess (etaf-video--instance-session instance)))
+             (if (etaf-video-mpv--session-p sess)
+                 (etaf-video-mpv--session-destroy sess)
+               (etaf-video-session-destroy sess)))
            (message "etaf-video: %s" (error-message-string problem))))))))
 
 (defun etaf-video--instance-register (instance)
@@ -557,37 +603,76 @@ frame does not pay for an ordinary ETAF publication."
         (user-error "An etaf-video is already mounted for handle %S" handle)))
     (puthash handle instance etaf-video--instances)))
 
+(defun etaf-video--session-destroy-any (session)
+  "Destroy SESSION whether backed by libmpv or ffmpeg."
+  (when session
+    (if (etaf-video-mpv--session-p session)
+        (etaf-video-mpv--session-destroy session)
+      (etaf-video-session-destroy session))))
+
+(defun etaf-video--session-state-any (session)
+  "Read detached state plist from SESSION whether libmpv or ffmpeg."
+  (if (etaf-video-mpv--session-p session)
+      (etaf-video-mpv--session-state session)
+    (append (list :engine 'ffmpeg) (etaf-video-session-state session))))
+
 (defun etaf-video--instance-build (instance &optional start playing)
   "Create INSTANCE's playback session from its applied inputs.
 START is the seek position in seconds and PLAYING says whether the new
 session starts playing; a paused session presents one frame instead."
   (let* ((applied (etaf-video--instance-applied instance))
          (size (etaf-video--instance-frame-size instance))
-         (session (etaf-video-session-create
-                   (plist-get applied :src)
-                   :format (nth 0 size)
-                   :width (nth 1 size)
-                   :height (nth 2 size)
-                   :speed (plist-get applied :speed)
-                   :fps (plist-get applied :display-fps)
-                   :start (or start 0)
-                   :canvas (eq (etaf-video--instance-effective-backend instance)
-                               'canvas)
-                   :audio (plist-get applied :audio)
-                   :volume (plist-get applied :volume)
-                   :on-frame (lambda (frame _session)
-                               (etaf-video--instance-present instance frame)))))
+         (engine (etaf-video--instance-effective-engine instance))
+         (session
+          (if (eq engine 'mpv)
+              (etaf-video-mpv--session-create
+               (etaf-video-source-info (plist-get applied :src))
+               :format (nth 0 size)
+               :width (nth 1 size)
+               :height (nth 2 size)
+               :speed (plist-get applied :speed)
+               :fps (plist-get applied :display-fps)
+               :start (or start 0)
+               :audio (plist-get applied :audio)
+               :volume (plist-get applied :volume)
+               :playing playing
+               :canvas-spec-fn (lambda ()
+                                 (or (etaf-video--instance-canvas-display instance)
+                                     (etaf-video--instance-canvas-spec instance)))
+               :on-frame (lambda (frame _session)
+                           (etaf-video--instance-present instance frame)))
+            (etaf-video-session-create
+             (plist-get applied :src)
+             :format (nth 0 size)
+             :width (nth 1 size)
+             :height (nth 2 size)
+             :speed (plist-get applied :speed)
+             :fps (plist-get applied :display-fps)
+             :start (or start 0)
+             :canvas (eq (etaf-video--instance-effective-backend instance)
+                         'canvas)
+             :audio (plist-get applied :audio)
+             :volume (plist-get applied :volume)
+             :on-frame (lambda (frame _session)
+                         (etaf-video--instance-present instance frame))))))
     (setf (etaf-video--instance-session instance) session
           (etaf-video--instance-image-scale instance) (nth 3 size)
           (etaf-video--instance-image-max-width instance) (nth 4 size)
           (etaf-video--instance-image-max-height instance) (nth 5 size))
-    (if playing
-        (etaf-video-session-play session)
-      (etaf-video-session-step session))))
+    (unless (eq engine 'mpv)
+      (if playing
+          (etaf-video-session-play session)
+        (etaf-video-session-step session)))))
+
+(defun etaf-video--source-start-offset (src)
+  "Return initial seek offset in seconds declared on SRC, or 0."
+  (let ((start (and (consp src) (plist-get src :start))))
+    (if (and (numberp start) (>= start 0)) start 0)))
 
 (defun etaf-video--instance-mount (instance autoplay)
   "Mount INSTANCE, start its session and honor AUTOPLAY."
-  (setf (etaf-video--instance-runtime instance) (etaf-current-runtime))
+  (setf (etaf-video--instance-runtime instance) (etaf-current-runtime)
+        (etaf-video--instance-autoplay instance) (and autoplay t))
   (etaf-video--instance-register instance)
   (setf (etaf-video--instance-applied instance)
         (etaf-video--instance-read-inputs instance))
@@ -596,7 +681,11 @@ session starts playing; a paused session presents one frame instead."
           (etaf-value (plist-get (etaf-video--instance-sources instance)
                                  :canvas)))
     (etaf-video--instance-ensure-canvas instance))
-  (etaf-video--instance-build instance 0 autoplay))
+  (etaf-video--instance-build
+   instance
+   (etaf-video--source-start-offset
+    (plist-get (etaf-video--instance-applied instance) :src))
+   autoplay))
 
 (defun etaf-video--instance-unmount (instance)
   "Release INSTANCE's session and handle registration."
@@ -606,7 +695,7 @@ session starts playing; a paused session presents one frame instead."
   (setf (etaf-video--instance-canvas-spec instance) nil
         (etaf-video--instance-canvas-key instance) nil)
   (when-let* ((session (etaf-video--instance-session instance)))
-    (etaf-video-session-destroy session)
+    (etaf-video--session-destroy-any session)
     (setf (etaf-video--instance-session instance) nil))
   (let ((handle (etaf-video--instance-handle instance)))
     (when (eq (gethash handle etaf-video--instances) instance)
@@ -615,48 +704,66 @@ session starts playing; a paused session presents one frame instead."
 
 (defun etaf-video--instance-apply (instance inputs)
   "Apply new tracked INPUTS to INSTANCE.
-A source change rebuilds the session at the start of the new source.  A size,
-mode, ramp or device pixel ratio change rebuilds it at the current position,
-or at the last frame of an ended video, so a paused canvas shows a frame of
-its new size; speed, volume and audio changes update the running session in
-place."
+A source change rebuilds the session at the start of the new source.  On
+libmpv, size changes resize the output surface in place without restarting
+playback; on ffmpeg, size, mode, ramp or device pixel ratio changes rebuild
+at the current position.  Speed, volume and audio update in place."
   (let ((old (etaf-video--instance-applied instance)))
     (unless (equal old inputs)
-      (let ((structural
-             (or (not (equal (plist-get old :src) (plist-get inputs :src)))
-                 (not (equal (plist-get old :columns) (plist-get inputs :columns)))
-                 (not (equal (plist-get old :rows) (plist-get inputs :rows)))
-                 (not (equal (plist-get old :mode) (plist-get inputs :mode)))
-                 (not (equal (plist-get old :ramp) (plist-get inputs :ramp)))
-                 (not (equal (plist-get old :device-pixel-ratio)
-                             (plist-get inputs :device-pixel-ratio)))
-                 (not (equal (plist-get old :display-fps)
-                             (plist-get inputs :display-fps))))))
+      (let* ((session (etaf-video--instance-session instance))
+             (mpv-p (etaf-video-mpv--session-p session))
+             (src-changed (not (equal (plist-get old :src) (plist-get inputs :src))))
+             (size-changed (or (not (equal (plist-get old :columns) (plist-get inputs :columns)))
+                               (not (equal (plist-get old :rows) (plist-get inputs :rows)))
+                               (not (equal (plist-get old :device-pixel-ratio)
+                                           (plist-get inputs :device-pixel-ratio)))))
+             (mode-changed (or (not (equal (plist-get old :mode) (plist-get inputs :mode)))
+                               (not (equal (plist-get old :ramp) (plist-get inputs :ramp)))
+                               (not (equal (plist-get old :display-fps)
+                                           (plist-get inputs :display-fps)))))
+             (structural (or src-changed mode-changed (and size-changed (not mpv-p)))))
         (setf (etaf-video--instance-applied instance) inputs)
-        (if structural
-            (when-let* ((session (etaf-video--instance-session instance)))
-              (let* ((state (etaf-video-session-state session))
-                     (duration (plist-get state :duration))
-                     (playing (plist-get state :playing))
-                     (position
-                      (cond ((not (equal (plist-get old :src) (plist-get inputs :src))) 0)
-                            ((and (not playing) duration
-                                  (or (plist-get state :ended)
-                                      (>= (plist-get state :position) duration)))
-                             (max 0 (- duration
-                                       (/ 1.0 (or (plist-get state :source-fps) 25)))))
-                            (t (plist-get state :position)))))
-                (etaf-video-session-destroy session)
-                (setf (etaf-video--instance-session instance) nil)
-                (when (etaf-video--instance-runtime instance)
-                  (etaf-video--instance-build instance position playing))))
-          (when-let* ((session (etaf-video--instance-session instance)))
-            (unless (equal (plist-get old :speed) (plist-get inputs :speed))
-              (etaf-video-session-set-speed session (plist-get inputs :speed)))
-            (unless (equal (plist-get old :volume) (plist-get inputs :volume))
-              (etaf-video-session-set-volume session (plist-get inputs :volume)))
-            (unless (equal (plist-get old :audio) (plist-get inputs :audio))
-              (etaf-video-session-set-audio session (plist-get inputs :audio)))))))))
+        (cond
+         ((and mpv-p size-changed (not src-changed) (not mode-changed))
+          (let ((size (etaf-video--instance-frame-size instance)))
+            (setf (etaf-video--instance-image-scale instance) (nth 3 size)
+                  (etaf-video--instance-image-max-width instance) (nth 4 size)
+                  (etaf-video--instance-image-max-height instance) (nth 5 size))
+            (etaf-video-mpv--session-resize session (nth 1 size) (nth 2 size))))
+         (structural
+          (when session
+            (let* ((state (etaf-video--session-state-any session))
+                   (duration (plist-get state :duration))
+                   (playing (if src-changed
+                                (or (plist-get state :playing)
+                                    (etaf-video--instance-autoplay instance))
+                              (plist-get state :playing)))
+                   (position
+                    (cond (src-changed
+                           (etaf-video--source-start-offset (plist-get inputs :src)))
+                          ((and (not playing) duration
+                                (or (plist-get state :ended)
+                                    (>= (plist-get state :position) duration)))
+                           (max 0 (- duration
+                                     (/ 1.0 (or (plist-get state :source-fps) 25)))))
+                          (t (plist-get state :position)))))
+              (etaf-video--session-destroy-any session)
+              (setf (etaf-video--instance-session instance) nil)
+              (when (etaf-video--instance-runtime instance)
+                (etaf-video--instance-build instance position playing)))))
+         (session
+          (unless (equal (plist-get old :speed) (plist-get inputs :speed))
+            (if mpv-p
+                (etaf-video-mpv--session-set-speed session (plist-get inputs :speed))
+              (etaf-video-session-set-speed session (plist-get inputs :speed))))
+          (unless (equal (plist-get old :volume) (plist-get inputs :volume))
+            (if mpv-p
+                (etaf-video-mpv--session-set-volume session (plist-get inputs :volume))
+              (etaf-video-session-set-volume session (plist-get inputs :volume))))
+          (unless (equal (plist-get old :audio) (plist-get inputs :audio))
+            (if mpv-p
+                (etaf-video-mpv--session-set-audio session (plist-get inputs :audio))
+              (etaf-video-session-set-audio session (plist-get inputs :audio))))))))))
 
 (etaf-define-component etaf-video
     (&key src (columns 100) (rows 30) (mode 'image)
@@ -799,68 +906,113 @@ video still plays itself but cannot be controlled."
           (expr (etaf-video--instance-view-content instance)))))
 
 (defun etaf-video-play (handle)
-  "Start or resume the mounted video identified by HANDLE.
-The producer restarts at the last presented position, so a resume never
-fast-forwards to catch up with wall-clock time."
-  (etaf-video-session-play (etaf-video--session-for handle))
+  "Start or resume the mounted video identified by HANDLE."
+  (let ((session (etaf-video--session-for handle)))
+    (if (etaf-video-mpv--session-p session)
+        (etaf-video-mpv--session-play session)
+      (etaf-video-session-play session)))
   t)
 
 (defun etaf-video-pause (handle)
-  "Pause the mounted video identified by HANDLE.
-The producer and audio sidecar are released; the last picture stays on the
-canvas."
-  (etaf-video-session-pause (etaf-video--session-for handle))
+  "Pause the mounted video identified by HANDLE."
+  (let ((session (etaf-video--session-for handle)))
+    (if (etaf-video-mpv--session-p session)
+        (etaf-video-mpv--session-pause session)
+      (etaf-video-session-pause session)))
   t)
 
 (defun etaf-video-toggle-playback (handle)
   "Toggle the mounted video identified by HANDLE between play and pause.
 A finished video restarts from its beginning."
-  (etaf-video-session-toggle (etaf-video--session-for handle))
+  (let ((session (etaf-video--session-for handle)))
+    (if (etaf-video-mpv--session-p session)
+        (etaf-video-mpv--session-toggle session)
+      (etaf-video-session-toggle session)))
   t)
 
 (defun etaf-video-step (handle)
   "Pause the mounted video identified by HANDLE and present one more frame."
-  (etaf-video-session-step (etaf-video--session-for handle))
+  (let ((session (etaf-video--session-for handle)))
+    (if (etaf-video-mpv--session-p session)
+        (etaf-video-mpv--session-step session)
+      (etaf-video-session-step session)))
+  t)
+
+(defun etaf-video-step-back (handle)
+  "Pause the mounted video identified by HANDLE and step backward one frame.
+Requires the libmpv engine; on the ffmpeg backend this seeks back 1 second."
+  (let ((session (etaf-video--session-for handle)))
+    (if (etaf-video-mpv--session-p session)
+        (etaf-video-mpv--session-step-back session)
+      (let ((pos (max 0.0 (- (or (plist-get (etaf-video-session-state session) :position) 0.0) 1.0))))
+        (etaf-video-session-pause session)
+        (etaf-video-session-seek session pos))))
   t)
 
 (defun etaf-video-seek (handle seconds)
-  "Move the mounted video identified by HANDLE to SECONDS.
-A playing video restarts its producer at the new position; a paused video
-presents the frame there and stays paused."
-  (etaf-video-session-seek (etaf-video--session-for handle) seconds)
+  "Move the mounted video identified by HANDLE to SECONDS."
+  (let ((session (etaf-video--session-for handle)))
+    (if (etaf-video-mpv--session-p session)
+        (etaf-video-mpv--session-seek session seconds)
+      (etaf-video-session-seek session seconds)))
   t)
 
 (defun etaf-video-set-speed (handle speed)
-  "Set the playback rate of the mounted video identified by HANDLE.
-SPEED is a positive number; a playing video restarts at the same position
-with the new rate."
-  (etaf-video-session-set-speed (etaf-video--session-for handle) speed)
+  "Set the playback rate of the mounted video identified by HANDLE."
+  (let ((session (etaf-video--session-for handle)))
+    (if (etaf-video-mpv--session-p session)
+        (etaf-video-mpv--session-set-speed session speed)
+      (etaf-video-session-set-speed session speed)))
   t)
 
 (defun etaf-video-set-volume (handle volume)
-  "Set the audio volume of the mounted video identified by HANDLE.
-VOLUME is between 0 and 100; a playing video restarts its audio sidecar at
-the same position."
-  (etaf-video-session-set-volume (etaf-video--session-for handle) volume)
+  "Set the audio volume of the mounted video identified by HANDLE, 0 to 100."
+  (let ((session (etaf-video--session-for handle)))
+    (if (etaf-video-mpv--session-p session)
+        (etaf-video-mpv--session-set-volume session volume)
+      (etaf-video-session-set-volume session volume)))
   t)
 
 (defun etaf-video-set-audio (handle audio)
-  "Turn the audio sidecar of the mounted video identified by HANDLE on or off.
-AUDIO non-nil plays the source's audio track; a source without an audio
-stream stays silent."
-  (etaf-video-session-set-audio (etaf-video--session-for handle) audio)
+  "Turn audio of the mounted video identified by HANDLE on or off."
+  (let ((session (etaf-video--session-for handle)))
+    (if (etaf-video-mpv--session-p session)
+        (etaf-video-mpv--session-set-audio session audio)
+      (etaf-video-session-set-audio session audio)))
   t)
+
+(defun etaf-video-set-property (handle name value)
+  "Set playback engine property NAME to VALUE on mounted video HANDLE.
+Supported on the libmpv engine (returns t on success, nil when unsupported)."
+  (let ((session (etaf-video--session-for handle)))
+    (when (etaf-video-mpv--session-p session)
+      (etaf-video-mpv--session-set-property session name value))))
+
+(defun etaf-video-get-property (handle name &optional type)
+  "Read playback engine property NAME from mounted video HANDLE.
+TYPE is `node' (default), `string', `bool', `int' or `float'.  Returns nil on
+engines that do not expose properties."
+  (let ((session (etaf-video--session-for handle)))
+    (when (etaf-video-mpv--session-p session)
+      (etaf-video-mpv--session-get-property session name type))))
+
+(defun etaf-video-command (handle &rest args)
+  "Send command ARGS to the playback engine of mounted video HANDLE.
+Supported on the libmpv engine; returns nil on engines without commands."
+  (let ((session (etaf-video--session-for handle)))
+    (when (etaf-video-mpv--session-p session)
+      (etaf-video-mpv--session-command session args))))
 
 (defun etaf-video-state (handle)
   "Return the mounted video identified by HANDLE as a detached plist.
-Keys are `:handle', `:mode' (the effective render mode), `:source',
-`:playing', `:position', `:duration', `:speed', `:format', `:width',
-`:height' (producer pixels), `:display-fps', `:source-fps', `:received',
-`:presented', `:dropped', `:audio' and `:ended'."
+Keys include `:handle', `:engine', `:mode', `:source', `:playing',
+`:position', `:duration', `:speed', `:format', `:width', `:height',
+`:display-fps', `:source-fps', `:received', `:presented', `:dropped',
+`:audio', `:buffering', `:error' and `:ended'."
   (let ((instance (etaf-video--instance-for handle)))
     (append (list :handle handle
                   :mode (etaf-video--instance-effective-mode instance))
-            (etaf-video-session-state (etaf-video--session-for handle)))))
+            (etaf-video--session-state-any (etaf-video--session-for handle)))))
 
 (provide 'etaf-video-component)
 ;;; etaf-video-component.el ends here

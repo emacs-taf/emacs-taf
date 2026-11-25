@@ -110,11 +110,11 @@ variant 命名的是语义角色而不是颜色。状态 variant `success`、`wa
 
 <!-- index: etaf-progress; determinate progress; track token; reactive value -->
 
-#### Component: etaf-progress (&key value max label variant)
+#### Component: etaf-progress (&key value max label variant animated)
 
 渲染确定型进度条。VALUE 与 MAX 是数字（或响应式），满足 0 <= VALUE <= MAX 且 MAX > 0。LABEL 可选。
 
-**参数。** VALUE 是当前量，MAX 是总量；两者都接受普通数字或响应式值，并在每次渲染时读取。LABEL 是可选说明文字。VARIANT 从语义 variant 中选择填充色。
+**参数。** VALUE 是当前量，MAX 是总量；两者都接受普通数字或响应式值，并在每次渲染时读取。LABEL 是可选说明文字。VARIANT 从语义 variant 中选择填充色。ANIMATED 非 nil（默认 nil）时，在挂载后经共享动画时钟平滑过渡填充宽度与百分比数字。
 
 **语义。** 进度条是两行：第一行显示标签与四舍五入后的百分比，第二行是一个标准行，轨道用 `:ui-progress-track`，填充用 variant 的前景并按百分比占据宽度。响应式的 VALUE 或 MAX 会重渲染进度条并重写百分比；因为检查在每次渲染时运行，值变化期间也持续约束取值边界。
 
@@ -186,11 +186,11 @@ variant 命名的是语义角色而不是颜色。状态 variant `success`、`wa
 
 <!-- index: etaf-statistic; metric card -->
 
-#### Component: etaf-statistic (&key label value trend)
+#### Component: etaf-statistic (&key label value trend animated)
 
 用调用方拥有的展示值渲染紧凑的度量卡片。
 
-**参数。** LABEL 是 muted 说明，VALUE 是强调的数字，TREND 是可选的成功色变化行。每个都接受值、ref 或 computed，与 `etaf-label` 一样。
+**参数。** LABEL 是 muted 说明，VALUE 是强调的数字，TREND 是可选的成功色变化行。每个都接受值、ref 或 computed，与 `etaf-label` 一样。ANIMATED 非 nil（默认 nil）时，在挂载后经共享动画时钟平滑滚动数值。
 
 **语义。** 结果是三行 column——muted label、heading value、success trend——自身没有表面，因为组件有意把容器间距与表面留给调用方。TREND 为 nil 时渲染一个空行。
 
@@ -206,13 +206,13 @@ variant 命名的是语义角色而不是颜色。状态 variant `success`、`wa
 
 <!-- index: etaf-skeleton; loading placeholder; placeholder size -->
 
-#### Component: etaf-skeleton (&key width height)
+#### Component: etaf-skeleton (&key width height animated)
 
 渲染中性加载占位，不拥有加载状态。
 
-**参数。** WIDTH 默认为 `stretch`，HEIGHT 默认一个标准行；两者接受任何长度值。
+**参数。** WIDTH 默认为 `stretch`，HEIGHT 默认一个标准行；两者接受任何长度值。ANIMATED 非 nil（默认 nil）时，在挂载后经共享动画时钟柔和脉冲闪烁占位表面。
 
-**语义。** skeleton 是用 `:ui-progress-track` 填充的普通盒子，尺寸由 props 决定。它不含状态、不含定时器：应用决定何时把它换成真实内容；在此之前它恰好预留内容将占用的空间。
+**语义。** skeleton 是用 `:ui-progress-track` 填充的普通盒子，尺寸由 props 决定。不开启 ANIMATED 时不含状态与定时器；开启后归属 Component Scope 的帧序列在卸载时停止并遵循 `etaf-animation-enabled`。
 
 **返回。** 一个 View。
 
@@ -222,7 +222,23 @@ variant 命名的是语义角色而不是颜色。状态 variant `success`、`wa
 (etaf-skeleton :width '(ch 24) :height '(lh 2))
 ```
 
-**参见。** `etaf-progress`、`:ui-progress-track`。
+**参见。** `etaf-progress`、`etaf-spinner`、`:ui-progress-track`。
+
+#### Component: etaf-spinner (&key style label variant interval)
+
+渲染固定宽度的共享时钟加载指示器，并附带可选说明文字。
+
+**参数。** STYLE 选择帧序列风格：`braille`（默认）、`dots`、`line` 或 `meter`。LABEL 是显示在字形旁的可选弱化文字。VARIANT 从语义 variant 选择字形颜色（默认 `info`）。INTERVAL 是每帧停留的正秒数（默认 0.09）。
+
+**语义。** spinner 在共享时钟上拥有一个归属 Scope 的 `etaf-animation-frames` 序列，并固定字形盒宽度，避免帧切换时抖动相邻文字。卸载时停止序列，`etaf-animation-enabled` 为 nil 时停在第一帧。
+
+**返回。** 一个 View。
+
+**错误。** STYLE 不在四个符号内、LABEL 既不是字符串也不是 nil、或 INTERVAL 非正时报 `error→ etaf-component-call-error`。
+
+**示例。** `(etaf-spinner :style 'braille :label "同步中")`
+
+**参见。** `etaf-animation-frames`、`etaf-skeleton`。
 
 ## 轨道 token
 

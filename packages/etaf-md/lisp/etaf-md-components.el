@@ -27,10 +27,12 @@
 (require 'etaf-md-env)
 (require 'etaf-ui)
 
-(declare-function etaf-md--tabs-view "etaf-md-nodes" (env &optional page-view label-fn))
+(declare-function etaf-md--tabs-view "etaf-md-nodes" (env &optional page-view label-fn flush-body))
 (declare-function etaf-md--code-tab-page "etaf-md-nodes" (env page))
 (declare-function etaf-md--child-view "etaf-md-nodes" (env child))
-(declare-function etaf-md--media-card "etaf-md-views" (url alt env &optional declared-kind))
+(declare-function etaf-md--media-card "etaf-md-views" (url alt env &optional declared-kind declared-width declared-height))
+(declare-function etaf-md--media-picture "etaf-md-views" (url env width height &optional alt))
+(declare-function etaf-md--media-picture-size "etaf-md-views" (url env width height))
 (declare-function etaf-md-qrcode-view "etaf-md-qrcode" (env))
 (declare-function etaf-md-qrcode-cached-p "etaf-md-qrcode" (env))
 (declare-function etaf-md-qrcode-available-p "etaf-md-qrcode" ())
@@ -120,12 +122,10 @@ in both palettes."
                                (list :color (etaf-md--component-ink env :muted))
                                (list description))))
             (when href
-              (list (etaf-node 'text
-                               (list :color (etaf-md-accent env 'primary)
-                                     :font-weight 'bold
-                                     :role 'link :tab-index 0
-                                     :on-press (lambda () (etaf-md-follow-link env href)))
-                               (list (format "→ %s" href)))))
+              (list (etaf-md--leaf-button
+                     env (format "→ %s" href)
+                     (lambda () (etaf-md-follow-link env href))
+                     :role 'link :bold t :help href)))
             (when (or title description href)
               (list (etaf-node 'text (list :color (etaf-md--component-ink env :faint))
                                (list " "))))
@@ -167,12 +167,13 @@ in both palettes."
            (body (list 'ch columns))
            (muted (etaf-md--component-ink env :muted)))
       (etaf-view
-        (column :width (list 'ch (+ columns 2))
+        (column :width (list 'ch (+ columns 4))
                 :cross-align 'start
                 :item-gap '(lh 0)
                 :background-color (etaf-md-surface env 'raised)
                 :border (etaf-md--hairline env)
                 :padding '((lh 1) (ch 2))
+                :pointer (when href 'hand)
                 :on-press (when href
                             (lambda () (etaf-md-follow-link env href)))
           (expr (list (etaf-md--media-picture src view-env columns 14)))
@@ -206,6 +207,7 @@ in both palettes."
                 :border (etaf-md--hairline env)
                 :padding '((lh 1) (ch 2))
                 :item-gap '(lh 0)
+                :pointer 'hand
                 :on-press (lambda () (etaf-md-follow-link env href))
           (expr (list (etaf-node 'text (list :font-weight 'bold) (list title))))
           (expr (list (etaf-node 'text nil (list " "))))
@@ -213,10 +215,10 @@ in both palettes."
                   (list (etaf-node 'text
                                    (list :color (etaf-md--component-ink env :muted))
                                    (list description)))))
-          (expr (list (etaf-node 'text
-                                 (list :color (etaf-md-accent env 'primary)
-                                       :role 'link :tab-index 0)
-                                 (list (format "→ %s" href))))))))))
+          (expr (list (etaf-md--leaf-button
+                       env (format "→ %s" href)
+                       (lambda () (etaf-md-follow-link env href))
+                       :role 'link :bold nil :help href))))))))
 
 (etaf-md--define-shipped 'npm-badge
   :name "npm-badge"
@@ -378,10 +380,13 @@ language row fixed above the body that scrolls under it."
                     (plist-get (etaf-md-node-block (cdr selected)) :lang)))
          (rows (etaf-md--code-tree-rows files))
          (height (max 4 (or (etaf-md-attr env :height) 18)))
-         (total (+ height 1))
-         (width (min 40
+         ;; Account for header (1lh) + top/bottom borders & header divider (1lh)
+         ;; so the inner `height'-row scroll viewport never clips its bottom line.
+         (total (+ height 2))
+         (avail (etaf-md-available-width env))
+         (width (min (max 14 (floor (* avail 0.34)))
                      (max 14
-                          (+ 7 (seq-max
+                          (+ 6 (seq-max
                                 (mapcar (lambda (row)
                                           (if (eq (car row) 'dir)
                                               (length (cdr row))
@@ -424,21 +429,26 @@ language row fixed above the body that scrolls under it."
                                                 (list (cdr row)))))
                   (let* ((index (car (cdr row)))
                          (name (cdr (cdr row)))
-                         (chosen (= index active)))
+                         (chosen (= index active))
+                         (hover (unless chosen (etaf-md--hover-fill env 'soft))))
                     (etaf-node 'box
                                (list :width 'stretch
                                      :height (list 'lh 1)
-                                     :padding-inline '(ch 2)
-                                     :role 'button :tab-index 0
-                                     :on-press (lambda ()
-                                                 (etaf-md-set-block-state
-                                                  env :active index)))
+                                     :padding-inline '(ch 2))
                                (list (etaf-node 'text
-                                                ;; The fill belongs to the name's
-                                                ;; own line, not to the box.
-                                                (list :background-color (when chosen accent-soft)
-                                                      :color (if chosen accent muted)
-                                                      :font-weight (when chosen 'bold))
+                                                ;; Selected item keeps its selection fill and takes no hover.
+                                                ;; Unselected item gets leaf-only hover and hand pointer.
+                                                (append
+                                                 (list :background-color (when chosen accent-soft)
+                                                       :color (if chosen accent muted)
+                                                       :font-weight (when chosen 'bold)
+                                                       :role 'button :tab-index 0
+                                                       :pointer (unless chosen 'hand)
+                                                       :on-press (lambda ()
+                                                                   (etaf-md-set-block-state
+                                                                    env :active index)))
+                                                 (when hover
+                                                   (list :hover-style (list :background-color hover))))
                                                 (list name)))))))
               rows))))
         (column :width 'stretch
@@ -463,6 +473,7 @@ language row fixed above the body that scrolls under it."
                :min-height (list 'lh height)
                :max-height (list 'lh height)
                :overflow 'scroll
+               :wrap-mode 'word
                :tab-index 0
                :ref scroll-ref
                :padding-inline '(ch 1)
@@ -570,7 +581,7 @@ the match data of its caller."
    (lambda (line)
      (mapconcat (lambda (part) (etaf-md--npm-to-rewrite part manager))
                 (split-string line "&&" nil " ")
-                "&&"))
+                " && "))
    (split-string text "\n")
    "\n"))
 
@@ -619,9 +630,7 @@ shown under a strip that names every manager the `tabs' attribute lists."
              :border-top (etaf-md--hairline env)
           (expr (etaf-ui-markdown-view-block
                  synthetic
-                 (list :theme (etaf-md-env-theme env)
-                       :palette (etaf-md-env-palette env)
-                       :width (etaf-md-env-width env)))))))))
+                 (etaf-md--markdown-env env))))))))
 
 (etaf-md--define-shipped 'npm-to
   :name "npm-to"

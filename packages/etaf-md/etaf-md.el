@@ -2,13 +2,15 @@
 
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 ;; Author: ETAF contributors
-;; Version: 0.2.1
-;; Package-Requires: ((emacs "29.1") (etaf "0.3.0") (etaf-ui "0.2.0"))
+;; Version: 0.3.0
+;; Package-Requires: ((emacs "29.1") (etaf "0.3.8") (etaf-ui "0.3.6"))
 ;; Keywords: hypermedia, docs
 ;; URL: https://github.com/emacs-taf/etaf-md
 
 ;;; Commentary:
 
+;; Modern Markdown reading view and living-document renderer built on ETAF.
+;;
 ;; Public API
 ;;
 ;; Load this package with (require 'etaf-md) after adding this
@@ -125,48 +127,50 @@
 ;; Return capability facts for reading a document.  The shape matches
 ;; `etaf-install-doctor'; every program is optional, and a missing one leaves
 ;; the blocks that need it as their source text.
-;; Function: etaf-md-preview (&optional source)
-;;;###autoload (autoload 'etaf-md-preview "etaf-md" nil t)
-;; Open SOURCE's preview in a window beside the current one.
-;; SOURCE is a file path; interactively it is the current buffer's markdown
-;; file, and a buffer that visits no markdown file prompts for one.  The source
-;; buffer keeps the selected window and the point, so an edit followed by a
-;; save reaches the preview without leaving the text.  An existing preview of
-;; the same file is shown instead of rendered twice, and
-;; `etaf-md-close' gives the window back.
-;;
 ;; Function: etaf-md-open (&optional source)
 ;;;###autoload (autoload 'etaf-md-open "etaf-md" nil t)
-;; Mount a markdown preview and return its buffer.
-;; SOURCE is a file path, a session from `etaf-md-create', or nil to
-;; prompt for a file.  Interactively it defaults to the current buffer's
-;; markdown file and then to a file prompt; a file that already has a preview
-;; buffer is selected instead of rendered twice.  Opening a session mounts
-;; that session, so callers can render a document they built themselves.  The
-;; buffer is an ETAF application (`etaf-app-open') whose root keys add outline
-;; navigation, reloading, theming and closing; the reading measure starts from
-;; the showing window and later resizes reflow through the framework's viewport
-;; update, so the document is never rebuilt for a window geometry change.
-;; A preview opened from a file follows it: an unsaved edit in its buffer
-;; repaints the document on the next frame, so the render keeps up with the
-;; typing instead of waiting for the keys to stop, and saving the source or
-;; changing it on disk from another program repaints it the same way.  Each
-;; top-level block is its own Component, published under a key that names the
-;; block's type and source, so a repaint renders the block that changed and
-;; leaves the others' output and instances alone.  The page is read-only: the
-;; markdown is edited in its own buffer with the reader's own commands.  Closing
-;; the buffer releases the session's Runtime, its watch, the buffer's change
-;; hook, so reopening the same file renders a fresh preview.
+;; Open a full-width Markdown reading view in the current window and return its
+;; buffer.  SOURCE is a file path, a session from `etaf-md-create', or nil to
+;; prompt for a file.  Interactively, when the current buffer visits a Markdown
+;; file and no prefix argument is given, opens it immediately without prompting
+;; or splitting windows and syncs to the current source line; with `C-u' or
+;; from any other buffer, prompts for a file.  A file that already has a
+;; preview buffer is selected instead of rendered twice.  Opening a session
+;; mounts that session, so callers can render a document they built themselves.
+;; The buffer is an ETAF application (`etaf-app-open') whose root keys add
+;; outline navigation, side-by-side split toggling, reloading, theming and
+;; closing; the reading measure starts from the showing window and later
+;; resizes reflow through the framework's viewport update.  A preview opened
+;; from a file follows it live on every edit and save.  Closing a single-window
+;; preview with `etaf-md-close' (`q') restores the originating buffer without
+;; deleting the window.
+;;
+;; Function: etaf-md-preview (&optional file)
+;;;###autoload (autoload 'etaf-md-preview "etaf-md" nil t)
+;; Toggle a live side-by-side preview in a right split beside the Markdown
+;; source window.  Opening splits non-destructively without closing unrelated
+;; panes, turns on proportional scroll-follow aligned to the current source
+;; line and keeps point in the source buffer; invoking it again (or pressing
+;; `q' in the preview) closes the preview and removes only the split window it
+;; created.  When invoked inside a preview buffer with no FILE, delegates to
+;; `etaf-md-toggle-split'.  This and `etaf-md-open' are the only global `M-x'
+;; interactive commands; all preview-buffer actions below are bound to keys in
+;; the preview buffer and remain callable from Lisp without polluting `M-x'.
 ;;
 ;; Function: etaf-md-close ()
-;;;###autoload (autoload 'etaf-md-close "etaf-md" nil t)
-;; Unmount the current preview buffer, kill it and free its window.
-;; The current window goes away when the frame has another window, so a preview
-;; opened beside its source closes back onto the source.  Signals `user-error'
-;; when the current buffer is not a preview.
+;; Unmount the current preview buffer, kill it and restore its window cleanly.
+;; Removes only the split window created by `etaf-md-preview' or
+;; `etaf-md-toggle-split'; when opened single-window via `etaf-md-open',
+;; restores the originating buffer in place.  Signals `user-error' when the
+;; current buffer is not a preview.
+;;
+;; Function: etaf-md-toggle-split ()
+;; Toggle between single-window full reading view and side-by-side source +
+;; preview editing from inside the current preview buffer (`v').  Returns
+;; non-nil when side-by-side split is active.
 ;;
 ;; Function: etaf-md-view (&optional session)
-;;;###autoload (autoload 'etaf-md-view "etaf-md" nil t)
+;;;###autoload (autoload 'etaf-md-view "etaf-md" nil nil)
 ;; Return the preview View for SESSION.
 ;; SESSION defaults to a new empty session; pass a session from
 ;; `etaf-md-create' to mount a real document yourself with
@@ -178,10 +182,11 @@
 ;; document itself) is required; a missing or unreadable FILE signals
 ;; `etaf-md-error'.  TITLE overrides the document title and THEME
 ;; selects a palette from `etaf-md-themes', defaulting to the frame's
-;; background mode.  FLAVOR selects the markdown dialect: `gfm' (the default)
-;; enables the GitHub extensions (tables, task lists, strikethrough, autolinks,
-;; footnotes and front matter), `commonmark' parses the core specification
-;; only, and a feature plist toggles individual extensions.  ON-LINK is an
+;; background mode.  FLAVOR selects the markdown dialect: `etaf' (the default)
+;; enables GFM plus ETAF extensions and front matter, `gfm' enables the GitHub
+;; extensions (tables, task lists, strikethrough, autolinks, footnotes and
+;; front matter), `commonmark' parses the core specification only, and a
+;; feature plist toggles individual extensions.  ON-LINK is an
 ;; optional function (URL) called when a link is activated; returning non-nil
 ;; marks the activation handled, and returning nil falls back to the default
 ;; behavior (in-document `#anchor' jump, `browse-url' for remote URLs, or
@@ -219,33 +224,38 @@
 ;; `sepia'); any other value signals `etaf-md-error'.  `auto' returns
 ;; to the face-derived surfaces and paints no page background.
 ;;
-;; Function: etaf-md-cycle-theme (session)
-;; Switch SESSION to the next palette and return its name.
+;; Function: etaf-md-cycle-theme (&optional session)
+;; Switch SESSION (or the current preview buffer interactively via `t') to the
+;; next theme mode (`dark' -> `light' -> `sepia' -> `auto') and return the
+;; newly selected mode symbol.
 ;;
 ;; Function: etaf-md-outline (session)
 ;; Return SESSION's outline as a list of (LEVEL TEXT ID), in document order.
 ;;
 ;; Function: etaf-md-goto-heading ()
-;;;###autoload (autoload 'etaf-md-goto-heading "etaf-md" nil t)
 ;; Choose an outline heading of the current preview and move to it.
 ;; The candidate list is the document's own outline, indented by level and
 ;; prefixed with its hash marks.  Signals `user-error' when the current buffer
 ;; is not a preview.
 ;;
+;; Function: etaf-md-goto-source ()
+;; Jump from the current preview point to the matching line in its source
+;; buffer or file and momentarily highlight that line.  Selects an existing
+;; source window when visible, or switches to the source buffer in place
+;; without creating an unexpected split.  Returns the target buffer position,
+;; or signals `user-error' when the preview has no backing source.
+;;
 ;; Function: etaf-md-next-heading ()
-;;;###autoload (autoload 'etaf-md-next-heading "etaf-md" nil t)
 ;; Move point to the next outline heading of the current preview.
 ;; Reports "No further heading" when the document has no later heading and
 ;; signals `user-error' when the current buffer is not a preview.
 ;;
 ;; Function: etaf-md-previous-heading ()
-;;;###autoload (autoload 'etaf-md-previous-heading "etaf-md" nil t)
 ;; Move point to the previous outline heading of the current preview.
 ;; Reports "No earlier heading" at the first heading and signals
 ;; `user-error' when the current buffer is not a preview.
 ;;
 ;; Function: etaf-md-follow-scroll (&optional arg)
-;;;###autoload (autoload 'etaf-md-follow-scroll "etaf-md" nil t)
 ;; Toggle scrolling the preview along with its source buffer and return the new
 ;; state.  While it is on, a command that scrolls the source window moves the
 ;; preview so the block at the top of that window becomes its first row: a
@@ -258,29 +268,28 @@
 ;; else turns it off.  A buffer that no preview shows signals `user-error'.
 ;;
 ;; Function: etaf-md-reload ()
-;;;###autoload (autoload 'etaf-md-reload "etaf-md" nil t)
 ;; Re-read the file behind the current preview and repaint it.
 ;; The same as `etaf-md-refresh' on the preview's session, for a reader pressing
 ;; the page's own key.  Signals `user-error' when the current buffer is not a
 ;; preview.
 ;;
 ;; Function: etaf-md-wider ()
-;;;###autoload (autoload 'etaf-md-wider "etaf-md" nil t)
 ;; Widen the current preview's reading measure by four cells.
 ;; Reports the effective width and the maximum.  Signals `user-error' when the
 ;; current buffer is not a preview.
 ;;
 ;; Function: etaf-md-narrower ()
-;;;###autoload (autoload 'etaf-md-narrower "etaf-md" nil t)
 ;; Narrow the current preview's reading measure by four cells, down to
 ;; `etaf-md-width-min'.  Signals `user-error' when the current buffer is not a
 ;; preview.
 ;;
 ;; Function: etaf-md-locate (session index)
-;; Move point to SESSION's outline heading INDEX and recenter.
-;; INDEX is zero-based into `etaf-md-outline'.  Return the buffer
-;; position, or nil when SESSION has no live buffer or the heading is not
-;; visible.
+;; Move point to SESSION's outline heading INDEX and bring it into view.
+;; INDEX is zero-based into `etaf-md-outline'.  When SESSION is embedded inside
+;; a scrolling Host viewport, scrolls the enclosing viewport to the heading
+;; without disturbing surrounding chrome; otherwise recenters the window.
+;; Return the buffer position, or nil when SESSION has no live buffer or the
+;; heading is not visible.
 ;;
 ;; Function: etaf-md-adjust-width (session delta)
 ;; Widen SESSION's maximum reading measure by DELTA character cells and return
@@ -294,8 +303,8 @@
 ;; semantic faces) and paints no page background, so panels, tables, code
 ;; blocks and rules match whatever Emacs theme is active; `dark', `light' and
 ;; `sepia' select that fixed palette explicitly, including its page background.
-;; `etaf-md-set-theme' and `etaf-md-cycle-theme' always select
-;; an explicit palette, so the page background follows the chosen theme.  An
+;; `etaf-md-set-theme' selects `auto' or an explicit palette, and
+;; `etaf-md-cycle-theme' cycles `dark' -> `light' -> `sepia' -> `auto'.  An
 ;; open preview keeps a live theme cell that a panel's title-bar switch also
 ;; writes, so a host can pin a fixed page or return to the face-derived one.
 ;;
@@ -318,21 +327,65 @@
 ;; to the measure instead of painting over the gutter.
 ;;
 ;; Variable: etaf-md-typeset (default t)
-;; Whether a mermaid fence and a `$$' display formula are drawn by a program.
-;; Both are source in the markdown and pictures on the page when mermaid-cli is
-;; installed: the diagram is drawn by `mmdc', the formula by KaTeX in the
-;; Chromium that package brings.  A render runs in the background and is cached
-;; by its source and the page's colours, so a page paints its source at once
-;; and swaps in the picture when it arrives; a block edited again draws again.
-;; With this nil, or without the program, the fence stays a code block and the
-;; formula keeps `etaf-ui-markdown-math-text'', which is also what an inline
+;; Whether a mermaid fence and a `$$' display formula are drawn as pictures.
+;; Both are source in the markdown and crisp SVGs on the page when the
+;; embedded QuickJS native module (`make native-build', combining vendored
+;; Obsidian Pele + native CoreText/Pango text measurement and MathJax
+;; TeX-to-SVG, inspired by LuciusChen/pele.el) is built; `mermaid-cli' +
+;; KaTeX serves as an automatic fallback when the native module is absent or
+;; for diagram dialects Pele does not implement.  A render runs in the
+;; background and is cached by its source and the page's colours, keeping the
+;; last valid picture visible while editing until the replacement arrives.
+;; With this nil, or without any backend, the fence stays a code block and the
+;; formula keeps `etaf-ui-markdown-math-text', which is also what an inline
 ;; formula always keeps, because a picture inside a line would change the line
 ;; height.
 ;;
 ;; Function: etaf-md-typeset-available-p ()
 ;; Return non-nil when this system can draw diagrams and formulas.
-;; Both go through mermaid-cli, so this answers that one program's presence;
-;; the answer is remembered until the next Emacs session.
+;; Checks the embedded QuickJS native module first, then `mermaid-cli' (`mmdc')
+;; plus `node' as fallback.
+;;
+;; Function: etaf-md-toggle-toc (&optional arg)
+;; Toggle the independent right side-window outline (`*ETAF Outline*') for the
+;; current preview (`C-c t`).  With prefix ARG, open when positive and close
+;; otherwise.  Returns the new state.
+;;
+;; Function: etaf-md-toggle-spoilers (&optional arg)
+;; Reveal or hide all `!!spoiler!!' spans in the current preview (`S`).
+;; With prefix ARG, reveal when positive and hide otherwise.  Returns the new
+;; state.
+;;
+;; Function: etaf-md-preview-link ()
+;; Inspect the link, wiki-link, in-document anchor or Emacs symbol at point
+;; inside a dismissible in-buffer preview card (`K`).  Returns the preview
+;; plist or nil.
+;;
+;; Variable: etaf-md-allow-local-read (default t)
+;; Whether read-only workspace widgets (`include', `code-ref', `project-tree',
+;; `git-log', `git-diff') may read files inside the document's workspace root.
+;;
+;; Variable: etaf-md-allow-actions (default `ask')
+;; Whether executable widget actions (`run') are allowed: `ask' prompts
+;; before running, `t' runs without prompting, and `nil' disables execution.
+;;
+;; Variable: etaf-md-interactive-checkbox (default t)
+;; Whether activating a task list checkbox toggles `[ ]' and `[x]' in source.
+;;
+;; Variable: etaf-md-media-lightbox (default `auto')
+;; Whether activating a local image opens the in-buffer media lightbox (`auto'
+;; uses it on graphical frames, `t' always uses it, `nil' opens externally).
+;;
+;; Variable: etaf-md-remote-images (default t)
+;; Whether displayed previews asynchronously download remote HTTP(S) images
+;; into the local disk cache (`~/.cache/etaf-md/images/') and repaint them in
+;; place once ready.  Headless sessions created by `etaf-md-create' never
+;; initiate network transfers.
+;;
+;; Variable: etaf-md-cache-max-bytes (default 104857600)
+;; Maximum total size in bytes retained per `etaf-md' disk cache directory
+;; (`typeset/', `qrcode/' and `images/') before least recently modified
+;; entries are evicted lazily on idle.
 ;;
 ;; Error: etaf-md-error
 ;; Invalid markdown preview session or document input
@@ -358,7 +411,9 @@
                                       buffer-file-name)))))
 
 (require 'etaf-ui)
+(require 'etaf-md-cache)
 (require 'etaf-md-theme)
+(require 'etaf-md-assets)
 (require 'etaf-md-node)
 (require 'etaf-md-env)
 (require 'etaf-md-nodes)
@@ -371,17 +426,29 @@
 
 (defun etaf-md-doctor ()
   "Return capability facts for reading a document.
-The shape matches `etaf-install-doctor': :required and :optional lists of
-(LABEL AVAILABLE REMEDY).  Reading text needs no external program; each entry
+The shape matches `etaf-install-doctor': `:required' and `:optional' lists of
+\\(LABEL AVAILABLE REMEDY).  Reading text needs no external program; each entry
 tells which block keeps its source text without it."
-  (list :required nil
-        :optional
-        (list (list "ffmpeg" (and (executable-find "ffmpeg") t)
-                    "Optional: install ffmpeg to play video cards and convert terminal images.")
-              (list "mmdc" (etaf-md-typeset-available-p)
-                    "Optional: install mermaid-cli to draw mermaid diagrams and display formulas.")
-              (list "qrencode" (and (executable-find "qrencode") t)
-                    "Optional: install qrencode to draw a qrcode block."))))
+  (let* ((native-info (etaf-md-typeset--native-info))
+         (native-ok (and native-info t))
+         (native-remedy
+          (if native-info
+              (format "Built-in QuickJS native renderer active (Pele %s, MathJax %s, text: %s)."
+                      (plist-get native-info :pele)
+                      (plist-get native-info :mathjax)
+                      (plist-get native-info :text-backend))
+            "Optional: run 'make native-build' in etaf-md for fast zero-browser Mermaid and math SVG rendering.")))
+    (list :required nil
+          :optional
+          (list (list "typeset-native" native-ok native-remedy)
+                (list "ffmpeg" (and (executable-find "ffmpeg") t)
+                      "Optional: install ffmpeg to play video cards and convert terminal images.")
+                (list "mmdc" (etaf-md-typeset--mmdc-available-p)
+                      "Optional fallback: install mermaid-cli when the native renderer is not built or for unsupported Mermaid dialects.")
+                (list "qrencode" (and (executable-find "qrencode") t)
+                      "Optional: install qrencode to draw a qrcode block.")
+                (list "git" (and (executable-find "git") t)
+                      "Optional: install git for git-log and git-diff living-doc blocks.")))))
 
 
 (provide 'etaf-md)

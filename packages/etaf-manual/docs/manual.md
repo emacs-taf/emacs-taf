@@ -23,58 +23,22 @@ The book documents the public interfaces of the core packages: ecss, ekp, ebox, 
 
 English is the primary language. Every chapter exists in every language, with the same file name.
 
-`site/` is an Astro project that publishes the book.  `site/scripts/export-site.el`
-reads the parsed book and writes the pages and the sidebar under
-`site/src/content/` (generated content is untracked); `site/astro.config.mjs`
-configures Starlight with English at the root and Simplified Chinese under
-`/zh-cn/`; `site/scripts/publish.py` builds the site and deploys it as a new
-release behind the `current` symlink.  Chapter links inside the pages are
-rewritten to site routes, and `elisp :run` and `:figure` fences become plain
-`elisp` blocks with a label, because a static page cannot mount a view.
-The exporter also regenerates a bilingual not-found page with installation and
-manual links. `site/src/content/i18n/` owns the localized accessibility text.
-The Markdown processor preserves literal punctuation so chapter anchors stay
-aligned with the book.
+`site/` is an Astro project that publishes the book.  `site/scripts/export-site.el` reads the parsed book and writes the pages and the sidebar under `site/src/content/` (generated content is untracked); `site/astro.config.mjs` configures Starlight with English at the root and Simplified Chinese under `/zh-cn/`; `site/scripts/publish.py` builds the site and deploys it as a new release behind the `current` symlink.  Chapter links inside the pages are rewritten to site routes, and `elisp :run` and `:figure` fences become plain `elisp` blocks with a label, because a static page cannot mount a view. The exporter also regenerates a bilingual not-found page with installation and manual links. `site/src/content/i18n/` owns the localized accessibility text. The Markdown processor preserves literal punctuation so chapter anchors stay aligned with the book.
 
-The landing page is a standalone Astro page, not a Starlight splash:
-`site/src/components/Landing.astro` renders it from the copy, screenshots
-and repository links in `site/src/data/landing.mjs`, and
-`site/src/pages/index.astro` and `site/src/pages/zh-cn/index.astro` select
-the language.  Starlight's content flow, heading wrappers and column width
-fight a free layout, so Starlight keeps only the reading pages.  Both share
-`site/src/styles/brand.css`, which holds the faces and the light and dark
-palettes; `site/src/styles/custom.css` maps them onto Starlight and sets the
-reading sizes.  The colour theme is stored under the `starlight-theme` key,
-so a choice on either side carries over.  The manual header reuses the landing
-page's theme button and language link instead of Starlight's selects.
+The landing page is a standalone Astro page, not a Starlight splash: `site/src/components/Landing.astro` renders it from the copy, screenshots and repository links in `site/src/data/landing.mjs`, and `site/src/pages/index.astro` and `site/src/pages/zh-cn/index.astro` select the language.  Starlight's content flow, heading wrappers and column width fight a free layout, so Starlight keeps only the reading pages.  Both share `site/src/styles/brand.css`, which holds the faces and the light and dark palettes; `site/src/styles/custom.css` maps them onto Starlight and sets the reading sizes.  The colour theme is stored under the `starlight-theme` key, so a choice on either side carries over.  The manual header reuses the landing page's theme button and language link instead of Starlight's selects.
 
-The site keeps an editorial look, so change these tokens rather than adding
-local styles:
+The site keeps an editorial look, so change these tokens rather than adding local styles:
 
-- Faces: Source Serif 4 for Latin text and headings, LXGW WenKai for Chinese
-  text, Noto Serif SC for Chinese headings, and IBM Plex Mono with WenKai
-  Mono for code and small labels.  Fonts are self-hosted from fontsource
-  packages split by unicode-range; WenKai comes from its webfont CDN.
-- Reading: 18px body text with a 1.75 line height (1.85 for Chinese) in a
-  44rem column; navigation and the page outline stay at 15px and 14px.
-- Colour: warm paper and ink, with the violet of the ETAF mark only for
-  links and small accents.  The dark theme is a matte charcoal with a fine
-  grain, so the surface reads as painted paper rather than black glass.  No
-  gradients, glows, glass blur or imitation window frames.
-- Layout: no element scrolls sideways at any width, including code blocks
-  and tables, which wrap; check 390 and 360 CSS pixels after a change.
+- Faces: Source Serif 4 for Latin text and headings, LXGW WenKai for Chinese text, Noto Serif SC for Chinese headings, and IBM Plex Mono with WenKai Mono for code and small labels.  Fonts are self-hosted from fontsource packages split by unicode-range; WenKai comes from its webfont CDN.
+- Reading: 18px body text with a 1.75 line height (1.85 for Chinese) in a 44rem column; navigation and the page outline stay at 15px and 14px.
+- Colour: warm paper and ink, with the violet of the ETAF mark only for links and small accents.  The dark theme is a matte charcoal with a fine grain, so the surface reads as painted paper rather than black glass.  No gradients, glows, glass blur or imitation window frames.
+- Layout: no element scrolls sideways at any width, including code blocks and tables, which wrap; check 390 and 360 CSS pixels after a change.
 
 ## Publishing the site and packages
 
-`make site-publish` rebuilds the site, uploads regular files over noninteractive
-SSH and deploys them behind `current`. It preserves the existing `packages/`
-directory. Use `PUBLISH_ARGS=--build-only` for a local build, or `--no-build` for
-an already built site. The host must already serve `/srv/etaf.top/current` over
-HTTPS; publication does not change Caddy or SSH configuration.
+`make site-publish` rebuilds the site, uploads regular files over noninteractive SSH and deploys them behind `current`. It preserves the existing `packages/` directory. Use `PUBLISH_ARGS=--build-only` for a local build, or `--no-build` for an already built site. The host must already serve `/srv/etaf.top/current` over HTTPS; publication does not change Caddy or SSH configuration.
 
-Unknown paths must serve the generated `404.html`. The Caddy configuration on
-`aliyun-hk` lives outside this repository, and the deploy script never edits it;
-Caddy 2.6.2 serves the recovery page through `handle_errors`:
+Unknown paths must serve the generated `404.html`. The Caddy configuration on `aliyun-hk` lives outside this repository, and the deploy script never edits it; Caddy 2.6.2 serves the recovery page through `handle_errors`:
 
 ```
 handle_errors {
@@ -84,8 +48,7 @@ handle_errors {
 }
 ```
 
-The current server answers unknown paths with an empty 404 body, so this is a
-host requirement rather than a repository change. Verify it with
+The current server answers unknown paths with an empty 404 body, so this is a host requirement rather than a repository change. Verify it with
 
 ```sh
 curl -s -o /dev/null -w '%{http_code} %{size_download}\n' https://etaf.top/no-such-page/
@@ -99,92 +62,25 @@ To publish a site and a validated workspace package release together:
 make site-publish PUBLISH_ARGS='--packages /path/to/release'
 ```
 
-`PUBLISH_ARGS='--packages-only /path/to/release'` updates only the package archive,
-without rebuilding or changing the current pages. Both package modes require the
-sibling workspace's `scripts/package-release.py stage` gate: a sealed checkpoint,
-matching validation hashes and every supported target through both installation
-paths. Partial diagnostics are rejected. Only the index, public manifest and
-listed source tarballs are uploaded; installation reports and logs stay private.
-The workspace tool manual owns the build and installation-check workflow.
+`PUBLISH_ARGS='--packages-only /path/to/release'` updates only the package archive, without rebuilding or changing the current pages. Both package modes require the sibling workspace's `scripts/package-release.py stage` gate: a sealed checkpoint, matching validation hashes and every supported target through both installation paths. Partial diagnostics are rejected. Only the index, public manifest and listed source tarballs are uploaded; installation reports and logs stay private. The workspace tool manual owns the build and installation-check workflow.
 
-The gates read different sources. `make check` and `make book-check` read the
-sibling provider checkouts directly, while an archive release builds from the
-revisions pinned in `workspace.json`. An interface that exists only in a working
-copy therefore passes the local gate and fails the release gate with
-`` `NAME' is not a public interface ``. Seal and release a provider before its
-interfaces are documented or released.
+The gates read different sources. `make check` and `make book-check` read the sibling provider checkouts directly, while an archive release builds from the revisions pinned in `workspace.json`. An interface that exists only in a working copy therefore passes the local gate and fails the release gate with `` `NAME' is not a public interface ``. Seal and release a provider before its interfaces are documented or released.
 
-`PUBLISH_ARGS='--pages-only /path/to/archive'` regenerates only the archive
-directory's `index.html` and per-package pages from an existing public archive.
-The manifest and every indexed tarball must verify, and the deployer carries
-older tarballs forward unchanged; use it to ship a presentation fix without
-rebuilding or re-gating packages whose bytes did not change.
+`PUBLISH_ARGS='--pages-only /path/to/archive'` regenerates only the archive directory's `index.html` and per-package pages from an existing public archive. The manifest and every indexed tarball must verify, and the deployer carries older tarballs forward unchanged; use it to ship a presentation fix without rebuilding or re-gating packages whose bytes did not change.
 
-The default SSH route is through `lightos` to `root@aliyun-hk`.
-`ETAF_TOP_ROOT=direct` selects a direct connection; `ETAF_TOP_HOST` overrides the
-host and `ETAF_TOP_KEEP` controls retained site releases (default 5, minimum 2).
-The host needs Python 3.10+. A deployment lock serializes site and package
-publication. Tar paths, file types, checksums and the public allowlist are checked
-before the atomic switch. Existing package filenames cannot change bytes, and
-package versions cannot go backward. Historical tarballs are carried into each
-new release even when older site releases are pruned.
+The default SSH route is through `lightos` to `root@aliyun-hk`. `ETAF_TOP_ROOT=direct` selects a direct connection; `ETAF_TOP_HOST` overrides the host and `ETAF_TOP_KEEP` controls retained site releases (default 5, minimum 2). The host needs Python 3.10+. A deployment lock serializes site and package publication. Tar paths, file types, checksums and the public allowlist are checked before the atomic switch. Existing package filenames cannot change bytes, and package versions cannot go backward. Historical tarballs are carried into each new release even when older site releases are pruned.
 
-Each package publication also writes a browsable archive. `packages/index.html`
-groups the served packages as Framework, Applications and Games, and
-`packages/<name>/index.html` is that package's page: what it does, the install
-snippet, its GitHub repository, the source commit it was built from, its checksum
-and the source tarball. Package names link to the page, never straight to a
-download; the manual links appear in the page text rather than as a header menu.
-`package.el` still reads only `archive-contents`, so a browser opening the bare
-directory sees the archive instead of a 404. Both pages are generated from the
-manifest on every release and are not part of it. `site/scripts/archive_pages.py`
-writes them and can run against any published archive on its own.
+Each package publication also writes a browsable archive. `packages/index.html` groups the served packages as Framework, Applications and Games, and `packages/<name>/index.html` is that package's page: what it does, the install snippet, its GitHub repository, the source commit it was built from, its checksum and the source tarball. Package names link to the page, never straight to a download; the manual links appear in the page text rather than as a header menu. `package.el` still reads only `archive-contents`, so a browser opening the bare directory sees the archive instead of a 404. Both pages are generated from the manifest on every release and are not part of it. `site/scripts/archive_pages.py` writes them and can run against any published archive on its own.
 
-Each row states when the package last changed, and a package page expands that
-into what changed, what it costs and who needs it. The date is the newest commit
-that touched the files the package ships, recorded in the manifest's `updated`
-map by the release build; publishing a release or changing an unrelated file in a
-repository does not move it, and rebuilding the same revision reproduces it. The
-package page lists the newest `CHANGELOG.md` entries shipped with that version, the
-downloaded size and file count, and the packages that require it, all read from
-the manifest and the tarballs on the host. A filter field narrows the index by
-name, summary or requirement; it needs JavaScript, and the unfiltered table is the
-no-JavaScript state.
+Each row states when the package last changed, and a package page expands that into what changed, what it costs and who needs it. The date is the newest commit that touched the files the package ships, recorded in the manifest's `updated` map by the release build; publishing a release or changing an unrelated file in a repository does not move it, and rebuilding the same revision reproduces it. The package page lists the newest `CHANGELOG.md` entries shipped with that version, the downloaded size and file count, and the packages that require it, all read from the manifest and the tarballs on the host. A filter field narrows the index by name, summary or requirement; it needs JavaScript, and the unfiltered table is the no-JavaScript state.
 
-Every row names its author: `emacs-taf` for a package this project maintains and
-the author's GitHub account for a package another developer publishes through the
-archive, each linking the organization or profile. Those community packages are
-filed under their own section, and their page states the license, links the
-author's repository and says that `M-x etaf-install` does not list them; they are
-installed with `M-x package-install` from the same archive.
+Every row names its author: `emacs-taf` for a package this project maintains and the author's GitHub account for a package another developer publishes through the archive, each linking the organization or profile. Those community packages are filed under their own section, and their page states the license, links the author's repository and says that `M-x etaf-install` does not list them; they are installed with `M-x package-install` from the same archive.
 
-The archive pages also show a download count per package. `site/scripts/download-stats.py`
-runs on the web host from a systemd timer (`etaf-download-stats`, every ten
-minutes) and counts installations, not fetches: a versioned tarball counts only
-when the same client asked for its `.tar.sig` within a minute, which is what
-package.el does and a crawler or a hand-run `curl` does not; one client counts
-once per package per UTC day, so re-running a test suite does not inflate the
-number; and the deployment verifier's `?deployment=` requests are skipped. It
-rewrites `packages/downloads.json` outside the immutable releases. The pages fetch
-that file in the browser and leave an em dash when it is missing, so the archive
-still reads without JavaScript or the timer. The access log, the timer and the
-served path (`/srv/etaf.top/stats`) are host configuration; publishing leaves
-them untouched.
+The archive pages also show a download count per package. `site/scripts/download-stats.py` runs on the web host from a systemd timer (`etaf-download-stats`, every ten minutes) and counts installations, not fetches: a versioned tarball counts only when the same client asked for its `.tar.sig` within a minute, which is what package.el does and a crawler or a hand-run `curl` does not; one client counts once per package per UTC day, so re-running a test suite does not inflate the number; and the deployment verifier's `?deployment=` requests are skipped. It rewrites `packages/downloads.json` outside the immutable releases. The pages fetch that file in the browser and leave an em dash when it is missing, so the archive still reads without JavaScript or the timer. The access log, the timer and the served path (`/srv/etaf.top/stats`) are host configuration; publishing leaves them untouched.
 
-Link previews use the same generated pages. The manual head supplies
-`https://etaf.top/og/manual.png` and a shared description; every archive page
-emits its own canonical URL, title and description and points at
-`https://etaf.top/og/archive.png`. The landing preview uses
-`/shots/etaf-ncm.png`. The cards are 1200x630 PNGs under `site/public/og/`;
-keep their paths stable so existing links keep their preview. Telegram caches
-previews per URL: after changing a card, send the link to `@WebpageBot` or
-share a versioned URL once to force a refetch.
+Link previews use the same generated pages. The manual head supplies `https://etaf.top/og/manual.png` and a shared description; every archive page emits its own canonical URL, title and description and points at `https://etaf.top/og/archive.png`. The landing preview uses `/shots/etaf-ncm.png`. The cards are 1200x630 PNGs under `site/public/og/`; keep their paths stable so existing links keep their preview. Telegram caches previews per URL: after changing a card, send the link to `@WebpageBot` or share a versioned URL once to force a refetch.
 
-After switching, the deployer reads the served index and package bytes over HTTPS.
-A failed check restores the previous `current`, then checks it again; a recovery
-network failure is reported as unverified rather than successful rollback.
-The client also reads back `current`. On transport interruption, inspect that link
-before retrying; a lost SSH response is not evidence that publication failed.
+After switching, the deployer reads the served index and package bytes over HTTPS. A failed check restores the previous `current`, then checks it again; a recovery network failure is reported as unverified rather than successful rollback. The client also reads back `current`. On transport interruption, inspect that link before retrying; a lost SSH response is not evidence that publication failed.
 
 ## The book description
 

@@ -559,4 +559,19 @@ keyboard macros reach it."
               (should (= leaves 1)))))
       (when (buffer-live-p buffer) (kill-buffer buffer)))))
 
+(ert-deftest ebox-window-scroll-with-header-line-does-not-lock-overflow ()
+  "An overflowing mounted buffer with a header line still scrolls via `ebox-scroll-page-down'."
+  (let ((rows (mapcar (lambda (i) (list 'text (format "Scrollable row %d" i)))
+                      (number-sequence 1 120))))
+    (ebox-test-with-mounted (buffer root (cons 'column rows))
+      (switch-to-buffer buffer)
+      (setq-local header-line-format "Pinned header")
+      (goto-char (point-min))
+      (set-window-start (selected-window) (point-min) t)
+      (ebox-scroll-page-down)
+      (should (> (window-start (selected-window)) (point-min)))
+      (let ((scrolled (window-start (selected-window))))
+        (ebox-refit buffer)
+        (should (= (window-start (selected-window)) scrolled))))))
+
 ;;; ebox-scroll-input-tests.el ends here

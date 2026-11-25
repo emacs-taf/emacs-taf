@@ -110,11 +110,11 @@ Draw one task's check state as a box.
 
 <!-- index: etaf-progress; determinate progress; track token; reactive value -->
 
-#### Component: etaf-progress (&key value max label variant)
+#### Component: etaf-progress (&key value max label variant animated)
 
 Render a determinate progress bar. VALUE and MAX are numeric (or reactive) with 0 <= VALUE <= MAX and MAX > 0. LABEL is optional.
 
-**Arguments.** VALUE is the current quantity and MAX the full quantity; both accept plain numbers or reactive values and are read on every render. LABEL is an optional caption. VARIANT selects the fill's color from the semantic variants.
+**Arguments.** VALUE is the current quantity and MAX the full quantity; both accept plain numbers or reactive values and are read on every render. LABEL is an optional caption. VARIANT selects the fill's color from the semantic variants. ANIMATED, when non-nil (default nil), smoothly transitions the fill width and percentage label on the shared animation clock when mounted.
 
 **Semantics.** The bar is two rows: a row showing the label and the rounded percentage, then one standard row whose track uses `:ui-progress-track` and whose fill uses the variant's foreground and occupies the percentage of the width. A reactive VALUE or MAX re-renders the bar and rewrites the percentage; because the checks run on every render, live bounds are enforced while the value changes.
 
@@ -186,11 +186,11 @@ Render an empty state with optional action callback.
 
 <!-- index: etaf-statistic; metric card -->
 
-#### Component: etaf-statistic (&key label value trend)
+#### Component: etaf-statistic (&key label value trend animated)
 
 Render a compact metric card from caller-owned display values.
 
-**Arguments.** LABEL is the muted caption, VALUE the emphasized figure and TREND an optional success-colored change line. Each accepts a value, ref or computed, like `etaf-label`.
+**Arguments.** LABEL is the muted caption, VALUE the emphasized figure and TREND an optional success-colored change line. Each accepts a value, ref or computed, like `etaf-label`. ANIMATED, when non-nil (default nil), rolls numeric values smoothly on the shared animation clock when mounted.
 
 **Semantics.** The result is a three-row column — a muted label, a heading value and a success-trend line — with no surface of its own, because the component deliberately leaves its container spacing and surface to the caller. A nil TREND renders an empty line.
 
@@ -206,13 +206,13 @@ Render a compact metric card from caller-owned display values.
 
 <!-- index: etaf-skeleton; loading placeholder; placeholder size -->
 
-#### Component: etaf-skeleton (&key width height)
+#### Component: etaf-skeleton (&key width height animated)
 
 Render a neutral loading placeholder without owning loading state.
 
-**Arguments.** WIDTH defaults to `stretch` and HEIGHT to one standard row; both accept any length value.
+**Arguments.** WIDTH defaults to `stretch` and HEIGHT to one standard row; both accept any length value. ANIMATED, when non-nil (default nil), gently pulses the placeholder fill on the shared animation clock when mounted.
 
-**Semantics.** The skeleton is a plain box filled with `:ui-progress-track`, sized by its props. It contains no state and no timer: the application decides when to replace it with real content, and until then it reserves exactly the space the content will take.
+**Semantics.** The skeleton is a plain box filled with `:ui-progress-track`, sized by its props. Without ANIMATED it contains no state and no timer; with ANIMATED it uses a Scope-owned frame sequence that stops on unmount and honors `etaf-animation-enabled`.
 
 **Returns.** A View.
 
@@ -222,7 +222,23 @@ Render a neutral loading placeholder without owning loading state.
 (etaf-skeleton :width '(ch 24) :height '(lh 2))
 ```
 
-**See also.** `etaf-progress`, `:ui-progress-track`.
+**See also.** `etaf-progress`, `etaf-spinner`, `:ui-progress-track`.
+
+#### Component: etaf-spinner (&key style label variant interval)
+
+Render a fixed-width shared-clock loading indicator with an optional caption.
+
+**Arguments.** STYLE selects the frame sequence: `braille` (default), `dots`, `line` or `meter`. LABEL is an optional muted caption beside the glyph. VARIANT selects the glyph color from the semantic variants (default `info`). INTERVAL is the positive number of seconds per frame (default 0.09).
+
+**Semantics.** The spinner owns a Scope-bound `etaf-animation-frames` sequence on the shared clock and fixes its glyph box width so adjacent labels never shift as frames cycle. Unmounting stops the sequence, and `etaf-animation-enabled` nil freezes it on its first frame.
+
+**Returns.** A View.
+
+**Errors.** `error→ etaf-component-call-error` when STYLE is not one of the four symbols, LABEL is neither a string nor nil, or INTERVAL is not a positive number.
+
+**Example.** `(etaf-spinner :style 'braille :label "Syncing")`
+
+**See also.** `etaf-animation-frames`, `etaf-skeleton`.
 
 ## The track token
 

@@ -49,8 +49,7 @@ Setext 二级标题
 
 ## 段落与换行
 
-一个段落由空行分隔。段内的换行是软换行，按 CommonMark 的规则折成一个空格，
-整段跟着阅读栏的宽度重新折行：
+一个段落由空行分隔。段内的换行是软换行，按 CommonMark 的规则折成一个空格，整段跟着阅读栏的宽度重新折行：
 
 这一段的第一行
 第二行接着上一行
@@ -68,8 +67,7 @@ Setext 二级标题
 
 ## 转义与实体
 
-反斜杠让标记变成普通字符：\*不是强调\*、\`不是代码\`、\# 不是标题、\[ 不是链接、
-\\ 是反斜杠本身。
+反斜杠让标记变成普通字符：\*不是强调\*、\`不是代码\`、\# 不是标题、\[ 不是链接、\\ 是反斜杠本身。
 
 命名实体、十进制与十六进制都生效：&copy; &mdash; &amp; &lt;tag&gt; &#65; &#x41;。
 
@@ -445,8 +443,7 @@ ___
 
 ## 脚注
 
-正文里点一下脚注引用[^spec]，跳到底部的定义；第二个引用[^dup]用来说明重复定义；
-同一个脚注引用两次[^spec]也只出现一条。
+正文里点一下脚注引用[^spec]，跳到底部的定义；第二个引用[^dup]用来说明重复定义；同一个脚注引用两次[^spec]也只出现一条。
 
 未定义的引用[^missing]保持原样，不会生成条目。
 
@@ -500,8 +497,7 @@ Term B
 
 水是 H~2~O，能量是 E = mc^2^，面积单位 m^2^，化学式 CO~2~。
 
-上下标只支持 Unicode 里有的字符，`H~2~O` 能排，`x~abc~` 这种没有对应字符的
-写法保持原样。
+上下标只支持 Unicode 里有的字符，`H~2~O` 能排，`x~abc~` 这种没有对应字符的写法保持原样。
 
 字母与多字符混用：x~i~、a^b^、2^10^、10^-3^。
 
@@ -538,8 +534,7 @@ $$
 
 ## 表情短码
 
-启动成功 :tada:，上线 :rocket:，注意 :warning:，修复 :bug:，笔记 :memo:，
-爱心 :heart:，加一 :+1:。
+启动成功 :tada:，上线 :rocket:，注意 :warning:，修复 :bug:，笔记 :memo:，爱心 :heart:，加一 :+1:。
 
 中文紧挨着也能出图：表情：:tada:
 
@@ -593,14 +588,11 @@ HTML 块按原样显示，不解析其中的标记。
 
 同一份解析器，三套预设：
 
-- `commonmark`：只认 CommonMark 核心语法；表格、任务列表、删除线、脚注、提示块
-  之外的写法都按普通文字显示。
+- `commonmark`：只认 CommonMark 核心语法；表格、任务列表、删除线、脚注、提示块之外的写法都按普通文字显示。
 - `gfm`：在核心之上加表格、任务列表、删除线、裸地址、脚注、提示块与 front matter。
 - `etaf`（默认）：在 `gfm` 之上再加定义列表、上下标、缩写、`$` 公式与表情短码。
 
-在这份文件的开头写一行 `flavor: commonmark`，预览就只按核心语法解析；会话参数
-`:flavor` 优先于文档里的声明，文档里的声明优先于全局变量
-`etaf-md-preview-flavor`。
+在这份文件的开头写一行 `flavor: commonmark`，预览就只按核心语法解析；会话参数 `:flavor` 优先于文档里的声明，文档里的声明优先于全局变量 `etaf-md-preview-flavor`。
 
 未启用的语法不会报错，只是照原样显示：这是「一份解析器、多套开关」的退化方式。
 
@@ -626,14 +618,10 @@ HTML 块按原样显示，不解析其中的标记。
 **属性**
 
 - `title`（字符串）：提示块的标题，省略用固定标题
-- `collapsible`（布尔，默认 `false`）：允许收起
-  可选：`true` `false`
-- `open`（布尔，默认 `true`）：收起时默认展开
-  可选：`true` `false`
-- `background`（底色，默认 `quote`）：底色
-  可选：`none` `page` `raised` `sunken` `quote`
-- `border-left-width`（长度，默认 `1ch`）：左侧竖条宽度
-  可选：`ch` `lh` `%`
+- `collapsible`（布尔，默认 `false`）：允许收起；可选：`true` `false`
+- `open`（布尔，默认 `true`）：收起时默认展开；可选：`true` `false`
+- `background`（底色，默认 `quote`）：底色；可选：`none` `page` `raised` `sunken` `quote`
+- `border-left-width`（长度，省略为 `3px` 细条）：左侧竖条宽度；可选：`ch` `lh` `%`
 
 **例子**
 
@@ -649,7 +637,7 @@ HTML 块按原样显示，不解析其中的标记。
 提示块也能写标题与正文。
 :::
 
-八个名字共用同一个视图，只是强调色和固定标题不同。
+七个名字共用同一个视图，只是强调色和固定标题不同。
 
 :::note {title="Note 是默认标题"}
 标题可以覆盖。
@@ -691,14 +679,10 @@ info 与 note 同色，名字不同。
 
 **属性**
 
-- `surface`（底色，默认 `none`）：外壳底色
-  可选：`none` `page` `raised` `sunken` `quote` `table-header` `table-stripe`
-- `padding`（长度，默认 `2ch`）：左右内边距
-  可选：`ch` `lh` `%`
-- `text-align`（对齐，默认 `start`）：内容的水平位置
-  可选：`start` `center` `end`
-- `width`（长度）：自身宽度
-  可选：`ch` `lh` `%`
+- `surface`（底色，默认 `none`）：外壳底色；可选：`none` `page` `raised` `sunken` `quote` `table-header` `table-stripe`
+- `padding`（长度，默认 `2ch`）：左右内边距；可选：`ch` `lh` `%`
+- `text-align`（对齐，默认 `start`）：内容的水平位置；可选：`start` `center` `end`
+- `width`（长度）：自身宽度；可选：`ch` `lh` `%`
 
 **例子**
 
@@ -717,7 +701,7 @@ surface page：页面底色。
 :::
 
 :::box {surface=raised}
-surface raised：比页面亮一层的面。
+surface raised：浮起一层的卡片面。
 :::
 
 :::box {surface=sunken}
@@ -762,12 +746,9 @@ text-align end：盒子里的字靠右。
 - `icon`（字符串）：标题前的图标名
 - `description`（字符串）：标题下的一行
 - `href`（字符串）：整张卡片可点
-- `accent`（强调色，默认 `neutral`）：标题的强调色
-  可选：`neutral` `primary` `success` `warning` `danger` `important`
-- `text-align`（对齐，默认 `start`）：内容的水平位置
-  可选：`start` `center` `end`
-- `width`（长度）：自身宽度
-  可选：`ch` `lh` `%`
+- `accent`（强调色，默认 `neutral`）：标题的强调色；可选：`neutral` `primary` `success` `warning` `danger` `important`
+- `text-align`（对齐，默认 `start`）：内容的水平位置；可选：`start` `center` `end`
+- `width`（长度）：自身宽度；可选：`ch` `lh` `%`
 
 **例子**
 
@@ -814,6 +795,18 @@ text-align end：盒子里的字靠右。
 点击卡片任何位置都会打开主页。
 :::
 
+:::columns {columns=2 divider=false}
+:::col
+:::card {title="带图标的卡片" icon="check" description="图标跟标题在同一行。"}
+卡片正文。
+:::
+:::
+:::col
+:::card {title="没有图标的卡片" description="默认什么都不画。"}
+:::
+:::
+:::
+
 
 
 ## 分栏
@@ -823,22 +816,14 @@ text-align end：盒子里的字靠右。
 **属性**
 
 - `columns`（字符串，默认 `2`）：一行几栏，或一串轨道
-- `gap`（长度，默认 `2ch`）：栏间距
-  可选：`ch` `lh` `%`
-- `padding`（长度）：左右内边距
-  可选：`ch` `lh` `%`
-- `min-width`（长度，默认 `24ch`）：每栏最小宽度
-  可选：`ch` `lh` `%`
-- `align-items`（枚举，默认 `stretch`）：子块在交叉轴的对齐
-  可选：`start` `center` `end` `stretch`
-- `justify-content`（枚举，默认 `start`）：子块在主轴的对齐
-  可选：`start` `center` `end` `between` `around`
-- `wrap`（布尔，默认 `false`）：放不下时换行
-  可选：`true` `false`
-- `divider`（布尔，默认 `true`）：栏与栏之间画一条竖线
-  可选：`true` `false`
-- `align-self`（枚举，默认 `start`）：自身在父级里的水平位置
-  可选：`start` `center` `end`
+- `gap`（长度，默认 `2ch`）：栏间距；可选：`ch` `lh` `%`
+- `padding`（长度）：左右内边距；可选：`ch` `lh` `%`
+- `min-width`（长度，默认 `24ch`）：每栏最小宽度；可选：`ch` `lh` `%`
+- `align-items`（枚举，默认 `stretch`）：子块在交叉轴的对齐；可选：`start` `center` `end` `stretch`
+- `justify-content`（枚举，默认 `start`）：子块在主轴的对齐；可选：`start` `center` `end` `between` `around`
+- `wrap`（布尔，默认 `false`）：放不下时换行；可选：`true` `false`
+- `divider`（布尔，默认 `true`）：栏与栏之间画一条竖线；可选：`true` `false`
+- `align-self`（枚举，默认 `start`）：自身在父级里的水平位置；可选：`start` `center` `end`
 
 子块 `col`：
 
@@ -1027,8 +1012,7 @@ Plume 的 `flex` 和 `card-grid` 在这套语法里都是 `columns`：数字是�
 **属性**
 
 - `title`（字符串）：收起时的标题
-- `open`（布尔，默认 `false`）：默认展开
-  可选：`true` `false`
+- `open`（布尔，默认 `false`）：默认展开；可选：`true` `false`
 
 **例子**
 
@@ -1077,16 +1061,13 @@ Error: void-function etaf-md-open
 
 **属性**
 
-- `expand`（布尔，默认 `false`）：打开时所有块都展开
-  可选：`true` `false`
-- `accordion`（布尔，默认 `true`）：同时只开一块；false 可以开多块
-  可选：`true` `false`
+- `expand`（布尔，默认 `false`）：打开时所有块都展开；可选：`true` `false`
+- `accordion`（布尔，默认 `true`）：同时只开一块；false 可以开多块；可选：`true` `false`
 
 子块 `collapse`：
 
 - `title`（字符串，必填）：收起时的标题
-- `open`（布尔，默认 `false`）：默认展开
-  可选：`true` `false`
+- `open`（布尔，默认 `false`）：默认展开；可选：`true` `false`
 - `index`（数字）：显示顺序，省略按书写顺序
 
 **例子**
@@ -1157,8 +1138,7 @@ index 大的排后面。
 子块 `tab`：
 
 - `title`（字符串，必填）：标签文字
-- `selected`（布尔，默认 `false`）：打开时选中这一页
-  可选：`true` `false`
+- `selected`（布尔，默认 `false`）：打开时选中这一页；可选：`true` `false`
 
 **例子**
 
@@ -1191,8 +1171,7 @@ Emacs 30 起的写法。
 子块 `tab`：
 
 - `title`（字符串）：标签文字，省略取围栏语言
-- `selected`（布尔，默认 `false`）：打开时选中这一页
-  可选：`true` `false`
+- `selected`（布尔，默认 `false`）：打开时选中这一页；可选：`true` `false`
 
 **例子**
 
@@ -1216,8 +1195,7 @@ print("hi")
 **属性**
 
 - `start`（数字，默认 `1`）：起始编号
-- `list-style`（枚举，默认 `decimal`）：记号
-  可选：`decimal` `bullet` `none`
+- `list-style`（枚举，默认 `decimal`）：记号；可选：`decimal` `bullet` `none`
 
 子块 `step`：
 
@@ -1296,16 +1274,14 @@ print("hi")
 
 **属性**
 
-- `list-style`（枚举，默认 `bullet`）：记号的样式
-  可选：`decimal` `bullet` `none`
+- `list-style`（枚举，默认 `bullet`）：记号的样式；可选：`decimal` `bullet` `none`
 - `start`（数字，默认 `1`）：第一项的序号
 
 子块 `event`：
 
 - `title`（字符串，必填）：标题
 - `time`（字符串）：时间文字
-- `status`（枚举）：状态，决定圆点颜色并画成一个徽标
-  可选：`success` `warning` `danger` `info`
+- `status`（枚举）：状态，决定圆点颜色并画成一个徽标；可选：`success` `warning` `danger` `info`
 
 **例子**
 
@@ -1370,8 +1346,7 @@ print("hi")
 - `type`（字符串）：类型注解
 - `type-link`（字符串）：类型的链接地址
 - `default`（字符串）：默认值
-- `required`（布尔，默认 `false`）：必填
-  可选：`true` `false`
+- `required`（布尔，默认 `false`）：必填；可选：`true` `false`
 - `deprecated`（字符串）：弃用说明，写了显示弃用徽标
 - `experimental`（字符串）：实验性说明，写了显示实验徽标
 - `enum`（字符串）：可选值，用 | 或逗号分隔
@@ -1379,10 +1354,8 @@ print("hi")
 - `format`（字符串）：格式
 - `constraint`（字符串）：约束
 - `since`（字符串）：引入版本
-- `label-width`（长度）：名称列宽度，省略按最长的名称算
-  可选：`ch` `lh` `%`
-- `separator`（枚举，默认 `colon`）：名称与值的分隔
-  可选：`colon` `none`
+- `label-width`（长度）：名称列宽度，省略按最长的名称算；可选：`ch` `lh` `%`
+- `separator`（枚举，默认 `colon`）：名称与值的分隔；可选：`colon` `none`
 
 **例子**
 
@@ -1496,10 +1469,8 @@ print("hi")
 **属性**
 
 - `title`（字符串）：树上方一行标题
-- `lines`（布尔，默认 `true`）：画不画树线
-  可选：`true` `false`
-- `icon`（枚举）：plume 的图标样式，文字页面里不画图标，只接受这个参数
-  可选：`simple` `colored`
+- `lines`（布尔，默认 `true`）：画不画树线；可选：`true` `false`
+- `icon`（枚举）：plume 的图标样式，文字页面里不画图标，只接受这个参数；可选：`simple` `colored`
 
 **例子**
 
@@ -1564,25 +1535,16 @@ print("hi")
 - `highlight-rows`（字符串）：高亮的行号，空格分隔
 - `highlight-columns`（字符串）：高亮的列号，空格分隔
 - `highlight-cells`（字符串）：高亮的单元格，写成 行:列，空格分隔
-- `align`（枚举）：整张表的对齐，盖过 text-align
-  可选：`left` `center` `right`
-- `copy`（布尔，默认 `false`）：在标题下画一个复制整表的一行
-  可选：`true` `false`
-- `highlight`（强调色，默认 `warning`）：高亮用哪个强调值
-  可选：`neutral` `primary` `success` `warning` `danger` `important`
-- `background`（底色，默认 `page`）：表格底色
-  可选：`none` `page` `raised` `sunken` `quote` `table-header` `table-stripe`
+- `align`（枚举）：整张表的对齐，盖过 text-align；可选：`left` `center` `right`
+- `copy`（布尔，默认 `false`）：在标题下画一个复制整表的一行；可选：`true` `false`
+- `highlight`（强调色，默认 `warning`）：高亮用哪个强调值；可选：`neutral` `primary` `success` `warning` `danger` `important`
+- `background`（底色，默认 `page`）：表格底色；可选：`none` `page` `raised` `sunken` `quote` `table-header` `table-stripe`
 - `color`（颜色，默认 `foreground`）：表格文字色
-- `header-background`（底色，默认 `table-header`）：表头底
-  可选：`none` `page` `raised` `sunken` `quote` `table-header` `table-stripe`
-- `stripe-background`（底色，默认 `table-stripe`）：条纹底
-  可选：`none` `page` `raised` `sunken` `quote` `table-header` `table-stripe`
-- `text-align`（对齐，默认 `start`）：单元格文字位置
-  可选：`start` `center` `end`
-- `margin-top`（长度，默认 `0ch`）：与上一块的距离
-  可选：`ch` `lh` `%`
-- `margin-bottom`（长度，默认 `0ch`）：与下一块的距离
-  可选：`ch` `lh` `%`
+- `header-background`（底色，默认 `table-header`）：表头底；可选：`none` `page` `raised` `sunken` `quote` `table-header` `table-stripe`
+- `stripe-background`（底色，默认 `table-stripe`）：条纹底；可选：`none` `page` `raised` `sunken` `quote` `table-header` `table-stripe`
+- `text-align`（对齐，默认 `start`）：单元格文字位置；可选：`start` `center` `end`
+- `margin-top`（长度，默认 `0ch`）：与上一块的距离；可选：`ch` `lh` `%`
+- `margin-bottom`（长度，默认 `0ch`）：与下一块的距离；可选：`ch` `lh` `%`
 
 **例子**
 
@@ -1678,12 +1640,9 @@ print("hi")
 **属性**
 
 - `title`（字符串）：标题栏文字
-- `height`（长度）：内容区高度
-  可选：`ch` `lh` `%`
-- `gap`（长度）：标题栏与内容之间的空行
-  可选：`ch` `lh` `%`
-- `no-padding`（布尔，默认 `false`）：内容区不留内边距
-  可选：`true` `false`
+- `height`（长度）：内容区高度；可选：`ch` `lh` `%`
+- `gap`（长度）：标题栏与内容之间的空行；可选：`ch` `lh` `%`
+- `no-padding`（布尔，默认 `false`）：内容区不留内边距；可选：`true` `false`
 
 **例子**
 
@@ -1701,18 +1660,6 @@ print("hi")
 ```
 (etaf-md-open "笔记")
 ```
-:::
-
-:::columns {columns=2 divider=false}
-:::col
-:::card {title="带图标的卡片" icon="check" description="图标跟标题在同一行。"}
-卡片正文。
-:::
-:::
-:::col
-:::card {title="没有图标的卡片" description="默认什么都不画。"}
-:::
-:::
 :::
 
 :::window {title="带间距的窗口" gap="1lh" height="6lh"}
@@ -2123,10 +2070,8 @@ npm ci
 - `title`（字符串）：主标题
 - `description`（字符串）：标题下的摘要
 - `href`（字符串）：行动链接地址
-- `accent`（强调色，默认 `primary`）：标题的强调色
-  可选：`neutral` `primary` `success` `warning` `danger` `important`
-- `background`（底色，默认 `raised`）：底色
-  可选：`none` `page` `raised` `sunken` `quote` `table-header` `table-stripe`
+- `accent`（强调色，默认 `primary`）：标题的强调色；可选：`neutral` `primary` `success` `warning` `danger` `important`
+- `background`（底色，默认 `raised`）：底色；可选：`none` `page` `raised` `sunken` `quote` `table-header` `table-stripe`
 
 **例子**
 
@@ -2138,8 +2083,8 @@ npm ci
 标题以外的参数都省略时，只剩标题和正文。
 :::
 
-:::home-box {title="换一种强调色" description="accent 可以取 success、warning、danger、important 或 neutral。" accent="success" background="sunken"}
-底色同样可以换。
+:::home-box {title="换一种强调色" description="accent 可以取 success、warning、danger、important 或 neutral。" accent="success"}
+默认 raised 底色配合绿色强调标题。
 :::
 
 :::home-box {title="换一种强调色" description="accent 可以取 success、warning、danger、important 或 neutral。" accent="success" background="sunken"}
@@ -2252,8 +2197,7 @@ npm ci
 子块 `slide`：
 
 - `title`（字符串）：切换条上的文字
-- `selected`（布尔，默认 `false`）：默认停在这一页
-  可选：`true` `false`
+- `selected`（布尔，默认 `false`）：默认停在这一页；可选：`true` `false`
 
 **例子**
 
@@ -2279,8 +2223,7 @@ npm ci
 
 ## 流程图：形状与分组
 
-每种形状有含义：圆角是开始结束，菱形是判断，圆柱是存储，子程序是调用。
-两条分支分别用 `classDef` 上了色，颜色从页面的强调色取。
+每种形状有含义：圆角是开始结束，菱形是判断，圆柱是存储，子程序是调用。两条分支分别用 `classDef` 上了色，颜色从页面的强调色取。
 
 ```mermaid
 flowchart TB
@@ -2589,8 +2532,7 @@ quadrantChart
 
 ## 桑基图：能量的去向
 
-第一列写来源，第二列写去向，第三个数是量；同一节点自动汇总。
-节点名要用拉丁字母，mermaid 的桑基图只接受这种名字。
+第一列写来源，第二列写去向，第三个数是量；同一节点自动汇总。节点名要用拉丁字母，mermaid 的桑基图只接受这种名字。
 
 ```mermaid
 sankey-beta
@@ -2730,8 +2672,7 @@ C4Context
 
 ## 公式：行内与独立
 
-行内公式跟着句子走，例如页面宽度按 $w = \lceil p / c \rceil$ 换算成格数，其中 $p$ 是像素宽，$c$ 是字符宽。
-独立公式单独成行，居中，上下留一行空白。
+行内公式跟着句子走，例如页面宽度按 $w = \lceil p / c \rceil$ 换算成格数，其中 $p$ 是像素宽，$c$ 是字符宽。独立公式单独成行，居中，上下留一行空白。
 
 $$
 \text{行高} = \max_{g \in G}\bigl(\text{ascent}(g) + \text{descent}(g)\bigr)

@@ -301,6 +301,24 @@ The border of the success status.
 
 **Semantics.** Completes the success triple.
 
+#### Token: :ui-important-fg
+
+The foreground of the important status.
+
+**Semantics.** Used for high-priority highlights and important semantic accents across cards and feedback surfaces.
+
+#### Token: :ui-important-bg
+
+The background of the important status.
+
+**Semantics.** The tint behind important text.
+
+#### Token: :ui-important-border
+
+The border of the important status.
+
+**Semantics.** Completes the important triple with `:ui-important-fg` and `:ui-important-bg`.
+
 ## Following the Emacs frame
 
 <!-- index: frame background mode; theme toggle -->

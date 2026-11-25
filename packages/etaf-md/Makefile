@@ -11,7 +11,13 @@ SOURCES += $(wildcard examples/*.el)
 SOURCES += scripts/etaf-md-gui-probe.el
 SOURCES += benchmarks/performance-scenarios.el
 
-.PHONY: compile load check clean structure-check setup-hooks acceptance api-check test benchmark mermaid-check
+.PHONY: compile load check clean native-build native-clean structure-check setup-hooks acceptance api-check test benchmark mermaid-check
+
+native-build:
+	$(MAKE) -C native EMACS="$(EMACS)"
+
+native-clean:
+	$(MAKE) -C native clean
 
 compile:
 	rm -f *.elc lisp/*.elc tests/*.elc examples/*.elc scripts/*.elc

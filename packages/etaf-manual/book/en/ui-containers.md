@@ -50,7 +50,7 @@ Render a reusable titled surface with default content slots.
 
 **Arguments.** TITLE is an optional strong heading; DESCRIPTION is an optional muted supporting line; VARIANT is a symbol appended to the surface's class names. The default slot holds the card's content.
 
-**Semantics.** The content order is TITLE, DESCRIPTION and the default slot. The surface uses the same padding, gap and panel tokens as `etaf-panel` and spans the available width. VARIANT carries no built-in behavior: every value produces the same default look with a different class, so callers distinguish card styles through their own rules or a Theme.
+**Semantics.** The content order is TITLE, DESCRIPTION and the default slot. The surface uses the same padding, gap and panel tokens as `etaf-panel`, spans the available width, and propagates TEXT-ALIGN to both header and body content. When VARIANT is a semantic accent (`primary`, `info`, `success`, `warning`, `danger` or `important`), the title and a 3px left accent border take the corresponding Theme token; `default`, `neutral` and custom names keep the plain panel border and strong title while still appending the variant class. When ON-PRESS is supplied, the card surface also shows a hand pointer.
 
 **Returns.** A View.
 

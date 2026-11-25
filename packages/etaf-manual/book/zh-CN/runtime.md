@@ -32,13 +32,13 @@ View 是描述，Runtime 保存输出。View 的静态部分构建一次，每�
 
 - BUFFER-OR-NAME 是缓冲区或缓冲区名。缓冲区不存在时会被创建；Runtime 不显示它。
 - VIEW 是 [View](views.md) 定义的归一化 View，或返回 View 的零参函数。函数带追踪求值，所以读了响应式源的 View 函数会在该源变化时重新渲染。
-- OPTIONS 是 plist。支持的键有 `:viewport-width`(像素)与 `:viewport-height`(行),首次发布会直接使用它们而不立刻重新布局;还有 `:observer`,一个单参报告 sink,在首次渲染前安装。维度为 nil 时跟随所在窗口。视口细节属于[视口](viewport.md)章;报告格式属于[增量更新与发布](incremental-updates-and-publication.md)。
+- OPTIONS 是 plist。支持的键有 `:viewport-width`（像素）与 `:viewport-height`（行），首次发布会直接使用它们而不立刻重新布局；`:observer`，一个在首次渲染前安装的单参报告 sink；以及 `:text-selection`，一个布尔值（`t` 或 `nil`），在挂载期间允许画布上的 Emacs 原生 mark 与指针文本选择。维度为 nil 时跟随所在窗口。视口细节属于[视口](viewport.md)章；报告格式属于[增量更新与发布](incremental-updates-and-publication.md)。
 
 **语义。** BUFFER-OR-NAME 里已挂载的 Runtime 会被先卸载，所以新 View 取代旧应用。首次发布是一次被观测的操作：View 被降级并渲染、整个缓冲区写一次、已提交修订号变为 1。登记 Runtime 的同时安装它的按键处理与 `kill-buffer-hook`，所以杀掉缓冲区会卸载它。首次发布失败时，新 Runtime 被释放、条件向外传播，缓冲区存活且没有 Runtime。
 
 **返回。** BUFFER-OR-NAME，一个活着的缓冲区。
 
-**错误。** OPTIONS 不是 proper plist、含有上面三个之外的键、`:viewport-width` 或 `:viewport-height` 既不是 nil 也不是正数、`:observer` 既不是 nil 也不是函数时，`error→ etaf-runtime-error`，数据给出消息与出错的值或键。View 自身的问题原样传播它的条件，例如 `etaf-view-error`、`etaf-view-syntax-error`、`etaf-component-call-error` 或 `etaf-renderer-error`，缓冲区不留下 Runtime。渲染期间调用会 `error→ etaf-render-side-effect-error`，数据为 `(mount-runtime)`。
+**错误。** OPTIONS 不是 proper plist、含有上面四个之外的键、`:viewport-width` 或 `:viewport-height` 既不是 nil 也不是正数、`:observer` 既不是 nil 也不是函数、或 `:text-selection` 不是布尔值（`nil` 或 `t`）时，`error→ etaf-runtime-error`，数据给出消息与出错的值或键。View 自身的问题原样传播它的条件，例如 `etaf-view-error`、`etaf-view-syntax-error`、`etaf-component-call-error` 或 `etaf-renderer-error`，缓冲区不留下 Runtime。渲染期间调用会 `error→ etaf-render-side-effect-error`，数据为 `(mount-runtime)`。
 
 **示例。** 已经知道布局上下文的无头宿主可省掉首次重新布局。
 
@@ -417,7 +417,7 @@ Host 查询看到的是至少带一个非空语义属性（例如 `:ref`、`:rol
 
 1. 保留段同步出树：顶层节点（单个根节点，或包裹多个根的 column）变化时挂载进 Ebox 挂载。
 2. 脏 Ebox 子树在一个批里 flush：重算样式、布局损坏区域，缓冲区区域只重写一次。
-3. 已提交修订号 +1，刷新 sticky Host 镜像。
+3. 已提交修订号 +1，刷新 sticky Host 镜像与行区间（保留 Host 更新与 refit 同样刷新，卸载时清除）。
 4. 提交的生命周期钩子在渲染之外运行：mounted 给本次提交中出现的实例，updated 给参与本次提交的实例，unmounted 给被释放的实例。每个钩子运行时 `etaf-current-runtime` 绑定到该 Runtime、渲染关闭，所以钩子可以写状态；钩子错误和别的发布工作一样由排空收集。
 
 排空随后继续 post 阶段；post 阶段写了状态就从头再来，如[响应式系统](reactivity.md#排空)所述。第 2 步之前失败的提交整体回滚，[原子提交](#原子提交)一节说明。
@@ -428,6 +428,356 @@ Host 查询看到的是至少带一个非空语义属性（例如 `:ref`、`:rol
 - 一次保留内容或几何更新只付一次 Ebox 发布和一次修订号前进，与 View 大小无关。
 - 内省函数遍历保留 Host 树或实例表；它们分配新列表或 plist，不发布任何东西。用于诊断与测试，不要逐帧调用。
 - 回滚只付失败事务触碰过的状态，而不是整个 View。
+
+## Runtime 扩展与呈现附着
+
+页面翻译等核心扩展通过这组接口观察 Runtime 生命周期、只读查询已提交的 Host 树（无需接触内部段或 Ebox 节点），并以命名归属挂载呈现层，使译文或装饰在应用响应式更新后保持完好、并在 Host 卸载时自动释放。
+
+#### Hook: etaf-runtime-mount-functions
+
+在 `etaf-mount` 完成首次发布之后以单参数 RUNTIME 运行的钩子。
+
+**语义。** 每个观察函数在 `etaf-current-runtime` 绑定到 RUNTIME 且关闭渲染状态时运行，时机位于 `:observer` 安装之后。单个观察函数的错误被隔离，不会中止挂载或影响后续观察函数。
+
+**参见。** `etaf-runtime-after-commit-functions` 与 `etaf-runtime-unmount-functions`。
+
+#### Hook: etaf-runtime-after-commit-functions
+
+已挂载 Runtime 提交了一次应用变更之后以单参数 RUNTIME 运行的钩子。
+
+**语义。** 在 Ebox 完成 flush、已提交修订号前进且组件生命周期钩子执行完毕后运行。首次挂载与纯呈现层 flush 不会触发该钩子，因此更新呈现层的扩展不会造成递归循环。单个观察函数的错误被隔离。
+
+**参见。** `etaf-runtime-mount-functions` 与 `etaf-runtime-set-host-presentations`。
+
+#### Hook: etaf-runtime-after-flush-functions
+
+在 RUNTIME 缓冲区发生非呈现层 Ebox flush 之后以单参数 RUNTIME 运行的钩子。
+
+**语义。** 在 `:overflow scroll` 容器滚动偏移更新、视口 refit 或应用提交写完缓冲区之后运行，让视口优先翻译器等扩展无需直接依赖 Ebox 就能感知容器内部滚动。纯呈现层 flush 不会触发该钩子。单个观察函数的错误被隔离。
+
+**参见。** `etaf-runtime-host-geometries` 与 `etaf-runtime-after-commit-functions`。
+
+#### Hook: etaf-runtime-unmount-functions
+
+已挂载 Runtime 开始卸载时以单参数 RUNTIME 运行的钩子。
+
+**语义。** 在保留树、Host 索引表与缓冲区绑定释放之前运行，便于扩展及时取消异步任务并回收会话状态。单个观察函数的错误被隔离。
+
+**参见。** `etaf-unmount` 与 `etaf-runtime-mount-functions`。
+
+#### Function: etaf-runtime-host-tree (&optional runtime)
+
+把已挂载 RUNTIME 的应用 Host 树以只读数据返回。
+
+**参数。** RUNTIME 默认取活动 Runtime 或当前缓冲区的 Runtime。
+
+**语义。** 仅遍历应用根节点，排除临时 surface 与附着呈现伴生段。每个节点是包含 `:id`（稳定整型 Host ID）、`:ref`、`:tag`、`:text`（应用的权威文本，始终不受呈现层覆盖影响）、`:props`（纯数据语义与样式属性，存在可用点击回调时附带 `:has-on-press`）、`:geometry`（`(:x :y :width :height)` 或 nil）和 `:children` 的 plist。
+
+**返回。** 按文档顺序排列的顶层 Host 节点 plist 列表。
+
+**错误。** RUNTIME 未挂载时抛出 `error→ etaf-runtime-error`。
+
+**参见。** `etaf-runtime-host-geometries`、`etaf-runtime-trigger-host-press` 与 `etaf-runtime-set-host-presentations`。
+
+#### Function: etaf-runtime-host-geometries (runtime host-ids)
+
+返回已挂载 RUNTIME 中整型 HOST-IDS 的实时几何与裁剪可见性。
+
+**参数。** RUNTIME 是已挂载 Runtime；HOST-IDS 是来自 `etaf-runtime-host-tree` 的整型 Host ID 列表。未知或尚未布局的 ID 会被跳过。
+
+**语义。** 无需重走整棵树即可查询每个 Host 当前已布局的边框盒。每条记录为 `(HOST-ID . PLIST)`，含像素单位的 `:x` 与 `:width`、已扣除全部外层 `:overflow scroll` 滚动偏移的根行号 `:y` 与 `:height`、与显示窗口求交后的有效垂直裁剪区间 `:clip-top`/`:clip-bottom`（无裁剪边界时为 nil），以及表示 Host 是否与该区间相交的 `:visible-p`。
+
+**返回。** 按 HOST-IDS 顺序排列的 `(HOST-ID . PLIST)` 关联列表。
+
+**错误。** RUNTIME 未挂载或 HOST-IDS 不是 proper list 时抛出 `error→ etaf-runtime-error`。
+
+**参见。** `etaf-runtime-host-tree` 与 `etaf-runtime-after-flush-functions`。
+
+#### Function: etaf-runtime-trigger-host-press (runtime host-id)
+
+在 RUNTIME 中向已提交整型 HOST-ID 派发一次可用的 `press' 事件。
+
+**参数。** RUNTIME 是已挂载 Runtime；HOST-ID 是来自 `etaf-runtime-host-tree` 的整型 `:id`。
+
+**语义。** 当 HOST-ID 仍存活且带有未禁用的 `:on-press' 回调时，经由 RUNTIME 常规事件批派发 `press'，让翻译或装饰后的控件无需暴露闭包即可触发原 Host 交互。
+
+**返回。** 成功派发返回非 nil，HOST-ID 不存在或无可用点击回调时返回 nil。
+
+**错误。** RUNTIME 未挂载或 HOST-ID 不是整数时抛出 `error→ etaf-runtime-error`；渲染期间调用抛出 `error→ etaf-render-side-effect-error`。
+
+#### Function: etaf-runtime-set-host-presentation (runtime host-id key spec)
+
+为 RUNTIME 中整型 HOST-ID 挂载或更新归属于 KEY 的呈现规格 SPEC。
+
+**参数。** RUNTIME 是已挂载 Runtime；HOST-ID 是来自 `etaf-runtime-host-tree` 的整数；KEY 是非 nil 符号；SPEC 为 nil（清除该 KEY）或含 `:mode`（`decorate`、`override`、`companion-inside`、`companion-after` 或 `companion-beside`）、可选整型 `:priority`（默认 `50`，越小越先渲染）及对应载荷的 plist：`decorate` 接收 `:spans`（`((START . END) . FACE)` 或 `((START . END) :face FACE)` 列表）与/或 `:face`；`override` 接收文本 Host 的 `:text` 或容器 Host 的 `:view`；伴生模式接收继承该 Host 的 Context 与 Theme 的归一化 `:view`。
+
+**语义。** 委托给 `etaf-runtime-set-host-presentations` 处理单个目标。同一 Host 的呈现桶支持多归属方共存：`decorate` 层可无损叠加在权威文本之上，多个伴生层按 `:priority` 升序排列，多个 `override` 层按 `:priority` 堆叠并在顶层撤销时自动回落。
+
+**返回。** HOST-ID 存活且已更新返回非 nil，不存在返回 nil。
+
+**错误。** RUNTIME 未挂载或 KEY/SPEC 非法时抛出 `error→ etaf-runtime-error`；渲染期间调用抛出 `error→ etaf-render-side-effect-error`。
+
+#### Function: etaf-runtime-set-host-presentations (runtime key updates)
+
+在已挂载 RUNTIME 中以一次原子 flush 应用归属于 KEY 的 `(HOST-ID . SPEC)` 呈现更新列表 UPDATES。
+
+**参数。** RUNTIME 是已挂载 Runtime；KEY 是非 nil 符号；UPDATES 是 `(HOST-ID . SPEC)` 组成的 proper list，校验规则同 `etaf-runtime-set-host-presentation`。
+
+**语义。** 所有变更在一次 Ebox 批中生效并递增 `etaf-runtime-revision`，不触发 `etaf-runtime-after-commit-functions`。未知或已卸载的 HOST-ID 会被跳过。同 KEY 同 `:mode` 的重复更新会就地修补伴生段；`decorate` 可与同 KEY 或其它 KEY 的伴生层共存并在应用更新文本后自动保留；容器 `override` 将原应用子节点暂存离屏容器以保留后续响应式修改；伴生模式在和解与重排中维持原布局槽位，并随 Host 卸载自动释放。
+
+**返回。** 实际更新的 Host 数量。
+
+**错误。** RUNTIME 未挂载或 KEY/UPDATES/SPEC 非法时抛出 `error→ etaf-runtime-error`；渲染期间调用抛出 `error→ etaf-render-side-effect-error`。
+
+#### Function: etaf-runtime-clear-presentations (runtime &optional key)
+
+在一次 Ebox flush 中移除已挂载 RUNTIME 的呈现附着并还原原始 Host。
+
+**参数。** RUNTIME 是已挂载 Runtime；可选 KEY 仅清除该符号归属的呈现层，为 nil 时清除全部。
+
+**语义。** 仅释放 KEY 归属的呈现段而不干扰同 Host 上的其余共存归属方，在单个批里于全部归属方移除后还原原 Ebox 节点与权威文本并递增修订号，不触发 `etaf-runtime-after-commit-functions`。
+
+**返回。** 还原的 Host 数量。
+
+**错误。** RUNTIME 未挂载或 KEY 非符号时抛出 `error→ etaf-runtime-error`；渲染期间调用抛出 `error→ etaf-render-side-effect-error`。
+
+## 扩展、元数据、覆盖层与快捷键层
+
+扩展引擎与外部覆盖工具通过四组可组合原语接入任意已挂载的 Runtime：声明式 Runtime 元数据、命名根级覆盖层、语义 Host 操作与文本偏移命中查询，以及严格位于应用快捷键之下的按优先级排序的扩展快捷键层。
+
+#### Hook: etaf-runtime-meta-change-functions
+
+已挂载 Runtime 的解析后元数据快照变化时以 `(RUNTIME META)` 调用的 abnormal hook。
+
+**语义。** 在调用 `etaf-runtime-set-meta` 或 `:meta` 中任意响应式来源（`etaf-ref`、`etaf-computed` 或零参函数）产出新快照后触发。每个监听函数彼此错误隔离。
+
+#### Hook: etaf-runtime-focus-change-functions
+
+已挂载 Runtime 中逻辑 Host 焦点移动时以 `(RUNTIME PREV-HOST-ID NEXT-HOST-ID)` 调用的 abnormal hook。
+
+**语义。** 焦点在已提交 Host 间切换（或进入/离开焦点，缺失端传 nil）后触发。每个监听函数彼此错误隔离，扩展异常不会破坏键盘导航。
+
+#### Function: etaf-runtime-meta (&optional runtime)
+
+返回已挂载 RUNTIME 解析后元数据 plist 的独立只读副本。
+
+**参数。** RUNTIME 默认取活动 Runtime 或当前缓冲区的 Runtime。
+
+**语义。** 返回通过 `etaf-mount`、`etaf-app-open` 或 `etaf-runtime-set-meta` 提供的 `:meta` 最新快照，常见字段包括 `:app`、`:kind`、`:uri` 与 `:title`；未设置时返回 nil。
+
+**返回。** 独立 plist，或 nil。
+
+**错误。** RUNTIME 未挂载时抛出 `error→ etaf-runtime-error`。
+
+#### Function: etaf-runtime-set-meta (runtime meta)
+
+用 META 替换已挂载 RUNTIME 的元数据声明并返回解析后的快照。
+
+**参数。** RUNTIME 是已挂载 Runtime；META 为 nil 或合法关键字 plist，其值可为静态数据、`etaf-ref`、`etaf-computed` 或零参函数。
+
+**语义。** 释放旧的元数据监听 Scope，若含响应式来源则在新 Scope 中求值并监听变化，每次解析快照变化时通知 `etaf-runtime-meta-change-functions`。
+
+**返回。** 独立解析后的元数据 plist，或 nil。
+
+**错误。** RUNTIME 未挂载或 META 非合法 plist 时抛出 `error→ etaf-runtime-error`；渲染期间调用抛出 `error→ etaf-render-side-effect-error`。
+
+#### Function: etaf-runtime-focus-host (runtime host-id)
+
+将已挂载 RUNTIME 的逻辑键盘焦点移动到整型 HOST-ID。
+
+**参数。** RUNTIME 是已挂载 Runtime；HOST-ID 是来自 `etaf-runtime-host-tree` 的整型 `:id`。
+
+**语义。** 定位已提交 Host 段并在其存活、可聚焦且未禁用时把 Ebox 焦点移到对应节点；焦点变化时触发 `etaf-runtime-focus-change-functions`。
+
+**返回。** 焦点成功移动返回非 nil；HOST-ID 不存在、被禁用或不可聚焦时返回 nil。
+
+**错误。** RUNTIME 未挂载或 HOST-ID 不是整数时抛出 `error→ etaf-runtime-error`；渲染期间调用抛出 `error→ etaf-render-side-effect-error`。
+
+#### Function: etaf-runtime-scroll-host-into-view (runtime host-id &optional align)
+
+滚动 RUNTIME 中外层 `:overflow scroll`/`auto` 容器及显示窗口，使整型 HOST-ID 滚入可视区域。
+
+**参数。** RUNTIME 是已挂载 Runtime；HOST-ID 是整型 `:id`；可选 ALIGN 为 `nearest`（默认）、`top` 或 `center`。
+
+**语义。** 从最内层祖先滚动容器逐级向外调整滚动偏移（并同步显示该缓冲区的活窗口），使 HOST-ID 按 ALIGN 策略进入视野。
+
+**返回。** HOST-ID 存活且已布局返回非 nil，不存在返回 nil。
+
+**错误。** RUNTIME 未挂载、HOST-ID 不是整数或 ALIGN 非法时抛出 `error→ etaf-runtime-error`；渲染期间调用抛出 `error→ etaf-render-side-effect-error`。
+
+#### Function: etaf-runtime-host-text-offset-at (runtime &optional position)
+
+返回已挂载 RUNTIME 中 POSITION 处文本 Host 的字符偏移与活动选区信息，无命中时返回 nil。
+
+**参数。** RUNTIME 是已挂载 Runtime；POSITION 默认为 RUNTIME 缓冲区中的 point。
+
+**语义。** 解析覆盖 POSITION 的最内层已提交文本 Host，并将缓冲区位置映射回该 Host 权威 `:text` 中的字符偏移；若同一文本 Host 上存在激活选区，则一并返回 `:region-start` 与 `:region-end`。
+
+**返回。** 形如 `(:host-id INT :offset INT :text STR :region-start INT-OR-NIL :region-end INT-OR-NIL)` 的 plist，未命中文本 Host 时返回 nil。
+
+**错误。** RUNTIME 未挂载时抛出 `error→ etaf-runtime-error`。
+
+#### Function: etaf-runtime-set-overlay (runtime key view &optional origin)
+
+在已挂载 RUNTIME 中挂载、更新或清除归属于 KEY 的命名根级覆盖层 VIEW。
+
+**参数。** RUNTIME 是已挂载 Runtime；KEY 是标识归属方的非 nil 符号；VIEW 为归一化 View（通常为 `:layer 'root :position 'absolute` 的 `box` 或由其组成的 `fragment`）或 nil（清除 KEY）；可选 ORIGIN 为已提交 Host 引用，指定 VIEW 继承的 Context 与 Theme（默认取根段）。
+
+**语义。** 不同 KEY 的覆盖层互不干扰地共存于应用布局之上；更新既有 KEY 会就地修补其覆盖段。覆盖层变更在呈现层保护内执行，不触发 `etaf-runtime-after-commit-functions` 或 `etaf-runtime-after-flush-functions`，也不会污染 `etaf-runtime-host-tree` 或 `etaf-runtime-inspect-tree`。
+
+**返回。** 发生变更返回非 nil，清除不存在的 KEY 返回 nil。
+
+**错误。** RUNTIME 未挂载或 KEY 不是非 nil 符号时抛出 `error→ etaf-runtime-error`；渲染期间调用抛出 `error→ etaf-render-side-effect-error`。
+
+#### Function: etaf-runtime-clear-overlay (runtime &optional key)
+
+从已挂载 RUNTIME 移除归属于 KEY 的命名根级覆盖层（KEY 为 nil 时移除全部）。
+
+**参数。** RUNTIME 是已挂载 Runtime；可选 KEY 是归属方符号，nil 表示全部。
+
+**语义。** 在单次 Ebox 批中释放匹配的覆盖段，不触发应用提交钩子。
+
+**返回。** 实际移除的覆盖层数量。
+
+**错误。** RUNTIME 未挂载或 KEY 非符号时抛出 `error→ etaf-runtime-error`；渲染期间调用抛出 `error→ etaf-render-side-effect-error`。
+
+#### Function: etaf-runtime-set-key-layer (runtime key entries &optional label priority)
+
+在已挂载 RUNTIME 上注册或替换归属于 KEY 的扩展快捷键层。
+
+**参数。** RUNTIME 是已挂载 Runtime；KEY 是非 nil 符号；ENTRIES 为 `(KEY-SEQ COMMAND LABEL)` 三元组列表（传 nil 则移除该层）；可选 LABEL 为帮助面板中的来源名称；可选 PRIORITY 为整型优先级（默认 `50`，越小越先匹配）。
+
+**语义。** 扩展快捷键层严格在 Host `:keys` 与框架默认键（`Tab`、`ESC`、`?`、`M-g` 与方向键）之后解析；尝试绑定框架保留键会抛出 `etaf-renderer-error`。未被遮蔽的有效绑定会自动出现在 `etaf-help-data` 的 `:kind 'extension` 分组中。
+
+**返回。** 更新成功返回非 nil。
+
+**错误。** RUNTIME 未挂载或 KEY/PRIORITY 非法时抛出 `error→ etaf-runtime-error`；条目格式非法或绑定保留键时抛出 `error→ etaf-renderer-error`；渲染期间调用抛出 `error→ etaf-render-side-effect-error`。
+
+#### Function: etaf-runtime-clear-key-layer (runtime &optional key)
+
+从已挂载 RUNTIME 移除归属于 KEY 的扩展快捷键层（KEY 为 nil 时清除全部）。
+
+**参数。** RUNTIME 是已挂载 Runtime；可选 KEY 是符号，nil 表示清除全部扩展层。
+
+**语义。** 立即移除匹配的快捷键层，后续按键派发与 `etaf-help-data` 同步生效。
+
+**返回。** 移除的快捷键层数量。
+
+**错误。** RUNTIME 未挂载或 KEY 非符号时抛出 `error→ etaf-runtime-error`；渲染期间调用抛出 `error→ etaf-render-side-effect-error`。
+
+## Runtime 内省
+
+开发者工具通过按需只读查询与一个受控响应式绑定写口检视已挂载的 Runtime，既不改动缓存，也不直接触碰 Ebox。
+
+#### Function: etaf-runtime-list ()
+
+按挂载身份升序返回当前全部存活的已挂载 ETAF Runtime 列表。
+
+**语义。** 遍历挂载表，过滤底层缓冲区仍存活的已挂载 Runtime 并按挂载顺序返回。
+
+**返回。** 存活的 Runtime 对象组成的新列表。
+
+**错误。** 无。
+
+**参见。** `etaf-runtime-for-buffer`、`etaf-runtime-inspect-tree`。
+
+#### Function: etaf-runtime-inspect-tree (&optional runtime)
+
+以只读数据返回已挂载 RUNTIME 的统一组件与 Host 树。
+
+**参数。** RUNTIME 默认取活动 Runtime 或当前缓冲区的 Runtime。
+
+**语义。** 遍历已提交保留段树，排除临时 surface 与附着呈现伴生段。组件节点携带 `:kind`（`component`）、`:id`、`:name`、`:key`、`:source-file`、`:render-count`、`:props-summary`、`:root-host-ids` 与 `:children`；Host 节点携带 `:kind`（`host`）、`:id`、`:tag`、`:ref`、`:dom-id`、`:classes`、`:text-preview`、`:presentations`、`:geometry`、`:focusable-p`、`:focused-p`、`:disabled-p`、`:has-press-p` 与 `:children`。
+
+**返回。** 按文档顺序排列的顶层节点 plist 列表。
+
+**错误。** RUNTIME 未挂载时抛出 `error→ etaf-runtime-error`。
+
+**参见。** `etaf-runtime-host-tree`、`etaf-runtime-inspect-host`、`etaf-runtime-inspect-component`。
+
+#### Function: etaf-runtime-host-id-at (runtime &optional position)
+
+返回已挂载 RUNTIME 中 POSITION 处的 `(INNERMOST-HOST-ID ... ROOT-HOST-ID)` 列表，无覆盖时返回 nil。
+
+**参数。** RUNTIME 是已挂载 Runtime；POSITION 默认为 RUNTIME 缓冲区中的 point。
+
+**语义。** 将 POSITION 处绘制的 Ebox 节点反查到已提交应用 Host 祖先链；若命中呈现伴生段，则自动回退到其归属应用 Host。
+
+**返回。** 从最内层到根的整型 Host ID 列表；POSITION 未被任何 Host 覆盖时返回 nil。
+
+**错误。** RUNTIME 未挂载时抛出 `error→ etaf-runtime-error`。
+
+**参见。** `etaf-host-ref-at`、`etaf-runtime-inspect-host`。
+
+#### Function: etaf-runtime-inspect-host (runtime host-id)
+
+返回已挂载 RUNTIME 中整型 HOST-ID 的详细只读检视快照，不存在时返回 nil。
+
+**参数。** RUNTIME 是已挂载 Runtime；HOST-ID 是来自 `etaf-runtime-inspect-tree` 或 `etaf-runtime-host-id-at` 的整型 `:id`。
+
+**语义。** 在不改动缓冲区和缓存的前提下汇总盒模型度量、归属到对应组件的按需 ECSS 层叠来源、逐行精确绘制区间、裁剪可见性、脱敏 props、behavior、呈现附着与焦点标记。
+
+**返回。** HOST-ID 的独立快照 plist，HOST-ID 不存在时返回 nil。
+
+**错误。** RUNTIME 未挂载或 HOST-ID 不是整数时抛出 `error→ etaf-runtime-error`。
+
+**参见。** `etaf-runtime-inspect-tree`、`etaf-runtime-inspect-component`。
+
+#### Function: etaf-runtime-inspect-component (runtime instance-id)
+
+返回已挂载 RUNTIME 中整型组件实例 INSTANCE-ID 的详细只读快照，不存在时返回 nil。
+
+**参数。** RUNTIME 是已挂载 Runtime；INSTANCE-ID 是 `etaf-runtime-inspect-tree` 中 `:kind component` 节点的整型 `:id`。
+
+**语义。** 报告组件名、key、源码文件、定义符号、根 Host ID 列表、渲染次数、props、命名绑定（区分 `ref`、`computed`、`resource`、`data-controller` 与普通值，并给出版本号、订阅与依赖摘要及可编辑标记）、继承的 Context 项与解析后的局部引用。
+
+**返回。** INSTANCE-ID 的独立快照 plist，INSTANCE-ID 不存在或已销毁时返回 nil。
+
+**错误。** RUNTIME 未挂载或 INSTANCE-ID 不是整数时抛出 `error→ etaf-runtime-error`。
+
+**参见。** `etaf-runtime-set-component-binding`、`etaf-runtime-inspect-tree`。
+
+#### Function: etaf-runtime-set-component-binding (runtime instance-id binding-name new-value)
+
+向已挂载 RUNTIME 中组件实例 INSTANCE-ID 的可写 `etaf-ref` 绑定 BINDING-NAME 写入 NEW-VALUE。
+
+**参数。** RUNTIME 是已挂载 Runtime；INSTANCE-ID 是存活的整型组件实例 ID；BINDING-NAME 是已声明的 `:bindings` 符号；NEW-VALUE 是待写入的新值。
+
+**语义。** 定位声明的绑定，在其持有可写 `etaf-ref` 时经由 `etaf-set-value` 写入并走常规响应式提交路径；非 ref 绑定（例如 `etaf-computed`）会被拒绝且不改动状态。
+
+**返回。** 成功返回 t。
+
+**错误。** RUNTIME 未挂载、INSTANCE-ID 或 BINDING-NAME 未知、或绑定不是可写 `etaf-ref` 时抛出 `error→ etaf-runtime-error`；渲染期间调用抛出 `error→ etaf-render-side-effect-error`。
+
+**参见。** `etaf-runtime-inspect-component`、`etaf-set-value`。
+
+#### Function: etaf-runtime-inspect-focus (runtime)
+
+返回已挂载 RUNTIME 的独立焦点、区域与有效键位作用域诊断快照。
+
+**参数。** RUNTIME 是已挂载 Runtime。
+
+**语义。** 汇总当前焦点 Host ID 与引用、原生输入会话状态、当前 `etaf-direction-scheme`、带 tab-index 与 focus-group 元数据的有序焦点停靠点列表、已声明区域及有效 `etaf-help-data` 快照。
+
+**返回。** 包含 `:focused-host-id`、`:focused-host-ref`、`:input-active-p`、`:direction-scheme`、`:stops`、`:regions` 与 `:help` 的独立 plist。
+
+**错误。** RUNTIME 未挂载时抛出 `error→ etaf-runtime-error`。
+
+**参见。** `etaf-focused-host-ref`、`etaf-help-data`。
+
+#### Function: etaf-runtime-commit-summary (runtime)
+
+返回已挂载 RUNTIME 最近一次提交的轻量摘要 plist。
+
+**参数。** RUNTIME 是已挂载 Runtime。
+
+**语义。** 以常数时间直接读取 Runtime 的修订号、最近一次实例变化计数（`:new-instances`、`:updated-instances`、`:retired-instances`）及最近一次 `etaf-runtime-update-report`，不遍历节点树。
+
+**返回。** 包含 `:rev`、`:new-instances`、`:updated-instances`、`:retired-instances` 与 `:update-report` 的独立 plist。
+
+**错误。** RUNTIME 未挂载时抛出 `error→ etaf-runtime-error`。
+
+**参见。** `etaf-runtime-update-report`、`etaf-runtime-after-commit-functions`。
 
 ## 错误与恢复
 

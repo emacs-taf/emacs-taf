@@ -16,17 +16,17 @@ A transition follows a reactive source; a frame sequence cycles a fixed list. Us
 
 <!-- index: etaf-transition; etaf-animation-frames; duration; easing; interval; loop; completion -->
 
-#### Function: etaf-transition (source &key (duration 0.2) (easing 'ease-out) name on-complete)
+#### Function: etaf-transition (source &key (duration 0.2) (easing 'ease-out) (delay 0) name on-complete)
 
 Return a ref that follows reactive SOURCE over DURATION seconds.
 
-**Arguments.** SOURCE is a ref, a computed value or a zero-argument function, exactly as in `etaf-watch`. DURATION is the travel time in seconds, defaults to 0.2 and may be zero. EASING is a name from `etaf-animation-easings` or an easing function. NAME labels the returned ref in diagnostics. ON-COMPLETE is a zero-argument function to run after a run reaches SOURCE.
+**Arguments.** SOURCE is a ref, a computed value or a zero-argument function, exactly as in `etaf-watch`. DURATION is the travel time in seconds, defaults to 0.2 and may be zero. EASING is a name from `etaf-animation-easings` or an easing function. DELAY waits that many seconds on the shared clock before interpolating and defaults to 0. NAME labels the returned ref in diagnostics. ON-COMPLETE is a zero-argument function to run after a run reaches SOURCE.
 
-**Semantics.** The returned ref starts at SOURCE's current value and is not running. Every later SOURCE change starts a run from the value currently displayed, so interrupting a run never jumps. Read the ref with `etaf-value` wherever the display should follow it. The animation belongs to the Scope active at creation, as in a Component's `:bindings` or setup; without such a Scope, stop it with `etaf-animation-stop`. A write of a target equal to the displayed value stops a run instead of starting one.
+**Semantics.** The returned ref starts at SOURCE's current value and is not running. Every later SOURCE change starts a run from the value currently displayed, so interrupting a run never jumps. While DELAY has not yet elapsed, the shown ref holds its starting value; zero DURATION with zero DELAY applies the target immediately. Read the ref with `etaf-value` wherever the display should follow it. The animation belongs to the Scope active at creation, as in a Component's `:bindings` or setup; without such a Scope, stop it with `etaf-animation-stop`. A write of a target equal to the displayed value stops a run instead of starting one.
 
 **Returns.** The displayed ref.
 
-**Errors.** `error→ etaf-animation-error` with data `("Invalid duration" VALUE)` when DURATION is not a nonnegative number, and `("Unknown easing" VALUE)` when EASING is neither a function nor a name in `etaf-animation-easings`. `error→ wrong-type-argument` with data `(functionp VALUE)` when ON-COMPLETE is neither nil nor a function. An invalid SOURCE signals what `etaf-watch` signals.
+**Errors.** `error→ etaf-animation-error` with data `("Invalid duration" VALUE)` when DURATION is not a nonnegative number, `("Invalid delay" VALUE)` when DELAY is not a nonnegative number, and `("Unknown easing" VALUE)` when EASING is neither a function nor a name in `etaf-animation-easings`. `error→ wrong-type-argument` with data `(functionp VALUE)` when ON-COMPLETE is neither nil nor a function. An invalid SOURCE signals what `etaf-watch` signals.
 
 **Example.** A target that a control can write.
 
@@ -37,7 +37,30 @@ Return a ref that follows reactive SOURCE over DURATION seconds.
 ;; ⇒ 0
 ```
 
-**See also.** `etaf-animation-frames`, `etaf-animation-interpolate`, `etaf-animation-stop`.
+**See also.** `etaf-spring`, `etaf-animation-frames`, `etaf-animation-interpolate`, `etaf-animation-stop`.
+
+#### Function: etaf-spring (source &key stiffness damping mass (precision 0.01) preset name on-complete)
+
+Return a ref that follows reactive SOURCE with damped spring physics.
+
+**Arguments.** SOURCE is a ref, computed or zero-argument function as in `etaf-watch`. PRESET selects a named bundle in `etaf-animation-spring-presets` (`snappy`, `gentle`, `bouncy` or `stiff`). STIFFNESS, DAMPING and MASS are positive numbers overriding the preset (or defaults 180, 22 and 1). PRECISION is the positive settling threshold (default 0.01). NAME labels diagnostics. ON-COMPLETE runs after the spring settles on SOURCE.
+
+**Semantics.** Unlike `etaf-transition`, retargeting a spring mid-flight preserves its current velocity so rapid interactive updates carry continuous momentum. Numbers, color strings and equal-shape lists or vectors containing them (such as `(px 120)`) animate across every numeric channel and snap exactly to SOURCE once position and velocity settle within PRECISION. Incompatible target shapes apply immediately. Scope ownership, `etaf-animation-stop`, `etaf-animation-finish` and `etaf-animation-enabled` follow `etaf-transition`.
+
+**Returns.** The displayed ref.
+
+**Errors.** `error→ etaf-animation-error` on an unknown PRESET or nonpositive STIFFNESS, DAMPING, MASS or PRECISION; `error→ wrong-type-argument` when ON-COMPLETE is neither nil nor a function.
+
+**Example.**
+
+```elisp
+(let* ((x (etaf-ref '(px 0)))
+       (shown (etaf-spring x :preset 'snappy)))
+  (etaf-value shown))
+;; ⇒ (px 0)
+```
+
+**See also.** `etaf-transition`, `etaf-animation-spring-presets`, `etaf-animation-stop`.
 
 #### Function: etaf-animation-frames (frames &key (interval 0.1) (loop t) name on-complete)
 
@@ -58,7 +81,35 @@ Return a ref cycling through FRAMES every INTERVAL seconds.
 ;; ⇒ "|"
 ```
 
-**See also.** `etaf-transition`, `etaf-animation-stop`, `etaf-animation-easings`.
+**See also.** `etaf-transition`, `etaf-animation-tick`, `etaf-animation-stop`, `etaf-animation-easings`.
+
+#### Function: etaf-animation-tick (callback &key (interval 0) name)
+
+Subscribe CALLBACK to the shared clock and return an elapsed-time ref.
+
+**Arguments.** CALLBACK is a function of two floats `(DT ELAPSED)`, giving the animation seconds since the previous invocation and since creation. INTERVAL is a nonnegative minimum spacing in animation seconds between calls; zero (the default) invokes CALLBACK on every shared clock sample. NAME labels diagnostics.
+
+**Semantics.** The returned ref starts at `0.0` and updates to the current elapsed animation seconds before each CALLBACK call. Pausing, speed scaling and `etaf-animation-pause-hidden` apply automatically. When `etaf-animation-enabled` is nil the tick does not start. Scope ownership, `etaf-animation-stop` and `etaf-animation-active-p` follow `etaf-transition`.
+
+**Returns.** The elapsed-seconds ref.
+
+**Errors.** `error→ wrong-type-argument` when CALLBACK is not a function; `error→ etaf-animation-error` when INTERVAL is not a nonnegative number.
+
+**See also.** `etaf-animation-timeline`, `etaf-animation-frames`, `etaf-animation-stop`.
+
+#### Function: etaf-animation-timeline (steps &key loop name on-complete)
+
+Run declarative STEPS on the shared clock and return a step-index ref.
+
+**Arguments.** STEPS is a nonempty list of step plists: `(:delay SECONDS)`, `(:call FUNCTION)`, `(:run FUNCTION :duration SECONDS [:easing EASING])` and `(:parallel STEP-LIST)`. LOOP non-nil repeats from step 0 after the final step. NAME labels diagnostics. ON-COMPLETE runs after the final step finishes when LOOP is nil.
+
+**Semantics.** Steps run in order on the shared clock inside the regular reactive batch; `:run` invokes FUNCTION with eased progress from 0 to 1 and guarantees a final `1.0` call, while `:parallel` runs its child steps concurrently until the longest finishes. Calling `etaf-animation-finish` resolves every remaining step in order and runs ON-COMPLETE; `etaf-animation-stop` halts immediately without running remaining steps. When `etaf-animation-enabled` is nil, a non-looping timeline resolves its steps immediately without starting the clock. Scope ownership follows `etaf-transition`.
+
+**Returns.** The zero-based step-index ref.
+
+**Errors.** `error→ etaf-animation-error` when STEPS is empty or contains a malformed step, negative delay/duration or unknown easing; `error→ wrong-type-argument` when a step callback or ON-COMPLETE is not a function.
+
+**See also.** `etaf-transition`, `etaf-animation-tick`, `etaf-animation-finish`.
 
 #### Property: :on-complete
 
@@ -128,6 +179,36 @@ Ordered `((PREDICATE . FUNCTION) ...)` conversions consulted before built-in int
 
 **See also.** `etaf-animation-interpolate`.
 
+#### Function: etaf-animation-quantize (value step)
+
+Snap numeric elements of VALUE to multiples of positive STEP.
+
+**Arguments.** VALUE is a number, list, vector or any other value. STEP is a positive number giving the grid spacing.
+
+**Semantics.** Numbers round to the nearest multiple of STEP; lists and vectors quantize recursively while non-numbers stay unchanged, so lengths such as `(px 13.7)` snap cleanly to a pixel or color step grid without generating fine-grained Emacs face or image churn.
+
+**Returns.** The quantized value.
+
+**Errors.** `error→ etaf-animation-error` with data `("Invalid quantize step" VALUE)` when STEP is not a positive number.
+
+**See also.** `etaf-animation-interpolate`, `etaf-transition`.
+
+#### Variable: etaf-animation-color-space
+
+Color space used by `etaf-animation-interpolate` when blending color strings.
+
+**Semantics.** Defaults to `rgb` for component-wise sRGB blending; set to `oklab` for perceptually uniform OKLab blending that avoids desaturated midpoints between vivid colors. An unknown symbol signals `etaf-animation-error`.
+
+**See also.** `etaf-animation-interpolate`.
+
+#### Variable: etaf-animation-spring-presets
+
+Alist of `(NAME . PLIST)` spring parameter bundles for `etaf-spring`.
+
+**Semantics.** Built-in presets are `snappy`, `gentle`, `bouncy` and `stiff`, each providing `:stiffness`, `:damping` and `:mass` defaults that explicit keyword arguments on `etaf-spring` may override.
+
+**See also.** `etaf-spring`.
+
 ### The shared clock
 
 <!-- index: etaf-animation-frame-rate; etaf-animation-speed; etaf-animation-paused; sampling; frame rate -->
@@ -159,6 +240,14 @@ While non-nil, the shared clock stops advancing.
 **Semantics.** Running animations hold their displayed value and keep their progress, and they stay subscribed. Clearing the variable resumes them exactly where they stopped; a run created while paused starts from its own first frame once the clock advances again. Pausing is not stopping: it resolves nothing, runs no completion callback, and leaves `etaf-animation-active-p` true.
 
 **See also.** `etaf-animation-enabled`, `etaf-animation-speed`, `etaf-animation-active-p`.
+
+#### Variable: etaf-animation-pause-hidden
+
+When non-nil, animations owned by an undisplayed Runtime buffer hold their progress.
+
+**Semantics.** Animations created while a Runtime is mounted record its buffer. When this variable is non-nil (default nil) and that buffer currently has no visible window, the shared clock skips sampling that animation and shifts its time base forward so it resumes seamlessly as soon as a window displays the buffer again.
+
+**See also.** `etaf-animation-paused`, `etaf-animation-enabled`.
 
 ### Stopping, finishing and the switch
 

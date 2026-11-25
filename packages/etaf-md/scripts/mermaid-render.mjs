@@ -28,9 +28,10 @@ import { execFileSync } from 'node:child_process'
 import { pathToFileURL } from 'node:url'
 
 const TIMEOUT_MS = 30000
-// Chromium draws on several processes, so a few pages fill a document's
-// diagrams in a fraction of the time one page takes.
-const WORKERS = 4
+// Headless Chromium with --disable-gpu can deadlock CDP Page.captureScreenshot
+// when multiple tabs take screenshots concurrently in the same browser process;
+// serialize diagram renders on a single recycled page so bursts never stall.
+const WORKERS = 1
 // A picture wider than this is scaled down to the reading column anyway, and
 // drawing it wider only costs memory.  Its pixels are still drawn at two device
 // pixels per point, which is the size the preview places it at.
@@ -165,6 +166,21 @@ window.ready = true
 
 const formulaPage = await browser.newPage()
 await formulaPage.setViewport({ width: 1200, height: 800, deviceScaleFactor: 2 })
+
+// All display-math requests share `formulaPage', so they must run strictly one
+// at a time.  Without a mutex, concurrent `setContent' calls overwrite the DOM
+// before an earlier request's `screenshot' finishes and poison the disk cache
+// with the wrong formula under another formula's SHA1 key.
+let formulaLock = Promise.resolve()
+
+function withFormulaPage(fn) {
+  const run = formulaLock.then(fn, fn)
+  formulaLock = run.then(
+    () => undefined,
+    () => undefined,
+  )
+  return run
+}
 
 
 // A family that writes its own colours into its stylesheet cannot follow the
@@ -380,6 +396,23 @@ async function drawFormula(request) {
   return null
 }
 
+// Run FN with a per-execution deadline, returning a timeout error instead of
+// leaving the preview waiting.  The deadline starts only after the worker page
+// has been acquired so queued jobs do not burn their budget waiting in line.
+function runWithTimeout(fn) {
+  let timer = null
+  let timedOut = false
+  const deadline = new Promise((resolve) => {
+    timer = setTimeout(() => {
+      timedOut = true
+      resolve({ ok: false, fatal: false, error: 'render timed out', _timedOut: true })
+    }, TIMEOUT_MS)
+  })
+  return Promise.race([fn(), deadline])
+    .finally(() => clearTimeout(timer))
+    .then((result) => ({ result, timedOut }))
+}
+
 // A diagram that does not parse is the author's text: drawing it again cannot
 // succeed, and the answer says so.  Anything else - a browser that crashed, a
 // picture that took too long - may work next time, so the block stays a
@@ -387,16 +420,46 @@ async function drawFormula(request) {
 async function draw(request) {
   try {
     if (request.kind === 'math') {
-      const problem = await drawFormula(request)
-      return problem ? { ok: false, error: problem, fatal: false } : { ok: true }
+      return await withFormulaPage(async () => {
+        const { result } = await runWithTimeout(async () => {
+          const problem = await drawFormula(request)
+          return problem ? { ok: false, error: problem, fatal: false } : { ok: true }
+        })
+        return { ok: result.ok, ...(result.error ? { error: result.error, fatal: false } : {}) }
+      })
     }
     const page = await takePage()
+    let recycle = false
     try {
-      const problem = await drawDiagram(page, request)
-      if (problem?.error) return { ok: false, error: problem.error, fatal: problem.fatal }
-      return { ok: true, vector: problem?.vector !== false }
+      const { result, timedOut } = await runWithTimeout(async () => {
+        const problem = await drawDiagram(page, request)
+        if (problem?.error) return { ok: false, error: problem.error, fatal: problem.fatal }
+        return { ok: true, vector: problem?.vector !== false }
+      })
+      if (timedOut) recycle = true
+      return {
+        ok: result.ok,
+        ...(result.vector !== undefined ? { vector: result.vector } : {}),
+        ...(result.error ? { error: result.error, fatal: Boolean(result.fatal) } : {}),
+      }
+    } catch (error) {
+      recycle = true
+      return {
+        ok: false,
+        fatal: false,
+        error: String(error?.message ?? error).split('\n')[0].slice(0, 300),
+      }
     } finally {
-      givePage(page)
+      if (recycle) {
+        await page.close().catch(() => {})
+        try {
+          givePage(await openMermaidPage())
+        } catch {
+          // If the browser itself died, the next request will surface the error.
+        }
+      } else {
+        givePage(page)
+      }
     }
   } catch (error) {
     return {
@@ -405,17 +468,6 @@ async function draw(request) {
       error: String(error?.message ?? error).split('\n')[0].slice(0, 300),
     }
   }
-}
-
-// A picture that never comes back must not leave the preview waiting: the block
-// keeps its source and the next request draws the next picture.  The deadline is
-// cleared when the picture lands, or the process would stay alive until it fires.
-function withDeadline(request) {
-  let timer = null
-  const deadline = new Promise((resolve) => {
-    timer = setTimeout(() => resolve({ ok: false, error: 'render timed out' }), TIMEOUT_MS)
-  })
-  return Promise.race([draw(request), deadline]).finally(() => clearTimeout(timer))
 }
 
 async function start() {
@@ -435,7 +487,7 @@ async function main() {
       process.stdout.write(JSON.stringify({ id: null, ok: false, error: 'bad request' }) + '\n')
       return
     }
-    const work = withDeadline(request).then((reply) => {
+    const work = draw(request).then((reply) => {
       process.stdout.write(JSON.stringify({ id: request.id, ...reply }) + '\n')
     })
     running.add(work)

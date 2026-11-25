@@ -118,7 +118,7 @@ table names the framework packages each one uses:
 | [etaf-desktop](https://github.com/emacs-taf/etaf-desktop) | Desktop window-management application built from ETAF and ETAF UI | etaf, etaf-ui, ebox |
 | [etaf-ncm](https://github.com/emacs-taf/etaf-ncm) | NetEase Cloud Music player: library browsing, playback control, lyrics and queue | etaf, etaf-ui, ebox |
 | [etaf-weread](https://github.com/emacs-taf/etaf-weread) | WeChat Reading client: shelf, notebook, highlights, store search and statistics | etaf, etaf-ui, etaf-db, ebox |
-| [etaf-md](https://github.com/emacs-taf/etaf-md) | Markdown reading view: centered measure, headings, tables, callouts, code and media cards | etaf, etaf-ui, ebox |
+| [etaf-md](https://github.com/emacs-taf/etaf-md) | Native Markdown renderer and live previewer: centered measure, full-grid tables, 35+ extended `:::` containers, zero-browser QuickJS Mermaid/MathJax SVGs, interactive widgets and lockstep split preview | etaf, etaf-ui, ebox |
 | [etaf-org-preview](https://github.com/emacs-taf/etaf-org-preview) | Org reading view: structural folding, headline keywords and planning, lists, tables, code, callouts, footnotes and a table of contents | etaf, etaf-ui, ebox |
 | [etaf-rss](https://github.com/emacs-taf/etaf-rss) | RSS reader: subscriptions, folders, unread and starred scopes, reading pane, search and OPML, over a local JSON store or a Miniflux server | etaf, etaf-ui, ebox |
 | [maillist](https://github.com/emacs-taf/maillist) | Mailing-list client: public-inbox thread list with unread and starred scopes, a fixed-header reader, local read/star state and replies through smtpmail | etaf, etaf-ui, etaf-db, ebox |

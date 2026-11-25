@@ -40,7 +40,8 @@
     },
     "etaf-md": {
       "resources": [
-        "scripts"
+        "scripts",
+        "native"
       ]
     },
     "etaf-org-preview": {

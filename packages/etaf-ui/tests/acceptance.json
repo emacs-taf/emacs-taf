@@ -624,6 +624,11 @@
       "purpose": "An audio viewer shows the speaker stage, its total time and the caption."
     },
     {
+      "name": "etaf-ui-media-viewer-supports-audio-volume-and-playback-keys",
+      "file": "tests/etaf-ui-surface-tests.el",
+      "purpose": "MediaViewer accepts :audio, :volume and :on-ended props and binds j/l for 10-second seeks and [/] for volume adjustments."
+    },
+    {
       "name": "etaf-ui-media-viewer-hides-the-mounted-buffer-cursor",
       "file": "tests/etaf-ui-surface-tests.el",
       "purpose": "A media viewer opened from another current buffer hides the mounted buffer's cursor and restores it on close."
@@ -1362,6 +1367,81 @@
       "name": "etaf-ui-markdown-heading-underline-can-be-disabled",
       "file": "tests/etaf-ui-markdown-tests.el",
       "purpose": "Setting `:heading-underline nil' in ENV suppresses H1/H2 bottom border rules and underlines on links inside headings while keeping heading links clickable and body links underlined."
+    },
+    {
+      "name": "etaf-ui-markdown-inline-delimiters-skip-code-spans",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "Closing delimiter scans for emphasis, strikethrough and highlight skip backtick code spans so delimiters inside inline code do not prematurely terminate formatting."
+    },
+    {
+      "name": "etaf-ui-markdown-math-text-preserves-escaped-braces",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "`etaf-ui-markdown-math-text' preserves escaped set braces `\\{' and `\\}' as literal braces while removing TeX grouping braces."
+    },
+    {
+      "name": "etaf-ui-markdown-highlight-reuses-mode-buffer-cleanly",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "Reusing per-mode scratch buffers for syntax highlighting flushes syntax state cleanly so an unclosed string in one snippet does not corrupt highlighting of the next."
+    },
+    {
+      "name": "etaf-ui-markdown-footnote-ref-back-and-code-copy-callbacks",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "Markdown rendering environment callbacks `:footnote-ref', `:footnote-back' and `:on-copy' attach host refs, trigger return actions from footnote definitions and report code copies."
+    },
+    {
+      "name": "etaf-ui-markdown-etaf-extended-inline-syntax-parses-and-paints",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "Extended etaf dialect inline syntax (spoilers, comments, wiki-links, inline annotations, color chips, symbols and .tip success highlights/badges) parses, renders and dispatches interactively while gfm keeps them literal."
+    },
+    {
+      "name": "etaf-ui-markdown-code-fence-advanced-options",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "Code blocks honor `:collapsed-lines' folding with interactive expand/collapse, `/word/` and `[!code word:...]` highlighting, `:whitespace', `:indent-guides' and 1-based `{a-b}` line ranges."
+    },
+    {
+      "name": "etaf-ui-markdown-collapsible-alert-and-interactive-tasks",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "Obsidian-style collapsible alerts (`> [!tip]- Title`) toggle visibility on header activation and task list checkboxes invoke `:on-toggle-task` with item line offsets."
+    },
+    {
+      "name": "etaf-ui-markdown-hover-discipline-keeps-static-surfaces-clean",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "Pointer hover faces attach strictly to unselected interactive leaves while static prose, code lines, inline chips, task labels and active tabs carry no mouse-face."
+    },
+    {
+      "name": "etaf-ui-markdown-highlight-modern-aliases-and-fallback",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "`etaf-ui-markdown-highlight-code' resolves modern language aliases and built-in/Tree-sitter fallbacks cleanly without failing when optional grammars are absent."
+    },
+    {
+      "name": "etaf-ui-markdown-highlight-builtin-lexer-and-shell-cli",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "`etaf-ui-markdown-highlight-code' highlights common languages via its zero-dependency built-in lexer when no Emacs mode or Tree-sitter grammar is installed and enhances shell/console CLI prompts, commands, flags and pipes losslessly."
+    },
+    {
+      "name": "etaf-ui-markdown-table-fits-wide-tables-without-clipping",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "Wide multi-column Markdown tables adapt across wide breakout, compact grid and narrow stacked-card budgets without ever clipping rightmost columns."
+    },
+    {
+      "name": "etaf-ui-spinner-cycles-frames-and-validates-props",
+      "file": "tests/etaf-ui-animation-tests.el",
+      "purpose": "Spinner cycles fixed-width frames on the shared clock, stops on unmount and rejects invalid props."
+    },
+    {
+      "name": "etaf-ui-animated-feedback-progress-statistic-and-skeleton",
+      "file": "tests/etaf-ui-animation-tests.el",
+      "purpose": "Opt-in animated progress, statistic and skeleton components advance smoothly on the shared clock."
+    },
+    {
+      "name": "etaf-ui-dialog-animated-backdrop-fades-in",
+      "file": "tests/etaf-ui-animation-tests.el",
+      "purpose": "An animated dialog dims its backdrop over time on open and dismisses cleanly."
+    },
+    {
+      "name": "etaf-ui-svg-stage-composites-only-overlapping-tiles-and-falls-back",
+      "file": "tests/etaf-ui-animation-tests.el",
+      "purpose": "SVG stage composites sprites onto overlapped tiles, dispatches tile activation and falls back to cell text when non-graphic."
     }
   ]
 }

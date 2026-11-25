@@ -26,7 +26,33 @@ Render ROWS by COLUMNS fixed cells with stable coordinate identities.
                 :on-cell-press (lambda (row column) (select-cell row column)))
 ```
 
-**See also.** `etaf-text-grid`, [Images](images.md).
+**See also.** `etaf-svg-stage`, `etaf-text-grid`, [Images](images.md).
+
+## The SVG stage
+
+<!-- index: etaf-svg-stage; dirty tile; sprite compositing; viewBox -->
+
+#### Component: etaf-svg-stage (&key rows columns cell-width cell-height tile-width tile-height cell-svg sprites cell-text cell-background cell-color cell-label cell-ref on-cell-press on-cell-focus graphic)
+
+Render a fixed tiled SVG stage with dirty-tile sprite compositing over `etaf-tile-grid`.
+
+**Arguments.** ROWS, COLUMNS, CELL-WIDTH (default 2) and CELL-HEIGHT (default 1) are positive integers. TILE-WIDTH and TILE-HEIGHT optionally give pixel dimensions per tile (defaulting to 8px per character and 16px per line). CELL-SVG is a required function `(row column tile-width tile-height)` returning SVG inner markup in stage coordinates. SPRITES is nil, a list of plists, a reactive source or a zero-argument function returning plists with numeric `:x`, `:y`, positive `:width`, `:height` and string or zero-argument function `:markup`. GRAPHIC is `auto` (default), `t` or `nil`. The remaining callbacks forward to `etaf-tile-grid`, with CELL-TEXT and colors serving text displays.
+
+**Semantics.** Each tile clips the shared stage coordinates through its own SVG `viewBox` `(col*tw row*th tw th)`. Only tiles overlapped by a sprite's bounding box rebuild their image descriptor when that sprite moves; untouched tiles reuse cached image descriptors (bounded per instance). When GRAPHIC resolves to nil the stage falls back cleanly to `:cell-text` and colors while keeping layout and grid keyboard navigation intact.
+
+**Returns.** A View.
+
+**Errors.** `error→ etaf-component-call-error` on nonpositive grid/tile dimensions, non-function CELL-SVG, invalid GRAPHIC value, or malformed sprite records.
+
+**Example.**
+
+```elisp
+(etaf-svg-stage :rows 4 :columns 4 :tile-width 32 :tile-height 32
+                :cell-svg (lambda (r c w h) (etaf-ui-svg-rect (* c w) (* r h) w h :fill "#223344"))
+                :sprites sprites-ref)
+```
+
+**See also.** `etaf-tile-grid`, `etaf-ui-svg-image`.
 
 ## The text grid
 

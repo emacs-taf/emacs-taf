@@ -23,6 +23,7 @@
 (declare-function clear-image-cache "image.c" (&optional filter))
 (require 'etaf)
 (require 'etaf-ui)
+(require 'etaf-md-cache)
 (require 'etaf-md-theme)
 (require 'etaf-md-env)
 
@@ -82,8 +83,7 @@ document with front matter opens on a page-like header instead of raw text."
                                        (cdr (assoc key etaf-md--meta-labels))
                                        value))))
                          '("author" "date" "version" "license" "status")))
-                  "  ·  "))
-)
+                  "  ·  ")))
     (when title
       (etaf-node 'column
                  (list :width 'stretch :item-gap '(lh 1))
@@ -136,18 +136,26 @@ activation handled, while nil calls FALLBACK with no arguments."
          (url (plist-get node :url))
          (remote (etaf-md--remote-url-p url))
          (target (if remote url (etaf-md--absolute-media url env)))
-         (kind (etaf-md--media-kind target)))
+         (kind (etaf-md--media-kind target))
+         (hover (when (if (plist-member env :link-hover) (plist-get env :link-hover) t)
+                  (etaf-md--env-color env :accent-soft))))
     (etaf-node 'text
-               (list :color (etaf-md--env-color env :accent)
-                     :background-color (etaf-md--env-color env :accent-soft)
-                     :role 'link :tab-index 0
-                     :help-echo (or url alt)
-                     :on-press (lambda ()
-                                 (etaf-md--activate-media
-                                  env kind target
-                                  (lambda ()
-                                    (funcall (plist-get env :open-url) url)))))
-               (list (format "🖼 %s" alt)))))
+               (append
+                (list :color (etaf-md--env-color env :accent)
+                      :background-color (etaf-md--env-color env :panel2)
+                      :role 'link :tab-index 0 :pointer 'hand
+                      :help-echo (or url alt)
+                      :on-press (lambda ()
+                                  (etaf-md--activate-media
+                                   env kind target
+                                   (lambda ()
+                                     (let ((lb (plist-get env :open-lightbox)))
+                                       (unless (and (not remote) (eq kind 'image)
+                                                    (functionp lb)
+                                                    (funcall lb target alt))
+                                         (funcall (plist-get env :open-url) url)))))))
+                (when hover (list :hover-style (list :background-color hover))))
+               (list (format " 🖼 %s " alt)))))
 
 ;;; ---------------------------------------------------------------------------
 ;;; Media blocks
@@ -161,8 +169,12 @@ activation handled, while nil calls FALLBACK with no arguments."
       'image))
 
 (defun etaf-md--remote-url-p (url)
-  "Return non-nil when URL points to a remote resource."
-  (string-match-p "\\`[a-zA-Z][a-zA-Z0-9+.-]*://" url))
+  "Return non-nil when URL names a remote resource (not local or `file://').
+A scheme longer than one letter other than `file:' is remote (`http:',
+`https:', `mailto:', `tel:'); a single letter is a Windows drive (`C:/notes')."
+  (and (stringp url)
+       (not (string-match-p "\\`file://" (downcase url)))
+       (string-match-p "\\`[a-zA-Z][a-zA-Z0-9+.-]+:" url)))
 
 (defun etaf-md--absolute-media (path env)
   "Return PATH resolved against ENV's base directory."
@@ -294,42 +306,45 @@ reuse their cached probe."
     (etaf-md--media-pixels-cached
      path #'etaf-md--probe-video-source)))
 
-(defun etaf-md--media-grid-for-pixels (pixels max-columns)
+(defun etaf-md--media-grid-for-pixels (pixels max-columns &optional max-rows)
   "Return the (COLUMNS . ROWS) grid for PIXELS capped by MAX-COLUMNS.
-A picture whose size could not be read keeps a card of a fixed shape rather than
-failing the whole page; `etaf-md--media-grid-cells' sizes a measured
-one."
+MAX-ROWS defaults to `etaf-md--media-max-rows' for standalone photos and
+screenshots; pass a larger ceiling for typeset diagrams that should scale by
+reading measure width without crushing vertical labels.  A picture whose size
+could not be read keeps a card of a fixed shape rather than failing the page."
   (if (or (not (consp pixels))
           (not (numberp (car pixels)))
           (not (numberp (cdr pixels))))
       ;; A picture whose size could not be read keeps a card of a fixed shape
       ;; rather than failing the whole page.
       (cons (min max-columns 48) 14)
-    (etaf-md--media-grid-cells pixels max-columns)))
+    (etaf-md--media-grid-cells pixels max-columns max-rows)))
 
 (defconst etaf-md--media-max-rows 20
   "Maximum character-row height for a standalone media card.
-Prevents tall portrait diagrams or screenshots from dominating the viewport;
+Prevents tall portrait photos or screenshots from dominating the viewport;
 when the ceiling applies, width scales down proportionally to preserve the
 source aspect ratio.")
 
-(defun etaf-md--media-grid-cells (pixels max-columns)
+(defun etaf-md--media-grid-cells (pixels max-columns &optional max-rows)
   "Return the (COLUMNS . ROWS) grid for measured PIXELS inside MAX-COLUMNS.
 A picture is drawn at its own size and scaled down proportionally when it
-exceeds MAX-COLUMNS or `etaf-md--media-max-rows', keeping the drawing inside
-the column and preserving the source aspect ratio in both dimensions."
-  (let* ((cell (etaf-md--cell-metrics))
+exceeds MAX-COLUMNS or MAX-ROWS (defaulting to `etaf-md--media-max-rows'),
+keeping the drawing inside the column and preserving the source aspect ratio
+in both dimensions."
+  (let* ((row-cap (or max-rows etaf-md--media-max-rows))
+         (cell (etaf-md--cell-metrics))
          (cell-width (float (car cell)))
          (cell-height (float (cdr cell)))
          (natural-width (float (car pixels)))
          (natural-height (float (cdr pixels)))
          (max-w (* max-columns cell-width))
-         (max-h (* etaf-md--media-max-rows cell-height))
+         (max-h (* row-cap cell-height))
          (scale (min 1.0 (/ max-w natural-width) (/ max-h natural-height)))
          (columns (max 1 (min max-columns
                               (round (/ (* natural-width scale) cell-width)))))
          (fitted-height (* natural-height (/ (* columns cell-width) natural-width)))
-         (rows (max 1 (min etaf-md--media-max-rows
+         (rows (max 1 (min row-cap
                            (round (/ fitted-height cell-height))))))
     (cons columns rows)))
 
@@ -372,10 +387,12 @@ wide banner cannot grow past its card."
 
 (defun etaf-md--media-picture-size (url env max-columns max-rows)
   "Return the grid URL would need as a plain picture, or nil.
-Only a local image has a size; a remote source and a missing file answer
-nil, so a caller can size its card around the picture it will draw."
+Only a local image (or an already-cached remote image) has a size; an uncached
+remote source and a missing file answer nil."
   (let* ((remote (etaf-md--remote-url-p url))
-         (path (unless remote (etaf-md--absolute-media url env))))
+         (path (if remote
+                   (etaf-md-cache-image-path url)
+                 (etaf-md--absolute-media url env))))
     (when (and path (file-exists-p path)
                (eq (etaf-md--media-kind path) 'image))
       (etaf-md--media-grid-fit path max-columns max-rows))))
@@ -383,10 +400,12 @@ nil, so a caller can size its card around the picture it will draw."
 (defun etaf-md--media-picture (url env max-columns max-rows)
   "Return URL drawn as a plain picture for ENV inside MAX bounds.
 No figure frame and no caption: the caller owns the card or the stage around
-it.  A remote source becomes a placeholder that opens in the browser; a
-missing file says so instead of failing the page."
+it.  An already-cached remote image draws from its local cache; an uncached
+remote source becomes a placeholder that opens in the browser."
   (let* ((remote (etaf-md--remote-url-p url))
-         (path (unless remote (etaf-md--absolute-media url env)))
+         (path (if remote
+                   (etaf-md-cache-image-path url)
+                 (etaf-md--absolute-media url env)))
          (exists (and path (file-exists-p path))))
     (cond
      ((and path exists (eq (etaf-md--media-kind path) 'image))
@@ -397,7 +416,7 @@ missing file says so instead of failing the page."
                          :rows (cdr grid)
                          :adapter 'auto)
                    nil)))
-     ((and path (not exists))
+     ((and (not remote) path (not exists))
       (etaf-node 'text
                  (list :color (etaf-md--env-color env :muted))
                  (list (format "（找不到 %s）" (file-name-nondirectory path)))))
@@ -444,7 +463,9 @@ as a bordered placeholder that opens in the browser.  DECLARED-KIND, when
 DECLARED-WIDTH and DECLARED-HEIGHT, when given as positive CSS pixel counts,
 bound the rendered grid to the document's declared display size."
   (let* ((remote (etaf-md--remote-url-p url))
-         (path (unless remote (etaf-md--absolute-media url env)))
+         (cached-remote (and remote (etaf-md-cache-image-path url)))
+         (path (cond (cached-remote cached-remote)
+                     ((not remote) (etaf-md--absolute-media url env))))
          (kind (and path (if (eq declared-kind 'video)
                              'video
                            (etaf-md--media-kind path))))
@@ -452,26 +473,34 @@ bound the rendered grid to the document's declared display size."
                          (if (eq declared-kind 'video)
                              'video
                            (etaf-md--media-kind url))))
-         (target (or path url))
+         (target (if remote url (or path url)))
          (exists (and path (file-exists-p path)))
-         (open (if (and path exists)
-                   ;; Local media opens with the operating system's default
-                   ;; application, so a video plays instead of appearing as a
-                   ;; binary buffer; remote and missing targets keep the URL
-                   ;; callback.
+         (open (if (and (not remote) path exists)
+                   ;; Local images prefer the in-buffer media lightbox when enabled;
+                   ;; videos and external fallback open with the system application.
                    (lambda ()
                      (etaf-md--activate-media
                       env media-kind path
-                      (lambda () (funcall (plist-get env :open-file) path))))
+                      (lambda ()
+                        (let ((lb (plist-get env :open-lightbox)))
+                          (unless (and (eq media-kind 'image)
+                                       (functionp lb)
+                                       (funcall lb path alt))
+                            (funcall (plist-get env :open-file) path))))))
                  (lambda ()
                    (etaf-md--activate-media
                     env media-kind target
-                    (lambda () (funcall (plist-get env :open-url) url))))))
+                    (lambda ()
+                      (let ((lb (plist-get env :open-lightbox)))
+                        (unless (and cached-remote (eq media-kind 'image)
+                                     (functionp lb)
+                                     (funcall lb cached-remote alt))
+                          (funcall (plist-get env :open-url) url))))))))
          (columns (plist-get env :width))
-         (caption (or alt (and path (file-name-nondirectory path)) url))
+         (caption (or alt (and (not remote) path (file-name-nondirectory path)) url))
          (help-label (if (and (stringp caption) (not (string-empty-p caption)))
                          caption
-                       (or (and path (file-name-nondirectory path)) url))))
+                       (or (and (not remote) path (file-name-nondirectory path)) url))))
     (cond
      ((and exists (eq kind 'image))
       (let* ((natural (etaf-md--image-pixels path))
@@ -619,9 +648,13 @@ bound the rendered grid to the document's declared display size."
 
 (declare-function etaf-md--env "etaf-md-model" (session))
 (declare-function etaf-md--block-marker "etaf-md-model" (block))
-(declare-function etaf-md--block-empty-p "etaf-md-model" (block text))
-(declare-function etaf-md--session-text "etaf-md-model" (session))
+(declare-function etaf-md--block-empty-p "etaf-md-model" (block &optional text))
 (declare-function etaf-md--card-env "etaf-md-model" (session env scope))
+(declare-function etaf-md--read "etaf-md-model" (session key))
+(declare-function etaf-md--write "etaf-md-model" (session key value))
+(declare-function etaf-md-outline "etaf-md-model" (session))
+(declare-function etaf-md-locate "etaf-md-model" (session index))
+(declare-function etaf-md--open-url "etaf-md-model" (session url))
 
 (defun etaf-md--inlines-text (inlines)
   "Return INLINES as the plain text they spell.
@@ -734,10 +767,11 @@ renderer when nothing overrides it."
       :block block))
     (_ (etaf-md-node-create :type (plist-get block :type) :block block))))
 
-(defun etaf-md--container-view (session env block)
+(defun etaf-md--container-view (session env block &optional slot)
   "Return the view BLOCK's definition gives it, under SESSION and ENV.
-A container whose name has no definition shows its source and one line saying
-so; that block alone degrades and the rest of the page renders."
+SLOT is the stable block slot symbol so container state survives edits above
+the container.  A container whose name has no definition shows its source and
+one line saying so; that block alone degrades and the rest of the page renders."
   (let* ((node (etaf-md--node-for-block block))
          (paint-env (etaf-md-env-create
                      :session session
@@ -745,7 +779,9 @@ so; that block alone degrades and the rest of the page renders."
                      :width (plist-get env :width)
                      :palette (plist-get env :palette)
                      :theme (plist-get env :theme)
-                     :block block)))
+                     :block block
+                     :slot slot
+                     :root-begin (plist-get block :begin))))
     (etaf-md--paint node paint-env)))
 
 (defun etaf-md--heading-ref (id)
@@ -762,51 +798,92 @@ so; that block alone degrades and the rest of the page renders."
         (etaf-node 'box (list :ref ref :width 'stretch) (list view))
       view)))
 
-(etaf-define-component etaf-md-block (&key session identity block)
-  "Render one published markdown BLOCK of SESSION under IDENTITY.
-The Component owns one block's hosts, and reads the session's environment in
-its own render.  Publishing another block, or a new value for this one,
-therefore replaces only the changed block's output: a block whose published
-call is unchanged never renders again, so its Scope, hosts and video handles
-stay."
+(defun etaf-md--wrap-block-width (block view session env)
+  "Center rendered block VIEW at SESSION's prose measure or wide figure budget.
+Prose blocks stay capped at SESSION's reading measure; wide tables and figures
+may expand up to `:figure-width' when the viewport allows while staying
+centered inside the page gutters."
+  (when view
+    (let* ((width (etaf-md--read session :width))
+           (figure (or (plist-get env :figure-width) width))
+           (cell-width (or (plist-get (ignore-errors (etaf-display-metrics)) :char-width)
+                           (frame-char-width)))
+           (type (plist-get block :type))
+           (wide-p (or (eq type 'table)
+                       (etaf-md--figure-block-p block)))
+           (cap (if wide-p (max width figure) width)))
+      (etaf-node 'column
+                 (list :width 'stretch :cross-align 'center :item-gap '(lh 0))
+                 (list
+                  (if (eq type 'table)
+                      ;; Table nodes manage their own `:max-width' (prose measure
+                      ;; for ordinary tables, breakout up to `:table-max-width'
+                      ;; for wide multi-column tables).
+                      view
+                    (etaf-md--measured-view cap cell-width view)))))))
+
+(etaf-define-component etaf-md-block (&key session slot cell)
+  "Render one published markdown block of SESSION owned by stable SLOT.
+CELL is a per-block reactive `etaf-ref' holding the block's current AST.
+Editing inside this block writes CELL in place so only this Component
+re-renders, preserving its Scope, Hosts, interactive container state and
+video handles without traversing the rest of the document."
   :render
-  (let ((env (etaf-md--card-env session
-                                        (etaf-md--env session)
-                                        identity)))
-      ;; A block whose text is gone paints nothing, so the page would show a
-      ;; gap where its marker still lives in the source.  Showing the marker
-      ;; there is what lets a reader see what is left and type it back.
-      (let ((text (etaf-md--session-text session)))
-        (cond
-         ;; A blank source line renders nothing at all, yet it is a line a
-         ;; reader types on.  One empty cell per blank line is enough for the
-         ;; caret to stand there, and one row per line keeps every source
-         ;; offset and its painted cell in step.
-         ((eq (plist-get block :type) 'container)
-          (etaf-md--container-view session env block))
-         ((eq (plist-get block :type) 'blank)
-          (etaf-node 'column nil
-                     (make-list (max 1 (or (plist-get block :lines) 1))
-                                (etaf-node 'text nil (list " ")))))
-         ((etaf-md--block-empty-p block text)
-          (etaf-node 'text
-                     (list :color (etaf-md--env-color env :muted)
-                           :font-family (face-attribute 'fixed-pitch :family nil t))
-                     (list (etaf-md--block-marker block))))
-         (t (etaf-md--wrap-heading
-             block (etaf-ui-markdown-view-block block env)))))))
+  (let* ((block (etaf-value cell))
+         (env (etaf-md--card-env session
+                                 (etaf-md--env session)
+                                 slot))
+         (rendered
+          (cond
+           ((null block) nil)
+           ((eq (plist-get block :type) 'container)
+            (etaf-md--container-view session env block slot))
+           ((etaf-md--block-empty-p block)
+            (etaf-node 'text
+                       (list :color (etaf-md--env-color env :muted)
+                             :font-family (face-attribute 'fixed-pitch :family nil t))
+                       (list (etaf-md--block-marker block))))
+           ((eq (plist-get block :type) 'table)
+            (let* ((figure (or (plist-get env :figure-width)
+                               (plist-get env :width)))
+                   (table-env (if figure
+                                  (plist-put (copy-sequence env) :table-max-width figure)
+                                env)))
+              (etaf-ui-markdown-view-block block table-env)))
+           (t (etaf-md--wrap-heading
+               block (etaf-ui-markdown-view-block block env))))))
+    (etaf-md--wrap-block-width block rendered session env)))
+
+(defconst etaf-md--measure-gutter 2
+  "Character cells kept blank on each side of the reading measure.
+A window narrower than the measure fills the column, so centering alone
+leaves no margin there and text would start on the window edge.  The gutter
+is padding, so it survives that case, and it also keeps a table's right
+border off the window's last column, where the renderer would extend its
+paint into the sub-cell remainder.")
 
 (defun etaf-md--page-widths (session width)
   "Return (MEASURE . FIGURE) columns for SESSION's page, capped at WIDTH.
 MEASURE is the reading column: the session's cap, or the window when it is
-narrower.  FIGURE is the whole width the page may give a drawing, which is the
-window itself: a diagram's own size is what decides how large it is drawn, and
-confining it to the prose measure shrank a wide one to half its type size."
+narrower.  FIGURE is the whole width the page may give a drawing or wide table,
+which is the canvas viewport minus side gutters: reading `etaf-canvas-columns'
+makes embedded views (such as `etaf-web') and live window resizes reflow
+reactively."
   (let* ((buffer (plist-get session :buffer))
          (window (and (buffer-live-p buffer) (get-buffer-window buffer t)))
+         (canvas-cols (ignore-errors
+                        (let* ((rt (or (etaf-current-runtime)
+                                       (and (buffer-live-p buffer)
+                                            (etaf-runtime-for-buffer buffer))))
+                               (cols (and rt (etaf-runtime-mounted-p rt)
+                                          (etaf-canvas-columns rt))))
+                          (and (integerp cols) (> cols 0) cols))))
+         (raw-cols (or canvas-cols
+                       (and (window-live-p window) (window-body-width window))
+                       (etaf-md--read session :viewport-width)))
          (gutter etaf-md--measure-gutter)
-         (available (if (window-live-p window)
-                        (max 24 (- (window-body-width window) (* 2 gutter)))
+         (available (if (and (integerp raw-cols) (> raw-cols 0))
+                        (max 24 (- raw-cols (* 2 gutter)))
                       width)))
     (cons (min width available) available)))
 
@@ -816,33 +893,28 @@ confining it to the prose measure shrank a wide one to half its type size."
     ('code-block (equal (plist-get block :lang) "mermaid"))
     ('math (and (plist-get block :display) t))))
 
-(defun etaf-md--block-view (session key block ref widths)
-  "Return the keyed Component call that renders BLOCK of SESSION under KEY.
-WIDTHS is (MEASURE . FIGURE), the two widths the page lays out with.
-REF names the box that holds the block, so a command can map the point back to
-the block under it.  A published block keeps this call, so re-rendering the
-list hands the runtime the unchanged value and costs one comparison per
-retained block."
+(defun etaf-md--block-view (session slot ref cell block trailing widths)
+  "Return the keyed outer box + Component call for BLOCK under stable SLOT.
+REF names the box that holds the block for scrolling and reverse-jump lookup.
+TRAILING is the number of blank lines directly following BLOCK in the source,
+rendered as `:margin-bottom' so blank lines never spawn separate Components.
+WIDTHS is (MEASURE . FIGURE).  Placing `:key' directly on the outer box lets
+ETAF match unchanged siblings in place when blocks are inserted or removed."
+  (ignore block widths)
   (etaf-node 'box
-             (list :ref ref :width 'stretch
-                   ;; A drawing may use the whole page; prose fills the
-                   ;; measured column it sits in, so it starts on the same
-                   ;; edge as the page header above it.
-                   :max-width (when (etaf-md--figure-block-p block)
-                                (list 'ch (cdr widths))))
+             (append (list :key slot :ref ref :width 'stretch)
+                     (when (and (integerp trailing) (> trailing 0))
+                       (list :margin-bottom (list 'lh trailing))))
              (list (etaf-node 'etaf-md-block
-                              (list :key key :session session :identity key
-                                    :block block)
+                              (list :key slot :session session
+                                    :slot slot :cell cell)
                               nil))))
 
-(defun etaf-md--view-blocks (entries)
-  "Return published ENTRIES as one keyed block Component each.
-Blocks are stacked without a gap of the layout's own: the blank lines the file
-holds between them are painted as empty rows, so the page keeps exactly the
-lines the source has and a reader can type on each of them."
+(defun etaf-md--view-blocks (views)
+  "Return keyed block VIEWS stacked inside one column."
   (etaf-node 'column
-             (list :width 'stretch :cross-align 'center)
-             (mapcar (lambda (entry) (plist-get entry :view)) entries)))
+             (list :width 'stretch :cross-align 'center :item-gap '(lh 0))
+             views))
 
 ;;; ---------------------------------------------------------------------------
 ;;; Media rendering
@@ -864,84 +936,199 @@ elements render as the full poster card with caption and activation."
 ;;; Document
 ;;; ---------------------------------------------------------------------------
 
-
-(defconst etaf-md--measure-gutter 2
-  "Character cells kept blank on each side of the reading measure.
-A window narrower than the measure fills the column, so centering alone
-leaves no margin there and text would start on the window edge.  The gutter
-is padding, so it survives that case, and it also keeps a table's right
-border off the window's last column, where the renderer would extend its
-paint into the sub-cell remainder.")
-
-(defun etaf-md--measured-view (width cell-width view)
-  "Return VIEW laid out in a reading column WIDTH cells wide.
-CELL-WIDTH is the canvas cell those columns resolve against.  The width is
-stated rather than left to stretch and a maximum: the header and the body are
-two children of the page's centring column, and a stretched child with a max
-width settled on a different left edge from the other."
-  (etaf-node 'box (list :width (list 'px (* width cell-width)))
+(defun etaf-md--measured-view (width cell-width view &optional key)
+  "Return VIEW laid out in a reading column capped at WIDTH cells.
+CELL-WIDTH is the canvas cell those columns resolve against.  Stretching inside
+`:max-width' keeps prose centered at WIDTH in wide windows and wraps cleanly
+inside the page gutters when the window narrows, without clipping."
+  (etaf-node 'box
+             (append (when key (list :key key))
+                     (list :width 'stretch
+                           :max-width (list 'px (* width cell-width))))
              (list view)))
 
-(defun etaf-md--view-document (session document env)
-  "Return the reading View of DOCUMENT, shown by SESSION, rendered in ENV.
-The body is one keyed Component per published block, so a publish that
-changes one block repaints that block instead of the document.  The page
-takes the window's width and centres its children; prose states ENV's
-reading measure, and a drawing states the page's whole width, so a wide one
-keeps its type size instead of being squeezed into a column of text.  ENV's
-`:background', when set, paints the page; without it the buffer keeps the
-Emacs theme's own background."
-  (let* (;; The blocks state their own measure from the session, so the page
-         ;; must read the same number: taking ENV's window width here made the
-         ;; header a few columns wider than the body, and centring split the
-         ;; difference into an indent the body did not have.
-         (width (car (etaf-md--page-widths
-                      session (etaf-md--read session :width))))
+(defun etaf-md--memoized-hero (session meta env)
+  "Return memoized front-matter header box for META and ENV, or nil."
+  (let ((cached (plist-get session :hero-cache)))
+    (if (and cached (equal (car cached) meta) (eq (cadr cached) env))
+        (cddr cached)
+      (let* ((hero (and meta (etaf-md--meta-node (list :meta meta) env)))
+             (node (when hero
+                     (etaf-node 'box (list :key 'etaf-md-hero :width 'stretch)
+                                (list hero)))))
+        (plist-put session :hero-cache (cons meta (cons env node)))
+        node))))
+
+(defun etaf-md--memoized-footnotes (session footnotes env)
+  "Return memoized footnotes column for FOOTNOTES and ENV, or nil."
+  (let ((cached (plist-get session :footnotes-cache)))
+    (if (and cached (equal (car cached) footnotes) (eq (cadr cached) env))
+        (cddr cached)
+      (let ((node (when footnotes
+                    (etaf-node 'column
+                               (list :width 'stretch :cross-align 'center
+                                     :item-gap '(lh 0))
+                               (append
+                                (list (etaf-md--spacer)
+                                      (etaf-md--divider "脚注")
+                                      (etaf-md--spacer))
+                                (etaf-ui-markdown-view-blocks
+                                 footnotes (etaf-md--card-env
+                                            session env 'footnotes)))))))
+        (plist-put session :footnotes-cache (cons footnotes (cons env node)))
+        node))))
+
+(defun etaf-md--link-preview-card (session preview env)
+  "Return the dismissible in-buffer link/symbol PREVIEW card for SESSION."
+  (let* ((title (or (plist-get preview :title) "预览"))
+         (kind (plist-get preview :kind))
+         (body (or (plist-get preview :body) ""))
+         (open-fn (plist-get preview :on-open))
+         (panel (etaf-md--env-color env :panel))
+         (border (etaf-md--env-color env :border))
+         (accent (etaf-md--env-color env :accent))
+         (muted (etaf-md--env-color env :muted))
+         (hover (when (if (plist-member env :link-hover) (plist-get env :link-hover) t)
+                  (etaf-md--env-color env :accent-soft))))
+    (etaf-node
+     'column
+     (list :key 'etaf-md-link-preview-card
+           :width 'stretch :item-gap '(lh 0)
+           :background-color panel
+           :border-top (list '(px 1) 'solid border)
+           :border-right (list '(px 1) 'solid border)
+           :border-bottom (list '(px 1) 'solid border)
+           :border-left (list '(px 3) 'solid accent)
+           :padding '((lh 1) (ch 2))
+           :margin-bottom '(lh 1))
+     (list
+      (etaf-node
+       'flex (list :width 'stretch :align-items 'center :column-gap '(ch 1))
+       (delq nil
+             (list
+              (etaf-node 'text (list :font-weight 'bold :color accent) (list title))
+              (when kind (etaf-node 'etaf-badge (list :text kind :variant 'info) nil))
+              (etaf-node 'box (list :flex-basis '(ch 0) :flex-grow 1) nil)
+              (when (functionp open-fn)
+                (etaf-node 'text
+                           (append
+                            (list :color accent :font-weight 'bold
+                                  :role 'button :tab-index 0 :pointer 'hand
+                                  :help-echo "打开此目标"
+                                  :on-press (lambda ()
+                                              (etaf-md--write session :link-preview nil)
+                                              (funcall open-fn)))
+                            (when hover (list :hover-style (list :background-color hover))))
+                           (list " 打开 → ")))
+              (etaf-node 'text
+                         (append
+                          (list :color muted :role 'button :tab-index 0 :pointer 'hand
+                                :help-echo "关闭预览"
+                                :on-press (lambda () (etaf-md--write session :link-preview nil)))
+                          (when hover (list :hover-style (list :background-color hover))))
+                         (list " × ")))))
+      (etaf-node 'box (list :width 'stretch :margin-top '(lh 0) :wrap-mode 'word)
+                 (list (etaf-node 'text (list :color muted) (list body))))))))
+
+(defun etaf-md--lightbox-view (session lightbox)
+  "Return `etaf-media-viewer' overlay View for active LIGHTBOX in SESSION."
+  (let* ((items (plist-get lightbox :items))
+         (count (length items))
+         (idx (min (max 0 (or (plist-get lightbox :index) 0)) (max 0 (1- count))))
+         (current (nth idx items)))
+    (when current
+      (let ((src (plist-get current :src))
+            (caption (plist-get current :caption)))
+        (etaf-node
+         'etaf-media-viewer
+         (list :open t
+               :kind 'image
+               :src src
+               :source-size (etaf-md--image-pixels src)
+               :title (or caption (file-name-nondirectory src))
+               :subtitle (when (> count 1) (format "%d / %d" (1+ idx) count))
+               :caption caption
+               :on-close (lambda () (etaf-md--write session :lightbox nil))
+               :on-previous (when (> count 1)
+                              (lambda ()
+                                (etaf-md--write
+                                 session :lightbox
+                                 (list :items items :index (mod (1- idx) count)))))
+               :on-next (when (> count 1)
+                          (lambda ()
+                            (etaf-md--write
+                             session :lightbox
+                             (list :items items :index (mod (1+ idx) count))))))
+         nil)))))
+
+(defun etaf-md--view-document (session structure env)
+  "Return the reading View of SESSION's page STRUCTURE rendered in ENV.
+STRUCTURE is a plist `(:meta META :leading N :views VIEWS :footnotes FN)'.
+Every top-level block carries a stable `:key' on its outer box, and hero,
+leading blank spacer and footnotes are keyed and memoized so unrelated block
+edits never create spurious damage outside the edited block."
+  (let* ((width (etaf-md--read session :width))
          (background (plist-get env :background))
-         (hero (etaf-md--meta-node document env))
-         ;; One read for the whole page: the reading column and the picture
-         ;; cells both state pixels, and both must use the canvas's own cell.
+         (meta (plist-get structure :meta))
+         (leading (or (plist-get structure :leading) 0))
+         (block-views (plist-get structure :views))
+         (footnotes (plist-get structure :footnotes))
+         (preview (etaf-md--read session :link-preview))
+         (lightbox (etaf-md--read session :lightbox))
          (cell-width (or (plist-get (ignore-errors (etaf-display-metrics)) :char-width)
                          (frame-char-width)))
-         (measured (lambda (view) (etaf-md--measured-view width cell-width view)))
-         (entries (if hero
-                      (cons (list :view (etaf-node 'box
-                                                   (list :width 'stretch)
-                                                   (list hero)))
-                            (plist-get document :children))
-                    (plist-get document :children)))
-         (body (append
-                (list (funcall measured (etaf-md--view-blocks entries)))
-                (when-let* ((footnotes (plist-get document :footnotes)))
-                  (list (funcall measured
-                                 (etaf-node 'column
-                                            (list :width 'stretch :cross-align 'center
-                                                  :item-gap '(lh 0))
-                                            (append
-                                             (list (etaf-md--spacer)
-                                                   (etaf-md--divider "脚注")
-                                                   (etaf-md--spacer))
-                                             (etaf-ui-markdown-view-blocks
-                                              footnotes (etaf-md--card-env
-                                                         session env 'footnotes))))))))))
+         (hero-box (etaf-md--memoized-hero session meta env))
+         (leading-box
+          (cond
+           ((and (null block-views) (null hero-box))
+            (etaf-node 'box
+                       (list :key 'etaf-md-leading-blanks :width 'stretch
+                             :height (list 'lh (max 1 leading)))
+                       (list (etaf-node 'text nil (list " ")))))
+           ((> leading 0)
+            (etaf-node 'box
+                       (list :key 'etaf-md-leading-blanks :width 'stretch
+                             :height (list 'lh leading))
+                       nil))))
+         (chrome-views (append (when preview
+                                 (list (etaf-md--link-preview-card session preview env)))
+                               (when hero-box (list hero-box))
+                               (when leading-box (list leading-box))))
+         (fn-view (etaf-md--memoized-footnotes session footnotes env))
+         (main-col (etaf-node
+                    'column
+                    (list :width 'stretch :cross-align 'center :item-gap '(lh 0))
+                    (append
+                     (when chrome-views
+                       (list (etaf-md--measured-view width cell-width
+                                                     (etaf-md--view-blocks chrome-views)
+                                                     'etaf-md-chrome)))
+                     (list (etaf-node 'box
+                                      (list :key 'etaf-md-body :width 'stretch)
+                                      (list (etaf-md--view-blocks block-views))))
+                     (when fn-view
+                       (list (etaf-md--measured-view width cell-width
+                                                     fn-view
+                                                     'etaf-md-footnotes))))))
+         (body (list main-col)))
     (etaf-node 'column
                (append (list :width '(vw 100) :cross-align 'center
                              :aria-label "Markdown 预览"
-                             :help "链接和图片可直接激活；视频在文档内播放，缺少解码器时使用系统播放器。")
+                             :help "链接和图片可直接激活；C-c t 开关目录，S 开关遮罩，K 预览光标处链接。")
                        (when background
                          (list :background-color background)))
-               (list
-                ;; The page is as wide as the window.  Prose states the reading
-                ;; measure and is centred in it; a drawing states the whole
-                ;; width, so a wide one is not squeezed into a column of text.
-                (etaf-node 'column
-                           (list :width 'stretch
-                                 :cross-align 'center
-                                 :padding (list (list 'lh 1)
-                                                (list 'ch etaf-md--measure-gutter))
-                                 :item-gap '(lh 0)
-                                 :color (etaf-md--env-color env :ink))
-                           body)))))
+               (delq nil
+                     (list
+                      (etaf-node 'column
+                                 (list :width 'stretch
+                                       :cross-align 'center
+                                       :padding (list (list 'lh 1)
+                                                      (list 'ch etaf-md--measure-gutter))
+                                       :item-gap '(lh 0)
+                                       :color (etaf-md--env-color env :ink))
+                                 body)
+                      (when lightbox
+                        (etaf-md--lightbox-view session lightbox)))))))
 
 (provide 'etaf-md-views)
 ;;; etaf-md-views.el ends here

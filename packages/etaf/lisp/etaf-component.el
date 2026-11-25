@@ -556,6 +556,8 @@ published props and callbacks; it does not undo the caller's business ref write.
                 (etaf--component-spec-create
                  :name ',name
                  :props ',props
+                 :binding-names ',binding-names
+                 :definition-symbol ',definition-symbol
                  :defaults ,(etaf--component-default-resolver arguments)
                  :validate ,(when saw-validate
                               `(lambda (etaf--validated-props)

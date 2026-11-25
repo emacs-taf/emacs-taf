@@ -1,6 +1,6 @@
 # 扩展语法
 
-> **状态。** 今天页面能渲染的只有 GitHub 提示块，写法是 `> [!NOTE]`、`> [!TIP]`、`> [!IMPORTANT]`、`> [!WARNING]`、`> [!CAUTION]`。本文其余部分是设计契约，先把模型、语法、属性和验收定下来，实现时照它做。标「计划中」的名字今天都不存在，函数名也只是提案。
+> **状态。** 容器词汇表、`@tab` 子块标记、站点组件、`etaf-md-define-node`、`etaf-md-set-attr`（面向容器节点选择器）与 `etaf-md-describe-nodes` 均已实现并支持渲染。源码 buffer 辅助编辑模式（第 7 章 `etaf-md-edit-mode`）以及核心 Markdown 节点样式选择器仍属于规划中的提案。
 >
 > **怎么读。** 写文档看第 3、5、6 章。写容器定义看第 9、10 章。实现渲染器看第 2、7、8、11 章。想知道今天能用什么，看 6.17。想知道某个名字为什么这么写，看附录 E。
 >
@@ -48,11 +48,11 @@
 | `list-style` | enum | steps、timeline、file-tree | `list-style=decimal` |
 | `href` | string | card | `href="#安装"` |
 
-**五个面：** `none`、`page`、`raised`、`sunken`、`quote`。**六个强调：** `neutral`、`primary`、`success`、`warning`、`danger`、`important`。
+**七个面：** `none`、`page`、`raised`、`sunken`、`quote`、`table-header`、`table-stripe`。**六个强调：** `neutral`、`primary`、`success`、`warning`、`danger`、`important`。
 
 长度必须带单位，`2ch` 或 `1lh`，光写 `2` 是错的。颜色和字号文档里一个都不写，它们由读者的主题与样式表决定。
 
-属性名想不起来，就用 `etaf-md-describe-nodes` 查，或者开 `etaf-md-edit-mode` 让补全替你想。
+属性名想不起来，就用 `etaf-md-describe-nodes` 查（独立的源码辅助模式 `etaf-md-edit-mode` 仍在规划中）。
 
 ## 1. 定位
 
@@ -68,7 +68,7 @@
 
 上层应用有自己的页面模型、布局注册表、目录树、站点导航和数据源。它 `require` 这里的根入口，只调用公开接口。这里不为上层的策略加开关、加参数。
 
-两边的接缝只有一处：文档变成视图。今天还没有这个接口，公开的只有创建会话、打开、关闭、导航、状态和诊断。上层真要把渲染结果嵌进自己的区域时，这个包补两个入口，一个是给一段文本或一个文件返回可以直接挂进任意区域的视图，另一个是容器注册。两个都算计划中。
+两边的接缝只有一处：文档变成视图。`etaf-md-view` 将文本或文件会话返回为可直接挂载到任意区域的 ETAF View，`etaf-md-define-node` 负责注册容器类型；上层应用只需通过这些公开入口与会话生命周期、导航、状态快照和能力诊断接口交互。
 
 这个包也不产出 HTML。它画的是 buffer。要让别人在浏览器里看，那是上层应用自己的后端。
 
@@ -413,7 +413,7 @@ line 44: 第 9 层嵌套超过上限 8 层
 
 代码块由 `etaf-ui` 的 Markdown 渲染器画，页面主题只决定调色板。
 
-### 3.6 源码 buffer 的编辑体验
+### 3.7 源码 buffer 的编辑体验
 
 渲染出来的页面没有标记，所以标记的代价全落在写的人身上。这一节说的东西全部发生在源码 buffer，不改语法，也不改渲染结果。
 
@@ -1124,30 +1124,26 @@ print("hi")
 
 ### 6.17 状态总表
 
-| 容器 | 家族 | 实现层 | 状态 |
+| 容器 / 语法 | 家族 | 实现层 | 状态 |
 | --- | --- | --- | --- |
-| GitHub 提示块 `> [!NOTE]` 等五种 | 提示 | 原语 | 已实现 |
-| `note`、`tip`、`important`、`warning`、`caution` | 提示 | 原语 | 计划中 |
-| `box` | 结构 | 原语 | 计划中 |
-| `card` | 结构 | `etaf-card` | 计划中 |
-| `columns` + `col` | 结构 | 原语，引擎的 grid | 计划中 |
-| `steps` + `step` | 集合 | `etaf-steps` | 计划中 |
-| `timeline` + `event` | 集合 | `etaf-timeline` | 计划中 |
-| `stats` + `stat` | 集合 | `etaf-statistic` | 计划中 |
-| `field` | 集合 | 原语 | 计划中 |
-| `file-tree` | 集合 | `etaf-tree` | 计划中 |
-| `chat` + `message` | 集合 | 原语 | 计划中 |
-| `tabs` + `tab` | 交互 | `etaf-tabs` | 计划中 |
-| `code-tabs` + `tab` | 交互 | `etaf-tabs` | 计划中 |
-| `accordion` + `collapse` | 交互 | `etaf-accordion` | 计划中 |
-| `table` | 文稿 | 原语 | 计划中 |
-| `window` | 文稿 | 原语 | 计划中 |
-| `panel` | 窗格 | `etaf-edge-panel` | 已实现 |
-| `tab-panel` + `tab` | 窗格 | `etaf-edge-tabs` | 已实现 |
-| `form` | 窗格 | `etaf-underline-field` | 已实现 |
-| `panel` | 窗格 | `etaf-edge-panel` | 已实现 |
-| `tab-panel` + `tab` | 窗格 | `etaf-edge-tabs` | 已实现 |
-| `form` | 窗格 | `etaf-underline-field` | 已实现 |
+| GitHub / Obsidian 提示块 `> [!NOTE]`（支持 `+/-` 折叠与自定义标题） | 提示 | 原语 | 已实现 |
+| `note`、`info`、`tip`、`important`、`warning`、`caution`、`danger` | 提示 | 原语 | 已实现 |
+| `box`、`card`、`columns` + `col`、`details`、`left`/`center`/`right`/`justify` | 结构 | 原语 / `etaf-card` / `etaf-accordion` | 已实现 |
+| `steps` + `step`、`timeline` + `event`（支持 `orientation=horizontal` 与 `card`） | 集合 | `etaf-steps` / `etaf-timeline` | 已实现 |
+| `stats` + `stat`（支持 `trend`、`accent`、`spark`） | 集合 | `etaf-statistic` | 已实现 |
+| `field`、`file-tree`（支持 `lines`/`collapsible`/`clickable`）、`chat` | 集合 | 原语 | 已实现 |
+| `tabs` + `tab`、`code-tabs` + `tab`、`accordion` + `collapse`、`swiper` | 交互 | `etaf-tabs` / `etaf-accordion` | 已实现 |
+| `table`（支持 `align` 整表对齐、`sortable` 列排序与复制）、`window` | 文稿 | 原语 / `etaf-window-chrome` | 已实现 |
+| `panel`、`tab-panel` + `tab`、`form`、`log`、`statusbar` | 窗格 | `etaf-edge-panel` / `etaf-edge-tabs` / `etaf-underline-field` / `etaf-log` / `etaf-status-bar` | 已实现 |
+| `chart`（`line` 盲文折线、`bar` 条形、`stacked` 占比、`heatmap` 热力） | 可视化 | `etaf-braille-chart` / 原语 | 已实现 |
+| `progress`、`keymap`、`breadcrumb` | 轻量结构 | 原语 | 已实现 |
+| `diff`（`@before`/`@after` 配对对齐）、`pros-cons`（`@pro`/`@con` 无外框等高）、`demo` | 对比与实时演示 | 原语 | 已实现 |
+| `home-box`、`image-card`、`link-card`、`npm-badge`、`qrcode`、`code-tree`、`npm-to` | 站点与展示 | 原语 / `etaf-badge` / `etaf-qr` | 已实现 |
+| `include`、`code-ref`、`symbol`、`project-tree`、`git-log`、`git-diff` | Emacs 原生活文档（L1 只读） | 沙箱资产层（`:asset-data`） | 已实现 |
+| `run` | Emacs 原生活文档（L2 显式触发） | 受控动作层（`etaf-md-allow-actions`） | 已实现 |
+| 行内轻语义：`!!遮罩!!`、`[+注释]`、`[[双链]]`、`%%注释%%`、`:color[...]`、`:sym[...]` | 行内扩展 | `etaf-ui-markdown` | 已实现 |
+| 代码块增强：`:collapsed-lines[=N]`、`/word/`、`[!code word:...]`、`:whitespace`、`:indent-guides` | 代码围栏 | `etaf-ui-markdown` | 已实现 |
+| 交互式 GFM 任务复选框（写回源文档）、`C-c t` 独立 Emacs 大纲侧窗、`S` 全局遮罩、`K` 链接/符号预览、图库灯箱 | 阅读器壳层 | `etaf-md-app` / `etaf-media-viewer` | 已实现 |
 
 ## 7. 交互契约
 
@@ -1605,7 +1601,7 @@ heading            内置语法，文档写不出名字
 
 - 出问题先查一条链：这块是什么类型 → 哪条定义 → 调了哪个组件 → 属性值来自哪一层 → 落到哪个令牌。
 - 报错行永远在页面上，不用开日志。
-- `etaf-md-doctor` 回答页面能用哪些外部程序——ffmpeg、mermaid-cli、qrencode——所以读者能知道某个块为什么留着源码。报告注册表本身（几个类型、哪个覆盖生效）还在计划中。
+- `etaf-md-doctor` 回答页面能用哪些可选能力——`typeset-native`、`ffmpeg`、`mmdc`、`qrencode` 与 `git`——所以读者能知道某个块为什么留着源码。报告注册表本身（几个类型、哪个覆盖生效）还在计划中。
 
 ### 10.9 信任模型
 

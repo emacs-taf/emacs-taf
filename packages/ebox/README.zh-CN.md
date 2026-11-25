@@ -2,13 +2,9 @@
 
 [English](README.md)
 
-Ebox 是面向 Emacs buffer 的 retained 文本布局引擎。它构建 text、box、row、column、
-flex、grid 和 image 节点组成的可变节点树，计算基于 ECSS 的样式，在横向像素和纵向
-行网格上排版，并把结果写入 Emacs buffer。节点挂载后，调用方继续修改同一棵树；
-Ebox 跟踪 dirty 节点，只重写发生变化的 buffer 行和行内片段。
+Ebox 是面向 Emacs buffer 的 retained 文本布局引擎。它构建 text、box、row、column、flex、grid 和 image 节点组成的可变节点树，计算基于 ECSS 的样式，在横向像素和纵向行网格上排版，并把结果写入 Emacs buffer。节点挂载后，调用方继续修改同一棵树；Ebox 跟踪 dirty 节点，只重写发生变化的 buffer 行和行内片段。
 
-当包需要底层布局与 buffer 渲染时直接使用 Ebox；当应用还需要组件、响应式状态或应用
-生命周期时，请使用同级 ETAF 包。
+当包需要底层布局与 buffer 渲染时直接使用 Ebox；当应用还需要组件、响应式状态或应用生命周期时，请使用同级 ETAF 包。
 
 ## 能力
 
@@ -40,12 +36,9 @@ Ebox 没有原生模块。可用时，图片准备也可以使用 Emacs 图形�
 (require 'ebox)
 ```
 
-为了交互速度，每次更新 checkout 后在其中运行 `make native`。它会字节编译 Ebox，
-并把原生代码存入你的 `eln-cache`；即使关闭了 JIT 原生编译，Emacs 也会自动用它
-代替字节码，无需额外配置。之后修改过的源文件在下次 `make native` 前以字节码运行。
+为了交互速度，每次更新 checkout 后在其中运行 `make native`。它会字节编译 Ebox，并把原生代码存入你的 `eln-cache`；即使关闭了 JIT 原生编译，Emacs 也会自动用它代替字节码，无需额外配置。之后修改过的源文件在下次 `make native` 前以字节码运行。
 
-checkout 用户只 require `ebox`；`lisp/` 下的实现文件是私有的。权威 API 清单在
-[`ebox.el`](ebox.el) 的 Commentary 中，工作流见 [ETAF 参考手册](https://etaf.top/zh-cn/ebox-node-construction/)。
+checkout 用户只 require `ebox`；`lisp/` 下的实现文件是私有的。权威 API 清单在 [`ebox.el`](ebox.el) 的 Commentary 中，工作流见 [ETAF 参考手册](https://etaf.top/zh-cn/ebox-node-construction/)。
 
 ## 最小可运行示例
 
@@ -68,8 +61,7 @@ checkout 用户只 require `ebox`；`lisp/` 下的实现文件是私有的。权
     (buffer-substring-no-properties (point-min) (point-max))))
 ```
 
-`ebox-render-to-buffer` 会挂载 retained root。之后调用 `ebox-node-set-text`、
-`ebox-node-set-props`、`ebox-node-insert` 等接口会修改同一棵树，并 flush 受影响的 buffer 行。
+`ebox-render-to-buffer` 会挂载 retained root。之后调用 `ebox-node-set-text`、`ebox-node-set-props`、`ebox-node-insert` 等接口会修改同一棵树，并 flush 受影响的 buffer 行。
 
 ## 文档
 

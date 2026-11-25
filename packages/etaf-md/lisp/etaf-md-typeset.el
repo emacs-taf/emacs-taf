@@ -1,4 +1,4 @@
-;;; etaf-md-typeset.el --- Draw diagrams and formulas with a program  -*- lexical-binding: t; -*-
+;;; etaf-md-typeset.el --- Draw diagrams and formulas in the background -*- lexical-binding: t; -*-
 
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -6,13 +6,23 @@
 
 ;; Two block kinds carry a picture rather than prose: a fenced `mermaid' block
 ;; and a `$$' display formula.  The parser and the shared renderer keep them as
-;; source, which is what a reader sees when nothing else is installed.  When
-;; mermaid-cli is present this module draws them: the diagram through `mmdc',
-;; the formula through KaTeX and the Chromium mmdc already brings.
+;; source, which is what a reader sees when no backend is available.
+;;
+;; When the native dynamic module (`native/etaf-md-typeset-native.{dylib,so}',
+;; inspired by LuciusChen/pele.el) is built, both Mermaid diagrams (via
+;; vendored Obsidian Pele + native CoreText/Pango label measurement) and display
+;; formulas (via vendored MathJax TeX-to-SVG) render inside an embedded QuickJS
+;; background thread with zero Chromium, Node.js or child processes, writing
+;; standalone SVGs directly to the disk cache.
+;;
+;; When the native module is absent, or for a diagram family Pele does not
+;; support, `scripts/mermaid-render.mjs' (mermaid-cli + KaTeX) serves as an
+;; automatic fallback.
 ;;
 ;; A render is asynchronous and cached by what it depends on, so a repaint of
-;; the same block costs one file check.  Until the picture exists the block
-;; keeps its source, and a finished render repaints the page in place.
+;; the same block costs one file check.  While live-editing a previously
+;; rendered block, the last valid picture stays visible until the replacement
+;; SVG lands.
 
 ;;; Code:
 
@@ -20,28 +30,36 @@
 (require 'subr-x)
 
 (require 'json)
+(require 'etaf-md-cache)
 (require 'etaf-md-model)
 (require 'etaf-md-views)
 
 (declare-function image-size "image.c" (spec &optional pixels frame))
+(declare-function etaf-md--native-submit "ext:etaf-md-typeset-native" (id kind source options timeout))
+(declare-function etaf-md--native-poll "ext:etaf-md-typeset-native" ())
+(declare-function etaf-md--native-cancel "ext:etaf-md-typeset-native" (id))
+(declare-function etaf-md--native-channel "ext:etaf-md-typeset-native" (process))
+(declare-function etaf-md--native-shutdown "ext:etaf-md-typeset-native" ())
+(declare-function etaf-md--native-info "ext:etaf-md-typeset-native" ())
 
 (defgroup etaf-md-typeset nil
-  "Diagrams and display formulas drawn by an external program."
+  "Diagrams and display formulas drawn asynchronously."
   :group 'etaf-md)
 
 (defcustom etaf-md-typeset t
-  "Whether the preview draws a diagram and a display formula with a program.
-When nil, or when mermaid-cli is not installed, a mermaid block and a display
-formula keep the source and the plain-text rendering the shared renderer
-paints.  A page never waits for a program either way: a picture that is not
-cached yet appears on the repaint that follows its render."
+  "Whether the preview draws a diagram and a display formula as pictures.
+When nil, or when neither the native QuickJS module nor mermaid-cli is
+available, a mermaid block and a display formula keep their source and the
+plain-text rendering the shared renderer paints.  A page never waits for a
+render either way: a picture that is not cached yet appears on the repaint
+that follows its completion."
   :type 'boolean)
 
 (defconst etaf-md-typeset--cache-directory
   (expand-file-name "etaf-md/typeset/"
                     (or (getenv "XDG_CACHE_HOME")
                         (expand-file-name "~/.cache")))
-  "Directory holding one PNG per rendered block.")
+  "Directory holding one SVG or PNG per rendered block.")
 
 (defconst etaf-md-typeset--scale 2
   "Pixels per point a picture is drawn at, so it stays sharp when it is placed.")
@@ -49,8 +67,7 @@ cached yet appears on the repaint that follows its render."
 (defconst etaf-md-typeset--formula-scale 1.0
   "A display formula is set at the page's body size.
 A formula is part of the text around it, so it takes the reader's own body
-size; KaTeX adds the air a fraction, a sum or an integral needs above and
-below the line on its own.")
+size; the typesetter adds the vertical air a fraction, sum or integral needs.")
 
 (defun etaf-md--typeset-pixels ()
   "Return the pixel size to typeset a formula at.
@@ -62,29 +79,59 @@ changes their font size gets a formula that still matches the text."
 (defvar etaf-md-typeset--running (make-hash-table :test #'equal)
   "Render in flight by block key, so one block never renders twice.")
 
-(defvar etaf-md-typeset--missing nil
-  "Non-nil once the programs were looked for and not found.")
+(defvar etaf-md-typeset--prefer-native t
+  "When non-nil, prefer the embedded QuickJS native module when built.")
+
+(defvar etaf-md-typeset--native-checked nil
+  "Non-nil once the native module has been probed on disk.")
+
+(defvar etaf-md-typeset--native-loaded nil
+  "Path of the loaded native typesetting module, or nil.")
+
+(defvar etaf-md-typeset--native-channel nil
+  "Emacs pipe process woken by the native worker thread on job completion.")
+
+(defvar etaf-md-typeset--native-requests (make-hash-table :test #'eql)
+  "Native renders in flight or queued, keyed by request id.")
+
+(defvar etaf-md-typeset--native-waiting nil
+  "FIFO list of native jobs waiting for a free worker slot.")
+
+(defvar etaf-md-typeset--native-in-flight 0
+  "Number of jobs currently submitted to the native worker thread.")
+
+(defconst etaf-md-typeset--native-max-in-flight 32
+  "Maximum concurrent jobs pushed into the native worker queue at once.")
+
+(defconst etaf-md-typeset--native-timeout 10000
+  "Per-job timeout in milliseconds for the embedded QuickJS worker.")
+
+(defvar etaf-md-typeset--native-poll-timer nil
+  "Safety drain timer active only while native jobs are pending.")
+
+(defvar etaf-md-typeset--mmdc-missing nil
+  "Non-nil once the mermaid-cli fallback was looked for and not found.")
 
 (defconst etaf-md-typeset--renderer-idle 45
-  "Seconds the drawing program may idle before it is stopped.
+  "Seconds the fallback drawing program may idle before it is stopped.
 Chromium costs memory while it runs and a page draws its pictures once, so an
 editor that stopped reading diagrams should not keep a browser around.")
 
 (defvar etaf-md-typeset--renderer nil
-  "The drawing program's process, or nil before the first picture.")
+  "The fallback drawing program's process, or nil before the first picture.")
 
 (defvar etaf-md-typeset--renderer-text ""
-  "Answers received from the renderer that do not make a whole line yet.")
+  "Answers received from the fallback renderer that do not make a whole line yet.")
 
-(defvar etaf-md-typeset--requests (make-hash-table)
-  "Render in flight by request id.
-Each entry is a plist of `:key', `:kind', `:path' and `:done'.")
+(defvar etaf-md-typeset--requests (make-hash-table :test #'eql)
+  "Fallback renders in flight by request id.
+Each entry is a plist of `:key', `:kind' and `:done'.")
 
 (defvar etaf-md-typeset--serial 0
-  "Number of the last request handed to the renderer.")
+  "Number of the last request handed to either backend.")
 
 (defvar etaf-md-typeset--idle-timer nil
-  "Timer that stops the renderer when it has nothing left to draw.")
+  "Timer that stops the fallback renderer when it has nothing left to draw.")
 
 (defvar etaf-md-typeset--failed (make-hash-table :test #'equal)
   "Renderer's message by block key of a block that cannot be drawn.
@@ -92,29 +139,91 @@ A key holds the source and every setting the picture depends on, so a block
 stays unrendered until its source or the page changes, and one bad diagram is
 not retried on every keystroke that republishes the page.")
 
-(defun etaf-md-typeset--renderer-script ()
-  "Return the drawing program's path, or nil when this checkout lacks it."
+;;; ---------------------------------------------------------------------------
+;;; Backend discovery
+;;; ---------------------------------------------------------------------------
+
+(defun etaf-md-typeset--package-root ()
+  "Return the root directory of `etaf-md', or nil when running only from .eln."
   (when-let* ((entry (locate-library "etaf-md"))
-              ((not (string-suffix-p ".eln" entry)))
-              (script (expand-file-name "scripts/mermaid-render.mjs"
-                                        (file-name-directory entry)))
+              ((not (string-suffix-p ".eln" entry))))
+    (file-name-directory entry)))
+
+(defun etaf-md-typeset--native-module-path ()
+  "Return the compiled native typesetting module path if present on disk."
+  (when (and module-file-suffix (stringp module-file-suffix))
+    (when-let* ((root (etaf-md-typeset--package-root)))
+      (let* ((name (concat "etaf-md-typeset-native" module-file-suffix))
+             (candidates (list (expand-file-name name (expand-file-name "native" root))
+                               (expand-file-name name root))))
+        (cl-find-if #'file-exists-p candidates)))))
+
+(defun etaf-md-typeset--ensure-native ()
+  "Ensure the native QuickJS module is loaded and its wakeup pipe is live.
+Return non-nil when the native module is ready to accept jobs."
+  (when (and etaf-md-typeset--prefer-native module-file-suffix)
+    (unless (or (featurep 'etaf-md-typeset-native)
+                etaf-md-typeset--native-checked)
+      (setq etaf-md-typeset--native-checked t)
+      (when-let* ((path (etaf-md-typeset--native-module-path)))
+        (condition-case err
+            (progn
+              (load path nil t t)
+              (when (featurep 'etaf-md-typeset-native)
+                (setq etaf-md-typeset--native-loaded path)))
+          (error
+           (message "etaf-md native typeset module could not be loaded: %s"
+                    (error-message-string err))))))
+    (when (featurep 'etaf-md-typeset-native)
+      (unless (process-live-p etaf-md-typeset--native-channel)
+        (setq etaf-md-typeset--native-channel
+              (make-pipe-process
+               :name "etaf-md-typeset-native"
+               :noquery t
+               :coding 'no-conversion
+               :filter #'etaf-md--native-filter))
+        (etaf-md--native-channel etaf-md-typeset--native-channel))
+      t)))
+
+(defun etaf-md-typeset--native-available-p ()
+  "Return non-nil when the embedded QuickJS native module is ready."
+  (and etaf-md-typeset
+       etaf-md-typeset--prefer-native
+       (etaf-md-typeset--ensure-native)))
+
+(defun etaf-md-typeset--native-info ()
+  "Return engine metadata plist when the native module is loaded, else nil."
+  (when (and (etaf-md-typeset--native-available-p)
+             (fboundp 'etaf-md--native-info))
+    (ignore-errors (etaf-md--native-info))))
+
+(defun etaf-md-typeset--renderer-script ()
+  "Return the fallback drawing program's path, or nil when this checkout lacks it."
+  (when-let* ((root (etaf-md-typeset--package-root))
+              (script (expand-file-name "scripts/mermaid-render.mjs" root))
               ((file-exists-p script)))
     script))
 
-(defun etaf-md-typeset-available-p ()
-  "Return non-nil when this system can draw diagrams and formulas.
-Both are drawn by `scripts/mermaid-render.mjs', which needs Node and the
-mermaid-cli package beside `mmdc': the diagram is mermaid's own renderer and
-the formula is KaTeX on the Chromium mmdc brings."
+(defun etaf-md-typeset--mmdc-available-p ()
+  "Return non-nil when the Node + mermaid-cli fallback renderer is installed."
   (and etaf-md-typeset
-       (not etaf-md-typeset--missing)
+       (not etaf-md-typeset--mmdc-missing)
        (or (and (executable-find "mmdc")
                 (executable-find "node")
                 (etaf-md-typeset--renderer-script))
-           ;; Answer nil the first time too: the fallback used to return the
-           ;; setq's value, so the page asked for a render on a machine that
-           ;; has no renderer and then waited on programs that never help.
-           (progn (setq etaf-md-typeset--missing t) nil))))
+           (progn (setq etaf-md-typeset--mmdc-missing t) nil))))
+
+(defun etaf-md-typeset-available-p ()
+  "Return non-nil when this system can draw diagrams and formulas.
+Prefers the embedded QuickJS native module (`native/etaf-md-typeset-native')
+and falls back to `scripts/mermaid-render.mjs' when `mmdc' and `node' exist."
+  (and etaf-md-typeset
+       (or (etaf-md-typeset--native-available-p)
+           (etaf-md-typeset--mmdc-available-p))))
+
+;;; ---------------------------------------------------------------------------
+;;; Colors, keys and cache lookup
+;;; ---------------------------------------------------------------------------
 
 (defun etaf-md--typeset-colors (env)
   "Return (PALETTE . INK) drawn for ENV's page.
@@ -126,141 +235,135 @@ which way round they are.  A formula is inked in the page's own text colour, so
 both sit on whatever surface the page paints instead of carrying a palette of
 their own."
   (let* ((background (or (plist-get env :background)
-                         ;; A page in the face-derived appearance has no
-                         ;; background of its own, but its palette still names
-                         ;; the surface it paints: the frame's appearance is a
-                         ;; second opinion, and the two disagree whenever a
-                         ;; theme's faces are lighter than `background-mode'
-                         ;; says.  A picture drawn from the frame's opinion
-                         ;; lands as light ink on a light page.
                          (etaf-md--env-color env :bg)))
-         ;; The surface is dark when it stands farther from white than from
-         ;; black.  A fixed ratio against black called a slate page light: the
-         ;; palette's #191a1c sits 1.6:1 from black, past the 1.5 the old test
-         ;; asked for, so a dark page was drawn with the light palette.
          (dark (> (etaf-ui-color-contrast background "#ffffff")
                   (etaf-ui-color-contrast background "#000000"))))
     (cons (if dark 'dark 'light)
           (etaf-md--hex-color (etaf-md--env-color env :ink)))))
 
-(defconst etaf-md-typeset--picture-version 5
+(defconst etaf-md-typeset--picture-version 7
   "Version of the drawing a cache key stands for.
-Raised when the renderer's own output changes - the size a picture is drawn
-at, or the part of the drawing it is cut from - so a picture drawn the old way
-is drawn again instead of being reused as if it were the new one.")
+Raised when the renderer's own output changes so cached pictures are redrawn.")
 
 (defun etaf-md--typeset-page (env)
   "Return ENV's page constants for a picture key: (COLORS . CONFIG-HASH).
-The configuration of a diagram is generated from the page's colours and type
-size, which is the same answer for every block of that page and costs more
-than the rest of a publish.  It is built once and reused while those inputs
-hold; the signature is compared rather than assumed, because a page can be
-published again after the reader changed the frame's font."
+Built once per appearance signature and reused across blocks of that page."
   (let ((signature (list (plist-get env :theme)
                          (plist-get env :background)
                          (plist-get env :ink)
-                         (etaf-md--base-pixels))))
+                         (etaf-md--base-pixels)
+                         (if (etaf-md-typeset--native-available-p) 'native 'mmdc))))
     (let ((cached (plist-get env :typeset-page)))
       (if (and cached (equal (car cached) signature))
           (cdr cached)
-        (let ((page (cons (etaf-md--typeset-colors env)
-                          (secure-hash 'sha1 (etaf-md--mermaid-config env)))))
+        (let* ((config-str (if (etaf-md-typeset--native-available-p)
+                               (etaf-md--native-mermaid-options-json env)
+                             (etaf-md--mermaid-config env)))
+               (page (cons (etaf-md--typeset-colors env)
+                           (secure-hash 'sha1 config-str))))
           (plist-put env :typeset-page (cons signature page))
           page)))))
 
 (defun etaf-md--typeset-key (kind source env)
   "Return the cache key of KIND drawn from SOURCE for ENV's surface.
-The key holds what the picture depends on, so a theme switch draws a new one
-instead of reusing the colours of the old surface."
+The key holds what the picture depends on, so a theme switch or backend change
+draws a fresh picture instead of reusing stale output."
   (let* ((page (etaf-md--typeset-page env))
-         (colors (car page)))
+         (colors (car page))
+         (backend (if (etaf-md-typeset--native-available-p) "native" "mmdc")))
     (secure-hash 'sha1
-               (format "%s\n%d\n%s\n%s\n%s\n%s"
-                       kind etaf-md-typeset--picture-version source
-                       (car colors)
-                       (cdr colors)
-                       ;; A formula drawn for another body size is another
-                       ;; picture, not a cache hit.
-                       ;; A formula depends on the size it is set at, and a
-                       ;; diagram on every setting of the renderer's config:
-                       ;; the font it is measured with, its colours and its
-                       ;; margins.  A key without them hands back a picture
-                       ;; drawn the old way, which is how a font change looked
-                       ;; like it had not been applied.
-                       (if (eq kind 'math)
-                           (format "%d/%d"
-                                   (etaf-md--typeset-pixels)
-                                   (cdr (etaf-md--cell-metrics)))
-                         (cdr page))))))
+                 (format "%s\n%s\n%d\n%s\n%s\n%s\n%s"
+                         backend kind etaf-md-typeset--picture-version source
+                         (car colors)
+                         (cdr colors)
+                         (if (eq kind 'math)
+                             (format "%d/%d/%s"
+                                     (etaf-md--typeset-pixels)
+                                     (cdr (etaf-md--cell-metrics))
+                                     (etaf-md--mermaid-font-family))
+                           (cdr page))))))
 
 (defun etaf-md--typeset-path (key)
-  "Return the PNG path of KEY."
+  "Return the PNG cache path of KEY."
   (expand-file-name (concat key ".png") etaf-md-typeset--cache-directory))
+
+(defun etaf-md--typeset-svg-path (key)
+  "Return the SVG cache path of KEY."
+  (expand-file-name (concat key ".svg") etaf-md-typeset--cache-directory))
 
 (defun etaf-md--typeset-picture (key)
   "Return the picture drawn for KEY, or nil when it is not drawn yet.
-A diagram has a vector copy beside its raster, which every place the picture is
-shown prefers: it stays sharp at whatever size the page gives it and holds no
-bitmap in memory.  A formula is drawn as a raster only.  The raster is the
-marker of a finished render either way, because it is written first."
-  (when-let* ((raster (etaf-md--typeset-path key))
-              ((file-exists-p raster)))
-    (let ((vector (concat (file-name-sans-extension raster) ".svg")))
-      (if (file-exists-p vector) vector raster))))
+Prefers a vector SVG (produced directly by the native QuickJS engine or beside
+a fallback PNG) and falls back to PNG when only a raster exists."
+  (let ((vector (etaf-md--typeset-svg-path key))
+        (raster (etaf-md--typeset-path key)))
+    (cond ((file-exists-p vector) vector)
+          ((file-exists-p raster) raster))))
+
+(defun etaf-md--typeset-block-kind (block)
+  "Return `mermaid', `math' or nil for AST BLOCK."
+  (pcase (plist-get block :type)
+    ('code-block (and (equal (plist-get block :lang) "mermaid") 'mermaid))
+    ('math (and (plist-get block :display) 'math))))
 
 (defun etaf-md-typeset-attach (block env)
   "Return BLOCK carrying the picture already rendered for it in ENV.
-The block gains `:picture', the PNG path, when one exists; the renderer draws
-that and leaves a block without one as its source.  Publishing compares the
-block's content, so a picture that arrived makes the block different and the
-page paints it without any other bookkeeping.  Reading the cache is all this
-does: a render never starts a program, because a render is also the pass a
-keystroke pays for."
-  (let ((kind (pcase (plist-get block :type)
-                ('code-block (and (equal (plist-get block :lang) "mermaid") 'mermaid))
-                ('math (and (plist-get block :display) 'math)))))
-    (if (not kind)
-        block
-      (if-let* ((source (plist-get block :text))
-                ((not (string-blank-p source)))
-                ;; A picture already on disk is shown whether or not this system
-                ;; can draw new ones: a preview that once drew diagrams must not
-                ;; lose them because the drawing program went missing later.
-                (path (etaf-md--typeset-picture
-                       (etaf-md--typeset-key kind source env))))
-          (plist-put (copy-sequence block) :picture path)
-        block))))
+Descends into container `:children' so diagrams and formulas inside cards,
+tabs or columns also attach cached pictures.  When `etaf-md-typeset' is nil,
+strips any `:picture' so blocks show their source cleanly.  Reading the cache
+never starts a render."
+  (cond
+   ((eq (plist-get block :type) 'container)
+    (let* ((children (plist-get block :children))
+           (updated (mapcar (lambda (child) (etaf-md-typeset-attach child env))
+                            children)))
+      (if (cl-every #'eq children updated)
+          block
+        (plist-put (copy-sequence block) :children updated))))
+   (t
+    (let ((kind (etaf-md--typeset-block-kind block)))
+      (cond
+       ((not kind) block)
+       ((not etaf-md-typeset)
+        (if (plist-member block :picture)
+            (let ((copy (copy-sequence block)))
+              (cl-remf copy :picture)
+              copy)
+          block))
+       (t
+        (if-let* ((source (plist-get block :text))
+                  ((not (string-blank-p source)))
+                  (path (etaf-md--typeset-picture
+                         (etaf-md--typeset-key kind source env))))
+            (if (equal path (plist-get block :picture))
+                block
+              (plist-put (copy-sequence block) :picture path))
+          block)))))))
+
+(defconst etaf-md-typeset--max-rows 120
+  "Upper row safety ceiling for typeset diagrams and display formulas.
+Unlike standalone photo cards (`etaf-md--media-max-rows' = 20), diagrams carry
+body-size vector typography inside a vertically scrolling document: bounding
+them by reading-column width instead of a 20-row height cap keeps portrait
+flowcharts, state machines and ER diagrams at crisp 1:1 type size.")
 
 (defun etaf-md--typeset-figure (kind path env)
   "Return the View of the picture at PATH for KIND in ENV.
-A diagram keeps a caption that opens the file, the way an image card does; a
-formula is its own line with no frame, because it belongs to the sentence above
-it.  The figure states the reading measure as its own width instead of filling
-its container: a block is a Component, and a stretch inside one resolves against
-the frame rather than the page, which left a figure centred for the frame and
-clipped by the page."
-  (let* (;; A drawing may use the page's whole width: its own size decides how
-         ;; large it is painted, and the reading measure would shrink a wide
-         ;; one to half its type size.
-         (width (max 24 (or (plist-get env :figure-width)
+A diagram keeps a caption that opens the lightbox (or external viewer); a
+formula is its own line with no frame, because it belongs to the prose around
+it."
+  (let* ((width (max 24 (or (plist-get env :figure-width)
                             (plist-get env :width) 92)))
-         ;; The picture is drawn at `--scale' device pixels per point, so its
-         ;; own pixel size is that many times the size it should occupy; the
-         ;; grid it is placed in comes from the size on the page, not the file.
          (pixels (when-let* ((natural (ignore-errors
                                         (etaf-md--image-pixels path))))
                    (cons (/ (car natural) (float etaf-md-typeset--scale))
                          (/ (cdr natural) (float etaf-md-typeset--scale)))))
-         (grid (or (etaf-md--media-grid-for-pixels pixels (- width 2))
+         (grid (or (etaf-md--media-grid-for-pixels
+                    pixels (- width 2) etaf-md-typeset--max-rows)
                    (cons width 8)))
-         ;; A zoom changes the grid, and a vector drawn to the new size costs a
-         ;; whole rasterisation: librsvg paints gradients and component
-         ;; transfers, roughly eighty milliseconds a drawing, and a page
-         ;; measures every slice it holds.  The raster beside the vector is
-         ;; the same drawing at twice the size it is shown at, so while it
-         ;; still has the pixels a zoom needs, it is shown instead: loading it
-         ;; is a decode, not a drawing.  A grid that outgrows it goes back to
-         ;; the vector, which stays sharp at any size.
+         ;; When a 2x fallback raster sits beside the vector and still covers
+         ;; the displayed pixel width, prefer decoding the raster; native SVG
+         ;; outputs have no sibling PNG and render directly as crisp vectors.
          (raster (concat (file-name-sans-extension path) ".png"))
          (shown (if (and (string-suffix-p ".svg" path)
                          (file-exists-p raster)
@@ -277,21 +380,13 @@ clipped by the page."
                                  :adapter 'auto)
                            nil)))
     (if (eq kind 'math)
-        ;; A formula is a line of the text around it: the raster carries the
-        ;; transparent rows that centre it in whole rows, and the source's own
-        ;; blank lines are what separate it from the blocks beside it.  Block
-        ;; padding would add whole lines, since a fractional line of padding
-        ;; still takes one, and that turned two formulas one blank line apart
-        ;; into an 80-pixel gap.
         (etaf-node 'column
                    (list :width 'stretch :max-width (list 'ch width)
                          :cross-align 'center)
                    (list image))
       (let ((open-file (plist-get env :open-file))
-            (caption (format "%s（按 RET 打开）" (file-name-nondirectory path))))
-        ;; A diagram is its own drawing: no frame around it, and the caption
-        ;; under it names the file, so the page reads as one surface instead of
-        ;; a card inside a card.
+            (open-lightbox (plist-get env :open-lightbox))
+            (caption (format "%s（按 RET 放大/打开）" (file-name-nondirectory path))))
         (etaf-node 'column
                    (list :width 'stretch :max-width (list 'ch width)
                          :cross-align 'center :item-gap '(lh 0)
@@ -299,21 +394,27 @@ clipped by the page."
                                      (etaf-md--activate-media
                                       env 'image path
                                       (lambda ()
-                                        (when open-file
-                                          (funcall open-file path)))))
+                                        (unless (and (functionp open-lightbox)
+                                                     (funcall open-lightbox path "Mermaid 图表"))
+                                          (when open-file
+                                            (funcall open-file path))))))
                          :role 'button :tab-index 0 :pointer 'hand
                          :help-echo caption)
                    (list image
                          (etaf-md--caption-view "▲ mermaid" env)))))))
 
+;;; ---------------------------------------------------------------------------
+;;; Typography and theme mapping
+;;; ---------------------------------------------------------------------------
+
 (defconst etaf-md-mermaid-fonts
   '("LXGW WenKai" "LXGW WenKai Mono" "PingFang SC" "Hiragino Sans GB"
     "Helvetica Neue" "Arial" "sans-serif")
-  "Families a diagram falls back to when the reader's own font lacks a glyph.
-The WenKai faces carry the CJK shapes a diagram label needs, spelled the way the
-font names itself: `LXGWWenKai' is the file's name, not its family, and a family
-the renderer cannot find falls back to whatever CJK face the system picks.
-The rest are families every desktop has, so a label is always measurable.")
+  "Families a diagram falls back to when the reader's own font lacks a glyph.")
+
+(defconst etaf-md-mermaid-mono-fonts
+  '("LXGW WenKai Mono" "Menlo" "Monaco" "DejaVu Sans Mono" "monospace")
+  "Monospace families for code labels inside diagrams.")
 
 (defun etaf-md--mermaid-font-family ()
   "Return the font stack a diagram is drawn and measured with.
@@ -322,45 +423,27 @@ the page in; the names after it cover the glyphs that face may lack."
   (let* ((family (ignore-errors (face-attribute 'default :family nil t)))
          (names (if (and (stringp family)
                          (not (string-empty-p family))
-                         ;; A face may name the symbol `default', which is not a
-                         ;; family the renderer can find.
                          (not (string= family "default")))
                     (cons family etaf-md-mermaid-fonts)
                   etaf-md-mermaid-fonts)))
     (mapconcat #'identity (delete-dups names) ", ")))
 
+(defun etaf-md--mermaid-mono-font-family ()
+  "Return the monospace font stack used for code labels inside diagrams."
+  (mapconcat #'identity etaf-md-mermaid-mono-fonts ", "))
+
 (defconst etaf-md--mermaid-hues
   '(:accent :ok :warn :important :danger :muted)
-  "Theme colors a diagram takes its categorical series from.
-Mermaid separates a git graph's branches, a pie's slices, a timeline's periods
-and a mind map's children by hue.  These are the page's own callout colors, in
-the order it introduces them, so a diagram never brings in a hue the page does
-not already use.")
+  "Theme colors a diagram takes its categorical series from.")
 
 (defconst etaf-md--mermaid-fill-contrast 3.0
-  "Contrast ratio a diagram's label keeps against the fill under it.
-Three to one is the floor for drawn text; the four and a half of body prose is
-unreachable here, because the same colour is also the line that carries the
-structure - a mind map's branch, a timeline's rule - and a fill dark enough to
-carry the page's own dark ink on a dark page is a fill the page cannot see.")
+  "Contrast ratio a diagram's label keeps against the fill under it.")
 
 (defconst etaf-md--mermaid-fill-separation 1.5
-  "Contrast ratio a category fill keeps against the page it is drawn on.
-A fill the colour of the page is not a fill, and mermaid paints a mind map's
-branch and a timeline's rule in this same colour: a fill that only just stands
-off the page leaves those lines too faint to follow.")
+  "Contrast ratio a category fill keeps against the page it is drawn on.")
 
 (defun etaf-md--mermaid-fill (page ink hue &optional label separate)
-  "Return (FILL . LABEL) for HUE mixed into PAGE, and for the label on it.
-A filled area has two jobs: it stands `etaf-md--mermaid-fill-separation'
-away from PAGE so it reads as a shape, and the text on it reads at
-`etaf-md--mermaid-fill-contrast'.  The page's own ink does not always
-manage both - a saturated hue carries neither a dark ink nor a light one - so
-the label falls back to the page colour when that reads better, and the mix is
-the palest one that satisfies both.  LABEL states one colour for the text
-instead, and SEPARATE `no' drops the demand to stand off the page, for a filled
-area that carries its own border.  A hue that never satisfies them keeps the
-mix that comes closest."
+  "Return (FILL . LABEL) for HUE mixed into PAGE, and for the label on it."
   (let ((best (cons (etaf-md--mix-color page hue 0.3) (or label ink)))
         (separate (not (eq separate 'no)))
         (best-score 0)
@@ -386,11 +469,7 @@ mix that comes closest."
       best)))
 
 (defun etaf-md--page-colors (env)
-  "Return ENV's page colours, keyed by role, as #rrggbb.
-A theme may name a colour the way X11 does (`grey70'), and neither the
-renderer's browser nor mermaid reads that name.  The page's colours are turned
-into hex once here rather than at each place that draws with them, so no field
-of the configuration can carry a name the renderer cannot parse."
+  "Return ENV's page colours, keyed by role, as #rrggbb."
   (let ((role (lambda (key)
                 (etaf-md--hex-color (etaf-md--env-color env key)))))
     (list :ink (funcall role :ink)
@@ -399,31 +478,94 @@ of the configuration can carry a name the renderer cannot parse."
           :border (funcall role :border)
           :muted (funcall role :muted)
           :quote (funcall role :quote-bg)
-          ;; A page in the face-derived appearance has no background of its
-          ;; own; its palette still names the surface it paints.
+          :accent (funcall role :accent)
+          :ok (funcall role :ok)
+          :warn (funcall role :warn)
+          :important (funcall role :important)
+          :danger (funcall role :danger)
           :page (etaf-md--hex-color
                  (or (plist-get env :background)
                      (etaf-md--env-color env :bg))))))
 
+(defun etaf-md--pele-theme (env)
+  "Return a hash table of Pele CSS custom properties derived from ENV's palette.
+Every color is derived from the active page theme (`dark', `light', `sepia' or
+face-derived `auto'), so diagrams harmonize with the surrounding document."
+  (let* ((colors (etaf-md--page-colors env))
+         (page (plist-get colors :page))
+         (ink (plist-get colors :ink))
+         (muted (plist-get colors :muted))
+         (border (plist-get colors :border))
+         (panel (plist-get colors :panel))
+         (panel2 (plist-get colors :panel2))
+         (accent (plist-get colors :accent))
+         (ok (plist-get colors :ok))
+         (warn (plist-get colors :warn))
+         (important (plist-get colors :important))
+         (danger (plist-get colors :danger))
+         ;; Slightly elevate line & border contrast against muted panel surfaces.
+         (line (etaf-md--mix-color muted ink 0.35))
+         (stroke (etaf-md--mix-color border muted 0.35))
+         (table (make-hash-table :test #'equal)))
+    (dolist (pair
+             `(("__dummy" . nil)
+               ("--pele-bg" . ,page)
+               ("--pele-fg" . ,ink)
+               ("--pele-muted" . ,muted)
+               ("--pele-line" . ,line)
+               ("--pele-surface" . ,panel)
+               ("--pele-surface-alt" . ,panel2)
+               ("--pele-border" . ,stroke)
+               ("--pele-accent" . ,accent)
+               ("--pele-critical" . ,danger)
+               ("--pele-error" . ,danger)
+               ("--pele-fg-on-dark" . "#f3f5f8")
+               ("--pele-fg-on-light" . "#1a1d23")
+               ("--pele-radius" . "6px")
+               ("--pele-series-1" . ,accent)
+               ("--pele-series-2" . ,ok)
+               ("--pele-series-3" . ,warn)
+               ("--pele-series-4" . ,important)
+               ("--pele-series-5" . ,danger)
+               ("--pele-series-6" . ,(etaf-md--mix-color accent ok 0.5))
+               ("--pele-series-7" . ,(etaf-md--mix-color warn danger 0.5))
+               ("--pele-series-8" . ,(etaf-md--mix-color important danger 0.5))))
+      (when (cdr pair)
+        (puthash (car pair) (cdr pair) table)))
+    table))
+
+(defun etaf-md--native-mermaid-options-json (env)
+  "Return the JSON options string passed to the native QuickJS Pele engine."
+  (let ((base (max 10 (round (etaf-md--base-pixels)))))
+    (json-serialize
+     `((fontSize . ,base)
+       (fontFamily . ,(etaf-md--mermaid-font-family))
+       (fontFamilyMono . ,(etaf-md--mermaid-mono-font-family))
+       (measureText . t)
+       (transparentBackground . t)
+       (scale . ,etaf-md-typeset--scale)
+       (theme . ,(etaf-md--pele-theme env)))
+     :false-object :false)))
+
+(defun etaf-md--native-math-options-json (env)
+  "Return the JSON options string passed to the native QuickJS MathJax engine."
+  (json-serialize
+   `((ink . ,(cdr (etaf-md--typeset-colors env)))
+     (pixels . ,(etaf-md--typeset-pixels))
+     (cell . ,(cdr (etaf-md--cell-metrics)))
+     (scale . ,etaf-md-typeset--scale)
+     (fontFamily . ,(etaf-md--mermaid-font-family)))
+   :false-object :false))
+
 (defun etaf-md--mermaid-tint (page ink weight)
-  "Return PAGE moved toward INK by WEIGHT.
-A diagram needs surfaces one step away from the page - a cluster, a gantt's
-section band, its grid - and a page whose panels are nearly its own color gives
-no such step.  A tint of the page toward its ink is a step in the direction the
-page is built in, so it stays a page surface in every palette."
+  "Return PAGE moved toward INK by WEIGHT."
   (etaf-md--mix-color page ink weight))
 
 (defun etaf-md--mermaid-states (env page ink)
-  "Return the surfaces a gantt paints a task's state with.
-A gantt separates a finished task from a running one from a late one by
-background: mermaid fills them with light grey, white and red, the colors of a
-light page on any page.  The page already has a colour for each of those ideas,
-so the state takes it, mixed into PAGE far enough for the task's own label."
+  "Return the surfaces a gantt paints a task's state with."
   (let ((surface (lambda (key prefix)
                    (let* ((hue (etaf-md--hex-color
                                 (etaf-md--env-color env key)))
-                          ;; A bar carries its state at its edge, so its fill
-                          ;; only has to hold the task's text.
                           (fill (car (etaf-md--mermaid-fill
                                       page ink hue ink 'no))))
                      (list (cons (intern (concat prefix "BkgColor")) fill)
@@ -433,10 +575,7 @@ so the state takes it, mixed into PAGE far enough for the task's own label."
             (funcall surface :danger "crit"))))
 
 (defun etaf-md--mermaid-family-theme (env colors)
-  "Return the theme variables that later diagram families read.
-Each of these families paints its own surface - a chart's plot, a radar's disc,
-a C4 box - instead of deriving it from the box colour, so the page states the
-surface and the ink that goes on it for every family at once."
+  "Return the theme variables that later diagram families read."
   (let ((page (plist-get colors :page))
         (ink (plist-get colors :ink))
         (border (plist-get colors :border))
@@ -451,8 +590,6 @@ surface and the ink that goes on it for every family at once."
                   (yAxisTickColor . ,muted) (yAxisLineColor . ,border)
                   (plotColorPalette . ,(etaf-md--mermaid-plot-colours env page ink))
                   (dataLabelColor . ,ink) (legendTextColor . ,ink)))
-      ;; A radar's curves are strokes over a mostly empty disc, so its series
-      ;; keep the hue rather than the fill mixed for a solid shape.
       (radar . ((axisColor . ,muted) (axisStrokeWidth . 1)
                 (graticuleColor . ,(etaf-md--mermaid-tint page ink 0.14))
                 (graticuleStrokeWidth . 1)
@@ -467,10 +604,7 @@ surface and the ink that goes on it for every family at once."
              (messageTextColor . ,ink))))))
 
 (defun etaf-md--mermaid-series (env page ink)
-  "Return ENV's category colours, keyed by role.
-:fill is a page surface carrying the page's own ink, :hue is the same colour
-unmixed, for the line or border that belongs to the same category, and :label
-is the ink that goes on the fill."
+  "Return ENV's category colours, keyed by role."
   (mapcar (lambda (key)
             (let* ((hue (etaf-md--hex-color
                          (etaf-md--env-color env key)))
@@ -479,26 +613,16 @@ is the ink that goes on the fill."
           etaf-md--mermaid-hues))
 
 (defun etaf-md--mermaid-plot-colours (env page ink)
-  "Return a chart's series colours as a comma-separated list.
-A bar is a filled shape, so it takes the surface that carries the page's ink;
-the line beside it takes the hue itself, where the difference between the two
-series has to be visible in a stroke a pixel wide."
+  "Return a chart's series colours as a comma-separated list."
   (let ((series (etaf-md--mermaid-series env page ink)))
     (mapconcat #'identity
                (cl-loop for index from 0 below 6
                         for entry = (nth (mod index (length series)) series)
-                        ;; A bar is filled, so it takes the surface; the line
-                        ;; beside it is a stroke and takes the hue itself.
                         collect (plist-get entry (if (cl-evenp index) :fill :hue)))
                ",")))
 
 (defun etaf-md--mermaid-categorical (env page ink)
-  "Return the theme variables that colour ENV's diagram categories.
-Mermaid derives those colours by darkening the box color of the page, which on
-a dark page leaves every slice, branch and period black, and it cannot tell a
-dark page from a light one.  So the page's callout colors supply the hues, each
-mixed into PAGE for the fill and kept as it is for the lines and borders that
-carry the same category."
+  "Return the theme variables that colour ENV's diagram categories."
   (let* ((series (etaf-md--mermaid-series env page ink))
          (pick (lambda (index) (nth (mod index (length series)) series))))
     (append
@@ -520,30 +644,20 @@ carry the same category."
               append (list (cons (intern (format "git%d" i)) fill)
                            (cons (intern (format "gitInv%d" i)) hue)
                            (cons (intern (format "gitBranchLabel%d" i)) label)
-                           ;; A journey paints a period's band and its tasks by
-                           ;; the same series, and its actors beside them.
                            (cons (intern (format "fillType%d" i)) fill)
                            (cons (intern (format "actor%d" i)) hue))))))
 
 (defun etaf-md--typeset-palette (env)
-  "Return the page's colours as the drawing program names them.
-A few diagram families write their own colours instead of reading a theme, so
-the renderer is told the page's palette once and states it where those families
-listen.  Naming the roles here keeps mermaid's vocabulary out of the renderer."
+  "Return the page's colours as the fallback drawing program names them."
   (let ((colors (etaf-md--page-colors env)))
     (list :page (plist-get colors :page)
           :ink (plist-get colors :ink)
           :line (plist-get colors :muted)
           :panel (plist-get colors :panel)
-          :danger (etaf-md--hex-color
-                   (etaf-md--env-color env :danger)))))
+          :danger (plist-get colors :danger))))
 
 (defun etaf-md--mermaid-config (env)
-  "Return the mermaid configuration JSON drawn for ENV's page.
-The diagram is built from the page's own colours instead of mermaid's fixed
-`default' and `dark' palettes, so a light page carries light boxes with its own
-ink, and the margins keep the drawing off the card's edges: without them a
-sequence diagram starts at the very first pixel."
+  "Return the mermaid-cli configuration JSON drawn for ENV's page."
   (let* ((colors (etaf-md--page-colors env))
          (ink (plist-get colors :ink))
          (panel (plist-get colors :panel))
@@ -552,21 +666,12 @@ sequence diagram starts at the very first pixel."
          (muted (plist-get colors :muted))
          (quote-bg (plist-get colors :quote))
          (page (plist-get colors :page))
-        ;; A frame supplies the body size; a batch run has none, and rounding
-        ;; its answer would size every diagram at one pixel.
-        (base (max 8 (round (etaf-md--base-pixels)))))
+         (base (max 8 (round (etaf-md--base-pixels)))))
     (json-encode
      `((look . "classic")
        (theme . "base")
-       ;; A label is text, not an HTML box: mermaid otherwise wraps every label
-       ;; in the SVG's `foreignObject', which only a browser can draw, so the
-       ;; picture shows its shapes and loses every word in any other renderer.
        (htmlLabels . :json-false)
        (themeVariables
-        ;; Mermaid derives most of a drawing's own colours from this one:
-        ;; given `transparent' it computes black, so a dark card, a radar disc
-        ;; and a C4 canvas came out black on a light page.  The page's own
-        ;; colour is both the honest answer and the one every derivation needs.
         . ((background . ,page)
            (primaryColor . ,panel)
            (primaryTextColor . ,ink)
@@ -579,14 +684,8 @@ sequence diagram starts at the very first pixel."
            (textColor . ,ink)
            (mainBkg . ,panel)
            (nodeBorder . ,border)
-           ;; A cluster is a surface the nodes sit on, so it is a step from
-           ;; the page rather than the page's quote colour, which is darker
-           ;; than the page on a dark theme and swallowed the grouping.
            (clusterBkg . ,(etaf-md--mermaid-tint page ink 0.06))
            (clusterBorder . ,border)
-           ;; An edge label sits on a solid chip so the line does not cross it.
-           ;; The chip is the same step from the page as a cluster, so a label
-           ;; inside a cluster does not cut a darker hole in it.
            (edgeLabelBackground . ,(etaf-md--mermaid-tint page ink 0.06))
            (actorBkg . ,panel)
            (actorBorder . ,border)
@@ -599,51 +698,34 @@ sequence diagram starts at the very first pixel."
            (noteBkgColor . ,quote-bg)
            (noteTextColor . ,ink)
            (noteBorderColor . ,border)
-           ;; A slice is separated from the next by the page itself, and the
-           ;; outer ring is the page's border, so a pie reads as sections of
-           ;; one drawing instead of sections inside a black wheel.
            (pieStrokeColor . ,page)
            (pieOuterStrokeColor . ,border)
-           ;; An entity's attribute rows take their fill from `rowOdd' and
-           ;; `rowEven', which mermaid derives by lightening the box colour; on
-           ;; a dark page that put the page's ink on a white row.  The page's own
-           ;; row surfaces keep the ink readable.
            (rowOdd . ,panel2)
            (rowEven . ,quote-bg)
-           ;; A gantt's band, its grid and its today line are the light
-           ;; page's greys and red on any page.
            (sectionBkgColor . ,(etaf-md--mermaid-tint page ink 0.04))
            (sectionBkgColor2 . ,(etaf-md--mermaid-tint page ink 0.04))
            (altSectionBkgColor . ,page)
            (gridColor . ,(etaf-md--mermaid-tint page ink 0.14))
            (vertLineColor . ,(etaf-md--mermaid-tint page ink 0.14))
-           (todayLineColor . ,(etaf-md--hex-color
-                               (etaf-md--env-color env :danger)))
+           (todayLineColor . ,(plist-get colors :danger))
            (taskBkgColor . ,panel)
            (taskBorderColor . ,border)
            (taskTextColor . ,ink)
            (taskTextOutsideColor . ,ink)
            (taskTextDarkColor . ,ink)
            (taskTextClickableColor . ,ink)
-           ;; A journey's title and its actors' faces are its own colours too.
            (titleColor . ,ink)
            (faceColor . ,panel)
-           ;; A quadrant's points are drawn in a fill mermaid derives by
-           ;; lightening a box colour, which on a dark page hides them; the
-           ;; four quadrants stay page-coloured so the grid does the dividing.
            (quadrant1Fill . ,page)
            (quadrant2Fill . ,page)
            (quadrant3Fill . ,page)
            (quadrant4Fill . ,page)
            (quadrantPointFill . ,ink)
-           ;; A point's label is drawn on the page, beside the dot, not on it.
            (quadrantPointTextFill . ,ink)
            (quadrantXAxisTextFill . ,muted)
            (quadrantYAxisTextFill . ,muted)
            (quadrantInternalBorderStrokeFill . ,border)
            (quadrantExternalBorderStrokeFill . ,border)
-           ;; A commit's label is what the commit says, not a footnote: mermaid
-           ;; sets it at ten pixels, a size the page never uses.
            (commitLabelFontSize . ,(format "%dpx" base))
            (commitLabelColor . ,ink)
            (commitLabelBackground . ,page)
@@ -651,44 +733,19 @@ sequence diagram starts at the very first pixel."
            (tagLabelFontSize . ,(format "%dpx" base))
            (tagLabelColor . ,ink)
            (tagLabelBackground . ,panel2)
-           (tagLabelBorder . ,border)
-           ;; The diagram is measured with this font as well as drawn with it:
-           ;; a family the renderer's Chromium lacks makes it measure the label
-           ;; narrower than the glyphs, and a CJK edge label comes out cut off.
-           ;; The reader's own font comes first, so a diagram carries the same
-           ;; type as the page, with the CJK face behind it and a family every
-           ;; desktop has as the last resort.
+           (tagLabelBorderColor . ,border)
            ,@(etaf-md--mermaid-family-theme env colors)
            (fontFamily . ,(etaf-md--mermaid-font-family))
            (fontSize . ,(format "%dpx" base))
            ,@(etaf-md--mermaid-categorical env page ink)
            ,@(etaf-md--mermaid-states env page ink)))
-       ;; A node hugs its label.  Mermaid measures the text, adds this padding
-       ;; and a minimum width of its own, and a diamond inscribes its label, so
-       ;; its box grows to about twice the text's.  The wider padding inflated
-       ;; every box by four pixels an axis, which left short labels in frames
-       ;; with room to spare, and the spacing below keeps a wide flow chart from
-       ;; being scaled down to fit the reading column.
        (flowchart . ((padding . 8) (nodeSpacing . 40) (rankSpacing . 40)
                      (wrappingWidth . 160)
                      (useMaxWidth . t) (htmlLabels . t)))
-       ;; Mermaid sizes each kind of diagram on its own: a sequence diagram's
-       ;; messages come out at 12px beside 14px actors, and gantt, er,
-       ;; requirement and state diagrams default to 11, 12, 14 and 24.  One page
-       ;; reads as one typeface, so every kind is told the page's size.  A
-       ;; diagram wider than the column is still scaled to fit, and that is the
-       ;; only change of size a reader sees.
        (sequence . ((diagramMarginX . 16) (diagramMarginY . 12)
                     (actorMargin . 40) (boxMargin . 10)
                     (actorFontSize . ,base) (messageFontSize . ,base)
                     (noteFontSize . ,base)))
-       ;; These three carry minimum boxes of their own: a state node is 120
-       ;; wide, an entity 100 by 75, a requirement 200 wide.  A short label in
-       ;; one of them leaves a frame with room to spare, so the floors come down
-       ;; to a size the label fills.
-       ;; A commit's id is set at the angle mermaid turns it to, which a short
-       ;; Latin id survives and a Chinese one does not: it is laid flat, where a
-       ;; reader can read it like every other label on the page.
        (gitGraph . ((rotateCommitLabel . :json-false)))
        (gantt . ((fontSize . ,base) (sectionFontSize . ,base)))
        (er . ((fontSize . ,base) (minEntityWidth . 60) (minEntityHeight . 40)))
@@ -696,21 +753,166 @@ sequence diagram starts at the very first pixel."
        (state . ((fontSize . ,base) (minNodeWidth . 60)))))))
 
 ;;; ---------------------------------------------------------------------------
-;;; The drawing program
+;;; Primary backend: embedded QuickJS native module (inspired by pele.el)
+;;; ---------------------------------------------------------------------------
+
+(defun etaf-md--typeset-write-svg (key svg)
+  "Write UTF-8 SVG text atomically to KEY's cache path and return that path."
+  (make-directory etaf-md-typeset--cache-directory t)
+  (let* ((target (etaf-md--typeset-svg-path key))
+         (tmp (make-temp-file
+               (expand-file-name ".typeset-" etaf-md-typeset--cache-directory)
+               nil ".svg"))
+         (coding-system-for-write 'utf-8-unix))
+    (unwind-protect
+        (progn
+          (with-temp-file tmp
+            (insert svg))
+          (rename-file tmp target t)
+          target)
+      (when (file-exists-p tmp)
+        (ignore-errors (delete-file tmp))))))
+
+(defun etaf-md--native-stop-poll-timer ()
+  "Cancel the native safety poll timer when no jobs remain."
+  (when (timerp etaf-md-typeset--native-poll-timer)
+    (cancel-timer etaf-md-typeset--native-poll-timer)
+    (setq etaf-md-typeset--native-poll-timer nil)))
+
+(defun etaf-md--native-dispatch ()
+  "Submit queued native jobs up to `etaf-md-typeset--native-max-in-flight'."
+  (while (and etaf-md-typeset--native-waiting
+              (< etaf-md-typeset--native-in-flight
+                 etaf-md-typeset--native-max-in-flight))
+    (let* ((entry (pop etaf-md-typeset--native-waiting))
+           (id (nth 0 entry))
+           (kind-str (nth 1 entry))
+           (source (nth 2 entry))
+           (options-json (nth 3 entry))
+           (request (gethash id etaf-md-typeset--native-requests)))
+      (when request
+        (condition-case err
+            (progn
+              (etaf-md--native-submit
+               id kind-str source options-json etaf-md-typeset--native-timeout)
+              (cl-incf etaf-md-typeset--native-in-flight))
+          (error
+           (remhash id etaf-md-typeset--native-requests)
+           (remhash (plist-get request :key) etaf-md-typeset--running)
+           (etaf-md--typeset-failed
+            request (error-message-string err) nil)))))))
+
+(defun etaf-md--native-unsupported-p (err-plist)
+  "Return non-nil when ERR-PLIST indicates an unsupported diagram type."
+  (let ((code (downcase (or (plist-get err-plist :code) "")))
+        (msg (downcase (or (plist-get err-plist :message) ""))))
+    (or (string-match-p "unsupported\\|unknown" code)
+        (string-match-p "unsupported\\|unknown diagram\\|not supported" msg))))
+
+(defun etaf-md--native-handle-result (id json-text)
+  "Process one native worker completion for ID with JSON-TEXT."
+  (when-let* ((request (gethash id etaf-md-typeset--native-requests)))
+    (remhash id etaf-md-typeset--native-requests)
+    (when (> etaf-md-typeset--native-in-flight 0)
+      (cl-decf etaf-md-typeset--native-in-flight))
+    (let* ((key (plist-get request :key))
+           (parsed (ignore-errors
+                     (json-parse-string json-text
+                                        :object-type 'plist
+                                        :array-type 'list
+                                        :false-object nil
+                                        :null-object nil))))
+      (cond
+       ((and (plist-get parsed :ok) (stringp (plist-get parsed :svg)))
+        (remhash key etaf-md-typeset--running)
+        (etaf-md--typeset-write-svg key (plist-get parsed :svg))
+        (etaf-md--typeset-arrived request))
+       (t
+        (let* ((err (plist-get parsed :error))
+               (code (or (plist-get err :code) "render"))
+               (msg (or (plist-get err :message) "native renderer failed"))
+               (transient (member code '("timeout" "cancelled" "memory" "engine"))))
+          ;; If Pele does not support this diagram dialect and mermaid-cli is
+          ;; installed, transparently retry the same block through mmdc.
+          (if (and (eq (plist-get request :kind) 'mermaid)
+                   (etaf-md--native-unsupported-p err)
+                   (etaf-md-typeset--mmdc-available-p))
+              (progn
+                (remhash key etaf-md-typeset--running)
+                (etaf-md--typeset-start-mmdc
+                 key
+                 (plist-get request :kind)
+                 (plist-get request :source)
+                 (plist-get request :env)
+                 (plist-get request :done)))
+            (remhash key etaf-md-typeset--running)
+            (etaf-md--typeset-failed request msg (not transient)))))))))
+
+(defun etaf-md--native-drain ()
+  "Drain completed results from the native QuickJS worker without blocking."
+  (etaf-md--native-dispatch)
+  (when (featurep 'etaf-md-typeset-native)
+    (let ((limit 64)
+          entry)
+      (while (and (> limit 0) (setq entry (etaf-md--native-poll)))
+        (cl-decf limit)
+        (etaf-md--native-handle-result (car entry) (cadr entry)))))
+  (etaf-md--native-dispatch)
+  (when (and (zerop (hash-table-count etaf-md-typeset--native-requests))
+             (null etaf-md-typeset--native-waiting))
+    (etaf-md--native-stop-poll-timer)))
+
+(defun etaf-md--native-filter (_process _text)
+  "Pipe wakeup filter invoked by Emacs whenever the native worker completes a job."
+  (etaf-md--native-drain))
+
+(defun etaf-md--native-shutdown-all ()
+  "Cleanly shut down the native QuickJS worker before Emacs exits."
+  (etaf-md--native-stop-poll-timer)
+  (setq etaf-md-typeset--native-waiting nil
+        etaf-md-typeset--native-in-flight 0)
+  (clrhash etaf-md-typeset--native-requests)
+  (when (and (featurep 'etaf-md-typeset-native)
+             (fboundp 'etaf-md--native-shutdown))
+    (ignore-errors (etaf-md--native-shutdown)))
+  (when (process-live-p etaf-md-typeset--native-channel)
+    (ignore-errors (delete-process etaf-md-typeset--native-channel)))
+  (setq etaf-md-typeset--native-channel nil))
+
+(add-hook 'kill-emacs-hook #'etaf-md--native-shutdown-all)
+
+(defun etaf-md--typeset-start-native (key kind source env done)
+  "Queue SOURCE of KIND for KEY on the embedded QuickJS worker."
+  (when (etaf-md-typeset--ensure-native)
+    (let* ((id (cl-incf etaf-md-typeset--serial))
+           (kind-str (symbol-name kind))
+           (options-json (if (eq kind 'math)
+                             (etaf-md--native-math-options-json env)
+                           (etaf-md--native-mermaid-options-json env))))
+      (puthash id (list :key key :kind kind :source source :env env :done done)
+               etaf-md-typeset--native-requests)
+      (puthash key id etaf-md-typeset--running)
+      (setq etaf-md-typeset--native-waiting
+            (nconc etaf-md-typeset--native-waiting
+                   (list (list id kind-str source options-json))))
+      (etaf-md--native-dispatch)
+      (unless (timerp etaf-md-typeset--native-poll-timer)
+        (setq etaf-md-typeset--native-poll-timer
+              (run-at-time 0.02 0.04 #'etaf-md--native-drain)))
+      t)))
+
+;;; ---------------------------------------------------------------------------
+;;; Fallback backend: scripts/mermaid-render.mjs (mermaid-cli + KaTeX)
 ;;; ---------------------------------------------------------------------------
 
 (defun etaf-md--renderer-start (script)
-  "Return the drawing program's process, starting it when there is none.
-SCRIPT is its path.  One process draws every picture a session shows: starting
-Chromium is what a render costs, and it is started once."
+  "Return the fallback drawing program's process, starting it when needed."
   (unless (process-live-p etaf-md-typeset--renderer)
     (let ((errors (generate-new-buffer " *etaf-md-renderer-errors*")))
       (setq etaf-md-typeset--renderer-text "")
       (setq etaf-md-typeset--renderer
             (make-process
              :name "etaf-md-renderer"
-             ;; The filter reads the answers as they arrive, so nothing has to
-             ;; be kept: a buffer would grow with every picture drawn.
              :buffer nil
              :command (list "node" script)
              :connection-type 'pipe
@@ -723,7 +925,7 @@ Chromium is what a render costs, and it is started once."
   etaf-md-typeset--renderer)
 
 (defun etaf-md--renderer-send (request)
-  "Write REQUEST to the drawing program, or return nil when it cannot start."
+  "Write REQUEST to the fallback drawing program, or return nil if unavailable."
   (when-let* ((script (etaf-md-typeset--renderer-script))
               (process (ignore-errors (etaf-md--renderer-start script)))
               ((process-live-p process)))
@@ -732,7 +934,7 @@ Chromium is what a render costs, and it is started once."
     process))
 
 (defun etaf-md--renderer-reset-idle ()
-  "Restart the countdown that stops an idle drawing program."
+  "Restart the countdown that stops an idle fallback drawing program."
   (when (timerp etaf-md-typeset--idle-timer)
     (cancel-timer etaf-md-typeset--idle-timer))
   (setq etaf-md-typeset--idle-timer
@@ -740,16 +942,14 @@ Chromium is what a render costs, and it is started once."
                      #'etaf-md--renderer-stop)))
 
 (defun etaf-md--renderer-stop ()
-  "Stop the drawing program when it has nothing left to draw.
-Chromium costs memory while it runs and a page draws its pictures once, so a
-reader who stopped opening diagrams should not keep a browser around."
+  "Stop the fallback drawing program when it has nothing left to draw."
   (setq etaf-md-typeset--idle-timer nil)
   (when (and (process-live-p etaf-md-typeset--renderer)
              (zerop (hash-table-count etaf-md-typeset--requests)))
     (delete-process etaf-md-typeset--renderer)))
 
 (defun etaf-md--renderer-filter (_process text)
-  "Read TEXT as the renderer's answers, one JSON object per line."
+  "Read TEXT as the fallback renderer's answers, one JSON object per line."
   (setq etaf-md-typeset--renderer-text
         (concat etaf-md-typeset--renderer-text text))
   (let ((received etaf-md-typeset--renderer-text))
@@ -761,7 +961,7 @@ reader who stopped opening diagrams should not keep a browser around."
     (setq etaf-md-typeset--renderer-text received)))
 
 (defun etaf-md--renderer-answer (line)
-  "Act on one LINE of the renderer's answers."
+  "Act on one LINE of the fallback renderer's answers."
   (when-let* ((reply (ignore-errors (json-parse-string line :object-type 'plist)))
               (id (plist-get reply :id))
               ((integerp id))
@@ -771,25 +971,20 @@ reader who stopped opening diagrams should not keep a browser around."
     (if (eq (plist-get reply :ok) t)
         (etaf-md--typeset-arrived request)
       (etaf-md--typeset-failed request (plist-get reply :error)
-                                        (eq (plist-get reply :fatal) t)))
+                               (eq (plist-get reply :fatal) t)))
     (etaf-md--renderer-reset-idle)))
 
 (defun etaf-md--typeset-arrived (request)
-  "Call REQUEST's continuation once its picture is on disk.
-A render that left no file is a failure the caller sees as the source still
-painted, so nothing repaints then."
-  (when (and (file-exists-p
-              (etaf-md--typeset-path (plist-get request :key)))
+  "Call REQUEST's continuation once its picture is on disk."
+  (when (and (etaf-md--typeset-picture (plist-get request :key))
              (plist-get request :done))
+    (etaf-md-cache-prune-directory etaf-md-typeset--cache-directory)
     (run-at-time 0 nil (plist-get request :done))))
 
 (defun etaf-md--typeset-failed (request message fatal)
-  "Record that REQUEST cannot be drawn, and keep its block as its source.
-A diagram that does not parse is the author's text, not a picture, and draw it
-again would fail the same way: FATAAL says so, and the block is remembered until
-its source or the page changes.  Any other failure may pass, so the block is
-left a candidate and the next repaint tries again.  Either way the renderer's
-own message says what happened."
+  "Record that REQUEST cannot be drawn.
+FATAL remembers syntax errors until the source or page changes; transient
+failures leave the block eligible for retry."
   (when fatal
     (puthash (plist-get request :key) (or message "the renderer gave no reason")
              etaf-md-typeset--failed))
@@ -798,7 +993,7 @@ own message says what happened."
            (truncate-string-to-width (or message "no reason given") 160)))
 
 (defun etaf-md--renderer-fail-pending (reason)
-  "Record REASON for every render in flight and let the blocks keep their source."
+  "Record REASON for every fallback render in flight."
   (let ((requests nil))
     (maphash (lambda (_id request) (push request requests))
              etaf-md-typeset--requests)
@@ -808,7 +1003,7 @@ own message says what happened."
       (etaf-md--typeset-failed request reason nil))))
 
 (defun etaf-md--renderer-sentinel (process _event)
-  "Report a drawing program that died while it had work."
+  "Report a fallback drawing program that died while it had work."
   (when (memq (process-status process) '(exit signal))
     (setq etaf-md-typeset--renderer nil)
     (when (timerp etaf-md-typeset--idle-timer)
@@ -829,23 +1024,16 @@ own message says what happened."
          (car (split-string text "\n")))))))
 
 (defun etaf-md--typeset-options (kind env)
-  "Return the renderer's settings for KIND on ENV's page."
+  "Return the fallback renderer's settings for KIND on ENV's page."
   (if (eq kind 'math)
       (list :ink (cdr (etaf-md--typeset-colors env))
             :pixels (etaf-md--typeset-pixels)
             :cell (cdr (etaf-md--cell-metrics)))
-    ;; The configuration is JSON already.  Parsing it to a plist and encoding
-    ;; it again would turn every `false' into the string "false", which the
-    ;; renderer reads as true.
     (list :config (etaf-md--mermaid-config env)
           :palette (etaf-md--typeset-palette env))))
 
-(defun etaf-md--typeset-start (key kind source env done)
-  "Ask the drawing program for SOURCE's picture as KIND, and call DONE later.
-The picture is drawn on the page's own palette at two device pixels per
-point, which is the size `etaf-md-typeset--scale' places it at.  A
-block the renderer cannot draw keeps its source and is remembered in
-`etaf-md-typeset--failed'."
+(defun etaf-md--typeset-start-mmdc (key kind source env done)
+  "Ask the fallback Node/mmdc renderer for SOURCE's picture as KIND."
   (make-directory etaf-md-typeset--cache-directory t)
   (let* ((id (cl-incf etaf-md-typeset--serial))
          (request (append (list :id id :kind (symbol-name kind)
@@ -863,72 +1051,81 @@ block the renderer cannot draw keeps its source and is remembered in
        (list :key key :kind kind) "the drawing program did not start" nil)
       nil)))
 
+(defun etaf-md--typeset-start (key kind source env done)
+  "Draw SOURCE as KIND under KEY on ENV's page and call DONE when ready.
+Uses the embedded QuickJS native module when available, falling back to
+`scripts/mermaid-render.mjs' otherwise."
+  (if (etaf-md-typeset--native-available-p)
+      (etaf-md--typeset-start-native key kind source env done)
+    (etaf-md--typeset-start-mmdc key kind source env done)))
+
+;;; ---------------------------------------------------------------------------
+;;; Request collection & repaint batching
+;;; ---------------------------------------------------------------------------
+
+(defun etaf-md--typeset-collect-blocks (blocks env acc)
+  "Collect missing typeset jobs from BLOCKS in ENV into ACC."
+  (dolist (block blocks)
+    (if (eq (plist-get block :type) 'container)
+        (setq acc (etaf-md--typeset-collect-blocks
+                   (plist-get block :children) env acc))
+      (when-let* ((kind (etaf-md--typeset-block-kind block))
+                  (source (plist-get block :text))
+                  ((not (string-blank-p source)))
+                  (key (etaf-md--typeset-key kind source env))
+                  ((not (etaf-md--typeset-picture key)))
+                  ((not (gethash key etaf-md-typeset--running)))
+                  ((not (gethash key etaf-md-typeset--failed))))
+        (push (list kind source key) acc))))
+  acc)
+
 (defun etaf-md-typeset-request (session)
   "Start the renders SESSION's page needs and does not show yet.
-The blocks are read from the published document, and a block whose picture is
-already on disk, or already rendering, is skipped.  The programs start on a
-timer, so asking costs the publish pass one comparison per picture block and
-never a program launch."
+Reads blocks from the published document (including nested containers) and
+skips any block already cached, in flight, or recorded as a syntax failure."
   (when (etaf-md-typeset-available-p)
-    (let ((env (etaf-md--env session))
-          (wanted nil))
-      (dolist (entry (plist-get (etaf-md--read session :document) :children))
-        (let* ((block (plist-get entry :block))
-               (kind (pcase (plist-get block :type)
-                      ('code-block (and (equal (plist-get block :lang) "mermaid") 'mermaid))
-                      ('math (and (plist-get block :display) 'math)))))
-          (when-let* ((source (and kind (plist-get block :text)))
-                      ((not (string-blank-p source)))
-                      (key (etaf-md--typeset-key kind source env))
-                      ((not (file-exists-p (etaf-md--typeset-path key))))
-                      ((not (gethash key etaf-md-typeset--running)))
-                      ((not (gethash key etaf-md-typeset--failed))))
-            (push (list kind source key) wanted))))
+    (let* ((env (etaf-md--env session))
+           (blocks (mapcar (lambda (entry) (plist-get entry :block))
+                           (plist-get (etaf-md--read session :document) :children)))
+           (wanted (etaf-md--typeset-collect-blocks blocks env nil)))
       (when wanted
-        (run-at-time 0 nil
-                     (lambda ()
-                       (dolist (entry (nreverse wanted))
-                         (let ((kind (nth 0 entry))
-                               (source (nth 1 entry))
-                               (key (nth 2 entry)))
-                           (unless (or (file-exists-p (etaf-md--typeset-path key))
-                                       (gethash key etaf-md-typeset--running)
-                                       (gethash key etaf-md-typeset--failed))
-                             (etaf-md--typeset-start
-                              key kind source env
-                              (lambda () (etaf-md--typeset-changed session))))))))))))
+        (run-at-time
+         0 nil
+         (lambda ()
+           (dolist (entry (nreverse wanted))
+             (let ((kind (nth 0 entry))
+                   (source (nth 1 entry))
+                   (key (nth 2 entry)))
+               (unless (or (etaf-md--typeset-picture key)
+                           (gethash key etaf-md-typeset--running)
+                           (gethash key etaf-md-typeset--failed))
+                 (etaf-md--typeset-start
+                  key kind source env
+                  (lambda () (etaf-md--typeset-changed session))))))))))))
 
 (defun etaf-md--typeset-changed (session)
-  "Repaint SESSION once, however many pictures arrive together.
-Pictures land one after another as the renderer gets to them, and a page that
-repainted on each arrival would reflow its reader's place a dozen times.  One
-paint per burst is what a reader sees, so the first arrival schedules the paint
-and the rest join it."
+  "Repaint SESSION once, however many pictures arrive together."
   (unless (plist-get session :typeset-pending)
     (plist-put session :typeset-pending t)
-    (run-at-time 0.15 nil
+    (run-at-time 0.05 nil
                  (lambda ()
                    (plist-put session :typeset-pending nil)
                    (etaf-md--typeset-repaint session)))))
 
 (defun etaf-md--typeset-repaint (session)
-  "Publish SESSION's document again so the page paints its new pictures.
-The republish reads the same source the page follows, so a picture that lands
-while the file is not being visited publishes the file rather than nothing."
-  (etaf-md--republish session))
+  "Attach newly rendered pictures on SESSION's blocks and repaint them in place."
+  (if (fboundp 'etaf-md--refresh-block-assets)
+      (etaf-md--refresh-block-assets session)
+    (etaf-md--republish session)))
 
 (defun etaf-md--render-code-block (block env)
-  "Return BLOCK drawn as its picture, or nil to keep its source.
-Only a `mermaid' fence has a program behind it; every other language keeps the
-renderer's own painting."
+  "Return BLOCK drawn as its picture, or nil to keep its source."
   (when-let* ((path (and (equal (plist-get block :lang) "mermaid")
                          (plist-get block :picture))))
     (etaf-md--typeset-figure 'mermaid path env)))
 
 (defun etaf-md--render-math (block env)
-  "Return display formula BLOCK typeset, or nil to keep the text rendering.
-An inline formula is part of a sentence and keeps its text: a picture inside a
-line would change the line's height."
+  "Return display formula BLOCK typeset, or nil to keep the text rendering."
   (when-let* ((path (and (plist-get block :display)
                          (plist-get block :picture))))
     (etaf-md--typeset-figure 'math path env)))

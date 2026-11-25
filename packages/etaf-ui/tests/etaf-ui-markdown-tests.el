@@ -1024,5 +1024,453 @@ its columns need."
             (call-interactively (key-binding (kbd "RET")))
             (should (equal clicked '("https://example.com/h")))))))))
 
+(ert-deftest etaf-ui-markdown-inline-delimiters-skip-code-spans ()
+  "Emphasis, strikethrough and highlight delimiters ignore matching tokens inside inline code."
+  (let* ((doc (etaf-ui-markdown-parse
+               "Check **bold `a*b` end**, ~~del `x~~y` end~~ and ==mark `p==q` end==.\n"))
+         (children (plist-get (car (plist-get doc :children)) :children))
+         (strong (cl-find 'strong children :key (lambda (n) (plist-get n :type))))
+         (strike (cl-find 'strike children :key (lambda (n) (plist-get n :type))))
+         (mark (cl-find 'mark children :key (lambda (n) (plist-get n :type)))))
+    (should strong)
+    (should (cl-some (lambda (n) (and (eq (plist-get n :type) 'code)
+                                      (equal (plist-get n :text) "a*b")))
+                     (plist-get strong :children)))
+    (should strike)
+    (should (cl-some (lambda (n) (and (eq (plist-get n :type) 'code)
+                                      (equal (plist-get n :text) "x~~y")))
+                     (plist-get strike :children)))
+    (should mark)
+    (should (cl-some (lambda (n) (and (eq (plist-get n :type) 'code)
+                                      (equal (plist-get n :text) "p==q")))
+                     (plist-get mark :children)))))
+
+(ert-deftest etaf-ui-markdown-math-text-preserves-escaped-braces ()
+  "`etaf-ui-markdown-math-text' keeps escaped set braces `\\{' and `\\}'."
+  (let ((rendered (etaf-ui-markdown-math-text "\\{x \\in S\\} \\cup \\{y^2\\}")))
+    (should (string-match-p "{x ∈ S}" rendered))
+    (should (string-match-p "{y²}" rendered))))
+
+(ert-deftest etaf-ui-markdown-highlight-reuses-mode-buffer-cleanly ()
+  "Highlighting multiple snippets in one language leaves no leaked syntax state."
+  (let* ((unclosed (etaf-ui-markdown-highlight-code "elisp" "(setq s \"unterminated"))
+         (clean (etaf-ui-markdown-highlight-code "elisp" "(defun demo (x) (+ x 1))")))
+    (should (listp unclosed))
+    (should (cl-some (lambda (run)
+                       (and (equal (plist-get run :text) "defun")
+                            (eq (plist-get (plist-get run :props) :role) 'keyword)))
+                     clean))))
+
+(ert-deftest etaf-ui-markdown-footnote-ref-back-and-code-copy-callbacks ()
+  "`:footnote-ref', `:footnote-back' and `:on-copy' wire host refs and notifications."
+  (let* ((backed nil)
+         (copied nil)
+         (fn-ref 'etaf-ui-test-fn-1)
+         (doc (etaf-ui-markdown-parse
+               "Body[^1].\n\n```elisp\n(message \"hi\")\n(message \"bye\")\n```\n\n[^1]: Note text.\n"))
+         (env (etaf-ui-markdown-test--env
+               :features (plist-get doc :features)
+               :footnote-ref (lambda (label) (when (equal label "1") fn-ref))
+               :footnote-back (lambda (label) (push label backed))
+               :on-copy (lambda (kind text lines) (push (list kind text lines) copied))))
+         (views (append (etaf-ui-markdown-view-blocks (plist-get doc :children) env)
+                        (etaf-ui-markdown-view-blocks (plist-get doc :footnotes) env)))
+         (buffer-name (format " *etaf-ui-md-fn-%s*" (cl-gensym))))
+    (unwind-protect
+        (progn
+          (etaf-mount buffer-name (etaf-node 'column (list :width '(ch 60)) views))
+          (let* ((rt (etaf-runtime-for-buffer buffer-name))
+                 (bounds (etaf-host-ref-bounds rt fn-ref))
+                 (plain (etaf-ui-markdown-test--text buffer-name)))
+            (should (consp bounds))
+            (should (string-match-p "↩" plain))
+            (with-current-buffer buffer-name
+              (set-window-buffer (selected-window) (current-buffer))
+              (goto-char (1+ (string-match "↩" plain)))
+              (execute-kbd-macro (kbd "RET"))
+              (should (equal backed '("1")))
+              (goto-char (1+ (string-match "复制" plain)))
+              (execute-kbd-macro (kbd "RET"))
+              (should (equal (caar copied) 'code))
+              (should (= (nth 2 (car copied)) 2)))))
+      (when-let* ((rt (etaf-runtime-for-buffer buffer-name)))
+        (etaf-unmount rt))
+      (when-let* ((buf (get-buffer buffer-name)))
+        (kill-buffer buf)))))
+
+(ert-deftest etaf-ui-markdown-etaf-extended-inline-syntax-parses-and-paints ()
+  "Extended inline syntax parses in the `etaf' dialect, stays literal in `gfm' and paints cleanly."
+  (let* ((source (concat
+                  "%%hidden block comment%%\n\n"
+                  "Secret !!hidden answer!! and %%inline hidden%% text.\n\n"
+                  "See [[Guide#Intro|入门指南]] and [+term] with "
+                  ":color[#4493f8] :sym[find-file] ==Tip=={.tip} :badge[v2]{.tip}.\n\n"
+                  "[+term]: A rich inline explanation.\n"))
+         (doc (etaf-ui-markdown-parse source))
+         (gfm (etaf-ui-markdown-parse "!!raw!! :color[#4493f8] [[raw]]\n" 'gfm))
+         (state (etaf-ref nil))
+         (opened-wiki nil)
+         (opened-sym nil)
+         (buffer-name (format " *etaf-ui-md-ext-%s*" (cl-gensym))))
+    (should (assoc "term" (plist-get doc :annotations)))
+    (should (equal "!!raw!! :color[#4493f8] [[raw]]"
+                   (mapconcat (lambda (n) (or (plist-get n :text) ""))
+                              (plist-get (car (plist-get gfm :children)) :children)
+                              "")))
+    (unwind-protect
+        (progn
+          (etaf-mount
+           buffer-name
+           (etaf-view
+            (column :width '(ch 76)
+              (expr
+               (let* ((alist (etaf-value state))
+                      (env (etaf-ui-markdown-test--env
+                            :features (plist-get doc :features)
+                            :annotations (plist-get doc :annotations)
+                            :block-state (lambda (k &optional d)
+                                           (if-let* ((cell (assoc k alist)))
+                                               (cdr cell)
+                                             d))
+                            :set-block-state (lambda (k v)
+                                               (let ((next (copy-alist (etaf-value state))))
+                                                 (if-let* ((cell (assoc k next)))
+                                                     (setcdr cell v)
+                                                   (push (cons k v) next))
+                                                 (etaf-set-value state next)))
+                            :open-wiki-link (lambda (target anchor label)
+                                              (push (list target anchor label) opened-wiki))
+                            :open-symbol (lambda (name) (push name opened-sym)))))
+                 (etaf-ui-markdown-view-blocks (plist-get doc :children) env))))))
+          (let ((plain (etaf-ui-markdown-test--text buffer-name)))
+            (should-not (string-match-p "hidden block comment" plain))
+            (should-not (string-match-p "inline hidden" plain))
+            (should-not (string-match-p "hidden answer" plain))
+            (should (string-match-p "░" plain))
+            (should (string-match-p "入门指南" plain))
+            (should (string-match-p "#4493f8" plain))
+            (should (string-match-p "find-file" plain))
+            (should (string-match-p "v2" plain))
+            (with-current-buffer buffer-name
+              (set-window-buffer (selected-window) (current-buffer))
+              ;; `.tip' mark and badge must use the success fill (:ok-soft), not blue (:accent-soft).
+              (let* ((tip-pos (1+ (string-match "Tip" plain)))
+                     (v2-pos (1+ (string-match "v2" plain)))
+                     (tip-face (get-text-property tip-pos 'face))
+                     (v2-face (get-text-property v2-pos 'face)))
+                (should (string-match-p "#dafbe1\\|#12261e" (format "%S" tip-face)))
+                (should (string-match-p "#dafbe1\\|#12261e" (format "%S" v2-face))))
+              ;; Reveal spoiler via activation.
+              (goto-char (1+ (string-match "░" plain)))
+              (execute-kbd-macro (kbd "RET"))
+              (should (string-match-p "hidden answer"
+                                      (etaf-ui-markdown-test--text buffer-name)))
+              ;; Expand annotation card via activation.
+              (let ((after-plot (etaf-ui-markdown-test--text buffer-name)))
+                (goto-char (1+ (string-match "term" after-plot)))
+                (execute-kbd-macro (kbd "RET")))
+              (should (string-match-p "A rich inline explanation\\."
+                                      (etaf-ui-markdown-test--text buffer-name)))
+              ;; Activate wiki-link and symbol.
+              (let ((now (etaf-ui-markdown-test--text buffer-name)))
+                (goto-char (1+ (string-match "入门指南" now)))
+                (execute-kbd-macro (kbd "RET"))
+                (goto-char (1+ (string-match "find-file" now)))
+                (execute-kbd-macro (kbd "RET")))))
+          (should (equal opened-wiki '(("Guide" "Intro" "入门指南"))))
+          (should (equal opened-sym '("find-file"))))
+      (when-let* ((rt (etaf-runtime-for-buffer buffer-name)))
+        (etaf-unmount rt))
+      (when-let* ((buf (get-buffer buffer-name)))
+        (kill-buffer buf)))))
+
+(ert-deftest etaf-ui-markdown-code-fence-advanced-options ()
+  "Code blocks support `:collapsed-lines', `/word/', `[!code word:...]', `:whitespace', `:indent-guides' and 1-based `{a-b}'."
+  (let* ((source (concat
+                  "```elisp {2-3} /alpha/ :collapsed-lines=2 :whitespace :indent-guides\n"
+                  "line1 alpha\n"
+                  "  line2 beta ; [!code word:beta]\n"
+                  "    line3\n"
+                  "line4\n"
+                  "line5\n"
+                  "```\n"))
+         (doc (etaf-ui-markdown-parse source))
+         (state (etaf-ref nil))
+         (buffer-name (format " *etaf-ui-md-code-adv-%s*" (cl-gensym))))
+    (unwind-protect
+        (progn
+          (etaf-mount
+           buffer-name
+           (etaf-view
+            (column :width '(ch 72)
+              (expr
+               (let* ((alist (etaf-value state))
+                      (env (etaf-ui-markdown-test--env
+                            :features (plist-get doc :features)
+                            :block-state (lambda (k &optional d)
+                                           (if-let* ((cell (assoc k alist)))
+                                               (cdr cell)
+                                             d))
+                            :set-block-state (lambda (k v)
+                                               (let ((next (copy-alist (etaf-value state))))
+                                                 (if-let* ((cell (assoc k next)))
+                                                     (setcdr cell v)
+                                                   (push (cons k v) next))
+                                                 (etaf-set-value state next))))))
+                 (etaf-ui-markdown-view-blocks (plist-get doc :children) env))))))
+          (let ((collapsed (etaf-ui-markdown-test--text buffer-name)))
+            (should (string-match-p "line1" collapsed))
+            (should (string-match-p "line2" collapsed))
+            (should-not (string-match-p "line4" collapsed))
+            (should-not (string-match-p "\\[!code" collapsed))
+            (should (string-match-p "·" collapsed))
+            (should (string-match-p "展开剩余 3 行" collapsed))
+            (with-current-buffer buffer-name
+              (set-window-buffer (selected-window) (current-buffer))
+              (goto-char (1+ (string-match "展开剩余 3 行" collapsed)))
+              (execute-kbd-macro (kbd "RET"))))
+          (let ((expanded (etaf-ui-markdown-test--text buffer-name)))
+            (should (string-match-p "line4" expanded))
+            (should (string-match-p "line5" expanded))
+            (should (string-match-p "│" expanded))
+            (should (string-match-p "收起代码" expanded))))
+      (when-let* ((rt (etaf-runtime-for-buffer buffer-name)))
+        (etaf-unmount rt))
+      (when-let* ((buf (get-buffer buffer-name)))
+        (kill-buffer buf)))))
+
+(ert-deftest etaf-ui-markdown-collapsible-alert-and-interactive-tasks ()
+  "Obsidian collapsible alerts toggle their body and task checkboxes invoke `:on-toggle-task'."
+  (let* ((source (concat
+                  "> [!tip]- 折叠提示\n"
+                  "> 隐藏的正文。\n\n"
+                  "- [ ] 第一项\n"
+                  "- [x] 第二项\n"))
+         (doc (etaf-ui-markdown-parse source))
+         (state (etaf-ref nil))
+         (toggled nil)
+         (buffer-name (format " *etaf-ui-md-alert-task-%s*" (cl-gensym))))
+    (unwind-protect
+        (progn
+          (etaf-mount
+           buffer-name
+           (etaf-view
+            (column :width '(ch 64)
+              (expr
+               (let* ((alist (etaf-value state))
+                      (env (etaf-ui-markdown-test--env
+                            :features (plist-get doc :features)
+                            :block-state (lambda (k &optional d)
+                                           (if-let* ((cell (assoc k alist)))
+                                               (cdr cell)
+                                             d))
+                            :set-block-state (lambda (k v)
+                                               (let ((next (copy-alist (etaf-value state))))
+                                                 (if-let* ((cell (assoc k next)))
+                                                     (setcdr cell v)
+                                                   (push (cons k v) next))
+                                                 (etaf-set-value state next)))
+                            :on-toggle-task (lambda (block item item-index)
+                                              (push (list (plist-get block :begin)
+                                                          (plist-get item :line-offset)
+                                                          (plist-get item :checked)
+                                                          item-index)
+                                                    toggled)))))
+                 (etaf-ui-markdown-view-blocks (plist-get doc :children) env))))))
+          (let ((initial (etaf-ui-markdown-test--text buffer-name)))
+            (should (string-match-p "折叠提示" initial))
+            (should-not (string-match-p "隐藏的正文" initial))
+            (with-current-buffer buffer-name
+              (set-window-buffer (selected-window) (current-buffer))
+              ;; Expand collapsible alert.
+              (goto-char (1+ (string-match "折叠提示" initial)))
+              (execute-kbd-macro (kbd "RET"))
+              (should (string-match-p "隐藏的正文"
+                                      (etaf-ui-markdown-test--text buffer-name)))
+              ;; Toggle first task checkbox leaf.
+              (let ((now (etaf-ui-markdown-test--text buffer-name)))
+                (goto-char (1+ (string-match "□" now)))
+                (execute-kbd-macro (kbd "RET")))))
+          (should (= 1 (length toggled)))
+          (should (equal 0 (nth 1 (car toggled))))
+          (should-not (nth 2 (car toggled)))
+          (should (= 1 (nth 3 (car toggled)))))
+      (when-let* ((rt (etaf-runtime-for-buffer buffer-name)))
+        (etaf-unmount rt))
+      (when-let* ((buf (get-buffer buffer-name)))
+        (kill-buffer buf)))))
+
+(ert-deftest etaf-ui-markdown-hover-discipline-keeps-static-surfaces-clean ()
+  "Hover faces attach strictly to unselected interactive leaves, never to static prose, code lines or selected tabs."
+  (let* ((source (concat
+                  "Plain prose with [link](https://example.com), :sym[car], "
+                  "!!secret!!, :color[#123456], :badge[beta]{.tip}.\n\n"
+                  "- [ ] Checkable item\n\n"
+                  "```elisp\n(defun keep-me-clean () 42)\n```\n"))
+         (doc (etaf-ui-markdown-parse source))
+         (env (etaf-ui-markdown-test--env
+               :features (plist-get doc :features)
+               :open-link #'ignore
+               :open-symbol #'ignore
+               :on-toggle-task #'ignore))
+         (buffer-name (format " *etaf-ui-md-hover-%s*" (cl-gensym))))
+    (unwind-protect
+        (progn
+          (etaf-mount
+           buffer-name
+           (etaf-view
+            (column :width '(ch 72) :item-gap '(lh 1)
+              (etaf-tabs :active 'first
+                         :items '((:key first :label "ActiveTab")
+                                  (:key second :label "IdleTab"))
+                         :on-change #'ignore)
+              (expr (etaf-ui-markdown-view-blocks (plist-get doc :children) env)))))
+          (with-current-buffer buffer-name
+            (let ((plain (buffer-substring-no-properties (point-min) (point-max))))
+              ;; Unselected interactive leaves MUST carry mouse-face and hand pointer.
+              (dolist (needle '("IdleTab" "link" "car" "░" "□" "复制"))
+                (let ((pos (1+ (string-match (regexp-quote needle) plain))))
+                  (should (get-text-property pos 'mouse-face))
+                  (should (eq 'hand (get-text-property pos 'pointer)))))
+              ;; Selected tab and static/multi-styled surfaces MUST NOT carry mouse-face.
+              (dolist (needle '("ActiveTab" "Plain" "#123456" "beta"
+                                "Checkable" "defun" "keep-me-clean"))
+                (let ((pos (1+ (string-match (regexp-quote needle) plain))))
+                  (should-not (get-text-property pos 'mouse-face)))))))
+      (when-let* ((rt (etaf-runtime-for-buffer buffer-name)))
+        (etaf-unmount rt))
+      (when-let* ((buf (get-buffer buffer-name)))
+        (kill-buffer buf)))))
+
+(ert-deftest etaf-ui-markdown-highlight-modern-aliases-and-fallback ()
+  "Modern fence aliases (`python3', `console', `tsx', `ts', `el', `http', `yaml') highlight cleanly without failing on missing Tree-sitter grammars."
+  (dolist (case '(("python3" . "def greet(name):\n    return 'hi'\n")
+                  ("pycon" . ">>> def f(x):\n...     return x\n")
+                  ("console" . "if true; then echo ok; fi\n")
+                  ("shell-session" . "export FOO=\"bar\"\n")
+                  ("el" . "(defun foo (x) (+ x 1))\n")
+                  ("common-lisp" . "(defun bar (x) (* x 2))\n")
+                  ("mjs" . "export const answer = 42;\n")
+                  ("ts" . "const total = 10;\nfunction sum(a) { return a; }\n")
+                  ("tsx" . "function App() { return <div>ok</div>; }\n")
+                  ("http" . "Content-Type: application/json\n")
+                  ("yaml" . "name: etaf\nversion: 1\n")))
+    (let* ((lang (car case))
+           (src (cdr case))
+           (runs (etaf-ui-markdown-highlight-code lang src))
+           (joined (mapconcat (lambda (r) (plist-get r :text)) runs "")))
+      (should (consp runs))
+      (should (equal joined src))
+      (should (cl-some (lambda (r) (plist-get r :props)) runs)))))
+
+(ert-deftest etaf-ui-markdown-highlight-builtin-lexer-and-shell-cli ()
+  "Zero-dependency built-in lexer highlights languages without installed modes and enhances shell CLI commands losslessly."
+  (dolist (case '(("go" . "package main\nfunc main() { x := 1; fmt.Println(\"hi\") }\n")
+                  ("rust" . "#[derive(Debug)]\npub fn first<'a>(s: &'a str) -> Option<usize> { let _ = vec![1]; Some(s.len()) }\n")
+                  ("dockerfile" . "FROM alpine:3.20\nRUN apk add --no-cache git\n")
+                  ("zig" . "const std = @import(\"std\");\npub fn main() void {}\n")
+                  ("svelte" . "<script lang=\"ts\">\nlet count = 0;\n</script>\n<button>{count}</button>\n")
+                  ("vue" . "<script setup>\nconst n = 1\n</script>\n<template><div>ok</div></template>\n")
+                  ("kotlin" . "fun greet(name: String): Int { return 42 }\n")
+                  ("swift" . "struct Point { let x: Double }\n")
+                  ("graphql" . "query GetUser { user(id: 1) { name } }\n")
+                  ("protobuf" . "message User { string name = 1; }\n")
+                  ("hcl" . "resource \"aws_s3_bucket\" \"b\" { bucket = \"demo\" }\n")
+                  ("cmake" . "cmake_minimum_required(VERSION 3.20)\n")
+                  ("abnf9110" . "field-name = 1*VCHAR ; comment\n")
+                  ("bash" . "brew install ripgrep\n")
+                  ("shell" . "$ git status -sb\n")
+                  ("console" . "$ sudo cargo build --release | tee build.log\n")))
+    (let* ((lang (car case))
+           (src (cdr case))
+           (runs (etaf-ui-markdown-highlight-code lang src))
+           (joined (mapconcat (lambda (r) (plist-get r :text)) runs "")))
+      (should (consp runs))
+      (should (equal joined src))
+      (should (cl-some (lambda (r) (plist-get (plist-get r :props) :role)) runs))))
+  ;; Shell CLI enhancer paints prompt, command, flags and pipe roles explicitly.
+  (let ((runs (etaf-ui-markdown-highlight-code
+               "console" "$ cargo build --release | sh")))
+    (should (cl-some (lambda (r)
+                       (and (equal (plist-get r :text) "$")
+                            (eq (plist-get (plist-get r :props) :role) 'comment)))
+                     runs))
+    (should (cl-some (lambda (r)
+                       (and (equal (plist-get r :text) "cargo")
+                            (eq (plist-get (plist-get r :props) :role) 'function)))
+                     runs))
+    (should (cl-some (lambda (r)
+                       (and (equal (plist-get r :text) "--release")
+                            (eq (plist-get (plist-get r :props) :role) 'constant)))
+                     runs))
+    (should (cl-some (lambda (r)
+                       (and (equal (plist-get r :text) "|")
+                            (eq (plist-get (plist-get r :props) :role) 'keyword)))
+                     runs)))
+  ;; Unrecognized language still stays plain (nil).
+  (should-not (etaf-ui-markdown-highlight-code "no-such-language" "plain text")))
+
+(ert-deftest etaf-ui-markdown-table-fits-wide-tables-without-clipping ()
+  "An 8-column table adapts cleanly across breakout, compact and narrow budgets.
+No rightmost column is ever clipped: wide breakout renders all columns side by
+side, medium budgets compress padding and scale columns into the budget, and
+narrow splits fold rows into stacked record cards."
+  (let ((md (concat
+             "| 标准 | 方法论 (BEM/SMACSS) | 预处理器 (Sass) | CSS 模块 | 运行时 CSS-in-JS | 编译时 CSS-in-JS | 实用工具优先 (Tailwind) | 现代原生 CSS |\n"
+             "| --- | --- | --- | --- | --- | --- | --- | --- |\n"
+             "| 作用域机制 | 手动命名约定 | 无 (全局) | 构建时哈希化类名 | JS闭包/运行时生成 | 构建时提取/哈希化 | 无 (依赖组合) | @scope |\n"
+             "| 最佳适用 | 纪律严明的团队 | 组织中大型CSS | 任何组件化应用 | 高度动态化的UI | 性能敏感的组件化应用 | 快速原型/设计系统 | 简化工具链的项目 |\n")))
+    ;; 1. Wide breakout budget: all 8 columns fit side-by-side with 9 borders.
+    (let* ((doc (etaf-ui-markdown-parse md))
+           (env (etaf-ui-markdown-test--env :width 78 :table-max-width 166
+                                            :features (plist-get doc :features)))
+           (views (etaf-ui-markdown-view-blocks (plist-get doc :children) env))
+           (buf (format " *etaf-ui-markdown-%s*" (cl-gensym))))
+      (unwind-protect
+          (progn
+            (etaf-mount buf (etaf-node 'column (list :width '(ch 170)) views))
+            (let* ((text (etaf-ui-markdown-test--text buf))
+                   (rows (cl-remove-if-not (lambda (l) (string-match-p "│" l))
+                                           (split-string text "\n"))))
+              (should (string-match-p "@scope" text))
+              (should (string-match-p "现代原生 CSS" text))
+              (should (cl-every (lambda (r) (= 9 (cl-count ?│ r))) rows))))
+        (when-let* ((rt (etaf-runtime-for-buffer buf))) (etaf-unmount rt))
+        (when (get-buffer buf) (kill-buffer buf))))
+    ;; 2. Compact 78-cell budget: all 8 columns remain in one aligned grid.
+    (let* ((doc (etaf-ui-markdown-parse md))
+           (env (etaf-ui-markdown-test--env :width 78
+                                            :features (plist-get doc :features)))
+           (views (etaf-ui-markdown-view-blocks (plist-get doc :children) env))
+           (buf (format " *etaf-ui-markdown-%s*" (cl-gensym))))
+      (unwind-protect
+          (progn
+            (etaf-mount buf (etaf-node 'column (list :width '(ch 78)) views))
+            (let* ((text (etaf-ui-markdown-test--text buf))
+                   (rows (cl-remove-if-not (lambda (l) (string-match-p "│" l))
+                                           (split-string text "\n"))))
+              (should (string-match-p "@scope" text))
+              (should (cl-every (lambda (r) (= 9 (cl-count ?│ r))) rows))
+              (should (cl-every (lambda (r) (<= (string-width r) 78)) rows))))
+        (when-let* ((rt (etaf-runtime-for-buffer buf))) (etaf-unmount rt))
+        (when (get-buffer buf) (kill-buffer buf))))
+    ;; 3. Ultra-narrow 44-cell budget: folds into stacked record cards keeping all data.
+    (let* ((doc (etaf-ui-markdown-parse md))
+           (env (etaf-ui-markdown-test--env :width 44
+                                            :features (plist-get doc :features)))
+           (views (etaf-ui-markdown-view-blocks (plist-get doc :children) env))
+           (buf (format " *etaf-ui-markdown-%s*" (cl-gensym))))
+      (unwind-protect
+          (progn
+            (etaf-mount buf (etaf-node 'column (list :width '(ch 44)) views))
+            (let* ((text (etaf-ui-markdown-test--text buf))
+                   (lines (split-string text "\n")))
+              (should (string-match-p "标准 · 作用域机制" text))
+              (should (string-match-p "@scope" text))
+              (should (string-match-p "简化工具链" text))
+              (should (cl-every (lambda (l) (<= (string-width l) 44)) lines))))
+        (when-let* ((rt (etaf-runtime-for-buffer buf))) (etaf-unmount rt))
+        (when (get-buffer buf) (kill-buffer buf))))))
+
 (provide 'etaf-ui-markdown-tests)
 ;;; etaf-ui-markdown-tests.el ends here

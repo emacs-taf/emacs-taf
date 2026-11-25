@@ -780,6 +780,11 @@
       "purpose": "Refitting a mount whose whole tree fits its window restores the window start to the buffer top after a temporarily shorter window scrolled it."
     },
     {
+      "name": "ebox-repaint-aligns-window-start-to-row-beginning",
+      "file": "tests/ebox-update-tests.el",
+      "purpose": "Repainting a scrolled buffer aligns the restored window start to column 0 so leading row cells such as left padding stay visible."
+    },
+    {
       "name": "ebox-mounted-rows-own-wrapping-and-restore-buffer-settings",
       "file": "tests/ebox-update-tests.el",
       "purpose": "Mounted output disables native continuation of engine-owned rows and restores the buffer's original wrapping setting on unmount."
@@ -993,6 +998,61 @@
       "name": "ebox-text-scale-keeps-untouched-row-heights",
       "file": "tests/ebox-text-scale-tests.el",
       "purpose": "A text scale change raises every row, including rows the update did not rewrite."
+    },
+    {
+      "name": "ebox-window-scroll-with-header-line-does-not-lock-overflow",
+      "file": "tests/ebox-scroll-input-tests.el",
+      "purpose": "An overflowing mounted buffer with a header line still scrolls via `ebox-scroll-page-down' and keeps its scroll start across `ebox-refit' instead of misreporting that the buffer fits the window body."
+    },
+    {
+      "name": "ebox-touching-structural-edits-coalesce-into-lines-strategy",
+      "file": "tests/ebox-update-tests.el",
+      "purpose": "Replacing a stacked child with a different-height child, or inserting/deleting consecutive siblings in one batch, coalesces touching line ranges into a single `lines' edit instead of falling back to a full buffer rewrite."
+    },
+    {
+      "name": "ebox-disjoint-height-changing-edits-stay-on-lines-strategy",
+      "file": "tests/ebox-update-tests.el",
+      "purpose": "Multiple disjoint height-changing edits and bordered-container growth in a single batch apply sequentially with `lines' strategy and match a fresh render."
+    },
+    {
+      "name": "ebox-same-column-insert-and-sibling-growth-match-fresh-render",
+      "file": "tests/ebox-update-tests.el",
+      "purpose": "Combining structural child insertions/deletions with earlier or adjacent sibling height changes in the same column keeps recorded line coordinates aligned and matches a fresh render."
+    },
+    {
+      "name": "ebox-side-by-side-column-cancelling-height-edits-keep-siblings-intact",
+      "file": "tests/ebox-update-tests.el",
+      "purpose": "Cancelling height-changing edits inside one pane of a side-by-side flex row rewrite that pane in place without shifting or duplicating sibling columns."
+    },
+    {
+      "name": "ebox-overlay-and-bordered-stack-stay-consistent-under-cancelling-edits",
+      "file": "tests/ebox-update-tests.el",
+      "purpose": "Cancelling or multi-point structural edits keep root overlays at their exact rows and keep top and bottom border faces on the exact edge lines of bordered stacks."
+    },
+    {
+      "name": "ebox-allow-text-selection-enables-native-region-on-canvas",
+      "file": "tests/ebox-interaction-tests.el",
+      "purpose": "Setting `ebox-allow-text-selection' non-nil opts a mounted canvas into native Emacs mark/region selection and releases `down-mouse-1' while preserving the default refusal when nil."
+    },
+    {
+      "name": "ebox-node-box-metrics-reports-resolved-box-model",
+      "file": "tests/ebox-introspection-tests.el",
+      "purpose": "`ebox-node-box-metrics' returns resolved margin, border, padding, border-box and content-box metrics for a laid-out node and nil for an unlaid-out node."
+    },
+    {
+      "name": "ebox-node-inspect-style-reports-provenance-and-winners",
+      "file": "tests/ebox-introspection-tests.el",
+      "purpose": "`ebox-node-inspect-style' computes on-demand ECSS provenance, matching only active rules and distinguishing winning declarations from overridden ones."
+    },
+    {
+      "name": "ebox-node-row-spans-isolates-side-by-side-columns-and-clipping",
+      "file": "tests/ebox-introspection-tests.el",
+      "purpose": "`ebox-node-row-spans' returns per-line buffer spans covering only each node's horizontal extent without bleeding across side-by-side columns."
+    },
+    {
+      "name": "ebox-reparent-child-from-removed-wrapper-into-emptied-column",
+      "file": "tests/ebox-update-tests.el",
+      "purpose": "Removing a laid-out child from a wrapper, removing that wrapper to empty a stacked column, and re-inserting the child in one batch renders cleanly without sequence errors."
     }
   ]
 }

@@ -32,13 +32,13 @@ Mount normalized VIEW into BUFFER-OR-NAME and return its buffer.
 
 - BUFFER-OR-NAME is a buffer or a buffer name. The buffer is created if it does not exist; the Runtime does not display it.
 - VIEW is a normalized View, as [Views](views.md) defines, or a zero-argument function returning one. A function is evaluated with tracking, so a View function that reads a reactive source is re-rendered when the source changes.
-- OPTIONS is a plist. The supported keys are `:viewport-width` (in pixels) and `:viewport-height` (in lines), which the first publication uses directly instead of an immediate re-layout, and `:observer`, a one-argument report sink installed before the first render. A nil dimension follows the displaying window. The viewport details belong to [Viewport](viewport.md); the report format belongs to [Incremental Updates and Publication](incremental-updates-and-publication.md).
+- OPTIONS is a plist. The supported keys are `:viewport-width` (in pixels) and `:viewport-height` (in lines), which the first publication uses directly instead of an immediate re-layout, `:observer`, a one-argument report sink installed before the first render, and `:text-selection`, a boolean (t or nil) enabling native Emacs mark and pointer text selection on the canvas for the duration of the mount. A nil dimension follows the displaying window. The viewport details belong to [Viewport](viewport.md); the report format belongs to [Incremental Updates and Publication](incremental-updates-and-publication.md).
 
 **Semantics.** An existing Runtime mounted in BUFFER-OR-NAME is unmounted first, so the new View replaces the old application. The first publication is one observed operation: the View is lowered and rendered, the whole buffer is written, and the committed revision becomes 1. Registering the Runtime also installs its key handling and its `kill-buffer-hook`, so killing the buffer unmounts it. If the first publication fails, the new Runtime is disposed and the condition propagates; the buffer survives with no Runtime.
 
 **Returns.** BUFFER-OR-NAME as a live buffer.
 
-**Errors.** `error→ etaf-runtime-error` when OPTIONS is not a proper plist, when it contains a key outside the three above, when `:viewport-width` or `:viewport-height` is neither nil nor a positive number, or when `:observer` is neither nil nor a function; the data names the message and the offending value or key. A View problem propagates its own condition, such as `etaf-view-error`, `etaf-view-syntax-error`, `etaf-component-call-error` or `etaf-renderer-error`, and the buffer is left without a Runtime. During rendering the call signals `error→ etaf-render-side-effect-error` with data `(mount-runtime)`.
+**Errors.** `error→ etaf-runtime-error` when OPTIONS is not a proper plist, when it contains a key outside the four above, when `:viewport-width` or `:viewport-height` is neither nil nor a positive number, when `:observer` is neither nil nor a function, or when `:text-selection` is not a boolean (`nil` or `t`); the data names the message and the offending value or key. A View problem propagates its own condition, such as `etaf-view-error`, `etaf-view-syntax-error`, `etaf-component-call-error` or `etaf-renderer-error`, and the buffer is left without a Runtime. During rendering the call signals `error→ etaf-render-side-effect-error` with data `(mount-runtime)`.
 
 **Example.** A headless host that already knows the layout context avoids the first re-layout.
 
@@ -417,7 +417,7 @@ A commit happens between the render and post phases for every Runtime whose buff
 
 1. The tree is synchronized from the retained segments: the top-level node — the single root node or a column wrapping several roots — is mounted into the Ebox mount when it changed.
 2. The dirty Ebox subtrees are flushed in one batch: styles are recomputed, damaged regions are laid out and the buffer regions are rewritten once.
-3. The committed revision advances by one, and the sticky Host mirror is refreshed.
+3. The committed revision advances by one, and any sticky Host mirror and line span are refreshed (retained Host updates and refits refresh them the same way, and unmount clears them).
 4. The lifecycle hooks of the commit run outside rendering: mounted for the instances that appeared in this commit, updated for the instances that took part in it, and unmounted for the instances that were disposed. Each runs with `etaf-current-runtime` bound to the Runtime and with rendering off, so a hook may write state; hook errors are collected by the drain like other publication work.
 
 The drain then continues with the post phase, and starts over if the post phase wrote state, as [Reactivity](reactivity.md#draining) describes. A commit that fails before step 2 is rolled back as a whole, as [Atomic commits](#atomic-commits) explains.
@@ -428,6 +428,356 @@ The drain then continues with the post phase, and starts over if the post phase 
 - A retained content or geometry update pays one Ebox publication and one revision increment, independent of the size of the View.
 - The introspection functions walk the retained Host tree or the instance table; they allocate fresh lists or plists and publish nothing. Use them for diagnostics and tests, not per frame.
 - A rollback pays for the state the failed transaction touched, not for the whole View.
+
+## Runtime extensions and presentations
+
+Extensions such as page translators observe a Runtime's lifecycle, read its committed Host tree without touching internal segments or Ebox nodes, and attach keyed visual presentations that survive application updates and dispose cleanly with their Hosts.
+
+#### Hook: etaf-runtime-mount-functions
+
+Hook run with one argument, RUNTIME, after `etaf-mount` completes its first publication.
+
+**Semantics.** Each function in the hook runs with `etaf-current-runtime` bound to RUNTIME and rendering disabled, after any mount `:observer` is installed. An error in one observer is isolated and does not abort the mount or prevent later observers from running.
+
+**See also.** `etaf-runtime-after-commit-functions` and `etaf-runtime-unmount-functions`.
+
+#### Hook: etaf-runtime-after-commit-functions
+
+Hook run with one argument, RUNTIME, after a mounted Runtime commits an application change.
+
+**Semantics.** The hook runs after Ebox flushes, the committed revision advances and Component lifecycle hooks finish. Neither the initial mount nor presentation-only flushes run this hook, so an extension that updates presentations never triggers an observation loop. Individual observer errors are isolated.
+
+**See also.** `etaf-runtime-mount-functions` and `etaf-runtime-set-host-presentations`.
+
+#### Hook: etaf-runtime-after-flush-functions
+
+Hook run with one argument, RUNTIME, after a non-presentation Ebox flush on RUNTIME's buffer.
+
+**Semantics.** Runs after Ebox finishes updating the buffer for an `:overflow scroll` offset change, a viewport refit or an application commit, so extensions such as viewport-first translators observe internal container scrolling without reading Ebox directly. Presentation-only flushes do not run this hook. Individual observer errors are isolated.
+
+**See also.** `etaf-runtime-host-geometries` and `etaf-runtime-after-commit-functions`.
+
+#### Hook: etaf-runtime-unmount-functions
+
+Hook run with one argument, RUNTIME, when a mounted Runtime begins unmounting.
+
+**Semantics.** Runs before the retained tree, Host tables and buffer bindings are released, allowing extensions to cancel asynchronous work and clean up per-Runtime sessions. Individual observer errors are isolated.
+
+**See also.** `etaf-unmount` and `etaf-runtime-mount-functions`.
+
+#### Function: etaf-runtime-host-tree (&optional runtime)
+
+Return the committed application Host tree of mounted RUNTIME as read-only data.
+
+**Arguments.** RUNTIME defaults to the active or current-buffer Runtime.
+
+**Semantics.** Walks the application root only, excluding transient surfaces and attached presentation companions. Each node is a plist with `:id` (stable integer Host ID), `:ref`, `:tag`, `:text` (the application's authoritative text, never a presentation override), `:props` (data-only semantic and style properties plus `:has-on-press` when an enabled press handler exists), `:geometry` (`(:x :y :width :height)` or nil) and `:children`.
+
+**Returns.** A list of top-level Host node plists in document order.
+
+**Errors.** `error→ etaf-runtime-error` when RUNTIME is not mounted.
+
+**See also.** `etaf-runtime-host-geometries`, `etaf-runtime-trigger-host-press` and `etaf-runtime-set-host-presentations`.
+
+#### Function: etaf-runtime-host-geometries (runtime host-ids)
+
+Return live geometry and clipping visibility for integer HOST-IDS in mounted RUNTIME.
+
+**Arguments.** RUNTIME is a mounted Runtime; HOST-IDS is a proper list of integer Host IDs returned by `etaf-runtime-host-tree`. Unknown or unlaid-out IDs are omitted.
+
+**Semantics.** Queries the current laid-out box of each Host without walking the full tree. Each entry is `(HOST-ID . PLIST)` with `:x` and `:width` in pixels, `:y` and `:height` in root lines reflecting every enclosing `:overflow scroll` offset, `:clip-top` and `:clip-bottom` naming the effective vertical clip band intersected with the displaying window (or nil when unbounded), and `:visible-p` indicating whether the Host intersects that band.
+
+**Returns.** An alist of `(HOST-ID . PLIST)` entries in the order of HOST-IDS.
+
+**Errors.** `error→ etaf-runtime-error` when RUNTIME is not mounted or HOST-IDS is not a proper list.
+
+**See also.** `etaf-runtime-host-tree` and `etaf-runtime-after-flush-functions`.
+
+#### Function: etaf-runtime-trigger-host-press (runtime host-id)
+
+Dispatch an enabled `press' event on committed integer HOST-ID in RUNTIME.
+
+**Arguments.** RUNTIME is a mounted Runtime; HOST-ID is an integer `:id` from `etaf-runtime-host-tree`.
+
+**Semantics.** Dispatches `press' through RUNTIME's ordinary event batch when HOST-ID is still live and carries an enabled `:on-press' handler, allowing translated or decorated controls to invoke the original Host action without exposing closures.
+
+**Returns.** Non-nil when dispatched, or nil when HOST-ID is absent or has no enabled press handler.
+
+**Errors.** `error→ etaf-runtime-error` when RUNTIME is not mounted or HOST-ID is not an integer. `error→ etaf-render-side-effect-error` during rendering.
+
+#### Function: etaf-runtime-set-host-presentation (runtime host-id key spec)
+
+Attach or update keyed presentation SPEC owned by KEY on integer HOST-ID in RUNTIME.
+
+**Arguments.** RUNTIME is a mounted Runtime; HOST-ID is an integer from `etaf-runtime-host-tree`; KEY is a non-nil symbol naming the owner; SPEC is nil (clear KEY on HOST-ID) or a plist with `:mode` (`decorate`, `override`, `companion-inside`, `companion-after` or `companion-beside`), optional `:priority` (integer, default `50`, lower runs first), and mode-specific payload: `:spans` (list of `((START . END) . FACE)` or `((START . END) :face FACE)`) and/or `:face` for `decorate`, `:text` (string on a text Host) or `:view` (normalized View on a container Host) for `override`, or `:view` (normalized View inheriting the Host's Context and Theme) for companion modes.
+
+**Semantics.** Delegates to `etaf-runtime-set-host-presentations` for one target. Multiple owners coexist in the same Host's presentation bucket: additive `decorate` layers compose over authoritative text without replacing it, coexisting companions stack in ascending `:priority` order, and `override` layers stack by `:priority` with automatic fallback when the top owner clears.
+
+**Returns.** Non-nil when HOST-ID was live and updated, or nil when absent.
+
+**Errors.** `error→ etaf-runtime-error` on unmounted RUNTIME or invalid KEY/SPEC; `error→ etaf-render-side-effect-error` during rendering.
+
+#### Function: etaf-runtime-set-host-presentations (runtime key updates)
+
+Apply a list of `(HOST-ID . SPEC)` presentation UPDATES owned by KEY in mounted RUNTIME in one atomic flush.
+
+**Arguments.** RUNTIME is a mounted Runtime; KEY is a non-nil symbol; UPDATES is a proper list of `(HOST-ID . SPEC)` pairs validated as in `etaf-runtime-set-host-presentation`.
+
+**Semantics.** All changes apply in one Ebox batch and advance `etaf-runtime-revision` without firing `etaf-runtime-after-commit-functions`. Unknown or unmounted HOST-IDs are skipped. Updating an existing presentation of the same KEY and `:mode` patches its companion segment in place; `decorate` entries coexist with companion entries of the same or other keys and survive application text edits; container `override` parks the application's real children offscreen so reactive edits survive until cleared; companion modes keep their Host's layout slot across reconciliation and dispose automatically when the Host unmounts.
+
+**Returns.** The number of Hosts updated.
+
+**Errors.** `error→ etaf-runtime-error` on unmounted RUNTIME or invalid KEY/UPDATES/SPEC; `error→ etaf-render-side-effect-error` during rendering.
+
+#### Function: etaf-runtime-clear-presentations (runtime &optional key)
+
+Remove attached presentations in mounted RUNTIME in one Ebox flush, restoring original Hosts.
+
+**Arguments.** RUNTIME is a mounted Runtime; optional KEY restricts removal to presentations owned by that symbol, or nil removes all.
+
+**Semantics.** Disposes attached presentation segments for KEY without disturbing other coexisting owners, restores original Ebox nodes and authoritative text once no active owner remains on a Host, and advances the revision without firing `etaf-runtime-after-commit-functions`.
+
+**Returns.** The number of Hosts restored.
+
+**Errors.** `error→ etaf-runtime-error` when RUNTIME is not mounted or KEY is not a symbol; `error→ etaf-render-side-effect-error` during rendering.
+
+## Extensions, metadata, overlays and key layers
+
+Extension engines and external overlays attach to any mounted Runtime through four composable primitives: declarative Runtime metadata, named root-layer overlays, semantic Host actions and text-offset hit testing, and priority-ordered extension key layers that sit strictly below application bindings.
+
+#### Hook: etaf-runtime-meta-change-functions
+
+Abnormal hook run with `(RUNTIME META)` when a mounted Runtime's resolved metadata snapshot changes.
+
+**Semantics.** Fires after `etaf-runtime-set-meta` or when any reactive source (`etaf-ref`, `etaf-computed` or zero-argument function) inside `:meta` produces a changed snapshot. Each function runs in isolation; errors do not stop other listeners.
+
+#### Hook: etaf-runtime-focus-change-functions
+
+Abnormal hook run with `(RUNTIME PREV-HOST-ID NEXT-HOST-ID)` when logical Host focus moves in RUNTIME.
+
+**Semantics.** Fires after focus changes between committed Hosts (or enters/leaves focus, passing nil for the absent endpoint). Each listener runs in isolation so a failing extension cannot break keyboard navigation.
+
+#### Function: etaf-runtime-meta (&optional runtime)
+
+Return a detached read-only copy of mounted RUNTIME's resolved metadata plist.
+
+**Arguments.** RUNTIME defaults to the active or current-buffer Runtime.
+
+**Semantics.** Returns the latest resolved snapshot of the `:meta` plist supplied to `etaf-mount`, `etaf-app-open` or `etaf-runtime-set-meta`, commonly carrying `:app`, `:kind`, `:uri` and `:title`. Returns nil when no metadata was set.
+
+**Returns.** A detached plist, or nil.
+
+**Errors.** `error→ etaf-runtime-error` when RUNTIME is not mounted.
+
+#### Function: etaf-runtime-set-meta (runtime meta)
+
+Replace mounted RUNTIME's metadata declaration with META and return the resolved snapshot.
+
+**Arguments.** RUNTIME is a mounted Runtime. META is nil or a proper keyword plist whose values may be static data, `etaf-ref`, `etaf-computed` or zero-argument functions.
+
+**Semantics.** Disposes any previous metadata watcher scope, evaluates META inside a fresh Scope when reactive sources are present, and notifies `etaf-runtime-meta-change-functions` whenever the resolved snapshot changes.
+
+**Returns.** The detached resolved metadata plist, or nil.
+
+**Errors.** `error→ etaf-runtime-error` when RUNTIME is not mounted or META is not a valid plist; `error→ etaf-render-side-effect-error` during rendering.
+
+#### Function: etaf-runtime-focus-host (runtime host-id)
+
+Move logical keyboard focus in mounted RUNTIME to integer HOST-ID.
+
+**Arguments.** RUNTIME is a mounted Runtime; HOST-ID is an integer `:id` from `etaf-runtime-host-tree`.
+
+**Semantics.** Locates the committed Host segment and moves Ebox focus to its backing node when the Host is live, focusable and not disabled. Fires `etaf-runtime-focus-change-functions` when focus changes.
+
+**Returns.** Non-nil when focus moved to HOST-ID, or nil when HOST-ID is absent, disabled or not focusable.
+
+**Errors.** `error→ etaf-runtime-error` when RUNTIME is not mounted or HOST-ID is not an integer; `error→ etaf-render-side-effect-error` during rendering.
+
+#### Function: etaf-runtime-scroll-host-into-view (runtime host-id &optional align)
+
+Scroll enclosing `:overflow scroll`/`auto` containers and displaying windows in RUNTIME so integer HOST-ID is visible.
+
+**Arguments.** RUNTIME is a mounted Runtime; HOST-ID is an integer `:id`; optional ALIGN is `nearest` (default), `top` or `center`.
+
+**Semantics.** Walks ancestor scroll containers from innermost outward and adjusts their scroll offset (and any live window displaying RUNTIME's buffer) so HOST-ID enters view according to ALIGN.
+
+**Returns.** Non-nil when HOST-ID is live and laid out, or nil when absent.
+
+**Errors.** `error→ etaf-runtime-error` when RUNTIME is not mounted, HOST-ID is not an integer or ALIGN is invalid; `error→ etaf-render-side-effect-error` during rendering.
+
+#### Function: etaf-runtime-host-text-offset-at (runtime &optional position)
+
+Return text Host character offset and active region details at POSITION in mounted RUNTIME, or nil.
+
+**Arguments.** RUNTIME is a mounted Runtime; POSITION defaults to point in RUNTIME's buffer.
+
+**Semantics.** Resolves POSITION to the innermost committed text Host covering it and maps buffer offsets back to indices inside the Host's authoritative `:text`. When mark/region is active over the same text Host, also populates `:region-start` and `:region-end`.
+
+**Returns.** A plist `(:host-id INT :offset INT :text STR :region-start INT-OR-NIL :region-end INT-OR-NIL)`, or nil when POSITION does not lie on a text Host.
+
+**Errors.** `error→ etaf-runtime-error` when RUNTIME is not mounted.
+
+#### Function: etaf-runtime-set-overlay (runtime key view &optional origin)
+
+Mount, update or clear named root-layer overlay KEY with VIEW in mounted RUNTIME.
+
+**Arguments.** RUNTIME is a mounted Runtime; KEY is a non-nil symbol identifying the overlay owner; VIEW is a normalized View (commonly a `:layer 'root :position 'absolute` box or a fragment of such boxes) or nil to remove KEY; optional ORIGIN is a committed Host reference whose Context and Theme VIEW inherits (defaulting to the root).
+
+**Semantics.** Multiple distinct KEYs coexist independently above the application layout. Updating an existing KEY patches its overlay segment in place. Mounting or patching overlays runs inside a presentation mutation guard and never fires `etaf-runtime-after-commit-functions` or `etaf-runtime-after-flush-functions`, and overlay nodes never appear in `etaf-runtime-host-tree` or `etaf-runtime-inspect-tree`.
+
+**Returns.** Non-nil when changed, or nil when clearing an absent KEY.
+
+**Errors.** `error→ etaf-runtime-error` when RUNTIME is not mounted or KEY is not a non-nil symbol; `error→ etaf-render-side-effect-error` during rendering.
+
+#### Function: etaf-runtime-clear-overlay (runtime &optional key)
+
+Remove named root-layer overlay KEY (or all overlays when KEY is nil) from mounted RUNTIME.
+
+**Arguments.** RUNTIME is a mounted Runtime; optional KEY is a symbol naming the overlay owner, or nil for all owners.
+
+**Semantics.** Disposes the matching overlay segment(s) in one Ebox batch without firing application commit hooks.
+
+**Returns.** The number of overlays removed.
+
+**Errors.** `error→ etaf-runtime-error` when RUNTIME is not mounted or KEY is not a symbol; `error→ etaf-render-side-effect-error` during rendering.
+
+#### Function: etaf-runtime-set-key-layer (runtime key entries &optional label priority)
+
+Register or replace an extension key layer owned by KEY on mounted RUNTIME.
+
+**Arguments.** RUNTIME is a mounted Runtime; KEY is a non-nil symbol; ENTRIES is a list of `(KEY-SEQ COMMAND LABEL)` triples (or nil to remove KEY); optional LABEL names the source in key help; optional PRIORITY is an integer (default `50`, lower runs first).
+
+**Semantics.** Extension key layers resolve strictly below Host `:keys` and framework defaults (`Tab`, `ESC`, `?`, `M-g` and direction keys). Any entry attempting to bind a framework-reserved key is rejected with `etaf-renderer-error`. Active unshadowed bindings surface automatically in `etaf-help-data` under `:kind 'extension`.
+
+**Returns.** Non-nil when updated.
+
+**Errors.** `error→ etaf-runtime-error` when RUNTIME is not mounted or KEY/PRIORITY is invalid; `error→ etaf-renderer-error` when an entry is malformed or binds a reserved key; `error→ etaf-render-side-effect-error` during rendering.
+
+#### Function: etaf-runtime-clear-key-layer (runtime &optional key)
+
+Remove extension key layer KEY (or all extension key layers when KEY is nil) from mounted RUNTIME.
+
+**Arguments.** RUNTIME is a mounted Runtime; optional KEY is a symbol, or nil to clear every layer.
+
+**Semantics.** Drops the matching layer(s) immediately so subsequent key dispatches and `etaf-help-data` reflect the removal.
+
+**Returns.** The number of layers removed.
+
+**Errors.** `error→ etaf-runtime-error` when RUNTIME is not mounted or KEY is not a symbol; `error→ etaf-render-side-effect-error` during rendering.
+
+## Runtime introspection
+
+Developer tools inspect live mounted Runtimes through read-only on-demand queries plus one controlled reactive-binding write entry, without mutating caches or touching Ebox directly.
+
+#### Function: etaf-runtime-list ()
+
+Return a list of all currently mounted live ETAF Runtimes ordered by mount identity.
+
+**Semantics.** Iterates over mounted Runtimes whose backing buffers are still live and returns them in ascending mount order.
+
+**Returns.** A fresh list of live Runtime objects.
+
+**Errors.** None.
+
+**See also.** `etaf-runtime-for-buffer`, `etaf-runtime-inspect-tree`.
+
+#### Function: etaf-runtime-inspect-tree (&optional runtime)
+
+Return mounted RUNTIME's unified Component and Host tree as read-only data.
+
+**Arguments.** RUNTIME defaults to the active or current-buffer Runtime.
+
+**Semantics.** Walks the committed segment tree, excluding transient surfaces and attached presentation companions. Component nodes carry `:kind` (`component`), `:id`, `:name`, `:key`, `:source-file`, `:render-count`, `:props-summary`, `:root-host-ids` and `:children`. Host nodes carry `:kind` (`host`), `:id`, `:tag`, `:ref`, `:dom-id`, `:classes`, `:text-preview`, `:presentations`, `:geometry`, `:focusable-p`, `:focused-p`, `:disabled-p`, `:has-press-p` and `:children`.
+
+**Returns.** A list of top-level node plists in document order.
+
+**Errors.** `error→ etaf-runtime-error` when RUNTIME is not mounted.
+
+**See also.** `etaf-runtime-host-tree`, `etaf-runtime-inspect-host`, `etaf-runtime-inspect-component`.
+
+#### Function: etaf-runtime-host-id-at (runtime &optional position)
+
+Return `(INNERMOST-HOST-ID ... ROOT-HOST-ID)' at POSITION in mounted RUNTIME, or nil.
+
+**Arguments.** RUNTIME is a mounted Runtime; POSITION defaults to point in RUNTIME's buffer.
+
+**Semantics.** Resolves the painted Ebox node at POSITION back to its committed application Host lineage, stepping out of presentation companions to the owning Host.
+
+**Returns.** A list of integer Host IDs from innermost to root, or nil when no Host covers POSITION.
+
+**Errors.** `error→ etaf-runtime-error` when RUNTIME is not mounted.
+
+**See also.** `etaf-host-ref-at`, `etaf-runtime-inspect-host`.
+
+#### Function: etaf-runtime-inspect-host (runtime host-id)
+
+Return detailed read-only inspection snapshot for integer HOST-ID in mounted RUNTIME, or nil.
+
+**Arguments.** RUNTIME is a mounted Runtime; HOST-ID is an integer `:id` from `etaf-runtime-inspect-tree` or `etaf-runtime-host-id-at`.
+
+**Semantics.** Gathers box-model metrics, on-demand ECSS cascade provenance attributed to owning Components, exact per-line painted row spans, clipping visibility, sanitized props, behaviors, presentations and focus flags without mutating buffers or caches.
+
+**Returns.** A detached plist for HOST-ID, or nil when HOST-ID is absent.
+
+**Errors.** `error→ etaf-runtime-error` when RUNTIME is not mounted or HOST-ID is not an integer.
+
+**See also.** `etaf-runtime-inspect-tree`, `etaf-runtime-inspect-component`.
+
+#### Function: etaf-runtime-inspect-component (runtime instance-id)
+
+Return detailed read-only snapshot for integer Component INSTANCE-ID in mounted RUNTIME, or nil.
+
+**Arguments.** RUNTIME is a mounted Runtime; INSTANCE-ID is an integer `:id` of a `:kind component` node from `etaf-runtime-inspect-tree`.
+
+**Semantics.** Reports component name, key, source file, definition symbol, root Host IDs, render count, props, named bindings (classifying `ref`, `computed`, `resource`, `data-controller` and plain values with versions, subscriber/dependency summaries and editability), inherited Context entries and resolved local refs.
+
+**Returns.** A detached plist for INSTANCE-ID, or nil when INSTANCE-ID is absent or disposed.
+
+**Errors.** `error→ etaf-runtime-error` when RUNTIME is not mounted or INSTANCE-ID is not an integer.
+
+**See also.** `etaf-runtime-set-component-binding`, `etaf-runtime-inspect-tree`.
+
+#### Function: etaf-runtime-set-component-binding (runtime instance-id binding-name new-value)
+
+Write NEW-VALUE to writable `etaf-ref' BINDING-NAME of Component INSTANCE-ID in mounted RUNTIME.
+
+**Arguments.** RUNTIME is a mounted Runtime; INSTANCE-ID is a live integer Component instance ID; BINDING-NAME is a declared `:bindings` symbol; NEW-VALUE is the replacement value.
+
+**Semantics.** Locates the declared binding and writes NEW-VALUE through `etaf-set-value` when it holds a writable `etaf-ref`, participating in the ordinary reactive commit path. Non-ref bindings (such as `etaf-computed`) are rejected without mutating state.
+
+**Returns.** t on success.
+
+**Errors.** `error→ etaf-runtime-error` when RUNTIME is not mounted, INSTANCE-ID or BINDING-NAME is unknown, or the binding is not a writable `etaf-ref`; `error→ etaf-render-side-effect-error` during rendering.
+
+**See also.** `etaf-runtime-inspect-component`, `etaf-set-value`.
+
+#### Function: etaf-runtime-inspect-focus (runtime)
+
+Return detached focus, region and effective key-scope diagnostics for mounted RUNTIME.
+
+**Arguments.** RUNTIME is a mounted Runtime.
+
+**Semantics.** Collects the currently focused Host ID and reference, native input session state, active `etaf-direction-scheme`, ordered focus stops with tab-index and focus-group metadata, declared regions and the effective `etaf-help-data` snapshot.
+
+**Returns.** A detached plist with `:focused-host-id`, `:focused-host-ref`, `:input-active-p`, `:direction-scheme`, `:stops`, `:regions` and `:help`.
+
+**Errors.** `error→ etaf-runtime-error` when RUNTIME is not mounted.
+
+**See also.** `etaf-focused-host-ref`, `etaf-help-data`.
+
+#### Function: etaf-runtime-commit-summary (runtime)
+
+Return a lightweight summary plist of mounted RUNTIME's latest commit.
+
+**Arguments.** RUNTIME is a mounted Runtime.
+
+**Semantics.** Reads the Runtime's revision, latest instance counts (`:new-instances`, `:updated-instances`, `:retired-instances`) and latest `etaf-runtime-update-report` in constant time without walking the tree.
+
+**Returns.** A detached plist with `:rev`, `:new-instances`, `:updated-instances`, `:retired-instances` and `:update-report`.
+
+**Errors.** `error→ etaf-runtime-error` when RUNTIME is not mounted.
+
+**See also.** `etaf-runtime-update-report`, `etaf-runtime-after-commit-functions`.
 
 ## Errors and recovery
 

@@ -130,7 +130,21 @@ Pause the mounted video identified by HANDLE and present one more frame.
 
 **Errors.** The handle errors of `etaf-video-play`.
 
-**See also.** `etaf-video-pause`, `etaf-video-seek`, `etaf-video-state`.
+**See also.** `etaf-video-step-back`, `etaf-video-pause`, `etaf-video-seek`, `etaf-video-state`.
+
+#### Function: etaf-video-step-back (handle)
+
+Pause the mounted video identified by HANDLE and step backward one frame.
+
+**Arguments.** HANDLE is the registered symbol.
+
+**Semantics.** On the `mpv` engine this issues a frame-accurate backward step (`frame-back-step`); on the `ffmpeg` backend it pauses and seeks one second earlier.
+
+**Returns.** `t`.
+
+**Errors.** The handle errors of `etaf-video-play`.
+
+**See also.** `etaf-video-step`, `etaf-video-seek`, `etaf-video-engine`.
 
 #### Function: etaf-video-seek (handle seconds)
 
@@ -166,7 +180,7 @@ Return the mounted video identified by HANDLE as a detached plist.
 
 **Arguments.** HANDLE is the registered symbol.
 
-**Semantics.** The plist describes the session at the call: `:handle`, `:mode` (the effective render mode after the `image` fallback), `:source` (the file name, the URL string, or the symbol `demo`), `:playing`, `:position` (seconds; the seek base plus the frames received at the source rate, clamped to the duration), `:duration`, `:speed`, `:format` (the producer's frame format: `gray`, `rgb24` or `mjpeg`), `:width` and `:height` (producer pixels), `:display-fps`, `:source-fps`, `:received`, `:presented`, `:dropped`, `:audio` and `:ended`. The result does not address the session after it returns, so it is safe to store and compare. `:audio` reports the session's audio setting; a source without an audio stream stays silent even when it is true.
+**Semantics.** The plist describes the session at the call: `:handle`, `:mode` (the effective render mode after the `image` fallback), `:source` (the file name, the URL string, or the symbol `demo`), `:playing`, `:position` (seconds; the seek base plus elapsed time while frames arrive, clamped to the duration), `:duration`, `:speed`, `:format` (the producer's frame format: `gray`, `rgb24`, `bgra` or `mjpeg`), `:width` and `:height` (producer pixels), `:display-fps`, `:source-fps`, `:received`, `:presented`, `:dropped`, `:audio`, `:buffering`, `:error` and `:ended`. The result does not address the session after it returns, so it is safe to store and compare. `:audio` reports the session's audio setting; a source without an audio stream stays silent even when it is true. `:buffering` is non-nil while waiting for the first frame or when a live stream stalls; `:error` holds the decoder diagnostic when the producer exits non-zero.
 
 **Returns.** The detached state plist.
 
@@ -283,6 +297,74 @@ Rendering backend that puts a graphical video frame on screen.
 <!-- index: etaf-video-ffmpeg-program; etaf-video-ffplay-program; etaf-video-ffprobe-program; optional dependency -->
 
 Three variables name the external programs video playback uses. Each accepts an executable name resolved on the search path or an absolute file name, so a project can pin a version or point at a wrapper script. [Installation and Loading](installation-and-loading.md) lists the degradation each missing program causes.
+
+#### Variable: etaf-video-engine
+
+Playback engine used by `etaf-video`: `auto` (default), `mpv` or `ffmpeg`.
+
+**Semantics.** `auto` uses the optional cross-platform `libmpv` dynamic module (`native/etaf-video-mpv`) on graphical frames in `image` mode when available, giving frame-accurate A/V sync, seamless live volume/speed/resize, multi-track audio, native `libass` / dual subtitles, hardware decoding and video filters; otherwise it falls back to the `ffmpeg` subprocess pipeline. `mpv` requires `libmpv`; `ffmpeg` forces the subprocess pipeline. Build the optional module with `sh native/build-video-mpv-module.sh`; compilation needs only `emacs-module.h` and loads `libmpv` dynamically at runtime.
+
+**See also.** `etaf-video-mpv-available-p`, `etaf-video-mpv-library`, `etaf-video-set-property`.
+
+#### Variable: etaf-video-mpv-library
+
+Optional explicit path to the `libmpv` shared library (`dylib`, `so` or `dll`).
+
+**Semantics.** Defaults to nil, searching the platform's standard library locations (`libmpv.2.dylib` on macOS, `libmpv.so.2` on Linux, `libmpv-2.dll` on Windows) and `ETAF_VIDEO_MPV_LIBRARY`.
+
+**See also.** `etaf-video-mpv-available-p`, `etaf-video-engine`.
+
+#### Function: etaf-video-mpv-available-p ()
+
+Return non-nil when the cross-platform `libmpv` native backend is available.
+
+**Semantics.** Loads `native/etaf-video-mpv` once and verifies that `libmpv` can be dynamically opened. Returns nil without signaling when either is absent.
+
+**Returns.** `t` when ready, nil otherwise.
+
+**See also.** `etaf-video-engine`, `etaf-video-mpv-library`.
+
+#### Function: etaf-video-set-property (handle name value)
+
+Set playback engine property NAME to VALUE on mounted video HANDLE.
+
+**Arguments.** HANDLE is the registered symbol, NAME is an engine property name string such as `"aid"`, `"sid"`, `"secondary-sid"`, `"video-rotate"`, `"brightness"`, `"audio-delay"` or `"ab-loop-a"`, and VALUE is a boolean, integer, float or string.
+
+**Semantics.** On the `mpv` engine this updates the running playback property in place without restarting decoding. On engines that do not expose properties it returns nil.
+
+**Returns.** `t` on success, an `(ERROR-CODE . MESSAGE)` cons on rejection, or nil when unsupported.
+
+**Errors.** The handle errors of `etaf-video-play`.
+
+**See also.** `etaf-video-get-property`, `etaf-video-command`, `etaf-video-engine`.
+
+#### Function: etaf-video-get-property (handle name &optional type)
+
+Read playback engine property NAME from mounted video HANDLE.
+
+**Arguments.** HANDLE is the registered symbol, NAME is an engine property name string, and optional TYPE is `node` (default, returning native Lisp values including lists and alists for structured properties like `"track-list"` and `"chapter-list"`), `string`, `bool`, `int` or `float`.
+
+**Semantics.** Returns the current property value on the `mpv` engine, or nil when unavailable or unsupported.
+
+**Returns.** The property value or nil.
+
+**Errors.** The handle errors of `etaf-video-play`.
+
+**See also.** `etaf-video-set-property`, `etaf-video-command`.
+
+#### Function: etaf-video-command (handle &rest args)
+
+Send engine command ARGS to mounted video HANDLE.
+
+**Arguments.** HANDLE is the registered symbol; ARGS are command arguments coerced to strings (such as `"sub-add"`, `"screenshot-to-file"`, `"frame-back-step"`).
+
+**Semantics.** Dispatches the command on the `mpv` engine and returns `0` on success or `(ERROR-CODE . MESSAGE)` on failure; returns nil on engines without commands.
+
+**Returns.** `0`, an error cons, or nil.
+
+**Errors.** The handle errors of `etaf-video-play`.
+
+**See also.** `etaf-video-set-property`, `etaf-video-get-property`.
 
 #### Variable: etaf-video-ffmpeg-program
 

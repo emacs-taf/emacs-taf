@@ -19,6 +19,7 @@
 
 #include <emacs-module.h>
 
+#include <errno.h>
 #include <fcntl.h>
 #include <stdint.h>
 #include <unistd.h>
@@ -27,9 +28,9 @@ int plugin_is_GPL_compatible;
 
 static emacs_value Qnil;
 
-/* Open FILE and return its descriptor, or nil on failure.  Opening a fifo
-   blocks until the producer opens the write end, which happens right after
-   ffmpeg starts.  */
+/* Open FILE non-blocking and return its descriptor, or nil on failure.
+   O_NONBLOCK prevents the Emacs main loop from blocking while a network
+   decoder is still connecting to its stream.  */
 
 static emacs_value
 canvas_open (emacs_env *env, ptrdiff_t nargs, emacs_value *args, void *data)
@@ -38,12 +39,13 @@ canvas_open (emacs_env *env, ptrdiff_t nargs, emacs_value *args, void *data)
   ptrdiff_t size = sizeof path;
   if (!env->copy_string_contents (env, args[0], path, &size))
     return Qnil;
-  int fd = open (path, O_RDONLY);
+  int fd = open (path, O_RDONLY | O_NONBLOCK);
   return fd < 0 ? Qnil : env->make_integer (env, fd);
 }
 
-/* Read up to N bytes from FD into CANVAS's pixel buffer and return the
-   number of bytes read.  Zero means the stream ended.  */
+/* Read up to N bytes from FD into CANVAS's pixel buffer without blocking
+   the Emacs main thread.  Returns bytes read (0 when no complete frame is
+   available yet or at EOF).  */
 
 static emacs_value
 canvas_read (emacs_env *env, ptrdiff_t nargs, emacs_value *args, void *data)
@@ -57,9 +59,18 @@ canvas_read (emacs_env *env, ptrdiff_t nargs, emacs_value *args, void *data)
   while (got < want)
     {
       ssize_t n = read (fd, (char *) pixels + got, (size_t) (want - got));
-      if (n <= 0)
+      if (n > 0)
+	{
+	  got += n;
+	  continue;
+	}
+      if (n == 0)
 	break;
-      got += n;
+      if (errno == EINTR)
+	continue;
+      if (errno == EAGAIN || errno == EWOULDBLOCK)
+	break;
+      return env->make_integer (env, -1);
     }
   return env->make_integer (env, got);
 }

@@ -1188,7 +1188,7 @@ Grid track wrappers are traversed after their structural validator succeeds."
 (cl-defstruct (ebox-style-scope (:constructor ebox-style--make-scope)
                                 (:copier nil))
   "Shared author scope: a stable membership identity and one rule snapshot."
-  identity stylesheet)
+  identity stylesheet rules origin)
 
 (cl-defun ebox-style-scope-create (rules &key (origin 'author))
   "Create an immutable shared scope from ordered RULES at ORIGIN.
@@ -1198,7 +1198,9 @@ membership and `:ecss-scope-roots' for roots.  Each root mounts independently;
 only members within that root can receive rules.  No roots means no rules."
   (ebox-style--make-scope :identity (make-symbol "ebox-style-scope")
                           :stylesheet (ebox-style--shared-stylesheet
-                                       rules origin)))
+                                       rules origin)
+                          :rules rules
+                          :origin origin))
 
 (defvar ebox-style--stylesheets (make-hash-table :test 'equal)
   "Compiled stylesheets keyed by (ORIGIN . RULES).")
@@ -1532,6 +1534,17 @@ mutates no input or stylesheet and evaluates no declaration values."
             (cons (ecss-selector-parse (car rule))
                   (ebox-style-compile-declarations (cdr rule) t)))
           (ecss-validate-rules rules)))
+
+(defconst ebox-style--id-to-name-table
+  (let ((table (make-hash-table :test 'eq)))
+    (dolist (property ebox-style--property-definitions table)
+      (unless (plist-get property :shorthand)
+        (puthash (plist-get property :id) (plist-get property :name) table))))
+  "Map from canonical ECSS property schema ids to public Ebox keywords.")
+
+(defun ebox-style--public-property-name (id)
+  "Return canonical public Ebox keyword for schema ID, or ID when custom."
+  (or (gethash id ebox-style--id-to-name-table) id))
 
 (defun ebox-style--public-computed-values (style)
   "Return STYLE values using canonical public Ebox property names."

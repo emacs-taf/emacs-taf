@@ -216,6 +216,16 @@ Whether a mounted canvas hides its cursor after a pointer press.
 
 **See also.** [Text input](text-input.md), [Focus](focus.md).
 
+#### Variable: ebox-allow-text-selection
+
+Whether a mounted canvas allows native Emacs mark and pointer text selection.
+
+**Semantics.** Nil by default so canvas applications keep pointer presses and `set-mark-command` from painting a region over layout cells. Setting it buffer-locally to non-nil (or passing `:text-selection t` to `etaf-mount`) lets reading and browser buffers use native Emacs mark, Shift-movement, pointer drag selection and `kill-ring-save` while interactive controls keep their own press and drag gestures.
+
+**Returns.** Not applicable; the variable is a boolean.
+
+**See also.** `etaf-mount`, `etaf-cursor-follows-input-modality`.
+
 #### Variable: ebox-input-edit-commands
 
 Commands that edit the session value when a session `:keymap` binds them.

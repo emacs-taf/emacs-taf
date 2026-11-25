@@ -26,7 +26,33 @@
                 :on-cell-press (lambda (row column) (select-cell row column)))
 ```
 
-**参见。** `etaf-text-grid`、[图片](images.md)。
+**参见。** `etaf-svg-stage`、`etaf-text-grid`、[图片](images.md)。
+
+## SVG 精灵舞台
+
+<!-- index: etaf-svg-stage; 脏瓦片; 精灵合成; viewBox -->
+
+#### Component: etaf-svg-stage (&key rows columns cell-width cell-height tile-width tile-height cell-svg sprites cell-text cell-background cell-color cell-label cell-ref on-cell-press on-cell-focus graphic)
+
+在 `etaf-tile-grid` 上渲染带脏瓦片精灵合成的固定网格 SVG 舞台。
+
+**参数。** ROWS、COLUMNS、CELL-WIDTH（默认 2）与 CELL-HEIGHT（默认 1）为正整数。TILE-WIDTH 与 TILE-HEIGHT 可选，指定单瓦片像素尺寸（默认每列 8px、每行 16px）。CELL-SVG 是必需回调 `(row column tile-width tile-height)`，返回舞台坐标系下的 SVG 内部标记。SPRITES 可以是 nil、精灵 plist 列表、响应式源或零参函数，每个精灵含数值 `:x`、`:y`、正数 `:width`、`:height` 与字符串或零参函数 `:markup`。GRAPHIC 取 `auto`（默认）、`t` 或 `nil`。其余回调透传给 `etaf-tile-grid`，CELL-TEXT 与颜色用于文本终端回退。
+
+**语义。** 每个瓦片通过各自的 SVG `viewBox` `(col*tw row*th tw th)` 裁剪共享舞台坐标；精灵移动时只有包围盒重叠的瓦片重建图像描述符，未受影响的瓦片直接命中实例级有界缓存。当 GRAPHIC 解析为 nil 时自动回退到 `:cell-text` 与格子颜色，保留全部布局与网格键盘导航。
+
+**返回。** 一个 View。
+
+**错误。** 网格或瓦片尺寸非正、CELL-SVG 不是函数、GRAPHIC 非法或精灵字段不合法时报 `error→ etaf-component-call-error`。
+
+**示例。**
+
+```elisp
+(etaf-svg-stage :rows 4 :columns 4 :tile-width 32 :tile-height 32
+                :cell-svg (lambda (r c w h) (etaf-ui-svg-rect (* c w) (* r h) w h :fill "#223344"))
+                :sprites sprites-ref)
+```
+
+**参见。** `etaf-tile-grid`、`etaf-ui-svg-image`。
 
 ## 文本网格
 

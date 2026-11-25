@@ -130,7 +130,21 @@
 
 **错误。** 与 `etaf-video-play` 相同的 handle 错误。
 
-**参见。** `etaf-video-pause`、`etaf-video-seek`、`etaf-video-state`。
+**参见。** `etaf-video-step-back`、`etaf-video-pause`、`etaf-video-seek`、`etaf-video-state`。
+
+#### Function: etaf-video-step-back (handle)
+
+暂停 HANDLE 标识的已挂载视频并单帧后退。
+
+**参数。** HANDLE 是注册的符号。
+
+**语义。** 在 `mpv` 引擎上执行真单帧回退（`frame-back-step`）；在 `ffmpeg` 后端上暂停并回退 1 秒。
+
+**返回。** `t`。
+
+**错误。** 与 `etaf-video-play` 相同的 handle 错误。
+
+**参见。** `etaf-video-step`、`etaf-video-seek`、`etaf-video-engine`。
 
 #### Function: etaf-video-seek (handle seconds)
 
@@ -166,7 +180,7 @@
 
 **参数。** HANDLE 是注册的符号。
 
-**语义。** plist 描述调用时的会话：`:handle`、`:mode`（`image` 退回后的有效渲染模式）、`:source`（文件名、URL 字符串或符号 `demo`）、`:playing`、`:position`（秒；seek 基准加按源帧率收到的帧数，截断到时长）、`:duration`、`:speed`、`:format`（生产者的帧格式：`gray`、`rgb24` 或 `mjpeg`）、`:width` 与 `:height`（生产者像素）、`:display-fps`、`:source-fps`、`:received`、`:presented`、`:dropped`、`:audio` 与 `:ended`。返回后结果不再指向会话，可以安全保存与比较。`:audio` 报告会话的音频设置；没有音轨的源即使它为真也保持静音。
+**语义。** plist 描述调用时的会话：`:handle`、`:mode`（`image` 退回后的有效渲染模式）、`:source`（文件名、URL 字符串或符号 `demo`）、`:playing`、`:position`（秒；seek 基准加帧流推进的耗时，截断到时长）、`:duration`、`:speed`、`:format`（生产者的帧格式：`gray`、`rgb24`、`bgra` 或 `mjpeg`）、`:width` 与 `:height`（生产者像素）、`:display-fps`、`:source-fps`、`:received`、`:presented`、`:dropped`、`:audio`、`:buffering`、`:error` 与 `:ended`。返回后结果不再指向会话，可以安全保存与比较。`:audio` 报告会话的音频设置；没有音轨的源即使它为真也保持静音。等待首帧或网络流卡顿时 `:buffering` 为真；生产者非零退出时 `:error` 保存解码器诊断信息。
 
 **返回。** detached 状态 plist。
 
@@ -283,6 +297,74 @@
 <!-- index: etaf-video-ffmpeg-program; etaf-video-ffplay-program; etaf-video-ffprobe-program; 可选依赖 -->
 
 三个变量命名视频播放使用的外部程序。每个都接受在搜索路径上解析的可执行名或绝对路径，所以项目可以钉住版本或指向包装脚本。[安装与加载](installation-and-loading.md) 列出每个程序缺失时造成的降级。
+
+#### Variable: etaf-video-engine
+
+`etaf-video` 使用的播放引擎：`auto`（默认）、`mpv` 或 `ffmpeg`。
+
+**语义。** `auto` 在图形帧的 `image` 模式下优先启用跨平台 `libmpv` 动态模块（`native/etaf-video-mpv`），提供真音画同步、无缝调节音量/倍速/缩放、多音轨、原生 `libass` / 双语字幕、硬件解码与画面滤镜；否则自动回退到 `ffmpeg` 子进程管线。`mpv` 强制使用 `libmpv`；`ffmpeg` 强制使用子进程管线。在包根目录执行 `sh native/build-video-mpv-module.sh` 即可构建，编译期仅依赖 `emacs-module.h`，运行期动态加载 `libmpv`。
+
+**参见。** `etaf-video-mpv-available-p`、`etaf-video-mpv-library`、`etaf-video-set-property`。
+
+#### Variable: etaf-video-mpv-library
+
+可选的 `libmpv` 共享库显式路径（`dylib`、`so` 或 `dll`）。
+
+**语义。** 默认为 nil，自动按平台搜索标准共享库路径（macOS `libmpv.2.dylib`、Linux `libmpv.so.2`、Windows `libmpv-2.dll`）及环境变量 `ETAF_VIDEO_MPV_LIBRARY`。
+
+**参见。** `etaf-video-mpv-available-p`、`etaf-video-engine`。
+
+#### Function: etaf-video-mpv-available-p ()
+
+当跨平台 `libmpv` 原生后端就绪时返回非 nil。
+
+**语义。** 按需加载一次 `native/etaf-video-mpv` 并确认可动态打开 `libmpv`；任一缺失时静默返回 nil。
+
+**返回。** 就绪时为 `t`，否则为 nil。
+
+**参见。** `etaf-video-engine`、`etaf-video-mpv-library`。
+
+#### Function: etaf-video-set-property (handle name value)
+
+设置已挂载视频 HANDLE 的播放引擎属性 NAME 为 VALUE。
+
+**参数。** HANDLE 是注册的符号，NAME 是引擎属性名字符串（如 `"aid"`、`"sid"`、`"secondary-sid"`、`"video-rotate"`、`"brightness"`、`"audio-delay"`、`"ab-loop-a"`），VALUE 为布尔值、整数、浮点数或字符串。
+
+**语义。** 在 `mpv` 引擎上就地更新运行中的属性而不重启解码；在不支持属性的引擎上返回 nil。
+
+**返回。** 成功返回 `t`，被拒绝返回 `(ERROR-CODE . MESSAGE)`，不支持时返回 nil。
+
+**错误。** 与 `etaf-video-play` 相同的 handle 错误。
+
+**参见。** `etaf-video-get-property`、`etaf-video-command`、`etaf-video-engine`。
+
+#### Function: etaf-video-get-property (handle name &optional type)
+
+读取已挂载视频 HANDLE 的播放引擎属性 NAME。
+
+**参数。** HANDLE 是注册的符号，NAME 是属性名字符串，可选 TYPE 为 `node`（默认，直接返回原生 Lisp 值，包括 `"track-list"` 与 `"chapter-list"` 的列表/alist）、`string`、`bool`、`int` 或 `float`。
+
+**语义。** 在 `mpv` 引擎上返回当前属性值，不可用或不支持时返回 nil。
+
+**返回。** 属性值或 nil。
+
+**错误。** 与 `etaf-video-play` 相同的 handle 错误。
+
+**参见。** `etaf-video-set-property`、`etaf-video-command`。
+
+#### Function: etaf-video-command (handle &rest args)
+
+向已挂载视频 HANDLE 的播放引擎发送命令 ARGS。
+
+**参数。** HANDLE 是注册的符号，ARGS 为转为字符串下发的命令参数（如 `"sub-add"`、`"screenshot-to-file"`、`"frame-back-step"`）。
+
+**语义。** 在 `mpv` 引擎上执行命令，成功返回 `0`，失败返回 `(ERROR-CODE . MESSAGE)`；在不支持命令的引擎上返回 nil。
+
+**返回。** `0`、错误 cons 或 nil。
+
+**错误。** 与 `etaf-video-play` 相同的 handle 错误。
+
+**参见。** `etaf-video-set-property`、`etaf-video-get-property`。
 
 #### Variable: etaf-video-ffmpeg-program
 

@@ -14,7 +14,7 @@
 
 ## 打开与关闭
 
-#### Function: etaf-app-open (name view &key state on-fit on-close background foreground (cursor 'inherit) mode-line (display t) mount-options)
+#### Function: etaf-app-open (name view &key state on-fit on-close background foreground (cursor 'inherit) mode-line (display t) mount-options meta)
 
 把 VIEW 作为应用缓冲区 NAME 打开，并返回该缓冲区。
 
@@ -30,6 +30,7 @@
 - MODE-LINE 为 nil（默认）时隐藏 mode line，为 t 时保留，否则是一个 `mode-line-format` 值。
 - DISPLAY 为 t（默认）时在选中窗口里显示缓冲区，是函数时由它接收并显示缓冲区，为 nil 时不显示。
 - MOUNT-OPTIONS 是 `etaf-mount` 的 OPTIONS plist，或一个以显示窗口为参数（缓冲区未显示时为 nil）返回它的函数。函数在缓冲区里、ON-FIT 之后运行，所以固定的 `:viewport-height` 这类选项可以取自适配后的状态。
+- META 是可选的 Runtime 元数据 plist（如 `:app`、`:kind`、`:uri`、`:title`，值可以是静态数据、ref、computed 或零参函数）；当 MOUNT-OPTIONS 未显式指定 `:meta` 时自动并入挂载选项。
 
 **语义。** 各步骤按以下顺序运行。
 

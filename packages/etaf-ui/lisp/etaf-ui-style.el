@@ -210,13 +210,15 @@ unchanged, which keeps a Theme that uses a named color usable."
 (defconst etaf-ui--theme-roles
   '(:bg :fg :panel :track :border :muted :dim :accent :accent-fg :accent-soft
         :success :success-bg :success-border :warning :warning-bg :warning-border
-        :danger :danger-bg :danger-border :info :info-bg :info-border)
+        :danger :danger-bg :danger-border :info :info-bg :info-border
+        :important :important-bg :important-border)
   "Palette roles `etaf-ui-theme-tokens' accepts.")
 
 (defconst etaf-ui--theme-status-colors
   '((:success "#1A7F37" "#3FB950")
     (:warning "#9A6700" "#D29922")
-    (:danger "#D1242F" "#F85149"))
+    (:danger "#D1242F" "#F85149")
+    (:important "#8250DF" "#A371F7"))
   "Status colors for light and dark backgrounds when a palette omits them.")
 
 (defun etaf-ui--theme-palette-roles (palette)
@@ -253,7 +255,7 @@ role is supplied too."
     (dolist (status etaf-ui--theme-status-colors)
       (funcall default (car status) (if dark (nth 2 status) (nth 1 status))))
     (funcall default :info (funcall get :accent))
-    (dolist (status '(:success :warning :danger :info))
+    (dolist (status '(:success :warning :danger :info :important))
       (let ((color (funcall get status))
             (name (substring (symbol-name status) 1)))
         (funcall default (intern (format ":%s-bg" name))
@@ -271,12 +273,13 @@ when omitted: `:panel' (raised surfaces, default `:bg'), `:track'
 `:muted' (secondary text), `:dim' (disabled text, default `:muted'),
 `:accent' (default `:fg'), `:accent-fg' (text on the accent, default
 white), `:accent-soft' (selection and tonal fills), and `:success',
-`:warning', `:danger' and `:info' (default `:accent'), each with a `-bg'
-and `-border' variant.  The result maps these roles onto every color token
-the catalog components read, so an application provides one coherent
-palette instead of listing each token.  An application that wants a
-different value for one token puts that token before the result when it
-provides the Theme; the first value of a key wins."
+`:warning', `:danger', `:info' and `:important' (default status hues),
+each with a `-bg' and `-border' variant.  The result maps these roles
+onto every color token the catalog components read, so an application
+provides one coherent palette instead of listing each token.  An
+application that wants a different value for one token puts that token
+before the result when it provides the Theme; the first value of a key
+wins."
   (let* ((roles (etaf-ui--theme-palette-roles palette))
          (role (lambda (name) (plist-get roles name)))
          (bg (funcall role :bg)) (fg (funcall role :fg))
@@ -303,6 +306,9 @@ provides the Theme; the first value of a key wins."
           :ui-info-fg (funcall role :info)
           :ui-info-bg (funcall role :info-bg)
           :ui-info-border (funcall role :info-border)
+          :ui-important-fg (funcall role :important)
+          :ui-important-bg (funcall role :important-bg)
+          :ui-important-border (funcall role :important-border)
           :ui-panel-fg fg :ui-panel-bg panel :ui-panel-border border
           :ui-divider-bg border
           :ui-progress-track track :ui-range-track track :ui-range-fill accent
@@ -347,16 +353,18 @@ controls, so a filled label keeps its contrast in a light or a dark
 palette; the historical name is kept for its callers."
   (etaf-ui--state-hover-step color 0.12))
 
-(defun etaf-ui--style-border (value)
-  "Return canonical border VALUE from a semantic ETAF Theme value."
-  (cond
-   ((etaf-theme-token-p value)
-    (etaf-theme-token (nth 1 value) (nth 2 value)
-                      #'etaf-ui--style-border))
-   ((and (stringp value)
-         (string-match-p "\\`#[[:xdigit:]]+\\'" value))
-    (list '(px 1) 'solid value))
-   (t value)))
+(defun etaf-ui--style-border (value &optional width)
+  "Return canonical border VALUE from a semantic ETAF Theme value.
+Optional WIDTH is the border thickness in pixels (default 1)."
+  (let ((px (or width 1)))
+    (cond
+     ((etaf-theme-token-p value)
+      (etaf-theme-token (nth 1 value) (nth 2 value)
+                        (lambda (color) (etaf-ui--style-border color px))))
+     ((and (stringp value)
+           (string-match-p "\\`#[[:xdigit:]]+\\'" value))
+      (list (list 'px px) 'solid value))
+     (t value))))
 
 (provide 'etaf-ui-style)
 ;;; etaf-ui-style.el ends here

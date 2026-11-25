@@ -2261,11 +2261,17 @@ its bottom at the last line, as far as the content allows."
 The pixels are measured, not counted in lines: a wrapped or styled row is
 taller than one line, and the last row of a canvas often ends in padding
 cells, so neither line counts nor `pos-visible-in-window-p' answers whether
-the picture is complete."
+the picture is complete.  Y-LIMIT includes the window's header-line and
+tab-line heights because `window-text-pixel-size' compares against
+window-top Y coordinates."
   (when (window-live-p window)
-    (let ((body (window-body-height window t)))
+    (let* ((body (window-body-height window t))
+           (limit (+ body
+                     (window-header-line-height window)
+                     (window-tab-line-height window)
+                     1)))
       (<= (cdr (window-text-pixel-size window (point-min) (point-max)
-                                       nil (1+ body)))
+                                       nil limit))
           body))))
 
 (defun ebox--scroll-window (lines)
@@ -2394,6 +2400,13 @@ next gesture immediately, so consecutive left and right swipes each fire."
 
 ;;;; Buffer mode
 
+(defvar ebox-allow-text-selection nil
+  "Whether a mounted canvas allows native Emacs mark and pointer selection.
+Nil by default so canvas applications keep presses from painting regions; set
+it buffer-locally to non-nil in reading or browser buffers where the user
+selects and copies painted text.  Interactive controls keep their own press
+and drag gestures.")
+
 (defvar ebox-buffer-mode-map
   (let ((map (make-sparse-keymap)))
     ;; A mounted canvas is application output: unbound printing keys must
@@ -2432,10 +2445,13 @@ next gesture immediately, so consecutive left and right swipes each fire."
     (dolist (key '("<end>" "M->"))
       (define-key map (kbd key) (lambda () (interactive) (ebox-focus-edge t))))
     (define-key map [mouse-movement] #'ebox--hover-event)
-    ;; Painted cells are not a text selection: a press or drag only moves
-    ;; point, so dragging over the canvas never paints a region.
+    ;; Painted cells are not a text selection unless `ebox-allow-text-selection'
+    ;; is non-nil: otherwise a press or drag only moves point without a region.
     (dolist (event '(down-mouse-1 drag-mouse-1))
-      (define-key map (vector event) #'mouse-set-point))
+      (define-key map (vector event)
+                  `(menu-item "" mouse-set-point
+                              :filter ,(lambda (cmd)
+                                         (unless ebox-allow-text-selection cmd)))))
     map)
   "Keymap of mounted Ebox buffers: scrolling, focus navigation and activation.
 Arrows and C-n/C-p/C-b/C-f move focus with `ebox-focus-direction', scrolling
@@ -2443,9 +2459,12 @@ when no stop lies above or below; Home/End and M-</M-> reach the group's or
 scope's first and last stop.")
 
 (defun ebox--refuse-mark ()
-  "Deactivate a mark activated over a mounted canvas.
-The canvas has no text selection; an input session keeps its own region."
-  (deactivate-mark))
+  "Deactivate a mark activated over a mounted canvas unless allowed.
+The canvas refuses text selection by default while input sessions keep their
+own region; setting `ebox-allow-text-selection' non-nil opts a buffer into
+native Emacs mark and region selection."
+  (unless ebox-allow-text-selection
+    (deactivate-mark)))
 
 (defconst ebox--scroll-overridden-modes '(pixel-scroll-precision-mode pixel-scroll-mode)
   "Minor modes whose wheel bindings Ebox buffers override locally.")

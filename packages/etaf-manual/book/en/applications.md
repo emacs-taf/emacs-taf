@@ -14,7 +14,7 @@ Opening is one transaction: the buffer is prepared as a canvas, displayed, fitte
 
 ## Opening and closing
 
-#### Function: etaf-app-open (name view &key state on-fit on-close background foreground (cursor 'inherit) mode-line (display t) mount-options)
+#### Function: etaf-app-open (name view &key state on-fit on-close background foreground (cursor 'inherit) mode-line (display t) mount-options meta)
 
 Open VIEW as the application buffer NAME and return the buffer.
 
@@ -30,6 +30,7 @@ Open VIEW as the application buffer NAME and return the buffer.
 - MODE-LINE is nil (the default) to hide the mode line, t to keep it, or a `mode-line-format` value.
 - DISPLAY is t (the default) to show the buffer in the selected window, a function that receives the buffer and displays it, or nil to leave it undisplayed.
 - MOUNT-OPTIONS is the OPTIONS plist of `etaf-mount`, or a function of the display window (nil when the buffer is not displayed) that returns it. A function runs in the buffer after ON-FIT, so options such as a fixed `:viewport-height` can come from the fitted state.
+- META is an optional Runtime metadata plist (`:app`, `:kind`, `:uri`, `:title`, whose values may be static data, refs, computeds or zero-argument functions) merged into MOUNT-OPTIONS as `:meta` when MOUNT-OPTIONS does not already supply one.
 
 **Semantics.** The steps run in this order.
 

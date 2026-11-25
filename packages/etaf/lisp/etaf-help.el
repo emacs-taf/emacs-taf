@@ -147,7 +147,13 @@ The returned data is a defensive copy and contains no business callbacks."
                         (append (plist-get group :entries) local))
                 (setq groups (append groups
                                      (list (list :title "应用操作" :source title
-                                                 :kind 'application :entries local))))))))
+                                                 :kind 'application :entries local)))))))
+          ;; Registered extension key layers whose bindings are not shadowed.
+          (when-let* ((ext-entries (etaf--keys-layer-help-entries runtime seen)))
+            (setq groups
+                  (append groups
+                          (list (list :title "扩展操作" :source "Extensions"
+                                      :kind 'extension :entries ext-entries))))))
         (setq groups
               (append
                groups

@@ -409,6 +409,31 @@ line lies under an unrelated overlay; focus reveals it."
       (set-window-configuration config)
       (kill-buffer buffer))))
 
+(ert-deftest ebox-allow-text-selection-enables-native-region-on-canvas ()
+  (let ((buffer (get-buffer-create " *ebox-allow-region*"))
+        (config (current-window-configuration))
+        (transient-mark-mode t))
+    (unwind-protect
+        (progn
+          (set-window-buffer (selected-window) buffer)
+          (set-buffer buffer)
+          (ebox-mount buffer '(column (text "alpha beta") (text "gamma")))
+          ;; Default keeps region inactive and overrides down-mouse-1.
+          (should (eq (key-binding [down-mouse-1]) #'mouse-set-point))
+          (execute-kbd-macro (kbd "C-SPC"))
+          (should-not (region-active-p))
+          ;; Opting in preserves native mark and releases down-mouse-1.
+          (setq-local ebox-allow-text-selection t)
+          (should-not (eq (key-binding [down-mouse-1]) #'mouse-set-point))
+          (goto-char (point-min))
+          (execute-kbd-macro (kbd "C-SPC"))
+          (forward-char 5)
+          (should (region-active-p))
+          (should (equal (buffer-substring-no-properties (region-beginning) (region-end))
+                         "alpha")))
+      (set-window-configuration config)
+      (kill-buffer buffer))))
+
 (ert-deftest ebox-node-at-resolves-padding-cells-to-their-box ()
   (ebox-test-with-mounted (buffer root
                            '(column :width (ch 20)

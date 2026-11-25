@@ -301,6 +301,24 @@ token 在包含它的声明被降级时解析：内联 Host 属性在 Host 提�
 
 **语义。** 组成成功三件套。
 
+#### Token: :ui-important-fg
+
+重要状态的前景。
+
+**语义。** 用于卡片与反馈表面中的重点强调与高优先级语义提示。
+
+#### Token: :ui-important-bg
+
+重要状态的背景。
+
+**语义。** 重要状态文字背后的底色。
+
+#### Token: :ui-important-border
+
+重要状态的边框。
+
+**语义。** 与 `:ui-important-fg`、`:ui-important-bg` 组成重要状态三件套。
+
 ## 跟随 Emacs 当前主题
 
 <!-- index: frame 背景模式; 主题切换 -->

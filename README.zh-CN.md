@@ -77,7 +77,7 @@ Emacs 包会自动安装，但原生 `telega-server` 不会：先安装 TDLib，
 | [etaf-desktop](https://github.com/emacs-taf/etaf-desktop) | 基于 ETAF 与 ETAF UI 的 Emacs 桌面窗口管理应用 | etaf、etaf-ui、ebox |
 | [etaf-ncm](https://github.com/emacs-taf/etaf-ncm) | 网易云音乐播放器：曲库浏览、播放控制、歌词与队列 | etaf、etaf-ui、ebox |
 | [etaf-weread](https://github.com/emacs-taf/etaf-weread) | 微信读书客户端：书架、笔记本、划线、书店搜索与统计 | etaf、etaf-ui、etaf-db、ebox |
-| [etaf-md](https://github.com/emacs-taf/etaf-md) | Markdown 阅读视图：居中版心、标题、表格、提示块、代码与媒体卡片 | etaf、etaf-ui、ebox |
+| [etaf-md](https://github.com/emacs-taf/etaf-md) | Emacs 原生 Markdown 全语法与拓展容器渲染器：居中版心、完整网格表格、35+ `:::` 拓展容器与交互组件、内置 QuickJS 零浏览器 Mermaid/MathJax 矢量渲染、双栏实时对照预览 | etaf、etaf-ui、ebox |
 | [etaf-org-preview](https://github.com/emacs-taf/etaf-org-preview) | Org 阅读视图：结构折叠、标题关键字与计划、列表、表格、代码、提示块、脚注与目录 | etaf、etaf-ui、ebox |
 | [etaf-rss](https://github.com/emacs-taf/etaf-rss) | RSS 阅读器：订阅、分组、未读与收藏、阅读栏、搜索与 OPML，可读本地存储或 Miniflux 服务器 | etaf、etaf-ui、ebox |
 | [maillist](https://github.com/emacs-taf/maillist) | 邮件列表客户端：public-inbox 主题列表、未读与星标、固定顶栏阅读、本地状态与 smtpmail 回复 | etaf、etaf-ui、etaf-db、ebox |

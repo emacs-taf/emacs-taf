@@ -186,6 +186,30 @@ Return the root line of NODE's border-box top, or nil when not laid out.
 
 **See also.** `ebox-node-geometry`.
 
+#### Function: ebox-node-box-metrics (node)
+
+Return resolved box-model metrics for laid-out NODE, or nil.
+
+**Semantics.** Reads NODE's cached layout metrics without triggering relayout or mutating caches. Horizontal values (`:x`, `:margin` left/right, `:border` left/right, `:padding` left/right, `:border-box` width, `:content-box` width, `:natural-width`) are pixels; vertical values (`:y`, `:margin` top/bottom, `:border` top/bottom, `:padding` top/bottom, `:border-box` height, `:content-box` height, `:viewport-height`, `:scroll`) are root lines.
+
+**Returns.** A detached plist with `:x`, `:y`, `:margin`, `:border`, `:padding`, `:border-box`, `:content-box`, `:viewport-height`, `:scroll`, `:layout-kind`, `:gap` and `:natural-width`, or nil when NODE is not laid out.
+
+**Errors.** `wrong-type-argument` when NODE is not an Ebox node.
+
+**See also.** `ebox-node-geometry`, `ebox-node-inspect-style`.
+
+#### Function: ebox-node-inspect-style (node)
+
+Return on-demand ECSS cascade and provenance details for styled NODE, or nil.
+
+**Semantics.** Runs `ecss-compute-style` with provenance enabled for NODE alone so normal layout pays zero provenance cost. Returns resolved public property values, specified property keywords, custom properties, non-initial winner provenance, active selector states, diagnostics and matched inline and scoped rules with per-declaration `:winner` flags.
+
+**Returns.** A detached plist with `:values`, `:specified`, `:custom-properties`, `:provenance`, `:matched-rules`, `:states` and `:diagnostics`, or nil when NODE has not been styled yet.
+
+**Errors.** `wrong-type-argument` when NODE is not an Ebox node.
+
+**See also.** `ebox-node-box-metrics`, `ebox-style-scope-create`.
+
 ## Painted spans
 
 #### Function: ebox-node-bounds (node &optional all-lines)
@@ -216,6 +240,18 @@ Return (START . END) buffer positions of NODE's first painted line.
 ```
 
 **See also.** `ebox-node-position`, `ebox-node-at`, `ebox-node-geometry`.
+
+#### Function: ebox-node-row-spans (node)
+
+Return exact painted (LINE BEG . END) buffer spans for visible rows of NODE.
+
+**Semantics.** Unlike `ebox-node-bounds`, which returns one contiguous range across rows, this returns an ordered entry per visible 0-based root line. Each `(BEG . END)` pair covers only NODE's own horizontal extent on that row (never crossing adjacent columns in Flex or Grid layouts) and intersects enclosing `:overflow` clipping ancestors.
+
+**Returns.** A list of `(LINE BEG . END)` cells in ascending line order, or nil when NODE is unmounted, hidden or clipped out of view.
+
+**Errors.** `wrong-type-argument` when NODE is not an Ebox node.
+
+**See also.** `ebox-node-bounds`, `ebox-node-geometry`.
 
 #### Function: ebox-node-position (node)
 

@@ -76,8 +76,9 @@ ETAF 的模块集最大。核心是作者模型；Runtime 是把模型接到 Ebo
 | `lisp/etaf-performance.el` | 可选的性能记录器 | `lisp/etaf-runtime.el` |
 | `lisp/etaf-video-source.el` | 视频源归一化、探测与帧过滤 | — |
 | `lisp/etaf-video-audio.el` | 播放会话的音频侧车 | `lisp/etaf-video-source.el` |
+| `lisp/etaf-video-mpv.el` | 可选的跨平台 libmpv 播放后端 | `lisp/etaf-video-source.el` |
 | `lisp/etaf-video-session.el` | 播放会话：帧生产者、侧车与定时器 | `lisp/etaf-video-source.el`、`lisp/etaf-video-audio.el` |
-| `lisp/etaf-video-component.el` | `etaf-video` Component | `lisp/etaf-video-source.el`、`lisp/etaf-video-session.el`、`lisp/etaf-video-audio.el`、`lisp/etaf-component.el`、`lisp/etaf-reactive.el`、`lisp/etaf-runtime.el` |
+| `lisp/etaf-video-component.el` | `etaf-video` Component | `lisp/etaf-video-source.el`、`lisp/etaf-video-session.el`、`lisp/etaf-video-audio.el`、`lisp/etaf-video-mpv.el`、`lisp/etaf-component.el`、`lisp/etaf-reactive.el`、`lisp/etaf-runtime.el` |
 
 每个能力模块都 require Runtime，而 Runtime 不 require 其中任何一个，这正是 Action、键位、region、视口 region 与性能记录器是可选的层、而不是核心一部分的原因。视频四个模块自成一个小栈：源、音频侧车、会话，最后是 Component。入口把它们全部加载，因此 require `etaf` 就加载整个框架。
 

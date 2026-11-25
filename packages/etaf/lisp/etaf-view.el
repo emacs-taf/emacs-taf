@@ -43,6 +43,8 @@
   "Internal definition of one ETAF Component."
   name
   props
+  binding-names
+  definition-symbol
   defaults
   render
   setup
@@ -88,7 +90,7 @@ lowering for its :src, :columns, :rows, :adapter and :inset properties.")
   "Compiler-owned DSL properties rejected by ordinary node construction.")
 
 (defconst etaf--semantic-props
-  '(:class :id :role :disabled :tab-index :ref :use
+  '(:class :id :role :disabled :tab-index :ref :use :translate
     :help-echo :pointer :hover-style :hover-content :drag-lock-modifier
     :drag-edge :hover-group :sticky :keys :help :focus-group :focus-scope
     :key-scope :region :on-direction)

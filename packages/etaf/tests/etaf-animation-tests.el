@@ -517,5 +517,229 @@
       (etaf-unmount runtime)
       (when (buffer-live-p buffer) (kill-buffer buffer)))))
 
+(ert-deftest etaf-animation-transition-delay-waits-before-moving ()
+  "A delayed transition holds its starting value during delay, then moves."
+  (should-error (etaf-transition (etaf-ref 0) :delay -0.1)
+                :type 'etaf-animation-error)
+  (let* ((completed 0)
+         (target (etaf-ref 0))
+         (shown (etaf-transition target :duration 0.15 :delay 0.12
+                                 :easing 'linear
+                                 :on-complete (lambda () (cl-incf completed)))))
+    (unwind-protect
+        (progn
+          (setf (etaf-value target) 10)
+          (should (etaf-animation-active-p shown))
+          (etaf-animation-test-sleep 0.06)
+          (should (= 0 (etaf-value shown)))
+          (etaf-animation-test-wait
+           (lambda () (not (etaf-animation-active-p shown))))
+          (should (= 10 (etaf-value shown)))
+          (should (= 1 completed)))
+      (etaf-animation-stop shown))))
+
+(ert-deftest etaf-animation-spring-physics-retarget-and-presets ()
+  "Springs settle with momentum, support presets and lists, and validate args."
+  (should-error (etaf-spring (etaf-ref 0) :preset 'unknown)
+                :type 'etaf-animation-error)
+  (should-error (etaf-spring (etaf-ref 0) :stiffness 0)
+                :type 'etaf-animation-error)
+  (should-error (etaf-spring (etaf-ref 0) :damping -1)
+                :type 'etaf-animation-error)
+  (should-error (etaf-spring (etaf-ref 0) :mass 0)
+                :type 'etaf-animation-error)
+  (should-error (etaf-spring (etaf-ref 0) :precision 0)
+                :type 'etaf-animation-error)
+  ;; Underdamped bouncy preset overshoots target before settling.
+  (let* ((completed 0)
+         (target (etaf-ref 0))
+         (shown (etaf-spring target :preset 'bouncy :precision 0.05
+                             :on-complete (lambda () (cl-incf completed))))
+         (samples nil)
+         (stop (etaf-watch shown (lambda (new _old) (push new samples)))))
+    (unwind-protect
+        (progn
+          (setf (etaf-value target) 100)
+          (should (etaf-animation-active-p shown))
+          (etaf-animation-test-wait
+           (lambda () (not (etaf-animation-active-p shown))))
+          (should (= 100 (etaf-value shown)))
+          (should (= 1 completed))
+          (should (cl-some (lambda (v) (> v 100.5)) samples)))
+      (etaf-animation-stop shown)
+      (funcall stop)))
+  ;; Length list interpolation and mid-flight finish.
+  (let* ((target (etaf-ref '(px 0)))
+         (shown (etaf-spring target :preset 'snappy :precision 0.1)))
+    (unwind-protect
+        (progn
+          (setf (etaf-value target) '(px 80))
+          (etaf-animation-test-wait
+           (lambda () (> (cadr (etaf-value shown)) 5)))
+          (should (eq 'px (car (etaf-value shown))))
+          (setf (etaf-value target) '(px 20))
+          (etaf-animation-finish shown)
+          (should (equal '(px 20) (etaf-value shown)))
+          (should-not (etaf-animation-active-p shown)))
+      (etaf-animation-stop shown)))
+  ;; Disabled animations snap immediately.
+  (let* ((etaf-animation-enabled nil)
+         (target (etaf-ref 0))
+         (shown (etaf-spring target :preset 'gentle)))
+    (setf (etaf-value target) 42)
+    (should (= 42 (etaf-value shown)))
+    (should-not (etaf-animation-active-p shown))))
+
+(ert-deftest etaf-animation-tick-reports-dt-elapsed-and-interval ()
+  "Tick subscriptions report dt and elapsed, obey interval and stop cleanly."
+  (should-error (etaf-animation-tick 'not-a-fn) :type 'wrong-type-argument)
+  (should-error (etaf-animation-tick #'ignore :interval -1)
+                :type 'etaf-animation-error)
+  (let ((calls nil)
+        (handle nil))
+    (unwind-protect
+        (progn
+          (setq handle (etaf-animation-tick
+                        (lambda (dt elapsed) (push (cons dt elapsed) calls))
+                        :interval 0.05 :name 'tick-test))
+          (should (etaf-animation-active-p handle))
+          (etaf-animation-test-wait (lambda () (>= (length calls) 3)))
+          (let ((ordered (nreverse (copy-sequence calls))))
+            (should (cl-every (lambda (pair) (>= (car pair) 0.045)) ordered))
+            (should (cl-every (lambda (a b) (< (cdr a) (cdr b)))
+                              ordered (cdr ordered)))
+            (should (> (etaf-value handle) 0.1)))
+          (etaf-animation-stop handle)
+          (should-not (etaf-animation-active-p handle))
+          (let ((count (length calls)))
+            (etaf-animation-test-sleep 0.1)
+            (should (= count (length calls)))))
+      (when handle (etaf-animation-stop handle)))))
+
+(ert-deftest etaf-animation-timeline-sequences-parallel-and-finish ()
+  "Timelines sequence calls, delays, runs and parallel steps, and finish cleanly."
+  (should-error (etaf-animation-timeline nil) :type 'etaf-animation-error)
+  (should-error (etaf-animation-timeline '((:bogus 1))) :type 'etaf-animation-error)
+  (should-error (etaf-animation-timeline '((:delay -1))) :type 'etaf-animation-error)
+  (should-error (etaf-animation-timeline '((:parallel nil))) :type 'etaf-animation-error)
+  (let ((log nil)
+        (run-values nil)
+        (par-a nil)
+        (par-b nil)
+        (completed 0)
+        tl)
+    (unwind-protect
+        (progn
+          (setq tl
+                (etaf-animation-timeline
+                 (list
+                  (list :call (lambda () (push 'first log)))
+                  (list :delay 0.05)
+                  (list :run (lambda (p) (push p run-values))
+                        :duration 0.08 :easing 'linear)
+                  (list :parallel
+                        (list (list :run (lambda (p) (push p par-a)) :duration 0.05)
+                              (list :delay 0.04)))
+                  (list :call (lambda () (push 'last log))))
+                 :on-complete (lambda () (cl-incf completed))))
+          (should (etaf-animation-active-p tl))
+          (etaf-animation-test-wait (lambda () (not (etaf-animation-active-p tl))))
+          (should (equal '(first last) (nreverse log)))
+          (should (= 1.0 (car run-values)))
+          (should (= 1.0 (car par-a)))
+          (should (null par-b))
+          (should (= 5 (etaf-value tl)))
+          (should (= 1 completed)))
+      (when tl (etaf-animation-stop tl))))
+  ;; Finishing mid-run executes every remaining step in order and completes.
+  (let ((events nil)
+        (completed 0)
+        tl)
+    (unwind-protect
+        (progn
+          (setq tl
+                (etaf-animation-timeline
+                 (list (list :delay 2.0)
+                       (list :call (lambda () (push 'step-a events)))
+                       (list :run (lambda (p) (push (list 'run p) events))
+                             :duration 1.0)
+                       (list :call (lambda () (push 'step-b events))))
+                 :on-complete (lambda () (cl-incf completed))))
+          (should (etaf-animation-active-p tl))
+          (etaf-animation-finish tl)
+          (should-not (etaf-animation-active-p tl))
+          (should (equal '(step-a (run 1.0) step-b) (nreverse events)))
+          (should (= 1 completed)))
+      (when tl (etaf-animation-stop tl))))
+  ;; Disabled animations resolve a non-looping timeline immediately.
+  (let ((etaf-animation-enabled nil)
+        (events nil)
+        (completed 0))
+    (let ((tl (etaf-animation-timeline
+               (list (list :call (lambda () (push 'a events)))
+                     (list :delay 5.0)
+                     (list :call (lambda () (push 'b events))))
+               :on-complete (lambda () (cl-incf completed)))))
+      (should-not (etaf-animation-active-p tl))
+      (should (equal '(a b) (nreverse events)))
+      (should (= 1 completed)))))
+
+(ert-deftest etaf-animation-quantize-and-oklab-color-space ()
+  "Quantization snaps numeric shapes and OKLab blends colors perceptually."
+  (should (= 0.375 (etaf-animation-quantize 0.37 0.125)))
+  (should (equal '(px 14.0) (etaf-animation-quantize '(px 13.7) 2)))
+  (should (equal [10.0 20.0] (etaf-animation-quantize [11 19] 10)))
+  (should-error (etaf-animation-quantize 1 0) :type 'etaf-animation-error)
+  (let ((rgb-mid (let ((etaf-animation-color-space 'rgb))
+                   (etaf-animation-interpolate "#ff0000" "#00ff00" 0.5)))
+        (oklab-mid (let ((etaf-animation-color-space 'oklab))
+                     (etaf-animation-interpolate "#ff0000" "#00ff00" 0.5))))
+    (should (color-name-to-rgb rgb-mid))
+    (should (color-name-to-rgb oklab-mid))
+    (should-not (equal rgb-mid oklab-mid)))
+  (let ((etaf-animation-color-space 'bogus))
+    (should-error (etaf-animation-interpolate "#000000" "#ffffff" 0.5)
+                  :type 'etaf-animation-error)))
+
+(defvar etaf-animation-test--hidden-elapsed nil
+  "Elapsed ref owned by the hidden-pause test component.")
+
+(etaf-define-component etaf-animation-test--hidden-card ()
+  "Component owning a tick animation for visibility-pause verification."
+  :setup (progn
+           (setq etaf-animation-test--hidden-elapsed
+                 (etaf-animation-tick #'ignore :name 'hidden-tick))
+           nil)
+  :view (text (expr (format "t=%.2f" (etaf-value etaf-animation-test--hidden-elapsed)))))
+
+(ert-deftest etaf-animation-pause-hidden-holds-undisplayed-buffer ()
+  "With `etaf-animation-pause-hidden' non-nil, hidden buffers pause and resume."
+  (let ((etaf-animation-pause-hidden t)
+        (buffer (generate-new-buffer " *etaf-anim-hidden*"))
+        (other (generate-new-buffer " *etaf-anim-other*"))
+        runtime)
+    (unwind-protect
+        (save-window-excursion
+          (delete-other-windows)
+          (switch-to-buffer buffer)
+          (etaf-mount buffer (etaf-view (etaf-animation-test--hidden-card))
+                      (list :viewport-width 300 :viewport-height 8))
+          (setq runtime (etaf-runtime-for-buffer buffer))
+          (etaf-animation-test-wait
+           (lambda () (> (etaf-value etaf-animation-test--hidden-elapsed) 0.04)))
+          ;; Hide BUFFER by displaying OTHER in the sole window.
+          (switch-to-buffer other)
+          (let ((frozen (etaf-value etaf-animation-test--hidden-elapsed)))
+            (etaf-animation-test-sleep 0.15)
+            (should (equal frozen (etaf-value etaf-animation-test--hidden-elapsed)))
+            ;; Showing BUFFER again resumes advancing from where it held.
+            (switch-to-buffer buffer)
+            (etaf-animation-test-wait
+             (lambda () (> (etaf-value etaf-animation-test--hidden-elapsed)
+                           (+ frozen 0.04))))))
+      (when runtime (etaf-unmount runtime))
+      (when (buffer-live-p buffer) (kill-buffer buffer))
+      (when (buffer-live-p other) (kill-buffer other)))))
+
 (provide 'etaf-animation-tests)
 ;;; etaf-animation-tests.el ends here

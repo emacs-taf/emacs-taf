@@ -18,12 +18,18 @@
 (require 'subr-x)
 (require 'etaf)
 (require 'etaf-ui)
+(require 'etaf-md-cache)
 (require 'etaf-md-theme)
+(require 'etaf-md-assets)
 (require 'etaf-md-views)
 
 (declare-function etaf-md--child-syntax "etaf-md-node" (type))
+(declare-function etaf-md--block-state-prune "etaf-md-env" (session slot))
+(declare-function etaf-md--block-state-ref "etaf-md-env" (session identity))
 (declare-function etaf-md-open "etaf-md-app" (&optional source))
 (declare-function etaf-md--current-session "etaf-md-app" ())
+(declare-function etaf-md-qrcode-attach "etaf-md-qrcode" (block))
+(declare-function etaf-md-qrcode-request "etaf-md-qrcode" (session))
 (declare-function url-unhex-string "url-util" (string))
 
 (define-error 'etaf-md-error "Markdown preview error")
@@ -112,11 +118,15 @@ re-renders on every write."
 (defconst etaf-md--markdown-file-regexp "\\.\\(md\\|markdown\\|mdown\\|mkd\\)\\'"
   "File names this package reads as a markdown document.")
 
-(defun etaf-md--remote-url-p (url)
-  "Return non-nil when URL names a remote resource.
-A scheme longer than one letter is a URL, so `mailto:' and `tel:' reach the
-browser; a single letter is a Windows drive, and `C:/notes' is a file."
-  (string-match-p "\\`[a-zA-Z][a-zA-Z0-9+.-]+:" url))
+(defun etaf-md--canonical-file (file)
+  "Return the canonical path for FILE, resolving symlinks when FILE exists.
+Using one canonical key everywhere ensures a symlinked source buffer and its
+preview share the same follow session."
+  (when (and (stringp file) (not (string-empty-p file)))
+    (let ((expanded (expand-file-name file)))
+      (if (file-exists-p expanded)
+          (file-truename expanded)
+        expanded))))
 
 (defun etaf-md--read-source (file)
   "Return FILE's text, signaling `etaf-md-error' on failure."
@@ -276,6 +286,9 @@ would join them, so the marker gets its own paragraph here."
 
 (defvar etaf-md--footnote-def-collector nil
   "Mutable cell `(ALIST)' collecting footnote definitions during container parse.")
+
+(defvar etaf-md--annotation-def-collector nil
+  "Mutable cell `(ALIST)' collecting `[+label]:' defs during container parse.")
 
 (defun etaf-md--line-indent (line)
   "Return LINE's leading space count with tabs counted as four columns."
@@ -462,6 +475,8 @@ their block ranges move to where the stretch sits in TEXT."
   (let* ((top-level (null etaf-md--footnote-def-collector))
          (etaf-md--footnote-def-collector
           (or etaf-md--footnote-def-collector (list nil)))
+         (etaf-md--annotation-def-collector
+          (or etaf-md--annotation-def-collector (list nil)))
          (offset 0) (plain-start 0) (container nil) (depth 0) (fence nil)
          (result nil) (template nil))
     (cl-flet ((flush (end)
@@ -471,6 +486,10 @@ their block ranges move to where the stretch sits in TEXT."
                          (blocks (plist-get parsed :children)))
                     (etaf-md--collect-footnote-defs
                      slice etaf-md--footnote-def-collector)
+                    (dolist (ann (plist-get parsed :annotations))
+                      (unless (assoc (car ann) (car etaf-md--annotation-def-collector))
+                        (setcar etaf-md--annotation-def-collector
+                                (cons ann (car etaf-md--annotation-def-collector)))))
                     (when (and (null template) (= plain-start 0))
                       (setq template parsed))
                     (setq result
@@ -556,9 +575,12 @@ their block ranges move to where the stretch sits in TEXT."
                  (footnotes (etaf-md--resolve-footnotes
                              result
                              (nreverse (car etaf-md--footnote-def-collector))
-                             flavor)))
+                             flavor))
+                 (annotations (nreverse (car etaf-md--annotation-def-collector))))
             (setq document (plist-put document :outline outline))
             (setq document (plist-put document :footnotes footnotes))
+            (when annotations
+              (setq document (plist-put document :annotations annotations)))
             (unless (plist-get document :title)
               (when-let* ((first (car outline)))
                 (setq document (plist-put document :title (nth 1 first)))))))
@@ -579,19 +601,59 @@ sample stays code."
        ((and (not fence) (string-match "\\`:::" line))
         (setq found t))))))
 
-(defun etaf-md--parse (text flavor)
+(defun etaf-md--doc-defs-extract (text)
+  "Extract link-reference and abbreviation definition lines from TEXT, or nil.
+Skips fenced code blocks.  Cached on the full parse so incremental slice parses
+resolve reference links and abbreviations defined elsewhere in the document."
+  (let ((len (length text))
+        (pos 0)
+        (fence nil)
+        (defs nil))
+    (while (< pos len)
+      (let* ((nl (or (string-search "\n" text pos) len))
+             (line (substring text pos nl)))
+        (cond
+         ((string-match "\\`[ \t]*\\(`\\{3,\\}\\|~\\{3,\\}\\)" line)
+          (let ((marker (match-string 1 line))
+                (bare (string-match-p "\\`[ \t]*\\'" (substring line (match-end 0)))))
+            (if fence
+                (when (and bare
+                           (eq (aref fence 0) (aref marker 0))
+                           (>= (length marker) (length fence)))
+                  (setq fence nil))
+              (setq fence marker))))
+         (fence nil)
+         ((or (string-match-p "\\` ? ? ?\\[[^^\n]+\\]:[ \t]*" line)
+              (string-match-p "\\`\\*\\[[^\n]+\\]:[ \t]*" line))
+          (push line defs)))
+        (setq pos (1+ nl))))
+    (when defs
+      (mapconcat #'identity (nreverse defs) "\n"))))
+
+(defun etaf-md--parse (text flavor &optional skip-defs)
   "Parse TEXT with FLAVOR, reporting failures as `etaf-md-error'.
 Container syntax is this package's own; everything else is shared with the
 other document viewers, and this package keeps its own error type at its
-boundary."
+boundary.  When SKIP-DEFS is nil at top level, extracts link/abbreviation
+definitions for incremental splice parses."
   (condition-case err
-      (if (etaf-md--container-syntax-p text)
-          (etaf-md--parse-containers text flavor)
-        (let ((parsed (etaf-ui-markdown-parse text flavor)))
-          (when etaf-md--footnote-def-collector
-            (etaf-md--collect-footnote-defs
-             text etaf-md--footnote-def-collector))
-          parsed))
+      (let ((parsed
+             (if (etaf-md--container-syntax-p text)
+                 (etaf-md--parse-containers text flavor)
+               (let ((doc (etaf-ui-markdown-parse text flavor)))
+                 (when etaf-md--footnote-def-collector
+                   (etaf-md--collect-footnote-defs
+                    text etaf-md--footnote-def-collector))
+                 (when etaf-md--annotation-def-collector
+                   (dolist (ann (plist-get doc :annotations))
+                     (unless (assoc (car ann) (car etaf-md--annotation-def-collector))
+                       (setcar etaf-md--annotation-def-collector
+                               (cons ann (car etaf-md--annotation-def-collector))))))
+                 doc))))
+        (when (and (not skip-defs) (null etaf-md--footnote-def-collector))
+          (setq parsed (plist-put (copy-sequence parsed)
+                                  :doc-defs (etaf-md--doc-defs-extract text))))
+        parsed)
     (etaf-ui-markdown-error
      (signal 'etaf-md-error (cdr err)))))
 
@@ -717,198 +779,355 @@ if it had content and keep that paint."
 (defconst etaf-md--block-ref-prefix "etaf-md-block-"
   "Prefix of the symbol naming a block's box for point-to-block lookup.")
 
+(defvar etaf-md--slot-counter 0
+  "Monotonic counter naming stable block slot symbols.")
+
+(defun etaf-md--make-slot ()
+  "Return a unique opaque symbol identifying a stable block slot."
+  (make-symbol (format "etaf-md-slot-%d" (cl-incf etaf-md--slot-counter))))
+
 (defun etaf-md--rendered-block (block)
-  "Return BLOCK without the source range it carries.
-A block's `:begin' and `:end' move when text above it changes, while the
-block displays the same content; comparing what a block displays keeps its
-published entry reusable across such an edit."
-  (if (or (plist-member block :begin) (plist-member block :end))
-      (let ((copy (copy-sequence block)))
+  "Return BLOCK without source range offsets, recursively across containers.
+A block's `:begin' and `:end' move when text above it changes, while the block
+displays the same content; stripping ranges recursively ensures unchanged
+containers stay equal across edits above them."
+  (if (not (and (listp block) (keywordp (car block))))
+      block
+    (let* ((has-range (or (plist-member block :begin) (plist-member block :end)))
+           (children (and (eq (plist-get block :type) 'container)
+                          (plist-get block :children)))
+           (copy (if (or has-range children) (copy-sequence block) block)))
+      (when has-range
         (cl-remf copy :end)
-        (cl-remf copy :begin)
-        copy)
-    block))
-
-(defun etaf-md--gap-blocks (blocks text)
-  "Return a blank block for each stretch of blank TEXT holds between BLOCKS.
-A blank line is a line the document paints nothing on: the page would leave a
-gap where the source holds a line, so a reader who presses RET to start a
-paragraph has no row to type on and no cell to stand the caret on.  Painting
-one empty row per blank line is what keeps a source offset and the cell it is
-painted on in step, which is what lets the caret stay where the reader put it.
-
-A block's range ends after its own final newline, so what the blocks leave
-uncovered between them is blank lines and the lines the parser consumes
-without a block -- a link reference definition, an abbreviation definition.
-Only the blank lines paint, one row each, so the page still shows the file's
-own spacing.  A file that ends with a newline ends on an empty line, so that
-position gets a row standing for the text past its last character.  An empty
-file gets that row."
-  (let* ((size (length text))
-         (blocks (or blocks nil))
-         (front (etaf-md--front-matter-end text))
-         (cursor 0)
-         (result nil))
-    (dolist (block blocks)
-      (let ((begin (or (plist-get block :begin) size))
-            (end (or (plist-get block :end) cursor)))
-        (dolist (row (etaf-md--gap-rows
-                      text (if (zerop cursor) (max cursor front) cursor) begin))
-          (push row result))
-        (setq cursor (max cursor end))))
-    (cond ((< cursor size)
-           (dolist (row (etaf-md--gap-rows text cursor size))
-             (push row result)))
-          ((or (= size 0) (eq (aref text (1- size)) ?\n))
-           (push (list :type 'blank :begin size :end (1+ size) :lines 1) result)))
-    (nreverse result)))
+        (cl-remf copy :begin))
+      (when children
+        (setq copy (plist-put copy :children
+                              (mapcar #'etaf-md--rendered-block children))))
+      copy)))
 
 (defun etaf-md--front-matter-end (text)
   "Return the offset past TEXT's front matter, or 0 when it has none.
-The parser reads a first line of `---' and a closing `---' or `...' as front
-matter; the page shows that as its title, so it paints no rows for those
-lines but still paints the blank lines that follow them."
-  (let* ((lines (split-string text "\n"))
-         (close (and (equal (string-trim (car lines)) "---")
-                     (cl-position-if (lambda (line)
-                                       (member (string-trim line) '("---" "...")))
-                                     (cdr lines)))))
-    (if close
-        (1+ (length (mapconcat #'identity (cl-subseq lines 0 (+ close 2)) "\n")))
-      0)))
+Matches only the head of TEXT in O(1) without splitting the whole document."
+  (if (and (stringp text)
+           (string-match "\\`[ \t]*---[ \t]*\n" text))
+      (let ((start (match-end 0)))
+        (if (string-match "^[ \t]*\\(?:---\\|\\.\\.\\.\\)[ \t]*\\(?:\n\\|\\'\\)"
+                          text start)
+            (match-end 0)
+          0))
+    0))
 
-(defun etaf-md--gap-rows (text begin end)
-  "Return the rows TEXT's gap from BEGIN to END contributes.
-A gap holds the lines the parser consumed without a block as well as blank
-lines, so each blank line paints one empty row and a metadata line paints
-nothing: the page keeps the file's own spacing instead of pulling the next
-block up against the last one.  The front matter is the one stretch a caller
-leaves out, because the page shows it as its title rather than as lines."
-  (let ((rows nil)
-        (position begin))
-    (while (< position end)
-      (let* ((newline (string-match "\n" text position))
-             (line-end (if (and newline (< newline end)) newline end)))
-        (when (string-blank-p (substring text position line-end))
-          (push (list :type 'blank :begin position :end (1+ line-end) :lines 1)
-                rows))
-        (setq position (1+ line-end))))
-    (nreverse rows)))
+(defun etaf-md--count-blank-lines (text begin end &optional trailing-eof)
+  "Return the blank-line gap in TEXT between offsets BEGIN and END.
+Scans in place with zero substring allocations.  When only blank lines lie in
+the span, preserves the exact source blank-line count.  When non-block
+metadata lines (such as footnote, link or abbreviation definitions) occupy the
+span, collapses internal separator blanks between those invisible definitions
+instead of stacking one blank row per definition; when TRAILING-EOF is non-nil
+returns only blank lines before the first trailing definition."
+  (let ((total 0)
+        (lead 0)
+        (cur 0)
+        (seen-nonblank nil)
+        (pos (max 0 (or begin 0)))
+        (limit (min (length text) (max 0 (or end 0)))))
+    (while (< pos limit)
+      (let* ((nl (string-search "\n" text pos))
+             (line-end (if (and nl (< nl limit)) nl limit))
+             (blank t)
+             (i pos))
+        (while (and blank (< i line-end))
+          (unless (memq (aref text i) '(?\s ?\t ?\r))
+            (setq blank nil))
+          (setq i (1+ i)))
+        (if blank
+            (progn
+              (setq total (1+ total)
+                    cur (1+ cur))
+              (unless seen-nonblank
+                (setq lead (1+ lead))))
+          (setq seen-nonblank t
+                cur 0))
+        (setq pos (1+ line-end))))
+    (cond
+     ((not seen-nonblank) total)
+     (trailing-eof lead)
+     (t (max lead cur)))))
 
-(defun etaf-md--paintable-blocks (blocks text)
-  "Return BLOCKS in source order with their blank stretches filled in as rows.
-Both lists are ordered by source position already, so one merge keeps the page
-in the order the file holds."
-  (let ((blanks (etaf-md--gap-blocks blocks text))
-        (result nil))
-    (while (or blocks blanks)
-      (cond
-       ((null blanks) (push (pop blocks) result))
-       ((null blocks) (push (pop blanks) result))
-       ((<= (or (plist-get (car blocks) :begin) 0)
-            (or (plist-get (car blanks) :begin) 0))
-        (push (pop blocks) result))
-       (t (push (pop blanks) result))))
-    (nreverse result)))
+(defun etaf-md--attach-block-assets (block env &optional session)
+  "Attach cached diagram, QR, image and workspace assets onto BLOCK."
+  (when (and env (fboundp 'etaf-md-typeset-attach))
+    (setq block (etaf-md-typeset-attach block env)))
+  (when (fboundp 'etaf-md-qrcode-attach)
+    (setq block (etaf-md-qrcode-attach block)))
+  (when (and session (fboundp 'etaf-md-assets-attach))
+    (setq block (etaf-md-assets-attach block session)))
+  (when (fboundp 'etaf-md-cache-warm-block)
+    (etaf-md-cache-warm-block block)
+    (let* ((urls (etaf-md-cache--extract-block-urls block))
+           (paths (and urls (delq nil (mapcar #'etaf-md-cache-image-path urls)))))
+      (when paths
+        (setq block (plist-put (copy-sequence block) :cached-images paths)))))
+  block)
 
-(defun etaf-md--block-entries (session document text published)
-  "Return DOCUMENT's top-level blocks as keyed publishing entries.
-An entry is `(:key KEY :block BLOCK :ref REF :view CALL)'.
-KEY names the block's type and a digest of the block's own source, plus an
-occurrence number so two identical blocks stay distinct.  A block's source,
-not its position, is its identity: a block inserted or removed above it leaves
-every unchanged block's key, and therefore its Component instance, alone.
+(defun etaf-md--block-digest (block text)
+  "Return a content digest string for BLOCK in TEXT."
+  (let ((source (or (etaf-md--block-source block text) ""))
+        (asset-sig (when-let* ((ad (plist-get block :asset-data)))
+                     (let ((print-circle t) (print-length 12) (print-level 4))
+                       (prin1-to-string ad)))))
+    (concat (or (and (plist-get block :type)
+                     (symbol-name (plist-get block :type)))
+                "block")
+            ":"
+            (secure-hash 'sha1
+                         (concat source "\0"
+                                 (or (plist-get block :picture) "") "\0"
+                                 (or (plist-get block :qr) "") "\0"
+                                 (or asset-sig "") "\0"
+                                 (mapconcat #'identity
+                                            (plist-get block :cached-images) "|"))))))
 
-The list also carries a blank block for every stretch of blank the file holds
-between its blocks, because the page must paint a row a reader can type on
-there; a blank row holds no source text, so its key is its place among them.
-
-PUBLISHED maps the previous publish's keys to their entries.  A block whose
-source and parsed content both survive keeps its published entry, CALL
-included, so its instance keeps its Scope, Hosts and video handles, and the
-list costs one comparison for it instead of a new call."
-  (let ((counts (make-hash-table :test #'equal))
-        (blank-index 0)
-        (entries nil)
-        (widths (etaf-md--page-widths
-                 session (etaf-md--read session :width)))
-        (env (when (fboundp 'etaf-md-typeset-attach)
-               (etaf-md--env session))))
-    (dolist (block (etaf-md--paintable-blocks
-                    (plist-get document :children) text))
-      (when env
-        (setq block (etaf-md-typeset-attach block env)))
-      (when (fboundp 'etaf-md-qrcode-attach)
-        (setq block (etaf-md-qrcode-attach block)))
-      (let* ((blank (eq (plist-get block :type) 'blank))
-             (source (or (etaf-md--block-source block text) ""))
-             ;; The picture is part of the block: it is drawn for one palette,
-             ;; so a block whose picture changed is a different block and must
-             ;; not reuse the entry that still holds the old drawing.
-             ;; The palette is part of the block too: a block's view carries
-             ;; the colours it was built with, so a palette change must build
-             ;; it again rather than hand back the previous page's painting.
-             (palette (format "%s|%s|%s"
-                              (plist-get env :theme)
-                              (plist-get env :background)
-                              (plist-get env :ink)))
-             (digest (unless blank
-                       (concat (or (and (plist-get block :type)
-                                        (symbol-name (plist-get block :type)))
-                                   "block")
-                               ":"
-                               (secure-hash 'sha1
-                                            (concat source "\0" palette "\0"
-                                                    (or (plist-get block :picture) ""))))))
-             ;; A blank row paints no source text, so the only thing that tells
-             ;; one from another is where it sits among the blank rows.
-             (digest (or digest (format "blank:%d" (cl-incf blank-index))))
-             (occurrence (1+ (gethash digest counts 0)))
-             (key (if (= 1 occurrence) digest (format "%s#%d" digest occurrence)))
+(defun etaf-md--make-entry (session block text trailing widths &optional reuse-entry)
+  "Build or update a published block entry for BLOCK with TRAILING blank lines.
+When REUSE-ENTRY is supplied, keeps its stable `:slot', `:ref' and `:cell',
+updating `:cell' in place only when rendered content changed, and keeping its
+`eq' `:view' when `:trailing' and figure-block status are unchanged."
+  (let* ((digest (etaf-md--block-digest block text))
+         (figure (and (etaf-md--figure-block-p block) t)))
+    (if reuse-entry
+        (let* ((slot (plist-get reuse-entry :slot))
+               (ref (plist-get reuse-entry :ref))
+               (cell (plist-get reuse-entry :cell))
+               (old-block (plist-get reuse-entry :block))
+               (same-content (and (equal (plist-get reuse-entry :key) digest)
+                                  (equal (etaf-md--rendered-block old-block)
+                                         (etaf-md--rendered-block block))))
+               (same-shell (and (eql (plist-get reuse-entry :trailing) trailing)
+                                (eq (plist-get reuse-entry :figure-p) figure)))
+               (view (if same-shell
+                         (plist-get reuse-entry :view)
+                       (etaf-md--block-view
+                        session slot ref cell block trailing widths))))
+          (unless same-content
+            (etaf-set-value cell block))
+          (when-let* ((states (plist-get session :block-states)))
+            (unless (gethash slot states)
+              (puthash slot (etaf-ref nil :name 'etaf-md-block-state) states)))
+          (list :slot slot :ref ref :cell cell :key digest :block block
+                :trailing trailing :figure-p figure :view view))
+      (let* ((slot (etaf-md--make-slot))
              (ref (make-symbol etaf-md--block-ref-prefix))
-             (old (and published (gethash key published)))
-             (same (and old
-                        (equal (etaf-md--rendered-block
-                                (plist-get old :block))
-                               (etaf-md--rendered-block block)))))
-        (puthash digest occurrence counts)
-        (push (cond
-               ;; Only the call is retained: the block itself is the freshly
-               ;; parsed one, so its source offsets follow an edit above it.
-               (same (list :key key :block block
-                           :ref (plist-get old :ref)
-                           :view (plist-get old :view)))
-               (t (list :key key :block block
-                        :ref ref
-                        :view (etaf-md--block-view
-                               session key block ref widths))))
-              entries)))
-    (nreverse entries)))
+             (cell (etaf-ref block :name 'etaf-md-block-cell))
+             (view (etaf-md--block-view
+                    session slot ref cell block trailing widths)))
+        (when-let* ((states (plist-get session :block-states)))
+          (puthash slot (etaf-ref nil :name 'etaf-md-block-state) states))
+        (list :slot slot :ref ref :cell cell :key digest :block block
+              :trailing trailing :figure-p figure :view view)))))
 
-(defun etaf-md--published-table (entries)
-  "Return ENTRIES as a table from each entry's key to the entry."
-  (let ((table (make-hash-table :test #'equal)))
-    (dolist (entry entries) (puthash (plist-get entry :key) entry table))
-    table))
+(defun etaf-md--reconcile-slice (session old-entries new-blocks next-begin
+                                         text widths env &optional has-footnotes)
+  "Reconcile NEW-BLOCKS against OLD-ENTRIES in a local slice.
+NEXT-BEGIN is the offset where the block following this slice begins, or
+`(length text)' at end of document.  When HAS-FOOTNOTES is non-nil, the
+document ends with a dedicated footnotes section that paints its own divider
+spacer, so trailing blank lines before EOF are not stacked onto the final
+body block.  Two-pass matching keeps exact matches untouched and reuses slots
+in place for edited blocks of the same type."
+  (let* ((n-new (length new-blocks))
+         (n-old (length old-entries))
+         (used-old (make-vector n-old nil))
+         (matched (make-vector n-new nil))
+         (prepared (make-vector n-new nil))
+         (trailings (make-vector n-new 0))
+         (digests (make-vector n-new nil))
+         (old-vec (vconcat old-entries))
+         (by-digest (make-hash-table :test #'equal)))
+    (dotimes (j n-old)
+      (let* ((oe (aref old-vec j))
+             (k (plist-get oe :key)))
+        (puthash k (nconc (gethash k by-digest) (list j)) by-digest)))
+    (let ((rest new-blocks)
+          (i 0))
+      (while rest
+        (let* ((blk (etaf-md--attach-block-assets (car rest) env session))
+               (nxt (cadr rest))
+               (end (or (plist-get blk :end) (length text)))
+               (gap-end (if nxt (or (plist-get nxt :begin) end) next-begin))
+               (at-eof (and (null nxt) (>= gap-end (length text))))
+               (tr (cond
+                    ((and at-eof has-footnotes) 0)
+                    ((< end gap-end)
+                     (etaf-md--count-blank-lines text end gap-end at-eof))
+                    (t 0)))
+               (dig (etaf-md--block-digest blk text)))
+          (aset prepared i blk)
+          (aset trailings i tr)
+          (aset digests i dig)
+          ;; Pass 1: exact content match by digest + rendered AST.
+          (when-let* ((cands (gethash dig by-digest)))
+            (let ((hit nil))
+              (dolist (j cands)
+                (when (and (null hit) (not (aref used-old j))
+                           (equal (etaf-md--rendered-block
+                                   (plist-get (aref old-vec j) :block))
+                                  (etaf-md--rendered-block blk)))
+                  (setq hit j)))
+              (when hit
+                (aset used-old hit t)
+                (aset matched i (aref old-vec hit))))))
+        (setq rest (cdr rest) i (1+ i))))
+    ;; Pass 2: reuse remaining unmatched old slots in order for edited blocks
+    ;; (preferring same block type so Components patch Ebox nodes in place).
+    (dotimes (i n-new)
+      (unless (aref matched i)
+        (let ((btype (plist-get (aref prepared i) :type))
+              (hit nil))
+          (dotimes (j n-old)
+            (when (and (null hit) (not (aref used-old j))
+                       (eq (plist-get (plist-get (aref old-vec j) :block) :type)
+                           btype))
+              (setq hit j)))
+          (unless hit
+            (dotimes (j n-old)
+              (when (and (null hit) (not (aref used-old j)))
+                (setq hit j))))
+          (when hit
+            (aset used-old hit t)
+            (aset matched i (aref old-vec hit))))))
+    ;; Retire unused old slots' interactive container state.
+    (dotimes (j n-old)
+      (unless (aref used-old j)
+        (etaf-md--block-state-prune session (plist-get (aref old-vec j) :slot))))
+    ;; Materialize reconciled entries.  Preserve the previous rendered picture
+    ;; on an edited mermaid or display-math block (stale-while-revalidate,
+    ;; inspired by pele.el) while the replacement SVG renders or while live
+    ;; edits are momentarily syntactically incomplete.
+    (let (out)
+      (dotimes (i n-new)
+        (let* ((blk (aref prepared i))
+               (reuse (aref matched i)))
+          (when (and reuse
+                     (bound-and-true-p etaf-md-typeset)
+                     (fboundp 'etaf-md-typeset-available-p)
+                     (etaf-md-typeset-available-p)
+                     (fboundp 'etaf-md--typeset-block-kind)
+                     (not (plist-get blk :picture)))
+            (let* ((old-blk (plist-get reuse :block))
+                   (old-pic (plist-get old-blk :picture))
+                   (kind (etaf-md--typeset-block-kind blk))
+                   (src (plist-get blk :text)))
+              (when (and kind
+                         (eq kind (etaf-md--typeset-block-kind old-blk))
+                         (stringp src)
+                         (not (string-blank-p src))
+                         (stringp old-pic)
+                         (file-exists-p old-pic))
+                (setq blk (plist-put (copy-sequence blk) :picture old-pic)))))
+          (push (etaf-md--make-entry session
+                                     blk
+                                     text
+                                     (aref trailings i)
+                                     widths
+                                     reuse)
+                out)))
+      (nreverse out))))
+
+(defun etaf-md--shift-entry (entry new-block)
+  "Return a copy of ENTRY with shifted NEW-BLOCK, skipping hash and view."
+  (let ((copy (copy-sequence entry)))
+    (plist-put copy :block new-block)))
+
+(defun etaf-md--publish-entries (session document text splice-info)
+  "Return `(ENTRIES LEADING VIEWS-CHANGED)' for DOCUMENT of SESSION.
+When SPLICE-INFO is non-nil (from an incremental parse), only the spliced
+middle window is hashed and reconciled; unchanged prefix and suffix entries
+keep their slots, cells and `eq' views in O(Δ) work."
+  (let* ((blocks (plist-get document :children))
+         (old-entries (plist-get session :entries))
+         (widths (etaf-md--page-widths session (etaf-md--read session :width)))
+         (env (etaf-md--env session))
+         (front (etaf-md--front-matter-end text))
+         (first-begin (if blocks
+                          (or (plist-get (car blocks) :begin) (length text))
+                        (length text)))
+         (leading (if (< front first-begin)
+                      (etaf-md--count-blank-lines text front first-begin)
+                    0))
+         (has-footnotes (and (plist-get document :footnotes) t))
+         (entries
+          (if (and splice-info old-entries)
+              (let* ((head (plist-get splice-info :head))
+                     (tail (plist-get splice-info :tail))
+                     (mcount (plist-get splice-info :middle-count))
+                     (old-prefix (seq-take old-entries head))
+                     (old-mid (cl-subseq old-entries head tail))
+                     (old-suffix (nthcdr tail old-entries))
+                     (new-mid (cl-subseq blocks head (+ head mcount)))
+                     (new-suffix-blocks (nthcdr (+ head mcount) blocks))
+                     (next-begin (if new-suffix-blocks
+                                     (or (plist-get (car new-suffix-blocks) :begin)
+                                         (length text))
+                                   (length text)))
+                     (mid-entries
+                      (etaf-md--reconcile-slice
+                       session old-mid new-mid next-begin text widths env
+                       (and (null new-suffix-blocks) has-footnotes)))
+                     (suffix-entries
+                      (cl-mapcar #'etaf-md--shift-entry
+                                 old-suffix new-suffix-blocks)))
+                ;; Re-check the trailing blank lines of entry (head - 1) since
+                ;; the boundary right after it may have gained/lost blank lines.
+                (when (> head 0)
+                  (let* ((prev-cell (last old-prefix))
+                         (prev-entry (car prev-cell))
+                         (prev-block (plist-get prev-entry :block))
+                         (prev-end (or (plist-get prev-block :end) 0))
+                         (prev-at-eof (and (null mid-entries) (null suffix-entries)))
+                         (after-begin (cond
+                                       (mid-entries
+                                        (or (plist-get (plist-get (car mid-entries) :block) :begin)
+                                            prev-end))
+                                       (suffix-entries
+                                        (or (plist-get (plist-get (car suffix-entries) :block) :begin)
+                                            prev-end))
+                                       (t (length text))))
+                         (new-tr (cond
+                                  ((and prev-at-eof has-footnotes) 0)
+                                  ((< prev-end after-begin)
+                                   (etaf-md--count-blank-lines text prev-end after-begin prev-at-eof))
+                                  (t 0))))
+                    (unless (eql new-tr (plist-get prev-entry :trailing))
+                      (let* ((slot (plist-get prev-entry :slot))
+                             (ref (plist-get prev-entry :ref))
+                             (cell (plist-get prev-entry :cell))
+                             (updated (copy-sequence prev-entry)))
+                        (setq updated (plist-put updated :trailing new-tr))
+                        (setq updated
+                              (plist-put updated :view
+                                         (etaf-md--block-view
+                                          session slot ref cell prev-block
+                                          new-tr widths)))
+                        (setcar prev-cell updated)))))
+                (nconc old-prefix mid-entries suffix-entries))
+            (etaf-md--reconcile-slice
+             session (or old-entries nil) blocks (length text) text widths env
+             has-footnotes)))
+         (views-changed
+          (or (not (= (length entries) (length old-entries)))
+              (not (cl-every (lambda (a b)
+                               (eq (plist-get a :view) (plist-get b :view)))
+                             entries old-entries)))))
+    (list entries leading views-changed)))
 
 (defun etaf-md--block-ref-table (entries)
-  "Return ENTRIES as a table from each entry's box reference to its key."
+  "Return ENTRIES as a table from each entry's box reference to its slot."
   (let ((table (make-hash-table :test #'eq)))
     (dolist (entry entries)
       (when-let* ((ref (plist-get entry :ref)))
-        (puthash ref (plist-get entry :key) table)))
+        (puthash ref (plist-get entry :slot) table)))
     table))
-
-(defun etaf-md--keyed-document (session document contents published)
-  "Return (KEYED . TABLE) for DOCUMENT parsed from CONTENTS.
-KEYED is DOCUMENT with its top-level blocks replaced by publishing entries;
-TABLE maps each entry's key to the entry, to be published with the document
-and passed back as PUBLISHED by the next parse."
-  (let ((entries (etaf-md--block-entries
-                  session document contents published)))
-    (plist-put session :block-refs (etaf-md--block-ref-table entries))
-    (cons (plist-put (copy-sequence document) :children entries)
-          (etaf-md--published-table entries))))
 
 (cl-defun etaf-md-create (&key file text title theme flavor on-link on-media
                                (link-hover t) (heading-underline t))
@@ -940,7 +1159,7 @@ while keeping heading links active and body links underlined."
     (signal 'etaf-md-error
             (list (format "etaf-md-create: :on-media must be a function: %S"
                           on-media))))
-  (let* ((file (and file (expand-file-name file)))
+  (let* ((file (and file (etaf-md--canonical-file file)))
          (contents (cond (text text)
                          (file (etaf-md--read-source file))
                          (t (signal 'etaf-md-error
@@ -965,16 +1184,47 @@ while keeping heading links active and body links underlined."
                         :dir (if file (file-name-directory file)
                                default-directory)
                         :document (etaf-ref nil :name 'etaf-md-document)
-                        ;; Publishing entries of the last parse, keyed by block
-                        ;; identity; an unchanged block keeps its entry.
-                        :published nil
-                        ;; Box reference to block key, so a command can find
-                        ;; the block the point sits in.
+                        ;; Structural layout ref for `etaf-md-app': written only
+                        ;; when the block view list, hero, leading blanks or
+                        ;; footnotes change, so editing inside an existing block
+                        ;; wakes only that block's Component.
+                        :page-structure (etaf-ref nil :name 'etaf-md-page-structure)
+                        ;; Incremented when frame appearance changes under `auto'
+                        ;; theme so mounted blocks re-render in place.
+                        :appearance-rev (etaf-ref 0 :name 'etaf-md-appearance-rev)
+                        :entries nil
+                        :leading-blanks 0
+                        :parsed nil
+                        :provisional-fence-span nil
+                        :dirty-span nil
+                        :live-tick nil
+                        :live-text nil
+                        :source-buffer nil
+                        :follow-scroll nil
+                        :follow-scroll-marker nil
+                        :follow-scroll-line nil
+                        :asset-timer nil
+                        :assets (make-hash-table :test #'equal)
+                        :assets-pending (make-hash-table :test #'equal)
+                        :annotations nil
+                        :reveal-spoilers (etaf-ref nil :name 'etaf-md-reveal-spoilers)
+                        :toc-open (etaf-ref nil :name 'etaf-md-toc-open)
+                        :toc-active (etaf-ref 0 :name 'etaf-md-toc-active)
+                        :toc-buffer nil
+                        :lightbox (etaf-ref nil :name 'etaf-md-lightbox)
+                        :link-preview (etaf-ref nil :name 'etaf-md-link-preview)
+                        :typeset-pending nil
+                        :image-refresh-pending nil
+                        :hero-cache nil
+                        :footnotes-cache nil
+                        ;; Box reference to block slot, for reverse lookup.
                         :block-refs (make-hash-table :test #'eq)
-                        ;; Display state of the interactive blocks, keyed by
-                        ;; block identity.  It is a ref because a write must
-                        ;; repaint the block that read it, not rebuild the page.
+                        ;; Per-block interactive container state refs (allocated
+                        ;; when each entry is created, never during `:render').
+                        :block-states (make-hash-table :test #'eq)
                         :block-state (etaf-ref nil :name 'etaf-md-block-state)
+                        ;; Saved buffer positions for footnote `↩' back-links.
+                        :footnote-origins (make-hash-table :test #'equal)
                         ;; The rendering environment shared by the blocks of
                         ;; one appearance.
                         :env-cache nil
@@ -991,6 +1241,7 @@ while keeping heading links active and body links underlined."
                                                 :name 'etaf-md-theme-source)
                         :theme-mode (etaf-ref requested :name 'etaf-md-theme-mode)
                         :width (etaf-ref 92 :name 'etaf-md-width)
+                        :viewport-width (etaf-ref nil :name 'etaf-md-viewport-width)
                         :error (etaf-ref nil :name 'etaf-md-error-text)
                         :buffer nil
                         ;; Cards whose video plays inline; written by
@@ -1082,38 +1333,136 @@ the edit rather than the size of the document."
          (tail (etaf-md--shared-end old new (- (min (length old) (length new)) start))))
     (list start (- (length old) tail) (- (length new) tail))))
 
-(defun etaf-md--fence-count (text from to)
-  "Return how many code fence lines TEXT holds between FROM and TO."
-  (let ((count 0)
-        (start from))
-    (while (let ((found (string-match etaf-md--fence-regexp text start)))
-             (when (and found (< found to))
-               (setq count (1+ count)
-                     start (match-end 0))
-               t)))
-    count))
+(defun etaf-md--region-fence-state (text from to)
+  "Scan TEXT between FROM and TO for code fences, containers and doc defs.
+Returns a plist `(:fence FENCE :depth DEPTH :footnote BOOL :doc-def BOOL)'.
+FENCE is nil when balanced or `(CHAR . LEN)' when unclosed; DEPTH is 0 when
+`:::' containers are balanced or `unbalanced' / positive when unmatched."
+  (let ((pos from)
+        (fence nil)
+        (depth 0)
+        (footnote nil)
+        (doc-def nil))
+    (while (< pos to)
+      (let* ((nl (string-search "\n" text pos))
+             (line-end (if (and nl (< nl to)) nl to))
+             (line (substring text pos line-end)))
+        (cond
+         ((string-match "\\`[ \t]*\\(`\\{3,\\}\\|~\\{3,\\}\\)" line)
+          (let ((marker (match-string 1 line))
+                (bare (string-match-p "\\`[ \t]*\\'"
+                                      (substring line (match-end 0)))))
+            (if fence
+                (when (and bare
+                           (eq (car fence) (aref marker 0))
+                           (>= (length marker) (cdr fence)))
+                  (setq fence nil))
+              (setq fence (cons (aref marker 0) (length marker))))))
+         (fence nil)
+         (t
+          (when (string-match etaf-md--container-close line)
+            (setq depth (if (and (integerp depth) (> depth 0))
+                            (1- depth)
+                          'unbalanced)))
+          (when (and (integerp depth)
+                     (string-match etaf-md--container-open line))
+            (setq depth (1+ depth)))
+          (when (string-search "[^" line)
+            (setq footnote t))
+          (when (or (string-match-p "\\` ? ? ?\\[[^^\n]+\\]:[ \t]*" line)
+                    (string-match-p "\\`\\*\\[[^\n]+\\]:[ \t]*" line))
+            (setq doc-def t))))
+        (setq pos (1+ line-end))))
+    (list :fence fence :depth depth :footnote footnote :doc-def doc-def)))
 
-(defun etaf-md--splice-parse (session contents old-text old-document)
-  "Return OLD-DOCUMENT updated for CONTENTS, or nil when it needs a whole parse.
-The blocks before and after an edit are the same text at a shifted offset, so
-only the blocks the edit could have touched are parsed again.  A whole parse
-is needed when the edit reaches the front matter, and when it changes how many
-code fences the region holds: a fence opens a block that can end outside the
-region, and only the whole text tells where."
-  (pcase-let* ((`(,old-start ,old-end ,_)
-                (etaf-md--changed-span old-text contents))
-               (delta (- (length contents) (length old-text)))
-               (children (plist-get old-document :children))
-               (count (length children)))
-    (when (and children
-               ;; A document parsed before blocks carried ranges, or by a
-               ;; clause that forgot one, cannot be spliced: a whole parse
-               ;; gives the block ranges back.
+(defun etaf-md--blocks-have-heading-p (blocks)
+  "Return non-nil when any block in BLOCKS (or inside containers) is a heading."
+  (cl-some (lambda (block)
+             (pcase (plist-get block :type)
+               ('heading t)
+               ('container (etaf-md--blocks-have-heading-p
+                            (plist-get block :children)))))
+           blocks))
+
+(defun etaf-md--recompute-outline-copying (blocks)
+  "Recompute unique heading ids across BLOCKS without mutating shared headings.
+Returns `(OUTLINE UPDATED-BLOCKS CHANGED-INDICES)'."
+  (let ((seen (make-hash-table :test #'equal))
+        (used (make-hash-table :test #'equal))
+        (outline nil)
+        (changed-indices nil))
+    (cl-labels
+        ((walk-one (block)
+           (pcase (plist-get block :type)
+             ('heading
+              (let* ((text (string-trim
+                            (etaf-md--heading-plain-text
+                             (plist-get block :children))))
+                     (base (etaf-md--heading-slug text))
+                     (count (1+ (or (gethash base seen) 0)))
+                     (id (if (= count 1) base (format "%s-%d" base count))))
+                (while (gethash id used)
+                  (setq count (1+ count)
+                        id (format "%s-%d" base count)))
+                (puthash base count seen)
+                (puthash id t used)
+                (push (list (plist-get block :level) text id) outline)
+                (if (equal (plist-get block :id) id)
+                    (cons block nil)
+                  (cons (plist-put (copy-sequence block) :id id) t))))
+             ('container
+              (let ((any nil)
+                    (kids nil))
+                (dolist (child (plist-get block :children))
+                  (let ((res (walk-one child)))
+                    (when (cdr res) (setq any t))
+                    (push (car res) kids)))
+                (if any
+                    (cons (plist-put (copy-sequence block) :children (nreverse kids)) t)
+                  (cons block nil))))
+             (_ (cons block nil)))))
+      (let ((updated nil)
+            (idx 0))
+        (dolist (block blocks)
+          (let ((res (walk-one block)))
+            (when (cdr res) (push idx changed-indices))
+            (push (car res) updated))
+          (setq idx (1+ idx)))
+        (list (nreverse outline) (nreverse updated) (nreverse changed-indices))))))
+
+(defun etaf-md--splice-parse (session contents old-text old-document
+                                      &optional dirty-span live-p)
+  "Return splice result plist for CONTENTS, or nil when a whole parse is needed.
+When incremental splicing succeeds, returns a plist with `:document', `:head',
+`:tail', `:middle-count', `:delta' and `:provisional' (non-nil when a live
+unclosed code fence was provisionally closed at the local slice boundary)."
+  (let* ((delta (- (length contents) (length old-text)))
+         (span (if (and dirty-span
+                        (= (- (nth 2 dirty-span) (nth 1 dirty-span)) delta)
+                        (<= 0 (nth 0 dirty-span) (nth 1 dirty-span) (length old-text))
+                        (<= 0 (nth 0 dirty-span) (nth 2 dirty-span) (length contents)))
+                   dirty-span
+                 (etaf-md--changed-span old-text contents)))
+         (old-start (nth 0 span))
+         (old-end (nth 1 span))
+         (prev-prov (plist-get session :provisional-fence-span))
+         (prov-overlap (and prev-prov
+                            (<= old-start (cdr prev-prov))
+                            (<= (car prev-prov) old-end)))
+         (children (plist-get old-document :children))
+         (count (length children)))
+    (when prov-overlap
+      (setq old-start (min old-start (car prev-prov))
+            old-end (max old-end (min (length old-text) (cdr prev-prov)))))
+    (when (and (or live-p (null prev-prov))
+               children
                (seq-every-p (lambda (block)
                               (and (integerp (plist-get block :begin))
                                    (integerp (plist-get block :end))))
                             children))
-      (let* ((first (or (cl-position-if (lambda (block)
+      (let* ((front-old (etaf-md--front-matter-end old-text))
+             (front-new (etaf-md--front-matter-end contents))
+             (first (or (cl-position-if (lambda (block)
                                           (>= (or (plist-get block :end) 0) old-start))
                                         children)
                         count))
@@ -1123,31 +1472,116 @@ region, and only the whole text tells where."
                         count))
              (head (max 0 (- first etaf-md--reparse-neighbours)))
              (tail (min count (+ after etaf-md--reparse-neighbours)))
-             (from (if (> head 0) (plist-get (nth (1- head) children) :end) 0))
-             (to (if (< tail count) (plist-get (nth tail children) :begin)
-                    (length old-text)))
+             (from (if (> head 0)
+                       (plist-get (nth (1- head) children) :end)
+                     front-old))
+             (to (if (< tail count)
+                     (plist-get (nth tail children) :begin)
+                   (length old-text)))
              (to-new (+ to delta)))
-        (when (and (<= from old-start)
+        (when (and (= front-old front-new)
+                   (>= old-start front-old)
+                   (<= from old-start)
                    (<= old-end to)
-                   (> from 0)           ; front matter holds the title
-                   (<= from to-new (length contents))
-                   (cl-evenp (etaf-md--fence-count old-text from to))
-                   (cl-evenp (etaf-md--fence-count contents from to-new)))
-          (let* ((fragment (etaf-md--parse (substring contents from to-new)
-                                                   (plist-get session :flavor)))
-                 (middle (mapcar (lambda (block)
-                                   (let ((copy (copy-sequence block)))
-                                     (setq copy (plist-put copy :begin (+ from (plist-get block :begin))))
-                                     (plist-put copy :end (+ from (plist-get block :end)))))
-                                 (plist-get fragment :children)))
-                 (suffix (mapcar (lambda (block)
-                                   (let ((copy (copy-sequence block)))
-                                     (setq copy (plist-put copy :begin (+ delta (plist-get block :begin))))
-                                     (plist-put copy :end (+ delta (plist-get block :end)))))
-                                 (nthcdr tail children)))
-                 (spliced (append (seq-take children head) middle suffix)))
-            (when (etaf-md--blocks-ordered-p spliced (length contents))
-              (plist-put (copy-sequence old-document) :children spliced))))))))
+                   (<= from to-new (length contents)))
+          (let* ((old-state (etaf-md--region-fence-state old-text from to))
+                 (new-state (etaf-md--region-fence-state contents from to-new))
+                 (old-fence (plist-get old-state :fence))
+                 (new-fence (plist-get new-state :fence))
+                 (old-depth (plist-get old-state :depth))
+                 (new-depth (plist-get new-state :depth))
+                 (prov-covered (and prev-prov
+                                    (<= from (car prev-prov))
+                                    (<= (cdr prev-prov) to)))
+                 (old-fence-ok (or (null old-fence) prov-covered))
+                 (provisional (and live-p
+                                   old-fence-ok
+                                   new-fence
+                                   (eql old-depth 0)
+                                   (eql new-depth 0))))
+            (when (and old-fence-ok
+                       (or (null new-fence) provisional)
+                       (eql old-depth 0)
+                       (eql new-depth 0)
+                       (not (plist-get old-state :footnote))
+                       (not (plist-get new-state :footnote))
+                       (not (plist-get old-state :doc-def))
+                       (not (plist-get new-state :doc-def)))
+              (let* ((raw-slice (substring contents from to-new))
+                     (slice-len (length raw-slice))
+                     (slice-with-close
+                      (if provisional
+                          (concat raw-slice
+                                  (unless (string-suffix-p "\n" raw-slice) "\n")
+                                  (make-string (cdr new-fence) (car new-fence))
+                                  "\n")
+                        raw-slice))
+                     (doc-defs (plist-get old-document :doc-defs))
+                     (parse-input
+                      (if (and doc-defs (not (string-empty-p doc-defs)))
+                          (concat slice-with-close "\n\n" doc-defs "\n")
+                        slice-with-close))
+                     (flavor (etaf-md--flavor-for session contents))
+                     (fragment (etaf-md--parse parse-input flavor t))
+                     (frag-blocks
+                      (cl-remove-if-not
+                       (lambda (block)
+                         (let ((b (plist-get block :begin)))
+                           (and (integerp b) (< b slice-len))))
+                       (plist-get fragment :children)))
+                     (middle
+                      (mapcar (lambda (block)
+                                (let* ((b (plist-get block :begin))
+                                       (e (min slice-len (plist-get block :end)))
+                                       (shifted (car (etaf-md--shift-blocks
+                                                      (list block) from))))
+                                  (setq shifted (plist-put shifted :begin (+ from b)))
+                                  (plist-put shifted :end (+ from e))))
+                              frag-blocks))
+                     (suffix
+                      (mapcar (lambda (block)
+                                (let ((copy (copy-sequence block)))
+                                  (setq copy (plist-put copy :begin
+                                                        (+ delta (plist-get block :begin))))
+                                  (plist-put copy :end
+                                             (+ delta (plist-get block :end)))))
+                              (nthcdr tail children)))
+                     (spliced (append (seq-take children head) middle suffix)))
+                (when (etaf-md--blocks-ordered-p spliced (length contents))
+                  (let* ((old-mid (cl-subseq children head tail))
+                         (headings-touched
+                          (or (etaf-md--blocks-have-heading-p old-mid)
+                              (etaf-md--blocks-have-heading-p middle)))
+                         (new-doc (copy-sequence old-document))
+                         (full-reconcile nil))
+                    (if headings-touched
+                        (pcase-let* ((`(,outline ,updated ,changed-idx)
+                                      (etaf-md--recompute-outline-copying spliced)))
+                          (setq spliced updated)
+                          (setq new-doc (plist-put new-doc :outline outline))
+                          (when (and (null (cdr (assoc "title" (plist-get new-doc :meta))))
+                                     (car outline))
+                            (setq new-doc (plist-put new-doc :title (nth 1 (car outline)))))
+                          (when (cl-some (lambda (i) (or (< i head) (>= i (+ head (length middle)))))
+                                         changed-idx)
+                            (setq full-reconcile t)))
+                      nil)
+                    (setq new-doc (plist-put new-doc :children spliced))
+                    (list :document new-doc
+                          :head head
+                          :tail tail
+                          :middle-count (length middle)
+                          :delta delta
+                          :full-reconcile full-reconcile
+                          :provisional
+                          (cond
+                           (provisional (cons from to-new))
+                           ((and prev-prov (not prov-covered))
+                            (if (<= to (car prev-prov))
+                                (cons (+ (car prev-prov) delta)
+                                      (+ (cdr prev-prov) delta))
+                              prev-prov))
+                           (t nil)))))))))))))
 
 (defun etaf-md--blocks-ordered-p (blocks size)
   "Return non-nil when BLOCKS name increasing ranges inside SIZE characters."
@@ -1161,54 +1595,138 @@ region, and only the whole text tells where."
         (setq edge end)))
     ok))
 
-(defun etaf-md--parse-changed (session contents)
-  "Return the document CONTENTS describes, parsing only what changed.
-A preview republishes after every keystroke and parsing is the largest part of
-that cost, so the blocks the edit left alone keep the parse they already have."
+(defun etaf-md--parse-changed (session contents &optional dirty-span live-p)
+  "Return `(DOCUMENT . SPLICE-INFO)' for CONTENTS, parsing only what changed.
+SPLICE-INFO is non-nil when an incremental splice succeeded without needing
+full-document entry reconciliation."
   (let* ((flavor (etaf-md--flavor-for session contents))
          (cached (plist-get session :parsed))
-         (document (cond ((null cached) (etaf-md--parse contents flavor))
-                         ((equal (car cached) contents) (cdr cached))
-                         (t (or (etaf-md--splice-parse
-                                 session contents (car cached) (cdr cached))
-                                (etaf-md--parse contents flavor))))))
+         (same-text (and cached (equal (car cached) contents)
+                         (or live-p (null (plist-get session :provisional-fence-span)))))
+         (splice nil)
+         (document
+          (cond
+           ((null cached)
+            (plist-put session :provisional-fence-span nil)
+            (etaf-md--parse contents flavor))
+           (same-text
+            (cdr cached))
+           (t
+            (let ((res (etaf-md--splice-parse
+                        session contents (car cached) (cdr cached)
+                        dirty-span live-p)))
+              (if res
+                  (progn
+                    (plist-put session :provisional-fence-span
+                               (plist-get res :provisional))
+                    (unless (plist-get res :full-reconcile)
+                      (setq splice res))
+                    (plist-get res :document))
+                (plist-put session :provisional-fence-span nil)
+                (etaf-md--parse contents flavor)))))))
     (plist-put session :parsed (cons contents document))
-    document))
+    (cons document splice)))
 
-(defun etaf-md--install (session contents &optional title)
-  "Parse CONTENTS and publish it as SESSION's document; return the document.
-TITLE, when given, names the document instead of its own front matter or file.
-The parser and the title fallback are shared by the first parse and every
-refresh path: reading the file again, following a save, and following an edit
-that was not saved.  Each top-level block keeps the publishing entry it had
-while its source and parsed content survive, so one edited block repaints
-itself and every other block keeps its instance."
-  (let* ((keyed (etaf-md--keyed-document
-                 session
-                 (etaf-md--parse-changed session contents)
-                 contents
-                 (plist-get session :published)))
-         (document (car keyed)))
-    (etaf-batch
-      (etaf-set-value (etaf-md--ref session :document) document)
-      (etaf-set-value (etaf-md--ref session :title)
-                      (or title
-                          (plist-get document :title)
-                          (and (plist-get session :file)
-                               (file-name-nondirectory (plist-get session :file)))
-                          "Markdown"))
-      (etaf-set-value (etaf-md--ref session :error) nil))
-    (plist-put session :features (plist-get document :features))
-    (plist-put session :published (cdr keyed))
+(defun etaf-md--cancel-asset-timer (session)
+  "Cancel any pending debounced async asset timer on SESSION."
+  (when-let* ((timer (plist-get session :asset-timer)))
+    (when (timerp timer) (cancel-timer timer))
+    (plist-put session :asset-timer nil)))
+
+(defun etaf-md--run-async-assets (session)
+  "Request missing diagrams, QR codes, workspace assets and remote images."
+  (when (fboundp 'etaf-md-typeset-request)
+    (etaf-md-typeset-request session))
+  (when (fboundp 'etaf-md-qrcode-request)
+    (etaf-md-qrcode-request session))
+  (when (fboundp 'etaf-md-assets-request)
+    (etaf-md-assets-request session))
+  (when (and (buffer-live-p (plist-get session :buffer))
+             (fboundp 'etaf-md-cache-request-images))
+    (etaf-md-cache-request-images session)))
+
+(defun etaf-md--schedule-async-assets (session &optional live-p)
+  "Schedule external asset generation for SESSION.
+During live typing (LIVE-P non-nil), debounces onto an idle timer so rapid
+keystrokes inside formulas, diagrams or QR blocks never flood Chromium or disk."
+  (etaf-md--cancel-asset-timer session)
+  (if live-p
+      (plist-put session :asset-timer
+                 (run-with-idle-timer
+                  0.25 nil
+                  (lambda ()
+                    (plist-put session :asset-timer nil)
+                    (when (buffer-live-p (plist-get session :buffer))
+                      (etaf-md--run-async-assets session)))))
     (when (fboundp 'etaf-md-typeset-request)
       (etaf-md-typeset-request session))
     (when (fboundp 'etaf-md-qrcode-request)
       (etaf-md-qrcode-request session))
+    (when (fboundp 'etaf-md-assets-request)
+      (etaf-md-assets-request session))
+    (when (and (buffer-live-p (plist-get session :buffer))
+               (fboundp 'etaf-md-cache-request-images))
+      (plist-put session :asset-timer
+                 (run-with-timer
+                  0.05 nil
+                  (lambda ()
+                    (plist-put session :asset-timer nil)
+                    (when (buffer-live-p (plist-get session :buffer))
+                      (etaf-md-cache-request-images session))))))))
+
+(defun etaf-md--install (session contents &optional title dirty-span live-p)
+  "Parse CONTENTS and publish it as SESSION's document; return the document.
+TITLE overrides the document title; DIRTY-SPAN is an optional `(OLD-BEG OLD-END
+NEW-END)' span from `after-change-functions'; LIVE-P is non-nil during unsaved
+live typing.  When only an existing block's text changed, updates that block's
+own `:cell' ref in place without updating `:page-structure', so `etaf-md-app'
+performs zero work and only that single block Component re-renders."
+  (let (document)
+    (etaf-batch
+      (pcase-let* ((`(,parsed . ,splice-info)
+                    (etaf-md--parse-changed session contents dirty-span live-p))
+                   (pub (etaf-md--publish-entries
+                         session parsed contents splice-info))
+                   (entries (nth 0 pub))
+                   (leading (nth 1 pub))
+                   (views-changed (nth 2 pub))
+                   (doc (plist-put (copy-sequence parsed) :children entries))
+                   (old-struct (etaf-md--read session :page-structure))
+                   (meta (plist-get doc :meta))
+                   (footnotes (plist-get doc :footnotes))
+                   (struct-changed
+                    (or (null old-struct)
+                        views-changed
+                        (not (eql leading (plist-get old-struct :leading)))
+                        (not (equal meta (plist-get old-struct :meta)))
+                        (not (equal footnotes (plist-get old-struct :footnotes))))))
+        (setq document doc)
+        (plist-put session :entries entries)
+        (plist-put session :leading-blanks leading)
+        (plist-put session :features (plist-get doc :features))
+        (plist-put session :annotations (plist-get doc :annotations))
+        (when views-changed
+          (plist-put session :block-refs (etaf-md--block-ref-table entries)))
+        (etaf-set-value (etaf-md--ref session :document) doc)
+        (when struct-changed
+          (etaf-set-value (etaf-md--ref session :page-structure)
+                          (list :meta meta
+                                :leading leading
+                                :views (mapcar (lambda (e) (plist-get e :view)) entries)
+                                :footnotes footnotes)))
+        (etaf-md--write session :title
+                        (or title
+                            (plist-get doc :title)
+                            (and (plist-get session :file)
+                                 (file-name-nondirectory (plist-get session :file)))
+                            "Markdown"))
+        (etaf-md--write session :error nil)))
+    (etaf-md--schedule-async-assets session live-p)
     document))
 
-(defun etaf-md--publish (session contents)
+(defun etaf-md--publish (session contents &optional dirty-span live-p)
   "Publish CONTENTS as SESSION's document and return SESSION."
-  (etaf-md--install session contents)
+  (etaf-md--install session contents nil dirty-span live-p)
   session)
 
 (defun etaf-md-refresh (session)
@@ -1221,16 +1739,50 @@ published document untouched."
     (etaf-md--publish session text)
     ;; See `etaf-md--live-repaint': a scheduled follow compares against
     ;; the text the page already shows.
-    (plist-put session :live-text text)))
+    (plist-put session :live-text text)
+    session))
+
+(defun etaf-md--refresh-block-assets (session)
+  "Re-attach newly arrived pictures, QR codes or cached images in place.
+Updates only the `:cell' ref of blocks whose asset actually changed, without
+reparsing the document or touching any other block."
+  (when (buffer-live-p (plist-get session :buffer))
+    (let ((env (etaf-md--env session))
+          (entries (plist-get session :entries))
+          (changed nil))
+      (etaf-batch
+        (dolist (entry entries)
+          (let* ((old-block (plist-get entry :block))
+                 (new-block (etaf-md--attach-block-assets old-block env session)))
+            (unless (and (equal (plist-get old-block :picture)
+                                (plist-get new-block :picture))
+                         (equal (plist-get old-block :qr)
+                                (plist-get new-block :qr))
+                         (equal (plist-get old-block :asset-data)
+                                (plist-get new-block :asset-data))
+                         (equal (plist-get old-block :cached-images)
+                                (plist-get new-block :cached-images))
+                         (or (not (eq (plist-get old-block :type) 'container))
+                             (equal (plist-get old-block :children)
+                                    (plist-get new-block :children))))
+              (plist-put entry :block new-block)
+              (etaf-set-value (plist-get entry :cell) new-block)
+              (setq changed t)))))
+      changed)))
 
 (defun etaf-md--republish (session)
-  "Publish SESSION's document again for its current palette and return it.
-A picture block carries the file drawn for the palette it was published with,
-so a palette change has to publish the document even though its text is the
-same.  The parse is cached, so this costs the block keys, not the text, and the
-publish starts the pictures the new palette needs."
-  (when (plist-get session :buffer)
-    (etaf-md--install session (etaf-md--session-text session)))
+  "Repaint SESSION for its current palette/appearance and request missing pictures.
+Reuses the cached parse and updates only changed assets in place, bumping
+`:appearance-rev' when frame appearance inputs changed so every block repaints
+with the new palette without destroying Component instances."
+  (when (buffer-live-p (plist-get session :buffer))
+    (let ((old-inputs (car (plist-get session :env-cache)))
+          (new-inputs (etaf-md--env-inputs session)))
+      (unless (equal old-inputs new-inputs)
+        (etaf-set-value (etaf-md--ref session :appearance-rev)
+                        (1+ (etaf-md--read session :appearance-rev))))
+      (etaf-md--refresh-block-assets session)
+      (etaf-md--schedule-async-assets session nil)))
   session)
 
 (defun etaf-md-set-theme (session theme)
@@ -1252,13 +1804,25 @@ background, while `auto' returns to the face-derived surfaces."
   (etaf-md--republish session)
   session)
 
-(defun etaf-md-cycle-theme (session)
-  "Switch SESSION to the next palette and return its name."
-  (let* ((themes (mapcar #'car etaf-md-themes))
-         (current (etaf-md--read session :theme))
-         (tail (cdr (memq current themes))))
-    (etaf-md-set-theme session (or (car tail) (car themes)))
-    (etaf-md--read session :theme)))
+(declare-function etaf-md--current-session "etaf-md-app" ())
+
+(defun etaf-md-cycle-theme (&optional session)
+  "Switch SESSION (or the current preview) to the next theme mode.
+Cycles `dark' -> `light' -> `sepia' -> `auto' and returns the newly selected
+mode symbol."
+  (let* ((explicit-p (not (null session)))
+         (session (or session
+                      (and (fboundp 'etaf-md--current-session)
+                           (etaf-md--current-session))
+                      (user-error "Not an ETAF markdown preview buffer")))
+         (modes (append (mapcar #'car etaf-md-themes) '(auto)))
+         (current (etaf-md--read session :theme-mode))
+         (tail (cdr (memq current modes)))
+         (next (or (car tail) (car modes))))
+    (etaf-md-set-theme session next)
+    (unless explicit-p
+      (message "Theme: %s" next))
+    next))
 
 ;;; ---------------------------------------------------------------------------
 ;;; Width and layout fitting
@@ -1352,17 +1916,45 @@ collapsed blocks; falls back to line-order scanning when no runtime is attached.
                        (etaf-md--heading-match-forward (nth 1 entry)))
                      when position collect (cons index position))))))))
 
+(defun etaf-md--scrollable-ancestor-p (runtime ref)
+  "Return non-nil when REF sits inside a scrolling Host in RUNTIME."
+  (let* ((ancestries (etaf-runtime-host-ancestries runtime (list ref)))
+         (lineage (cdr (gethash ref ancestries))))
+    (cl-some (lambda (anc)
+               (memq (plist-get (etaf-runtime-host-props-for runtime anc) :overflow)
+                     '(scroll auto)))
+             lineage)))
+
 (defun etaf-md-locate (session index)
-  "Move point to SESSION's outline heading INDEX and recenter.
-Return the position, or nil when the heading is not visible."
+  "Move point to SESSION's outline heading INDEX and bring it into view.
+When SESSION is mounted inside a scrolling Host, scrolls that viewport so the
+heading sits at its top without recentering the outer Emacs window; otherwise
+recenters the window to row 0.  Return the position, or nil when the heading is
+not mounted or visible."
   (let* ((buffer (plist-get session :buffer))
-         (position (cdr (assq index (etaf-md--heading-positions session)))))
-    (when (and position (buffer-live-p buffer))
-      (with-selected-window (or (get-buffer-window buffer t) (selected-window))
-        (with-current-buffer buffer
-          (goto-char position)
-          (recenter 0)))
-      position)))
+         (outline (etaf-md-outline session))
+         (entry (and (integerp index) (>= index 0) (nth index outline)))
+         (runtime (and (buffer-live-p buffer) (etaf-runtime-for-buffer buffer)))
+         (ref (and entry (etaf-md--heading-ref (nth 2 entry))))
+         (in-scroller nil))
+    (when (and entry (buffer-live-p buffer))
+      (when (and runtime (etaf-runtime-mounted-p runtime)
+                 ref (etaf-runtime-host-props-for runtime ref))
+        (setq in-scroller (etaf-md--scrollable-ancestor-p runtime ref))
+        (when in-scroller
+          (etaf-scroll-into-view runtime ref 'start)))
+      (let ((position (cdr (assq index (etaf-md--heading-positions session)))))
+        (when position
+          (when (etaf-md--ref session :toc-active)
+            (etaf-md--write session :toc-active index))
+          (with-selected-window (or (get-buffer-window buffer t) (selected-window))
+            (with-current-buffer buffer
+              (push-mark (point) t)
+              (goto-char position)
+              (unless in-scroller
+                (when (eq (window-buffer (selected-window)) buffer)
+                  (recenter 0)))))
+          position)))))
 
 (defun etaf-md--adjacent-heading (session direction)
   "Move point to the next outline heading in DIRECTION.
@@ -1462,26 +2054,70 @@ the file directly."
         (call-process opener nil 0 nil path)
       (browse-url-of-file path))))
 
+(defun etaf-md--footnote-ref (label)
+  "Return the host ref symbol naming footnote definition LABEL."
+  (when (and (stringp label) (not (string-empty-p label)))
+    (intern (format "etaf-md-footnote-%s" label))))
+
 (defun etaf-md--jump-footnote (session label)
-  "Move point to footnote LABEL in SESSION's buffer."
-  (let ((buffer (plist-get session :buffer)))
+  "Move point to footnote definition LABEL in SESSION's buffer.
+Records the caller's position for the `↩' return control and pushes mark so
+`C-u C-SPC' returns to the reference."
+  (let* ((buffer (plist-get session :buffer))
+         (runtime (and (buffer-live-p buffer) (etaf-runtime-for-buffer buffer)))
+         (ref (etaf-md--footnote-ref label))
+         (in-scroller nil))
     (when (buffer-live-p buffer)
       (with-current-buffer buffer
-        (goto-char (point-min))
-        (if (search-forward (format "[%s]" (or (plist-get
-                                                (cl-find label
-                                                         (plist-get
-                                                          (etaf-md--read
-                                                           session :document)
-                                                          :footnotes)
-                                                         :key (lambda (footnote)
-                                                                (plist-get footnote :label))
-                                                         :test #'equal)
-                                                :number)
-                                               label))
-                             nil t)
-            (progn (beginning-of-line) (recenter 0))
-          (message "Footnote %s not found" label))))))
+        (let ((origin (point)))
+          (when-let* ((origins (plist-get session :footnote-origins))
+                      ((hash-table-p origins)))
+            (puthash label origin origins))
+          (when (and runtime (etaf-runtime-mounted-p runtime)
+                     ref (etaf-runtime-host-props-for runtime ref))
+            (setq in-scroller (etaf-md--scrollable-ancestor-p runtime ref))
+            (when in-scroller
+              (etaf-scroll-into-view runtime ref 'start)))
+          (let ((position
+                 (or (and runtime ref (etaf-host-ref-position runtime ref))
+                     ;; Fallback when unmounted: search backwards from buffer end
+                     ;; so we land on the bottom footnote definition, never on
+                     ;; the body reference itself.
+                     (save-excursion
+                       (goto-char (point-max))
+                       (let* ((entry (cl-find label
+                                              (plist-get
+                                               (etaf-md--read session :document)
+                                               :footnotes)
+                                              :key (lambda (fn) (plist-get fn :label))
+                                              :test #'equal))
+                              (needle (format "[%s] "
+                                              (or (and entry (plist-get entry :number))
+                                                  label))))
+                         (when (search-backward needle nil t)
+                           (match-beginning 0)))))))
+            (if position
+                (with-selected-window (or (get-buffer-window buffer t) (selected-window))
+                  (with-current-buffer buffer
+                    (push-mark origin t)
+                    (goto-char position)
+                    (unless in-scroller
+                      (recenter 0)))
+                  position)
+              (message "Footnote %s not found" label))))))))
+
+(defun etaf-md--jump-footnote-back (session label)
+  "Return from footnote definition LABEL back to its saved reference position."
+  (let ((buffer (plist-get session :buffer))
+        (origins (plist-get session :footnote-origins)))
+    (when (and (buffer-live-p buffer) (hash-table-p origins))
+      (if-let* ((origin (gethash label origins)))
+          (with-selected-window (or (get-buffer-window buffer t) (selected-window))
+            (with-current-buffer buffer
+              (push-mark (point) t)
+              (goto-char (max (point-min) (min (point-max) origin)))
+              (recenter)))
+        (message "没有记录脚注 %s 的引用位置" label)))))
 
 ;;; ---------------------------------------------------------------------------
 ;;; Rendering environment
@@ -1528,6 +2164,78 @@ frame, so FRAME nil reads that frame."
     (cons (face-attribute 'default :foreground)
           (face-attribute 'default :background))))
 
+(defun etaf-md--collect-gallery-images (session)
+  "Collect local/cached image items in SESSION for the media lightbox."
+  (let ((dir (or (plist-get session :dir) default-directory))
+        (items nil)
+        (seen (make-hash-table :test #'equal)))
+    (cl-labels
+        ((add (url caption)
+           (when (stringp url)
+             (let* ((remote (etaf-md--remote-url-p url))
+                    (path (if remote
+                              (etaf-md-cache-image-path url)
+                            (expand-file-name
+                             (if (string-prefix-p "file://" url) (substring url 7) url)
+                             dir))))
+               (when (and path (file-readable-p path)
+                          (eq (etaf-md--media-kind path) 'image)
+                          (not (gethash path seen)))
+                 (puthash path t seen)
+                 (push (list :src path
+                             :caption (or (and (stringp caption) (not (string-empty-p caption)) caption)
+                                          (file-name-nondirectory path)))
+                       items)))))
+         (walk-inline (node)
+           (when (and (listp node) (keywordp (car node)))
+             (when (eq (plist-get node :type) 'image)
+               (add (plist-get node :url) (plist-get node :alt)))
+             (dolist (ch (plist-get node :children)) (walk-inline ch))))
+         (walk-block (b)
+           (when (and (listp b) (keywordp (car b)))
+             (when-let* ((pic (plist-get b :picture)))
+               (add pic (or (plist-get b :lang) "图表")))
+             (pcase (plist-get b :type)
+               ((or 'paragraph 'heading)
+                (dolist (ch (plist-get b :children)) (walk-inline ch)))
+               ('container
+                (when (equal (plist-get b :name) "image-card")
+                  (let ((attrs (plist-get b :attrs)))
+                    (add (plist-get attrs :src) (plist-get attrs :title))))
+                (dolist (ch (plist-get b :children)) (walk-block ch)))
+               ((or 'blockquote 'list-item)
+                (dolist (ch (plist-get b :children)) (walk-block ch)))
+               ('list
+                (dolist (it (plist-get b :items))
+                  (dolist (ch (plist-get it :children)) (walk-block ch))))))))
+      (dolist (entry (plist-get session :entries))
+        (walk-block (plist-get entry :block))))
+    (nreverse items)))
+
+(defun etaf-md--open-lightbox (session path &optional caption)
+  "Open SESSION's in-buffer `etaf-media-viewer' lightbox at image PATH."
+  (let* ((buf (and session (plist-get session :buffer)))
+         (win (and (buffer-live-p buf) (get-buffer-window buf t)))
+         (frame (and (window-live-p win) (window-frame win)))
+         (use-lb (pcase etaf-md-media-lightbox
+                   ('t t)
+                   ('auto (display-graphic-p frame))
+                   (_ nil))))
+    (when (and use-lb
+               (buffer-live-p buf)
+               (stringp path) (file-readable-p path))
+      (let* ((items (etaf-md--collect-gallery-images session))
+             (idx (or (cl-position path items
+                                   :key (lambda (it) (plist-get it :src))
+                                   :test #'equal)
+                      (progn
+                        (setq items (append items
+                                            (list (list :src path
+                                                        :caption (or caption (file-name-nondirectory path))))))
+                        (1- (length items))))))
+        (etaf-md--write session :lightbox (list :items items :index idx))
+        t))))
+
 (defun etaf-md--env-inputs (session)
   "Return the values SESSION's rendering environment is built from.
 Every value the environment prints is read here, once.  Reading them is what
@@ -1540,6 +2248,8 @@ re-render after a theme switch instead of keeping the faces it first read."
          (frame (etaf-md--display-frame session)))
     (list :theme (etaf-md--read session :theme)
           :source source
+          :rev (etaf-md--read session :appearance-rev)
+          :viewport-width (etaf-md--read session :viewport-width)
           :width (etaf-md--read session :width)
           :columns (cdr (etaf-md--page-widths
                             session (etaf-md--read session :width)))
@@ -1547,25 +2257,41 @@ re-render after a theme switch instead of keeping the faces it first read."
           :surface (and face-derived (etaf-md--frame-surface frame))
           :appearance (and face-derived (etaf-appearance))
           :dir (plist-get session :dir)
-          :features (plist-get session :features))))
+          :features (plist-get session :features)
+          :annotations (plist-get session :annotations)
+          :reveal-spoilers (etaf-md--read session :reveal-spoilers))))
 
 (declare-function etaf-md--render-code-block "etaf-md-typeset" (block env))
 (declare-function etaf-md--render-math "etaf-md-typeset" (block env))
 (declare-function etaf-md-typeset-request "etaf-md-typeset" (session))
 (declare-function etaf-md-typeset-attach "etaf-md-typeset" (block env))
+(declare-function etaf-md-typeset-available-p "etaf-md-typeset" ())
+(declare-function etaf-md--typeset-block-kind "etaf-md-typeset" (block))
 
 (defun etaf-md--build-env (session)
   "Build SESSION's rendering environment from its current inputs."
-  (list :theme (etaf-md--read session :theme)
-        :palette (etaf-md--session-palette session)
-        :width (etaf-md--read session :width)
-        :figure-width (cdr (etaf-md--page-widths
-                              session (etaf-md--read session :width)))
-        :background (etaf-md--page-background session)
+  (let* ((max-width (etaf-md--read session :width))
+         (widths (etaf-md--page-widths session max-width)))
+    (list :theme (etaf-md--read session :theme)
+          :palette (etaf-md--session-palette session)
+          :width (car widths)
+          :figure-width (cdr widths)
+          :background (etaf-md--page-background session)
         :dir (plist-get session :dir)
         :features (plist-get session :features)
+        :annotations (plist-get session :annotations)
+        :reveal-spoilers (etaf-md--read session :reveal-spoilers)
         :open-url (lambda (url) (etaf-md--open-url session url))
         :open-link (lambda (url) (etaf-md--open-url session url))
+        :open-wiki-link (lambda (target anchor label)
+                          (etaf-md-assets-open-wiki-link session target anchor label))
+        :open-symbol (lambda (name)
+                       (etaf-md-assets-open-symbol session name))
+        :on-toggle-task (when etaf-md-interactive-checkbox
+                          (lambda (block item idx)
+                            (etaf-md-assets-toggle-task session block item idx)))
+        :open-lightbox (lambda (path &optional caption)
+                         (etaf-md--open-lightbox session path caption))
         :link-hover (plist-get session :link-hover)
         :heading-underline (plist-get session :heading-underline)
         :open-media (lambda (kind path) (etaf-md--open-media session kind path))
@@ -1581,10 +2307,14 @@ re-render after a theme switch instead of keeping the faces it first read."
            (etaf-md--ref session :video-active)
            (cons key (etaf-md--read session :video-active))))
         :footnote-jump (lambda (label) (etaf-md--jump-footnote session label))
+        :footnote-ref #'etaf-md--footnote-ref
+        :footnote-back (lambda (label) (etaf-md--jump-footnote-back session label))
+        :on-copy (lambda (_kind _text lines)
+                   (message "已复制 %d 行代码" lines))
         ;; A picture costs a program, so only a session with a file may start
         ;; one: the finished render repaints that file's page.
         :render-code-block #'etaf-md--render-code-block
-        :render-math #'etaf-md--render-math))
+        :render-math #'etaf-md--render-math)))
 
 (defun etaf-md--env (session)
   "Return SESSION's rendering environment, reused until one of its inputs changes.
@@ -1600,16 +2330,38 @@ retained block the same environment object, which keeps its props unchanged."
           env)))))
 
 (defun etaf-md--card-env (session env scope)
-  "Return ENV with video card identities for one render pass of SCOPE.
+  "Return ENV with video card identities and per-slot block state for SCOPE.
 SCOPE names the pass, so two cards of one source stay distinct while a card
-keeps its key across repaints of the same block.  ENV is shared between
-publishes, so the occurrence counter cannot live in it."
-  (let ((occurrences (make-hash-table :test #'equal)))
-    (plist-put (copy-sequence env) :video-card
-               (lambda (url)
-                 (etaf-md--video-card
-                  session url
-                  (list scope (cl-incf (gethash url occurrences 0))))))))
+keeps its key across repaints of the same block.  Bridging `:block-state' and
+`:set-block-state' to SCOPE's ref gives every block O(1) interactive toggles."
+  (let ((occurrences (make-hash-table :test #'equal))
+        (copy (copy-sequence env)))
+    (setq copy
+          (plist-put copy :video-card
+                     (lambda (url)
+                       (etaf-md--video-card
+                        session url
+                        (list scope (cl-incf (gethash url occurrences 0)))))))
+    (setq copy
+          (plist-put copy :block-state
+                     (lambda (key &optional default)
+                       (let* ((ref (etaf-md--block-state-ref session scope))
+                              (alist (and (etaf-ref-p ref) (etaf-value ref)))
+                              (cell (and alist (assoc (cons scope key) alist))))
+                         (if cell (cdr cell) default)))))
+    (setq copy
+          (plist-put copy :set-block-state
+                     (lambda (key value)
+                       (let ((ref (etaf-md--block-state-ref session scope)))
+                         (when (etaf-ref-p ref)
+                           (let* ((alist (copy-alist (etaf-value ref)))
+                                  (full (cons scope key))
+                                  (cell (assoc full alist)))
+                             (if cell (setcdr cell value)
+                               (push (cons full value) alist))
+                             (etaf-set-value ref alist))))
+                       value)))
+    copy))
 
 
 (provide 'etaf-md-model)

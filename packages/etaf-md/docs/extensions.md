@@ -1,6 +1,6 @@
 # Extension syntax
 
-> **Status.** The only extension the page renders today is the GitHub alert block: `> [!NOTE]`, `> [!TIP]`, `> [!IMPORTANT]`, `> [!WARNING]`, `> [!CAUTION]`. Everything else here is a design contract: it fixes the model, the syntax, the attributes and the acceptance before the code exists. Any name marked *planned* does not exist today, and its function names are proposals.
+> **Status.** The container vocabulary, `@tab` marker syntax, site components, `etaf-md-define-node`, `etaf-md-set-attr` (for container node selectors), and `etaf-md-describe-nodes` are implemented and rendered. Source-buffer authoring helpers (`etaf-md-edit-mode`, section 7) and non-container core Markdown selectors remain planned proposals.
 >
 > **How to read it.** Writing a document: chapters 3, 5 and 6. Writing a container definition: chapters 9 and 10. Implementing the renderer: chapters 2, 7, 8 and 11. What works today: the status table in 6.17. Why a name is spelled that way: Appendix E.
 >
@@ -48,11 +48,11 @@ Passes the buffer directly.
 | `list-style` | enum | steps, timeline, file-tree | `list-style=decimal` |
 | `href` | string | card | `href="#install"` |
 
-**Five surfaces:** `none`, `page`, `raised`, `sunken`, `quote`. **Six accents:** `neutral`, `primary`, `success`, `warning`, `danger`, `important`.
+**Seven surfaces:** `none`, `page`, `raised`, `sunken`, `quote`, `table-header`, `table-stripe`. **Six accents:** `neutral`, `primary`, `success`, `warning`, `danger`, `important`.
 
 A length always carries its unit, `2ch` or `1lh`; a bare `2` is wrong. A document never names a colour or a type size; the reader's theme and style table decide those.
 
-When an attribute name slips your mind, ask `etaf-md-describe-nodes`, or turn on `etaf-md-edit-mode` and let completion answer.
+When an attribute name slips your mind, ask `etaf-md-describe-nodes` (a dedicated source minor mode `etaf-md-edit-mode` is planned).
 
 ## 1. Place
 
@@ -68,7 +68,7 @@ Pages, directories, routes, navigation, data sources and publishing are things t
 
 That application owns its page model, its layout registry, its outline tree, its site navigation and its data. It requires this package's root entry and calls only the public interfaces. Nothing here grows a switch or a parameter for that layer's policy.
 
-The seam has one place: a document becomes a view. That interface does not exist yet; what is public today is creating a session, opening, closing, navigating, reading state and reporting capability. When the application needs to embed a rendered document, this package adds two entries: one returns a view for a text or a file that can be mounted in any region, and one registers a container. Both are planned.
+The seam has one place: a document becomes a view. `etaf-md-view` returns a mountable ETAF View for a session created from text or a file, and `etaf-md-define-node` registers a container type; embedding applications consume those public entries alongside session lifecycle, navigation, state snapshots and capability diagnostics.
 
 The package also emits no HTML. It paints a buffer. Serving a page to a browser is the application's own backend.
 
@@ -409,15 +409,11 @@ A fence's info takes four kinds of options after the language, in any order.
 ```
 ````
 
-The markers choose the paint and never reach the code.  Inside a focused block
-the rows that are not focused recede into the surface, and every ink is made
-readable against the fill it sits on, in light and dark themes alike.  The
-copy action in the header puts the code, markers removed, on the kill ring.
+The markers choose the paint and never reach the code.  Inside a focused block the rows that are not focused recede into the surface, and every ink is made readable against the fill it sits on, in light and dark themes alike.  The copy action in the header puts the code, markers removed, on the kill ring.
 
-Code blocks are painted by the `etaf-ui` markdown renderer; the page theme
-only supplies the palette.
+Code blocks are painted by the `etaf-ui` markdown renderer; the page theme only supplies the palette.
 
-### 3.6 Editing the source buffer
+### 3.7 Editing the source buffer
 
 A rendered page carries no markup, so the whole cost of it falls on the writer. Everything here happens in the source buffer. It changes neither the syntax nor the rendered result.
 
@@ -688,7 +684,7 @@ What ships today is the GitHub spelling, with the marker on the first line of a 
 > This only works on Emacs 30 and later.
 ```
 
-The planned container spelling gives five definitions one shared attribute set and one shared view.
+The container spelling is implemented too: seven names share one attribute set and one view (`details` belongs to the same family as a single-block fold, see 6.13).
 
 | Attribute | Type | Default | Meaning |
 | --- | --- | --- | --- |
@@ -750,8 +746,7 @@ A box is a card without a title. Centring a figure is what it is for.
 | `start` | number | `1` | First number |
 | `list-style` | enum | `decimal` | `decimal` for digits, `bullet` for a dot |
 
-The child is `step`, with a required `title`.  An ordered list works too:
-each item is one step and its text is the title.
+The child is `step`, with a required `title`.  An ordered list works too: each item is one step and its text is the title.
 
 ````markdown
 :::steps
@@ -888,13 +883,9 @@ The body is an indented list, one `-` per level.
 
 The case it solves: saying what a directory holds. A fenced block can show the same thing, but its lines have to line up with the indentation, and hand-written ones are off by a cell sooner or later. The marks use only the characters 4.6 allows.
 
-A comment after `#` follows the name in muted ink; `++ name` marks a new file
-and `-- name` a removed one, green and red; a name wrapped in `**` is bold, to
-point at the entry a reader should look at first.  `icon` accepts plume's values
-and paints no file icon on a text page.
+A comment after `#` follows the name in muted ink; `++ name` marks a new file and `-- name` a removed one, green and red; a name wrapped in `**` is bold, to point at the entry a reader should look at first.  `icon` accepts plume's values and paints no file icon on a text page.
 
-Component: the page draws its own guides, one row per entry, with no
-interaction.
+Component: the page draws its own guides, one row per entry, with no interaction.
 
 ### 6.10 Chat
 
@@ -902,10 +893,7 @@ interaction.
 | --- | --- | --- | --- |
 | `title` | string | none | Title above the conversation |
 
-The messages are grouped by marker lines, the way plume writes them: `{name}`
-starts a message, `{.}` is the reader themself, and `{:time}` changes the time.
-The blocks after a marker belong to that message, so a message may hold several
-paragraphs, a list or code.
+The messages are grouped by marker lines, the way plume writes them: `{name}` starts a message, `{.}` is the reader themself, and `{:time}` changes the time. The blocks after a marker belong to that message, so a message may hold several paragraphs, a list or code.
 
 ````markdown
 :::chat {title="Why does the preview not refresh"}
@@ -919,9 +907,7 @@ It refreshes after saving, so half typed text does not reflow.
 :::
 ````
 
-What the reader writes sits on the right and the other side on the left; the
-time takes a row of its own.  The case it solves: putting a conversation into a
-document as text instead of a screenshot.
+What the reader writes sits on the right and the other side on the left; the time takes a row of its own.  The case it solves: putting a conversation into a document as text instead of a screenshot.
 
 Component: `etaf-chat` when the catalog has one, painted in place otherwise.
 
@@ -1053,9 +1039,7 @@ A transformation of plume's `window`, which draws rounded corners and a shadow; 
 
 ### 6.16 Pane containers
 
-Three containers paint a rule a cell already owns instead of spending a row on
-it: a panel puts its title on its top rule, tabs sit in that rule, and a form
-hangs its value under a single line.
+Three containers paint a rule a cell already owns instead of spending a row on it: a panel puts its title on its top rule, tabs sit in that rule, and a form hangs its value under a single line.
 
 #### Panel
 
@@ -1075,8 +1059,7 @@ The panel names itself on its top rule; the body starts on the next row.
 :::
 ```
 
-The case it solves: several blocks sit side by side, each has to say what it
-is, and none of them wants to spend a whole row on a heading.
+The case it solves: several blocks sit side by side, each has to say what it is, and none of them wants to spend a whole row on a heading.
 
 Component: `etaf-edge-panel`.
 
@@ -1099,10 +1082,7 @@ The second page.
 :::
 ```
 
-The tabs and the body share one frame: the tab row is the top rule, the chosen
-tab is filled with the accent colour, and switching a tab swaps only the body.
-This separates it from `tabs` in 6.11: `tabs` is a strip of its own, while a
-tab panel grows its tabs on the pane's edge.
+The tabs and the body share one frame: the tab row is the top rule, the chosen tab is filled with the accent colour, and switching a tab swaps only the body. This separates it from `tabs` in 6.11: `tabs` is a strip of its own, while a tab panel grows its tabs on the pane's edge.
 
 Component: `etaf-edge-tabs`.
 
@@ -1112,8 +1092,7 @@ Component: `etaf-edge-tabs`.
 | --- | --- | --- | --- |
 | `width` | length | the row | Form width |
 
-The body is a list, one `label: value` per item; the label sits above the value
-and a line closes the value.
+The body is a list, one `label: value` per item; the label sits above the value and a line closes the value.
 
 ```markdown
 :::form
@@ -1122,34 +1101,32 @@ and a line closes the value.
 :::
 ```
 
-The case it solves: settings and environment facts, one column of names and one
-of values, with no need for a table's header row and alignment row.
+The case it solves: settings and environment facts, one column of names and one of values, with no need for a table's header row and alignment row.
 
 Component: `etaf-underline-field`.
 
 ### 6.17 Status table
 
-| Container | Family | Implementation | Status |
+| Container / syntax | Family | Implementation | Status |
 | --- | --- | --- | --- |
-| GitHub alert `> [!NOTE]` and its four siblings | Callouts | Primitives | Implemented |
-| `note`, `tip`, `important`, `warning`, `caution` | Callouts | Primitives | Planned |
-| `box` | Structure | Primitives | Planned |
-| `card` | Structure | `etaf-card` | Planned |
-| `columns` + `col` | Structure | Primitives, the engine's grid | Planned |
-| `steps` + `step` | Collections | `etaf-steps` | Planned |
-| `timeline` + `event` | Collections | `etaf-timeline` | Planned |
-| `stats` + `stat` | Collections | `etaf-statistic` | Planned |
-| `field` | Collections | Primitives | Planned |
-| `file-tree` | Collections | `etaf-tree` | Planned |
-| `chat` + `message` | Collections | Primitives | Planned |
-| `tabs` + `tab` | Interaction | `etaf-tabs` | Planned |
-| `code-tabs` + `tab` | Interaction | `etaf-tabs` | Planned |
-| `accordion` + `collapse` | Interaction | `etaf-accordion` | Planned |
-| `table` | Documents | Primitives | Planned |
-| `window` | Documents | Primitives | Planned |
-| `panel` | Pane | `etaf-edge-panel` | Implemented |
-| `tab-panel` + `tab` | Pane | `etaf-edge-tabs` | Implemented |
-| `form` | Pane | `etaf-underline-field` | Implemented |
+| GitHub / Obsidian alerts `> [!NOTE]` (with `+/-` folding and custom titles) | Callouts | Primitives | Implemented |
+| `note`, `info`, `tip`, `important`, `warning`, `caution`, `danger` | Callouts | Primitives | Implemented |
+| `box`, `card`, `columns` + `col`, `details`, `left`/`center`/`right`/`justify` | Structure | Primitives / `etaf-card` / `etaf-accordion` | Implemented |
+| `steps` + `step`, `timeline` + `event` (`orientation=horizontal`, `card`) | Collections | `etaf-steps` / `etaf-timeline` | Implemented |
+| `stats` + `stat` (`trend`, `accent`, `spark`) | Collections | `etaf-statistic` | Implemented |
+| `field`, `file-tree` (`lines`, `collapsible`, `clickable`), `chat` | Collections | Primitives | Implemented |
+| `tabs` + `tab`, `code-tabs` + `tab`, `accordion` + `collapse`, `swiper` | Interaction | `etaf-tabs` / `etaf-accordion` | Implemented |
+| `table` (`align`, `sortable` column sorting & copy), `window` | Documents | Primitives / `etaf-window-chrome` | Implemented |
+| `panel`, `tab-panel` + `tab`, `form`, `log`, `statusbar` | Pane | `etaf-edge-panel` / `etaf-edge-tabs` / `etaf-underline-field` / `etaf-log` / `etaf-status-bar` | Implemented |
+| `chart` (`line`, `bar`, `stacked`, `heatmap`) | Visualization | `etaf-braille-chart` / Primitives | Implemented |
+| `progress`, `keymap`, `breadcrumb` | Editorial structure | Primitives | Implemented |
+| `diff` (`@before`/`@after`), `pros-cons` (`@pro`/`@con`), `demo` | Comparison & live examples | Primitives | Implemented |
+| `home-box`, `image-card`, `link-card`, `npm-badge`, `qrcode`, `code-tree`, `npm-to` | Site & showcase | Primitives / `etaf-badge` / `etaf-qr` | Implemented |
+| `include`, `code-ref`, `symbol`, `project-tree`, `git-log`, `git-diff` | Emacs-native living docs (L1 read-only) | Sandboxed asset layer (`:asset-data`) | Implemented |
+| `run` | Emacs-native living docs (L2 explicit action) | Trust-gated actions (`etaf-md-allow-actions`) | Implemented |
+| Inline semantics: `!!spoiler!!`, `[+note]`, `[[wiki]]`, `%%comment%%`, `:color[...]`, `:sym[...]` | Inline extensions | `etaf-ui-markdown` | Implemented |
+| Code fence upgrades: `:collapsed-lines[=N]`, `/word/`, `[!code word:...]`, `:whitespace`, `:indent-guides` | Code blocks | `etaf-ui-markdown` | Implemented |
+| Interactive GFM task checkboxes, `C-c t` independent Emacs side-window outline, `S` global spoilers, `K` link/symbol preview, media lightbox | Reader shell | `etaf-md-app` / `etaf-media-viewer` | Implemented |
 
 ## 7. The interaction contract
 
@@ -1607,7 +1584,7 @@ heading            built in; a document cannot write its name
 
 - When something looks wrong, follow one chain: what type is this block, which definition renders it, which component it calls, which layer supplied each value, and which token that landed on.
 - The error line is always on the page, so no log has to be opened.
-- `etaf-md-doctor` answers for the programs a page can use — ffmpeg, mermaid-cli, qrencode — so a reader learns why a block kept its source text. Reporting the registry itself (how many types, which override is in place) is planned.
+- `etaf-md-doctor` answers for the optional capabilities a page can use — `typeset-native`, `ffmpeg`, `mmdc`, `qrencode` and `git` — so a reader learns why a block kept its source text. Reporting the registry itself (how many types, which override is in place) is planned.
 
 ### 10.9 Trust model
 

@@ -515,9 +515,9 @@ Keep a Host visible while its buffer scrolls.
 
 **Arguments.** nil or `top`. Any other value is rejected. The default is nil.
 
-**Semantics.** A `top` Host stays reachable like a sticky header. Once a window's start reaches the Host, ETAF mirrors the Host's first row into that window's header line and makes the window body start after the Host, so the row is neither duplicated nor shifted; while point is inside the Host, the Host shows in place instead. A primary click on a mirrored cell runs that cell's press binding at its buffer position. The Runtime owns the buffer's `header-line-format` while a sticky Host is mounted, and one Host per Runtime is sticky: the last committed `top` Host wins.
+**Semantics.** A `top` Host mirrors its first row into a displaying window's header line once that window scrolls completely past the Host's rows (`window-start` reaches the line after the Host), without moving `window-start`, so the original row and the mirror never appear simultaneously. A primary click on a mirrored cell runs that cell's press binding at its buffer position. The mirror refreshes on commits, retained Host updates and refits, and is cleared when the Host stops being sticky or the Runtime unmounts. The Runtime owns the buffer's `header-line-format` while a sticky Host is mounted, and one Host per Runtime is sticky: the last committed `top` Host wins.
 
-Sticky is a row-level affordance: keep the Host to a single row, as in a toolbar or a section header, rather than a whole panel.
+Sticky is a lightweight single-row header mirror for natively scrolling buffers, subject to Emacs header-line limits: it mirrors only the first row at the buffer's layout width (narrower second windows clip it) and cannot receive point, keyboard focus or native text input. Lay out fixed interactive toolbars as a non-scrolling sibling above an `:overflow` `scroll` viewport instead.
 
 **Example.** A build log whose header stays visible while the log scrolls.
 
@@ -539,6 +539,20 @@ Sticky is a row-level affordance: keep the Host to a single row, as in a toolbar
 **Errors.** `error→ etaf-renderer-error` when the value is not nil or `top`.
 
 **See also.** [Viewport](viewport.md) and [Scrolling](scrolling.md).
+
+#### Property: :translate
+
+Declare a translation hint on a Host for page-translation extensions.
+
+**Arguments.** nil, `t`, `yes`, `no` or `content`. Any other value is rejected. The default is nil.
+
+**Semantics.** Stored as Runtime-owned semantic Host metadata and exposed through `etaf-runtime-host-tree` without affecting Ebox layout or styling. nil inherits from enclosing Hosts; `t` or `yes` marks the Host translatable; `no` excludes the Host and its subtree (useful for code blocks, identifiers and key caps); `content` marks a primary content region.
+
+**Example.** `(box :translate 'no (text "M-x etaf-translate-toggle"))`
+
+**Errors.** `error→ etaf-renderer-error` when the value is outside nil, `t`, `yes`, `no` and `content`.
+
+**See also.** `etaf-runtime-host-tree` and `etaf-runtime-set-host-presentations`.
 
 ### Keyboard operation
 
@@ -716,7 +730,7 @@ The cost of a Host update is therefore proportional to that Host's own propertie
 
 ### Sticky Hosts
 
-The sticky mechanism is owned by the Runtime, not by the layout. When a Host with `:sticky top` commits, the Runtime records it; when a window's start reaches the Host's bounds, ETAF mirrors the Host's first row into that window's header line, adjusts the window's start so the body begins after the Host, and removes the mirror when the window scrolls back above the Host or point is inside it. Because the header line belongs to the window, the mechanism works per window: every window showing the buffer can have its own state. The mirror is a copy for display; it is refreshed when the Host is repainted, and clicking a mirrored cell runs the press binding of the cell at its original buffer position.
+The sticky mechanism is owned by the Runtime, not by the layout. When a Host with `:sticky` `top` commits, the Runtime records it and prepares a single-row mirror string with primary mouse clicks forwarded to each cell's buffer position. The buffer's `header-line-format` uses a zero-allocation integer check against the window's start so the mirror appears only after the Host's rows have scrolled completely off screen and hides automatically once any part of the Host returns into view, without calling `set-window-start`. Because the header line belongs to the window, each window showing the buffer decides independently whether to show the mirror, though all windows share the buffer's rendered width. The mirror and its line span refresh on commits, retained Host updates and refits, and are removed completely when the Host clears `:sticky` or the Runtime unmounts.
 
 #### Function: etaf-projection (runtime entries &optional source)
 

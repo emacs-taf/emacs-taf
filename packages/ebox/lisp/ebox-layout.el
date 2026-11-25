@@ -1358,9 +1358,10 @@ Items in ITEM's run move one by one; later runs move by their offset."
          (let ((r (ebox--seq-find-run seq run)))
            (and r (eq (aref (ebox-seq-runs seq) r) run))))))
 
-(defun ebox--absorb (node geo changed)
+(defun ebox--absorb (node geo changed &optional recorded)
   "Absorb CHANGED (ITEM OLD-W OLD-H) height changes in stack NODE.
-Return non-nil on success."
+RECORDED, when non-nil, holds earlier structural line damages of NODE whose
+start lines must follow each absorbed height shift.  Return non-nil on success."
   (when (ebox--stack-capable-p node geo)
     (let ((cs (ebox-node-cs node)) (delta-total 0))
       (catch 'fail
@@ -1378,6 +1379,12 @@ Return non-nil on success."
                 (throw 'fail nil)))
             (let ((delta (- (ebox--item-h item) (nth 2 entry))))
               (unless (zerop delta)
+                (when recorded
+                  (setq recorded
+                        (ebox--shift-recorded recorded
+                                              (ebox--item-y item)
+                                              (nth 2 entry)
+                                              (ebox--item-h item))))
                 (ebox--shift-after geo item delta)
                 (ebox--note-shift delta)
                 (setq delta-total (+ delta-total delta))))))
@@ -1418,18 +1425,20 @@ including through a dirty descendant, requires relaying out NODE."
 
 (defun ebox--border-damage (node geo old-bh)
   "Repaint NODE's border lines whose position moved since OLD-BH lines.
-Top and bottom borders decorate the first and last border-box lines, so a
-height change moves them without changing the lines it inserted or deleted."
+Top and bottom borders and rounded corners decorate the first and last
+border-box lines, so a height change moves them without changing the
+lines it inserted or deleted."
   (let* ((cs (ebox-node-cs node))
          (bh (ebox-geo-bh geo))
          (delta (- bh old-bh))
-         (mt (ebox-geo-mt geo)))
+         (mt (ebox-geo-mt geo))
+         (rounded (> (or (ebox--px (ebox--cv cs 'ebox/border-radius) cs nil) 0) 1)))
     (when (and ebox--record (/= delta 0) (> bh 0))
-      (when (ebox-cs-bbot cs)
+      (when (or (ebox-cs-bbot cs) rounded)
         (push (list (list 'lines node (+ mt (1- bh)) 'border) 0 1 1) ebox--damage)
         (when (and (> delta 0) (> old-bh 0))
           (push (list (list 'lines node (+ mt (1- old-bh)) 'border) 0 1 1) ebox--damage)))
-      (when (ebox-cs-btop cs)
+      (when (or (ebox-cs-btop cs) rounded)
         (push (list (list 'lines node mt 'border) 0 1 1) ebox--damage)
         (when (and (> delta 0) (< delta bh))
           (push (list (list 'lines node (+ mt delta) 'border) 0 1 1) ebox--damage))))))
@@ -1448,47 +1457,50 @@ height change moves them without changing the lines it inserted or deleted."
     (dolist (kid kids)
       (setf (ebox-node-dirty kid) (logand (ebox-node-dirty kid) (lognot ebox--d-queued))))
     (setf (ebox-node-dirty node) (logand (ebox-node-dirty node) (lognot ebox--d-desc)))
-    (when ops
-      (unless (ebox--apply-ops node geo ops)
-        (setq full t)))
-    (unless full
-      (dolist (kid kids)
-        (when (and (not full)
-                   (eq (ebox-node-parent kid) node)
-                   (not (zerop (logand (ebox-node-dirty kid) 15)))
-                   (not (ebox--abs-p kid))
-                   (or (ebox--content-stable-p geo kid) (progn (setq full t) nil)))
-          (let* ((flow (eq (ebox-node-tag node) 'box))
-                 (para (and flow (ebox--inline-p kid) (ebox--para-of geo kid))))
-            (cond
-             (para
-              (let ((oh (ebox-para-h para)))
-                (ebox--layout-para para (ebox-para-w para))
-                (if (= oh (ebox-para-h para))
-                    (when ebox--record
-                      (setq ebox--damage (cons (list para 0 oh oh) ebox--damage)))
-                  (push (list para (ebox-para-w para) oh) changed))))
-             ((and flow (ebox--inline-p kid)) (setq full t))
-             (t
-              (let* ((ow (ebox-node-w kid)) (oh (ebox-node-h kid))
-                     (key (ebox--constraint kid))
-                     (nat (and key (aref key 3) (ebox-geo-nat (ebox-node-layout kid)))))
-                (if (null key)
-                    (setq full t)
-                  (when (and (ebox--layout kid (aref key 0) (aref key 1) (aref key 2)
-                                           (aref key 3))
-                             (aref key 3))
-                    ;; NODE derived KID's forced height from KID's natural
-                    ;; height; measure again when that may have changed.
-                    (let ((new (ebox--stretched-natural kid)))
-                      (setf (ebox-geo-nat (ebox-node-layout kid)) new)
-                      (unless (and new nat (= new nat))
-                        (setq full t))))
-                  (unless (and (= ow (ebox-node-w kid)) (= oh (ebox-node-h kid)))
-                    (push (list kid ow oh) changed))))))))))
-    (when (and changed (not full))
-      (unless (ebox--absorb node geo (nreverse changed))
-        (setq full t)))
+    (let ((ops-recorded nil))
+      (when ops
+        (let ((res (ebox--apply-ops node geo ops)))
+          (if res
+              (setq ops-recorded (and (consp res) res))
+            (setq full t))))
+      (unless full
+        (dolist (kid kids)
+          (when (and (not full)
+                     (eq (ebox-node-parent kid) node)
+                     (not (zerop (logand (ebox-node-dirty kid) 15)))
+                     (not (ebox--abs-p kid))
+                     (or (ebox--content-stable-p geo kid) (progn (setq full t) nil)))
+            (let* ((flow (eq (ebox-node-tag node) 'box))
+                   (para (and flow (ebox--inline-p kid) (ebox--para-of geo kid))))
+              (cond
+               (para
+                (let ((oh (ebox-para-h para)))
+                  (ebox--layout-para para (ebox-para-w para))
+                  (if (= oh (ebox-para-h para))
+                      (when ebox--record
+                        (setq ebox--damage (cons (list para 0 oh oh) ebox--damage)))
+                    (push (list para (ebox-para-w para) oh) changed))))
+               ((and flow (ebox--inline-p kid)) (setq full t))
+               (t
+                (let* ((ow (ebox-node-w kid)) (oh (ebox-node-h kid))
+                       (key (ebox--constraint kid))
+                       (nat (and key (aref key 3) (ebox-geo-nat (ebox-node-layout kid)))))
+                  (if (null key)
+                      (setq full t)
+                    (when (and (ebox--layout kid (aref key 0) (aref key 1) (aref key 2)
+                                             (aref key 3))
+                               (aref key 3))
+                      ;; NODE derived KID's forced height from KID's natural
+                      ;; height; measure again when that may have changed.
+                      (let ((new (ebox--stretched-natural kid)))
+                        (setf (ebox-geo-nat (ebox-node-layout kid)) new)
+                        (unless (and new nat (= new nat))
+                          (setq full t))))
+                    (unless (and (= ow (ebox-node-w kid)) (= oh (ebox-node-h kid)))
+                      (push (list kid ow oh) changed))))))))))
+      (when (and changed (not full))
+        (unless (ebox--absorb node geo (nreverse changed) ops-recorded)
+          (setq full t))))
     (if full
         (let ((key (ebox--constraint node)))
           (setf (ebox-node-intr node) nil)
@@ -1575,7 +1587,7 @@ height change moves them without changing the lines it inserted or deleted."
                      (setq recorded (ebox--shift-recorded recorded start delta 0))
                      (push (list (list 'lines node start) 0 delta 0) recorded)
                      (push (car recorded) ebox--damage))))))))
-        (ebox--stack-resize node geo total)))))
+        (and (ebox--stack-resize node geo total) (or recorded t))))))
 
 (defun ebox--shift-recorded (recorded start old new)
   "Move RECORDED line damages past an edit of OLD lines to NEW at START.
@@ -2117,10 +2129,12 @@ line's top when the shape does not simply fill the line."
                    (or (> top (- radius)) (< bottom (+ lh radius)))
                    (ebox-image--metrics nil)
                    (image-type-available-p 'svg))
-          (let ((parent (ebox-node-parent node)))
-            (list top bottom (if (> radius 1) radius 0) (ebox-cs-bg cs)
-                  (or (and parent (ebox-cs-bg (ebox-node-cs parent)))
-                      (face-background 'default nil t)))))))))
+          (let* ((parent (ebox-node-parent node))
+                 (inside (ebox-cs-bg cs))
+                 (outside (or (and parent (ebox-cs-bg (ebox-node-cs parent)))
+                              (face-background 'default nil t))))
+            (unless (equal inside outside)
+              (list top bottom (if (> radius 1) radius 0) inside outside))))))))
 
 (defun ebox--shape-end (shape left width padface)
   "Return the strings of WIDTH pixels of side padding under SHAPE.
@@ -2967,25 +2981,62 @@ copied, so the strut keeps its zero-width height display."
       (ebox-node-host node)
     (ebox-node-parent node)))
 
-(defun ebox--clip-range (range node)
-  "Restrict root-line RANGE (START OLD NEW WHOLE) to the lines NODE's clips show.
-NODE is the innermost node whose content box holds RANGE; every clipping
-node from NODE outward keeps only its visible content lines, and a height
-change shifts the clipped lines below it.  Return nil when no shown line
-changes."
+(defun ebox--clip-range (range node &optional child)
+  "Restrict root-line RANGE (START OLD NEW WHOLE) through NODE and its ancestors.
+NODE is the innermost node whose content box holds RANGE; CHILD, when
+non-nil, is the immediate child of NODE that RANGE ascended from.  Every
+clipping node keeps only its visible content lines.  A height-changing
+range (OLD /= NEW) cannot shift root buffer lines across a non-stack
+container (whose siblings may share lines) or across a node hosting
+placed overlays, so it becomes a same-height rewrite before any enclosing
+clip applies; pure insertions or deletions at a bordered or rounded
+ancestor's first or last border-box line extend by one line so the
+adjacent border or corner line is repainted cleanly.  Return nil when no
+shown line changes."
   (pcase-let ((`(,start ,old ,new ,whole) range))
     (while (and node start)
       (let ((geo (ebox-node-layout node)))
-        (when (and geo (or (> (ebox-geo-ch geo) (ebox-geo-vh geo))
-                           (> (ebox-geo-scroll geo) 0)))
-          (let* ((top (+ (ebox--item-top-in-root node) (ebox-geo-mt geo) (ebox-geo-pt geo)))
-                 (end (+ top (ebox-geo-vh geo)))
-                 (from (max start top))
-                 (to (if (= old new) (min (+ start new) end) end)))
-            (if (< from to)
-                (setq start from old (- to from) new (- to from) whole nil)
-              (setq start nil)))))
-      (setq node (ebox--clip-parent node)))
+        (when geo
+          (when (/= old new)
+            (let ((non-stack (not (ebox-geo-stack geo)))
+                  (overlays (cl-some #'ebox-node-placed (ebox-node-overlays node))))
+              (when (or non-stack overlays)
+                (let* ((box-top (if (and non-stack child)
+                                    (ebox--item-top-in-root child)
+                                  (+ (ebox--item-top-in-root node)
+                                     (ebox-geo-mt geo) (ebox-geo-pt geo))))
+                       (box-end (if (and non-stack child)
+                                    (+ box-top (ebox-node-h child))
+                                  (+ box-top (ebox-geo-vh geo))))
+                       (from (max start box-top))
+                       (to box-end))
+                  (if (< from to)
+                      (setq start from old (- to from) new (- to from) whole nil)
+                    (setq start nil))))))
+          (when (and start (or (> (ebox-geo-ch geo) (ebox-geo-vh geo))
+                               (> (ebox-geo-scroll geo) 0)))
+            (let* ((top (+ (ebox--item-top-in-root node) (ebox-geo-mt geo) (ebox-geo-pt geo)))
+                   (end (+ top (ebox-geo-vh geo)))
+                   (from (max start top))
+                   (to (if (= old new) (min (+ start new) end) end)))
+              (if (< from to)
+                  (setq start from old (- to from) new (- to from) whole nil)
+                (setq start nil))))
+          (when (and start (/= old new) (or (zerop old) (zerop new)))
+            (let* ((cs (ebox-node-cs node))
+                   (bh (ebox-geo-bh geo))
+                   (rounded (> (or (ebox--px (ebox--cv cs 'ebox/border-radius) cs nil) 0) 1))
+                   (btop (+ (ebox--item-top-in-root node) (ebox-geo-mt geo)))
+                   (bend (+ btop bh)))
+              (when (> bh 0)
+                (when (and (or (ebox-cs-btop cs) rounded)
+                           (<= start btop) (< (+ start new) bend))
+                  (setq old (1+ old) new (1+ new) whole nil))
+                (when (and (or (ebox-cs-bbot cs) rounded)
+                           (>= (+ start new) bend) (> start btop))
+                  (setq start (1- start) old (1+ old) new (1+ new) whole nil)))))))
+      (setq child node
+            node (ebox--clip-parent node)))
     (and start (list start old new whole))))
 
 (defun ebox--damage-range (damage)
@@ -3004,13 +3055,15 @@ means the damage is not shown."
                       (+ (nth 2 item) (ebox-geo-mt geo) (ebox-geo-pt geo)
                          (- (ebox-geo-scroll geo))))))
         (ebox--clip-range (list (+ (ebox--item-top-in-root node) start from) old new nil)
-                          (if border (ebox--clip-parent node) node))))
+                          (if border (ebox--clip-parent node) node)
+                          (and border node))))
      ((ebox-para-p item)
       (ebox--clip-range (list (+ (ebox--item-top-in-root item) from) old new nil)
                         (ebox-para-owner item)))
      (t
       (ebox--clip-range (list (+ (ebox--item-top-in-root item) from) old new (= from 0))
-                        (ebox--clip-parent item))))))
+                        (ebox--clip-parent item)
+                        item)))))
 
 (defun ebox--damage-live-p (damage root)
   "Return non-nil when DAMAGE's owner is laid out under ROOT."
@@ -3041,9 +3094,19 @@ the next pass believes it painted."
               (t (push r ranges)))))
     (setq ranges (nreverse ranges))
     (when (cdr ranges)
-      (setq ranges (sort ranges (lambda (a b)
-                                  (or (< (car a) (car b))
-                                      (and (= (car a) (car b)) (> (nth 2 a) (nth 2 b))))))))
+      (setq ranges
+            (sort ranges
+                  (lambda (a b)
+                    (or (< (car a) (car b))
+                        (and (= (car a) (car b))
+                             ;; Put pure deletions (new = 0) before positive
+                             ;; ranges at the same start so touching merge
+                             ;; folds them instead of dropping them as nested;
+                             ;; among positive ranges, wider comes first so
+                             ;; containers precede nested same-height damage.
+                             (or (and (zerop (nth 2 a)) (> (nth 2 b) 0))
+                                 (and (> (nth 2 a) 0) (> (nth 2 b) 0)
+                                      (> (nth 2 a) (nth 2 b))))))))))
     (catch 'full
       ;; Every range is a fresh list, so merging edits it in place.
       (dolist (range ranges)
@@ -3051,8 +3114,14 @@ the next pass believes it painted."
                (prev-end (and prev (+ (car prev) (nth 2 prev))))
                (end (+ (car range) (nth 2 range))))
           (cond
-           ((or (null prev) (>= (car range) prev-end))
+           ((or (null prev) (> (car range) prev-end))
             (push range merged))
+           ((= (car range) prev-end)
+            ;; Touching ranges in post-layout order combine into one contiguous
+            ;; replacement covering both old and new spans.
+            (setf (nth 1 prev) (+ (nth 1 prev) (nth 1 range))
+                  (nth 2 prev) (+ (nth 2 prev) (nth 2 range))
+                  (nth 3 prev) nil))
            ((and (<= end prev-end)
                  (or (= (nth 1 range) (nth 2 range)) (nth 3 prev)))
             ;; Nested in lines the previous edit already rewrites.
@@ -3066,18 +3135,26 @@ the next pass believes it painted."
            (t (throw 'full 'full)))))
       (dolist (edit merged)
         (setcdr (nthcdr 2 edit) nil))
-      (let ((growth 0))
-        (dolist (edit merged)
-          (setq growth (+ growth (- (nth 2 edit) (nth 1 edit)))))
-        (if (or (and old-lines (/= (+ old-lines growth) height))
-                ;; Several ranges each start where their node now sits.  When
-                ;; the page also changes height, the ranges after the first
-                ;; sit at lines the old buffer does not hold there: their own
-                ;; node moved, so replacing at the new start leaves what the
-                ;; node used to occupy.  Rewrite the page instead.
-                (and (cdr merged) (/= growth 0)))
+      ;; Ordered post-layout edits apply sequentially top to bottom: each edit
+      ;; shifts later lines by its net growth so the next edit's post-layout
+      ;; start lands on its exact old lines.  Verify every edit stays in bounds
+      ;; and the total delta accounts for ROOT's new height.
+      (let ((edits (nreverse merged))
+            (delta 0)
+            (valid t))
+        (dolist (edit edits)
+          (let ((start (car edit))
+                (old (nth 1 edit))
+                (new (nth 2 edit)))
+            (when (or (< start 0) (< old 0) (< new 0)
+                      (> (+ start new) height)
+                      (and old-lines (> (+ start old) (+ old-lines delta))))
+              (setq valid nil))
+            (setq delta (+ delta (- new old)))))
+        (if (or (not valid)
+                (and old-lines (/= (+ old-lines delta) height)))
             'full
-          (nreverse merged))))))
+          edits)))))
 
 (provide 'ebox-layout)
 

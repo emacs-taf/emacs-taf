@@ -50,7 +50,7 @@
 
 **参数。** TITLE 是可选的 strong 标题；DESCRIPTION 是可选的 muted 辅助行；VARIANT 是追加到表面类名的符号。default slot 装卡片内容。
 
-**语义。** 内容顺序是 TITLE、DESCRIPTION、default slot。表面使用与 `etaf-panel` 相同的内边距、间隙与面板 token，并撑满可用宽。VARIANT 不带内置行为：任何值都产出相同的默认外观，只是类名不同，因此调用方通过自己的规则或 Theme 区分卡片风格。
+**语义。** 内容顺序是 TITLE、DESCRIPTION、default slot。表面使用与 `etaf-panel` 相同的内边距、间隙与面板 token，撑满可用宽，并将 TEXT-ALIGN 同时作用于标题行与正文内容。VARIANT 为语义强调值（`primary`、`info`、`success`、`warning`、`danger`、`important`）时，标题与左侧 3px 竖条取对应 Theme 强调色；`default`、`neutral` 及自定义名称保持默认面板边框与加粗标题并追加类名。传入 ON-PRESS 时整张卡片附带手形指针。
 
 **返回。** 一个 View。
 

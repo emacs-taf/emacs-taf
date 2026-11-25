@@ -23,33 +23,16 @@
 
 英文是主语言。每一章在每种语言下都有同名文件。
 
-`site/` 是发布全书的 Astro 工程。`site/scripts/export-site.el` 读取解析好的书，
-把页面和侧栏写到 `site/src/content/` 下（生成内容不进版本库）；`site/astro.config.mjs`
-配置 Starlight，英文在根路径、简体中文在 `/zh-cn/` 下；`site/scripts/publish.py`
-构建站点并把新版本部署到 `current` 软链之后。页面内的章间链接会改写成站点路由，
-`elisp :run` 与 `:figure` 代码块会变成带标签的普通 `elisp` 块，因为静态页面无法挂载 View。
-导出器还会重新生成含安装说明与手册链接的双语未找到页面。`site/src/content/i18n/` 维护本地化无障碍文案；Markdown 处理器保留原标点，使章节锚点与书稿一致。
+`site/` 是发布全书的 Astro 工程。`site/scripts/export-site.el` 读取解析好的书，把页面和侧栏写到 `site/src/content/` 下（生成内容不进版本库）；`site/astro.config.mjs` 配置 Starlight，英文在根路径、简体中文在 `/zh-cn/` 下；`site/scripts/publish.py` 构建站点并把新版本部署到 `current` 软链之后。页面内的章间链接会改写成站点路由，`elisp :run` 与 `:figure` 代码块会变成带标签的普通 `elisp` 块，因为静态页面无法挂载 View。导出器还会重新生成含安装说明与手册链接的双语未找到页面。`site/src/content/i18n/` 维护本地化无障碍文案；Markdown 处理器保留原标点，使章节锚点与书稿一致。
 
-首页是独立的 Astro 页面，不是 Starlight splash：`site/src/components/Landing.astro`
-按 `site/src/data/landing.mjs` 里的文案、截图和仓库链接渲染，
-`site/src/pages/index.astro` 与 `site/src/pages/zh-cn/index.astro` 选择语言。
-Starlight 的内容流、标题包装和栏宽会和自由布局冲突，所以它只负责阅读页。
-两者共用 `site/src/styles/brand.css`，其中定义字体和浅色、深色两套配色；
-`site/src/styles/custom.css` 把它们映射到 Starlight 并设定阅读尺寸。
-配色主题存放在 `starlight-theme` 键下，在任一侧切换都会同步到另一侧。手册页头复用首页的
-主题按钮和语言链接，不再使用 Starlight 的下拉选择。
+首页是独立的 Astro 页面，不是 Starlight splash：`site/src/components/Landing.astro` 按 `site/src/data/landing.mjs` 里的文案、截图和仓库链接渲染，`site/src/pages/index.astro` 与 `site/src/pages/zh-cn/index.astro` 选择语言。Starlight 的内容流、标题包装和栏宽会和自由布局冲突，所以它只负责阅读页。两者共用 `site/src/styles/brand.css`，其中定义字体和浅色、深色两套配色；`site/src/styles/custom.css` 把它们映射到 Starlight 并设定阅读尺寸。配色主题存放在 `starlight-theme` 键下，在任一侧切换都会同步到另一侧。手册页头复用首页的主题按钮和语言链接，不再使用 Starlight 的下拉选择。
 
 站点保持书籍式的排版风格，修改时调整这些设定，不要另加局部样式：
 
-- 字体：拉丁文正文与标题用 Source Serif 4，中文正文用霞鹜文楷，中文标题用
-  Noto Serif SC，代码与小号标签用 IBM Plex Mono 加霞鹜文楷等宽。字体来自
-  fontsource 包，按 unicode-range 切片自托管；霞鹜文楷从其 webfont CDN 加载。
-- 阅读：正文 18px、行高 1.75（中文 1.85），栏宽 44rem；导航与页内目录保持
-  15px 和 14px。
-- 配色：暖色纸墨，ETAF 标志的紫色只用于链接和小处点缀。深色主题是带细颗粒的
-  哑光炭灰，让表面像纸面而不是黑玻璃。不用渐变、光晕、毛玻璃和仿窗口外框。
-- 布局：任何宽度下都没有元素横向滚动，代码块与表格改为折行；改动后检查
-  390 与 360 CSS 像素。
+- 字体：拉丁文正文与标题用 Source Serif 4，中文正文用霞鹜文楷，中文标题用 Noto Serif SC，代码与小号标签用 IBM Plex Mono 加霞鹜文楷等宽。字体来自 fontsource 包，按 unicode-range 切片自托管；霞鹜文楷从其 webfont CDN 加载。
+- 阅读：正文 18px、行高 1.75（中文 1.85），栏宽 44rem；导航与页内目录保持 15px 和 14px。
+- 配色：暖色纸墨，ETAF 标志的紫色只用于链接和小处点缀。深色主题是带细颗粒的哑光炭灰，让表面像纸面而不是黑玻璃。不用渐变、光晕、毛玻璃和仿窗口外框。
+- 布局：任何宽度下都没有元素横向滚动，代码块与表格改为折行；改动后检查 390 与 360 CSS 像素。
 
 ## 发布站点和包归档
 
@@ -67,11 +50,7 @@ make site-publish PUBLISH_ARGS='--packages /path/to/release'
 
 默认 SSH 路径经 `lightos` 到 `root@aliyun-hk`。`ETAF_TOP_ROOT=direct` 使用直连；`ETAF_TOP_HOST` 更换主机，`ETAF_TOP_KEEP` 控制保留的站点版本数（默认 5，最少 2）。服务端需要 Python 3.10+。部署锁串行化站点与包发布；原子切换前检查 tar 路径、文件类型、摘要和公开文件白名单。已有包文件名不能被不同字节替换，包版本不能倒退。即使旧站点版本被清理，历史 tar 包也会带入新版本继续提供下载。
 
-每次包发布还会生成可浏览的归档。`packages/index.html` 按框架、应用、游戏分组列出
-每个包；`packages/<名>/index.html` 是该包的详情页——用途、安装片段、GitHub 仓库、
-构建所用的源码提交、校验和与源码包。包名链接指向详情页，而不是直接下载；手册链接
-写在正文里，不在页头放菜单。`package.el` 仍只读 `archive-contents`，浏览器打开裸目录
-看到的是归档说明而不是 404。两个页面每次发布都从清单重新生成，不属于清单内容。
+每次包发布还会生成可浏览的归档。`packages/index.html` 按框架、应用、游戏分组列出每个包；`packages/<名>/index.html` 是该包的详情页——用途、安装片段、GitHub 仓库、构建所用的源码提交、校验和与源码包。包名链接指向详情页，而不是直接下载；手册链接写在正文里，不在页头放菜单。`package.el` 仍只读 `archive-contents`，浏览器打开裸目录看到的是归档说明而不是 404。两个页面每次发布都从清单重新生成，不属于清单内容。
 
 归档页还会显示每个包的下载次数。服务端的 `site/scripts/download-stats.py` 由 systemd 定时器（`etaf-download-stats`，每十分钟）运行，统计的是「安装」而不是「取文件」：版本化 tar 包只有同一客户端在一分钟内也请求它的 `.tar.sig` 才计数——package.el 会这么做，爬虫或手工 `curl` 不会；同一客户端每个包每个 UTC 日只算一次，所以反复跑测试不会把数字抬高；部署校验带 `?deployment=` 的请求直接跳过。它把 `packages/downloads.json` 写在不可变版本目录之外。页面在浏览器里读取该文件，文件缺失时保留破折号，所以没有 JavaScript 或定时器时归档仍可阅读。访问日志、定时器与 `/srv/etaf.top/stats` 服务路径属于主机配置，发布过程不改动它们。
 

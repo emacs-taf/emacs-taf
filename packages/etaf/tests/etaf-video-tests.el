@@ -79,6 +79,7 @@ ENV=VALUE strings for the fixtures."
   `(let ((process-environment
           (append (cons (concat "FAKE_FFMPEG_LOG=" ,log) ,settings)
                   process-environment))
+         (etaf-video-engine 'ffmpeg)
          (etaf-video-ffmpeg-program etaf-video-tests--ffmpeg)
          (etaf-video-ffprobe-program etaf-video-tests--ffprobe)
          (etaf-video-ffplay-program etaf-video-tests--ffplay))
@@ -776,6 +777,157 @@ behind."
                   :headers '(("X-Test" . "line\nbreak"))))
            :type 'user-error))
       (etaf-video-tests--cleanup name))))
+
+(ert-deftest etaf-video-tests-seek-and-speed-stop-playing-audio ()
+  "Seeking or changing speed while playing stops the active ffplay sidecar immediately."
+  (let ((name " *etaf-video-seek-audio*")
+        (log (etaf-video-tests--log))
+        (audio-log (etaf-video-tests--log)))
+    (unwind-protect
+        (etaf-video-tests--with-fixture
+            log (list "FAKE_FFMPEG_FRAMES=200" "FAKE_FFMPEG_INTERVAL=0.02"
+                      "FAKE_FFPROBE_AUDIO=1"
+                      (concat "FAKE_FFPLAY_LOG=" audio-log))
+          (let ((handle (etaf-video-tests--mount
+                         name (list :src etaf-video-tests--input :mode 'ascii
+                                    :columns 8 :rows 2 :autoplay t :audio t))))
+            (should (etaf-video-tests--wait
+                     (lambda () (etaf-video-tests--ffplay-pid audio-log)) 5))
+            (let ((pid1 (etaf-video-tests--ffplay-pid audio-log)))
+              (etaf-video-seek handle 2.0)
+              (should (etaf-video-tests--wait
+                       (lambda () (null (process-attributes pid1))) 5))
+              (should (etaf-video-tests--wait
+                       (lambda ()
+                         (let ((p2 (etaf-video-tests--ffplay-pid audio-log)))
+                           (and p2 (/= p2 pid1))))
+                       5)))
+            (let ((pid2 (etaf-video-tests--ffplay-pid audio-log)))
+              (etaf-video-set-speed handle 1.5)
+              (should (etaf-video-tests--wait
+                       (lambda () (null (process-attributes pid2))) 5))
+              (should (etaf-video-tests--wait
+                       (lambda ()
+                         (let ((args (etaf-video-tests--ffplay-arguments audio-log)))
+                           (member "atempo=1.5" args)))
+                       5)))
+            (etaf-video-pause handle)))
+      (etaf-video-tests--cleanup name)
+      (ignore-errors (delete-file log))
+      (ignore-errors (delete-file audio-log)))))
+
+(ert-deftest etaf-video-tests-normalized-source-honors-start-offset ()
+  "A pre-normalized source with `:start' mounts at that offset with zero ffprobe calls."
+  (let ((name " *etaf-video-start-offset*")
+        (probe-log (etaf-video-tests--log))
+        (log (etaf-video-tests--log)))
+    (unwind-protect
+        (etaf-video-tests--with-fixture
+            log (list "FAKE_FFMPEG_FRAMES=40" "FAKE_FFMPEG_INTERVAL=0.01"
+                      (concat "FAKE_FFPROBE_LOG=" probe-log))
+          (let* ((src (list :kind 'url
+                            :url "https://stream.test/video.m4s"
+                            :width 640 :height 360 :fps 30 :duration 120
+                            :audio t :start 42.5))
+                 (handle (etaf-video-tests--mount
+                          name (list :src src :mode 'ascii
+                                     :columns 8 :rows 2 :autoplay t))))
+            (should (etaf-video-tests--wait
+                     (lambda () (>= (etaf-video-tests--presented handle) 1))))
+            (should-not (etaf-video-tests--runs probe-log))
+            (let ((first-run (car (etaf-video-tests--runs log))))
+              (should (equal "42.5" (etaf-video-tests--argument first-run "-ss"))))
+            (should (>= (plist-get (etaf-video-tests--state handle) :position) 42.5))
+            (etaf-video-pause handle)))
+      (etaf-video-tests--cleanup name)
+      (ignore-errors (delete-file log))
+      (ignore-errors (delete-file probe-log)))))
+
+(ert-deftest etaf-video-tests-engine-controls-and-mpv-backend ()
+  "Public engine controls degrade cleanly on ffmpeg and drive libmpv when available."
+  (let ((name " *etaf-video-engine-ctl*")
+        (log (etaf-video-tests--log)))
+    (unwind-protect
+        (etaf-video-tests--with-fixture
+            log '("FAKE_FFMPEG_FRAMES=20" "FAKE_FFMPEG_INTERVAL=0.01")
+          (let* ((etaf-video-engine 'ffmpeg)
+                 (handle (etaf-video-tests--mount
+                          name '(:src nil :mode ascii :columns 8 :rows 2 :autoplay t))))
+            (should (etaf-video-tests--wait
+                     (lambda () (>= (etaf-video-tests--presented handle) 1))))
+            (should (eq 'ffmpeg (plist-get (etaf-video-state handle) :engine)))
+            (should-not (etaf-video-set-property handle "brightness" 10))
+            (should-not (etaf-video-get-property handle "brightness" 'int))
+            (should-not (etaf-video-command handle "frame-step"))
+            (should (etaf-video-step-back handle))))
+      (etaf-video-tests--cleanup name)
+      (ignore-errors (delete-file log))))
+  (when (and (etaf-video-mpv-available-p) (executable-find "ffmpeg"))
+    (let* ((name " *etaf-video-mpv-real*")
+           (clip (make-temp-file "etaf-mpv-test-" nil ".mp4")))
+      (unwind-protect
+          (when (zerop (call-process "ffmpeg" nil nil nil
+                                     "-y" "-loglevel" "error"
+                                     "-f" "lavfi" "-i" "testsrc2=size=160x90:rate=15:duration=2"
+                                     "-c:v" "libx264" "-pix_fmt" "yuv420p" clip))
+            (let* ((etaf-video-engine 'mpv)
+                   (handle (etaf-video-tests--mount
+                            name (list :src clip :mode 'ascii
+                                       :columns 16 :rows 6 :audio nil :autoplay t))))
+              (should (etaf-video-tests--wait
+                       (lambda () (>= (etaf-video-tests--presented handle) 1)) 5))
+              (should (eq 'mpv (plist-get (etaf-video-state handle) :engine)))
+              (should (etaf-video-set-property handle "video-rotate" 90))
+              (should (eql 90 (etaf-video-get-property handle "video-rotate" 'int)))
+              (should (etaf-video-set-property handle "brightness" 15))
+              (should (eql 15 (etaf-video-get-property handle "brightness" 'int)))
+              (should (etaf-video-step-back handle))
+              (should-not (plist-get (etaf-video-state handle) :playing))))
+        (etaf-video-tests--cleanup name)
+        (ignore-errors (delete-file clip))))))
+
+(ert-deftest etaf-video-tests-master-clock-holds-video-until-audio-ready ()
+  "Video presents Frame 0 and holds until ffplay's live audio clock starts.
+Once numeric `-stats' samples arrive, playback unlocks and reports the audio
+clock's media position instead of drifting ahead during ffplay cold start."
+  (let ((name " *etaf-video-av-sync*")
+        (log (etaf-video-tests--log))
+        (audio-log (etaf-video-tests--log)))
+    (unwind-protect
+        (etaf-video-tests--with-fixture
+            log (list "FAKE_FFMPEG_FRAMES=80" "FAKE_FFMPEG_INTERVAL=0.01"
+                      "FAKE_FFPROBE_AUDIO=1" "FAKE_FFPROBE_DURATION=60"
+                      "FAKE_FFPLAY_STATS=1" "FAKE_FFPLAY_NAN_MS=250"
+                      "FAKE_FFPLAY_START=10.0"
+                      (concat "FAKE_FFPLAY_LOG=" audio-log))
+          (let* ((etaf-video-engine 'ffmpeg)
+                 (src (list :kind 'url
+                            :url "https://stream.test/video.m4s"
+                            :audio-url "https://stream.test/audio.m4s"
+                            :width 640 :height 360 :fps 30 :duration 60
+                            :audio t :start 10.0))
+                 (handle (etaf-video-tests--mount
+                          name (list :src src :mode 'ascii :audio t
+                                     :columns 8 :rows 2 :autoplay t))))
+            ;; Frame 0 preview renders promptly while ffplay is still reporting nan.
+            (should (etaf-video-tests--wait
+                     (lambda () (>= (etaf-video-tests--presented handle) 1)) 3))
+            ;; Hold on Frame 0 during the nan window: position stays pinned at 10.0
+            ;; and video does not run ahead of audio.
+            (etaf-video-tests--wait (lambda () nil) 0.12)
+            (should (= 1 (etaf-video-tests--presented handle)))
+            (should (< (abs (- (plist-get (etaf-video-tests--state handle) :position) 10.0)) 0.05))
+            ;; Once ffplay's live numeric clock starts (~250 ms), video unlocks and
+            ;; advances smoothly in lockstep with the audio clock.
+            (should (etaf-video-tests--wait
+                     (lambda ()
+                       (and (>= (etaf-video-tests--presented handle) 5)
+                            (>= (plist-get (etaf-video-tests--state handle) :position) 10.15)))
+                     3))
+            (etaf-video-pause handle)))
+      (etaf-video-tests--cleanup name)
+      (ignore-errors (delete-file log))
+      (ignore-errors (delete-file audio-log)))))
 
 (provide 'etaf-video-tests)
 ;;; etaf-video-tests.el ends here

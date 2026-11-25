@@ -35,7 +35,9 @@
   state
   palette
   theme
-  block)
+  block
+  slot
+  root-begin)
 
 (defun etaf-md--env-with-width (env width)
   "Return a copy of ENV whose available column count is narrowed to WIDTH."
@@ -46,18 +48,28 @@
    :state (etaf-md-env-state env)
    :palette (etaf-md-env-palette env)
    :theme (etaf-md-env-theme env)
-   :block (etaf-md-env-block env)))
+   :block (etaf-md-env-block env)
+   :slot (etaf-md-env-slot env)
+   :root-begin (etaf-md-env-root-begin env)))
 
 (defun etaf-md--markdown-env (env)
   "Return the `etaf-ui-markdown' rendering env for paint ENV.
 Preserves the page services (media, links, footnotes) while binding `:width'
-to ENV's own available columns."
-  (if-let* ((session (etaf-md-env-session env)))
-      (plist-put (copy-sequence (etaf-md--env session))
-                 :width (etaf-md-env-width env))
-    (list :theme (etaf-md-env-theme env)
-          :palette (etaf-md-env-palette env)
-          :width (etaf-md-env-width env))))
+to ENV's own available columns and bridging per-block interactive state."
+  (let* ((session (etaf-md-env-session env))
+         (base (if session
+                   (copy-sequence (etaf-md--env session))
+                 (list :theme (etaf-md-env-theme env)
+                       :palette (etaf-md-env-palette env)))))
+    (setq base (plist-put base :width (etaf-md-env-width env)))
+    (when session
+      (setq base (plist-put base :block-state
+                            (lambda (key &optional default)
+                              (etaf-md-block-state env key default))))
+      (setq base (plist-put base :set-block-state
+                            (lambda (key value)
+                              (etaf-md-set-block-state env key value)))))
+    base))
 
 (defun etaf-md--paint (node env)
   "Return the view ENV's definition gives NODE, or a failure line."
@@ -77,8 +89,16 @@ to ENV's own available columns."
                     :state (etaf-md-env-state env)
                     :palette (etaf-md-env-palette env)
                     :theme (etaf-md-env-theme env)
-                    :block (etaf-md-node-block node))))
-        (funcall (plist-get definition :view) inner)))
+                    :block (etaf-md-node-block node)
+                    :slot (etaf-md-env-slot env)
+                    :root-begin (etaf-md-env-root-begin env))))
+        (condition-case err
+            (funcall (plist-get definition :view) inner)
+          (etaf-md-error
+           (etaf-md--failure-view
+            env (or (etaf-md-node-source node) "")
+            (or (and (stringp (cadr err)) (cadr err))
+                (error-message-string err)))))))
      ;; A Markdown block the new model does not define yet keeps the painter
      ;; it has today; only a container with no definition is a failure,
      ;; because a container cannot be painted without one.
@@ -111,6 +131,61 @@ to ENV's own available columns."
 (defun etaf-md--muted (env)
   "Return the muted ink of ENV's palette."
   (or (etaf-md--palette-value (etaf-md-env-palette env) :muted) "#9198a1"))
+
+(defun etaf-md--hover-p (env)
+  "Return non-nil when ENV's session enables pointer hover feedback."
+  (let ((session (etaf-md-env-session env)))
+    (if (and session (plist-member session :link-hover))
+        (plist-get session :link-hover)
+      t)))
+
+(defun etaf-md--hover-fill (env &optional variant)
+  "Return a theme-derived hover fill for leaf controls in ENV, or nil."
+  (when (etaf-md--hover-p env)
+    (let ((palette (etaf-md-env-palette env)))
+      (pcase variant
+        ('soft (or (etaf-md--palette-value palette :panel2)
+                   (etaf-md--palette-value palette :panel)))
+        (_ (or (etaf-md--palette-value palette :accent-soft)
+               (etaf-md--palette-value palette :panel2)))))))
+
+(defun etaf-md--leaf-button (env label on-press &rest opts)
+  "Return a single-face interactive leaf control in ENV.
+OPTS accepts `:selected', `:disabled', `:color', `:background', `:role',
+`:help', `:bold', `:hover-variant'.  Selected or disabled leaves suppress
+`:hover-style' so interactive states never stack, and hover applies strictly
+to this leaf text node without touching surrounding container styling."
+  (let* ((selected (plist-get opts :selected))
+         (disabled (plist-get opts :disabled))
+         (role (or (plist-get opts :role) 'button))
+         (help (plist-get opts :help))
+         (bold (if (plist-member opts :bold) (plist-get opts :bold) selected))
+         (accent (etaf-md-accent env 'primary))
+         (muted (etaf-md--muted env))
+         (palette (etaf-md-env-palette env))
+         (color (or (plist-get opts :color)
+                    (cond (disabled (or (etaf-md--palette-value palette :faint) muted))
+                          (selected accent)
+                          (t accent))))
+         (bg (or (plist-get opts :background)
+                 (when selected
+                   (or (etaf-md--palette-value palette :accent-soft)
+                       (etaf-md-surface env 'sunken)))))
+         (interactive-p (and (not disabled) (functionp on-press)))
+         (hover (and interactive-p (not selected)
+                     (etaf-md--hover-fill env (plist-get opts :hover-variant)))))
+    (etaf-node 'text
+               (append
+                (list :color color)
+                (when bg (list :background-color bg))
+                (when bold (list :font-weight 'bold))
+                (when help (list :help-echo help))
+                (when interactive-p
+                  (list :role role :tab-index 0 :pointer 'hand
+                        :on-press on-press))
+                (when hover
+                  (list :hover-style (list :background-color hover))))
+               (list label))))
 
 (defun etaf-md--hairline (env)
   "Return a one-pixel border as the Theme ENV's page lives in defines it.
@@ -174,7 +249,8 @@ the same component, so the lookup accepts either."
       ('page (etaf-md--palette-value palette :bg))
       ('raised (or (etaf-md--palette-value palette :panel)
                    (etaf-md--palette-value palette :panel2)))
-      ('sunken (or (etaf-md--palette-value palette :panel2)
+      ('sunken (or (etaf-md--palette-value palette :sunken)
+                   (etaf-md--palette-value palette :panel2)
                    (etaf-md--palette-value palette :panel)))
       ('quote (etaf-md--palette-value palette :quote-bg))
       ('table-header (etaf-md--palette-value palette :table-header))
@@ -213,38 +289,64 @@ keep their own ink instead of sharing one fixed set of colours."
       t)))
 
 (defun etaf-md--block-identity (env)
-  "Return the identity ENV's block keeps across a repaint.
-The parsed block's start offset names it while the document lives; a block
-without one falls back to its position in the page."
-  (or (plist-get (etaf-md-node-block (etaf-md-env-node env)) :begin) 0))
+  "Return the identity ENV's block keeps across repaints and edits above it.
+Top-level containers use their block's stable slot symbol; nested containers
+combine that slot with their type and offset relative to the top-level block so
+editing lines above the container never resets its interactive state."
+  (let* ((slot (etaf-md-env-slot env))
+         (node (etaf-md-env-node env))
+         (block (and node (etaf-md-node-block node)))
+         (begin (and block (plist-get block :begin)))
+         (root-begin (etaf-md-env-root-begin env)))
+    (cond
+     ((and slot (or (null begin) (null root-begin) (eql begin root-begin)))
+      slot)
+     (slot
+      (list slot (etaf-md-node-type node) (- begin root-begin)))
+     (t (or begin 0)))))
+
+(defun etaf-md--block-state-ref (session identity)
+  "Return the pre-allocated reactive ref storing state for IDENTITY.
+Each top-level block owns its own `etaf-ref' in SESSION's `:block-states'
+table (allocated when its entry is created, never during `:render'), so
+toggling one control repaints only that block.  Falls back to SESSION's
+`:block-state' ref when IDENTITY is not associated with a block slot."
+  (when session
+    (let ((table (plist-get session :block-states))
+          (slot (if (consp identity) (car identity) identity)))
+      (or (and (hash-table-p table) (gethash slot table))
+          (plist-get session :block-state)))))
+
+(defun etaf-md--block-state-prune (session slot)
+  "Remove interactive container state belonging to retired SLOT in SESSION."
+  (when-let* ((table (and session (plist-get session :block-states)))
+              ((hash-table-p table)))
+    (remhash slot table)))
 
 (defun etaf-md-block-state (env key &optional default)
   "Return KEY's state for ENV's block, or DEFAULT.
-The state lives in the session's reactive ref, so a write repaints the
-preview."
+Reads only this block's dedicated reactive ref, so toggling another container
+never wakes this one."
   (let* ((session (etaf-md-env-session env))
-         (ref (and session (plist-get session :block-state)))
-         (table (and (etaf-ref-p ref) (etaf-value ref)))
          (identity (etaf-md--block-identity env))
-         (entry (and table (assq identity table)))
-         (cell (and entry (assq key (cdr entry)))))
+         (ref (etaf-md--block-state-ref session identity))
+         (alist (and (etaf-ref-p ref) (etaf-value ref)))
+         (cell (and alist (assoc (cons identity key) alist))))
     (if cell (cdr cell) default)))
 
 (defun etaf-md-set-block-state (env key value)
-  "Store VALUE under KEY for ENV's block and repaint the preview."
+  "Store VALUE under KEY for ENV's block and repaint only that block."
   (let* ((session (etaf-md-env-session env))
          (identity (etaf-md--block-identity env))
-         (ref (and session (plist-get session :block-state))))
+         (ref (etaf-md--block-state-ref session identity)))
     (when (etaf-ref-p ref)
-      (let* ((table (copy-tree (etaf-value ref)))
-             (entry (and table (assq identity table))))
-        (if entry
-            (let ((cell (assq key (cdr entry))))
-              (if cell
-                  (setcdr cell value)
-                (setcdr entry (cons (cons key value) (cdr entry)))))
-          (setq table (cons (cons identity (list (cons key value))) table)))
-        (etaf-set-value ref table))))
+      (let* ((alist (copy-alist (etaf-value ref)))
+             (full-key (cons identity key))
+             (cell (assoc full-key alist)))
+        (if cell
+            (setcdr cell value)
+          (push (cons full-key value) alist))
+        (etaf-set-value ref alist))))
   value)
 
 (defun etaf-md-available-width (env)

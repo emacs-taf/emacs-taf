@@ -121,6 +121,33 @@
       (set-window-configuration config)
       (kill-buffer buffer))))
 
+(ert-deftest ebox-repaint-aligns-window-start-to-row-beginning ()
+  "Repainting a scrolled buffer restores window start to column 0 of its row."
+  (let ((buffer (get-buffer-create " *ebox-repaint-start-bol*"))
+        (config (current-window-configuration)))
+    (unwind-protect
+        (progn
+          (set-window-buffer (selected-window) buffer)
+          (let* ((window (selected-window))
+                 (count (+ (window-body-height window) 20))
+                 (rows (cl-loop for i below count
+                                collect `(box ,(format "Row-%02d" i))))
+                 (root (ebox-mount buffer `(column :padding-left (ch 2) ,@rows)))
+                 (target (nth 10 (ebox-node-children root))))
+            (with-current-buffer buffer
+              (goto-char (point-min))
+              (forward-line 10)
+              (let ((bol (line-beginning-position)))
+                ;; Place window-start past the left-padding cell on row 10.
+                (set-window-start window (1+ bol) t)
+                (ebox-node-set-text (car (ebox-node-children target)) "Row-10-updated")
+                (let* ((ws (window-start window))
+                       (ws-bol (save-excursion (goto-char ws) (line-beginning-position))))
+                  (should (= ws ws-bol))
+                  (should (= (line-number-at-pos ws) 11)))))))
+      (set-window-configuration config)
+      (kill-buffer buffer))))
+
 (ert-deftest ebox-mounted-rows-own-wrapping-and-restore-buffer-settings ()
   "A mounted buffer cannot wrap engine rows again; unmount restores its policy."
   (dolist (initial '(inherit nil t))
@@ -523,5 +550,228 @@ B "))
         (should matches)
         (should (string-match-p "Covered" text))
         (should-not (string-match-p "Higher" text))))))
+
+(ert-deftest ebox-touching-structural-edits-coalesce-into-lines-strategy ()
+  "Replacing, inserting or deleting adjacent stacked children uses `lines' strategy."
+  (let* ((items (cl-loop for i below 40
+                         collect `(box :id ,(format "b%d" i) ,(format "Block-%02d" i)))))
+    (ebox-test-with-mounted (buffer root `(column :width (ch 40) ,@items))
+      (let ((b2 (car (ebox-selector-query root "#b2")))
+            (b3 (car (ebox-selector-query root "#b3"))))
+        ;; Replace 1-line child with a 3-line child in one batch (remove + insert at same y).
+        (ebox-with-batch
+          (ebox-node-remove b2)
+          (ebox-node-insert root (ebox-build '(column :id "rep" (box "R1") (box "R2") (box "R3"))) 2))
+        (let ((report (ebox-buffer-update-report buffer))
+              (matches (ebox-test-buffer-matches-render-p root buffer)))
+          (should (eq (plist-get report :strategy) 'lines))
+          (should (= (plist-get report :edits) 1))
+          (should (<= (plist-get report :lines) 4))
+          (should matches))
+        ;; Insert two consecutive siblings in one batch.
+        (ebox-with-batch
+          (ebox-node-insert root (ebox-build '(box :id "ins1" "Ins-1")) 3)
+          (ebox-node-insert root (ebox-build '(box :id "ins2" "Ins-2")) 4))
+        (let ((report (ebox-buffer-update-report buffer))
+              (matches (ebox-test-buffer-matches-render-p root buffer)))
+          (should (eq (plist-get report :strategy) 'lines))
+          (should (= (plist-get report :edits) 1))
+          (should (<= (plist-get report :lines) 4))
+          (should matches))
+        ;; Delete two consecutive siblings in one batch.
+        (let ((ins1 (car (ebox-selector-query root "#ins1")))
+              (ins2 (car (ebox-selector-query root "#ins2"))))
+          (ebox-with-batch
+            (ebox-node-remove ins1)
+            (ebox-node-remove ins2)
+            (ebox-node-remove b3))
+          (let ((report (ebox-buffer-update-report buffer))
+                (matches (ebox-test-buffer-matches-render-p root buffer)))
+            (should (eq (plist-get report :strategy) 'lines))
+            (should (= (plist-get report :edits) 1))
+            (should matches)))))))
+
+(ert-deftest ebox-disjoint-height-changing-edits-stay-on-lines-strategy ()
+  "Multiple disjoint height-changing edits and bordered growth stay on `lines' strategy."
+  (let* ((middle (cl-loop for i below 25
+                          collect `(box :id ,(format "m%d" i) ,(format "Mid-%02d" i))))
+         (bordered-rows (cl-loop for i below 15
+                                 collect `(box :id ,(format "c%d" i) ,(format "Code-%02d" i)))))
+    (ebox-test-with-mounted
+        (buffer root
+                `(column :width (ch 40)
+                         (box :id "head" "Head")
+                         (column :id "card" :border ((px 1) solid "#888888")
+                                 ,@bordered-rows)
+                         ,@middle
+                         (box :id "tail" "Tail")))
+      (let ((head (car (ebox-selector-query root "#head")))
+            (c7 (car (ebox-selector-query root "#c7")))
+            (m20 (car (ebox-selector-query root "#m20")))
+            (tail (car (ebox-selector-query root "#tail"))))
+        ;; Growing a row inside a bordered container also touches its border lines.
+        (ebox-node-set-text (car (ebox-node-children c7)) "Code-07-A\nCode-07-B\nCode-07-C")
+        (let ((report (ebox-buffer-update-report buffer))
+              (matches (ebox-test-buffer-matches-render-p root buffer)))
+          (should (eq (plist-get report :strategy) 'lines))
+          (should (< (plist-get report :lines) 15))
+          (should matches))
+        ;; Simultaneous growth near top and shrink + insert far below in one batch.
+        (ebox-with-batch
+          (ebox-node-set-text (car (ebox-node-children head)) "Head-1\nHead-2\nHead-3")
+          (ebox-node-set-text (car (ebox-node-children c7)) "Code-07-short")
+          (ebox-node-set-text (car (ebox-node-children m20)) "Mid-20-A\nMid-20-B")
+          (ebox-node-insert root (ebox-build '(box :id "extra" "Extra-line")) 30)
+          (ebox-node-set-text (car (ebox-node-children tail)) "Tail-updated"))
+        (let ((report (ebox-buffer-update-report buffer))
+              (matches (ebox-test-buffer-matches-render-p root buffer)))
+          (should (eq (plist-get report :strategy) 'lines))
+          (should (< (plist-get report :lines) 20))
+          (should matches))))))
+
+(ert-deftest ebox-same-column-insert-and-sibling-growth-match-fresh-render ()
+  "Combining structural insert/remove and sibling height change in one column renders accurately."
+  (let* ((items (cl-loop for i below 20
+                         collect `(box :id ,(format "r%d" i) ,(format "Row-%02d" i)))))
+    (ebox-test-with-mounted (buffer root `(column :width (ch 40) ,@items))
+      (let ((r2 (car (ebox-selector-query root "#r2")))
+            (r12 (car (ebox-selector-query root "#r12"))))
+        ;; Insert later sibling AND grow earlier sibling in the same column batch.
+        (ebox-with-batch
+          (ebox-node-insert root (ebox-build '(box :id "added" "Added-1\nAdded-2")) 15)
+          (ebox-node-set-text (car (ebox-node-children r2)) "Row-02-A\nRow-02-B\nRow-02-C"))
+        (let ((report (ebox-buffer-update-report buffer))
+              (matches (ebox-test-buffer-matches-render-p root buffer)))
+          (should (eq (plist-get report :strategy) 'lines))
+          (should matches))
+        ;; Delete sibling immediately before a growing sibling in the same batch.
+        (let ((r11 (car (ebox-selector-query root "#r11"))))
+          (ebox-with-batch
+            (ebox-node-remove r11)
+            (ebox-node-set-text (car (ebox-node-children r12)) "Row-12-X\nRow-12-Y\nRow-12-Z"))
+          (let ((report (ebox-buffer-update-report buffer))
+                (matches (ebox-test-buffer-matches-render-p root buffer)))
+            (should (eq (plist-get report :strategy) 'lines))
+            (should matches)))))))
+
+(ert-deftest ebox-side-by-side-column-cancelling-height-edits-keep-siblings-intact ()
+  "Cancelling +1/-1 edits in one flex-row pane rewrite in place without shifting siblings."
+  (ebox-test-with-mounted
+      (buffer root
+              '(flex :width (ch 72) :height (lh 12) :flex-direction row
+                     (column :id "sidebar" :width (ch 20)
+                             (box "S0") (box "S1") (box "S2") (box "S3")
+                             (box "S4") (box "S5") (box "S6") (box "S7"))
+                     (column :id "main" :width (ch 26)
+                             (box "M0") (box "M1") (box "M2") (box "M3")
+                             (box "M4") (box "M5") (box "M6") (box "M7"))
+                     (column :id "rail" :width (ch 26)
+                             (column :id "inspector"
+                                     (box :id "i0" "I0")
+                                     (box :id "i1" "I1")
+                                     (box :id "i2" "I2")
+                                     (box :id "i3" "I3")
+                                     (box :id "i4" "I4-line1\nI4-line2")
+                                     (box :id "i5" "I5")))))
+    (let ((inspector (car (ebox-selector-query root "#inspector")))
+          (i4 (car (ebox-selector-query root "#i4"))))
+      (ebox-with-batch
+        (ebox-node-insert inspector (ebox-build '(box :id "ix" "IX")) 1)
+        (ebox-node-set-text (car (ebox-node-children i4)) "I4-short"))
+      (let* ((report (ebox-buffer-update-report buffer))
+             (strategy (plist-get report :strategy))
+             (ranges (plist-get report :ranges))
+             (same-height (cl-every (lambda (r) (= (nth 1 r) (nth 2 r))) ranges))
+             (matches (ebox-test-buffer-matches-render-p root buffer)))
+        (should (eq strategy 'lines))
+        (should same-height)
+        (should matches)))))
+
+(ert-deftest ebox-overlay-and-bordered-stack-stay-consistent-under-cancelling-edits ()
+  "Cancelling edits keep root overlays anchored and bordered-stack edges accurate."
+  ;; Root overlay stays anchored when a nested column has cancelling +1/-1 edits.
+  (ebox-test-with-mounted
+      (buffer root
+              '(column :width (ch 40)
+                       (column :id "inner"
+                               (box :id "a0" "A0")
+                               (box :id "a1" "A1")
+                               (box :id "a2" "A2")
+                               (box :id "a3" "A3")
+                               (box :id "a4" "A4")
+                               (box :id "a5" "A5-1\nA5-2")
+                               (box :id "a6" "A6"))
+                       (box :id "ov" :position absolute :layer root
+                            :top (lh 2) :left (ch 5) :width (ch 15) :height (lh 2)
+                            "OVERLAY")))
+    (let ((inner (car (ebox-selector-query root "#inner")))
+          (a5 (car (ebox-selector-query root "#a5"))))
+      (ebox-with-batch
+        (ebox-node-insert inner (ebox-build '(box :id "ax" "AX")) 1)
+        (ebox-node-set-text (car (ebox-node-children a5)) "A5-short"))
+      (let ((matches (ebox-test-buffer-matches-render-p root buffer)))
+        (should matches))))
+  ;; Bordered stack (direct and nested) keeps top/bottom border faces on exact edge lines.
+  (dolist (nested '(nil t))
+    (ebox-test-with-mounted
+        (buffer root
+                (if nested
+                    '(column :width (ch 40)
+                             (column :id "card" :border ((px 1) solid "#888888")
+                                     (column :id "host"
+                                             (box :id "c0" "C0")
+                                             (box :id "c1" "C1")
+                                             (box :id "c2" "C2")
+                                             (box :id "c3" "C3")
+                                             (box :id "c4" "C4"))))
+                  '(column :width (ch 40)
+                           (column :id "host" :border ((px 1) solid "#888888")
+                                   (box :id "c0" "C0")
+                                   (box :id "c1" "C1")
+                                   (box :id "c2" "C2")
+                                   (box :id "c3" "C3")
+                                   (box :id "c4" "C4")))))
+      (let ((host (car (ebox-selector-query root "#host")))
+            (c4 (car (ebox-selector-query root "#c4"))))
+        (ebox-with-batch
+          (ebox-node-insert host (ebox-build '(box :id "cnew" "CNEW")) 0)
+          (ebox-node-remove c4))
+        (let* ((matches (ebox-test-buffer-matches-render-p root buffer))
+               (buf-lines (split-string (with-current-buffer buffer (buffer-string)) "\n"))
+               (ref-lines (split-string (ebox-render root) "\n"))
+               (props-match
+                (and (= (length buf-lines) (length ref-lines))
+                     (cl-every #'equal-including-properties buf-lines ref-lines))))
+          (should matches)
+          (should props-match))
+        (ebox-with-batch
+          (ebox-node-insert host (ebox-build '(box :id "cnew2" "CNEW2")) 0)
+          (ebox-node-insert host (ebox-build '(box :id "cmid" "CMID")) 3))
+        (let* ((matches (ebox-test-buffer-matches-render-p root buffer))
+               (buf-lines (split-string (with-current-buffer buffer (buffer-string)) "\n"))
+               (ref-lines (split-string (ebox-render root) "\n"))
+               (props-match
+                (and (= (length buf-lines) (length ref-lines))
+                     (cl-every #'equal-including-properties buf-lines ref-lines))))
+          (should matches)
+          (should props-match))))))
+
+(ert-deftest ebox-reparent-child-from-removed-wrapper-into-emptied-column ()
+  "Unwrapping a laid-out child from a removed wrapper into an emptied column renders cleanly."
+  (ebox-test-with-mounted
+      (buffer root '(column :width (ch 40)
+                            (column :id "outer"
+                                    (column :id "wrap"
+                                            (box :id "inner" "Body line")
+                                            (box :id "comp" "Companion")))))
+    (let ((outer (car (ebox-selector-query root "#outer")))
+          (wrap (car (ebox-selector-query root "#wrap")))
+          (inner (car (ebox-selector-query root "#inner"))))
+      (ebox-with-batch
+        (ebox-node-remove inner)
+        (ebox-node-remove wrap)
+        (ebox-node-insert outer inner 0))
+      (let ((matches (ebox-test-buffer-matches-render-p root buffer)))
+        (should matches)))))
 
 ;;; ebox-update-tests.el ends here

@@ -33,7 +33,7 @@
     {
       "name": "etaf-md-tests-open-prompt-defaults-to-the-relative-file",
       "file": "tests/etaf-md-tests.el",
-      "purpose": "Opening the preview interactively hands the file prompt a name relative to `default-directory', so the prompt shows the directory once instead of repeating it around the current buffer's file."
+      "purpose": "`etaf-md-open' opens a visiting Markdown buffer directly in-place without prompting or splitting, restores it on `etaf-md-close', and prompts with a relative default under `C-u'."
     },
     {
       "name": "etaf-md-tests-help-stays-in-preview",
@@ -143,7 +143,7 @@
     {
       "name": "etaf-md-tests-entry-command-keeps-the-source-window",
       "file": "tests/etaf-md-tests.el",
-      "purpose": "The side-by-side command opens the preview in a neighbouring window, keeps the source buffer selected, and closing the preview gives the window back."
+      "purpose": "`etaf-md-preview' toggles a right preview split while keeping the source window selected, closes cleanly on second invocation or `etaf-md-close', and recovers cleanly after manual `delete-other-windows'."
     },
     {
       "name": "etaf-md-tests-follow-scroll-shows-the-source-top",
@@ -458,7 +458,7 @@
     {
       "name": "etaf-md-tests-doctor-names-each-optional-program",
       "file": "tests/etaf-md-tests.el",
-      "purpose": "`etaf-md-doctor` names every program a block can use — ffmpeg, mermaid-cli and qrencode — with a remedy, so a reader whose block kept its source text learns why."
+      "purpose": "`etaf-md-doctor` names every optional capability a block can use — typeset-native, ffmpeg, mmdc, qrencode and git — with a remedy, so a reader whose block kept its source text learns why."
     },
     {
       "name": "etaf-md-tests-a-mailto-link-goes-to-the-browser",
@@ -534,6 +534,146 @@
       "name": "etaf-md-tests-heading-underline-option-suppresses-heading-rules-and-link-underlines",
       "file": "tests/etaf-md-tests.el",
       "purpose": "Passing `:heading-underline nil' to `etaf-md-create' omits H1/H2 bottom border rules and underlines on links inside headings while keeping heading links active and body paragraph links underlined."
+    },
+    {
+      "name": "etaf-md-tests-locate-scrolls-enclosing-viewport-preserving-header",
+      "file": "tests/etaf-md-tests.el",
+      "purpose": "`etaf-md-locate' locates off-screen headings when `etaf-md-view' is mounted inside an enclosing `:overflow scroll' viewport by scrolling that viewport while keeping sibling header rows intact."
+    },
+    {
+      "name": "etaf-md-tests-top-block-and-structural-edits-stay-incremental",
+      "file": "tests/etaf-md-tests.el",
+      "purpose": "Editing block 0, inserting blank lines near the top and splitting the first paragraph all stay on incremental line-level buffer patches."
+    },
+    {
+      "name": "etaf-md-tests-unclosed-live-fence-keeps-trailing-blocks-and-settles",
+      "file": "tests/etaf-md-tests.el",
+      "purpose": "Opening an unclosed code fence during unsaved live editing keeps downstream blocks intact on an incremental patch and settles to exact CommonMark upon closing or saving."
+    },
+    {
+      "name": "etaf-md-tests-live-edits-keep-outline-and-doc-wide-references-fresh",
+      "file": "tests/etaf-md-tests.el",
+      "purpose": "Incremental live edits refresh `etaf-md-outline' and `etaf-md-locate' for added headings while preserving document-wide reference link resolution."
+    },
+    {
+      "name": "etaf-md-tests-narrow-viewport-wraps-without-clipping-and-widens-back",
+      "file": "tests/etaf-md-tests.el",
+      "purpose": "Narrow viewports wrap long paragraphs cleanly without right-edge clipping, and widening back reflows up to the reading-measure cap."
+    },
+    {
+      "name": "etaf-md-tests-same-basename-files-open-distinct-previews",
+      "file": "tests/etaf-md-tests.el",
+      "purpose": "Two Markdown files with the same basename in different directories open distinct preview buffers with disambiguated buffer names."
+    },
+    {
+      "name": "etaf-md-tests-symlink-edits-sync-to-preview",
+      "file": "tests/etaf-md-tests.el",
+      "purpose": "Unsaved edits in a buffer visiting a symlink synchronize live to a preview opened through the symlink target path."
+    },
+    {
+      "name": "etaf-md-tests-footnote-jump-lands-on-definition-and-returns",
+      "file": "tests/etaf-md-tests.el",
+      "purpose": "Activating a footnote reference jumps to the bottom definition, pushes mark, and activating the `↩' back-link returns point to the reference."
+    },
+    {
+      "name": "etaf-md-tests-container-state-isolated-and-survives-edits-above",
+      "file": "tests/etaf-md-tests.el",
+      "purpose": "Interactive container state (such as `:::details') stays isolated per block and survives live insertions above the container that shift its source byte offset."
+    },
+    {
+      "name": "etaf-md-tests-malformed-chart-degrades-to-failure-view",
+      "file": "tests/etaf-md-tests.el",
+      "purpose": "A malformed `:::chart' container degrades to a visible failure block instead of signaling an uncaught error."
+    },
+    {
+      "name": "etaf-md-tests-file-url-media-resolves-as-local",
+      "file": "tests/etaf-md-tests.el",
+      "purpose": "Media references written with a `file://' URI resolve as local paths rather than remote URLs."
+    },
+    {
+      "name": "etaf-md-tests-preview-splits-nondestructively-and-goto-source-returns",
+      "file": "tests/etaf-md-tests.el",
+      "purpose": "`etaf-md-preview' splits beside the source without deleting unrelated windows, supports `etaf-md-goto-source' back to the matching source line, and restores only the preview split on `etaf-md-close'."
+    },
+    {
+      "name": "etaf-md-tests-theme-cycle-includes-auto-and-locate-pushes-mark",
+      "file": "tests/etaf-md-tests.el",
+      "purpose": "`etaf-md-cycle-theme' includes `auto' in the cycle, `etaf-md-locate' pushes mark before jumping, and headless creation with `etaf-md-remote-images' disabled stays offline."
+    },
+    {
+      "name": "etaf-md-tests-extended-layout-and-data-widgets-render",
+      "file": "tests/etaf-md-tests.el",
+      "purpose": "Curated editorial layout and data visualization containers (breadcrumb, progress, 4-quadrant stats, bar/stacked/heatmap charts, horizontal/card timeline and keymap without slash keycaps) render cleanly."
+    },
+    {
+      "name": "etaf-md-tests-interactive-cognitive-widgets-state-and-actions",
+      "file": "tests/etaf-md-tests.el",
+      "purpose": "Interactive widgets (sortable booktabs table, paired aligned diff, borderless pros-cons, demo source toggle and collapsible file-tree) update local per-block state cleanly on activation."
+    },
+    {
+      "name": "etaf-md-tests-inline-extensions-spoilers-annotations-and-tasks",
+      "file": "tests/etaf-md-tests.el",
+      "purpose": "Spoilers (single toggle and global `etaf-md-toggle-spoilers'), inline `[+label]' annotations, collapsible Obsidian alerts, `:collapsed-lines' code blocks and interactive GFM task checkboxes work end-to-end."
+    },
+    {
+      "name": "etaf-md-tests-workspace-l1-widgets-and-path-sandbox",
+      "file": "tests/etaf-md-tests.el",
+      "purpose": "Read-only L1 workspace widgets (`include', `code-ref' with balanced full Elisp form extraction, `symbol', `project-tree') load bounded workspace snapshots outside render, reject path traversal outside the workspace root and respect `etaf-md-allow-local-read'."
+    },
+    {
+      "name": "etaf-md-tests-executable-l2-widgets-respect-trust-gate",
+      "file": "tests/etaf-md-tests.el",
+      "purpose": "Executable L2 `run' Runbook never auto-executes on document open and strictly honors `etaf-md-allow-actions'."
+    },
+    {
+      "name": "etaf-md-tests-toc-panel-link-preview-and-media-lightbox",
+      "file": "tests/etaf-md-tests.el",
+      "purpose": "Independent Emacs side-window outline (`etaf-md-toggle-toc'), in-place link/symbol preview (`etaf-md-preview-link') and in-buffer media lightbox (`etaf-md-media-lightbox') open and dismiss cleanly."
+    },
+    {
+      "name": "etaf-md-tests-hover-discipline-across-themes-and-widgets",
+      "file": "tests/etaf-md-tests.el",
+      "purpose": "Across dark, light and sepia themes, pointer hover faces attach exclusively to unselected interactive leaf controls while selected controls, static prose, code lines, data cells and multi-styled card bodies carry no mouse-face."
+    },
+    {
+      "name": "etaf-md-tests-card-accents-box-surfaces-and-theme-tokens",
+      "file": "tests/etaf-md-tests.el",
+      "purpose": "All six `card' semantic accents paint distinct colors across dark/light/sepia with centered body alignment, all `box' surfaces remain distinct with dark `sunken' darker than `page', and `etaf-md-theme-tokens' emits only valid 6-digit #RRGGBB colors."
+    },
+    {
+      "name": "etaf-md-tests-columns-table-filetree-and-npmto-contracts",
+      "file": "tests/etaf-md-tests.el",
+      "purpose": "`columns' honors `justify-content=between', `table' honors `align=center', `file-tree' honors `lines=false' and bold `**focus** # comment' items, and `npm-to' preserves spaces around `&&'."
+    },
+    {
+      "name": "etaf-md-tests-command-surface-and-toggle-split",
+      "file": "tests/etaf-md-tests.el",
+      "purpose": "Global M-x surface exposes strictly `etaf-md-open' and `etaf-md-preview' (zero minor modes and zero leaked preview-only interactive commands), preview keys (`t', `v', `q') dispatch cleanly, and `etaf-md-toggle-split' switches single/split cleanly."
+    },
+    {
+      "name": "etaf-md-tests-footnotes-keep-compact-gap-after-body",
+      "file": "tests/etaf-md-tests.el",
+      "purpose": "Multiple trailing footnote definitions separated by blank lines do not accumulate into extra blank rows between the final body block and the footnotes divider."
+    },
+    {
+      "name": "etaf-md-tests-native-typeset-renders-mermaid-and-math-to-svg",
+      "file": "tests/etaf-md-tests.el",
+      "purpose": "With the native QuickJS module built, Mermaid diagrams (including flowchart TB with subgraph and classDef) and display math formulas render asynchronously to SVG across dark and light themes."
+    },
+    {
+      "name": "etaf-md-tests-native-typeset-keeps-valid-picture-on-incomplete-live-edit",
+      "file": "tests/etaf-md-tests.el",
+      "purpose": "While live-editing a previously rendered Mermaid block into transiently incomplete syntax, the preview keeps the last valid diagram visible instead of flashing back to raw code."
+    },
+    {
+      "name": "etaf-md-tests-table-vertical-borders-and-tall-diagram-sizing",
+      "file": "tests/etaf-md-tests.el",
+      "purpose": "`:::table' renders outer and inner vertical grid borders matching ordinary pipe tables, and portrait Mermaid diagrams keep readable 1:1 typography above the 20-row photo cap and open the in-buffer lightbox on activation."
+    },
+    {
+      "name": "etaf-md-tests-wide-table-adapts-across-viewport-widths",
+      "file": "tests/etaf-md-tests.el",
+      "purpose": "Wide multi-column tables break out cleanly on wide viewports while keeping prose at reading measure, compress into aligned full-column grids on medium viewports, and fold into stacked cards on narrow viewports without clipping or breaching side gutters."
     }
   ]
 }

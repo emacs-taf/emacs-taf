@@ -508,7 +508,8 @@ change stays a retained Host update rather than a Component rerender."
                    (info . "i") (menu . "=") (more-vertical . ":")
                    (sidebar . "|]") (eye . "o")
                    (checkbox . "[ ]") (checkbox-checked . "[x]")
-                   (checkbox-crossed . "[x]") (checkbox-dashed . "[-]")))
+                   (checkbox-crossed . "[x]") (checkbox-dashed . "[-]")
+                   (tile-filled . "#") (tile-outline . "o")))
        (fonts
         `((nerd ("DroidSansMono Nerd Font" "DejaVuSansMono Nerd Font") 1.0 ,fa)
           (fa ("FontAwesome") 0.86 ,fa)
@@ -575,7 +576,8 @@ change stays a retained Host update rather than a Component rerender."
            (mic . "◍") (clock . "◷") (send . "→") (reply . "←") (users . "▤")
            (at . "@") (dot . "•") (smile . "☺") (image . "▣") (video . "▶")
            (file . "▥") (paperclip . "&") (info . "i") (menu . "≡")
-           (more-vertical . "⋮") (eye . "◉"))
+           (more-vertical . "⋮") (eye . "◉")
+           (tile-filled . "▪") (tile-outline . "▫"))
          :fallback fallback))
   (etaf-ui-icon-set-register
    'svg
@@ -640,7 +642,9 @@ change stays a retained Host update rather than a Component rerender."
            (checkbox . "<rect x='1.2' y='1.2' width='11.6' height='11.6'/>")
            (checkbox-checked . "<rect x='1.2' y='1.2' width='11.6' height='11.6'/><path d='M3.7 7.2L6.1 9.6L10.5 4.3'/>")
            (checkbox-crossed . "<rect x='1.2' y='1.2' width='11.6' height='11.6'/><path d='M4.6 4.6L9.4 9.4M9.4 4.6L4.6 9.4'/>")
-           (checkbox-dashed . "<rect x='1.2' y='1.2' width='11.6' height='11.6'/><path d='M4.2 7H9.8'/>")))))
+           (checkbox-dashed . "<rect x='1.2' y='1.2' width='11.6' height='11.6'/><path d='M4.2 7H9.8'/>")
+           (tile-filled . "<rect x='1.4' y='1.4' width='11.2' height='11.2' rx='2.2' fill='currentColor' stroke='none'/>")
+           (tile-outline . "<rect x='1.8' y='1.8' width='10.4' height='10.4' rx='2.2'/>")))))
 
 (provide 'etaf-ui-icon)
 ;;; etaf-ui-icon.el ends here

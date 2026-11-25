@@ -515,9 +515,9 @@ Host 的鼠标指针形状。
 
 **参数。** nil 或 `top`。其他值被拒绝。默认是 nil。
 
-**语义。** `top` Host 像粘性表头一样保持可达。窗口起点到达 Host 后，ETAF 把 Host 的第一行镜像进该窗口的 header line，并让窗口正文从 Host 之后开始，因此该行既不重复也不位移；point 在 Host 内时，Host 原位显示。点击镜像格子的主键会在该格子的缓冲区位置运行它的 press 绑定。sticky Host 挂载期间 Runtime 拥有缓冲区的 `header-line-format`，且每个 Runtime 只有一个 Host 是 sticky：最后提交的 `top` Host 获胜。
+**语义。** `top` Host 在显示窗口完全滚过该 Host 所在行（`window-start` 到达 Host 之后那一行）时，把它的第一行镜像进该窗口的 header line，且永不移动 `window-start`，因此原行与镜像不可能同时出现。点击镜像格子的主键会在该格子的缓冲区位置运行它的 press 绑定。镜像在提交、保留 Host 更新和 refit 时刷新，并在取消 sticky 或 Runtime 卸载时彻底清除。sticky Host 挂载期间 Runtime 拥有缓冲区的 `header-line-format`，且每个 Runtime 只有一个 Host 是 sticky：最后提交的 `top` Host 获胜。
 
-sticky 是行级 affordance：让 Host 保持单行，如工具栏或小节标题，而不是整个面板。
+sticky 是原生滚动缓冲区里的轻量单行页眉镜像，受 Emacs header line 结构限制：只镜像第一行、宽度按缓冲区布局固定（更窄的第二窗口会裁切），且无法接受 point、键盘焦点或原生文本输入。需要固定交互工具栏的应用应把工具栏放成非滚动兄弟节点，正文放进 `:overflow` `scroll` 视口。
 
 **示例。** 一个构建日志，滚动日志时表头保持可见。
 
@@ -539,6 +539,20 @@ sticky 是行级 affordance：让 Host 保持单行，如工具栏或小节标�
 **错误。** 值不是 nil 或 `top` 时 `error→ etaf-renderer-error`。
 
 **参见。** [视口](viewport.md)和[滚动](scrolling.md)两章。
+
+#### Property: :translate
+
+在 Host 上声明面向页面翻译扩展的翻译语义提示。
+
+**参数。** nil、`t`、`yes`、`no` 或 `content`。其它值会被拒绝。默认为 nil。
+
+**语义。** 作为 Runtime 拥有的语义属性保存，并通过 `etaf-runtime-host-tree` 暴露，不影响 Ebox 布局与样式。nil 继承外层 Host；`t` 或 `yes` 标记该 Host 可翻译；`no` 排除该 Host 及其整棵子树（适合代码块、标识符与按键胶囊）；`content` 标记主内容区域。
+
+**示例。** `(box :translate 'no (text "M-x etaf-translate-toggle"))`
+
+**错误。** 值超出 nil、`t`、`yes`、`no`、`content` 时 `error→ etaf-renderer-error`。
+
+**参见。** `etaf-runtime-host-tree` 与 `etaf-runtime-set-host-presentations`。
 
 ### 键盘操作
 
@@ -716,7 +730,7 @@ Host 的身份与无障碍元数据就是 Ebox 选择器查询匹配的事实：
 
 ### Sticky Host
 
-粘性机制由 Runtime 拥有，而不是布局。带 `:sticky top` 的 Host 提交时，Runtime 记录它；窗口起点到达该 Host 边界后，ETAF 把 Host 第一行镜像进该窗口的 header line，调整窗口起点让正文从 Host 之后开始，并在窗口滚回 Host 上方或 point 在 Host 内时移除镜像。因为 header line 属于窗口，机制按窗口生效：显示同一缓冲区的每个窗口可以各有各的状态。镜像是显示用的副本；Host 重绘时刷新，点击镜像格子会在它原来的缓冲区位置运行该格子的 press 绑定。
+粘性机制由 Runtime 拥有，而不是布局。带 `:sticky` `top` 的 Host 提交时，Runtime 记录它并生成单行镜像字符串，把每个可点击格子的主键转发到对应的缓冲区位置。缓冲区的 `header-line-format` 只对窗口起点做零分配整数比较，仅在 Host 所在行完全滚出视口后才显示镜像，原行回到视口时自动隐藏，全程不调用 `set-window-start`。因为 header line 属于窗口，显示同一缓冲区的每个窗口各自决定显隐，但共享按缓冲区宽度渲染出的镜像字符串。镜像与行区间在提交、保留 Host 更新和 refit 时刷新，取消 `:sticky` 或 Runtime 卸载时全部清除。
 
 #### Function: etaf-projection (runtime entries &optional source)
 

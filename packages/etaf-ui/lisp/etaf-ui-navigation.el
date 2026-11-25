@@ -55,12 +55,14 @@ The strip is one Tab stop, entered at the selected tab: Left and Right move
 focus inside it and RET selects the focused tab.  At either end the key is
 consumed instead of wrapping or ringing."
   :render
-  (let* ((items (etaf-ui--navigation-items items 'etaf-tabs))
-         (active (etaf-ui--reactive-value active))
-         (muted (etaf-theme-token :ui-muted-fg "#687386"))
-         (ink (etaf-theme-token :ui-panel-fg "#1F2328"))
-         (surface (etaf-theme-token :ui-accent-soft-bg "#E8EFFD"))
-         (line (etaf-theme-token :ui-panel-border "#D9DDE3")))
+    (let* ((items (etaf-ui--navigation-items items 'etaf-tabs))
+           (active (etaf-ui--reactive-value active))
+           (muted (etaf-theme-token :ui-muted-fg "#687386"))
+           (ink (etaf-theme-token :ui-panel-fg "#1F2328"))
+           (surface (etaf-theme-token :ui-accent-soft-bg "#E8EFFD"))
+           (hover-bg (etaf-theme-token :ui-panel-bg "#F6F7F9"
+                                       #'etaf-ui--state-hover-shift))
+           (line (etaf-theme-token :ui-panel-border "#D9DDE3")))
     (etaf-check-prop :active active (cl-some (lambda (item) (equal active (plist-get item :key))) items)
                      "a key present in :items" 'etaf-tabs)
     (etaf-check-prop :on-change on-change (functionp on-change)
@@ -91,7 +93,8 @@ consumed instead of wrapping or ringing."
            ;; selected fill, and a tablist marks its choice with a filled
            ;; segment inside a shared hairline frame.  Only the first tab
            ;; draws a left edge; the others share their neighbour's right
-           ;; edge, so the dividers stay one pixel wide.
+           ;; edge, so the dividers stay one pixel wide.  Only unselected tabs
+           ;; carry hover feedback so active states never stack.
            (etaf-node 'column
                       (append
                        (list :role 'tab
@@ -99,6 +102,9 @@ consumed instead of wrapping or ringing."
                              :width 'max-content
                              :color (if selected ink muted)
                              :background-color (and selected surface)
+                             :pointer (unless selected 'hand)
+                             :hover-style (unless selected
+                                            (list :background-color hover-bg))
                              :border-top (when framed
                                            (etaf-ui--style-border line))
                              :border-right
@@ -181,6 +187,7 @@ sitting in a second, separate panel."
                             :aria-expanded (if expanded t 'false)
                             :variant 'ghost
                             :width 'stretch
+                            :pointer 'hand
                             :font-weight 'bold
                             :padding '((lh 1) (ch 2))
                             :border-bottom (unless last

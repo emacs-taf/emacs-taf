@@ -233,7 +233,14 @@ callbacks observe Ebox's already accepted focus, never a second focus state."
     (let* ((old (and previous (etaf-runtime-node-host-ref runtime previous)))
            (ref (and node (etaf-runtime-node-host-ref runtime node)))
            (left (and old (cons old (etaf-runtime-host-ancestor-refs runtime old))))
-           (entered (and ref (cons ref (etaf-runtime-host-ancestor-refs runtime ref)))))
+           (entered (and ref (cons ref (etaf-runtime-host-ancestor-refs runtime ref))))
+           (nodes (etaf-runtime-nodes runtime))
+           (old-seg (and previous (gethash previous nodes)))
+           (new-seg (and node (gethash node nodes)))
+           (old-id (and old-seg (eq (etaf--seg-kind old-seg) 'host)
+                        (etaf--host-id (etaf--seg-data old-seg))))
+           (new-id (and new-seg (eq (etaf--seg-kind new-seg) 'host)
+                        (etaf--host-id (etaf--seg-data new-seg)))))
       (etaf-batch
         (dolist (phase (list (list 'focus-leave :on-focus-leave left entered)
                             (list 'focus-enter :on-focus-enter entered left)))
@@ -244,7 +251,11 @@ callbacks observe Ebox's already accepted focus, never a second focus state."
               (let ((props (etaf--keys-props runtime each)))
                 (when (and (functionp (plist-get props (nth 1 phase)))
                            (not (plist-get props :disabled)))
-                  (etaf-dispatch-event runtime each (car phase)))))))))))
+                  (etaf-dispatch-event runtime each (car phase))))))))
+      (when (and (etaf-runtime-mounted-p runtime)
+                 (not (eql old-id new-id)))
+        (etaf--run-runtime-hooks 'etaf-runtime-focus-change-functions
+                                 runtime old-id new-id)))))
 
 (defun etaf--keys-register (runtime keys)
   "Add the events of a Host's KEYS to RUNTIME's scoped key map."
@@ -362,6 +373,9 @@ Runtime or callback arguments through their lexical environment."
         ('command
          (unless (and ref argument) (user-error "The ETAF key binding is no longer available"))
          (etaf--keys-run runtime ref argument))
+        ('layer
+         (unless argument (user-error "The ETAF extension key binding is no longer available"))
+         (etaf--keys-run runtime nil argument))
         ('dismiss (etaf-dispatch-event runtime ref 'dismiss))
         ('direction (etaf-direction argument runtime))
         ('tab (if argument (etaf-focus-previous runtime) (etaf-focus-next runtime)))
@@ -481,7 +495,131 @@ Wheel and click bindings follow the pointer rather than focus or point."
          ((and (or (member event etaf--keys-printing-events)
                    (bound-and-true-p etaf--help-state))
                (etaf--keys-boundary-p runtime (car (last chain))))
-          #'ignore))))))
+          #'ignore)
+         ;; Registered extension key layers resolve outside local/modal
+         ;; boundaries, strictly below Host `:keys' and framework defaults.
+         ((and (not (etaf--keys-boundary-p runtime (car (last chain))))
+               (etaf--keys-layer-command runtime event))))))))
+
+(defun etaf--keys-layer-command (runtime event)
+  "Return the extension key-layer command for EVENT in RUNTIME, or nil."
+  (cl-loop for (_key . layer) in (etaf-runtime-key-layers runtime)
+           for hit = (cl-find event (plist-get layer :entries)
+                              :key #'car :test #'equal)
+           when hit
+           return (etaf--keys-command runtime 'layer nil (nth 1 hit))))
+
+(defun etaf--keys-layer-help-entries (runtime seen)
+  "Return effective help entries from RUNTIME's key layers not in SEEN."
+  (let ((out nil)
+        (used (copy-sequence seen)))
+    (dolist (pair (etaf-runtime-key-layers runtime))
+      (let* ((key (car pair))
+             (layer (cdr pair))
+             (source (or (plist-get layer :label) (symbol-name key))))
+        (dolist (entry (plist-get layer :entries))
+          (let ((events (car entry))
+                (label (nth 2 entry)))
+            (unless (member events used)
+              (push events used)
+              (when (and (stringp label) (not (string-empty-p label)))
+                (push (list :key (key-description events)
+                            :events events
+                            :label label
+                            :source source)
+                      out)))))))
+    (nreverse out)))
+
+(defun etaf--keys-layer-prefix-conflict-p (map event)
+  "Return non-nil when EVENT conflicts as a prefix with bindings in MAP."
+  (let ((defined (gethash map etaf--keys-sequences)))
+    (and (not (member event defined))
+         (cl-some (lambda (other)
+                    (or (etaf--keys-prefix-p other event)
+                        (etaf--keys-prefix-p event other)))
+                  defined))))
+
+;;;###autoload
+(defun etaf-runtime-set-key-layer (runtime key entries &optional label priority)
+  "Register or replace extension key layer KEY on mounted RUNTIME.
+KEY is a non-nil symbol.  ENTRIES is a list of `(KEY-DESC COMMAND [LABEL])'
+items; nil removes KEY.  Framework-reserved first events (`Escape', `M-g',
+`C-g', `?', `Tab', arrows) signal `etaf-runtime-error'.  LABEL names the
+source in keyboard help, and PRIORITY is an integer (default 50, lower wins).
+Bindings that prefix-conflict with an already bound key sequence are skipped
+without disturbing the application.  Return the list of active key strings."
+  (etaf--assert-not-rendering 'set-key-layer)
+  (setq runtime (etaf-runtime-require-mounted runtime))
+  (unless (and (symbolp key) key)
+    (signal 'etaf-runtime-error (list "Key layer key must be a non-nil symbol" key)))
+  (unless (proper-list-p entries)
+    (signal 'etaf-runtime-error (list "Key layer entries must be a list" entries)))
+  (when (and label (not (stringp label)))
+    (signal 'etaf-runtime-error (list "Key layer label must be a string or nil" label)))
+  (let ((prio (or priority 50)))
+    (unless (integerp prio)
+      (signal 'etaf-runtime-error (list "Key layer priority must be an integer" prio)))
+    (if (null entries)
+        (progn
+          (setf (etaf-runtime-key-layers runtime)
+                (assq-delete-all key (etaf-runtime-key-layers runtime)))
+          nil)
+      (let ((normalized nil)
+            (active nil)
+            (map (etaf-runtime-keymap runtime)))
+        (dolist (item entries)
+          (unless (and (proper-list-p item) (>= (length item) 2) (<= (length item) 3))
+            (signal 'etaf-runtime-error (list "Invalid key layer entry" item)))
+          (let* ((raw-key (nth 0 item))
+                 (cmd (nth 1 item))
+                 (desc (nth 2 item)))
+            (unless (or (stringp raw-key) (vectorp raw-key))
+              (signal 'etaf-runtime-error (list "Invalid key layer sequence" raw-key)))
+            (unless (or (functionp cmd) (commandp cmd))
+              (signal 'etaf-runtime-error (list "Invalid key layer command" cmd)))
+            (when (and desc (not (stringp desc)))
+              (signal 'etaf-runtime-error (list "Invalid key layer label" desc)))
+            (let* ((event (etaf--keys-event raw-key))
+                   (first-ev (and (> (length event) 0) (vector (aref event 0)))))
+              (when (or (= (length event) 0)
+                        (member first-ev etaf--keys-reserved-events))
+                (signal 'etaf-runtime-error
+                        (list "Extension key layer cannot bind reserved key"
+                              (key-description event))))
+              (unless (and map (etaf--keys-layer-prefix-conflict-p map event))
+                (when map (etaf--keys-define map event))
+                (push (list event cmd desc) normalized)
+                (push (key-description event) active)))))
+        (let* ((others (assq-delete-all key (etaf-runtime-key-layers runtime)))
+               (entry (cons key (list :priority prio
+                                      :label label
+                                      :entries (nreverse normalized))))
+               (merged (sort (cons entry others)
+                             (lambda (a b)
+                               (< (plist-get (cdr a) :priority)
+                                  (plist-get (cdr b) :priority))))))
+          (setf (etaf-runtime-key-layers runtime) merged))
+        (nreverse active)))))
+
+;;;###autoload
+(defun etaf-runtime-clear-key-layer (runtime &optional key)
+  "Remove extension key layer KEY (or all when nil) from mounted RUNTIME.
+Return the number of layers removed."
+  (etaf--assert-not-rendering 'clear-key-layer)
+  (setq runtime (etaf-runtime-require-mounted runtime))
+  (when (and key (not (symbolp key)))
+    (signal 'etaf-runtime-error (list "Key layer key must be a symbol or nil" key)))
+  (let ((layers (etaf-runtime-key-layers runtime)))
+    (if (null key)
+        (let ((n (length layers)))
+          (setf (etaf-runtime-key-layers runtime) nil)
+          n)
+      (if (assq key layers)
+          (progn
+            (setf (etaf-runtime-key-layers runtime)
+                  (assq-delete-all key layers))
+            1)
+        0))))
 
 ;;;###autoload
 (defun etaf-drag-step (runtime host-ref columns rows)

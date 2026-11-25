@@ -1,0 +1,82 @@
+{
+  "name": "pele",
+  "version": "1.13.0",
+  "description": "A fast, lightweight Mermaid renderer that outputs themeable SVG.",
+  "license": "MIT",
+  "author": "kepano",
+  "keywords": [
+    "mermaid",
+    "diagram",
+    "diagrams",
+    "flowchart",
+    "svg",
+    "renderer"
+  ],
+  "homepage": "https://pele.run",
+  "bugs": "https://github.com/obsidianmd/pele/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/obsidianmd/pele.git"
+  },
+  "type": "module",
+  "main": "./dist/pele.js",
+  "module": "./dist/pele.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/pele.js",
+      "default": "./dist/pele.js"
+    },
+    "./core": {
+      "types": "./dist/core.d.ts",
+      "import": "./dist/esm/core.js",
+      "default": "./dist/esm/core.js"
+    },
+    "./lazy": {
+      "types": "./dist/lazy.d.ts",
+      "import": "./dist/esm/lazy.js",
+      "default": "./dist/esm/lazy.js"
+    },
+    "./diagrams/*": {
+      "types": "./dist/entries/*.d.ts",
+      "import": "./dist/esm/diagrams/*.js",
+      "default": "./dist/esm/diagrams/*.js"
+    },
+    "./global": "./dist/pele.global.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "sideEffects": [
+    "./dist/pele.js",
+    "./src/index.ts"
+  ],
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --exclude \"tests/website/**\"",
+    "test:website": "vitest run tests/website",
+    "prepublishOnly": "npm run typecheck && npm test && npm run build",
+    "test:watch": "vitest --exclude \"tests/website/**\"",
+    "bench": "node scripts/bench.mjs",
+    "bench:mermaid": "node scripts/bench-mermaid.mjs",
+    "website": "cd website && pnpm dev"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@braintree/sanitize-url": "^7.1.2",
+    "@mermaid-js/parser": "^2.0.1",
+    "beautiful-mermaid": "^1.1.3",
+    "esbuild": "^0.28.2",
+    "jison": "^0.4.18",
+    "js-yaml": "^4.3.2",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11"
+  }
+}

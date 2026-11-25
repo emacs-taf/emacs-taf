@@ -47,6 +47,7 @@
 | --- | --- |
 | [`ebox-input-edit-commands`](text-input.md#variable-ebox-input-edit-commands) | 会话 `:keymap` 绑定它们时编辑会话值的命令。 |
 | [`etaf-cursor-follows-input-modality`](text-input.md#variable-etaf-cursor-follows-input-modality) | 已挂载画布是否在指针按压后隐藏光标。 |
+| [`ebox-allow-text-selection`](text-input.md#variable-ebox-allow-text-selection) | 已挂载画布是否允许 Emacs 原生 mark 与指针文本选择。 |
 
 ## 动画
 
@@ -54,9 +55,12 @@
 | --- | --- |
 | [`etaf-animation-easings`](animation.md#variable-etaf-animation-easings) | 把进度映射到缓动后进度的 `(NAME . FUNCTION)` alist。 |
 | [`etaf-animation-interpolators`](animation.md#variable-etaf-animation-interpolators) | 优于内建插值、按顺序查询的 `((PREDICATE . FUNCTION) ...)` 转换表。 |
+| [`etaf-animation-color-space`](animation.md#variable-etaf-animation-color-space) | `etaf-animation-interpolate` 混合颜色使用的色彩空间：`rgb`（默认）或 `oklab`。 |
+| [`etaf-animation-spring-presets`](animation.md#variable-etaf-animation-spring-presets) | 供 `etaf-spring` 使用的 `(NAME . PLIST)` 弹簧参数预设表。 |
 | [`etaf-animation-frame-rate`](animation.md#variable-etaf-animation-frame-rate) | 运行中动画的显示时钟频率，单位是每秒帧数。 |
 | [`etaf-animation-speed`](animation.md#variable-etaf-animation-speed) | 动画速度倍数，正数；1.0 是正常速度。 |
 | [`etaf-animation-paused`](animation.md#variable-etaf-animation-paused) | 非 nil 时共享时钟停止前进。 |
+| [`etaf-animation-pause-hidden`](animation.md#variable-etaf-animation-pause-hidden) | 非 nil 时，无可见窗口的 Runtime 缓冲区动画自动挂起。 |
 | [`etaf-animation-enabled`](animation.md#variable-etaf-animation-enabled) | 动画是否随时间插值；默认为 t。 |
 
 ## 原生视频
@@ -68,6 +72,8 @@
 | [`etaf-video-density-ramp`](native-video.md#variable-etaf-video-density-ramp) | `ascii` 渲染模式下每个视频像素所用的字符。 |
 | [`etaf-video-display-fps`](native-video.md#variable-etaf-video-display-fps) | 新视频播放的显示定时器频率，单位是每秒帧数。 |
 | [`etaf-video-render-backend`](native-video.md#variable-etaf-video-render-backend) | 视频帧的渲染后端：`image`、`canvas` 或 `auto`。 |
+| [`etaf-video-engine`](native-video.md#variable-etaf-video-engine) | `etaf-video` 的播放引擎：`auto`、`mpv` 或 `ffmpeg`。 |
+| [`etaf-video-mpv-library`](native-video.md#variable-etaf-video-mpv-library) | 可选的 `libmpv` 共享库显式路径。 |
 | [`etaf-video-ffmpeg-program`](native-video.md#variable-etaf-video-ffmpeg-program) | 用于解码视频的 ffmpeg 可执行文件的名字或绝对路径。 |
 | [`etaf-video-ffplay-program`](native-video.md#variable-etaf-video-ffplay-program) | 用于音频的 ffplay 可执行文件的名字或绝对路径。 |
 | [`etaf-video-ffprobe-program`](native-video.md#variable-etaf-video-ffprobe-program) | 用于元数据的 ffprobe 可执行文件的名字或绝对路径。 |

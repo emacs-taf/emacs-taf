@@ -42,11 +42,11 @@
 
 <!-- index: etaf-dialog; modal panel; backdrop; fixed height -->
 
-#### Component: etaf-dialog (&key open title width height compact close-label on-close backdrop keys on-direction)
+#### Component: etaf-dialog (&key open title width height compact close-label on-close backdrop keys on-direction animated)
 
 用与 Popover 相同的浮动表面显示受控模态面板。
 
-**参数。** OPEN 是值、ref 或 computed。TITLE 默认 `"Dialog"`。WIDTH 默认 `(ch 48)`。HEIGHT 为 nil 或 `(lh N)`（N 为正），把面板限制在可见窗口内的若干文本行。COMPACT 去掉正文的纵向留白，让短表单保持紧凑。CLOSE-LABEL 默认 `"Close"`；nil 时省略默认 footer 按钮，让 footer slot 决定全部动作。BACKDROP 默认 t。ON-CLOSE 必需。KEYS 与 ON-DIRECTION 声明面板 Host 的作用域 `:keys` 和 `:on-direction`，不绑定遮罩。
+**参数。** OPEN 是值、ref 或 computed。TITLE 默认 `"Dialog"`。WIDTH 默认 `(ch 48)`。HEIGHT 为 nil 或 `(lh N)`（N 为正），把面板限制在可见窗口内的若干文本行。COMPACT 去掉正文的纵向留白，让短表单保持紧凑。CLOSE-LABEL 默认 `"Close"`；nil 时省略默认 footer 按钮，让 footer slot 决定全部动作。BACKDROP 默认 t。ON-CLOSE 必需。KEYS 与 ON-DIRECTION 声明面板 Host 的作用域 `:keys` 和 `:on-direction`，不绑定遮罩。ANIMATED 非 nil（默认 nil）时，打开后经共享动画时钟平滑渐暗模态遮罩。
 
 **语义。** 显示 buffer 的窗口是图形窗口时，对话框在窗口内居中，且永不移动应用的几何或全局焦点策略。header 显示 TITLE 与一个仅指针可用的 `x`，它请求 ON-CLOSE，Escape 同样如此，所以模态总有一条键盘出口。带 BACKDROP（默认）时，遮罩调暗 root 画布，同时让被盖住的应用（包括文字与图片）保持可见；被覆盖的控件及其焦点目标仍被挡住。点击遮罩请求 ON-CLOSE，不会穿透并点击背景；点击面板内部不会关闭。嵌套模态遮罩只关闭自己所属的最上层界面，不关闭被覆盖的父界面。BACKDROP 为 nil 时完全不绘制遮罩，外部按压策略归调用方。固定 HEIGHT 需要正文行数再加五（header、正文留白与 footer）；窗口太矮时裁剪对话框正文，而不溢出 frame。对话框不拥有表单数据。
 

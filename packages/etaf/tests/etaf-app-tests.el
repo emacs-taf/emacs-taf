@@ -165,4 +165,31 @@ the window scrolls as a whole and slides every pane at once."
             (should (= (length heights) 2)))
         (delete-other-windows frame-window)))))
 
+(ert-deftest etaf-mount-text-selection-enables-and-restores-region ()
+  "Mount option `:text-selection' enables native mark/region and restores on unmount."
+  (let ((buffer (get-buffer-create " *etaf-text-sel-test*"))
+        (config (current-window-configuration))
+        (transient-mark-mode t))
+    (unwind-protect
+        (progn
+          (should-error
+           (etaf-mount buffer (etaf-view (text "bad")) '(:text-selection "yes"))
+           :type 'etaf-runtime-error)
+          (set-window-buffer (selected-window) buffer)
+          (set-buffer buffer)
+          (etaf-mount buffer (etaf-view (column (text "hello world")))
+                      '(:viewport-width 400 :viewport-height 5 :text-selection t))
+          (goto-char (point-min))
+          (execute-kbd-macro (kbd "C-SPC"))
+          (forward-char 5)
+          (should (region-active-p))
+          (should (equal (buffer-substring-no-properties (region-beginning) (region-end))
+                         "hello"))
+          (etaf-unmount (etaf-runtime-for-buffer buffer))
+          (should-not (local-variable-p 'ebox-allow-text-selection)))
+      (when-let* ((rt (etaf-runtime-for-buffer buffer)))
+        (ignore-errors (etaf-unmount rt)))
+      (set-window-configuration config)
+      (when (buffer-live-p buffer) (kill-buffer buffer)))))
+
 ;;; etaf-app-tests.el ends here

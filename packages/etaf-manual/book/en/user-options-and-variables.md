@@ -47,6 +47,7 @@ Every documented variable, grouped by the chapter that defines it. Each row link
 | --- | --- |
 | [`ebox-input-edit-commands`](text-input.md#variable-ebox-input-edit-commands) | Commands that edit the session value when a session `:keymap` binds them. |
 | [`etaf-cursor-follows-input-modality`](text-input.md#variable-etaf-cursor-follows-input-modality) | Whether a mounted canvas hides its cursor after a pointer press. |
+| [`ebox-allow-text-selection`](text-input.md#variable-ebox-allow-text-selection) | Whether a mounted canvas allows native Emacs mark and pointer text selection. |
 
 ## Animation
 
@@ -54,9 +55,12 @@ Every documented variable, grouped by the chapter that defines it. Each row link
 | --- | --- |
 | [`etaf-animation-easings`](animation.md#variable-etaf-animation-easings) | Alist of `(NAME . FUNCTION)` easing curves from progress to eased progress. |
 | [`etaf-animation-interpolators`](animation.md#variable-etaf-animation-interpolators) | Ordered `((PREDICATE . FUNCTION) ...)` conversions consulted before built-in interpolation. |
+| [`etaf-animation-color-space`](animation.md#variable-etaf-animation-color-space) | Color space used by `etaf-animation-interpolate`: `rgb` (default) or `oklab`. |
+| [`etaf-animation-spring-presets`](animation.md#variable-etaf-animation-spring-presets) | Alist of `(NAME . PLIST)` spring parameter bundles for `etaf-spring`. |
 | [`etaf-animation-frame-rate`](animation.md#variable-etaf-animation-frame-rate) | Display clock rate in frames per second for running animations. |
 | [`etaf-animation-speed`](animation.md#variable-etaf-animation-speed) | Animation speed multiplier, a positive number; 1.0 is normal speed. |
 | [`etaf-animation-paused`](animation.md#variable-etaf-animation-paused) | While non-nil, the shared clock stops advancing. |
+| [`etaf-animation-pause-hidden`](animation.md#variable-etaf-animation-pause-hidden) | When non-nil, animations owned by an undisplayed Runtime buffer hold their progress. |
 | [`etaf-animation-enabled`](animation.md#variable-etaf-animation-enabled) | Whether animations interpolate over time; t by default. |
 
 ## Native Video
@@ -68,6 +72,8 @@ Every documented variable, grouped by the chapter that defines it. Each row link
 | [`etaf-video-density-ramp`](native-video.md#variable-etaf-video-density-ramp) | Characters used for one video pixel in the `ascii` render mode. |
 | [`etaf-video-display-fps`](native-video.md#variable-etaf-video-display-fps) | Display timer rate in frames per second for new video playback. |
 | [`etaf-video-render-backend`](native-video.md#variable-etaf-video-render-backend) | Rendering backend for video frames: `image`, `canvas` or `auto`. |
+| [`etaf-video-engine`](native-video.md#variable-etaf-video-engine) | Playback engine for `etaf-video`: `auto`, `mpv` or `ffmpeg`. |
+| [`etaf-video-mpv-library`](native-video.md#variable-etaf-video-mpv-library) | Optional explicit path to the `libmpv` shared library. |
 | [`etaf-video-ffmpeg-program`](native-video.md#variable-etaf-video-ffmpeg-program) | Name or absolute path of the ffmpeg executable used to decode video. |
 | [`etaf-video-ffplay-program`](native-video.md#variable-etaf-video-ffplay-program) | Name or absolute path of the ffplay executable used for audio. |
 | [`etaf-video-ffprobe-program`](native-video.md#variable-etaf-video-ffprobe-program) | Name or absolute path of the ffprobe executable used for metadata. |

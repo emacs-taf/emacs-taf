@@ -16,17 +16,17 @@ transition 跟随一个响应式源；帧序列轮播固定列表。值有明确
 
 <!-- index: etaf-transition; etaf-animation-frames; duration; easing; interval; loop; 完成 -->
 
-#### Function: etaf-transition (source &key (duration 0.2) (easing 'ease-out) name on-complete)
+#### Function: etaf-transition (source &key (duration 0.2) (easing 'ease-out) (delay 0) name on-complete)
 
 返回一个在 DURATION 秒内跟随响应式 SOURCE 的 ref。
 
-**参数。** SOURCE 是 ref、计算值或零参函数，和 `etaf-watch` 完全一样。DURATION 是行进秒数，默认 0.2，可以为 0。EASING 是 `etaf-animation-easings` 里的名字或一个缓动函数。NAME 是返回 ref 在诊断中的标签。ON-COMPLETE 是每次运行到达 SOURCE 后要跑的零参函数。
+**参数。** SOURCE 是 ref、计算值或零参函数，和 `etaf-watch` 完全一样。DURATION 是行进秒数，默认 0.2，可以为 0。EASING 是 `etaf-animation-easings` 里的名字或一个缓动函数。DELAY 是在共享时钟上开始插值前等待的秒数，默认 0。NAME 是返回 ref 在诊断中的标签。ON-COMPLETE 是每次运行到达 SOURCE 后要跑的零参函数。
 
-**语义。** 返回的 ref 以 SOURCE 的当前值为初值，且一开始不运行。此后每次 SOURCE 变化都从当前显示的值开始一次运行，所以打断运行永不跳变。在需要跟随显示值的地方用 `etaf-value` 读它。动画归属于创建时活动的 Scope，例如 Component 的 `:bindings` 或 setup；没有这样的 Scope 时，用 `etaf-animation-stop` 停止它。把目标写成与显示值相等的值会停止运行，而不是开始一次。
+**语义。** 返回的 ref 以 SOURCE 的当前值为初值，且一开始不运行。此后每次 SOURCE 变化都从当前显示的值开始一次运行，所以打断运行永不跳变。DELAY 尚未走完期间显示值保持起点不变；DURATION 与 DELAY 都为 0 时立刻落值。在需要跟随显示值的地方用 `etaf-value` 读它。动画归属于创建时活动的 Scope，例如 Component 的 `:bindings` 或 setup；没有这样的 Scope 时，用 `etaf-animation-stop` 停止它。把目标写成与显示值相等的值会停止运行，而不是开始一次。
 
 **返回。** 显示值 ref。
 
-**错误。** DURATION 不是非负数时 `error→ etaf-animation-error`，数据 `("Invalid duration" VALUE)`；EASING 既不是函数也不是 `etaf-animation-easings` 中的名字时 `error→ etaf-animation-error`，数据 `("Unknown easing" VALUE)`；ON-COMPLETE 既不是 nil 也不是函数时 `error→ wrong-type-argument`，数据 `(functionp VALUE)`。非法 SOURCE 报 `etaf-watch` 会报的错误。
+**错误。** DURATION 不是非负数时 `error→ etaf-animation-error`，数据 `("Invalid duration" VALUE)`；DELAY 不是非负数时 `error→ etaf-animation-error`，数据 `("Invalid delay" VALUE)`；EASING 既不是函数也不是 `etaf-animation-easings` 中的名字时 `error→ etaf-animation-error`，数据 `("Unknown easing" VALUE)`；ON-COMPLETE 既不是 nil 也不是函数时 `error→ wrong-type-argument`，数据 `(functionp VALUE)`。非法 SOURCE 报 `etaf-watch` 会报的错误。
 
 **示例。** 一个可由控件写入的目标。
 
@@ -37,7 +37,30 @@ transition 跟随一个响应式源；帧序列轮播固定列表。值有明确
 ;; ⇒ 0
 ```
 
-**参见。** `etaf-animation-frames`、`etaf-animation-interpolate`、`etaf-animation-stop`。
+**参见。** `etaf-spring`、`etaf-animation-frames`、`etaf-animation-interpolate`、`etaf-animation-stop`。
+
+#### Function: etaf-spring (source &key stiffness damping mass (precision 0.01) preset name on-complete)
+
+返回一个以阻尼弹簧物理模型跟随响应式 SOURCE 的 ref。
+
+**参数。** SOURCE 是 ref、计算值或零参函数，与 `etaf-watch` 相同。PRESET 从 `etaf-animation-spring-presets` 选择命名预设（`snappy`、`gentle`、`bouncy` 或 `stiff`）。STIFFNESS、DAMPING 与 MASS 为正数，覆盖预设（或默认值 180、22、1）。PRECISION 是正的静止阈值，默认 0.01。NAME 标签用于诊断。ON-COMPLETE 在弹簧稳定到 SOURCE 后运行。
+
+**语义。** 与 `etaf-transition` 不同，运行中途改变目标会保留当前速度，因此高频交互更新带有自然惯性。数字、颜色串以及包含它们的等形列表或向量（如 `(px 120)`）按数值通道同步推进，位置与速度落入 PRECISION 内时精准贴合 SOURCE；形状不兼容的目标立即生效。Scope 归属、`etaf-animation-stop`、`etaf-animation-finish` 与 `etaf-animation-enabled` 规则同 `etaf-transition`。
+
+**返回。** 显示值 ref。
+
+**错误。** PRESET 未知、或 STIFFNESS、DAMPING、MASS、PRECISION 非正时报 `error→ etaf-animation-error`；ON-COMPLETE 既不是 nil 也不是函数时报 `error→ wrong-type-argument`。
+
+**示例。**
+
+```elisp
+(let* ((x (etaf-ref '(px 0)))
+       (shown (etaf-spring x :preset 'snappy)))
+  (etaf-value shown))
+;; ⇒ (px 0)
+```
+
+**参见。** `etaf-transition`、`etaf-animation-spring-presets`、`etaf-animation-stop`。
 
 #### Function: etaf-animation-frames (frames &key (interval 0.1) (loop t) name on-complete)
 
@@ -58,7 +81,35 @@ transition 跟随一个响应式源；帧序列轮播固定列表。值有明确
 ;; ⇒ "|"
 ```
 
-**参见。** `etaf-transition`、`etaf-animation-stop`、`etaf-animation-easings`。
+**参见。** `etaf-transition`、`etaf-animation-tick`、`etaf-animation-stop`、`etaf-animation-easings`。
+
+#### Function: etaf-animation-tick (callback &key (interval 0) name)
+
+把 CALLBACK 订阅到共享动画时钟并返回已经过秒数的 ref。
+
+**参数。** CALLBACK 是接收两个浮点数 `(DT ELAPSED)` 的函数，分别为距离上次调用与自创建以来流逝的动画秒数。INTERVAL 是两次调用间的最小动画秒数间隔，默认 0 表示每次时钟采样都调用。NAME 用于诊断。
+
+**语义。** 返回 ref 从 `0.0` 开始，每次调用 CALLBACK 前先更新为最新累计秒数。全局暂停、倍速与 `etaf-animation-pause-hidden` 自动生效。`etaf-animation-enabled` 为 nil 时不启动。Scope 归属、`etaf-animation-stop` 与 `etaf-animation-active-p` 同 `etaf-transition`。
+
+**返回。** 已流逝秒数的 ref。
+
+**错误。** CALLBACK 不是函数时报 `error→ wrong-type-argument`；INTERVAL 不是非负数时报 `error→ etaf-animation-error`。
+
+**参见。** `etaf-animation-timeline`、`etaf-animation-frames`、`etaf-animation-stop`。
+
+#### Function: etaf-animation-timeline (steps &key loop name on-complete)
+
+在共享时钟上按声明式 STEPS 顺序执行并返回步骤索引 ref。
+
+**参数。** STEPS 是非空步骤 plist 列表，支持 `(:delay SECONDS)`、`(:call FUNCTION)`、`(:run FUNCTION :duration SECONDS [:easing EASING])` 与 `(:parallel STEP-LIST)`。LOOP 非 nil 时走完最后一步后从头循环；否则走完后调用 ON-COMPLETE。NAME 用于诊断。
+
+**语义。** 步骤在共享时钟的普通响应式批处理内依次推进；`:run` 以 0 到 1 的缓动进度调用 FUNCTION 并保证最终传入 `1.0`；`:parallel` 并发推进全部子步骤直至最长者结束。调用 `etaf-animation-finish` 会按序立刻完成所有剩余步骤并触发 ON-COMPLETE；`etaf-animation-stop` 立即停止且不执行剩余步骤。`etaf-animation-enabled` 为 nil 时，非循环时间轴立即完成全部步骤而不启动时钟。Scope 归属同 `etaf-transition`。
+
+**返回。** 从零开始的步骤索引 ref。
+
+**错误。** STEPS 为空或含非法步骤、负延时/时长或未知缓动时报 `error→ etaf-animation-error`；回调或 ON-COMPLETE 不是函数时报 `error→ wrong-type-argument`。
+
+**参见。** `etaf-transition`、`etaf-animation-tick`、`etaf-animation-finish`。
 
 #### Property: :on-complete
 
@@ -128,6 +179,36 @@ transition 跟随一个响应式源；帧序列轮播固定列表。值有明确
 
 **参见。** `etaf-animation-interpolate`。
 
+#### Function: etaf-animation-quantize (value step)
+
+把 VALUE 中的数值元素吸附到正步长 STEP 的整数倍。
+
+**参数。** VALUE 可以是数字、列表、向量或其他任意值。STEP 是正数网格步长。
+
+**语义。** 数字四舍五入到最近的 STEP 倍数；列表与向量递归量化，非数字保持不变，因此 `(px 13.7)` 这类长度值可以贴合像素或颜色步进栅格，避免高频生成大量细碎的 Emacs face 或图像缓存。
+
+**返回。** 量化后的值。
+
+**错误。** STEP 不是正数时报 `error→ etaf-animation-error`，数据 `("Invalid quantize step" VALUE)`。
+
+**参见。** `etaf-animation-interpolate`、`etaf-transition`。
+
+#### Variable: etaf-animation-color-space
+
+`etaf-animation-interpolate` 混合颜色串时使用的色彩空间。
+
+**语义。** 默认 `rgb` 按 sRGB 分量线性混合；设为 `oklab` 时按感知均匀的 OKLab 空间混合，避免高饱和色之间出现发灰的中间色。未知符号报 `etaf-animation-error`。
+
+**参见。** `etaf-animation-interpolate`。
+
+#### Variable: etaf-animation-spring-presets
+
+供 `etaf-spring` 使用的 `(NAME . PLIST)` 弹簧参数预设表。
+
+**语义。** 内建预设为 `snappy`、`gentle`、`bouncy` 与 `stiff`，分别提供 `:stiffness`、`:damping` 与 `:mass` 默认值，调用 `etaf-spring` 时可由显式关键字覆盖。
+
+**参见。** `etaf-spring`。
+
 ### 共享时钟
 
 <!-- index: etaf-animation-frame-rate; etaf-animation-speed; etaf-animation-paused; 采样; 帧率 -->
@@ -159,6 +240,14 @@ transition 跟随一个响应式源；帧序列轮播固定列表。值有明确
 **语义。** 运行中的动画保持显示值与进度，并且保持订阅。清回 nil 会让它们从停住的地方精确恢复；暂停期间创建的运行会在时钟再次前进后从它自己的第一帧开始。暂停不是停止：它不结算运行、不运行完成回调，`etaf-animation-active-p` 也保持真。
 
 **参见。** `etaf-animation-enabled`、`etaf-animation-speed`、`etaf-animation-active-p`。
+
+#### Variable: etaf-animation-pause-hidden
+
+非 nil 时，归属于当前无可见窗口的 Runtime 缓冲区的动画自动挂起。
+
+**语义。** 在已挂载 Runtime 中创建的动画会记录其缓冲区。当此变量非 nil（默认 nil）且该缓冲区在所有 frame 上都没有可见窗口时，共享时钟跳过该动画的采样并平移其时间基准，缓冲区重新显示后无缝续播。
+
+**参见。** `etaf-animation-paused`、`etaf-animation-enabled`。
 
 ### 停止、完成与开关
 

@@ -699,14 +699,19 @@ before LINE would otherwise leave on the inserted text."
   "Restore TRACKED positions of MOUNT after EDITS.
 A canvas no taller than its window has nothing to scroll, so its window
 starts at the first line: restoring a line that the rewrite moved there
-would leave the window showing the blank tail of a short canvas."
+would leave the window showing the blank tail of a short canvas.
+Window starts always align to column 0 because mounted buffers truncate
+engine rows, so a mid-line start would clip the leading cells of the
+first visible row."
   (let ((last (max 0 (1- (ebox-mount-lines mount)))))
     (dolist (entry tracked)
       (pcase-let* ((`(,kind ,window ,line ,column) entry)
                    (new-line (min last (car (ebox--map-line line edits))))
                    (pos (save-excursion
                           (ebox--goto-line mount new-line)
-                          (min (+ (point) column) (line-end-position))))
+                          (if (eq kind 'start)
+                              (point)
+                            (min (+ (point) column) (line-end-position)))))
                    (fits (and (window-live-p window)
                               (<= (ebox-mount-lines mount)
                                   (window-body-height window)))))
@@ -1255,11 +1260,17 @@ Nil WIDTH or HEIGHT follows the display window."
   "Start WINDOW at its buffer start when the whole buffer fits its body.
 A window that was shorter for a while (the echo area or a popup borrowed
 its lines) may have scrolled a window-sized tree; it returns to the top
-once the tree fits again."
+once the tree fits again.  Y-LIMIT includes the window's header-line and
+tab-line heights because `window-text-pixel-size' stops against window-top
+Y coordinates."
   (when (> (window-start window) (point-min))
-    (let ((body (window-body-height window t)))
+    (let* ((body (window-body-height window t))
+           (limit (+ body
+                     (window-header-line-height window)
+                     (window-tab-line-height window)
+                     1)))
       (when (<= (cdr (window-text-pixel-size window (point-min) (point-max)
-                                             nil (1+ body)))
+                                             nil limit))
                 body)
         (set-window-start window (point-min) t)))))
 
@@ -1320,6 +1331,129 @@ X and WIDTH are pixels, Y and HEIGHT root lines; nil when NODE is not laid out."
               :y (+ (ebox--item-top-in-root node) (ebox-geo-mt geo))
               :width (ebox-geo-bw geo)
               :height (ebox-geo-bh geo))))))
+
+(defun ebox-node-box-metrics (node)
+  "Return resolved box-model metrics for laid-out NODE, or nil.
+Return a detached plist with `:x', `:y', `:margin', `:border', `:padding',
+`:border-box', `:content-box', `:viewport-height', `:scroll', `:layout-kind',
+`:gap' and `:natural-width'.  Horizontal sizes are pixels and vertical sizes
+are root lines."
+  (ebox--check-node node)
+  (let ((geo (ebox-node-layout node))
+        (cs (ebox-node-cs node))
+        (rect (ebox-node-geometry node)))
+    (when (and geo cs rect)
+      (list :x (plist-get rect :x)
+            :y (plist-get rect :y)
+            :margin (list :top (ebox-geo-mt geo)
+                          :right (ebox-geo-mr geo)
+                          :bottom (ebox-geo-mb geo)
+                          :left (ebox-geo-ml geo))
+            :border (list :top (if (ebox-cs-btop cs) 1 0)
+                          :right (ebox-geo-br geo)
+                          :bottom (if (ebox-cs-bbot cs) 1 0)
+                          :left (ebox-geo-bl geo))
+            :padding (list :top (ebox-geo-pt geo)
+                           :right (ebox-geo-pr geo)
+                           :bottom (ebox-geo-pb geo)
+                           :left (ebox-geo-pl geo))
+            :border-box (list :width (ebox-geo-bw geo)
+                              :height (ebox-geo-bh geo))
+            :content-box (list :width (ebox-geo-cw geo)
+                               :height (ebox-geo-ch geo))
+            :viewport-height (ebox-geo-vh geo)
+            :scroll (ebox-geo-scroll geo)
+            :layout-kind (ebox-geo-kind geo)
+            :gap (ebox-geo-gap geo)
+            :natural-width (ebox-geo-nat geo)))))
+
+(defun ebox--clip-vertical-band (node mount)
+  "Return (TOP . BOTTOM) 0-based visible line band for NODE inside MOUNT."
+  (let ((top 0)
+        (bot (ebox-mount-lines mount))
+        (cur (ebox-node-parent node)))
+    (while cur
+      (when-let* ((cs (ebox-node-cs cur))
+                  ((memq (ebox-cs-overflow cs) '(scroll auto hidden)))
+                  (rect (ebox-node-geometry cur)))
+        (let ((ct (plist-get rect :y))
+              (cb (+ (plist-get rect :y) (max 0 (plist-get rect :height)))))
+          (setq top (max top ct)
+                bot (min bot cb))))
+      (setq cur (ebox-node-parent cur)))
+    (cons top bot)))
+
+(defun ebox--text-row-spans (node mount)
+  "Return per-line (LINE BEG . END) spans for text NODE in MOUNT."
+  (let* ((parent (ebox-node-parent node))
+         (geometry (and parent (ebox-node-geometry parent))))
+    (when (and geometry (> (plist-get geometry :height) 0))
+      (pcase-let* ((`(,clip-top . ,clip-bot) (ebox--clip-vertical-band parent mount))
+                   (y (plist-get geometry :y))
+                   (top (max y clip-top))
+                   (bot (min (+ y (plist-get geometry :height)) clip-bot))
+                   (spans nil))
+        (when (< top bot)
+          (with-current-buffer (ebox-mount-buffer mount)
+            (save-excursion
+              (ebox--goto-line mount top)
+              (let ((row top))
+                (while (< row bot)
+                  (let* ((bol (line-beginning-position))
+                         (eol (line-end-position))
+                         (run (text-property-any bol eol 'ebox-node node)))
+                    (when run
+                      (let ((stop eol))
+                        (while (and (> stop run)
+                                    (not (eq (get-text-property (1- stop) 'ebox-node) node)))
+                          (setq stop (1- stop)))
+                        (while (and (> stop run)
+                                    (eq (car-safe (get-text-property (1- stop) 'display)) 'space))
+                          (setq stop (1- stop)))
+                        (when (> stop run)
+                          (push (cons row (cons run stop)) spans)))))
+                  (setq row (1+ row))
+                  (when (< row bot)
+                    (forward-line 1)))))))
+        (nreverse spans)))))
+
+(defun ebox-node-row-spans (node)
+  "Return exact painted (LINE BEG . END) buffer spans for each visible row of NODE.
+LINE is 0-based.  For multi-column Flex or Grid layouts, each row's (BEG . END)
+covers only NODE's horizontal pixel extent on that line and respects enclosing
+clipping ancestors.  Return nil when NODE is unmounted, hidden or clipped out."
+  (ebox--check-node node)
+  (let ((mount (ebox--mount-of node)))
+    (when mount
+      (if (ebox-node-text-p node)
+          (ebox--text-row-spans node mount)
+        (let ((geometry (ebox-node-geometry node)))
+          (when (and geometry (> (plist-get geometry :height) 0)
+                     (> (plist-get geometry :width) 0)
+                     (ebox--node-slotted-p node))
+            (pcase-let* ((`(,clip-top . ,clip-bot) (ebox--clip-vertical-band node mount))
+                         (y (plist-get geometry :y))
+                         (top (max y clip-top))
+                         (bot (min (+ y (plist-get geometry :height)) clip-bot))
+                         (x (plist-get geometry :x))
+                         (right (+ x (plist-get geometry :width)))
+                         (spans nil))
+              (when (< top bot)
+                (with-current-buffer (ebox-mount-buffer mount)
+                  (save-excursion
+                    (ebox--goto-line mount top)
+                    (let ((row top))
+                      (while (< row bot)
+                        (let* ((bol (line-beginning-position))
+                               (eol (line-end-position))
+                               (beg (min eol (max bol (ebox--pos-at-x bol x))))
+                               (end (min eol (max beg (ebox--pos-at-x bol right)))))
+                          (when (< beg end)
+                            (push (cons row (cons beg end)) spans)))
+                        (setq row (1+ row))
+                        (when (< row bot)
+                          (forward-line 1)))))))
+              (nreverse spans))))))))
 
 (defun ebox--pos-at-x (bol x)
   "Return the buffer position at pixel X of the line starting at BOL."

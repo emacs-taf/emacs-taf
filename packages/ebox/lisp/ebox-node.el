@@ -123,13 +123,14 @@ INDEX equal to the length selects the last run; an empty SEQ returns nil."
       (aref (ebox-run-vec run) (- index (ebox-run-start run))))))
 
 (defun ebox--seq-find-run (seq run)
-  "Return RUN's position in SEQ's runs."
-  (let ((r (ebox--seq-run-index seq (ebox-run-start run))) (runs (ebox-seq-runs seq)))
-    ;; A run emptied by a deletion shares its start with its successor.
-    (while (and (> r 0) (not (eq (aref runs r) run))) (setq r (1- r)))
-    (unless (eq (aref runs r) run)
-      (setq r (cl-position run runs)))
-    r))
+  "Return RUN's position in SEQ's runs, or nil."
+  (when (> (ebox-seq-nr seq) 0)
+    (let ((r (ebox--seq-run-index seq (ebox-run-start run))) (runs (ebox-seq-runs seq)))
+      ;; A run emptied by a deletion shares its start with its successor.
+      (while (and (> r 0) (not (eq (aref runs r) run))) (setq r (1- r)))
+      (unless (eq (aref runs r) run)
+        (setq r (cl-position run runs)))
+      r)))
 
 (defun ebox--seq-open-run (seq r run)
   "Insert RUN at position R of SEQ's runs."
@@ -764,6 +765,112 @@ merges its :hover-style declarations into the computed paint."
             (when (> (hash-table-count table) 2048) (clrhash table))
             (puthash key cs table))
           cs))))
+
+(defun ebox--inspect-rule-matches-p (node root selector decls origin)
+  "Return non-nil when SELECTOR with DECLS at ORIGIN matches NODE under ROOT."
+  (let ((sheet (ecss-stylesheet-create)))
+    (ecss-stylesheet-declare-layers sheet nil origin)
+    (ecss-stylesheet-add-rule sheet ebox-style-schemas selector decls :origin origin)
+    (let ((probe (ecss-compute-style
+                  ebox-style-schemas node
+                  :adapter ebox--ecss-adapter
+                  :scopes (list (ecss-scope-create root sheet :subjects t)))))
+      (or (ecss-computed-style-specified-properties probe)
+          (ecss-computed-style-custom-properties probe)))))
+
+(defun ebox--inspect-declarations-list (compiled-decls prov-plist inline-p origin norm-sel)
+  "Return declaration inspection plists for COMPILED-DECLS against PROV-PLIST."
+  (let (out)
+    (cl-loop for (id val) on compiled-decls by #'cddr do
+             (let* ((key (ebox-style--public-property-name id))
+                    (prov (plist-get prov-plist id))
+                    (winner
+                     (and prov
+                          (eq (plist-get prov :source) 'declaration)
+                          (if inline-p
+                              (plist-get prov :inline)
+                            (and (not (plist-get prov :inline))
+                                 (eq (plist-get prov :origin) origin)
+                                 (equal (plist-get prov :selector) norm-sel))))))
+               (push (list :property key
+                           :value (copy-tree val)
+                           :winner (and winner t))
+                     out)))
+    (nreverse out)))
+
+(defun ebox-node-inspect-style (node)
+  "Return on-demand style cascade and provenance details for styled NODE, or nil.
+Computes ECSS provenance only for NODE without mutating caches or buffers.
+Return nil when NODE has not been styled yet.  Otherwise return a detached
+plist containing `:values', `:specified', `:custom-properties', `:provenance',
+`:matched-rules', `:states' and `:diagnostics'."
+  (unless (ebox-node-p node)
+    (signal 'wrong-type-argument (list 'ebox-node-p node)))
+  (when (ebox-node-cs node)
+    (let* ((parent (ebox-node-parent node))
+           (parent-cs (and parent (ebox-node-cs parent)))
+           (env (ebox--node-env node))
+           (scopes (and env (ebox--applicable-scopes node env)))
+           (ecss-scopes
+            (mapcar (lambda (entry)
+                      (ecss-scope-create (nth 1 entry)
+                                         (ebox-style-scope-stylesheet (car entry))
+                                         :subjects t))
+                    scopes))
+           (style (ecss-compute-style
+                   ebox-style-schemas node
+                   :declarations (ebox-node-decls node)
+                   :parent-style (and parent-cs (ebox-cs-vals parent-cs))
+                   :adapter ebox--ecss-adapter
+                   :provenance t
+                   :scopes ecss-scopes))
+           (raw-prov (ecss-computed-style-provenance style))
+           (spec-ids (ecss-computed-style-specified-properties style))
+           (pub-prov nil)
+           (matched nil))
+      (cl-loop for (id fact) on raw-prov by #'cddr do
+               (unless (eq (plist-get fact :source) 'initial)
+                 (push (cons (ebox-style--public-property-name id)
+                             (copy-tree fact))
+                       pub-prov)))
+      (when-let* ((decls (ebox-node-decls node)))
+        (push (list :origin 'inline
+                    :inline t
+                    :selector nil
+                    :specificity nil
+                    :layer nil
+                    :scope-root nil
+                    :declarations (ebox--inspect-declarations-list
+                                   decls raw-prov t 'author :inline))
+              matched))
+      (dolist (entry scopes)
+        (let* ((scope (car entry))
+               (root (nth 1 entry))
+               (origin (or (ebox-style-scope-origin scope) 'author))
+               (raw-rules (ebox-style-scope-rules scope)))
+          (dolist (rule raw-rules)
+            (let* ((sel-str (car rule))
+                   (parsed (ecss-selector-parse sel-str))
+                   (norm (ecss-selector-normalize parsed))
+                   (compiled (ebox-style-compile-declarations (cdr rule) t)))
+              (when (and compiled
+                         (ebox--inspect-rule-matches-p node root parsed compiled origin))
+                (push (list :origin origin
+                            :inline nil
+                            :selector (copy-sequence sel-str)
+                            :specificity (ecss-selector-specificity parsed)
+                            :layer nil
+                            :scope-root root
+                            :declarations (ebox--inspect-declarations-list
+                                           compiled raw-prov nil origin norm))
+                      matched))))))
+      (list :values (ebox-style--public-computed-values style)
+            :specified (mapcar #'ebox-style--public-property-name spec-ids)
+            :custom-properties (ecss-computed-style-custom-properties style)
+            :provenance (nreverse pub-prov)
+            :matched-rules (nreverse matched)
+            :states (copy-sequence (ebox--node-all-states node))
+            :diagnostics (ecss-computed-style-diagnostics style)))))
 
 ;;;; Faces and lengths
 

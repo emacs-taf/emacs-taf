@@ -3,8 +3,8 @@
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 
 ;; Author: ETAF contributors
-;; Version: 0.3.7
-;; Package-Requires: ((emacs "29.1") (ebox "3.1.0") (ecss "0.1.0"))
+;; Version: 0.3.8
+;; Package-Requires: ((emacs "29.1") (ebox "3.1.5") (ecss "0.1.0"))
 ;; Keywords: ui, tools, convenience
 ;; URL: https://github.com/emacs-taf/etaf
 
@@ -107,19 +107,31 @@
 ;; native activation/navigation targets; disabled or callbackless controls block
 ;; ancestor activation. Ebox remains the focus and native keymap authority.
 ;;
-;; Function: etaf-transition (source &key (duration 0.2) (easing 'ease-out) name on-complete)
+;; Function: etaf-transition (source &key (duration 0.2) (easing 'ease-out) (delay 0) name on-complete)
 ;;;###autoload (autoload 'etaf-transition "etaf" nil nil)
 ;; Return a ref that follows reactive SOURCE over DURATION seconds.
 ;; SOURCE is a ref, computed or zero-argument function as in `etaf-watch'; the
 ;; returned ref starts at SOURCE's current value.  Every later SOURCE change
 ;; restarts the interpolation from the value currently shown, so interruption
-;; never jumps.  DURATION of zero applies the target at once.  EASING is a name
-;; from `etaf-animation-easings' or a function.  ON-COMPLETE runs after a run
-;; reaches SOURCE.  Read the returned ref with `etaf-value' wherever the display
-;; follows it.  Created during Component setup or `:bindings', the animation
-;; belongs to its Scope and stops on disposal; otherwise call
-;; `etaf-animation-stop'.  NAME labels diagnostics, and invalid inputs signal
-;; `etaf-animation-error'.
+;; never jumps.  DURATION of zero with zero DELAY applies the target at once.
+;; DELAY waits that many seconds on the shared clock before interpolating.
+;; EASING is a name from `etaf-animation-easings' or a function.  ON-COMPLETE
+;; runs after a run reaches SOURCE.  Read the returned ref with `etaf-value'
+;; wherever the display follows it.  Created during Component setup or
+;; `:bindings', the animation belongs to its Scope and stops on disposal;
+;; otherwise call `etaf-animation-stop'.  NAME labels diagnostics, and invalid
+;; inputs signal `etaf-animation-error'.
+;;
+;; Function: etaf-spring (source &key stiffness damping mass (precision 0.01) preset name on-complete)
+;;;###autoload (autoload 'etaf-spring "etaf" nil nil)
+;; Return a ref that follows reactive SOURCE with damped spring physics.
+;; Unlike `etaf-transition', changing SOURCE mid-flight preserves the current
+;; velocity so rapid retargeting carries natural momentum.  PRESET names a
+;; bundle in `etaf-animation-spring-presets'; explicit STIFFNESS, DAMPING or
+;; MASS override the preset (or defaults 180, 22, 1).  PRECISION is the
+;; positive settling threshold.  Supports numbers, color strings and equal-shape
+;; lists or vectors containing them.  Scope ownership, ON-COMPLETE and
+;; `etaf-animation-error' validation follow `etaf-transition'.
 ;;
 ;; Function: etaf-animation-frames (frames &key (interval 0.1) (loop t) name on-complete)
 ;;;###autoload (autoload 'etaf-animation-frames "etaf" nil nil)
@@ -129,37 +141,67 @@
 ;; wherever the display follows it.  Scope ownership and `etaf-animation-error'
 ;; validation follow `etaf-transition'.
 ;;
+;; Function: etaf-animation-tick (callback &key (interval 0) name)
+;;;###autoload (autoload 'etaf-animation-tick "etaf" nil nil)
+;; Subscribe CALLBACK (DT ELAPSED) to the shared clock and return an elapsed
+;; ref.  INTERVAL is a nonnegative minimum spacing in animation seconds between
+;; invocations; zero runs on every tick.  The returned ref holds elapsed
+;; animation seconds and accepts `etaf-animation-stop', `etaf-animation-finish'
+;; and `etaf-animation-active-p'.  Scope ownership follows `etaf-transition'.
+;;
+;; Function: etaf-animation-timeline (steps &key loop name on-complete)
+;;;###autoload (autoload 'etaf-animation-timeline "etaf" nil nil)
+;; Run declarative STEPS on the shared clock and return its step-index ref.
+;; STEPS is a nonempty list of step plists: `(:delay SECONDS)', `(:call FN)',
+;; `(:run FN :duration SECONDS [:easing EASING])' and `(:parallel STEP-LIST)'.
+;; LOOP non-nil repeats from the first step; otherwise ON-COMPLETE runs after
+;; the final step.  `etaf-animation-finish' completes remaining steps in order
+;; and runs ON-COMPLETE; when `etaf-animation-enabled' is nil, a non-looping
+;; timeline resolves its steps immediately.  Scope ownership follows
+;; `etaf-transition'.
+;;
 ;; Function: etaf-animation-stop (source)
 ;;;###autoload (autoload 'etaf-animation-stop "etaf" nil nil)
-;; Stop animating SOURCE, a ref returned by `etaf-transition' or
-;; `etaf-animation-frames', and keep its value where it is.  Later writes to a
-;; transition's target no longer animate it.  A non-animated SOURCE signals
-;; `etaf-animation-error'.
+;; Stop animating SOURCE, a ref returned by `etaf-transition', `etaf-spring',
+;; `etaf-animation-frames', `etaf-animation-tick' or `etaf-animation-timeline', and keep
+;; its value where it is.  Later writes to a transition or spring target no
+;; longer animate it.  A non-animated SOURCE signals `etaf-animation-error'.
 ;;
 ;; Function: etaf-animation-finish (source)
 ;;;###autoload (autoload 'etaf-animation-finish "etaf" nil nil)
 ;; Stop animating SOURCE by applying its final value now.
-;; A transition applies its current target and runs its completion callback
-;; when it was running; a frame sequence keeps its current frame.
+;; A transition or spring applies its current target and runs its completion
+;; callback when running; a running timeline finishes its remaining steps in
+;; order and runs its completion callback; a frame sequence or tick keeps its
+;; current value.
 ;;
 ;; Function: etaf-animation-active-p (source)
 ;;;###autoload (autoload 'etaf-animation-active-p "etaf" nil nil)
 ;; Return non-nil while SOURCE's animation is subscribed to the shared clock.
-;; A resting transition and an unknown source return nil.
+;; A resting transition or spring and an unknown source return nil.
 ;;
 ;; Function: etaf-animation-interpolate (from to progress)
 ;;;###autoload (autoload 'etaf-animation-interpolate "etaf" nil nil)
 ;; Return the value at PROGRESS (0 to 1) between FROM and TO.
 ;; PROGRESS 1 returns TO unchanged.  Numbers convert arithmetically, color
-;; strings blend in RGB, and equal-length lists or vectors convert element-wise
-;; while equal non-numbers stand still, so Ebox length values such as `(lh 2)'
-;; interpolate in place.  Entries in `etaf-animation-interpolators' run first.
+;; strings blend in `etaf-animation-color-space', and equal-length lists or
+;; vectors convert element-wise while equal non-numbers stand still, so Ebox
+;; length values such as `(lh 2)' interpolate in place.  Entries in
+;; `etaf-animation-interpolators' run first.
+;;
+;; Function: etaf-animation-quantize (value step)
+;;;###autoload (autoload 'etaf-animation-quantize "etaf" nil nil)
+;; Snap numeric elements of VALUE to multiples of positive STEP.
+;; Lists and vectors quantize element-wise while non-numbers stay unchanged,
+;; preventing fine-grained face or image cache churn.  Non-positive STEP
+;; signals `etaf-animation-error'.
 ;;
 ;; Variable: etaf-animation-enabled
-;; Whether animations interpolate over time.  When nil, new transitions apply
-;; their target immediately, running transitions snap to their target and
-;; running frame sequences hold their current value.  Setting it back to t does
-;; not restart stopped runs.
+;; Whether animations interpolate over time.  When nil, new transitions and
+;; springs apply their target immediately, running transitions and springs snap
+;; to their target, non-looping timelines finish immediately, and frame
+;; sequences or ticks hold their current value.  Setting it back to t does not
+;; restart stopped runs.
 ;;
 ;; Variable: etaf-animation-frame-rate
 ;; Display clock rate in frames per second for running animations.
@@ -178,9 +220,21 @@
 ;; not resolve or stop a run.
 ;;
 ;; Variable: etaf-animation-speed
-;; Animation speed multiplier, a positive number.  2 advances every transition
-;; and frame sequence twice as fast and 0.5 half as fast; a change applies
-;; from the next tick without moving a run's progress.
+;; Animation speed multiplier, a positive number.  2 advances every animation
+;; twice as fast and 0.5 half as fast; a change applies from the next tick
+;; without moving a run's progress.
+;;
+;; Variable: etaf-animation-color-space
+;; Color space used by `etaf-animation-interpolate': `rgb' (default) or `oklab'.
+;;
+;; Variable: etaf-animation-pause-hidden
+;; When non-nil, animations owned by a mounted Runtime hold their progress
+;; while that Runtime's buffer has no visible window, resuming seamlessly once
+;; shown again.  Default nil.
+;;
+;; Variable: etaf-animation-spring-presets
+;; Alist of (NAME . PLIST) spring presets (`snappy', `gentle', `bouncy',
+;; `stiff') supplying `:stiffness', `:damping' and `:mass' for `etaf-spring'.
 ;;
 ;; Variable: etaf-animation-easings
 ;; Alist of (NAME . FUNCTION) easing curves mapping progress 0..1 to eased
@@ -194,7 +248,7 @@
 ;; Invalid ETAF animation operation
 ;; Catch this condition with condition-case; failed calls do not return a value.
 ;;
-;; Function: etaf-app-open (name view &key state on-fit on-close background foreground (cursor 'inherit) mode-line (display t) mount-options)
+;; Function: etaf-app-open (name view &key state on-fit on-close background foreground (cursor 'inherit) mode-line (display t) mount-options meta)
 ;;;###autoload (autoload 'etaf-app-open "etaf" nil nil)
 ;; Open VIEW as the application buffer NAME and return the buffer.
 ;; An application is one named buffer showing one mounted View; this is its
@@ -223,9 +277,10 @@
 ;; MOUNT-OPTIONS, a plist or a function of the display window (nil when
 ;; undisplayed) returning one, go to `etaf-mount'; a function runs in the
 ;; buffer after ON-FIT, so a fixed viewport height can come from the fitted
-;; state.  When mounting fails the application closes, the buffer is killed
-;; and the error propagates.  Declare keys with
-;; the root Host's `:keys'.
+;; state.  META, when non-nil, supplies a Runtime metadata plist (identifying
+;; `:app', `:kind', `:uri', `:title' or reactive sources) merged into `:meta'
+;; mount options.  When mounting fails the application closes, the buffer is
+;; killed and the error propagates.  Declare keys with the root Host's `:keys'.
 ;;
 ;; Function: etaf-app-close (&optional buffer-or-name)
 ;;;###autoload (autoload 'etaf-app-close "etaf" nil t)
@@ -1170,7 +1225,9 @@
 ;; next keyboard command restores it, because arrows and Tab are where keyboard
 ;; users read their position. A text input sets its own `cursor-type' while it
 ;; edits, and the caller's cursor state returns on unmount.
-;; OPTIONS is forwarded to `etaf-runtime-mount' when the Runtime is loaded.
+;; OPTIONS may provide `:viewport-width', `:viewport-height', `:observer' and
+;; `:text-selection' (t to enable native Emacs mark and pointer selection); it
+;; is forwarded to `etaf-runtime-mount' when the Runtime is loaded.
 ;;
 ;; Function: etaf-node (tag props children &optional named-slots)
 ;;;###autoload (autoload 'etaf-node "etaf" nil nil)
@@ -1186,15 +1243,25 @@
 ;; explicit nil blocks inheritance. Ebox validates and paints them. They do
 ;; not create an activation boundary or an ETAF hover event/state.
 ;;
-;; A Host with `:sticky top' (or nil) stays reachable while its buffer
-;; scrolls, like a CSS sticky app bar.  Once a window's start reaches the
-;; Host, the Host's first row is mirrored into that window's header line and
-;; the window body starts after the Host, so content neither duplicates nor
-;; shifts; while point is inside the Host it shows in place instead.  A
-;; primary click on a mirrored cell runs that cell's press binding at its
-;; buffer position.  One Host per Runtime is sticky (the last committed one
-;; wins); the Runtime owns `header-line-format' in its buffer only while a
-;; sticky Host is mounted.  Keep sticky Hosts to a single row.
+;; A Host with `:sticky top' (or nil) mirrors its first row into a displaying
+;; window's header line once that window scrolls completely past the Host's
+;; lines (`window-start' reaches the line after the Host), without moving
+;; `window-start', so the original row and mirror never appear simultaneously.
+;; A primary mouse click on a mirrored cell runs that cell's press binding at
+;; its buffer position; the mirror refreshes on commits, retained Host updates
+;; and refits, and clears completely on unmount.  One Host per Runtime is
+;; sticky (the last committed one wins); the Runtime owns `header-line-format'
+;; in its buffer only while a sticky Host is mounted.  Because Emacs's header
+;; line is a single-row, buffer-width strip that cannot hold point, keyboard
+;; focus or native text input, use `:sticky top' only for lightweight
+;; single-row headers in natively scrolling buffers; lay out fixed interactive
+;; toolbars as a non-scrolling sibling above an `:overflow scroll' viewport.
+;;
+;; A Host with `:translate' declares a translation hint for extensions such
+;; as `etaf-translate': nil inherits from ancestors, t or `yes' marks the
+;; Host translatable, `no' excludes the Host and its subtree, and `content'
+;; marks a primary content region.  Unsupported values signal
+;; `etaf-renderer-error'.
 ;;
 ;; Keyboard operation is declared on Hosts.  `:keys' is a list of
 ;; (KEY COMMAND [LABEL]) entries: KEY is a key or key sequence as a `kbd'
@@ -1729,6 +1796,201 @@
 ;; targets or updates, unmounted Runtimes, active Ebox transactions, and
 ;; rejected geometry signal `etaf-runtime-error' without a partial update.
 ;;
+;; Hook: etaf-runtime-mount-functions
+;; Hook run with one argument, RUNTIME, after `etaf-mount' publishes its initial View.
+;; Individual observer errors are isolated so one observer cannot prevent other
+;; observers or the mount from completing.
+;;
+;; Hook: etaf-runtime-after-commit-functions
+;; Hook run with one argument, RUNTIME, after a mounted Runtime commits an
+;; application change.  Presentation-only flushes and the initial mount do not
+;; run this hook.  Individual observer errors are isolated.
+;;
+;; Hook: etaf-runtime-unmount-functions
+;; Hook run with one argument, RUNTIME, when a mounted Runtime begins unmounting,
+;; before its retained segments and buffer bindings are released.  Individual
+;; observer errors are isolated.
+;;
+;; Hook: etaf-runtime-after-flush-functions
+;; Hook run with one argument, RUNTIME, after an Ebox flush completes on a
+;; mounted Runtime outside presentation-only mutations (including scroll-offset
+;; changes inside `:overflow scroll' containers and viewport refits).
+;; Individual observer errors are isolated.
+;;
+;; Hook: etaf-runtime-meta-change-functions
+;; Hook run with `(RUNTIME META)' when a mounted Runtime's resolved metadata
+;; plist changes.  Individual observer errors are isolated.
+;;
+;; Hook: etaf-runtime-focus-change-functions
+;; Hook run with `(RUNTIME PREV-HOST-ID NEXT-HOST-ID)' when logical Host focus
+;; changes in a mounted Runtime.  Individual observer errors are isolated.
+;;
+;; Function: etaf-runtime-meta (&optional runtime)
+;;;###autoload (autoload 'etaf-runtime-meta "etaf" nil nil)
+;; Return a detached copy of mounted RUNTIME's resolved metadata plist, or nil.
+;; RUNTIME defaults to the active or current-buffer Runtime.  An unmounted
+;; Runtime signals `etaf-runtime-error'.
+;;
+;; Function: etaf-runtime-set-meta (runtime meta)
+;;;###autoload (autoload 'etaf-runtime-set-meta "etaf" nil nil)
+;; Set mounted RUNTIME's metadata plist to META and return the resolved plist.
+;; META is nil or a proper plist whose values may be static data, `etaf-ref',
+;; `etaf-computed' or zero-argument functions.  Reactive updates notify
+;; `etaf-runtime-meta-change-functions'.  Forbidden during rendering.
+;;
+;; Function: etaf-runtime-host-tree (&optional runtime)
+;;;###autoload (autoload 'etaf-runtime-host-tree "etaf" nil nil)
+;; Return the committed application Host tree of mounted RUNTIME as read-only data.
+;; RUNTIME defaults to the active or current-buffer Runtime.  Each node is a
+;; plist with `:id', `:ref', `:tag', `:text', `:props', `:geometry' and
+;; `:children'.  Transient surfaces, overlays and attached presentation
+;; companions are excluded, and `:text' always holds the application's
+;; authoritative text even when a presentation overrides or decorates display.
+;; An unmounted Runtime signals `etaf-runtime-error'.
+;;
+;; Function: etaf-runtime-host-geometries (runtime host-ids)
+;;;###autoload (autoload 'etaf-runtime-host-geometries "etaf" nil nil)
+;; Return live geometry and visibility for integer HOST-IDS in mounted RUNTIME.
+;; Returns an alist of `(HOST-ID . PLIST)' entries holding `:x', `:y', `:width',
+;; `:height', `:clip-top', `:clip-bottom' and `:visible-p'.  `:y' reflects all
+;; enclosing `:overflow scroll' offsets and `:clip-top'/`:clip-bottom' intersect
+;; clipping ancestors with the displaying window.  An unmounted Runtime or
+;; non-list HOST-IDS signals `etaf-runtime-error'.
+;;
+;; Function: etaf-runtime-trigger-host-press (runtime host-id)
+;;;###autoload (autoload 'etaf-runtime-trigger-host-press "etaf" nil nil)
+;; Dispatch an enabled `press' event on committed integer HOST-ID in RUNTIME.
+;; Return non-nil when dispatched, or nil when HOST-ID is absent or carries no
+;; enabled `:on-press' handler.  An unmounted Runtime or non-integer HOST-ID
+;; signals `etaf-runtime-error'.  Forbidden during rendering.
+;;
+;; Function: etaf-runtime-focus-host (runtime host-id)
+;;;###autoload (autoload 'etaf-runtime-focus-host "etaf" nil nil)
+;; Move logical focus to committed integer HOST-ID in mounted RUNTIME.
+;; Return non-nil when focused, or nil when absent or ineligible.  An unmounted
+;; Runtime or non-integer HOST-ID signals `etaf-runtime-error'.  Forbidden
+;; during rendering.
+;;
+;; Function: etaf-runtime-scroll-host-into-view (runtime host-id &optional align)
+;;;###autoload (autoload 'etaf-runtime-scroll-host-into-view "etaf" nil nil)
+;; Scroll enclosing scrollers (and displaying Emacs window when needed) in
+;; mounted RUNTIME so committed integer HOST-ID is visible.  ALIGN is nil,
+;; `start' or `end'.  Return non-nil when HOST-ID was live.  Invalid arguments
+;; signal `etaf-runtime-error'.  Forbidden during rendering.
+;;
+;; Function: etaf-runtime-host-text-offset-at (runtime &optional position)
+;;;###autoload (autoload 'etaf-runtime-host-text-offset-at "etaf" nil nil)
+;; Return text Host offset and active region info at POSITION in RUNTIME, or
+;; nil when POSITION (default point) is not on a text Host.  Returns a plist
+;; `(:id HOST-ID :offset CHAR-OFFSET :text TEXT :region REGION)'.  An unmounted
+;; Runtime signals `etaf-runtime-error'.
+;;
+;; Function: etaf-runtime-set-overlay (runtime key view &optional origin)
+;;;###autoload (autoload 'etaf-runtime-set-overlay "etaf" nil nil)
+;; Mount, patch in place, or clear named root-layer overlay KEY with VIEW in
+;; mounted RUNTIME without remounting application Components or firing
+;; `etaf-runtime-after-commit-functions'.  KEY is a non-nil symbol; nil VIEW
+;; removes KEY.  VIEW inherits ORIGIN's (or root's) Context and Theme.  Return
+;; non-nil when changed.  Forbidden during rendering.
+;;
+;; Function: etaf-runtime-clear-overlay (runtime &optional key)
+;;;###autoload (autoload 'etaf-runtime-clear-overlay "etaf" nil nil)
+;; Remove named root-layer overlay KEY (or all overlays when KEY is nil) in
+;; mounted RUNTIME and return the number removed.  Forbidden during rendering.
+;;
+;; Function: etaf-runtime-set-key-layer (runtime key entries &optional label priority)
+;;;###autoload (autoload 'etaf-runtime-set-key-layer "etaf" nil nil)
+;; Register or replace extension key layer KEY on mounted RUNTIME.  ENTRIES is
+;; a list of `(KEY-DESC COMMAND [LABEL])' items; nil removes KEY.  Resolved
+;; strictly below Host `:keys' and framework defaults, outside local/modal
+;; boundaries.  Reserved keys signal `etaf-runtime-error'.  Returns active key
+;; descriptions.  Forbidden during rendering.
+;;
+;; Function: etaf-runtime-clear-key-layer (runtime &optional key)
+;;;###autoload (autoload 'etaf-runtime-clear-key-layer "etaf" nil nil)
+;; Remove extension key layer KEY (or all when nil) from mounted RUNTIME and
+;; return the count removed.  Forbidden during rendering.
+;;
+;; Function: etaf-runtime-set-host-presentation (runtime host-id key spec)
+;;;###autoload (autoload 'etaf-runtime-set-host-presentation "etaf" nil nil)
+;; Attach or update keyed presentation SPEC owned by non-nil symbol KEY on
+;; integer HOST-ID in mounted RUNTIME.  SPEC is nil (clear KEY on HOST-ID) or a
+;; plist with `:mode' (`decorate', `override', `companion-inside',
+;; `companion-after' or `companion-beside'), optional integer `:priority'
+;; (default 50), and mode payload (`:spans' / `:face' for `decorate', `:text'
+;; or `:view' for `override', `:view' for companions).  Multiple keys coexist
+;; cleanly on the same Host: decorations compose additively, companions order
+;; by priority and overrides stack by priority.  Return non-nil when HOST-ID
+;; was live and updated, or nil when absent.  Forbidden during rendering.
+;;
+;; Function: etaf-runtime-set-host-presentations (runtime key updates)
+;;;###autoload (autoload 'etaf-runtime-set-host-presentations "etaf" nil nil)
+;; Apply a list of `(HOST-ID . SPEC)' presentation UPDATES owned by KEY in
+;; mounted RUNTIME in one atomic Ebox flush without firing
+;; `etaf-runtime-after-commit-functions'.  Multiple keys coexist on the same
+;; Host.  Unknown or unmounted HOST-IDs are skipped.  Return the number of
+;; Hosts updated.  Invalid arguments signal `etaf-runtime-error'.  Forbidden
+;; during rendering.
+;;
+;; Function: etaf-runtime-clear-presentations (runtime &optional key)
+;;;###autoload (autoload 'etaf-runtime-clear-presentations "etaf" nil nil)
+;; Remove attached presentations in mounted RUNTIME in one Ebox flush.  When
+;; KEY is non-nil, clear only entries owned by KEY while keeping other owners
+;; intact; otherwise clear all and restore every Host.  Return the number of
+;; Hosts updated.  Forbidden during rendering.
+;;
+;; Function: etaf-runtime-list ()
+;;;###autoload (autoload 'etaf-runtime-list "etaf" nil nil)
+;; Return a list of all currently mounted live ETAF Runtimes ordered by mount
+;; identity.
+;;
+;; Function: etaf-runtime-inspect-tree (&optional runtime)
+;;;###autoload (autoload 'etaf-runtime-inspect-tree "etaf" nil nil)
+;; Return mounted RUNTIME's unified Component and Host tree as read-only data.
+;; RUNTIME defaults to the active or current-buffer Runtime.  Each node carries
+;; `:kind' (`component' or `host'), `:id', metadata and `:children'; transient
+;; surfaces and presentation companions are excluded.  An unmounted Runtime
+;; signals `etaf-runtime-error'.
+;;
+;; Function: etaf-runtime-host-id-at (runtime &optional position)
+;;;###autoload (autoload 'etaf-runtime-host-id-at "etaf" nil nil)
+;; Return `(INNERMOST-HOST-ID ... ROOT-HOST-ID)' at POSITION in mounted RUNTIME,
+;; or nil when no Host covers POSITION (default point).  Presentation companion
+;; nodes resolve to their owning application Host.  An unmounted Runtime signals
+;; `etaf-runtime-error'.
+;;
+;; Function: etaf-runtime-inspect-host (runtime host-id)
+;;;###autoload (autoload 'etaf-runtime-inspect-host "etaf" nil nil)
+;; Return detailed read-only inspection snapshot for integer HOST-ID in mounted
+;; RUNTIME, or nil when absent.  Computes box metrics, on-demand ECSS cascade
+;; provenance and exact painted row spans without mutating buffers or caches.
+;; Invalid arguments or an unmounted Runtime signal `etaf-runtime-error'.
+;;
+;; Function: etaf-runtime-inspect-component (runtime instance-id)
+;;;###autoload (autoload 'etaf-runtime-inspect-component "etaf" nil nil)
+;; Return detailed read-only snapshot for integer Component INSTANCE-ID in
+;; mounted RUNTIME, or nil when absent.  Includes props, named bindings with
+;; reactive metadata, Context bindings, local refs and render count.  Invalid
+;; arguments or an unmounted Runtime signal `etaf-runtime-error'.
+;;
+;; Function: etaf-runtime-set-component-binding (runtime instance-id binding-name new-value)
+;;;###autoload (autoload 'etaf-runtime-set-component-binding "etaf" nil nil)
+;; Write NEW-VALUE to writable `etaf-ref' BINDING-NAME of Component INSTANCE-ID
+;; in mounted RUNTIME and return t.  Signals `etaf-runtime-error' when RUNTIME
+;; is unmounted, INSTANCE-ID or BINDING-NAME is unknown, or the binding is not a
+;; writable `etaf-ref'.  Forbidden during rendering.
+;;
+;; Function: etaf-runtime-inspect-focus (runtime)
+;;;###autoload (autoload 'etaf-runtime-inspect-focus "etaf" nil nil)
+;; Return detached focus, region and effective key-scope diagnostics for mounted
+;; RUNTIME.  An unmounted Runtime signals `etaf-runtime-error'.
+;;
+;; Function: etaf-runtime-commit-summary (runtime)
+;;;###autoload (autoload 'etaf-runtime-commit-summary "etaf" nil nil)
+;; Return a lightweight summary plist of mounted RUNTIME's latest commit with
+;; `:rev', `:new-instances', `:updated-instances', `:retired-instances' and
+;; `:update-report'.  An unmounted Runtime signals `etaf-runtime-error'.
+;;
 ;; Function: etaf-runtime-instances (x)
 ;;;###autoload (autoload 'etaf-runtime-instances "etaf" nil nil)
 ;; Access slot "instances" of `etaf-runtime' struct X.
@@ -2065,6 +2327,11 @@
 ;;;###autoload (autoload 'etaf-video-step "etaf" nil nil)
 ;; Pause the mounted video identified by HANDLE and present one more frame.
 ;;
+;; Function: etaf-video-step-back (handle)
+;;;###autoload (autoload 'etaf-video-step-back "etaf" nil nil)
+;; Pause the mounted video identified by HANDLE and step backward one frame.
+;; On libmpv this steps backward frame-accurately; on ffmpeg it seeks back 1s.
+;;
 ;; Function: etaf-video-seek (handle seconds)
 ;;;###autoload (autoload 'etaf-video-seek "etaf" nil nil)
 ;; Move the mounted video identified by HANDLE to SECONDS.  A playing video
@@ -2081,6 +2348,24 @@
 ;; Function: etaf-video-set-audio (handle audio)
 ;;;###autoload (autoload 'etaf-video-set-audio "etaf" nil nil)
 ;; Turn the audio sidecar of the mounted video identified by HANDLE on or off.
+;;
+;; Function: etaf-video-set-property (handle name value)
+;;;###autoload (autoload 'etaf-video-set-property "etaf" nil nil)
+;; Set playback engine property NAME to VALUE on mounted video HANDLE.
+;; Supported on the libmpv engine; returns nil on engines without properties.
+;;
+;; Function: etaf-video-get-property (handle name &optional type)
+;;;###autoload (autoload 'etaf-video-get-property "etaf" nil nil)
+;; Read playback engine property NAME from mounted video HANDLE.
+;; TYPE is `node' (default), `string', `bool', `int' or `float'.
+;;
+;; Function: etaf-video-command (handle &rest args)
+;;;###autoload (autoload 'etaf-video-command "etaf" nil nil)
+;; Send engine command ARGS to mounted video HANDLE (libmpv engine).
+;;
+;; Function: etaf-video-mpv-available-p ()
+;;;###autoload (autoload 'etaf-video-mpv-available-p "etaf" nil nil)
+;; Return non-nil when the cross-platform libmpv native backend is available.
 ;;
 ;; Function: etaf-video-source-info (source)
 ;;;###autoload (autoload 'etaf-video-source-info "etaf" nil nil)
@@ -2137,6 +2422,14 @@
 ;; present.  A missing image type, an unloadable module or a non-graphical
 ;; frame silently keeps the `image' path.  `ascii' and `color' modes ignore
 ;; this setting.
+;;
+;; Variable: etaf-video-engine
+;; Playback engine for `etaf-video': `auto' (default), `mpv' or `ffmpeg'.
+;; `auto' uses the optional cross-platform libmpv native module on graphical
+;; frames in `image' mode and falls back to `ffmpeg' otherwise.
+;;
+;; Variable: etaf-video-mpv-library
+;; Optional explicit path to the libmpv shared library (`dylib', `so' or `dll').
 ;;
 ;; Variable: etaf-video-ffmpeg-program
 ;; Name or absolute path of the ffmpeg executable used to decode video.
@@ -2448,6 +2741,7 @@
 (require 'etaf-process)
 (require 'etaf-video-component)
 (require 'etaf-projection)
+(require 'etaf-inspect)
 
 (autoload 'etaf-animation-example-open "examples/etaf-animation-example" nil t)
 (autoload 'etaf-retained-resize-open "examples/etaf-retained-resize" nil t)

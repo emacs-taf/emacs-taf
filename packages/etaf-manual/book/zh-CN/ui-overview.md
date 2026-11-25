@@ -56,7 +56,7 @@ prop 就是普通 Component prop，[Component](components.md) 的调用规则原
 
 返回应用调色板 PALETTE 对应的目录 Theme token。
 
-**参数。** PALETTE 是 `#RRGGBB` 颜色角色组成的 plist。`:bg`（应用表面）和 `:fg`（正文）必填。可选角色有 `:panel`（凸起表面，默认 `:bg`）、`:track`（进度条与范围条的轨道，默认 `:panel`）、`:border`（线条）、`:muted`（次要文字）、`:dim`（禁用文字，默认 `:muted`）、`:accent`（默认 `:fg`）、`:accent-fg`（强调色上的文字，默认白色）、`:accent-soft`（选中与色调填充），以及状态角色 `:success`、`:warning`、`:danger` 和 `:info`（默认 `:accent`），每个状态角色都有 `-bg` 与 `-border` 变体。
+**参数。** PALETTE 是 `#RRGGBB` 颜色角色组成的 plist。`:bg`（应用表面）和 `:fg`（正文）必填。可选角色有 `:panel`（凸起表面，默认 `:bg`）、`:track`（进度条与范围条的轨道，默认 `:panel`）、`:border`（线条）、`:muted`（次要文字）、`:dim`（禁用文字，默认 `:muted`）、`:accent`（默认 `:fg`）、`:accent-fg`（强调色上的文字，默认白色）、`:accent-soft`（选中与色调填充），以及状态角色 `:success`、`:warning`、`:danger`、`:info`（默认 `:accent`）和 `:important`，每个状态角色都有 `-bg` 与 `-border` 变体。
 
 **语义。** 省略的角色会被推导：`:border` 把正文色以 18% 混入表面，`:muted` 把表面色以 35% 混入正文，`:accent-soft` 把强调色以 16% 混入表面，状态的 `-bg` 把状态色以 12%、`-border` 以 35% 混入表面，默认状态色按 `:bg` 是亮是暗选取。随后每个角色填充所有以它为名的 token：`:panel` 成为面板、shell、选择器、窗口标题栏与禁用状态的背景，`:border` 成为所有边框与分隔线，`:accent` 成为主按钮、范围填充与表格选中文字，其余依此类推。结果只含颜色；间距与圆角 token 保持目录默认值。
 

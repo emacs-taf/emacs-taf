@@ -554,9 +554,10 @@ the system opener instead."
       (delete-file file))))
 
 (ert-deftest etaf-md-tests-entry-command-keeps-the-source-window ()
-  "The entry command opens the preview in a window beside the source.
-The source buffer keeps the selected window, so an edit and its save need no
-window switching, and closing the preview gives the window back."
+  "`etaf-md-preview' opens a right preview split while keeping the source window.
+The source buffer keeps the selected window, invoking `etaf-md-preview' a
+second time closes the split cleanly, closing via `etaf-md-close' removes the
+split, and manual `delete-other-windows' lets `etaf-md-preview' re-open cleanly."
   (let* ((file (make-temp-file "etaf-md-" nil ".md"))
          (source nil))
     (unwind-protect
@@ -565,7 +566,9 @@ window switching, and closing the preview gives the window back."
           (setq source (find-file-noselect file))
           (switch-to-buffer source)
           (delete-other-windows)
-          (etaf-md-preview file)
+          ;; 1. First `etaf-md-preview' -> 2 windows (source left, preview right), source selected.
+          (let ((preview-buf (etaf-md-preview)))
+            (should (buffer-live-p preview-buf)))
           (let ((preview-window
                  (cl-find-if (lambda (window)
                                (string-prefix-p "*ETAF Markdown:"
@@ -574,11 +577,26 @@ window switching, and closing the preview gives the window back."
             (should (= 2 (length (window-list))))
             (should (eq (window-buffer (selected-window)) source))
             (should preview-window)
-            ;; source left of the preview, whatever the layout was
             (should (< (car (window-edges (selected-window)))
                        (car (window-edges preview-window))))
+            ;; 2. Closing from preview removes only the split window.
             (select-window preview-window)
             (etaf-md-close)
+            (should (= 1 (length (window-list)))))
+          ;; 3. Re-opening then toggling off directly from source cleans up split too.
+          (with-current-buffer source
+            (should (buffer-live-p (etaf-md-preview)))
+            (should (= 2 (length (window-list))))
+            (should-not (etaf-md-preview))
+            (should (= 1 (length (window-list))))
+            (should (eq (window-buffer (selected-window)) source))
+            ;; 4. Manual C-x 1 leaves no stale state: next `etaf-md-preview' re-splits cleanly.
+            (should (buffer-live-p (etaf-md-preview)))
+            (delete-other-windows)
+            (should (= 1 (length (window-list))))
+            (should (buffer-live-p (etaf-md-preview)))
+            (should (= 2 (length (window-list))))
+            (should-not (etaf-md-preview))
             (should (= 1 (length (window-list))))))
       (dolist (buffer (buffer-list))
         (when (and (string-prefix-p "*ETAF Markdown:" (buffer-name buffer))
@@ -679,6 +697,19 @@ Turning it off leaves the page where the reader put it."
               (run-hooks 'post-command-hook))
             (etaf-runtime-flush (etaf-runtime-for-buffer preview))
             (should (string-match-p "第 20 段" (funcall top-line preview-window)))
+            ;; The window must start at column 0 of the block's first row so
+            ;; the page container's left-padding cell is not clipped away.
+            (let* ((start (window-start preview-window))
+                   (bol (with-current-buffer preview
+                          (save-excursion
+                            (goto-char start)
+                            (line-beginning-position))))
+                   (gutter (with-current-buffer preview
+                             (get-text-property start 'display))))
+              (should (= start bol))
+              (should (eq (car-safe gutter) 'space))
+              ;; Keep window-point synced so GUI redisplay never snaps back to L1.
+              (should (= (window-point preview-window) start)))
             ;; The command also runs from the preview, and turning the follow
             ;; off leaves the page where the source scroll last put it.
             (with-current-buffer preview
@@ -1218,29 +1249,50 @@ repaints with the chosen page instead of only the frame chrome."
       (should-not (string-match-p "tags" (substring-no-properties (buffer-string)))))))
 
 (ert-deftest etaf-md-tests-open-prompt-defaults-to-the-relative-file ()
-  "The file prompt defaults to the current buffer's file, as a relative name.
-`read-file-name' resolves a relative default against its own directory; an
-absolute one made the prompt show that directory twice."
+  "`etaf-md-open' opens a visiting Markdown buffer directly in-place without prompting,
+restores it on `etaf-md-close' without deleting the window, and prompts with a
+relative default when given a prefix argument (`C-u')."
   (let ((dir (make-temp-file "etaf-md-prompt" t))
+        (source nil)
+        (prompted nil)
         (default nil))
     (unwind-protect
-        (progn
-          (with-temp-file (expand-file-name "note.md" dir) (insert "# Note\n"))
-          (with-temp-buffer
-            (setq buffer-file-name (expand-file-name "note.md" dir)
-                  default-directory (file-name-as-directory dir))
+        (let ((file (expand-file-name "note.md" dir)))
+          (with-temp-file file (insert "# Note\n\nHello.\n"))
+          (setq source (find-file-noselect file))
+          (delete-other-windows)
+          (switch-to-buffer source)
+          ;; 1. Without prefix arg in a visiting .md buffer: opens directly with zero prompt, single window.
+          (cl-letf (((symbol-function 'read-file-name)
+                     (lambda (&rest _)
+                       (setq prompted t)
+                       file)))
+            (let ((current-prefix-arg nil))
+              (call-interactively #'etaf-md-open)))
+          (should-not prompted)
+          (should (= 1 (length (window-list))))
+          (should (string-prefix-p "*ETAF Markdown:" (buffer-name (current-buffer))))
+          ;; Closing a single-window preview restores the originating source buffer without deleting the window.
+          (etaf-md-close)
+          (should (= 1 (length (window-list))))
+          (should (eq (current-buffer) source))
+          ;; 2. With prefix arg (C-u): prompts with relative default "note.md".
+          (with-current-buffer source
+            (setq default-directory (file-name-as-directory dir))
             (cl-letf (((symbol-function 'read-file-name)
                        (lambda (_prompt &optional _directory _predicate _mustmatch
                                 preset &rest _)
                          (setq default preset)
-                         buffer-file-name)))
-              (call-interactively #'etaf-md-open)))
+                         file)))
+              (let ((current-prefix-arg '(4)))
+                (call-interactively #'etaf-md-open))))
           (should default)
           (should-not (file-name-absolute-p default))
           (should (equal "note.md" default)))
       (dolist (buffer (buffer-list))
         (when (string-prefix-p "*ETAF Markdown" (buffer-name buffer))
           (with-current-buffer buffer (ignore-errors (etaf-md-close)))))
+      (when (buffer-live-p source) (kill-buffer source))
       (delete-directory dir t))))
 
 (ert-deftest etaf-md-tests-help-stays-in-preview ()
@@ -2072,7 +2124,8 @@ alone and the heading's marker alone."
 A reader whose diagram or code block kept its source text asks `doctor' why,
 so a program the page can use but never names is a blind spot."
   (let ((optional (plist-get (etaf-md-doctor) :optional)))
-    (should (equal (mapcar #'car optional) '("ffmpeg" "mmdc" "qrencode")))
+    (should (equal (mapcar #'car optional)
+                   '("typeset-native" "ffmpeg" "mmdc" "qrencode" "git")))
     (dolist (entry optional)
       (should (= 3 (length entry)))
       (should (stringp (nth 2 entry))))))
@@ -2643,3 +2696,1172 @@ proportionally below the unsized width."
               (should (face-underlined-p bface))))
         (when (buffer-live-p buf)
           (with-current-buffer buf (etaf-md-close)))))))
+
+(ert-deftest etaf-md-tests-locate-scrolls-enclosing-viewport-preserving-header ()
+  "`etaf-md-locate' scrolls an enclosing `:overflow scroll' viewport to off-screen headings."
+  (let* ((doc (concat "# First Heading\n\n"
+                      (mapconcat (lambda (i)
+                                   (format "Paragraph %d with enough text to extend past one viewport.\n\n" i))
+                                 (number-sequence 1 35) "")
+                      "## Deep Target Heading\n\nTail prose below target heading.\n"))
+         (session (etaf-md-create :text doc :theme 'dark))
+         (buf (generate-new-buffer " *etaf-md-scroll-locate*")))
+    (unwind-protect
+        (progn
+          (etaf-mount
+           buf
+           (etaf-view
+            (flex :flex-direction 'column :width '(vw 100) :height '(vh 100)
+                  :min-height '(lh 0) :overflow 'hidden
+              (box :flex-shrink 0 (text "FIXED-TOP-BAR"))
+              (box :ref 'outer-scroll :width 'stretch :flex-grow 1
+                   :flex-basis '(lh 0) :min-height '(lh 0) :overflow 'scroll
+                (column :width 'stretch :height 'auto
+                  (expr (etaf-md-view session))))))
+           '(:viewport-width 720 :viewport-height 16))
+          (let ((rt (etaf-runtime-for-buffer buf)))
+            (with-current-buffer buf
+              (should (= 0 (etaf-scroll-offset rt 'outer-scroll)))
+              (should-not (string-match-p "Deep Target Heading"
+                                          (buffer-substring-no-properties (point-min) (point-max))))
+              (let ((pos (etaf-md-locate session 1)))
+                (should (integerp pos))
+                (should (= (point) pos))
+                (should (looking-at-p "Deep Target Heading"))
+                (should (> (etaf-scroll-offset rt 'outer-scroll) 0))
+                (should (string-match-p
+                         "FIXED-TOP-BAR"
+                         (save-excursion
+                           (goto-char (point-min))
+                           (buffer-substring-no-properties
+                            (line-beginning-position) (line-end-position)))))))))
+      (when-let* ((rt (and (buffer-live-p buf) (etaf-runtime-for-buffer buf))))
+        (etaf-unmount rt))
+      (when (buffer-live-p buf) (kill-buffer buf)))))
+
+(ert-deftest etaf-md-tests-top-block-and-structural-edits-stay-incremental ()
+  "Top-block edits, blank-line inserts and paragraph splits stay on line-level patches."
+  (let* ((file (make-temp-file "etaf-md-top-inc-" nil ".md"))
+         (source nil)
+         (preview nil))
+    (unwind-protect
+        (progn
+          (with-temp-file file
+            (insert "---\ntitle: Top Inc\n---\n\n")
+            (dotimes (i 35)
+              (insert (format "第 %d 段：正文内容用来检验顶部增量重排。\n\n" i))))
+          (setq source (find-file-noselect file))
+          (setq preview (etaf-md-open file))
+          ;; 1. Edit block 0 directly.
+          (with-current-buffer source
+            (goto-char (point-min))
+            (search-forward "第 0 段")
+            (insert "（已改）"))
+          (sit-for 0.15)
+          (etaf-runtime-flush (etaf-runtime-for-buffer preview))
+          (let ((rep (with-current-buffer preview (etaf-runtime-update-report)))
+                (txt (with-current-buffer preview
+                       (buffer-substring-no-properties (point-min) (point-max)))))
+            (should (string-match-p "第 0 段（已改）" txt))
+            (should (eq 'lines (plist-get rep :strategy)))
+            (should (<= (plist-get rep :lines) 6)))
+          ;; 2. Insert a blank line right after block 0.
+          (with-current-buffer source
+            (goto-char (point-min))
+            (search-forward "第 0 段")
+            (end-of-line)
+            (insert "\n"))
+          (sit-for 0.15)
+          (etaf-runtime-flush (etaf-runtime-for-buffer preview))
+          (let ((rep (with-current-buffer preview (etaf-runtime-update-report))))
+            (should (eq 'lines (plist-get rep :strategy)))
+            (should (<= (plist-get rep :lines) 6)))
+          ;; 3. Split block 0 into two paragraphs.
+          (with-current-buffer source
+            (goto-char (point-min))
+            (search-forward "第 0 段")
+            (end-of-line)
+            (insert "\n\n新拆出来的段落。"))
+          (sit-for 0.15)
+          (etaf-runtime-flush (etaf-runtime-for-buffer preview))
+          (let ((rep (with-current-buffer preview (etaf-runtime-update-report)))
+                (txt (with-current-buffer preview
+                       (buffer-substring-no-properties (point-min) (point-max)))))
+            (should (string-match-p "新拆出来的段落。" txt))
+            (should (eq 'lines (plist-get rep :strategy)))
+            (should (<= (plist-get rep :lines) 8))))
+      (when (buffer-live-p preview) (kill-buffer preview))
+      (when (buffer-live-p source)
+        (with-current-buffer source (set-buffer-modified-p nil))
+        (kill-buffer source))
+      (delete-file file))))
+
+(ert-deftest etaf-md-tests-unclosed-live-fence-keeps-trailing-blocks-and-settles ()
+  "An unclosed code fence while typing stays local and settles on close or save."
+  (let* ((file (make-temp-file "etaf-md-fence-live-" nil ".md"))
+         (source nil)
+         (preview nil))
+    (unwind-protect
+        (progn
+          (with-temp-file file
+            (insert "# Live Fence\n\n")
+            (dotimes (i 20)
+              (insert (format "Paragraph %d **bold-%d**.\n\n" i i))))
+          (setq source (find-file-noselect file))
+          (setq preview (etaf-md-open file))
+          ;; Type an unclosed code fence in the middle without saving.
+          (with-current-buffer source
+            (goto-char (point-min))
+            (search-forward "Paragraph 8")
+            (end-of-line)
+            (insert "\n\n```elisp\n(message \"hi\")"))
+          (sit-for 0.15)
+          (etaf-runtime-flush (etaf-runtime-for-buffer preview))
+          (let ((rep (with-current-buffer preview (etaf-runtime-update-report))))
+            (should (eq 'lines (plist-get rep :strategy)))
+            (should (<= (plist-get rep :lines) 12)))
+          ;; Trailing paragraph still renders bold (not swallowed into code).
+          (with-current-buffer preview
+            (should (eq (etaf-md-tests--face-attribute "bold-18" :weight) 'bold)))
+          ;; Typing another character inside the provisional fence stays incremental.
+          (with-current-buffer source
+            (insert " ; ok"))
+          (sit-for 0.15)
+          (etaf-runtime-flush (etaf-runtime-for-buffer preview))
+          (let ((rep (with-current-buffer preview (etaf-runtime-update-report))))
+            (should (eq 'lines (plist-get rep :strategy)))
+            (should (<= (plist-get rep :lines) 12)))
+          ;; Closing the fence keeps trailing prose intact and incremental.
+          (with-current-buffer source
+            (insert "\n```"))
+          (sit-for 0.15)
+          (etaf-runtime-flush (etaf-runtime-for-buffer preview))
+          (let ((rep (with-current-buffer preview (etaf-runtime-update-report))))
+            (should (eq 'lines (plist-get rep :strategy)))
+            (should (<= (plist-get rep :lines) 12)))
+          (with-current-buffer preview
+            (should (eq (etaf-md-tests--face-attribute "bold-18" :weight) 'bold)))
+          ;; Saving an unclosed fence settles to exact CommonMark (swallows tail).
+          (with-current-buffer source
+            (goto-char (point-min))
+            (search-forward "; ok\n```")
+            (delete-region (- (point) 4) (point))
+            (save-buffer))
+          (sit-for 0.2)
+          (etaf-runtime-flush (etaf-runtime-for-buffer preview))
+          (with-current-buffer preview
+            (let ((plain (buffer-substring-no-properties (point-min) (point-max))))
+              (should (string-match-p "\\*\\*bold-18\\*\\*" plain)))))
+      (when (buffer-live-p preview) (kill-buffer preview))
+      (when (buffer-live-p source)
+        (with-current-buffer source (set-buffer-modified-p nil))
+        (kill-buffer source))
+      (delete-file file))))
+
+(ert-deftest etaf-md-tests-live-edits-keep-outline-and-doc-wide-references-fresh ()
+  "Incremental live edits update outline headings and keep reference links resolving."
+  (let* ((file (make-temp-file "etaf-md-outline-live-" nil ".md"))
+         (source nil)
+         (preview nil)
+         (opened nil))
+    (unwind-protect
+        (progn
+          (with-temp-file file
+            (insert "## Intro\n\nAlpha line.\n\n## Middle\n\nTarget prose.\n\n## End\n\nTail.\n\n"
+                    "[ref]: https://example.com/live-ref\n"))
+          (setq source (find-file-noselect file))
+          (setq preview (etaf-md-open file))
+          (with-current-buffer source
+            (goto-char (point-min))
+            (search-forward "Target prose.")
+            (replace-match "## Added Heading\n\nClick [Ref Link][ref] now."))
+          (sit-for 0.15)
+          (etaf-runtime-flush (etaf-runtime-for-buffer preview))
+          (let* ((session (with-current-buffer preview (etaf-app-state)))
+                 (titles (mapcar #'cadr (etaf-md-outline session))))
+            (should (equal titles '("Intro" "Middle" "Added Heading" "End")))
+            (with-current-buffer preview
+              (let ((pos (etaf-md-locate session 2)))
+                (should (integerp pos))
+                (should (looking-at-p "Added Heading")))
+              (should (etaf-md-tests--keymap-at "Ref Link"))
+              (goto-char (match-beginning 0))
+              (cl-letf (((symbol-function 'browse-url)
+                         (lambda (u &rest _) (push u opened))))
+                (call-interactively (key-binding (kbd "RET"))))
+              (should (equal opened '("https://example.com/live-ref"))))))
+      (when (buffer-live-p preview) (kill-buffer preview))
+      (when (buffer-live-p source)
+        (with-current-buffer source (set-buffer-modified-p nil))
+        (kill-buffer source))
+      (delete-file file))))
+
+(ert-deftest etaf-md-tests-narrow-viewport-wraps-without-clipping-and-widens-back ()
+  "Prose wraps cleanly in narrow windows without right-edge clipping and widens back."
+  (let* ((sentence (concat "AlphaWord BravoWord CharlieWord DeltaWord EchoWord "
+                           "FoxtrotWord GolfWord HotelWord IndiaWord JulietWord "
+                           "KiloWord LimaWord MikeWord NovemberWord"))
+         (session (etaf-md-create :text (concat sentence "\n") :theme 'dark))
+         (char (frame-char-width)))
+    (etaf-md-tests--with-mount session
+      (let ((rt (etaf-runtime-for-buffer (current-buffer))))
+        ;; Narrow to 48 columns: every word must survive wrapped across multiple lines.
+        (etaf-runtime-refit rt (* 48 char) 40)
+        (let* ((narrow-text (buffer-substring-no-properties (point-min) (point-max)))
+               (narrow-lines (count-lines (point-min) (point-max))))
+          (should (string-match-p "AlphaWord" narrow-text))
+          (should (string-match-p "NovemberWord" narrow-text))
+          (should (>= narrow-lines 3))
+          ;; Widening back to 120 columns must reflow into fewer lines.
+          (etaf-runtime-refit rt (* 120 char) 40)
+          (let* ((wide-text (buffer-substring-no-properties (point-min) (point-max)))
+                 (wide-lines (count-lines (point-min) (point-max))))
+            (should (string-match-p "NovemberWord" wide-text))
+            (should (< wide-lines narrow-lines))))))))
+
+(ert-deftest etaf-md-tests-same-basename-files-open-distinct-previews ()
+  "Two files sharing a basename in different directories get distinct preview buffers."
+  (let* ((root (make-temp-file "etaf-md-samebase-" t))
+         (dir-a (expand-file-name "alpha" root))
+         (dir-b (expand-file-name "beta" root))
+         (file-a (expand-file-name "README.md" dir-a))
+         (file-b (expand-file-name "README.md" dir-b))
+         buf-a buf-b)
+    (unwind-protect
+        (progn
+          (make-directory dir-a t)
+          (make-directory dir-b t)
+          (with-temp-file file-a (insert "# Alpha Doc\n\nContent from alpha.\n"))
+          (with-temp-file file-b (insert "# Beta Doc\n\nContent from beta.\n"))
+          (setq buf-a (etaf-md-open file-a))
+          (setq buf-b (etaf-md-open file-b))
+          (should-not (eq buf-a buf-b))
+          (should-not (equal (buffer-name buf-a) (buffer-name buf-b)))
+          (should (string-match-p "Content from alpha"
+                                  (with-current-buffer buf-a
+                                    (buffer-substring-no-properties (point-min) (point-max)))))
+          (should (string-match-p "Content from beta"
+                                  (with-current-buffer buf-b
+                                    (buffer-substring-no-properties (point-min) (point-max))))))
+      (when (buffer-live-p buf-a) (kill-buffer buf-a))
+      (when (buffer-live-p buf-b) (kill-buffer buf-b))
+      (delete-directory root t))))
+
+(ert-deftest etaf-md-tests-symlink-edits-sync-to-preview ()
+  "Editing through a symlink updates a preview opened via the real path."
+  (let* ((dir (make-temp-file "etaf-md-sym-" t))
+         (real (expand-file-name "real.md" dir))
+         (link (expand-file-name "alias.md" dir))
+         source preview)
+    (unwind-protect
+        (progn
+          (with-temp-file real (insert "# Symlink\n\nOriginal body.\n"))
+          (make-symbolic-link real link)
+          (setq preview (etaf-md-open real))
+          (setq source (find-file-noselect link))
+          (with-current-buffer source
+            (goto-char (point-max))
+            (insert "\nEdited via symlink.\n"))
+          (sit-for 0.2)
+          (etaf-runtime-flush (etaf-runtime-for-buffer preview))
+          (let ((txt (with-current-buffer preview
+                       (buffer-substring-no-properties (point-min) (point-max)))))
+            (should (string-match-p "Edited via symlink" txt))))
+      (when (buffer-live-p preview) (kill-buffer preview))
+      (when (buffer-live-p source)
+        (with-current-buffer source (set-buffer-modified-p nil))
+        (kill-buffer source))
+      (delete-directory dir t))))
+
+(ert-deftest etaf-md-tests-footnote-jump-lands-on-definition-and-returns ()
+  "Activating a footnote reference jumps to the definition and `↩' returns."
+  (let* ((doc (concat "Read the note[^1] right here.\n\n"
+                      (mapconcat (lambda (i) (format "Filler paragraph %d.\n\n" i))
+                                 (number-sequence 1 12) "")
+                      "[^1]: Footnote explanation body.\n"))
+         (session (etaf-md-create :text doc :theme 'dark))
+         (buf (etaf-md-open session)))
+    (unwind-protect
+        (with-current-buffer buf
+          (goto-char (point-min))
+          (should (search-forward "[1]" nil t))
+          (let ((ref-pos (match-beginning 0)))
+            (goto-char ref-pos)
+            (call-interactively (key-binding (kbd "RET")))
+            ;; Point must land on the bottom definition, not stay on body `[1]'.
+            (should (> (point) ref-pos))
+            (should (string-match-p
+                     "Footnote explanation body"
+                     (buffer-substring-no-properties
+                      (line-beginning-position) (line-end-position))))
+            ;; Mark was pushed at the pre-jump position.
+            (should (= (mark t) ref-pos))
+            ;; Activate the `↩' back-link on the same footnote line.
+            (should (search-forward "↩" (line-end-position) t))
+            (goto-char (match-beginning 0))
+            (call-interactively (key-binding (kbd "RET")))
+            (should (= (point) ref-pos))))
+      (when (buffer-live-p buf)
+        (with-current-buffer buf (etaf-md-close))))))
+
+(ert-deftest etaf-md-tests-container-state-isolated-and-survives-edits-above ()
+  "Interactive container state stays isolated per block and survives edits above."
+  (let* ((file (make-temp-file "etaf-md-state-" nil ".md"))
+         source preview)
+    (unwind-protect
+        (progn
+          (with-temp-file file
+            (insert "Top intro.\n\n"
+                    ":::details {title=\"Alpha Box\"}\nSecret alpha text.\n:::\n\n"
+                    ":::details {title=\"Beta Box\"}\nSecret beta text.\n:::\n"))
+          (setq source (find-file-noselect file))
+          (setq preview (etaf-md-open file))
+          ;; Open Alpha Box only.
+          (with-current-buffer preview
+            (should-not (string-match-p "Secret alpha text"
+                                        (buffer-substring-no-properties (point-min) (point-max))))
+            (goto-char (point-min))
+            (search-forward "Alpha Box")
+            (goto-char (match-beginning 0))
+            (call-interactively (key-binding (kbd "RET")))
+            (let ((txt (buffer-substring-no-properties (point-min) (point-max))))
+              (should (string-match-p "Secret alpha text" txt))
+              (should-not (string-match-p "Secret beta text" txt))))
+          ;; Insert new blocks above Alpha Box so its byte offset shifts.
+          (with-current-buffer source
+            (goto-char (point-min))
+            (insert "Inserted paragraph one.\n\nInserted paragraph two.\n\n"))
+          (sit-for 0.2)
+          (etaf-runtime-flush (etaf-runtime-for-buffer preview))
+          ;; Alpha Box must remain open and Beta Box must remain closed.
+          (let ((txt (with-current-buffer preview
+                       (buffer-substring-no-properties (point-min) (point-max)))))
+            (should (string-match-p "Inserted paragraph two" txt))
+            (should (string-match-p "Secret alpha text" txt))
+            (should-not (string-match-p "Secret beta text" txt))))
+      (when (buffer-live-p preview) (kill-buffer preview))
+      (when (buffer-live-p source)
+        (with-current-buffer source (set-buffer-modified-p nil))
+        (kill-buffer source))
+      (delete-file file))))
+
+(ert-deftest etaf-md-tests-malformed-chart-degrades-to-failure-view ()
+  "A malformed `:::chart' container degrades cleanly instead of signaling uncaught error."
+  (let ((session (etaf-md-create :text ":::chart {values=\"1\"}\n:::\n\nAfter chart.\n")))
+    (etaf-md-tests--with-mount session
+      (let ((txt (buffer-substring-no-properties (point-min) (point-max))))
+        (should (string-match-p "After chart" txt))
+        (should (string-match-p "chart" txt))))))
+
+(ert-deftest etaf-md-tests-file-url-media-resolves-as-local ()
+  "A `file://' image URL resolves as a local file rather than a remote URL."
+  (let* ((img (etaf-md-tests--fixture "wide-400x100.png"))
+         (file-url (concat "file://" img))
+         (seen nil)
+         (session (etaf-md-create
+                   :text (format "![Sample](%s)\n" file-url)
+                   :on-media (lambda (kind path)
+                               (push (cons kind path) seen)
+                               t))))
+    (etaf-md-tests--with-mount session
+      (goto-char (point-min))
+      (should (search-forward "▀" nil t))
+      (goto-char (match-beginning 0))
+      (call-interactively (key-binding (kbd "RET")))
+      (should (equal (car seen) (cons 'image (expand-file-name img)))))))
+
+(ert-deftest etaf-md-tests-preview-splits-nondestructively-and-goto-source-returns ()
+  "`etaf-md-preview' preserves unrelated windows, enables follow and supports `etaf-md-goto-source'."
+  (let* ((file (make-temp-file "etaf-md-split-" nil ".md"))
+         (side-buf (generate-new-buffer " *etaf-md-unrelated*"))
+         source preview)
+    (unwind-protect
+        (progn
+          (with-temp-file file
+            (insert "# Split Demo\n\n")
+            (dotimes (i 25)
+              (insert (format "第 %d 段：双栏同步与反向跳回测试内容。\n\n" i))))
+          (setq source (find-file-noselect file))
+          (delete-other-windows)
+          (let* ((win-side (selected-window))
+                 (win-src (split-window-below)))
+            (set-window-buffer win-side side-buf)
+            (set-window-buffer win-src source)
+            (select-window win-src)
+            (with-current-buffer source
+              (goto-char (point-min))
+              (search-forward "第 12 段")
+              (setq preview (etaf-md-preview)))
+            (should (buffer-live-p preview))
+            ;; All 3 windows exist: unrelated pane was NOT deleted.
+            (should (= 3 (length (window-list))))
+            (should (window-live-p win-side))
+            (should (eq (selected-window) win-src))
+            ;; Reverse jump from preview lands on the matching source line.
+            (let ((win-prev (get-buffer-window preview)))
+              (should (window-live-p win-prev))
+              (select-window win-prev)
+              (goto-char (point-min))
+              (should (search-forward "第 18 段" nil t))
+              (goto-char (match-beginning 0))
+              (let ((pos (etaf-md-goto-source)))
+                (should (integerp pos))
+                (should (eq (current-buffer) source))
+                (should (string-match-p
+                         "第 18 段"
+                         (buffer-substring-no-properties
+                          (line-beginning-position) (line-end-position)))))
+              ;; Closing the preview removes only the preview split, keeping both original windows.
+              (select-window win-prev)
+              (etaf-md-close)
+              (should (= 2 (length (window-list))))
+              (should (window-live-p win-side))
+              (should (window-live-p win-src)))))
+      (when (buffer-live-p preview) (kill-buffer preview))
+      (when (buffer-live-p source) (kill-buffer source))
+      (when (buffer-live-p side-buf) (kill-buffer side-buf))
+      (delete-file file))))
+
+(ert-deftest etaf-md-tests-theme-cycle-includes-auto-and-locate-pushes-mark ()
+  "`etaf-md-cycle-theme' includes `auto', `etaf-md-locate' pushes mark and remote images respect toggle."
+  (let* ((etaf-md-remote-images nil)
+         (session (etaf-md-create
+                   :text "# First\n\n![Remote](https://example.invalid/pic.png)\n\n## Second\n\nBody.\n"
+                   :theme 'dark)))
+    (should (eq (etaf-md-cycle-theme session) 'light))
+    (should (eq (plist-get (etaf-md-state session) :background) 'palette))
+    (should (eq (etaf-md-cycle-theme session) 'sepia))
+    (should (eq (etaf-md-cycle-theme session) 'auto))
+    (should (null (plist-get (etaf-md-state session) :background)))
+    (should (eq (etaf-md-cycle-theme session) 'dark))
+    (should (eq (plist-get (etaf-md-state session) :background) 'palette))
+    (etaf-md-tests--with-mount session
+      (goto-char (point-min))
+      (let ((start (point)))
+        (etaf-md-locate session 1)
+        (should (looking-at-p "Second"))
+        (should (= (mark t) start))))))
+
+(ert-deftest etaf-md-tests-extended-layout-and-data-widgets-render ()
+  "Curated editorial layout and visualization widgets paint cleanly."
+  (let* ((doc (concat
+               ":::breadcrumb {items=\"[Home](README.md) > Guide > Widgets\"}\n:::\n\n"
+               "## Metrics\n\n"
+               ":::progress {title=\"Build\" accent=success}\n- Parser: 100%\n- Widgets: 3/4\n:::\n\n"
+               ":::stats {columns=3}\n"
+               ":::stat {title=\"Tests\" value=\"390\" trend=\"+12%\" accent=success spark=\"1,4,2,8\"}\n:::\n"
+               ":::stat {title=\"Latency\" value=\"12ms\" trend=\"-8%\" accent=primary note=\"p95\"}\n:::\n"
+               ":::\n\n"
+               ":::chart {type=bar label=\"Timings\" values=\"Parse:4,Paint:8\" unit=\"ms\"}\n:::\n\n"
+               ":::chart {type=stacked label=\"Mix\" values=\"A:60,B:40\"}\n:::\n\n"
+               ":::chart {type=heatmap label=\"Activity\" values=\"0,1,2,3,4,5,6,7\"}\n:::\n\n"
+               ":::timeline {orientation=horizontal card=true}\n"
+               ":::event {title=\"Alpha\" time=\"T1\" status=success}\nFirst step.\n:::\n"
+               ":::event {title=\"Beta\" time=\"T2\" status=info}\nSecond step.\n:::\n"
+               ":::\n\n"
+               ":::keymap {title=\"Keys\" columns=2}\n- C-c t : Toggle TOC\n- n / p : Next or Prev\n:::\n"))
+         (session (etaf-md-create :text doc :theme 'dark)))
+    (etaf-md-tests--with-mount session
+      (let ((txt (buffer-substring-no-properties (point-min) (point-max))))
+        (should (string-match-p "Home › Guide › Widgets" txt))
+        (should (string-match-p "Parser" txt))
+        (should (string-match-p "75%" txt))
+        (should (string-match-p "\\+12%" txt))
+        (should (string-match-p "▁▄▂█" txt))
+        (should (string-match-p "p95" txt))
+        (should (string-match-p "Timings" txt))
+        (should (string-match-p "60%" txt))
+        (should (string-match-p "Activity" txt))
+        (should (string-match-p "Alpha" txt))
+        (should (string-match-p "Beta" txt))
+        (should (string-match-p "Toggle TOC" txt))
+        ;; In `keymap', `/' between alternative chords must NOT carry a keycap background.
+        (let* ((slash-pos (+ 2 (string-match " / " txt)))
+               (cap-pos (1+ (string-match "C-c" txt)))
+               (bg-of (lambda (p)
+                        (let ((s (format "%S" (get-text-property p 'face))))
+                          (when (string-match ":background \"\\(#[0-9a-fA-F]\\{6\\}\\)\"" s)
+                            (match-string 1 s)))))
+               (slash-bg (funcall bg-of slash-pos))
+               (cap-bg (funcall bg-of cap-pos)))
+          (should cap-bg)
+          (should-not (equal slash-bg cap-bg)))))))
+
+(ert-deftest etaf-md-tests-interactive-cognitive-widgets-state-and-actions ()
+  "Sortable table, paired diff, pros-cons, demo source toggle and collapsible file-tree update cleanly."
+  (let* ((doc (concat
+               ":::table {title=\"Bench\" sortable=true}\n"
+               "| Name | Score |\n| --- | --- |\n| Zebra | 10 |\n| Alpha | 30 |\n| Beta | 20 |\n"
+               ":::\n\n"
+               ":::diff {title=\"Patch\" mode=side}\n"
+               "@before Old\n```elisp\n(setq x 1)\n```\n"
+               "@after New\n```elisp\n(setq x 2)\n```\n"
+               ":::\n\n"
+               ":::pros-cons\n@pro Good\nFast.\n@con Bad\nComplex.\n:::\n\n"
+               ":::demo {title=\"Live Demo\"}\n**Rendered Bold**\n:::\n\n"
+               ":::file-tree {title=\"Tree\" collapsible=true}\n- src/\n  - main.el\n:::\n"))
+         (session (etaf-md-create :text doc :theme 'dark))
+         (buf (etaf-md-open session)))
+    (unwind-protect
+        (with-current-buffer buf
+          ;; 1. Sortable table: click Name header sorts ascending (Alpha before Zebra).
+          (goto-char (point-min))
+          (should (search-forward "Name ⇅" nil t))
+          (goto-char (match-beginning 0))
+          (call-interactively (key-binding (kbd "RET")))
+          (let ((txt (buffer-substring-no-properties (point-min) (point-max))))
+            (should (< (string-match "Alpha" txt) (string-match "Zebra" txt))))
+          ;; 2. Diff paired split puts old & new on the same line, and toggles cleanly to unified.
+          (let ((split-txt (buffer-substring-no-properties (point-min) (point-max))))
+            (should (string-match-p "(setq x 1).*?(setq x 2)" split-txt)))
+          (goto-char (point-min))
+          (should (search-forward "统一" nil t))
+          (goto-char (match-beginning 0))
+          (call-interactively (key-binding (kbd "RET")))
+          (should (string-match-p "(setq x 2)"
+                                  (buffer-substring-no-properties (point-min) (point-max))))
+          ;; 3. Pros-cons paints both columns cleanly.
+          (let ((pc-txt (buffer-substring-no-properties (point-min) (point-max))))
+            (should (string-match-p "✓ Good" pc-txt))
+            (should (string-match-p "× Bad" pc-txt)))
+          ;; 4. Demo toggle shows raw markdown source.
+          (goto-char (point-min))
+          (should (search-forward "查看源码" nil t))
+          (goto-char (match-beginning 0))
+          (call-interactively (key-binding (kbd "RET")))
+          (should (string-match-p "\\*\\*Rendered Bold\\*\\*"
+                                  (buffer-substring-no-properties (point-min) (point-max))))
+          ;; 5. File-tree collapsible directory hides child on click.
+          (should (string-match-p "main\\.el"
+                                  (buffer-substring-no-properties (point-min) (point-max))))
+          (goto-char (point-min))
+          (should (search-forward "▾ src/" nil t))
+          (goto-char (match-beginning 0))
+          (call-interactively (key-binding (kbd "RET")))
+          (should-not (string-match-p "main\\.el"
+                                      (buffer-substring-no-properties (point-min) (point-max)))))
+      (when (buffer-live-p buf)
+        (with-current-buffer buf (etaf-md-close))))))
+
+(ert-deftest etaf-md-tests-inline-extensions-spoilers-annotations-and-tasks ()
+  "Spoilers, inline annotations, collapsible alerts, collapsed code and interactive GFM tasks work end-to-end."
+  (let* ((doc (concat
+               "Reveal !!top secret!! and read [+note].\n\n"
+               "[+note]: Detailed inline note body.\n\n"
+               "> [!tip]- Hidden Tip\n> Alert secret body.\n\n"
+               "```elisp :collapsed-lines=2\n"
+               "(setq a 1)\n(setq b 2)\n(setq c 3)\n(setq d 4)\n"
+               "```\n\n"
+               "- [x] Done task\n"
+               "- [ ] Pending task\n"))
+         (session (etaf-md-create :text doc :theme 'light))
+         (buf (etaf-md-open session)))
+    (unwind-protect
+        (with-current-buffer buf
+          (let ((init (buffer-substring-no-properties (point-min) (point-max))))
+            (should-not (string-match-p "top secret" init))
+            (should-not (string-match-p "Detailed inline note body" init))
+            (should-not (string-match-p "Alert secret body" init))
+            (should-not (string-match-p "(setq d 4)" init))
+            (should (string-match-p "□" init)))
+          ;; Global spoiler toggle reveals spoiler and hides it again.
+          (should (eq t (etaf-md-toggle-spoilers)))
+          (etaf-runtime-flush (etaf-runtime-for-buffer buf))
+          (should (string-match-p "top secret"
+                                  (buffer-substring-no-properties (point-min) (point-max))))
+          (should-not (etaf-md-toggle-spoilers))
+          ;; Expand annotation card.
+          (goto-char (point-min))
+          (should (search-forward "[+note]" nil t))
+          (goto-char (match-beginning 0))
+          (call-interactively (key-binding (kbd "RET")))
+          (should (string-match-p "Detailed inline note body"
+                                  (buffer-substring-no-properties (point-min) (point-max))))
+          ;; Expand collapsible alert.
+          (goto-char (point-min))
+          (should (search-forward "Hidden Tip" nil t))
+          (goto-char (match-beginning 0))
+          (call-interactively (key-binding (kbd "RET")))
+          (should (string-match-p "Alert secret body"
+                                  (buffer-substring-no-properties (point-min) (point-max))))
+          ;; Expand collapsed code block.
+          (goto-char (point-min))
+          (should (search-forward "展开剩余 2 行" nil t))
+          (goto-char (match-beginning 0))
+          (call-interactively (key-binding (kbd "RET")))
+          (should (string-match-p "(setq d 4)"
+                                  (buffer-substring-no-properties (point-min) (point-max))))
+          ;; Toggle pending GFM task item -> unchecked □ disappears.
+          (goto-char (point-min))
+          (should (search-forward "□" nil t))
+          (goto-char (match-beginning 0))
+          (call-interactively (key-binding (kbd "RET")))
+          (etaf-runtime-flush (etaf-runtime-for-buffer buf))
+          (should-not (string-match-p "□"
+                                      (buffer-substring-no-properties (point-min) (point-max)))))
+      (when (buffer-live-p buf)
+        (with-current-buffer buf (etaf-md-close))))))
+
+(ert-deftest etaf-md-tests-workspace-l1-widgets-and-path-sandbox ()
+  "L1 workspace widgets read bounded local assets (including full Elisp forms) while rejecting path traversal."
+  (let* ((root (make-temp-file "etaf-md-ws-" t))
+         (sub (expand-file-name "sub" root))
+         (src-el (expand-file-name "sample.el" sub))
+         (doc-file (expand-file-name "index.md" root)))
+    (unwind-protect
+        (progn
+          (make-directory sub t)
+          (with-temp-file src-el
+            (insert ";; #region greet\n(defun sample-greet (x)\n  \"Greet X.\"\n  (let ((msg (format \"hi %s\" x)))\n    msg))\n;; #endregion\n"))
+          (with-temp-file doc-file
+            (insert (concat
+                     ":::include {src=\"sub/sample.el\" region=\"greet\"}\n:::\n\n"
+                     ":::code-ref {src=\"sub/sample.el\" symbol=\"sample-greet\"}\n:::\n\n"
+                     ":::symbol {name=\"etaf-md-open\"}\n:::\n\n"
+                     ":::project-tree {path=\".\" depth=2}\n:::\n\n"
+                     ":::include {src=\"../../etc/passwd\"}\n:::\n")))
+          (let ((session (etaf-md-create :file doc-file :theme 'dark)))
+            (etaf-md-tests--with-mount session
+              (let ((txt (buffer-substring-no-properties (point-min) (point-max))))
+                (should (string-match-p "sample-greet" txt))
+                ;; Full balanced Elisp sexp must include the closing body line.
+                (should (string-match-p "msg))" txt))
+                (should (string-match-p "L2–L5" txt))
+                (should (string-match-p "ƒ etaf-md-open" txt))
+                (should (string-match-p "sample\\.el" txt))
+                (should (string-match-p "超出工作区范围" txt)))))
+          ;; Disabling etaf-md-allow-local-read blocks local reads cleanly.
+          (let* ((etaf-md-allow-local-read nil)
+                 (session (etaf-md-create :file doc-file :theme 'dark)))
+            (etaf-md-tests--with-mount session
+              (let ((txt (buffer-substring-no-properties (point-min) (point-max))))
+                (should (string-match-p "本地文件读取已禁用" txt))))))
+      (delete-directory root t))))
+
+(ert-deftest etaf-md-tests-executable-l2-widgets-respect-trust-gate ()
+  "Executable `run' Runbook never auto-runs and honors `etaf-md-allow-actions'."
+  (let* ((doc ":::run {title=\"Echo Test\"}\n```sh\necho $((6 * 7))\n```\n:::\n")
+         (etaf-md-allow-actions nil)
+         (session (etaf-md-create :text doc :theme 'dark))
+         (buf (etaf-md-open session)))
+    (unwind-protect
+        (with-current-buffer buf
+          ;; Opening never ran the command.
+          (should-not (string-match-p "\\b42\\b"
+                                      (buffer-substring-no-properties (point-min) (point-max))))
+          ;; With etaf-md-allow-actions nil, pressing Run does not execute.
+          (goto-char (point-min))
+          (should (search-forward "▶ 运行" nil t))
+          (goto-char (match-beginning 0))
+          (call-interactively (key-binding (kbd "RET")))
+          (sit-for 0.15)
+          (should-not (string-match-p "\\b42\\b"
+                                      (buffer-substring-no-properties (point-min) (point-max))))
+          ;; Explicitly enabling etaf-md-allow-actions t lets Run execute and show output.
+          (let ((etaf-md-allow-actions t))
+            (goto-char (point-min))
+            (should (search-forward "▶ 运行" nil t))
+            (goto-char (match-beginning 0))
+            (call-interactively (key-binding (kbd "RET")))
+            (let ((deadline (+ (float-time) 3.0)))
+              (while (and (< (float-time) deadline)
+                          (not (string-match-p "\\b42\\b"
+                                               (buffer-substring-no-properties (point-min) (point-max)))))
+                (accept-process-output nil 0.05)
+                (etaf-runtime-flush (etaf-runtime-for-buffer buf))))
+            (should (string-match-p "\\b42\\b"
+                                    (buffer-substring-no-properties (point-min) (point-max))))))
+      (when (buffer-live-p buf)
+        (with-current-buffer buf (etaf-md-close))))))
+
+(ert-deftest etaf-md-tests-toc-panel-link-preview-and-media-lightbox ()
+  "Independent side-window outline (`etaf-md-toggle-toc'), in-place link/symbol preview and media lightbox open and dismiss cleanly."
+  (let* ((img (etaf-md-tests--fixture "wide-400x100.png"))
+         (doc (format "# Main\n\nInspect :sym[etaf-md-open] and jump to [Target](#target).\n\n![Banner](%s)\n\n## Target\n\nReached target.\n"
+                      img))
+         (etaf-md-media-lightbox t)
+         (session (etaf-md-create :text doc :theme 'dark))
+         (buf (etaf-md-open session)))
+    (unwind-protect
+        (with-current-buffer buf
+          ;; 1. Toggle independent Emacs side-window outline on and off.
+          (should (eq t (etaf-md-toggle-toc)))
+          (let ((outline-buf (cl-find-if (lambda (b)
+                                           (string-prefix-p "*ETAF Outline*" (buffer-name b)))
+                                         (buffer-list))))
+            (should (buffer-live-p outline-buf))
+            (should (get-buffer-window outline-buf t))
+            (let ((otxt (with-current-buffer outline-buf
+                          (buffer-substring-no-properties (point-min) (point-max)))))
+              (should (string-match-p "大纲目录" otxt))
+              (should (string-match-p "Target" otxt)))
+            ;; Preview buffer itself stays clean (no injected TOC text inside body).
+            (should-not (string-match-p "大纲目录"
+                                        (buffer-substring-no-properties (point-min) (point-max)))))
+          (should-not (etaf-md-toggle-toc))
+          (should-not (cl-find-if (lambda (b)
+                                    (string-prefix-p "*ETAF Outline*" (buffer-name b)))
+                                  (buffer-list)))
+          ;; 2. Preview Emacs symbol at point with `etaf-md-preview-link'.
+          (goto-char (point-min))
+          (should (search-forward "etaf-md-open" nil t))
+          (goto-char (match-beginning 0))
+          (let ((info (etaf-md-preview-link)))
+            (should info)
+            (should (equal (plist-get info :title) "ƒ etaf-md-open")))
+          (etaf-runtime-flush (etaf-runtime-for-buffer buf))
+          (should (string-match-p "交互命令"
+                                  (buffer-substring-no-properties (point-min) (point-max))))
+          ;; 3. Activate local image -> opens in-buffer media lightbox, close via `q'.
+          (goto-char (point-min))
+          (should (search-forward "▀" nil t))
+          (goto-char (match-beginning 0))
+          (call-interactively (key-binding (kbd "RET")))
+          (etaf-runtime-flush (etaf-runtime-for-buffer buf))
+          (should (string-match-p "Banner"
+                                  (buffer-substring-no-properties (point-min) (point-max))))
+          (execute-kbd-macro (kbd "q"))
+          (etaf-runtime-flush (etaf-runtime-for-buffer buf))
+          (should (buffer-live-p buf)))
+      (when (buffer-live-p buf)
+        (with-current-buffer buf (etaf-md-close))))))
+
+(ert-deftest etaf-md-tests-hover-discipline-across-themes-and-widgets ()
+  "Hover faces attach strictly to unselected interactive leaves across dark, light and sepia themes."
+  (let ((doc (concat
+              "PlainProse with [DocLink](https://example.com), [[WikiTarget|WikiAlias]], "
+              ":sym[car], !!HiddenWord!!, [+tipnote], :color[#4493f8], "
+              ":badge[StaticBadge]{.tip}.\n\n"
+              "[+tipnote]: Note detail.\n\n"
+              ":::note {title=\"FoldNote\" collapsible=true open=true}\nCalloutBodyText.\n:::\n\n"
+              "```elisp :collapsed-lines=2\n(defun alpha-code () 1)\n(defun beta-code () 2)\n(defun gamma-code () 3)\n```\n\n"
+              ":::tabs\n@tab ActiveTabLabel\nTabBodyProse.\n@tab IdleTabLabel\nSecond.\n:::\n\n"
+              ":::table {title=\"Grid\" sortable=true copy=true}\n"
+              "| ColHead | ValHead |\n| --- | --- |\n| CellDataOne | 42 |\n:::\n\n"
+              ":::link-card {href=\"https://example.com\" title=\"CardTitleText\" description=\"CardDescText\"}\n:::\n\n"
+              ":::code-tree\n@file a.el\n```elisp\n(setq first 1)\n```\n@file b.el\n```elisp\n(setq second 2)\n```\n:::\n\n"
+              ":::diff {title=\"DiffCard\" mode=side}\n@before\n```text\nold-line\n```\n@after\n```text\nnew-line\n```\n:::\n\n"
+              "- [ ] CheckItemText\n")))
+    (dolist (theme '(dark light sepia))
+      (let ((session (etaf-md-create :text doc :theme theme)))
+        (etaf-md-tests--with-mount session
+          (let ((plain (buffer-substring-no-properties (point-min) (point-max))))
+            ;; Tier 3: Unselected interactive leaves MUST carry mouse-face and pointer 'hand.
+            (dolist (needle '("DocLink" "WikiAlias" "car" "░" "[+tipnote]"
+                              "FoldNote" "复制" "展开剩余 1 行" "IdleTabLabel"
+                              "ColHead ⇅" "复制表格" "→ https://example.com"
+                              "b.el" "统一" "□"))
+              (let ((pos (string-match (regexp-quote needle) plain)))
+                (should pos)
+                (let* ((bufpos (1+ pos))
+                       (mf (get-text-property bufpos 'mouse-face))
+                       (ptr (get-text-property bufpos 'pointer)))
+                  (should mf)
+                  (should (eq ptr 'hand)))))
+            ;; Tier 2: Selected/active controls MUST NOT carry mouse-face (no state stacking).
+            (dolist (needle '("ActiveTabLabel" "a.el" "并排"))
+              (let ((pos (string-match (regexp-quote needle) plain)))
+                (should pos)
+                (should-not (get-text-property (1+ pos) 'mouse-face))))
+            ;; Tier 1 & Tier 4 container bodies: static text, code lines, data cells,
+            ;; card titles/descriptions and callout bodies MUST NOT carry mouse-face.
+            (dolist (needle '("PlainProse" "#4493f8" "StaticBadge"
+                              "CalloutBodyText" "alpha-code" "TabBodyProse"
+                              "CellDataOne" "CardTitleText" "CardDescText"
+                              "old-line" "CheckItemText"))
+              (let ((pos (string-match (regexp-quote needle) plain)))
+                (should pos)
+                (should-not (get-text-property (1+ pos) 'mouse-face))))))))
+    ;; Disabling :link-hover removes mouse-face while keeping pointer 'hand.
+    (let ((session (etaf-md-create :text doc :theme 'dark :link-hover nil)))
+      (etaf-md-tests--with-mount session
+        (let* ((plain (buffer-substring-no-properties (point-min) (point-max)))
+               (pos (1+ (string-match "DocLink" plain))))
+          (should-not (get-text-property pos 'mouse-face))
+          (should (eq 'hand (get-text-property pos 'pointer))))))))
+
+(defun etaf-md-tests--visual-x (pos)
+  "Return the horizontal layout offset in cells from line start to POS.
+Accounts for Ebox `(space :width (N))' spacer properties used in flex and
+centered layouts."
+  (save-excursion
+    (goto-char pos)
+    (let ((p (line-beginning-position))
+          (cw (max 1 (frame-char-width)))
+          (x 0))
+      (while (< p pos)
+        (let* ((disp (get-text-property p 'display))
+               (w (and (consp disp) (eq (car disp) 'space)
+                       (plist-get (cdr disp) :width))))
+          (cond
+           ((and (consp w) (numberp (car w)))
+            (setq x (+ x (/ (float (car w)) cw))))
+           ((numberp w)
+            (setq x (+ x w)))
+           (t
+            (setq x (+ x (char-width (char-after p)))))))
+        (setq p (1+ p)))
+      (round x))))
+
+(ert-deftest etaf-md-tests-card-accents-box-surfaces-and-theme-tokens ()
+  "Card semantic accents, card centered body, distinct box surfaces and valid 6-digit theme tokens hold across themes."
+  (let ((doc (concat
+              ":::box {surface=page}\nSURF_PAGE\n:::\n\n"
+              ":::box {surface=raised}\nSURF_RAISED\n:::\n\n"
+              ":::box {surface=sunken}\nSURF_SUNKEN\n:::\n\n"
+              ":::box {surface=table-header}\nSURF_THDR\n:::\n\n"
+              ":::card {title=\"CARD_NEUTRAL\" accent=\"neutral\"}\nBody.\n:::\n\n"
+              ":::card {title=\"CARD_PRIMARY\" accent=\"primary\"}\nBody.\n:::\n\n"
+              ":::card {title=\"CARD_SUCCESS\" accent=\"success\"}\nBody.\n:::\n\n"
+              ":::card {title=\"CARD_WARNING\" accent=\"warning\"}\nBody.\n:::\n\n"
+              ":::card {title=\"CARD_DANGER\" accent=\"danger\"}\nBody.\n:::\n\n"
+              ":::card {title=\"CARD_IMPORTANT\" accent=\"important\"}\nBody.\n:::\n\n"
+              ":::card {title=\"CENTER_TITLE\" width=\"40ch\" text-align=\"center\"}\nCENTER_BODY\n:::\n")))
+    (dolist (theme '(dark light sepia))
+      ;; Every color in `etaf-md-theme-tokens' must be a valid 6-digit #RRGGBB hex string.
+      (let ((tokens (etaf-md-theme-tokens theme)))
+        (cl-loop for (_k v) on tokens by #'cddr do
+                 (when (stringp v)
+                   (should (string-match-p "\\`#[0-9a-fA-F]\\{6\\}\\'" v)))))
+      (let ((session (etaf-md-create :text doc :theme theme)))
+        (etaf-md-tests--with-mount session
+          (let* ((plain (buffer-substring-no-properties (point-min) (point-max)))
+                 (fg-at (lambda (needle)
+                          (let* ((pos (1+ (string-match (regexp-quote needle) plain)))
+                                 (face (format "%S" (get-text-property pos 'face))))
+                            (when (string-match ":foreground \"\\(#[0-9a-fA-F]\\{6\\}\\)\"" face)
+                              (match-string 1 face)))))
+                 (bg-at (lambda (needle)
+                          (let* ((pos (1+ (string-match (regexp-quote needle) plain)))
+                                 (face (format "%S" (get-text-property pos 'face))))
+                            (when (string-match ":background \"\\(#[0-9a-fA-F]\\{6\\}\\)\"" face)
+                              (match-string 1 face)))))
+                 (card-fgs (mapcar fg-at '("CARD_NEUTRAL" "CARD_PRIMARY" "CARD_SUCCESS"
+                                           "CARD_WARNING" "CARD_DANGER" "CARD_IMPORTANT")))
+                 (bg-page (funcall bg-at "SURF_PAGE"))
+                 (bg-raised (funcall bg-at "SURF_RAISED"))
+                 (bg-sunken (funcall bg-at "SURF_SUNKEN"))
+                 (bg-thdr (funcall bg-at "SURF_THDR")))
+            ;; All 6 card accents must paint distinct title foreground colors.
+            (should (= 6 (length (delete-dups (copy-sequence card-fgs)))))
+            ;; Surfaces must be distinct (page vs raised vs sunken vs table-header).
+            (should-not (equal bg-page bg-raised))
+            (should-not (equal bg-page bg-sunken))
+            (should-not (equal bg-raised bg-sunken))
+            (should-not (equal bg-raised bg-thdr))
+            ;; In dark theme, sunken must be strictly darker than page, and raised lighter.
+            (when (eq theme 'dark)
+              (let ((hex-sum (lambda (h)
+                               (+ (string-to-number (substring h 1 3) 16)
+                                  (string-to-number (substring h 3 5) 16)
+                                  (string-to-number (substring h 5 7) 16)))))
+                (should (< (funcall hex-sum bg-sunken) (funcall hex-sum bg-page)))
+                (should (> (funcall hex-sum bg-raised) (funcall hex-sum bg-page)))))
+            ;; Centered card must visually align its body near its centered title.
+            (let ((title-x (etaf-md-tests--visual-x (1+ (string-match "CENTER_TITLE" plain))))
+                  (body-x (etaf-md-tests--visual-x (1+ (string-match "CENTER_BODY" plain)))))
+              (should (> body-x 10))
+              (should (<= (abs (- title-x body-x)) 2)))))))))
+
+(ert-deftest etaf-md-tests-columns-table-filetree-and-npmto-contracts ()
+  "Columns grow/justify/wrap, table center alignment, file-tree lines=false & bold focus, and npm-to && spacing work."
+  (let* ((doc (concat
+               ":::columns {columns=2 justify-content=between divider=false}\n"
+               ":::col\nJUST_LEFT\n:::\n"
+               ":::col\nJUST_RIGHT\n:::\n:::\n\n"
+               ":::table {align=center}\n| K | V |\n| --- | --- |\n| A | 1 |\n:::\n\n"
+               ":::file-tree {lines=false}\n- root/\n  - leaf.el\n:::\n\n"
+               ":::file-tree\n- **focus.el** # important file\n:::\n\n"
+               ":::npm-to {tabs=\"pnpm\"}\n```sh\nnpm install vue && npm run build\n```\n:::\n"))
+         (session (etaf-md-create :text doc :theme 'dark)))
+    (etaf-md-tests--with-mount session
+      (let ((plain (buffer-substring-no-properties (point-min) (point-max))))
+        ;; 1. justify-content=between pushes JUST_RIGHT near right edge (> 50 visual cells past JUST_LEFT).
+        (let ((col-l (etaf-md-tests--visual-x (1+ (string-match "JUST_LEFT" plain))))
+              (col-r (etaf-md-tests--visual-x (1+ (string-match "JUST_RIGHT" plain)))))
+          (should (> (- col-r col-l) 50)))
+        ;; 2. align=center table shifts visually away from left margin.
+        (let ((tcol (etaf-md-tests--visual-x (1+ (string-match "K" plain))))
+              (lcol (etaf-md-tests--visual-x (1+ (string-match "JUST_LEFT" plain)))))
+          (should (> tcol (+ lcol 15))))
+        ;; 3. file-tree lines=false omits box-drawing tree chars inside the box on leaf.el.
+        (let* ((rline (save-excursion
+                        (goto-char (1+ (string-match "leaf\\.el" plain)))
+                        (buffer-substring-no-properties
+                         (line-beginning-position) (line-end-position)))))
+          (should-not (string-match-p "[├└]" rline))
+          (should-not (string-match-p "│.*│.*leaf\\.el" rline)))
+        ;; 4. file-tree **focus.el** # important file strips ** and applies bold weight.
+        (let* ((fpos (1+ (string-match "focus\\.el" plain)))
+               (fface (format "%S" (get-text-property fpos 'face))))
+          (should-not (string-match-p "\\*\\*focus\\.el\\*\\*" plain))
+          (should (string-match-p "bold" fface)))
+        ;; 5. npm-to preserves spaces around &&.
+        (should (string-match-p "pnpm add vue && pnpm build" plain))))))
+
+(ert-deftest etaf-md-tests-command-surface-and-toggle-split ()
+  "Global M-x surface exposes strictly `etaf-md-open' and `etaf-md-preview' (zero minor modes, zero leaked preview-local interactive commands), preview keys still dispatch cleanly, and `etaf-md-toggle-split' switches single/split cleanly."
+  (let* ((file (make-temp-file "etaf-md-cmd-" nil ".md"))
+         (source nil)
+         (preview nil)
+         (interactive-cmds nil))
+    (unwind-protect
+        (progn
+          (with-temp-file file (insert "# Single Window\n\nBody paragraph.\n"))
+          ;; 1. Across all of Emacs, strictly `etaf-md-open' and `etaf-md-preview'
+          ;;    are interactive `etaf-md-*' commands (zero minor modes, zero leaks).
+          (mapatoms (lambda (sym)
+                      (when (and (string-prefix-p "etaf-md-" (symbol-name sym))
+                                 (not (string-prefix-p "etaf-md-tests-" (symbol-name sym)))
+                                 (fboundp sym)
+                                 (commandp sym))
+                        (push sym interactive-cmds))))
+          (should (equal (sort interactive-cmds
+                               (lambda (a b) (string< (symbol-name a) (symbol-name b))))
+                         '(etaf-md-open etaf-md-preview)))
+          ;; 2. Open single-window from source, verify preview keys (`t', `v', `q')
+          ;;    dispatch cleanly even though those functions are non-interactive.
+          (setq source (find-file-noselect file))
+          (delete-other-windows)
+          (switch-to-buffer source)
+          (setq preview (etaf-md-open file))
+          (should (= 1 (length (window-list))))
+          (with-current-buffer preview
+            (let ((before (plist-get (etaf-md-state (etaf-app-state)) :theme)))
+              (call-interactively (key-binding (kbd "t")))
+              (let ((after (plist-get (etaf-md-state (etaf-app-state)) :theme)))
+                (should (memq after '(dark light sepia)))
+                (ignore before)))
+            ;; Toggle split ON via `v' -> 2 windows (source left, preview right).
+            (call-interactively (key-binding (kbd "v")))
+            (should (= 2 (length (window-list))))
+            ;; Toggle split OFF via `v' -> back to 1 full-width preview window.
+            (call-interactively (key-binding (kbd "v")))
+            (should (= 1 (length (window-list))))
+            (should (eq (window-buffer (selected-window)) preview))
+            ;; Closing single-window preview via `q' restores source without deleting the window.
+            (call-interactively (key-binding (kbd "q")))
+            (should (= 1 (length (window-list))))
+            (should (eq (window-buffer (selected-window)) source))))
+      (when (buffer-live-p preview)
+        (with-current-buffer preview (ignore-errors (etaf-md-close))))
+      (when (buffer-live-p source) (kill-buffer source))
+      (delete-file file))))
+
+(ert-deftest etaf-md-tests-footnotes-keep-compact-gap-after-body ()
+  "Many trailing footnote definitions do not stack blank lines before the footnote divider."
+  (let* ((refs (mapconcat (lambda (i) (format "[^%d]" i))
+                          (number-sequence 1 12) ""))
+         (defs (mapconcat (lambda (i) (format "[^%d]: 脚注条目 %d" i i))
+                          (number-sequence 1 12) "\n\n"))
+         (text (format "正文结尾段落%s。\n\n%s\n" refs defs))
+         (gap (etaf-md-tests--gap text "正文结尾段落" "脚注")))
+    (should (= gap 1))))
+
+(defun etaf-md-tests--wait-until (pred timeout)
+  "Pump Emacs timers and process output until PRED returns non-nil or TIMEOUT."
+  (let ((deadline (+ (float-time) timeout)))
+    (while (and (not (funcall pred)) (< (float-time) deadline))
+      (accept-process-output nil 0.02)
+      (sleep-for 0.02))
+    (funcall pred)))
+
+(ert-deftest etaf-md-tests-native-typeset-renders-mermaid-and-math-to-svg ()
+  "When the native QuickJS module is built, Mermaid diagrams (including flowchart TB with subgraph/classDef) and `$$' display formulas render to SVGs in both dark and light themes."
+  (let* ((native-entry (assoc "typeset-native" (plist-get (etaf-md-doctor) :optional)))
+         (native-ok (cadr native-entry)))
+    (skip-unless native-ok)
+    (should (etaf-md-typeset-available-p))
+    (let* ((text (concat
+                  "# Diagram & Math\n\n"
+                  "```mermaid\n"
+                  "flowchart TB\n"
+                  "  start([收到请求]) --> cache{缓存命中?}\n"
+                  "  cache -->|是| draw[(读取图片)]\n"
+                  "  subgraph 缓存层\n"
+                  "    cache\n"
+                  "    draw\n"
+                  "  end\n"
+                  "  classDef hit fill:#1f6feb,stroke:#1f6feb,color:#ffffff\n"
+                  "  class cache,draw hit\n"
+                  "```\n\n"
+                  "$$\n"
+                  "\\text{行高} = \\sum_{i=1}^{n} i\n"
+                  "$$\n"))
+           (session (etaf-md-create :text text :theme 'dark))
+           (buffer (etaf-md-open session)))
+      (unwind-protect
+          (progn
+            (should (etaf-md-tests--wait-until
+                     (lambda ()
+                       (with-current-buffer buffer
+                         (let ((content (buffer-substring-no-properties (point-min) (point-max))))
+                           (and (string-match-p "▲ mermaid" content)
+                                (not (string-match-p "classDef hit" content))
+                                (not (string-match-p "∑" content))))))
+                     5.0))
+            (etaf-md-set-theme session 'light)
+            (should (etaf-md-tests--wait-until
+                     (lambda ()
+                       (with-current-buffer buffer
+                         (let ((content (buffer-substring-no-properties (point-min) (point-max))))
+                           (and (string-match-p "▲ mermaid" content)
+                                (not (string-match-p "classDef hit" content))))))
+                     5.0)))
+        (when (buffer-live-p buffer)
+          (with-current-buffer buffer (ignore-errors (etaf-md-close))))))))
+
+(ert-deftest etaf-md-tests-native-typeset-keeps-valid-picture-on-incomplete-live-edit ()
+  "While live-editing a rendered Mermaid block into transiently invalid syntax, the preview retains the last valid diagram instead of flashing back to raw code."
+  (let* ((native-entry (assoc "typeset-native" (plist-get (etaf-md-doctor) :optional)))
+         (native-ok (cadr native-entry)))
+    (skip-unless native-ok)
+    (let* ((file (make-temp-file "etaf-md-swr-" nil ".md"))
+           (source nil)
+           (preview nil))
+      (unwind-protect
+          (progn
+            (with-temp-file file
+              (insert "# Live Diagram\n\n```mermaid\nflowchart LR\n  A[起点] --> B[终点]\n```\n"))
+            (setq source (find-file-noselect file))
+            (setq preview (etaf-md-open file))
+            (should (etaf-md-tests--wait-until
+                     (lambda ()
+                       (with-current-buffer preview
+                         (let ((content (buffer-substring-no-properties (point-min) (point-max))))
+                           (and (string-match-p "▲ mermaid" content)
+                                (not (string-match-p "flowchart LR" content))))))
+                     5.0))
+            ;; Break Mermaid syntax mid-edit in the source buffer.
+            (with-current-buffer source
+              (goto-char (point-min))
+              (re-search-forward "B\\[终点\\]")
+              (replace-match "" t t))
+            ;; Pump live-edit tick and background render; previous valid diagram stays visible.
+            (etaf-md-tests--wait-until (lambda () nil) 0.35)
+            (with-current-buffer preview
+              (let ((content (buffer-substring-no-properties (point-min) (point-max))))
+                (should (string-match-p "▲ mermaid" content))
+                (should-not (string-match-p "flowchart LR" content)))))
+        (when (buffer-live-p preview)
+          (with-current-buffer preview (ignore-errors (etaf-md-close))))
+        (when (buffer-live-p source)
+          (with-current-buffer source (set-buffer-modified-p nil))
+          (kill-buffer source))
+        (delete-file file)))))
+
+(ert-deftest etaf-md-tests-table-vertical-borders-and-tall-diagram-sizing ()
+  "`:::table' restores vertical grid borders across all columns, and tall portrait Mermaid diagrams keep native scale instead of being crushed to 20 rows and open the lightbox on activation."
+  ;; 1. `:::table' renders outer and inner vertical borders (`│').
+  (let* ((table-md (concat ":::table {title=\"耗时\"}\n"
+                           "| 版本 | 耗时 | 内存 |\n"
+                           "| --- | --- | --- |\n"
+                           "| 0.1.9 | 5.4 s | 380 MB |\n"
+                           ":::\n"))
+         (session (etaf-md-create :text table-md :theme 'dark)))
+    (etaf-md-tests--with-mount session
+      (goto-char (point-min))
+      (should (search-forward "0.1.9" nil t))
+      (let* ((line (buffer-substring-no-properties
+                    (line-beginning-position) (line-end-position)))
+             (bars (cl-count ?│ line)))
+        (should (>= bars 4)))))
+  ;; 2. Portrait Mermaid diagram is width-bounded (exceeds the 20-row photo cap)
+  ;;    and pressing RET activates the in-buffer media lightbox when enabled.
+  (let* ((native-entry (assoc "typeset-native" (plist-get (etaf-md-doctor) :optional)))
+         (native-ok (cadr native-entry)))
+    (when native-ok
+      (let* ((etaf-md-media-lightbox t)
+             (tall-mmd (concat "```mermaid\n"
+                               "flowchart TB\n"
+                               "  a[步骤一] --> b[步骤二]\n"
+                               "  b --> c[步骤三]\n"
+                               "  c --> d[步骤四]\n"
+                               "  d --> e[步骤五]\n"
+                               "  e --> f[步骤六]\n"
+                               "  f --> g[步骤七]\n"
+                               "  g --> h[步骤八]\n"
+                               "```\n"))
+             (session (etaf-md-create :text tall-mmd :theme 'dark))
+             (buffer (etaf-md-open session)))
+        (unwind-protect
+            (progn
+              (should (etaf-md-tests--wait-until
+                       (lambda ()
+                         (with-current-buffer buffer
+                           (string-match-p
+                            "▲ mermaid"
+                            (buffer-substring-no-properties (point-min) (point-max)))))
+                       5.0))
+              (with-current-buffer buffer
+                (let ((shape (etaf-md-tests--media-grid-shape)))
+                  (should shape)
+                  ;; Tall 8-step vertical flowchart stays at 1:1 readable scale (> 20 rows).
+                  (should (> (cdr shape) 20)))
+                ;; Pressing RET on the diagram caption opens the in-buffer lightbox.
+                (goto-char (point-min))
+                (should (search-forward "▲ mermaid" nil t))
+                (goto-char (match-beginning 0))
+                (let ((cmd (key-binding (kbd "RET"))))
+                  (should cmd)
+                  (call-interactively cmd))
+                (let ((txt (buffer-substring-no-properties (point-min) (point-max))))
+                  (should (string-match-p "mermaid[ \t]+✕" txt)))))
+          (when (buffer-live-p buffer)
+            (with-current-buffer buffer (ignore-errors (etaf-md-close)))))))))
+
+(ert-deftest etaf-md-tests-wide-table-adapts-across-viewport-widths ()
+  "A wide 8-column table breaks out on wide screens and never clips on resize.
+Prose stays within the centered reading measure while the wide table expands up
+to the available viewport minus side gutters, compresses into a full-column
+grid on medium viewports, and folds into stacked cards on narrow viewports."
+  (let* ((md (concat
+              "前文段落保持舒适的阅读列宽，不会因为宽表格而拉满整屏。\n\n"
+              "| 标准 | 方法论 (BEM/SMACSS) | 预处理器 (Sass) | CSS 模块 | 运行时 CSS-in-JS | 编译时 CSS-in-JS | 实用工具优先 (Tailwind) | 现代原生 CSS |\n"
+              "| --- | --- | --- | --- | --- | --- | --- | --- |\n"
+              "| 作用域机制 | 手动命名约定 | 无 (全局) | 构建时哈希化类名 | JS闭包/运行时生成 | 构建时提取/哈希化 | 无 (依赖组合) | @scope |\n"
+              "| 最佳适用 | 纪律严明的团队 | 组织中大型CSS | 任何组件化应用 | 高度动态化的UI | 性能敏感的组件化应用 | 快速原型/设计系统 | 简化工具链的项目 |\n"))
+         (session (etaf-md-create :text md))
+         (char (frame-char-width))
+         (margin (* etaf-md-tests--documented-gutter char)))
+    (etaf-md-tests--with-mount session
+      (let ((rt (etaf-runtime-for-buffer (current-buffer))))
+        ;; Wide 170-col viewport: table breaks out wider than 80ch measure with all 8 cols intact.
+        (etaf-runtime-refit rt (* 170 char) 60)
+        (let* ((txt (buffer-substring-no-properties (point-min) (point-max)))
+               (rows (cl-remove-if-not (lambda (l) (string-match-p "│" l))
+                                       (split-string txt "\n")))
+               (prose-line (cl-find-if (lambda (l) (string-match-p "前文段落" l))
+                                       (split-string txt "\n"))))
+          (should (string-match-p "@scope" txt))
+          (should (string-match-p "现代原生 CSS" txt))
+          (should (cl-every (lambda (r) (= 9 (cl-count ?│ r))) rows))
+          (should (> (string-width (car rows)) 100))
+          ;; Prose stays centered at reading measure with wide displayed margins.
+          (should prose-line)
+          (goto-char (point-min))
+          (search-forward "前文段落")
+          (let ((blank (etaf-md-tests--page-margin-pixels)))
+            (should (> (car blank) (* 20 char)))))
+        ;; Medium 84-col viewport: all 8 columns still fit with full right border and side gutters.
+        (etaf-runtime-refit rt (* 84 char) 60)
+        (let* ((txt (buffer-substring-no-properties (point-min) (point-max)))
+               (rows (cl-remove-if-not (lambda (l) (string-match-p "│" l))
+                                       (split-string txt "\n"))))
+          (should (string-match-p "@scope" txt))
+          (should (cl-every (lambda (r) (= 9 (cl-count ?│ r))) rows))
+          (goto-char (point-min))
+          (search-forward "@scope")
+          (let ((blank (etaf-md-tests--page-margin-pixels)))
+            (should (>= (car blank) margin))
+            (should (>= (cdr blank) margin))))
+        ;; Narrow 46-col viewport: stacked cards keep every column value readable inside gutters.
+        (etaf-runtime-refit rt (* 46 char) 60)
+        (let ((txt (buffer-substring-no-properties (point-min) (point-max))))
+          (should (string-match-p "标准 · 作用域机制" txt))
+          (should (string-match-p "@scope" txt))
+          (goto-char (point-min))
+          (search-forward "@scope")
+          (let ((blank (etaf-md-tests--page-margin-pixels)))
+            (should (>= (car blank) margin))
+            (should (>= (cdr blank) margin))))))))

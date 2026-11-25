@@ -56,17 +56,55 @@
             :height '(lh 1) :border-bottom
             (etaf-ui--style-border (etaf-theme-token :ui-border "#687386")))))))
 
-(etaf-define-component etaf-progress (&key value (max 100) label (variant 'success))
+(defun etaf-ui--progress-percent (value max)
+  "Validate reactive VALUE and MAX and return percentage in [0.0, 100.0]."
+  (let ((current (etaf-ui--reactive-value value))
+        (limit (etaf-ui--reactive-value max)))
+    (etaf-check-prop :max limit (and (numberp limit) (> limit 0))
+                     "a positive number" 'etaf-progress)
+    (etaf-check-prop :value current (and (numberp current) (<= 0 current limit))
+                     "a number from zero through :max" 'etaf-progress)
+    (/ (* 100.0 current) limit)))
+
+(etaf-define-component etaf-ui--animated-progress (&key value max label variant)
+  "Render a progress bar whose fill follows VALUE smoothly on the shared clock."
+  :bindings
+  ((value-prop (etaf-prop :value))
+   (max-prop (etaf-prop :max))
+   (shown (etaf-transition
+           (lambda ()
+             (etaf-ui--progress-percent (etaf-value value-prop)
+                                        (etaf-value max-prop)))
+           :duration 0.22 :easing 'ease-out
+           :name 'etaf-progress)))
+  :render
+  (let* ((theme (etaf-ui--feedback-theme variant))
+         (percent (max 0.0 (min 100.0 (etaf-animation-quantize
+                                       (etaf-value shown) 0.5))))
+         (rounded (round percent)))
+    (ignore value max)
+    (etaf-view
+     (column :class "etaf-progress" :width 'stretch
+       (row :item-gap '(ch 1)
+         (etaf-label :text label :variant 'strong)
+         (etaf-label :text (format "%d%%" rounded) :variant 'muted))
+       (box :width 'stretch :height '(lh 1)
+            :background-color (etaf-theme-token :ui-progress-track "#E2E8F0")
+         (box :width (list '% percent) :height '(lh 1)
+              :background-color (nth 0 theme)))))))
+
+(etaf-define-component etaf-progress
+    (&key value (max 100) label (variant 'success) animated)
   "Render VALUE out of positive MAX; both accept numbers or reactive values."
   :render
-  (let* ((value (etaf-ui--reactive-value value))
-         (max (etaf-ui--reactive-value max))
-         (theme (etaf-ui--feedback-theme variant)))
-    (etaf-check-prop :max max (and (numberp max) (> max 0))
-                     "a positive number" 'etaf-progress)
-    (etaf-check-prop :value value (and (numberp value) (<= 0 value max))
-                     "a number from zero through :max" 'etaf-progress)
-    (let ((percent (round (/ (* 100.0 value) max))))
+  (if animated
+      (progn
+        (etaf-ui--progress-percent value max)
+        (etaf-view
+         (etaf-ui--animated-progress
+          :value value :max max :label label :variant variant)))
+    (let* ((percent (round (etaf-ui--progress-percent value max)))
+           (theme (etaf-ui--feedback-theme variant)))
       (etaf-view
        (column :class "etaf-progress" :width 'stretch
          (row :item-gap '(ch 1)
@@ -101,7 +139,41 @@
            (etaf-button :label "×" :variant 'ghost :aria-label "Dismiss"
                         :on-press on-dismiss))))))))
 
-(etaf-define-component etaf-statistic (&key label value trend)
+(defun etaf-ui--statistic-format (current target)
+  "Format animated numeric CURRENT matching integer or float shape of TARGET."
+  (if (not (numberp current))
+      (etaf-ui--text-value current)
+    (if (integerp target)
+        (number-to-string (round current))
+      (format "%.1f" (float current)))))
+
+(etaf-define-component etaf-ui--animated-statistic (&key label value trend)
+  "Render a metric card whose numeric VALUE rolls smoothly on the shared clock."
+  :bindings
+  ((value-prop (etaf-prop :value))
+   (shown (etaf-transition
+           (lambda () (etaf-ui--reactive-value (etaf-value value-prop)))
+           :duration 0.28 :easing 'ease-out
+           :name 'etaf-statistic)))
+  :render
+  (let* ((muted (etaf-theme-token :ui-muted-fg "#687386"))
+         (target (etaf-ui--reactive-value value))
+         (display (if (numberp target)
+                      (etaf-ui--statistic-format (etaf-value shown) target)
+                    (etaf-ui--text-value target))))
+    (etaf-view
+     (column :class "etaf-statistic" :width 'stretch
+             :item-gap '(lh 0)
+             :padding '((lh 1) (ch 2))
+             :background-color (etaf-theme-token :ui-panel-bg "#F6F7F9")
+             :border (etaf-ui--style-border
+                      (etaf-theme-token :ui-panel-border "#D9DDE3"))
+       (etaf-label :text label :variant 'muted)
+       (text :font-weight 'bold :color muted (expr display))
+       (expr (when trend
+               (etaf-view (etaf-label :text trend :variant 'success))))))))
+
+(etaf-define-component etaf-statistic (&key label value trend animated)
   "Render a metric as a small panel: a muted caption, the figure, a trend.
 The panel owns its surface and spacing so a row of metrics lines up; the
 caller decides the width."
@@ -109,21 +181,24 @@ caller decides the width."
   (etaf-check-prop :trend trend (or (null trend) (stringp trend))
                    "a string or nil" 'etaf-statistic)
   :render
-  (let ((muted (etaf-theme-token :ui-muted-fg "#687386")))
-    (etaf-view
-     (column :class "etaf-statistic" :width 'stretch
-             :item-gap '(lh 0)
-             :padding '((lh 1) (ch 2))
-              :background-color (etaf-theme-token :ui-panel-bg "#F6F7F9")
-             :border (etaf-ui--style-border
-                      (etaf-theme-token :ui-panel-border "#D9DDE3"))
-       (etaf-label :text label :variant 'muted)
-       (text :font-weight 'bold :color muted
-         ;; A reactive value reads like a Label text; a source object would
-         ;; reach the Text Host unresolved.
-         (expr (etaf-ui--text-value value)))
-       (expr (when trend
-               (etaf-view (etaf-label :text trend :variant 'success))))))))
+  (if animated
+      (etaf-view
+       (etaf-ui--animated-statistic :label label :value value :trend trend))
+    (let ((muted (etaf-theme-token :ui-muted-fg "#687386")))
+      (etaf-view
+       (column :class "etaf-statistic" :width 'stretch
+               :item-gap '(lh 0)
+               :padding '((lh 1) (ch 2))
+               :background-color (etaf-theme-token :ui-panel-bg "#F6F7F9")
+               :border (etaf-ui--style-border
+                        (etaf-theme-token :ui-panel-border "#D9DDE3"))
+         (etaf-label :text label :variant 'muted)
+         (text :font-weight 'bold :color muted
+           ;; A reactive value reads like a Label text; a source object would
+           ;; reach the Text Host unresolved.
+           (expr (etaf-ui--text-value value)))
+         (expr (when trend
+                 (etaf-view (etaf-label :text trend :variant 'success)))))))))
 
 (etaf-define-component etaf-empty
     (&key (title "Nothing here") description action-label on-action)
@@ -139,40 +214,132 @@ caller decides the width."
     (expr (when action-label
             (etaf-view (etaf-button :label action-label :on-press on-action))))))
 
-(etaf-define-component etaf-skeleton (&key (width 'stretch) (height '(lh 1)))
+(etaf-define-component etaf-ui--animated-skeleton (&key width height)
+  "Render a subtly pulsing loading placeholder on the shared clock."
+  :bindings
+  ((pulse (etaf-animation-frames '(0.0 0.35 0.7 1.0 0.7 0.35)
+                                 :interval 0.18 :name 'etaf-skeleton)))
+  :render
+  (let ((alpha (etaf-value pulse)))
+    (etaf-view
+     (box :class "etaf-skeleton is-animated" :width width :height height
+          :background-color
+          (etaf-theme-token
+           :ui-progress-track "#E2E8F0"
+           (lambda (base)
+             (let ((peak (etaf-ui--state-hover-shift base)))
+               (if (and (stringp base) (stringp peak))
+                   (etaf-ui-color-mix base peak alpha)
+                 base))))))))
+
+(etaf-define-component etaf-skeleton (&key (width 'stretch) (height '(lh 1)) animated)
   "Render a loading placeholder with WIDTH and HEIGHT."
-  :view
-  (box :class "etaf-skeleton" :width width :height height
-       :background-color (etaf-theme-token :ui-progress-track "#E2E8F0")))
+  :render
+  (if animated
+      (etaf-view (etaf-ui--animated-skeleton :width width :height height))
+    (etaf-view
+     (box :class "etaf-skeleton" :width width :height height
+          :background-color (etaf-theme-token :ui-progress-track "#E2E8F0")))))
+
+(defconst etaf-ui--spinner-styles
+  '((braille . (2 ("⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏")))
+    (dots    . (3 ("·  " "·· " "···" "·· ")))
+    (line    . (1 ("|" "/" "-" "\\")))
+    (meter   . (1 ("▁" "▂" "▃" "▄" "▅" "▆" "▇" "█" "▇" "▆" "▅" "▄" "▃" "▂"))))
+  "Spinner styles as (NAME . (CELL-WIDTH FRAME-LIST)).")
+
+(etaf-define-component etaf-spinner
+    (&key (style 'braille) label (variant 'info) (interval 0.09))
+  "Render a shared-clock loading indicator with fixed width and optional LABEL."
+  :validate
+  (progn
+    (etaf-check-prop :style style (and (symbolp style)
+                                       (assq style etaf-ui--spinner-styles))
+                     "braille, dots, line or meter" 'etaf-spinner)
+    (etaf-check-prop :label label (or (null label) (stringp label))
+                     "a string or nil" 'etaf-spinner)
+    (etaf-check-prop :interval interval (and (numberp interval) (> interval 0))
+                     "a positive number" 'etaf-spinner))
+  :bindings
+  ((spec (or (cdr (assq style etaf-ui--spinner-styles))
+             (cdr (assq 'braille etaf-ui--spinner-styles))))
+   (frame (etaf-animation-frames
+           (cadr spec)
+           :interval (if (and (numberp interval) (> interval 0))
+                         interval 0.09)
+           :name 'etaf-spinner)))
+  :render
+  (let ((theme (etaf-ui--feedback-theme variant))
+        (glyph-width (car spec)))
+    (etaf-view
+     (row :class (format "etaf-spinner %s" style) :role 'status
+          :item-gap '(ch 1) :cross-align 'center
+       (box :width (list 'ch glyph-width) :height '(lh 1)
+            :flex-shrink 0 :color (nth 0 theme)
+         (text (expr (etaf-value frame))))
+       (expr (when label
+               (etaf-view (etaf-label :text label :variant 'muted))))))))
+
+(defun etaf-ui--card-accent-color (variant)
+  "Return the resolved semantic accent color for card VARIANT, or nil."
+  (let ((key (pcase variant
+               ((or 'primary 'info) :ui-accent)
+               ('success :ui-success-fg)
+               ('warning :ui-warning-fg)
+               ('danger :ui-danger-fg)
+               ('important :ui-important-fg)
+               (_ nil))))
+    (when key
+      (plist-get (etaf-ui--style-tokens key) key))))
 
 (etaf-define-component etaf-card
     (&key title description icon (variant 'default) (width 'stretch)
           (text-align 'start) on-press)
   "Render a reusable surface with optional TITLE and DESCRIPTION slots.
 ICON draws a glyph from the icon sets before the title on the title's own
-row.  WIDTH sizes the card, TEXT-ALIGN places its content and ON-PRESS makes
-the whole surface activate; the border, fill and padding stay the card's own."
+row.  VARIANT may be `default'/`neutral' or a semantic accent (`primary',
+`info', `success', `warning', `danger', `important') that paints the title
+and a crisp left accent rule from the Theme.  WIDTH sizes the card,
+TEXT-ALIGN aligns both header and body content, and ON-PRESS makes the
+whole surface activate with a hand pointer."
   :validate
   (etaf-check-prop :on-press on-press (or (null on-press) (functionp on-press))
                    "a function or nil" 'etaf-card)
   :render
-  (let ((theme (etaf-ui--style-tokens :ui-panel-fg :ui-panel-bg :ui-panel-border)))
+  (let* ((theme (etaf-ui--style-tokens :ui-panel-fg :ui-panel-bg :ui-panel-border))
+         (border (etaf-ui--style-border (plist-get theme :ui-panel-border)))
+         (accent (etaf-ui--card-accent-color variant))
+         (slot (etaf-current-slot 'default)))
     (etaf-view
      (column :class (format "etaf-card %s" variant) :width width
              :cross-align text-align
+             :pointer (when on-press 'hand)
              :on-press on-press
              :padding '((lh 1) (ch 2))
              :item-gap '(lh 1)
              :color (plist-get theme :ui-panel-fg)
              :background-color (plist-get theme :ui-panel-bg)
-             :border (etaf-ui--style-border (plist-get theme :ui-panel-border))
+             :border-top border
+             :border-right border
+             :border-bottom border
+             :border-left (if accent
+                              (etaf-ui--style-border accent 3)
+                            border)
        (expr (when title
                (let* ((glyph (and icon
                                   (car (etaf-ui-icon-lines icon :lines 1))))
-                      (label (if glyph (concat glyph " " title) title)))
-                 (etaf-view (etaf-label :text label :variant 'strong)))))
+                      (title-text (etaf-ui--text-value title))
+                      (label (if glyph (concat glyph " " title-text) title-text)))
+                 (if accent
+                     (etaf-node 'text (list :color accent :font-weight 'bold)
+                                (list label))
+                   (etaf-view (etaf-label :text label :variant 'strong))))))
        (expr (when description (etaf-view (etaf-label :text description :variant 'muted))))
-       (expr (etaf-current-slot 'default))))))
+       (expr (when slot
+               (if (eq text-align 'start)
+                   slot
+                 (etaf-node 'box (list :width 'stretch :text-align text-align)
+                            (if (listp slot) slot (list slot))))))))))
 
 (defvar etaf-ui--avatar-cache (make-hash-table :test #'equal)
   "Round avatar image descriptors keyed by their source and pixel size.")
@@ -312,8 +479,8 @@ the line height and sits on the baseline the label uses."
 (defun etaf-ui--timeline-item (item index list-style)
   "Return timeline ITEM at INDEX rendered under LIST-STYLE.
 The time sits below the content, the way a chronology reads: title, what
-happened, when.  A left rail joins the entries, and each entry owns a dot in
-the colour its STATUS names."
+happened, when.  A continuous left rail runs down the timeline, with each
+entry's dot or index anchored cleanly against the rail on its title row."
   (let* ((time (plist-get item :time))
          (status (plist-get item :status))
          ;; A caller may spell the badge as a plist: :text is what the badge
@@ -323,14 +490,10 @@ the colour its STATUS names."
                              (plist-get status :variant)
                            status))
          (status-text (if (consp status) (plist-get status :text) status))
-        (title (plist-get item :title))
-        (content (plist-get item :content))
-         (muted (etaf-theme-token :ui-muted-fg "#687386")))
-    (etaf-view
-     (flex :class "etaf-timeline-item" :width 'stretch
-           :gap '((lh 0) (ch 1)) :align-items 'start
-       (box :class "etaf-timeline-marker" :width '(ch 2)
-         (expr
+         (title (plist-get item :title))
+         (content (plist-get item :content))
+         (border (etaf-theme-token :ui-border "#CBD5E1"))
+         (marker
           (pcase list-style
             ('decimal
              (etaf-view
@@ -341,26 +504,37 @@ the colour its STATUS names."
               (if status-variant (etaf-ui--status-token status-variant)
                 (etaf-theme-token :ui-accent "#2563EB"))))
             (_ nil))))
-       (column :class "etaf-timeline-body" :width 'stretch
-               :item-gap '(lh 0)
-               :border-left (etaf-ui--style-border muted)
-               :padding '((lh 0) (ch 2) (lh 1) (ch 2))
-         (flex :width 'stretch :gap '((lh 0) (ch 1)) :align-items 'center
-           (etaf-label :text title :variant 'strong)
-           (expr (when status-text
-                   (etaf-view (etaf-badge
-                               :text status-text
-                               :variant (if (memq status-variant
-                                                  '(success warning danger info))
-                                            status-variant
-                                          'info))))))
-         (expr
-          (cond ((functionp content) (funcall content))
-                ((stringp content)
-                 (etaf-view (etaf-label :text content :variant 'default)))))
-         (expr (when time
-                 (etaf-view
-                  (etaf-label :text time :variant 'muted)))))))))
+    (etaf-view
+     (column :class "etaf-timeline-item" :width 'stretch
+             :item-gap '(lh 0)
+             :border-left (etaf-ui--style-border border)
+             :padding '((lh 0) (ch 2) (lh 1) (ch 2))
+       (flex :class "etaf-timeline-body" :width 'stretch
+             :gap '((lh 0) (ch 1)) :align-items 'center
+         (expr marker)
+         (etaf-label :text title :variant 'strong)
+         (expr (when status-text
+                 (etaf-view (etaf-badge
+                             :text status-text
+                             :variant (if (memq status-variant
+                                                '(success warning danger info))
+                                          status-variant
+                                        'info))))))
+       (expr
+        (when content
+          (etaf-node
+           'box (list :width 'stretch
+                      :padding-left (if (eq list-style 'none) '(ch 0) '(ch 2)))
+           (list
+            (cond ((functionp content) (funcall content))
+                  ((stringp content)
+                   (etaf-view (etaf-label :text content :variant 'default))))))))
+       (expr (when time
+               (etaf-node
+                'box (list :width 'stretch
+                           :padding-left (if (eq list-style 'none) '(ch 0) '(ch 2)))
+                (list (etaf-view
+                       (etaf-label :text time :variant 'muted))))))))))
 
 (etaf-define-component etaf-timeline
     (&key items (list-style 'bullet) (start 1))

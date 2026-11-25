@@ -328,28 +328,123 @@
         (should (> (car size) 0)))
       (should-not (etaf-host-ref-bounds runtime 'missing)))))
 
+(defun etaf-events-tests--sticky-header-string ()
+  "Evaluate `header-line-format' when it is a sticky `:eval' construct."
+  (when (and (consp header-line-format) (eq (car header-line-format) :eval))
+    (let ((val (eval (cadr header-line-format))))
+      (cond
+       ((stringp val) val)
+       ((and (symbolp val) val (boundp val)) (symbol-value val))
+       (t nil)))))
+
 (ert-deftest etaf-events-sticky-host-mirrors-header-line ()
-  "A `:sticky top' Host owns the header line and forwards header clicks."
-  (let ((sticky (etaf-ref 'top)) (presses 0))
+  "A `:sticky top' Host mirrors once scrolled off and forwards header clicks."
+  (let ((sticky (etaf-ref 'top))
+        (presses 0)
+        (rows (mapcar (lambda (i) (format "Body line %d" i))
+                      (number-sequence 1 30))))
     (etaf-test-with-mount (runtime (etaf-view
                                     (column
                                      (row :sticky (etaf-value sticky)
                                           (box :on-press (lambda () (cl-incf presses))
                                                "Back")
                                           " Title")
-                                     "Body")))
+                                     (text :for (line rows) :key line (expr line)))))
       (ignore runtime)
-      ;; Batch Emacs formats no mode lines; read the construct's value.
-      (should (symbolp header-line-format))
-      (let* ((header (symbol-value header-line-format))
-             (map (get-text-property 0 'keymap header)))
-        (should (equal (string-trim header) "Back Title"))
-        (funcall (lookup-key map [header-line mouse-1]))
-        (should (= presses 1)))
+      (switch-to-buffer (current-buffer))
+      (should (and (consp header-line-format)
+                   (eq (car header-line-format) :eval)))
+      ;; While row 1 is visible (`window-start' at top), mirror stays hidden.
+      (set-window-start (selected-window) (point-min) t)
+      (should-not (etaf-events-tests--sticky-header-string))
+      ;; Once scrolled past the sticky row, the mirror shows and forwards clicks.
+      (let ((line2 (save-excursion (goto-char (point-min)) (forward-line 1) (point))))
+        (set-window-start (selected-window) line2 t)
+        (let* ((header (etaf-events-tests--sticky-header-string))
+               (map (and header (get-text-property 0 'keymap header))))
+          (should (stringp header))
+          (should (equal (string-trim header) "Back Title"))
+          (funcall (lookup-key map [header-line mouse-1]))
+          (should (= presses 1))))
       (etaf-set-value sticky nil)
       (should-not (local-variable-p 'header-line-format))
       (should-error (etaf-render (etaf-view (box :sticky 'bottom "x")))
                     :type 'etaf-renderer-error))))
+
+(ert-deftest etaf-events-sticky-host-unmount-cleans-header-and-hooks ()
+  "Unmounting a Runtime with `:sticky top' leaves no header-line, remap or hooks."
+  (let ((buffer (generate-new-buffer " *etaf-sticky-unmount*")))
+    (unwind-protect
+        (progn
+          (switch-to-buffer buffer)
+          (etaf-mount buffer
+                      (etaf-view
+                       (column
+                        (row :sticky 'top "Header")
+                        "Body")))
+          (let ((runtime (etaf-runtime-for-buffer buffer)))
+            (with-current-buffer buffer
+              (should (local-variable-p 'header-line-format))
+              (should (assq 'header-line face-remapping-alist))
+              (should (local-variable-p 'window-scroll-functions)))
+            (etaf-unmount runtime)
+            (with-current-buffer buffer
+              (should-not (local-variable-p 'header-line-format))
+              (should-not (assq 'header-line face-remapping-alist))
+              (should-not (delq t (and (local-variable-p 'window-scroll-functions)
+                                       window-scroll-functions)))
+              (should-not (delq t (and (local-variable-p 'post-command-hook)
+                                       post-command-hook)))
+              (should-not (delq t (and (local-variable-p 'window-configuration-change-hook)
+                                       window-configuration-change-hook)))
+              (should-not (window-parameter (selected-window) 'header-line-format)))))
+      (when (buffer-live-p buffer)
+        (when-let* ((rt (etaf-runtime-for-buffer buffer)))
+          (etaf-unmount rt))
+        (kill-buffer buffer)))))
+
+(ert-deftest etaf-events-sticky-host-retained-update-refreshes-span ()
+  "Retained Host updates refresh the sticky span, mirror text and click target."
+  (let ((presses 0)
+        (rows (mapcar (lambda (i) (format "Row %d" i))
+                      (number-sequence 1 30))))
+    (etaf-test-with-mount
+        (runtime (etaf-view
+                  (column
+                   (text :ref 'banner "Banner 1")
+                   (row :sticky 'top
+                        (box :on-press (lambda () (cl-incf presses)) "Act")
+                        (text :ref 'status " 0%"))
+                   (text :for (line rows) :key line (expr line)))))
+      (switch-to-buffer (current-buffer))
+      (let ((win (selected-window)))
+        ;; Initially banner is line 1 and sticky row is line 2; line 3 activates mirror.
+        (let ((line3 (save-excursion (goto-char (point-min)) (forward-line 2) (point))))
+          (set-window-start win line3 t)
+          (let* ((header (etaf-events-tests--sticky-header-string))
+                 (map (and header (get-text-property 0 'keymap header))))
+            (should (stringp header))
+            (should (equal (string-trim header) "Act 0%"))
+            (funcall (lookup-key map [header-line mouse-1]))
+            (should (= presses 1))))
+        ;; Expand banner above from 1 line to 3 lines AND update sticky status text.
+        (should (eq t (etaf-runtime-update-host-contents
+                       runtime
+                       '((banner . "Banner 1\nBanner 2\nBanner 3")
+                         (status . " 50%")))))
+        ;; Line 3 is now inside the banner above the sticky row (line 4): mirror hides.
+        (let ((line3 (save-excursion (goto-char (point-min)) (forward-line 2) (point)))
+              (line5 (save-excursion (goto-char (point-min)) (forward-line 4) (point))))
+          (set-window-start win line3 t)
+          (should-not (etaf-events-tests--sticky-header-string))
+          ;; Line 5 is past the shifted sticky row: mirror shows updated text and click works.
+          (set-window-start win line5 t)
+          (let* ((header (etaf-events-tests--sticky-header-string))
+                 (map (and header (get-text-property 0 'keymap header))))
+            (should (stringp header))
+            (should (equal (string-trim header) "Act 50%"))
+            (funcall (lookup-key map [header-line mouse-1]))
+            (should (= presses 2))))))))
 
 (ert-deftest etaf-events-retained-host-updates ()
   "Retained content and geometry updates change one Host and bump the revision."

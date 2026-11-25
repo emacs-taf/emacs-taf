@@ -441,7 +441,17 @@
     {
       "name": "etaf-events-sticky-host-mirrors-header-line",
       "file": "tests/etaf-events-tests.el",
-      "purpose": "A sticky Host mirrors its first row into the header line and header clicks run its press handler."
+      "purpose": "A sticky Host hides its mirror while visible, mirrors its first row once scrolled off, and forwards header clicks to its press handler."
+    },
+    {
+      "name": "etaf-events-sticky-host-unmount-cleans-header-and-hooks",
+      "file": "tests/etaf-events-tests.el",
+      "purpose": "Unmounting a Runtime with a sticky Host removes buffer-local header-line-format, header-line face remapping, local scroll/window hooks and window parameters."
+    },
+    {
+      "name": "etaf-events-sticky-host-retained-update-refreshes-span",
+      "file": "tests/etaf-events-tests.el",
+      "purpose": "Retained Host content updates above or inside a sticky Host refresh its span, mirrored text and click forwarding positions."
     },
     {
       "name": "etaf-events-retained-host-updates",
@@ -744,6 +754,21 @@
       "purpose": "Invalid render props report a Component call error and unknown handles report a user error."
     },
     {
+      "name": "etaf-video-tests-seek-and-speed-stop-playing-audio",
+      "file": "tests/etaf-video-tests.el",
+      "purpose": "Seeking or changing speed while playing immediately stops the old ffplay sidecar before starting the new aligned audio stream."
+    },
+    {
+      "name": "etaf-video-tests-normalized-source-honors-start-offset",
+      "file": "tests/etaf-video-tests.el",
+      "purpose": "A pre-normalized source plist with :start starts ffmpeg directly at that offset without calling ffprobe."
+    },
+    {
+      "name": "etaf-video-tests-engine-controls-and-mpv-backend",
+      "file": "tests/etaf-video-tests.el",
+      "purpose": "Public engine controls degrade cleanly on ffmpeg and drive real libmpv properties and backward stepping when available."
+    },
+    {
       "name": "etaf-view-mounts-static-and-expression-text",
       "file": "tests/etaf-view-tests.el",
       "purpose": "A mounted View paints static text and updates an expression in place."
@@ -1024,6 +1049,36 @@
       "purpose": "Values convert over registered easings; invalid inputs signal."
     },
     {
+      "name": "etaf-animation-transition-delay-waits-before-moving",
+      "file": "tests/etaf-animation-tests.el",
+      "purpose": "A delayed transition holds its starting value until its delay elapses, then interpolates to the target."
+    },
+    {
+      "name": "etaf-animation-spring-physics-retarget-and-presets",
+      "file": "tests/etaf-animation-tests.el",
+      "purpose": "Springs animate numbers and length shapes with damped physics, presets, retargeting and finish/disabled semantics."
+    },
+    {
+      "name": "etaf-animation-tick-reports-dt-elapsed-and-interval",
+      "file": "tests/etaf-animation-tests.el",
+      "purpose": "Shared-clock tick subscriptions report dt and elapsed time, respect interval throttling and stop cleanly."
+    },
+    {
+      "name": "etaf-animation-timeline-sequences-parallel-and-finish",
+      "file": "tests/etaf-animation-tests.el",
+      "purpose": "Timelines execute delays, callbacks, eased progress runs and parallel groups in order and resolve remaining steps on finish or when animations are disabled."
+    },
+    {
+      "name": "etaf-animation-quantize-and-oklab-color-space",
+      "file": "tests/etaf-animation-tests.el",
+      "purpose": "Quantization snaps numeric values and lengths to a step grid, and OKLab color blending produces valid perceptual midpoints."
+    },
+    {
+      "name": "etaf-animation-pause-hidden-holds-undisplayed-buffer",
+      "file": "tests/etaf-animation-tests.el",
+      "purpose": "When pause-hidden is enabled, animations owned by an undisplayed Runtime buffer pause and resume seamlessly when shown again."
+    },
+    {
       "name": "etaf-display-metrics-update-fixed-viewport-with-retained-state",
       "file": "tests/etaf-display-tests.el",
       "purpose": "Reactive display metrics update on zoom even with a fixed viewport without resetting Component state."
@@ -1202,6 +1257,96 @@
       "name": "etaf-keys-drag-step-measures-the-canvas-face",
       "file": "tests/etaf-keys-tests.el",
       "purpose": "A keyboard drag step travels canvas cells rather than the frame's default face, so a text scale does not move a separator the wrong distance."
+    },
+    {
+      "name": "etaf-presentation-runtime-hooks-and-translate-prop",
+      "file": "tests/etaf-presentation-tests.el",
+      "purpose": "Runtime mount, after-commit and unmount hooks isolate presentation-only flushes and validate the :translate semantic Host property."
+    },
+    {
+      "name": "etaf-presentation-text-override-preserves-authoritative-source",
+      "file": "tests/etaf-presentation-tests.el",
+      "purpose": "Text override presentations replace displayed text without altering authoritative Host tree text, restore on clear, and yield when application text changes."
+    },
+    {
+      "name": "etaf-presentation-container-override-keeps-app-updates-and-restores",
+      "file": "tests/etaf-presentation-tests.el",
+      "purpose": "Container override presentations park real children, forward reactive edits, dispatch presses by Host ID, and restore updated children cleanly."
+    },
+    {
+      "name": "etaf-presentation-companion-inside-survives-app-updates",
+      "file": "tests/etaf-presentation-tests.el",
+      "purpose": "companion-inside attachments stay pinned inside a box Host, patch in place, survive application text updates, and clear cleanly."
+    },
+    {
+      "name": "etaf-presentation-companion-after-and-beside-preserve-list-reconciliation",
+      "file": "tests/etaf-presentation-tests.el",
+      "purpose": "companion-after and companion-beside wrappers survive keyed list reordering and dispose cleanly when their Host unmounts."
+    },
+    {
+      "name": "etaf-presentation-batch-skips-stale-ids-and-validates-specs",
+      "file": "tests/etaf-presentation-tests.el",
+      "purpose": "Batch presentation updates skip unmounted Host IDs cleanly and signal etaf-runtime-error on invalid keys or specs."
+    },
+    {
+      "name": "etaf-presentation-after-flush-and-live-host-geometries",
+      "file": "tests/etaf-presentation-tests.el",
+      "purpose": "etaf-runtime-after-flush-functions fires on container scroll while skipping presentation flushes, and etaf-runtime-host-geometries tracks live scroll offsets and clipping visibility."
+    },
+    {
+      "name": "etaf-presentation-multi-owner-coexistence-and-priority-order",
+      "file": "tests/etaf-presentation-tests.el",
+      "purpose": "Multiple presentation owners coexist on the same Host with priority-ordered companions, additive decorations, priority-stacked overrides and isolated per-key clearing."
+    },
+    {
+      "name": "etaf-presentation-decorate-spans-survive-app-text-updates",
+      "file": "tests/etaf-presentation-tests.el",
+      "purpose": "Text span decorations compose additive faces over rendered text without mutating authoritative source text and survive reactive application updates."
+    },
+    {
+      "name": "etaf-presentation-named-root-overlays-coexist-without-commit-loop",
+      "file": "tests/etaf-presentation-tests.el",
+      "purpose": "Named root overlays coexist independently, patch in place, skip commit and flush hooks, and stay excluded from the application Host tree."
+    },
+    {
+      "name": "etaf-presentation-runtime-meta-and-reactive-meta-hook",
+      "file": "tests/etaf-presentation-tests.el",
+      "purpose": "Runtime metadata mounts before mount hooks, tracks reactive refs through etaf-runtime-meta-change-functions, and disposes cleanly on unmount."
+    },
+    {
+      "name": "etaf-presentation-semantic-actions-text-offset-and-key-layers",
+      "file": "tests/etaf-presentation-tests.el",
+      "purpose": "Semantic Host focus, scroll, text offset/region queries, and extension key layers honor priority, reject reserved keys and appear in keyboard help."
+    },
+    {
+      "name": "etaf-mount-text-selection-enables-and-restores-region",
+      "file": "tests/etaf-app-tests.el",
+      "purpose": "`etaf-mount' validates `:text-selection', enables native Emacs mark/region selection on the mounted canvas when t, and restores the prior buffer-local setting on unmount."
+    },
+    {
+      "name": "etaf-inspect-tree-and-runtime-list-track-mounted-runtimes",
+      "file": "tests/etaf-inspect-tests.el",
+      "purpose": "`etaf-runtime-list' tracks live mounted Runtimes and `etaf-runtime-inspect-tree' exposes unified Component and Host trees cleanly."
+    },
+    {
+      "name": "etaf-inspect-host-and-point-hit-return-metrics-style-and-spans",
+      "file": "tests/etaf-inspect-tests.el",
+      "purpose": "`etaf-runtime-host-id-at' resolves painted positions to Host IDs and `etaf-runtime-inspect-host' returns box metrics, Component-attributed ECSS provenance and exact row spans."
+    },
+    {
+      "name": "etaf-inspect-component-bindings-and-live-ref-mutation",
+      "file": "tests/etaf-inspect-tests.el",
+      "purpose": "`etaf-runtime-inspect-component' exposes named reactive bindings, `etaf-runtime-set-component-binding' updates writable refs while rejecting computed bindings, and `etaf-runtime-commit-summary' reports commit metrics."
+    },
+    {
+      "name": "etaf-inspect-focus-reports-stops-regions-and-help",
+      "file": "tests/etaf-inspect-tests.el",
+      "purpose": "`etaf-runtime-inspect-focus' reports focused Host identity, Tab stop order, declared regions and effective key help data."
+    },
+    {
+      "name": "etaf-video-tests-master-clock-holds-video-until-audio-ready",
+      "file": "tests/etaf-video-tests.el",
+      "purpose": "The ffmpeg video backend shows Frame 0 immediately, holds while ffplay reports nan during startup, and locks frame presentation to ffplay's live audio clock."
     }
   ]
 }

@@ -216,6 +216,16 @@ Ebox 入口是没有 Runtime 层的同一批会话：它们直接寻址已挂载
 
 **参见。** [文本输入](text-input.md)、[焦点](focus.md)。
 
+#### Variable: ebox-allow-text-selection
+
+已挂载画布是否允许 Emacs 原生 mark 与指针文本选择。
+
+**语义。** 默认为 nil，使画布类应用在指针按压或 `set-mark-command` 时不会把布局单元绘成选区。把它设为缓冲区局部非 nil（或向 `etaf-mount` 传入 `:text-selection t`）后，阅读与浏览器缓冲区可以正常使用原生 mark、Shift 方向选区、鼠标拖拽选区与 `kill-ring-save`，同时交互控件仍保留自己的点击与拖拽手势。
+
+**返回。** 不适用；变量是一个布尔值。
+
+**参见。** `etaf-mount`、`etaf-cursor-follows-input-modality`。
+
 #### Variable: ebox-input-edit-commands
 
 会话 `:keymap` 绑定它们时编辑会话值的命令。

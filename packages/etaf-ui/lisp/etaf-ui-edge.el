@@ -90,7 +90,9 @@ caller's default slot is the pane under the rule."
                               items)
                      "a key present in :items" 'etaf-edge-tabs))
   :render
-  (let ((colours (etaf-ui--edge-colors)))
+  (let* ((colours (etaf-ui--edge-colors))
+         (hover-bg (etaf-theme-token :ui-panel-bg "#F6F7F9"
+                                     #'etaf-ui--state-hover-shift)))
     (etaf-view
      (box :class "etaf-edge-tabs" :width width :ref ref :margin-top margin-top
        :border (etaf-ui--style-border (or accent
@@ -113,7 +115,7 @@ caller's default slot is the pane under the rule."
                      :aria-label (plist-get item :label)
                      ;; The chosen tab is a filled block, the way a printed
                      ;; index tab is: the accent paints the cell and the page
-                     ;; ink sits on it.
+                     ;; ink sits on it.  Only unselected tabs take pointer hover.
                      :color (if selected
                                 (etaf-ui-color-legible
                                  (plist-get colours :ui-panel-bg)
@@ -121,6 +123,9 @@ caller's default slot is the pane under the rule."
                               (plist-get colours :ui-muted-fg))
                      :background-color
                      (and selected (or accent (plist-get colours :ui-accent)))
+                     :pointer (unless selected 'hand)
+                     :hover-style (unless selected
+                                    (list :background-color hover-bg))
                      :font-weight (if selected 'bold nil)
                      :padding-inline '(ch 1)
                      :on-press (lambda ()

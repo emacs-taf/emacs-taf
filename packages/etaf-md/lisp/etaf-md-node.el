@@ -22,6 +22,8 @@
 (require 'cl-lib)
 (require 'subr-x)
 
+(declare-function etaf-md-env-node "etaf-md-env" (env))
+
 (defconst etaf-md-contract 1
   "Version of the document-side attribute table this build accepts.")
 
@@ -352,9 +354,9 @@ disappears from the registry."
 
 (defun etaf-md-set-attr (selector rules)
   "Install RULES for SELECTOR, or remove them when RULES is nil.
-SELECTOR is a list such as (heading) or (heading :level 2); RULES is a list of
-(KEY VALUE) pairs.  A second call for the same selector replaces it, keeping
-its place in the order."
+SELECTOR is a list matching a defined container node such as `(callout)' or
+`(callout :kind warning)'; RULES is a list of (KEY VALUE) pairs.  A second call
+for the same selector replaces it, keeping its place in the order."
   (unless (and (listp selector) (symbolp (car selector)))
     (signal 'etaf-md-error
             (list (format "A selector is a list starting with a type: %S"
@@ -579,47 +581,6 @@ page reports one line, never aborting."
   "Return NODE's declaration and rule problems, in that order."
   (append (etaf-md--problems node) (etaf-md--rule-problems node)))
 
-;;; Derive
-
-(defun etaf-md--roman (number)
-  "Return NUMBER as an upper-case Roman numeral."
-  (let ((specs '((1000 . "M") (900 . "CM") (500 . "D") (400 . "CD")
-                 (100 . "C") (90 . "XC") (50 . "L") (40 . "XL")
-                 (10 . "X") (9 . "IX") (5 . "V") (4 . "IV") (1 . "I")))
-        (out ""))
-    (dolist (spec specs out)
-      (while (>= number (car spec))
-        (setq out (concat out (cdr spec)))
-        (setq number (- number (car spec)))))))
-
-(defun etaf-md--outline-number (counters level numbering)
-  "Return LEVEL's section number from COUNTERS under NUMBERING."
-  (unless (eq numbering 'none)
-    (let ((nums (cl-subseq counters 1 (1+ level))))
-      (mapconcat
-       (lambda (n)
-         (pcase numbering
-           ('lower-roman (downcase (etaf-md--roman n)))
-           ('upper-alpha (format "%c" (+ 64 n)))
-           (_ (number-to-string n))))
-       nums "."))))
-
-(defun etaf-md-derive-numbers (nodes)
-  "Write a `number' on each heading in NODES, in document order.
-The number is nil when that heading's resolved `numbering' is none.  Returns
-NODES."
-  (let ((counters (make-vector 7 0)))
-    (dolist (node nodes nodes)
-      (when (eq (etaf-md-node-type node) 'heading)
-        (let* ((level (or (etaf-md--value node :level) 1))
-               (numbering (or (etaf-md--value node :numbering) 'decimal)))
-          (aset counters level (1+ (aref counters level)))
-          (cl-loop for index from (1+ level) below (length counters)
-                   do (aset counters index 0))
-          (setf (etaf-md-node-attrs node)
-                (plist-put (etaf-md-node-attrs node) :number
-                           (etaf-md--outline-number counters level numbering))))))))
-
 ;;; Inspection
 
 (defun etaf-md-describe-nodes (&optional type)
@@ -663,7 +624,6 @@ With TYPE, describe only that one."
   "Load every `.el' file in `etaf-md-node-directory', in file-name order.
 A missing directory is not an error: most readers keep their definitions in
 their init file."
-  (interactive)
   (when (file-directory-p etaf-md-node-directory)
     (dolist (file (sort (directory-files etaf-md-node-directory t "\\.el\\'")
                         #'string<))
