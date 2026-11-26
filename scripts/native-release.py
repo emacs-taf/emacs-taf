@@ -28,6 +28,7 @@ NAME_RE = re.compile(r"[a-z][a-z0-9-]*\Z")
 VERSION_RE = re.compile(r"[0-9]+(?:\.[0-9]+)*\Z")
 SHA256_RE = re.compile(r"[0-9a-f]{64}\Z")
 FILE_RE = re.compile(r"[a-z0-9][a-z0-9._-]*\.(?:dylib|so|dll)\Z")
+LIB_NAME_RE = re.compile(r"[a-z0-9][a-z0-9._-]*\.(?:dylib|so(?:\.[0-9]+)*|dll)\Z")
 HTTPS_RE = re.compile(r"https://[^\s\"']+\Z")
 
 VALID_PLATFORMS = (
@@ -63,13 +64,15 @@ NATIVE_PACKAGES = {
     },
     "etaf": {
         "module": "etaf-video-mpv",
-        "version": "1",
-        "description": "Cross-platform libmpv native video playback module",
+        "version": "2",
+        "description": "Cross-platform libmpv native GPU video playback module",
         "platforms": ("darwin-arm64", "darwin-x86_64", "linux-x86_64", "linux-arm64", "windows-x86_64"),
         "smoke": (
             '(progn '
             '(unless (fboundp (quote etaf-video-mpv--native-available-p)) '
-            '  (error "etaf-video-mpv--native-available-p missing")))'
+            '  (error "etaf-video-mpv--native-available-p missing")) '
+            '(unless (fboundp (quote etaf-video-mpv--native-gpu-available-p)) '
+            '  (error "etaf-video-mpv--native-gpu-available-p missing")))'
         ),
     },
     "ekp": {
@@ -190,6 +193,38 @@ def validate_manifest(data: dict, expected_package: str | None = None) -> list[s
             size = entry.get("size")
             if not isinstance(size, int) or isinstance(size, bool) or size <= 0:
                 errors.append(f"{eprefix}: size must be a positive integer")
+            libraries = entry.get("libraries")
+            if libraries is not None:
+                if not isinstance(libraries, list):
+                    errors.append(f"{eprefix}: libraries must be a list")
+                else:
+                    seen_libs: set[str] = set()
+                    for lidx, lib in enumerate(libraries):
+                        lprefix = f"{eprefix}.libraries[{lidx}]"
+                        if not isinstance(lib, dict):
+                            errors.append(f"{lprefix}: library record must be an object")
+                            continue
+                        lname = lib.get("name")
+                        if not isinstance(lname, str) or not LIB_NAME_RE.fullmatch(lname):
+                            errors.append(f"{lprefix}: invalid library name: {lname!r}")
+                        elif lname in seen_libs:
+                            errors.append(f"{lprefix}: duplicate library name: {lname}")
+                        else:
+                            seen_libs.add(lname)
+                        lfile = lib.get("file")
+                        if (not isinstance(lfile, str) or not FILE_RE.fullmatch(lfile)
+                                or not lfile.endswith(PLATFORM_SUFFIX[plat])):
+                            errors.append(f"{lprefix}: invalid artifact filename: {lfile!r}")
+                        lurls = lib.get("urls")
+                        if (not isinstance(lurls, list) or not lurls
+                                or not all(isinstance(u, str) and HTTPS_RE.fullmatch(u) for u in lurls)):
+                            errors.append(f"{lprefix}: urls must be a nonempty list of https:// URLs")
+                        ldigest = lib.get("sha256")
+                        if not isinstance(ldigest, str) or not SHA256_RE.fullmatch(ldigest):
+                            errors.append(f"{lprefix}: sha256 must be 64 lowercase hex digits")
+                        lsize = lib.get("size")
+                        if not isinstance(lsize, int) or isinstance(lsize, bool) or lsize <= 0:
+                            errors.append(f"{lprefix}: size must be a positive integer")
     return errors
 
 
@@ -354,6 +389,78 @@ def build_package(package: str, output: Path, emacs: str,
     return record
 
 
+def register_module(package: str, plat: str, source: Path, output: Path) -> dict:
+    """Stage a prebuilt native module binary under OUTPUT and write its record."""
+    if package not in NATIVE_PACKAGES:
+        raise ValueError(f"Unknown native package: {package}; choose from {sorted(NATIVE_PACKAGES)}")
+    spec = NATIVE_PACKAGES[package]
+    if plat not in spec["platforms"]:
+        raise ValueError(f"{package}: platform {plat} is not in supported platforms {spec['platforms']}")
+    if not source.is_file():
+        raise ValueError(f"Missing native module binary: {source}")
+    module_name = spec["module"]
+    version = spec["version"]
+    out_filename = artifact_filename(module_name, version, plat)
+    dest = output / package / version / out_filename
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(source, dest)
+    dest.chmod(0o755)
+    record = {
+        "package": package,
+        "module": module_name,
+        "version": version,
+        "platform": plat,
+        "file": out_filename,
+        "path": f"{package}/{version}/{out_filename}",
+        "sha256": sha256_file(dest),
+        "size": dest.stat().st_size,
+    }
+    meta_dir = output / "records"
+    meta_dir.mkdir(parents=True, exist_ok=True)
+    (meta_dir / f"{package}-{module_name}-{plat}.json").write_text(
+        json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return record
+
+
+def register_library(package: str, plat: str, name: str, module: str,
+                     source: Path, output: Path) -> dict:
+    """Stage a companion shared library binary under OUTPUT and write its record."""
+    if package not in NATIVE_PACKAGES:
+        raise ValueError(f"Unknown native package: {package}; choose from {sorted(NATIVE_PACKAGES)}")
+    spec = NATIVE_PACKAGES[package]
+    if plat not in spec["platforms"]:
+        raise ValueError(f"{package}: platform {plat} is not in supported platforms {spec['platforms']}")
+    if not LIB_NAME_RE.fullmatch(name):
+        raise ValueError(f"Invalid companion library filename: {name!r}")
+    if not NAME_RE.fullmatch(module):
+        raise ValueError(f"Invalid companion library module id: {module!r}")
+    if not source.is_file():
+        raise ValueError(f"Missing companion library binary: {source}")
+    version = spec["version"]
+    out_filename = artifact_filename(module, version, plat)
+    dest = output / package / version / out_filename
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(source, dest)
+    dest.chmod(0o644)
+    record = {
+        "kind": "library",
+        "package": package,
+        "module": module,
+        "name": name,
+        "version": version,
+        "platform": plat,
+        "file": out_filename,
+        "path": f"{package}/{version}/{out_filename}",
+        "sha256": sha256_file(dest),
+        "size": dest.stat().st_size,
+    }
+    meta_dir = output / "records"
+    meta_dir.mkdir(parents=True, exist_ok=True)
+    (meta_dir / f"{package}-lib-{module}-{plat}.json").write_text(
+        json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return record
+
+
 def assemble_manifests(input_dir: Path, *, write_packages: bool = False,
                        stage: Path | None = None, replace: bool = False,
                        base_url: str = "https://etaf.top/native",
@@ -391,16 +498,45 @@ def assemble_manifests(input_dir: Path, *, write_packages: bool = False,
             old = json.loads(manifest_path.read_text(encoding="utf-8"))
             for mod in old.get("modules", ()):
                 if mod.get("name") == spec["module"] and mod.get("version") == spec["version"]:
-                    existing_platforms = dict(mod.get("platforms") or {})
-        for rec in items:
+                    existing_platforms = {k: dict(v) for k, v in (mod.get("platforms") or {}).items()}
+        module_items = [r for r in items if r.get("kind", "module") == "module"]
+        lib_items = [r for r in items if r.get("kind") == "library"]
+        for rec in module_items:
             if rec["module"] != spec["module"] or rec["version"] != spec["version"]:
                 raise ValueError(f"{pkg}: record module/version does not match registry")
-            existing_platforms[rec["platform"]] = {
+            prev = existing_platforms.get(rec["platform"])
+            entry = {
                 "file": rec["file"],
                 "urls": default_urls(pkg, rec["version"], rec["file"], base_url, github_org),
                 "sha256": rec["sha256"],
                 "size": rec["size"],
             }
+            if not replace and prev and "libraries" in prev:
+                entry["libraries"] = prev["libraries"]
+            existing_platforms[rec["platform"]] = entry
+        libs_by_plat: dict[str, dict[str, dict]] = {}
+        for rec in lib_items:
+            if rec["version"] != spec["version"]:
+                raise ValueError(f"{pkg}: library record version does not match registry")
+            plat = rec["platform"]
+            if plat not in existing_platforms:
+                raise ValueError(f"{pkg}: companion library for {plat} has no module entry")
+            if plat not in libs_by_plat:
+                libs_by_plat[plat] = {
+                    lib["name"]: lib
+                    for lib in existing_platforms[plat].get("libraries", ())
+                } if not replace else {}
+            libs_by_plat[plat][rec["name"]] = {
+                "name": rec["name"],
+                "file": rec["file"],
+                "urls": default_urls(pkg, rec["version"], rec["file"], base_url, github_org),
+                "sha256": rec["sha256"],
+                "size": rec["size"],
+            }
+        for plat, lib_map in libs_by_plat.items():
+            existing_platforms[plat]["libraries"] = [
+                lib_map[name] for name in sorted(lib_map)
+            ]
         doc = {
             "schema": 1,
             "package": pkg,
@@ -492,6 +628,20 @@ def main() -> int:
                          help="Target architecture (macOS supports cross-compiling arm64 and x86_64)")
     p_build.add_argument("--skip-smoke", action="store_true")
 
+    p_register = sub.add_parser("register", help="Stage a remotely built native module binary and write its record")
+    p_register.add_argument("--package", required=True)
+    p_register.add_argument("--platform", required=True, choices=VALID_PLATFORMS)
+    p_register.add_argument("--source", type=Path, required=True)
+    p_register.add_argument("--output", type=Path, required=True)
+
+    p_library = sub.add_parser("library", help="Stage a companion shared library binary and write its record")
+    p_library.add_argument("--package", required=True)
+    p_library.add_argument("--platform", required=True, choices=VALID_PLATFORMS)
+    p_library.add_argument("--name", required=True, help="Runtime filename in cache directory (e.g. libmpv-2.dll)")
+    p_library.add_argument("--module", required=True, help="Artifact identifier prefix (e.g. libmpv-2)")
+    p_library.add_argument("--source", type=Path, required=True)
+    p_library.add_argument("--output", type=Path, required=True)
+
     p_manifest = sub.add_parser("manifest", help="Assemble package manifests and staged native tree")
     p_manifest.add_argument("--input", type=Path, required=True)
     p_manifest.add_argument("--write-packages", action="store_true",
@@ -522,6 +672,16 @@ def main() -> int:
                                arch=args.arch, skip_smoke=args.skip_smoke)
                  for pkg in targets]
         print(json.dumps({"built": built}, indent=2))
+        return 0
+    if args.command == "register":
+        record = register_module(args.package, args.platform,
+                                 args.source.resolve(), args.output.resolve())
+        print(json.dumps(record, indent=2))
+        return 0
+    if args.command == "library":
+        record = register_library(args.package, args.platform, args.name,
+                                  args.module, args.source.resolve(), args.output.resolve())
+        print(json.dumps(record, indent=2))
         return 0
     if args.command == "manifest":
         result = assemble_manifests(

@@ -972,6 +972,107 @@ class InstallTests(unittest.TestCase):
                  wide-target-w narrow-target-w))))))
 """)
 
+    def test_install_native_downloads_companion_libraries_before_activating_module(self):
+        import functools
+        import hashlib
+        from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+        import threading
+
+        mod_payload = b"prebuilt-windows-etaf-video-mpv-v2"
+        lib_payload = b"prebuilt-windows-libmpv-2-companion-dll"
+        mod_sha = hashlib.sha256(mod_payload).hexdigest()
+        lib_sha = hashlib.sha256(lib_payload).hexdigest()
+        mod_file = "etaf-video-mpv-v2-windows-x86_64.dll"
+        lib_file = "libmpv-2-v2-windows-x86_64.dll"
+
+        etaf_src = self.sources / "etaf"
+        (etaf_src / "native").mkdir(exist_ok=True)
+        (etaf_src / "native/manifest.json").write_text(json.dumps({
+            "schema": 1,
+            "package": "etaf",
+            "modules": [{
+                "name": "etaf-video-mpv",
+                "version": "2",
+                "description": "Fixture Windows GPU mpv module with companion libmpv",
+                "platforms": {
+                    "windows-x86_64": {
+                        "file": mod_file,
+                        "urls": [f"https://etaf.top/native/etaf/2/{mod_file}"],
+                        "sha256": mod_sha,
+                        "size": len(mod_payload),
+                        "libraries": [{
+                            "name": "libmpv-2.dll",
+                            "file": lib_file,
+                            "urls": [f"https://etaf.top/native/etaf/2/{lib_file}"],
+                            "sha256": lib_sha,
+                            "size": len(lib_payload),
+                        }],
+                    }
+                },
+            }],
+        }, indent=2) + "\n")
+
+        shutil.rmtree(self.archive)
+        command = [sys.executable, str(ROOT / "scripts/package_archive.py"), "build",
+                   "--directory", str(self.archive)]
+        for source in sorted(self.sources.iterdir()):
+            command.extend(["--package", f"{source.name}={source}"])
+        command.extend(["--resource", "etaf=native/manifest.json"])
+        result = subprocess.run(command, capture_output=True, text=True, timeout=20)
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+
+        native_root = self.base / "native-http-libs"
+        (native_root / "etaf" / "2").mkdir(parents=True)
+        (native_root / "etaf" / "2" / mod_file).write_bytes(mod_payload)
+        (native_root / "etaf" / "2" / lib_file).write_bytes(lib_payload)
+
+        class QuietHandler(SimpleHTTPRequestHandler):
+            def log_message(self, *_args):
+                pass
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0),
+                                     functools.partial(QuietHandler, directory=str(native_root)))
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        self.addCleanup(lambda: (server.shutdown(), server.server_close(), thread.join(timeout=5)))
+        native_url = f"http://127.0.0.1:{server.server_port}"
+        cache_dir = self.base / "native-cache-libs"
+
+        self.run_lisp(f"""
+(setq etaf-install-auto-native nil
+      etaf-install-native-directory {json.dumps(str(cache_dir))}
+      etaf-install-native-url {json.dumps(native_url)}
+      etaf-install--native-platform-override "windows-x86_64")
+(etaf-install 'etaf t)
+(let ((loaded nil)
+      (lib-existed-before-load nil)
+      (lib-dest (expand-file-name "etaf/2/libmpv-2.dll" {json.dumps(str(cache_dir))})))
+  (cl-letf (((symbol-function 'module-load)
+             (lambda (path)
+               (setq lib-existed-before-load (file-exists-p lib-dest))
+               (push path loaded)
+               t)))
+    (let ((report (etaf-install-native 'etaf)))
+      (unless (= 2 (length (plist-get report :installed)))
+        (error "Expected module + companion library installed: %S" report))
+      (unless lib-existed-before-load
+        (error "Companion libmpv-2.dll was not installed before module-load"))
+      (unless (= 1 (length loaded))
+        (error "module-load must run only on the dynamic module, not companion libraries: %S" loaded))
+      (unless (eq (plist-get (etaf-install-status 'etaf) :native) 'installed)
+        (error "Expected native installed status after module + companion library"))
+      ;; Removing companion library must drop status back to `available'.
+      (delete-file lib-dest)
+      (unless (eq (plist-get (etaf-install-status 'etaf) :native) 'available)
+        (error "Missing companion library did not revert native status to available"))
+      ;; Re-running etaf-install-native fetches only the missing companion library.
+      (let ((repair (etaf-install-native 'etaf)))
+        (unless (equal (mapcar #'car (plist-get repair :installed)) '("libmpv-2.dll"))
+          (error "Repair should re-download only missing companion library: %S" repair))
+        (unless (equal (mapcar #'car (plist-get repair :skipped)) '("etaf-video-mpv"))
+          (error "Repair should skip already cached dynamic module: %S" repair))))))
+""")
+
 
 if __name__ == "__main__":
     unittest.main()

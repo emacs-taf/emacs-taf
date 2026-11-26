@@ -180,7 +180,7 @@
 
 **参数。** HANDLE 是注册的符号。
 
-**语义。** plist 描述调用时的会话：`:handle`、`:mode`（`image` 退回后的有效渲染模式）、`:source`（文件名、URL 字符串或符号 `demo`）、`:playing`、`:position`（秒；seek 基准加帧流推进的耗时，截断到时长）、`:duration`、`:speed`、`:format`（生产者的帧格式：`gray`、`rgb24`、`bgra` 或 `mjpeg`）、`:width` 与 `:height`（生产者像素）、`:display-fps`、`:source-fps`、`:received`、`:presented`、`:dropped`、`:audio`、`:buffering`、`:error` 与 `:ended`。返回后结果不再指向会话，可以安全保存与比较。`:audio` 报告会话的音频设置；没有音轨的源即使它为真也保持静音。等待首帧或网络流卡顿时 `:buffering` 为真；生产者非零退出时 `:error` 保存解码器诊断信息。
+**语义。** plist 描述调用时的会话：`:handle`、`:engine`（`mpv` 或 `ffmpeg`）、`:render-backend`（`gpu`、`canvas` 或 `image`）、`:mode`（`image` 退回后的有效渲染模式）、`:source`（文件名、URL 字符串或符号 `demo`）、`:playing`、`:position`（秒；seek 基准加帧流推进的耗时，截断到时长）、`:duration`、`:speed`、`:format`（生产者的帧格式：`gpu`、`tiff-file`、`tiff`、`ppm`、`canvas`、`gray`、`rgb24`、`bgra` 或 `mjpeg`）、`:width` 与 `:height`（生产者像素）、`:display-fps`、`:source-fps`、`:received`、`:presented`、`:dropped`、`:audio`、`:buffering`、`:error` 与 `:ended`。返回后结果不再指向会话，可以安全保存与比较。`:audio` 报告会话的音频设置；没有音轨的源即使它为真也保持静音。等待首帧或网络流卡顿时 `:buffering` 为真；生产者非零退出时 `:error` 保存解码器诊断信息。
 
 **返回。** detached 状态 plist。
 
@@ -286,7 +286,7 @@
 
 视频帧到达屏幕所用的渲染后端。
 
-**语义。** 值默认 `image`：每帧发布一张缩放后的 JPEG，经保留的 Host 内容写入画布，任何能显示图像的 Emacs 都能用。`canvas` 把 BGRA 帧读进一张 Emacs canvas 图像，只刷新它的像素缓冲，不再逐帧编码、解码或发布内容；它要求 Emacs 具备 `canvas` 图像类型（Emacs 32，或打了 canvas 补丁的 31）以及编译好的 `native/etaf-video-canvas` 模块。在包根目录执行 `sh native/build-video-canvas-module.sh` 即可编译。脚本读取 `CC` 与 `EMACS_MODULE_INCLUDE`，把模块写在源码旁边。`auto` 在两者都满足时选 `canvas`，否则选 `image`。能力不满足时本变量不会导致失败：缺图像类型、模块加载失败或画布不在图形 frame 里，都静默回退 `image`。`ascii` 与 `color` 模式不受影响。
+**语义。** 值默认 `auto`：在实时图形 frame 中，当 `libmpv` 与平台原生 GPU 渲染层就绪时优先使用 `gpu` 硬件视频层（macOS 上基于 `CAOpenGLLayer` + VideoToolbox、Windows 上基于透明透传子 `HWND` + WGL OpenGL、Linux 上基于 X11 `XShape` + EGL/GLX 或 Wayland `wl_subsurface` + EGL，均无需重新编译 Emacs），否则在具备 `canvas` 图像类型与 `native/etaf-video-canvas` 模块时使用 `canvas`，再否则回退到 `image`。`gpu` 请求原生硬件 GPU 层（鼠标与键盘事件全部透传给 Emacs；遇到同 Buffer 弹窗或遮罩覆盖画布时自动抓取单帧铺底并暂时让位）。`canvas` 把 BGRA 帧读进一张 Emacs canvas 图像并原地刷新像素缓冲；在包根目录执行 `sh native/build-video-canvas-module.sh` 可编译该模块。`image` 强制走纯 Emacs 图像管线（`libmpv` 下使用异步 TIFF 文件环，`ffmpeg` 下使用缩放 JPEG），任何能显示图像的 Emacs 都能工作。能力不满足或非图形 frame 会静默回退 `image`。`ascii` 与 `color` 模式不受影响。
 
 **性能。** canvas 缓冲保持在逻辑分辨率：macOS 的 NS 后端在每次刷新时逐像素上传，设备分辨率的缓冲会让每帧成本翻四倍而画布上没有可见收益。
 
@@ -322,7 +322,17 @@
 
 **返回。** 就绪时为 `t`，否则为 nil。
 
-**参见。** `etaf-video-engine`、`etaf-video-mpv-library`。
+**参见。** `etaf-video-gpu-available-p`、`etaf-video-engine`、`etaf-video-mpv-library`。
+
+#### Function: etaf-video-gpu-available-p ()
+
+当平台原生硬件 GPU 视频层就绪时返回非 nil。
+
+**语义。** 检查 `etaf-video-mpv-available-p` 已就绪且当前图形 Emacs 会话支持平台原生 GPU 视频层（macOS 的 `CAOpenGLLayer` + VideoToolbox、Windows 的子 `HWND` + WGL OpenGL、Linux 的 X11 + EGL/GLX 或 Wayland `wl_subsurface` + EGL）。在终端、批处理或尚未提供原生 GPU 层的平台上静默返回 nil。
+
+**返回。** 就绪时为 `t`，否则为 nil。
+
+**参见。** `etaf-video-mpv-available-p`、`etaf-video-render-backend`、`etaf-video-state`。
 
 #### Function: etaf-video-set-property (handle name value)
 

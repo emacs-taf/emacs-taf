@@ -114,14 +114,21 @@ def published_digests(url="https://etaf.top/packages/manifest.json", timeout=30)
     return {item["file"]: item["sha256"] for item in manifest.get("packages", ())}
 
 
-def published_native_digests(url="https://etaf.top/native/manifest.json", timeout=30):
-    """Return {relpath: sha256} for hosted native binaries, or {} when unreadable."""
+def published_native_manifest(url="https://etaf.top/native/manifest.json", timeout=30):
+    """Return the currently published native manifest dict, or None when unreadable."""
     from urllib.request import ProxyHandler, build_opener
     try:
         opener = build_opener(ProxyHandler({}))
         with opener.open(url, timeout=timeout) as response:
-            manifest = json.loads(response.read())
+            return json.loads(response.read())
     except Exception:
+        return None
+
+
+def published_native_digests(url="https://etaf.top/native/manifest.json", timeout=30):
+    """Return {relpath: sha256} for hosted native binaries, or {} when unreadable."""
+    manifest = published_native_manifest(url=url, timeout=timeout)
+    if not isinstance(manifest, dict):
         return {}
     return {item["path"]: item["sha256"] for item in manifest.get("artifacts", ())}
 
@@ -154,7 +161,16 @@ def publish(args):
                             "verify", "--stage", str(native_input.resolve())],
                            check=True, timeout=120)
             shutil.copytree(native_input.resolve(), work / "native")
-            native_report = archive_pages.native_pages(work / "native")
+            local_manifest = json.loads((work / "native" / "manifest.json").read_text(encoding="utf-8"))
+            remote_manifest = published_native_manifest()
+            merged_artifacts = {}
+            if isinstance(remote_manifest, dict):
+                for item in remote_manifest.get("artifacts", ()):
+                    merged_artifacts[item["path"]] = item
+            for item in local_manifest.get("artifacts", ()):
+                merged_artifacts[item["path"]] = item
+            page_manifest = {"schema": 1, "artifacts": list(merged_artifacts.values())}
+            native_report = archive_pages.native_pages(work / "native", manifest=page_manifest)
             print(f"Native index page for {native_report['packages']} package(s), "
                   f"{native_report['artifacts']} artifact(s)")
         elif package_input:

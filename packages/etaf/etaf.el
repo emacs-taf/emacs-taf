@@ -2298,13 +2298,15 @@
 ;; `image' frames so Retina screens stay sharp.  DISPLAY-FPS is nil (use
 ;; `etaf-video-display-fps') or a positive integer presentation-rate cap.
 ;; `etaf-video-render-backend' selects how a graphical frame reaches the
-;; screen: `image' (the default) publishes one scaled JPEG per frame through
-;; the retained Host content; `canvas' reads BGRA frames into one Emacs
-;; canvas image and refreshes that buffer in place, which needs an Emacs with
-;; the `canvas' image type and `native/etaf-video-canvas' built; `auto' takes
-;; `canvas' when both are present.  A build without them silently keeps the
-;; `image' path, so an application runs unchanged on released Emacs
-;; versions.  `ascii' and `color' modes ignore this setting.
+;; screen: `auto' (the default) prefers the native hardware `gpu' video layer
+;; (macOS `CAOpenGLLayer', Windows Win32/WGL, Linux X11/Wayland EGL) when
+;; `libmpv' and the platform GPU surface are available in a live graphical
+;; frame (giving browser-grade low-CPU playback without recompiling Emacs),
+;; then `canvas' if the `canvas' image type and `native/etaf-video-canvas' are
+;; built, and falls back to `image'.  `gpu', `canvas' and `image' select a
+;; specific backend; missing capabilities silently keep the `image' path, so an
+;; application runs unchanged on released Emacs versions.  `ascii' and `color'
+;; modes ignore this setting.
 ;; Image frames share one image across row-height slices so adjacent content
 ;; and controls below the canvas retain their normal line heights.  POSITION,
 ;; LEFT, TOP and Z-INDEX place the canvas; they are declared on the canvas node
@@ -2374,6 +2376,10 @@
 ;;;###autoload (autoload 'etaf-video-mpv-available-p "etaf" nil nil)
 ;; Return non-nil when the cross-platform libmpv native backend is available.
 ;;
+;; Function: etaf-video-gpu-available-p ()
+;;;###autoload (autoload 'etaf-video-gpu-available-p "etaf" nil nil)
+;; Return non-nil when the native hardware GPU video layer is available.
+;;
 ;; Function: etaf-video-source-info (source)
 ;;;###autoload (autoload 'etaf-video-source-info "etaf" nil nil)
 ;; Return SOURCE's normalized playback metadata as a plist.
@@ -2398,10 +2404,11 @@
 ;; Function: etaf-video-state (handle)
 ;;;###autoload (autoload 'etaf-video-state "etaf" nil nil)
 ;; Return the mounted video identified by HANDLE as a detached plist.
-;; Keys are `:handle', `:mode', `:source', `:playing', `:position',
-;; `:duration', `:speed', `:format', `:width', `:height', `:display-fps',
-;; `:source-fps', `:received', `:presented', `:dropped', `:audio' and
-;; `:ended'.  A handle with no mounted video signals `user-error'.
+;; Keys are `:handle', `:engine', `:render-backend', `:mode', `:source',
+;; `:playing', `:position', `:duration', `:speed', `:format', `:width',
+;; `:height', `:display-fps', `:source-fps', `:received', `:presented',
+;; `:dropped', `:audio', `:buffering', `:error' and `:ended'.  A handle with
+;; no mounted video signals `user-error'.
 ;;
 ;; Variable: etaf-video-audio
 ;; Whether new videos play their source's audio track by default.
@@ -2419,16 +2426,18 @@
 ;; It caps the presented frame rate; values below 1 are raised to 1.
 ;;
 ;; Variable: etaf-video-render-backend
-;; Rendering backend for graphical `etaf-video' playback.
-;; `image' publishes one scaled JPEG per frame through the retained Host
-;; content and works on any Emacs that can show images.  `canvas' reads BGRA
-;; frames into one Emacs canvas image and refreshes that buffer in place,
-;; so a frame costs no JPEG encode, no decode and no Host publication; it
-;; needs the `canvas' image type (Emacs 32 or a patched 31) and the built
-;; `native/etaf-video-canvas' module.  `auto' takes `canvas' when both are
-;; present.  A missing image type, an unloadable module or a non-graphical
-;; frame silently keeps the `image' path.  `ascii' and `color' modes ignore
-;; this setting.
+;; Rendering backend for graphical `etaf-video' playback: `auto' (default),
+;; `gpu', `canvas' or `image'.
+;; `auto' prefers the native hardware `gpu' video layer when `libmpv' and the
+;; platform GPU surface are ready on a live graphical frame (macOS
+;; `CAOpenGLLayer', Windows Win32/WGL, Linux X11/Wayland EGL), then `canvas'
+;; when Emacs supports canvas images and `native/etaf-video-canvas' is built,
+;; and falls back to `image'.  `gpu' requests the native GPU overlay and falls
+;; back to `image' when unavailable.  `canvas' reads BGRA frames into one
+;; Emacs canvas image in place.  `image' forces the pure-Emacs image frame
+;; pipeline (file-backed TIFF ring under `libmpv', JPEG under `ffmpeg').
+;; Missing capabilities or non-graphical frames silently keep `image'.
+;; `ascii' and `color' modes ignore this setting.
 ;;
 ;; Variable: etaf-video-engine
 ;; Playback engine for `etaf-video': `auto' (default), `mpv' or `ffmpeg'.

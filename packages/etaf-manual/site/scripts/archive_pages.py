@@ -845,9 +845,10 @@ def format_bytes(size):
     return f"{max(1, round(size / 1024))} KB"
 
 
-def native_pages(native_dir):
+def native_pages(native_dir, manifest=None):
     """Write a browsable index.html for the hosted prebuilt native modules."""
-    manifest = json.loads((native_dir / "manifest.json").read_text(encoding="utf-8"))
+    if manifest is None:
+        manifest = json.loads((native_dir / "manifest.json").read_text(encoding="utf-8"))
     artifacts = sorted(manifest.get("artifacts", []),
                        key=lambda item: (item["package"], item["module"], item["version"], item["platform"]))
     by_package = {}

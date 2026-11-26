@@ -29,6 +29,7 @@
 ;;; Code:
 
 (require 'cl-lib)
+(require 'ebox)
 (require 'etaf-component)
 (require 'etaf-reactive)
 (require 'etaf-runtime)
@@ -54,15 +55,16 @@ default affects canvases built afterwards and does not repaint a mounted one.")
 (defvar etaf-video--cached-ramp nil
   "Ramp the cached translation table was built from.")
 
-(defvar etaf-video-render-backend 'image
+(defvar etaf-video-render-backend 'auto
   "Rendering backend for `etaf-video' Components.
-`image' publishes one scaled JPEG per frame through the retained Host
-content boundary, which is the established route.  `canvas' draws every
-frame into one Emacs canvas image and refreshes it in place, so a frame
-costs no JPEG encode, no decode and no Host publication; it needs an Emacs
-whose `canvas' image type is available and a graphical frame.  `auto' picks
-`canvas' when both hold and `image' otherwise.  Terminals always use the
-text modes regardless of this value.")
+Supported values are `auto', `gpu', `canvas' and `image'.
+`auto' (default) prefers the native hardware `gpu' video layer when `libmpv'
+and the platform GPU surface are available in a live graphical frame (giving
+browser-grade low-CPU playback without recompiling Emacs), then Emacs's
+`canvas' image type if built, and falls back to `image'.  `gpu' requests the
+native GPU layer (falling back to `image' when unavailable).  `canvas' draws
+into one Emacs canvas image in place.  `image' forces the pure-Emacs image
+frame pipeline.  Terminals always use text modes regardless of this value.")
 
 (defun etaf-video--ramp-table (ramp)
   "Return RAMP's byte-to-character translation table.
@@ -167,10 +169,57 @@ it on unmount, so the control functions always address a live session.")
     (or (etaf-video--instance-session instance)
         (user-error "The etaf-video for handle %S has no session" handle))))
 
+(defconst etaf-video--image-max-pixels (* 1920 1080)
+  "Automatic pixel budget for software `image' frames when DPR is unset.
+Preserves full 1080p detail on Retina displays while avoiding wasteful
+upscaling beyond native Full HD or the source stream's own dimensions.")
+
+(defconst etaf-video--image-flush-batch 4
+  "Number of retired frames buffered before batch-flushing Emacs's image cache.
+Always keeps the immediately previous frame live during transition so
+`lookup_image' never reuses the displayed frame's image ID slot, and reduces
+full-frame garbage redraws by flushing several retired frames together.")
+
 (cl-defstruct (etaf-video--instance (:constructor etaf-video--instance--make))
   "Mounted state owned by one `etaf-video' Component instance."
   handle ref cell sources runtime session applied autoplay image-scale
-  image-max-width image-max-height image-last canvas-spec canvas-key)
+  image-max-width image-max-height image-last image-retired
+  canvas-spec canvas-key gpu-occluded gpu-snapshot-image)
+
+(defvar etaf-video--gpu-instances nil
+  "Active `etaf-video' instances currently backed by a native GPU surface.")
+
+(defvar etaf-video--gpu-in-sync nil
+  "Non-nil while synchronizing native GPU video overlays to prevent recursion.")
+
+(defun etaf-video--blank-grid-text (columns rows &optional owner)
+  "Return a solid COLUMNS by ROWS grid of spaces that preserves canvas width.
+When OWNER is non-nil, tag every cell with `etaf-video-canvas-owner' so native
+GPU occlusion checks can detect any in-buffer overlay covering the canvas."
+  (let* ((line (make-string (max 1 (or columns 1)) ?\s))
+         (text (mapconcat (lambda (_) line)
+                          (number-sequence 1 (max 1 (or rows 1)))
+                          "\n")))
+    (when owner
+      (put-text-property 0 (length text) 'etaf-video-canvas-owner owner text))
+    text))
+
+(defun etaf-video--instance-clear-canvas (instance &optional owner)
+  "Replace INSTANCE's displayed image with a full-width blank grid.
+Unlinking ring-buffer `.tif' files while the buffer still displays them causes
+Emacs to collapse each sliced video row to 1 column wide, pulling any right-hand
+sibling columns to the left until the next stream's first frame arrives."
+  (unless (eq (etaf-video--instance-effective-backend instance) 'canvas)
+    (let* ((applied (etaf-video--instance-applied instance))
+           (blank (etaf-video--blank-grid-text (plist-get applied :columns)
+                                               (plist-get applied :rows)
+                                               owner))
+           (runtime (etaf-video--instance-runtime instance)))
+      (setcar (etaf-video--instance-cell instance) blank)
+      (when (and runtime (etaf-runtime-mounted-p runtime))
+        (ignore-errors
+          (etaf-runtime-update-host-content
+           runtime (etaf-video--instance-ref instance) blank))))))
 
 (defun etaf-video--instance-view-content (instance)
   "Return INSTANCE's current canvas text for ordinary publications.
@@ -261,14 +310,32 @@ backend instead of breaking video playback."
        (fboundp 'etaf-video-canvas-read)
        (etaf-video--instance-graphic-p instance)))
 
+(defun etaf-video--instance-gpu-p (instance)
+  "Return non-nil when INSTANCE can use the native hardware GPU video layer."
+  (let* ((applied (etaf-video--instance-applied instance))
+         (src (plist-get applied :src))
+         (kind (and (consp src) (plist-get src :kind)))
+         (demo-p (or (null src) (eq kind 'demo)
+                     (and (consp src) (or (eq (car src) :demo)
+                                          (plist-get src :demo))))))
+    (and (not demo-p)
+         (not (eq etaf-video-engine 'ffmpeg))
+         (eq (etaf-video--instance-effective-mode instance) 'image)
+         (etaf-video--instance-graphic-p instance)
+         (etaf-video-mpv--gpu-available-p))))
+
 (defun etaf-video--instance-effective-backend (instance)
   "Return INSTANCE's rendering backend after the capability fallback.
-A `canvas' or `auto' request falls back to `image' when this Emacs cannot
-display canvas images or the buffer is not in a graphical frame."
-  (if (and (memq etaf-video-render-backend '(canvas auto))
-           (etaf-video--instance-canvas-p instance))
-      'canvas
-    'image))
+`auto' prefers `gpu' when the native hardware GPU layer is available, then
+`canvas' when Emacs supports canvas images, and falls back to `image'."
+  (cond
+   ((and (memq etaf-video-render-backend '(gpu auto))
+         (etaf-video--instance-gpu-p instance))
+    'gpu)
+   ((and (memq etaf-video-render-backend '(canvas auto))
+         (etaf-video--instance-canvas-p instance))
+    'canvas)
+   (t 'image)))
 
 (defun etaf-video--instance-effective-engine (instance)
   "Return INSTANCE's playback engine: `mpv' or `ffmpeg'."
@@ -284,7 +351,9 @@ display canvas images or the buffer is not in a graphical frame."
       (_ (if (and (not demo-p)
                   (eq mode 'image)
                   (etaf-video--instance-graphic-p instance)
-                  (or (etaf-video--instance-canvas-p instance)
+                  (or (etaf-video--instance-gpu-p instance)
+                      (etaf-video--instance-canvas-p instance)
+                      (image-type-available-p 'tiff)
                       (image-type-available-p 'pbm))
                   (etaf-video-mpv-available-p))
              'mpv
@@ -320,9 +389,7 @@ a taller canvas is clipped by the layout anyway."
          (width (* columns char-width))
          (height (* rows char-height)))
     (cons (if window (min width (window-body-width window t)) width)
-          (if window
-              (min height (* (window-body-height window) char-height))
-            height))))
+          (if window (min height (window-body-height window t)) height))))
 
 (defun etaf-video--instance-pixel-frame-size (instance format &optional ratio)
   "Return INSTANCE's pixel frame size for FORMAT.
@@ -335,8 +402,8 @@ logical resolution."
          (columns (plist-get applied :columns))
          (rows (plist-get applied :rows))
          (frame (etaf-video--instance-frame instance))
-         (ratio (or ratio
-                    (plist-get applied :device-pixel-ratio)
+         (explicit-ratio (or ratio (plist-get applied :device-pixel-ratio)))
+         (ratio (or explicit-ratio
                     (ignore-errors (frame-scale-factor frame))
                     1.0))
          (display (etaf-video--instance-display-size instance))
@@ -346,6 +413,21 @@ logical resolution."
                   (max 1 (* columns (car cell)))))
          (height (if display (cdr display)
                    (max 1 (* rows (cdr cell))))))
+    (when (and (null explicit-ratio)
+               (not (eq format 'canvas))
+               (> ratio 1.0))
+      (let* ((src (plist-get applied :src))
+             (sw (and (consp src) (plist-get src :width)))
+             (sh (and (consp src) (plist-get src :height)))
+             (src-px (and (numberp sw) (numberp sh) (> sw 0) (> sh 0)
+                          (* (float sw) sh)))
+             (budget (if src-px
+                         (min (float etaf-video--image-max-pixels) src-px)
+                       (float etaf-video--image-max-pixels))))
+        (when (> (* (float width) height ratio ratio) budget)
+          (setq ratio (max 1.0 (min ratio
+                                    (sqrt (/ budget
+                                             (max 1.0 (* (float width) height))))))))))
     (list format
           (max 1 (round (* width ratio)))
           (max 1 (round (* height ratio)))
@@ -363,13 +445,23 @@ displayed image (nil for the raw modes)."
          (engine (etaf-video--instance-effective-engine instance)))
     (cond
      ((eq engine 'mpv)
-      (if (eq (etaf-video--instance-effective-backend instance) 'canvas)
-          (etaf-video--instance-pixel-frame-size instance 'canvas 1.0)
-        (pcase (etaf-video--instance-effective-mode instance)
-          ('image (etaf-video--instance-pixel-frame-size
-                   instance 'ppm (or (plist-get applied :device-pixel-ratio) 1.0)))
-          ('color (list 'rgb24 columns (* 2 rows) 1.0 nil nil))
-          (_ (list 'gray columns rows 1.0 nil nil)))))
+      (pcase (etaf-video--instance-effective-backend instance)
+        ('gpu (etaf-video--instance-pixel-frame-size instance 'gpu 1.0))
+        ('canvas (etaf-video--instance-pixel-frame-size instance 'canvas 1.0))
+        (_ (pcase (etaf-video--instance-effective-mode instance)
+             ('image (etaf-video--instance-pixel-frame-size
+                      instance
+                      (cond
+                       ((and (image-type-available-p 'tiff)
+                             (or (fboundp 'etaf-video-mpv--native-async-start)
+                                 (fboundp 'etaf-video-mpv--native-render-tiff-file)))
+                        'tiff-file)
+                       ((and (image-type-available-p 'tiff)
+                             (fboundp 'etaf-video-mpv--native-render-tiff))
+                        'tiff)
+                       (t 'ppm))))
+             ('color (list 'rgb24 columns (* 2 rows) 1.0 nil nil))
+             (_ (list 'gray columns rows 1.0 nil nil))))))
      ((eq (etaf-video--instance-effective-backend instance) 'canvas)
       ;; The canvas buffer is logical-resolution, so the producer must
       ;; write exactly that many pixels; a device-resolution frame would
@@ -381,33 +473,35 @@ displayed image (nil for the raw modes)."
         ('color (list 'rgb24 columns (* 2 rows) 1.0 nil nil))
         (_ (list 'gray columns rows 1.0 nil nil)))))))
 
-(defun etaf-video--image-ascent (frame &optional line)
+(defun etaf-video--image-ascent (frame &optional line runtime)
   "Return the image ascent percentage that keeps a row at the canvas line.
-LINE is that line's height in pixels; it defaults to FRAME's own.
-A canvas row usually shares its buffer line with application text, and a line
-grows to the sum of the largest ascent and the largest descent it holds.  The
-default font's own ascent and descent are therefore the whole row an image
-may occupy; aligning the image to that baseline keeps the line exactly one
-character high instead of pushing the rows below the canvas off the window."
-  (let* ((height (max 1 (or line
-                            ;; A caller with no canvas line left sits on the
-                            ;; frame's own row.
-                            (frame-char-height frame)))) ; frame metric
-         (info (ignore-errors (font-info (face-font 'default frame))))
-         (ascent (and (vectorp info) (> (length info) 9) (aref info 8)))
-         (descent (and (vectorp info) (> (length info) 9) (aref info 9))))
-    (if (and (numberp ascent) (numberp descent) (numberp height)
-             (> height 0) (> ascent 0) (>= descent 0))
-        (min 100 (max 1 (ceiling (* 100.0 (/ (float ascent) height)))))
-      82)))
+LINE is that line's height in pixels; it defaults to FRAME's own.  When
+RUNTIME supplies display metrics, prefer its measured `:ascent' so sliced
+video rows align seamlessly with Ebox's mixed-script line box."
+  (let* ((metrics (and runtime (ignore-errors (etaf-display-metrics runtime))))
+         (metric-ascent (plist-get metrics :ascent)))
+    (if (and (integerp metric-ascent) (<= 1 metric-ascent 100))
+        metric-ascent
+      (let* ((height (max 1 (or line
+                                ;; A caller with no canvas line left sits on the
+                                ;; frame's own row.
+                                (frame-char-height frame)))) ; frame metric
+             (info (ignore-errors (font-info (face-font 'default frame))))
+             (ascent (and (vectorp info) (> (length info) 9) (aref info 8)))
+             (descent (and (vectorp info) (> (length info) 9) (aref info 9))))
+        (if (and (numberp ascent) (numberp descent) (numberp height)
+                 (> height 0) (> ascent 0) (>= descent 0))
+            (min 100 (max 1 (ceiling (* 100.0 (/ (float ascent) height)))))
+          82)))))
 
-(defun etaf-video--image-grid-text (instance image)
+(defun etaf-video--image-grid-text (instance image &optional owner)
   "Return INSTANCE's canvas text cropping IMAGE into one cell per row.
 One frame image is many character rows tall while a buffer line holds one
 row, so publishing the image whole would push every line below the canvas
 past the window edge.  Slicing the frame into IMAGE's own character rows
 keeps the canvas exactly `rows' lines tall, which is what lets a caller
-place chrome under it."
+place chrome under it.  When OWNER is non-nil, tag every row with
+`etaf-video-canvas-owner' for native GPU occlusion tracking."
   (let* ((applied (etaf-video--instance-applied instance))
          (rows (max 1 (or (plist-get applied :rows) 1)))
          (frame (etaf-video--instance-frame instance))
@@ -415,19 +509,23 @@ place chrome under it."
                            (etaf-video--instance-runtime instance) frame)))
          (display (etaf-video--instance-display-size instance))
          (width (max 1 (or (car-safe display) 1)))
-         (height (max 1 (or (cdr-safe display) row-height))))
-    (mapconcat
-     (lambda (row)
-       (let ((y (* row row-height)))
-         (if (>= y height)
-             " "
-           (propertize
-            " "
-            'display
-            (list (list 'slice 0 y width (min row-height (- height y)))
-                  image)))))
-     (number-sequence 0 (1- rows))
-     "\n")))
+         (height (max 1 (or (cdr-safe display) row-height)))
+         (text
+          (mapconcat
+           (lambda (row)
+             (let ((y (* row row-height)))
+               (if (>= y height)
+                   " "
+                 (propertize
+                  " "
+                  'display
+                  (list (list 'slice 0 y width (min row-height (- height y)))
+                        image)))))
+           (number-sequence 0 (1- rows))
+           "\n")))
+    (when owner
+      (put-text-property 0 (length text) 'etaf-video-canvas-owner owner text))
+    text))
 
 (defun etaf-video--instance-present (instance frame)
   "Draw FRAME for INSTANCE through its effective backend."
@@ -537,6 +635,41 @@ host that Ebox prepared for the spec."
           (canvas-refresh spec)
           (redisplay))))))
 
+(defun etaf-video--flush-image-entry (entry)
+  "Flush one `(IMAGE . FRAME)' ENTRY from Emacs's image cache."
+  (when (consp entry)
+    (let ((spec (car entry))
+          (frame (cdr entry)))
+      (when spec
+        (ignore-errors
+          (image-flush spec (if (and frame (frame-live-p frame)) frame t)))))))
+
+(defun etaf-video--instance-flush-all-images (instance)
+  "Flush every cached video frame spec owned by INSTANCE."
+  (when-let* ((last (etaf-video--instance-image-last instance)))
+    (etaf-video--flush-image-entry last)
+    (setf (etaf-video--instance-image-last instance) nil))
+  (dolist (entry (etaf-video--instance-image-retired instance))
+    (etaf-video--flush-image-entry entry))
+  (setf (etaf-video--instance-image-retired instance) nil))
+
+(defun etaf-video--instance-retire-image (instance image frame)
+  "Record IMAGE on FRAME as INSTANCE's current frame and batch-flush old ones.
+Never flushes the immediately preceding frame before the new frame is
+redisplayed: keeping frame N-1 live guarantees that Emacs allocates a
+distinct `img_id' for frame N so every slice row updates cleanly without
+stale-ID collisions or per-frame full-frame garbage redraws."
+  (when-let* ((previous (etaf-video--instance-image-last instance)))
+    (push previous (etaf-video--instance-image-retired instance)))
+  (setf (etaf-video--instance-image-last instance)
+        (and image (cons image frame)))
+  (let ((retired (etaf-video--instance-image-retired instance)))
+    (when (> (length retired) etaf-video--image-flush-batch)
+      (dolist (old (cdr retired))
+        (etaf-video--flush-image-entry old))
+      (setf (etaf-video--instance-image-retired instance)
+            (list (car retired))))))
+
 (defun etaf-video--instance-present-image (instance frame)
   "Map FRAME for INSTANCE's effective mode and publish it.
 The retained content update replaces only the canvas Host, so one displayed
@@ -548,52 +681,246 @@ frame does not pay for an ordinary ETAF publication."
              (ref (etaf-video--instance-ref instance))
              (mode (etaf-video--instance-effective-mode instance))
              (session (etaf-video--instance-session instance))
-             (img-type (if (and (etaf-video-mpv--session-p session)
-                                (eq (etaf-video-mpv--session-format session) 'ppm))
-                           'pbm
+             (win-frame (and (eq mode 'image)
+                             (etaf-video--instance-frame instance)))
+             (img-type (if (etaf-video-mpv--session-p session)
+                           (pcase (etaf-video-mpv--session-format session)
+                             ((or 'tiff 'tiff-file) 'tiff)
+                             ('ppm 'pbm)
+                             (_ 'jpeg))
                          'jpeg))
-             (image (and (eq mode 'image)
-                         (let ((win-frame (etaf-video--instance-frame instance)))
-                           (create-image frame img-type t
-                                         :ascent (etaf-video--image-ascent
-                                                  win-frame
-                                                  (cdr (etaf-video--canvas-cell
-                                                        runtime win-frame)))
-                                         :scale (etaf-video--instance-image-scale instance)
-                                         :max-width (etaf-video--instance-image-max-width instance)
-                                         :max-height (etaf-video--instance-image-max-height instance)))))
+             (missing-file (and (eq mode 'image) (consp frame) (stringp (cadr frame))
+                                (not (file-readable-p (cadr frame)))))
+             (image (and (eq mode 'image) (not missing-file)
+                         (let ((ascent (etaf-video--image-ascent
+                                        win-frame
+                                        (cdr (etaf-video--canvas-cell
+                                              runtime win-frame))
+                                        runtime))
+                               (scale (etaf-video--instance-image-scale instance))
+                               (max-w (etaf-video--instance-image-max-width instance))
+                               (max-h (etaf-video--instance-image-max-height instance)))
+                           (if (and (consp frame) (stringp (cadr frame)))
+                               ;; File-backed ring frame: (SLOT PATH SEQ).
+                               (create-image (cadr frame) img-type nil
+                                             :id (nth 2 frame)
+                                             :ascent ascent
+                                             :scale scale
+                                             :max-width max-w
+                                             :max-height max-h)
+                             (create-image frame img-type t
+                                           :ascent ascent
+                                           :scale scale
+                                           :max-width max-w
+                                           :max-height max-h)))))
              (content
-              (pcase mode
-                ('image (etaf-video--image-grid-text instance image))
-                ('color
-                 (etaf-video--color-grid-text
-                  frame
-                  (plist-get applied :columns)
-                  (plist-get applied :rows)))
-                (_
-                 (etaf-video--ascii-grid-text
-                  frame
-                  (plist-get applied :columns)
-                  (plist-get applied :rows)
-                  (plist-get applied :ramp))))))
-        (setcar cell content)
-        (condition-case problem
-            (progn
-              (etaf-runtime-update-host-content runtime ref content)
-              ;; Emacs caches every image spec it has displayed.  A video
-              ;; presents a new spec per frame, so the previous frame is
-              ;; flushed as soon as the new one is committed; otherwise a long
-              ;; video grows the image cache for as long as its eviction delay
-              ;; and holds every decoded frame in memory.
-              (when-let* ((previous (etaf-video--instance-image-last instance)))
-                (ignore-errors (image-flush previous)))
-              (setf (etaf-video--instance-image-last instance) image))
-          (etaf-runtime-error
-           (let ((sess (etaf-video--instance-session instance)))
-             (if (etaf-video-mpv--session-p sess)
-                 (etaf-video-mpv--session-destroy sess)
-               (etaf-video-session-destroy sess)))
-           (message "etaf-video: %s" (error-message-string problem))))))))
+              (unless missing-file
+                (pcase mode
+                  ('image (etaf-video--image-grid-text instance image))
+                  ('color
+                   (etaf-video--color-grid-text
+                    frame
+                    (plist-get applied :columns)
+                    (plist-get applied :rows)))
+                  (_
+                   (etaf-video--ascii-grid-text
+                    frame
+                    (plist-get applied :columns)
+                    (plist-get applied :rows)
+                    (plist-get applied :ramp)))))))
+        (when content
+          (setcar cell content)
+          (condition-case problem
+              (progn
+                (etaf-runtime-update-host-content runtime ref content)
+                (when image
+                  (etaf-video--instance-retire-image instance image win-frame)))
+            (etaf-runtime-error
+             (unless (etaf-runtime-mounted-p runtime)
+               (when-let* ((sess (etaf-video--instance-session instance)))
+                 (etaf-video--session-destroy-any sess)
+                 (setf (etaf-video--instance-session instance) nil)))
+             (message "etaf-video: %s" (error-message-string problem)))))))))
+
+(defun etaf-video--instance-gpu-occluded-p (instance runtime buffer spans rows)
+  "Return non-nil when an in-buffer overlay/modal covers INSTANCE's canvas."
+  (or (etaf-runtime-surface runtime)
+      (etaf-runtime-overlay-entries runtime)
+      (null spans)
+      (< (length spans) rows)
+      (with-current-buffer buffer
+        (cl-some
+         (lambda (span)
+           (let ((beg (cadr span))
+                 (end (cddr span)))
+             (or (<= end beg)
+                 (not (eq (get-text-property beg 'etaf-video-canvas-owner) instance))
+                 (< (or (next-single-property-change
+                         beg 'etaf-video-canvas-owner nil end)
+                        end)
+                    end))))
+         spans))))
+
+(defun etaf-video--instance-gpu-clear-snapshot (instance)
+  "Release any temporary occlusion snapshot image held by INSTANCE."
+  (when-let* ((entry (etaf-video--instance-gpu-snapshot-image instance)))
+    (etaf-video--flush-image-entry entry)
+    (setf (etaf-video--instance-gpu-snapshot-image instance) nil)))
+
+(defun etaf-video--instance-gpu-enter-occluded (instance frame)
+  "Hide GPU layer and paint one crisp FBO snapshot underneath in-buffer overlays."
+  (let* ((session (etaf-video--instance-session instance))
+         (runtime (etaf-video--instance-runtime instance))
+         (disp (etaf-video--instance-display-size instance))
+         (dw (max 1 (or (car-safe disp) 640)))
+         (dh (max 1 (or (cdr-safe disp) 360))))
+    (when (and session (etaf-video-mpv--session-p session)
+               (etaf-video-mpv--session-gpu-p session))
+      (etaf-video-mpv--session-gpu-configure
+       session nil 0 0 0 0 nil 0 0 0 0 nil)
+      (when (and (> (or (etaf-video-mpv--session-presented session) 0) 0)
+                 runtime (etaf-runtime-mounted-p runtime)
+                 (image-type-available-p 'tiff))
+        (when-let* ((snap (etaf-video-mpv--session-gpu-snapshot session dw dh)))
+          (let* ((ascent (etaf-video--image-ascent
+                          frame
+                          (cdr (etaf-video--canvas-cell runtime frame))
+                          runtime))
+                 (img (create-image (car snap) 'tiff nil
+                                    :id (cdr snap)
+                                    :ascent ascent
+                                    :scale 1.0
+                                    :max-width dw
+                                    :max-height dh))
+                 (text (etaf-video--image-grid-text instance img instance)))
+            (etaf-video--instance-gpu-clear-snapshot instance)
+            (setf (etaf-video--instance-gpu-snapshot-image instance)
+                  (cons img frame))
+            (setcar (etaf-video--instance-cell instance) text)
+            (ignore-errors
+              (etaf-runtime-update-host-content
+               runtime (etaf-video--instance-ref instance) text))))))))
+
+(defun etaf-video--instance-gpu-leave-occluded (instance)
+  "Clear temporary occlusion snapshot before unhiding INSTANCE's GPU layer."
+  (etaf-video--instance-clear-canvas instance instance)
+  (etaf-video--instance-gpu-clear-snapshot instance)
+  (when-let* ((session (etaf-video--instance-session instance)))
+    (etaf-video-mpv--gpu-schedule-redraw session 0.03)))
+
+(defun etaf-video--instance-sync-gpu (instance)
+  "Synchronize INSTANCE's native GPU overlay rectangle and occlusion state."
+  (let* ((session (etaf-video--instance-session instance))
+         (runtime (etaf-video--instance-runtime instance))
+         (buffer (and runtime (etaf-runtime-mounted-p runtime)
+                      (etaf-runtime-buffer runtime))))
+    (when (and session (etaf-video-mpv--session-p session)
+               (etaf-video-mpv--session-gpu-p session))
+      (let* ((window (and buffer (buffer-live-p buffer)
+                          (get-buffer-window buffer t)))
+             (frame (and window (window-frame window)))
+             (visible-frame (and frame (frame-live-p frame)
+                                 (display-graphic-p frame)
+                                 (eq (frame-visible-p frame) t))))
+        (if (not visible-frame)
+            (etaf-video-mpv--session-gpu-configure
+             session nil 0 0 0 0 nil 0 0 0 0 nil)
+          (let* ((applied (etaf-video--instance-applied instance))
+                 (rows (max 1 (or (plist-get applied :rows) 1)))
+                 (node (ignore-errors
+                         (etaf-runtime-host-node
+                          runtime (etaf-video--instance-ref instance))))
+                 (spans (and node (ignore-errors (ebox-node-row-spans node))))
+                 (occluded (etaf-video--instance-gpu-occluded-p
+                            instance runtime buffer spans rows)))
+            (cond
+             (occluded
+              (unless (etaf-video--instance-gpu-occluded instance)
+                (setf (etaf-video--instance-gpu-occluded instance) t)
+                (etaf-video--instance-gpu-enter-occluded instance frame))
+              (etaf-video-mpv--session-gpu-configure
+               session nil 0 0 0 0 nil 0 0 0 0 nil))
+             (t
+              (when (etaf-video--instance-gpu-occluded instance)
+                (setf (etaf-video--instance-gpu-occluded instance) nil)
+                (etaf-video--instance-gpu-leave-occluded instance)
+                (setq spans (and node (ignore-errors (ebox-node-row-spans node)))))
+              (let* ((first-beg (and spans (cadr (car spans))))
+                     (posn (and first-beg (posn-at-point first-beg window)))
+                     (xy (and posn (posn-x-y posn))))
+                (if (not xy)
+                    (etaf-video-mpv--session-gpu-configure
+                     session nil 0 0 0 0 nil 0 0 0 0 nil)
+                  (let* ((edges (window-inside-pixel-edges window))
+                         (wl (nth 0 edges))
+                         (wt (nth 1 edges))
+                         (wr (nth 2 edges))
+                         (wb (nth 3 edges))
+                         (disp (etaf-video--instance-display-size instance))
+                         (fx (+ wl (car xy)))
+                         (fy (+ wt (cdr xy)))
+                         (fw (max 0 (min (car disp) (- wr fx))))
+                         (fh (max 0 (min (cdr disp) (- wb fy))))
+                         (is-child (and (frame-parent frame) t))
+                         (outer
+                          (let ((raw (or (ignore-errors (frame-edges frame 'outer-edges))
+                                         (let ((p (frame-position frame)))
+                                           (list (car p) (cdr p) 0 0)))))
+                            (if-let* ((par (and is-child (frame-parent frame)))
+                                      (pe (ignore-errors (frame-edges par 'inner-edges))))
+                                (list (+ (nth 0 pe) (nth 0 raw))
+                                      (+ (nth 1 pe) (nth 1 raw))
+                                      (+ (nth 0 pe) (nth 2 raw))
+                                      (+ (nth 1 pe) (nth 3 raw)))
+                              raw)))
+                         (title (or (frame-parameter frame 'title)
+                                    (frame-parameter frame 'name)
+                                    ""))
+                         (window-id (or (frame-parameter frame 'window-id)
+                                        (frame-parameter frame 'outer-window-id))))
+                    (etaf-video-mpv--session-gpu-configure
+                     session title
+                     (nth 0 outer) (nth 1 outer)
+                     (frame-pixel-width frame) (frame-pixel-height frame)
+                     is-child fx fy fw fh (and (> fw 0) (> fh 0))
+                     window-id))))))))))))
+
+(defun etaf-video--sync-all-gpu-instances ()
+  "Synchronize every mounted native GPU `etaf-video' instance."
+  (unless etaf-video--gpu-in-sync
+    (let ((etaf-video--gpu-in-sync t))
+      (dolist (inst (copy-sequence etaf-video--gpu-instances))
+        (ignore-errors (etaf-video--instance-sync-gpu inst))))))
+
+(defun etaf-video--sync-all-gpu-instances-arg (_arg)
+  "One-argument hook adapter for `etaf-video--sync-all-gpu-instances'."
+  (etaf-video--sync-all-gpu-instances))
+
+(defun etaf-video--sync-all-gpu-instances-scroll (_win _start)
+  "Two-argument scroll hook adapter for `etaf-video--sync-all-gpu-instances'."
+  (etaf-video--sync-all-gpu-instances))
+
+(defun etaf-video--gpu-register (instance)
+  "Register INSTANCE for reactive native GPU geometry and occlusion sync."
+  (unless (memq instance etaf-video--gpu-instances)
+    (let ((was-empty (null etaf-video--gpu-instances)))
+      (push instance etaf-video--gpu-instances)
+      (when was-empty
+        (add-hook 'window-configuration-change-hook #'etaf-video--sync-all-gpu-instances)
+        (add-hook 'window-size-change-functions #'etaf-video--sync-all-gpu-instances-arg)
+        (add-hook 'buffer-list-update-hook #'etaf-video--sync-all-gpu-instances)
+        (add-hook 'window-scroll-functions #'etaf-video--sync-all-gpu-instances-scroll)
+        (add-hook 'etaf-runtime-after-flush-functions #'etaf-video--sync-all-gpu-instances-arg)))))
+
+(defun etaf-video--gpu-unregister (instance)
+  "Unregister INSTANCE from native GPU geometry hooks when unmounted."
+  (setq etaf-video--gpu-instances (delq instance etaf-video--gpu-instances))
+  (unless etaf-video--gpu-instances
+    (remove-hook 'window-configuration-change-hook #'etaf-video--sync-all-gpu-instances)
+    (remove-hook 'window-size-change-functions #'etaf-video--sync-all-gpu-instances-arg)
+    (remove-hook 'buffer-list-update-hook #'etaf-video--sync-all-gpu-instances)
+    (remove-hook 'window-scroll-functions #'etaf-video--sync-all-gpu-instances-scroll)
+    (remove-hook 'etaf-runtime-after-flush-functions #'etaf-video--sync-all-gpu-instances-arg)))
 
 (defun etaf-video--instance-register (instance)
   "Register INSTANCE's handle, refusing a handle owned by another video."
@@ -639,6 +966,16 @@ session starts playing; a paused session presents one frame instead."
                :canvas-spec-fn (lambda ()
                                  (or (etaf-video--instance-canvas-display instance)
                                      (etaf-video--instance-canvas-spec instance)))
+               :visible-p (lambda ()
+                            (let* ((rt (etaf-video--instance-runtime instance))
+                                   (buf (and rt (etaf-runtime-buffer rt))))
+                              (and buf (buffer-live-p buf)
+                                   (or noninteractive
+                                       (not (null (get-buffer-window buf t)))))))
+               :gpu-sync-fn (lambda ()
+                              (unless etaf-video--gpu-in-sync
+                                (let ((etaf-video--gpu-in-sync t))
+                                  (etaf-video--instance-sync-gpu instance))))
                :on-frame (lambda (frame _session)
                            (etaf-video--instance-present instance frame)))
             (etaf-video-session-create
@@ -658,7 +995,22 @@ session starts playing; a paused session presents one frame instead."
     (setf (etaf-video--instance-session instance) session
           (etaf-video--instance-image-scale instance) (nth 3 size)
           (etaf-video--instance-image-max-width instance) (nth 4 size)
-          (etaf-video--instance-image-max-height instance) (nth 5 size))
+          (etaf-video--instance-image-max-height instance) (nth 5 size)
+          (etaf-video--instance-gpu-occluded instance) nil)
+    (when (and (etaf-video-mpv--session-p session)
+               (etaf-video-mpv--session-gpu-p session))
+      (etaf-video--gpu-register instance)
+      (let ((etaf-video--gpu-in-sync t))
+        (etaf-video--instance-clear-canvas instance instance)
+        (etaf-video--instance-sync-gpu instance))
+      ;; Re-sync once after the first Emacs redisplay settles posn-at-point.
+      (run-at-time 0.016 nil
+                   (lambda (inst)
+                     (when (and (memq inst etaf-video--gpu-instances)
+                                (not etaf-video--gpu-in-sync))
+                       (let ((etaf-video--gpu-in-sync t))
+                         (ignore-errors (etaf-video--instance-sync-gpu inst)))))
+                   instance))
     (unless (eq engine 'mpv)
       (if playing
           (etaf-video-session-play session)
@@ -689,9 +1041,10 @@ session starts playing; a paused session presents one frame instead."
 
 (defun etaf-video--instance-unmount (instance)
   "Release INSTANCE's session and handle registration."
-  (when-let* ((image (etaf-video--instance-image-last instance)))
-    (ignore-errors (image-flush image))
-    (setf (etaf-video--instance-image-last instance) nil))
+  (etaf-video--gpu-unregister instance)
+  (etaf-video--instance-gpu-clear-snapshot instance)
+  (setf (etaf-video--instance-gpu-occluded instance) nil)
+  (etaf-video--instance-flush-all-images instance)
   (setf (etaf-video--instance-canvas-spec instance) nil
         (etaf-video--instance-canvas-key instance) nil)
   (when-let* ((session (etaf-video--instance-session instance)))
@@ -729,7 +1082,19 @@ at the current position.  Speed, volume and audio update in place."
             (setf (etaf-video--instance-image-scale instance) (nth 3 size)
                   (etaf-video--instance-image-max-width instance) (nth 4 size)
                   (etaf-video--instance-image-max-height instance) (nth 5 size))
-            (etaf-video-mpv--session-resize session (nth 1 size) (nth 2 size))))
+            (when (etaf-video-mpv--session-gpu-p session)
+              (let ((etaf-video--gpu-in-sync t))
+                (etaf-video--instance-clear-canvas instance instance)))
+            (etaf-video-mpv--session-resize session (nth 1 size) (nth 2 size))
+            (when (etaf-video-mpv--session-gpu-p session)
+              (dolist (delay '(0.016 0.08))
+                (run-at-time delay nil
+                             (lambda (inst)
+                               (when (and (memq inst etaf-video--gpu-instances)
+                                          (not etaf-video--gpu-in-sync))
+                                 (let ((etaf-video--gpu-in-sync t))
+                                   (ignore-errors (etaf-video--instance-sync-gpu inst)))))
+                             instance)))))
          (structural
           (when session
             (let* ((state (etaf-video--session-state-any session))
@@ -747,8 +1112,15 @@ at the current position.  Speed, volume and audio update in place."
                            (max 0 (- duration
                                      (/ 1.0 (or (plist-get state :source-fps) 25)))))
                           (t (plist-get state :position)))))
+              ;; Paint a full-width blank grid BEFORE unlinking/flushing old
+              ;; frame files so adjacent layout columns never collapse.
+              (etaf-video--gpu-unregister instance)
+              (etaf-video--instance-gpu-clear-snapshot instance)
+              (setf (etaf-video--instance-gpu-occluded instance) nil)
+              (etaf-video--instance-clear-canvas instance)
               (etaf-video--session-destroy-any session)
               (setf (etaf-video--instance-session instance) nil)
+              (etaf-video--instance-flush-all-images instance)
               (when (etaf-video--instance-runtime instance)
                 (etaf-video--instance-build instance position playing)))))
          (session
@@ -1003,15 +1375,23 @@ Supported on the libmpv engine; returns nil on engines without commands."
     (when (etaf-video-mpv--session-p session)
       (etaf-video-mpv--session-command session args))))
 
+;;;###autoload
+(defun etaf-video-gpu-available-p ()
+  "Return non-nil when the native hardware GPU video layer is available.
+Requires `etaf-video-mpv-available-p' and a graphical session with platform
+GPU overlay support (for example macOS `CAOpenGLLayer' + VideoToolbox)."
+  (and (etaf-video-mpv--gpu-available-p) t))
+
 (defun etaf-video-state (handle)
   "Return the mounted video identified by HANDLE as a detached plist.
-Keys include `:handle', `:engine', `:mode', `:source', `:playing',
-`:position', `:duration', `:speed', `:format', `:width', `:height',
-`:display-fps', `:source-fps', `:received', `:presented', `:dropped',
-`:audio', `:buffering', `:error' and `:ended'."
+Keys include `:handle', `:engine', `:render-backend', `:mode', `:source',
+`:playing', `:position', `:duration', `:speed', `:format', `:width',
+`:height', `:display-fps', `:source-fps', `:received', `:presented',
+`:dropped', `:audio', `:buffering', `:error' and `:ended'."
   (let ((instance (etaf-video--instance-for handle)))
     (append (list :handle handle
-                  :mode (etaf-video--instance-effective-mode instance))
+                  :mode (etaf-video--instance-effective-mode instance)
+                  :render-backend (etaf-video--instance-effective-backend instance))
             (etaf-video--session-state-any (etaf-video--session-for handle)))))
 
 (provide 'etaf-video-component)

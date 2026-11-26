@@ -1349,6 +1349,21 @@
       "purpose": "The ffmpeg video backend shows Frame 0 immediately, holds while ffplay reports nan during startup, and locks frame presentation to ffplay's live audio clock."
     },
     {
+      "name": "etaf-video-tests-mpv-loads-split-audio-url-and-headers",
+      "file": "tests/etaf-video-tests.el",
+      "purpose": "When libmpv is available, split HTTP video and audio URLs load both tracks without delimiter splitting and forward custom headers containing commas to both requests."
+    },
+    {
+      "name": "etaf-video-tests-mpv-async-tiff-file-ring-and-cleanup",
+      "file": "tests/etaf-video-tests.el",
+      "purpose": "When libmpv is available in graphical image mode, frames render into a file-backed TIFF ring honoring display-fps and remove all temporary ring files on unmount."
+    },
+    {
+      "name": "etaf-video-tests-render-backend-and-gpu-probe",
+      "file": "tests/etaf-video-tests.el",
+      "purpose": "`etaf-video-state' reports `:render-backend' and `etaf-video-gpu-available-p' probes safely without signaling."
+    },
+    {
       "name": "etaf-activity-publish-order-actions-and-reactive-ref",
       "file": "tests/etaf-activity-tests.el",
       "purpose": "Live activities validate inputs, sort by active state and priority, return detached snapshots, update the reactive ref, invoke publisher actions and isolate observer errors."

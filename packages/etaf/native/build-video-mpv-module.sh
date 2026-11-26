@@ -10,10 +10,13 @@ include=${EMACS_MODULE_INCLUDE:-${EMACS_INCLUDE:-$("$emacs" -Q --batch --eval \
 extension=so
 extra_flags=""
 arch_flags=""
+extra_sources=""
 case "$(uname -s)" in
   Darwin)
     extension=dylib
     arch_flags="-Wl,-install_name,etaf-video-mpv.dylib"
+    extra_sources="$root/native/etaf-video-mpv-macos.m"
+    extra_flags="-fobjc-arc -Wno-deprecated-declarations -framework Cocoa -framework QuartzCore -framework OpenGL"
     if [ "${PORTABLE:-0}" = "1" ]; then
       arch_flags="$arch_flags -mmacosx-version-min=12.0"
     fi
@@ -23,11 +26,17 @@ case "$(uname -s)" in
     ;;
   MINGW*|CYGWIN*|MSYS*)
     extension=dll
+    extra_sources="$root/native/etaf-video-mpv-win32.c"
+    extra_flags="-lgdi32 -luser32 -lopengl32"
     if [ "${PORTABLE:-0}" = "1" ]; then
-      extra_flags="-static-libgcc"
+      extra_flags="-static-libgcc $extra_flags"
     fi
     ;;
-  *) extra_flags="-ldl" ;;
+  Linux)
+    extra_sources="$root/native/etaf-video-mpv-linux.c"
+    extra_flags="-ldl -lpthread -lm"
+    ;;
+  *) extra_flags="-ldl -lpthread" ;;
 esac
 canvas_flag=""
 if [ "${PORTABLE:-0}" != "1" ] && [ -f "$include/emacs-module.h" ] && grep -q "canvas_data" "$include/emacs-module.h"; then
@@ -37,7 +46,9 @@ fi
   $arch_flags \
   $canvas_flag \
   -I "$include" \
+  -I "$root/native" \
   "$root/native/etaf-video-mpv.c" \
+  $extra_sources \
   $extra_flags \
   -o "$root/native/etaf-video-mpv.$extension"
 printf 'built %s\n' "$root/native/etaf-video-mpv.$extension"

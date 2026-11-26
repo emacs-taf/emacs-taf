@@ -180,7 +180,7 @@ Return the mounted video identified by HANDLE as a detached plist.
 
 **Arguments.** HANDLE is the registered symbol.
 
-**Semantics.** The plist describes the session at the call: `:handle`, `:mode` (the effective render mode after the `image` fallback), `:source` (the file name, the URL string, or the symbol `demo`), `:playing`, `:position` (seconds; the seek base plus elapsed time while frames arrive, clamped to the duration), `:duration`, `:speed`, `:format` (the producer's frame format: `gray`, `rgb24`, `bgra` or `mjpeg`), `:width` and `:height` (producer pixels), `:display-fps`, `:source-fps`, `:received`, `:presented`, `:dropped`, `:audio`, `:buffering`, `:error` and `:ended`. The result does not address the session after it returns, so it is safe to store and compare. `:audio` reports the session's audio setting; a source without an audio stream stays silent even when it is true. `:buffering` is non-nil while waiting for the first frame or when a live stream stalls; `:error` holds the decoder diagnostic when the producer exits non-zero.
+**Semantics.** The plist describes the session at the call: `:handle`, `:engine` (`mpv` or `ffmpeg`), `:render-backend` (`gpu`, `canvas` or `image`), `:mode` (the effective render mode after the `image` fallback), `:source` (the file name, the URL string, or the symbol `demo`), `:playing`, `:position` (seconds; the seek base plus elapsed time while frames arrive, clamped to the duration), `:duration`, `:speed`, `:format` (the producer's frame format: `gpu`, `tiff-file`, `tiff`, `ppm`, `canvas`, `gray`, `rgb24`, `bgra` or `mjpeg`), `:width` and `:height` (producer pixels), `:display-fps`, `:source-fps`, `:received`, `:presented`, `:dropped`, `:audio`, `:buffering`, `:error` and `:ended`. The result does not address the session after it returns, so it is safe to store and compare. `:audio` reports the session's audio setting; a source without an audio stream stays silent even when it is true. `:buffering` is non-nil while waiting for the first frame or when a live stream stalls; `:error` holds the decoder diagnostic when the producer exits non-zero.
 
 **Returns.** The detached state plist.
 
@@ -286,7 +286,7 @@ Display timer rate in frames per second for new video playback.
 
 Rendering backend that puts a graphical video frame on screen.
 
-**Semantics.** The value defaults to `image`: every frame publishes one scaled JPEG through the retained Host content, and any Emacs that can display images works.  `canvas` reads BGRA frames into one Emacs canvas image and refreshes only its pixel buffer, so a frame costs no JPEG encode, no decode and no content publication; it needs the `canvas` image type (Emacs 32, or a patched 31) and a built `native/etaf-video-canvas` module. Build the module from the package root with `sh native/build-video-canvas-module.sh`; the script reads `CC` and `EMACS_MODULE_INCLUDE` and writes the module beside its source.  `auto` takes `canvas` when both are present and `image` otherwise.  Missing capabilities never fail playback: a build without the image type, a module that cannot load, or a canvas outside a graphical frame silently keep the `image` path.  `ascii` and `color` modes ignore the setting.
+**Semantics.** The value defaults to `auto`: on a live graphical frame it prefers the native hardware `gpu` video overlay when `libmpv` and the platform GPU layer are ready (a `CAOpenGLLayer` + VideoToolbox layer on macOS, a pass-through child `HWND` + WGL OpenGL surface on Windows, or an X11 `XShape` + EGL/GLX or Wayland `wl_subsurface` + EGL surface on Linux, requiring no Emacs recompilation), then `canvas` when the `canvas` image type and `native/etaf-video-canvas` module are available, and falls back to `image`. `gpu` requests the native GPU overlay (transparently passing mouse and keyboard input through to Emacs and yielding to a single-frame snapshot whenever an in-buffer modal or overlay covers the canvas). `canvas` reads BGRA frames into one Emacs canvas image and refreshes only its pixel buffer; build its module from the package root with `sh native/build-video-canvas-module.sh`. `image` forces the pure-Emacs image pipeline (an asynchronous file-backed TIFF ring under `libmpv`, or scaled JPEGs under `ffmpeg`), working on any Emacs that can display images. Missing capabilities or non-graphical frames silently fall back to `image`. `ascii` and `color` modes ignore the setting.
 
 **Performance.** The canvas buffer stays at logical resolution: the macOS NS backend re-uploads every pixel on refresh, so a device-resolution buffer would quadruple the per-frame cost for no visible gain in a text host.
 
@@ -322,7 +322,17 @@ Return non-nil when the cross-platform `libmpv` native backend is available.
 
 **Returns.** `t` when ready, nil otherwise.
 
-**See also.** `etaf-video-engine`, `etaf-video-mpv-library`.
+**See also.** `etaf-video-gpu-available-p`, `etaf-video-engine`, `etaf-video-mpv-library`.
+
+#### Function: etaf-video-gpu-available-p ()
+
+Return non-nil when the native hardware GPU video layer is available.
+
+**Semantics.** Verifies that `etaf-video-mpv-available-p` is ready and that the current graphical Emacs session supports the platform native GPU video surface (macOS `CAOpenGLLayer` + VideoToolbox, Windows child `HWND` + WGL OpenGL, or Linux X11 + EGL/GLX or Wayland `wl_subsurface` + EGL). Returns nil without signaling in terminal/batch sessions or on platforms without a native GPU surface.
+
+**Returns.** `t` when ready, nil otherwise.
+
+**See also.** `etaf-video-mpv-available-p`, `etaf-video-render-backend`, `etaf-video-state`.
 
 #### Function: etaf-video-set-property (handle name value)
 

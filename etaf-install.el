@@ -1128,6 +1128,18 @@ INSTALLED-ONLY checks offline reopening without computing an upgrade plan."
    (expand-file-name (format "%s/%s" package version)
                      (etaf-install--native-cache-root))))
 
+(defun etaf-install--native-library-cache-path (package version lib-name)
+  "Return the cached path for PACKAGE VERSION's companion shared library LIB-NAME."
+  (unless (and (stringp lib-name)
+               (string-match-p
+                "\\`[a-z0-9][a-z0-9._-]*\\.\\(dylib\\|so\\(?:\\.[0-9]+\\)*\\|dll\\)\\'"
+                lib-name))
+    (error "Invalid companion library name in native manifest: %S" lib-name))
+  (expand-file-name
+   lib-name
+   (expand-file-name (format "%s/%s" package version)
+                     (etaf-install--native-cache-root))))
+
 (defun etaf-install--native-local-checkout-path (package module &optional platform)
   "Return PACKAGE's in-tree built native MODULE path if it exists."
   (when-let* ((dir (etaf-install--package-directory package))
@@ -1216,9 +1228,24 @@ Returns nil, `installed', `available', or `unavailable'."
                       package version name platform))
                (local (etaf-install--native-local-checkout-path
                        package name platform))
-               (present (or local
-                            (and sha (etaf-install--native-cached-p dest sha))
-                            (and (null sha) (file-exists-p dest)))))
+               (libs (and (hash-table-p entry) (gethash "libraries" entry)))
+               (libs-ok
+                (or local
+                    (cl-every
+                     (lambda (lib)
+                       (and (hash-table-p lib)
+                            (let* ((lname (gethash "name" lib))
+                                   (lsha (gethash "sha256" lib))
+                                   (ldest (ignore-errors
+                                            (etaf-install--native-library-cache-path
+                                             package version lname))))
+                              (and ldest lsha
+                                   (etaf-install--native-cached-p ldest lsha)))))
+                     libs)))
+               (present (and libs-ok
+                             (or local
+                                 (and sha (etaf-install--native-cached-p dest sha))
+                                 (and (null sha) (file-exists-p dest))))))
           (unless present
             (setq all-installed nil)
             (when (and dynamic-ok entry)
@@ -1253,23 +1280,38 @@ Returns nil, `installed', `available', or `unavailable'."
               (string-prefix-p "http://127.0.0.1:" url)
               (string-prefix-p "http://localhost:" url))
     (error "Refusing non-HTTPS native binary URL: %s" url))
-  (let ((buffer (url-retrieve-synchronously url t t 30)))
-    (unless buffer
-      (error "No response from %s" url))
-    (unwind-protect
-        (with-current-buffer buffer
-          (let ((status (and (boundp 'url-http-response-status)
-                             url-http-response-status)))
-            (unless (and (integerp status) (= status 200))
-              (error "HTTP %s from %s" (or status "error") url)))
-          (set-buffer-multibyte nil)
-          (goto-char (point-min))
-          (unless (re-search-forward "\r?\n\r?\n" nil t)
-            (error "Malformed HTTP response from %s" url))
-          (let ((coding-system-for-write 'no-conversion))
-            (write-region (point) (point-max) destination nil 'silent)))
-      (when (buffer-live-p buffer)
-        (kill-buffer buffer)))))
+  (let* ((curl (executable-find "curl"))
+         (curl-ok
+          (and curl
+               (zerop (call-process
+                       curl nil nil nil
+                       "-fsSL" "--compressed"
+                       "--noproxy" "127.0.0.1,localhost"
+                       "--retry" "2"
+                       "--connect-timeout" "20"
+                       "--max-time" "300"
+                       "-o" destination url))
+               (file-exists-p destination))))
+    (unless curl-ok
+      (when (file-exists-p destination)
+        (ignore-errors (delete-file destination)))
+      (let ((buffer (url-retrieve-synchronously url t t 120)))
+        (unless buffer
+          (error "No response from %s" url))
+        (unwind-protect
+            (with-current-buffer buffer
+              (let ((status (and (boundp 'url-http-response-status)
+                                 url-http-response-status)))
+                (unless (and (integerp status) (= status 200))
+                  (error "HTTP %s from %s" (or status "error") url)))
+              (set-buffer-multibyte nil)
+              (goto-char (point-min))
+              (unless (re-search-forward "\r?\n\r?\n" nil t)
+                (error "Malformed HTTP response from %s" url))
+              (let ((coding-system-for-write 'no-conversion))
+                (write-region (point) (point-max) destination nil 'silent)))
+          (when (buffer-live-p buffer)
+            (kill-buffer buffer)))))))
 
 (defun etaf-install--native-fetch-verified (package version entry destination)
   "Fetch, verify size and SHA-256 for ENTRY, and atomically install to DESTINATION."
@@ -1459,6 +1501,20 @@ Return a plist with :installed, :skipped and :restart."
               ((etaf-install--native-manifest-path package)
                " The package continues working with its fallback backend.")
               (t "")))))
+        (dolist (lib (gethash "libraries" entry))
+          (unless (hash-table-p lib)
+            (error "Invalid companion library record for %s" name))
+          (let* ((lib-name (gethash "name" lib))
+                 (lib-sha (gethash "sha256" lib))
+                 (lib-dest (etaf-install--native-library-cache-path
+                            package version lib-name))
+                 (lib-cached (and (not force)
+                                  (etaf-install--native-cached-p lib-dest lib-sha))))
+            (if lib-cached
+                (push (cons lib-name lib-dest) skipped)
+              (message "ETAF: downloading %s (%s)…" lib-name platform)
+              (etaf-install--native-fetch-verified package version lib lib-dest)
+              (push (cons lib-name lib-dest) installed))))
         (let* ((expected-sha (gethash "sha256" entry))
                (cached (and (not force) (etaf-install--native-cached-p dest expected-sha))))
           (if cached

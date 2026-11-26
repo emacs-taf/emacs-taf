@@ -929,5 +929,183 @@ clock's media position instead of drifting ahead during ffplay cold start."
       (ignore-errors (delete-file log))
       (ignore-errors (delete-file audio-log)))))
 
+(ert-deftest etaf-video-tests-mpv-loads-split-audio-url-and-headers ()
+  "libmpv loads split HTTP `:audio-url' without splitting on `:' or `,'."
+  (when (and (etaf-video-mpv-available-p)
+             (executable-find "ffmpeg")
+             (executable-find "python3"))
+    (let* ((name " *etaf-video-mpv-split-audio*")
+           (dir (make-temp-file "etaf-mpv-split-" t))
+           (video-file (expand-file-name "video.mp4" dir))
+           (audio-file (expand-file-name "audio.m4a" dir))
+           (req-log (expand-file-name "requests.jsonl" dir))
+           (srv-script (expand-file-name "server.py" dir))
+           (srv-buf (generate-new-buffer " *etaf-mpv-split-srv*"))
+           (srv-proc nil))
+      (unwind-protect
+          (when (and (zerop (call-process "ffmpeg" nil nil nil
+                                          "-y" "-loglevel" "error"
+                                          "-f" "lavfi"
+                                          "-i" "testsrc2=size=160x90:rate=15:duration=2"
+                                          "-an" "-c:v" "libx264"
+                                          "-pix_fmt" "yuv420p" video-file))
+                     (zerop (call-process "ffmpeg" nil nil nil
+                                          "-y" "-loglevel" "error"
+                                          "-f" "lavfi"
+                                          "-i" "sine=frequency=440:duration=2"
+                                          "-vn" "-c:a" "aac" audio-file)))
+            (with-temp-file srv-script
+              (insert
+               "import functools, http.server, json, sys\n"
+               "root, log_path = sys.argv[1], sys.argv[2]\n"
+               "class H(http.server.SimpleHTTPRequestHandler):\n"
+               "    def log_message(self, *a): pass\n"
+               "    def do_GET(self):\n"
+               "        with open(log_path, 'a', encoding='utf-8') as f:\n"
+               "            f.write(json.dumps({'path': self.path,\n"
+               "                'referer': self.headers.get('Referer'),\n"
+               "                'ua': self.headers.get('User-Agent')}) + '\\n')\n"
+               "        super().do_GET()\n"
+               "srv = http.server.ThreadingHTTPServer(\n"
+               "    ('127.0.0.1', 0), functools.partial(H, directory=root))\n"
+               "print(f'PORT={srv.server_address[1]}', flush=True)\n"
+               "srv.serve_forever()\n"))
+            (setq srv-proc (make-process
+                            :name "etaf-mpv-split-srv"
+                            :command (list (executable-find "python3")
+                                           "-u" srv-script dir req-log)
+                            :buffer srv-buf :noquery t))
+            (let ((port nil))
+              (should (etaf-video-tests--wait
+                       (lambda ()
+                         (with-current-buffer srv-buf
+                           (goto-char (point-min))
+                           (when (re-search-forward "^PORT=\\([0-9]+\\)$" nil t)
+                             (setq port (string-to-number (match-string 1))))))
+                       5))
+              (let* ((video-url (format "http://127.0.0.1:%d/video.mp4" port))
+                     (audio-url (format "http://127.0.0.1:%d/audio.m4a" port))
+                     (referer "https://media.test/watch?a=1,2")
+                     (ua "etaf-split-test/1.0")
+                     (src (list :kind 'url
+                                :url video-url
+                                :audio-url audio-url
+                                :headers (list (cons "Referer" referer)
+                                               (cons "User-Agent" ua))
+                                :width 160 :height 90 :fps 15 :duration 2.0
+                                :audio t))
+                     (etaf-video-engine 'mpv)
+                     (handle (etaf-video-tests--mount
+                              name (list :src src :mode 'ascii
+                                         :columns 16 :rows 6
+                                         :audio nil :autoplay t))))
+                (should (etaf-video-tests--wait
+                         (lambda ()
+                           (and (>= (etaf-video-tests--presented handle) 1)
+                                (eql 2 (etaf-video-get-property
+                                        handle "track-list/count" 'int))))
+                         8))
+                (should (eq 'mpv (plist-get (etaf-video-state handle) :engine)))
+                (should (equal (list audio-url)
+                               (etaf-video-get-property handle "audio-files" 'node)))
+                (let ((types (list (etaf-video-get-property
+                                    handle "track-list/0/type" 'string)
+                                   (etaf-video-get-property
+                                    handle "track-list/1/type" 'string))))
+                  (should (member "video" types))
+                  (should (member "audio" types)))
+                (should-not (equal "no" (etaf-video-get-property handle "aid" 'string)))
+                (let ((reqs (when (file-exists-p req-log)
+                              (with-temp-buffer
+                                (insert-file-contents req-log)
+                                (mapcar (lambda (line)
+                                          (json-parse-string line :object-type 'plist))
+                                        (split-string (buffer-string) "\n" t))))))
+                  (let ((vreq (cl-find "/video.mp4" reqs
+                                       :key (lambda (r) (plist-get r :path))
+                                       :test #'equal))
+                        (areq (cl-find "/audio.m4a" reqs
+                                       :key (lambda (r) (plist-get r :path))
+                                       :test #'equal)))
+                    (should vreq)
+                    (should areq)
+                    (should (equal referer (plist-get vreq :referer)))
+                    (should (equal referer (plist-get areq :referer)))
+                    (should (equal ua (plist-get vreq :ua)))
+                    (should (equal ua (plist-get areq :ua)))))
+                (etaf-video-pause handle))))
+        (etaf-video-tests--cleanup name)
+        (when (process-live-p srv-proc) (delete-process srv-proc))
+        (when (buffer-live-p srv-buf) (kill-buffer srv-buf))
+        (ignore-errors (delete-directory dir t))))))
+
+(ert-deftest etaf-video-tests-mpv-async-tiff-file-ring-and-cleanup ()
+  "libmpv `image' mode writes file-backed TIFF ring frames and removes them on unmount."
+  (when (and (etaf-video-mpv-available-p) (executable-find "ffmpeg"))
+    (let* ((name " *etaf-video-mpv-tiff-ring*")
+           (tmp-dir (make-temp-file "etaf-mpv-ring-test-" t))
+           (clip (expand-file-name "clip.mp4" tmp-dir))
+           (temporary-file-directory (file-name-as-directory tmp-dir))
+           (etaf-video-engine 'mpv)
+           (etaf-video-display-fps 20)
+           (handle nil))
+      (unwind-protect
+          (when (zerop (call-process "ffmpeg" nil nil nil
+                                     "-y" "-loglevel" "error"
+                                     "-f" "lavfi"
+                                     "-i" "testsrc2=size=320x180:rate=24:duration=2"
+                                     "-c:v" "libx264" "-pix_fmt" "yuv420p" clip))
+            (cl-letf (((symbol-function 'display-graphic-p) (lambda (&optional _f) t))
+                      ((symbol-function 'image-type-available-p)
+                       (lambda (type) (eq type 'tiff)))
+                      ((symbol-function 'frame-scale-factor) (lambda (&optional _f) 2.0))
+                      ((symbol-function 'frame-char-width) (lambda (&optional _f) 10))
+                      ((symbol-function 'frame-char-height) (lambda (&optional _f) 20))
+                      ((symbol-function 'image-flush) (lambda (&rest _args) nil)))
+              (setq handle (etaf-video-tests--mount
+                            name (list :src clip :mode 'image
+                                       :columns 32 :rows 9 :audio nil :autoplay t)))
+              (should (etaf-video-tests--wait
+                       (lambda () (>= (etaf-video-tests--presented handle) 3)) 6))
+              (let ((state (etaf-video-state handle)))
+                (should (eq 'mpv (plist-get state :engine)))
+                (should (eq 'image (plist-get state :render-backend)))
+                (should (eq 'tiff-file (plist-get state :format)))
+                (should (= 20 (plist-get state :display-fps))))
+              (with-current-buffer name
+                (let* ((disp (get-text-property (point-min) 'display))
+                       (img (cadr disp))
+                       (file (and (consp img) (plist-get (cdr img) :file))))
+                  (should (eq 'image (car-safe img)))
+                  (should (eq 'tiff (plist-get (cdr img) :type)))
+                  (should (integerp (plist-get (cdr img) :id)))
+                  (should (and (stringp file) (file-exists-p file)))
+                  (with-temp-buffer
+                    (set-buffer-multibyte nil)
+                    (insert-file-contents-literally file nil 0 4)
+                    (should (equal (buffer-string) "II*\0")))))
+              (etaf-video-tests--cleanup name)
+              (should-not (directory-files tmp-dir nil "\\`etaf-mpv-.*\\.tif\\'"))))
+        (etaf-video-tests--cleanup name)
+        (ignore-errors (delete-directory tmp-dir t))))))
+
+(ert-deftest etaf-video-tests-render-backend-and-gpu-probe ()
+  "`etaf-video-state' reports `:render-backend' and `etaf-video-gpu-available-p' is safe."
+  (should (memq (etaf-video-gpu-available-p) '(nil t)))
+  (let* ((name " *etaf-video-backend-state*")
+         (etaf-video-engine 'ffmpeg)
+         (etaf-video-render-backend 'image)
+         (handle nil))
+    (unwind-protect
+        (progn
+          (setq handle (etaf-video-tests--mount
+                        name (list :src nil :mode 'ascii
+                                   :columns 16 :rows 6 :autoplay nil)))
+          (let ((state (etaf-video-state handle)))
+            (should (eq 'ffmpeg (plist-get state :engine)))
+            (should (eq 'image (plist-get state :render-backend)))
+            (should (eq 'ascii (plist-get state :mode)))))
+      (etaf-video-tests--cleanup name))))
+
 (provide 'etaf-video-tests)
 ;;; etaf-video-tests.el ends here

@@ -95,6 +95,40 @@ class NativeReleaseTests(unittest.TestCase):
             errs = NATIVE.validate_index_manifest(result["index"], stage)
             self.assertTrue(any("mismatch" in e for e in errs))
 
+    def test_companion_libraries_validate_and_assemble_into_manifest_and_stage(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            mod_src = base / "etaf-video-mpv.dll"
+            lib_src = base / "libmpv-2.dll"
+            mod_payload = b"windows-mpv-module-v2-bytes"
+            lib_payload = b"windows-companion-libmpv-bytes"
+            mod_src.write_bytes(mod_payload)
+            lib_src.write_bytes(lib_payload)
+
+            inp = base / "builds"
+            NATIVE.register_module("etaf", "windows-x86_64", mod_src, inp)
+            NATIVE.register_library("etaf", "windows-x86_64", "libmpv-2.dll", "libmpv-2", lib_src, inp)
+
+            stage = base / "stage"
+            result = NATIVE.assemble_manifests(inp, write_packages=False, stage=stage, replace=True)
+            manifest = result["manifests"]["etaf"]
+            self.assertEqual([], NATIVE.validate_manifest(manifest, expected_package="etaf"))
+            win_entry = manifest["modules"][0]["platforms"]["windows-x86_64"]
+            self.assertIn("libraries", win_entry)
+            self.assertEqual(1, len(win_entry["libraries"]))
+            lib_entry = win_entry["libraries"][0]
+            self.assertEqual("libmpv-2.dll", lib_entry["name"])
+            self.assertEqual("libmpv-2-v2-windows-x86_64.dll", lib_entry["file"])
+            self.assertEqual(len(lib_payload), lib_entry["size"])
+            self.assertEqual([], NATIVE.validate_index_manifest(result["index"], stage))
+            self.assertEqual(2, len(result["index"]["artifacts"]))
+            self.assertEqual(lib_payload, (stage / "etaf/2/libmpv-2-v2-windows-x86_64.dll").read_bytes())
+
+            # Invalid companion library filename must be rejected.
+            bad = json.loads(json.dumps(manifest))
+            bad["modules"][0]["platforms"]["windows-x86_64"]["libraries"][0]["name"] = "../evil.dll"
+            self.assertTrue(any("library name" in e for e in NATIVE.validate_manifest(bad)))
+
 
 if __name__ == "__main__":
     unittest.main()
