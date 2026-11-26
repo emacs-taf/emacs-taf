@@ -85,12 +85,19 @@
 
 ;;; Code:
 
-(let* ((entry (or load-file-name
-                  (locate-library "etaf-export")
-                  buffer-file-name))
-       (lisp-dir (and entry (expand-file-name "lisp" (file-name-directory entry)))))
-  (when (and lisp-dir (file-directory-p lisp-dir))
-    (add-to-list 'load-path lisp-dir)))
+;;;###autoload
+(eval-and-compile
+  (let* ((entry (or (and load-file-name
+                         (not (string-suffix-p ".eln" load-file-name))
+                         (file-directory-p
+                          (expand-file-name "lisp" (file-name-directory load-file-name)))
+                         load-file-name)
+                    (bound-and-true-p byte-compile-current-file)
+                    (locate-library "etaf-export")
+                    buffer-file-name))
+         (lisp-dir (and entry (expand-file-name "lisp" (file-name-directory entry)))))
+    (when (and lisp-dir (file-directory-p lisp-dir))
+      (add-to-list 'load-path lisp-dir))))
 
 (require 'cl-lib)
 (require 'etaf)
