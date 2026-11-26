@@ -1,7 +1,7 @@
 ;;; -*- lexical-binding: t; -*-
 ;;; etaf-install.el --- Install ETAF with the Emacs package manager
 
-;; Version: 0.2.27
+;; Version: 0.2.28
 ;; Package-Requires: ((emacs "29.1"))
 ;; URL: https://github.com/emacs-taf/emacs-taf
 ;; Keywords: convenience
@@ -1708,11 +1708,25 @@ installed.  With NO-CONFIRM, skip the prompt."
 
 ;;; The ETAF Packages buffer
 
+(defvar etaf-install--manage-width-override nil
+  "Internal test override for `*ETAF Packages*' viewport width in columns.")
+
 (defvar-local etaf-install--manage-cache nil
   "Cached status plists for the ETAF Packages buffer.")
 
+(defvar-local etaf-install--manage-layout nil
+  "Current responsive column layout plist for `*ETAF Packages*'.")
+
+(defvar-local etaf-install--manage-last-width nil
+  "Last viewport column width applied to `*ETAF Packages*'.")
+
 (defvar-local etaf-install--manage-last-status nil
   "Pending status headline set by a manage action for `post-command-hook'.")
+
+(defconst etaf-install--group-short-labels
+  '((framework . "Core") (extension . "Ext")
+    (application . "App") (game . "Game"))
+  "Compact group labels used in narrow `*ETAF Packages*' viewports.")
 
 (defun etaf-install--manage-statuses ()
   "Return cached target status plists for this buffer."
@@ -1720,30 +1734,313 @@ installed.  With NO-CONFIRM, skip the prompt."
       (setq etaf-install--manage-cache (etaf-install-status))))
 
 (defun etaf-install--manage-invalidate ()
-  "Drop cached target status."
-  (setq etaf-install--manage-cache nil))
+  "Drop cached target status and refresh responsive column widths."
+  (setq etaf-install--manage-cache nil
+        etaf-install--manage-last-width nil))
 
-(defun etaf-install--manage-status-cell (status)
-  "Return the status cell for STATUS."
-  (cond ((plist-get status :update)
-         (concat (propertize "● " 'face 'font-lock-keyword-face)
-                 (propertize "Update" 'face 'font-lock-keyword-face)))
-        ((plist-get status :installed-p)
-         (concat (propertize "● " 'face 'success)
-                 (propertize "Installed" 'face 'success)))
-        (t (concat (propertize "● " 'face 'shadow)
-                   (propertize "Not installed" 'face 'shadow)))))
+(defun etaf-install--manage-window-width (&optional window)
+  "Return effective column width for `*ETAF Packages*' in WINDOW."
+  (cond
+   ((integerp etaf-install--manage-width-override)
+    (max 50 etaf-install--manage-width-override))
+   (noninteractive 180)
+   (t
+    (let ((win (or (and (window-live-p window) window)
+                   (get-buffer-window (current-buffer))
+                   (selected-window))))
+      (max 50 (if (window-live-p win) (window-body-width win) (frame-width)))))))
 
-(defun etaf-install--manage-target-cell (status)
-  "Return the target cell for STATUS."
-  (concat (propertize (symbol-name (plist-get status :package)) 'face 'bold)
-          " — "
-          (propertize (plist-get status :label) 'face 'shadow)))
+(defun etaf-install--manage-with-tooltip (text tooltip)
+  "Return a copy of TEXT with `help-echo' set to TOOLTIP, preserving faces."
+  (if (and (stringp tooltip) (not (string-empty-p tooltip)))
+      (let ((copy (copy-sequence text)))
+        (add-text-properties 0 (length copy) (list 'help-echo tooltip) copy)
+        copy)
+    text))
 
-(defun etaf-install--manage-group-cell (status)
-  "Return the group cell for STATUS."
-  (or (cdr (assq (plist-get status :group) etaf-install--group-labels))
-      (capitalize (symbol-name (plist-get status :group)))))
+(defun etaf-install--manage-fit-list (items sep max-width &optional prefix overflow-sep)
+  "Join propertized ITEMS with SEP to fit inside MAX-WIDTH display columns.
+Optional PREFIX is prepended before the first item.  When ITEMS do not all
+fit, append OVERFLOW-SEP (defaults to SEP) plus `+N' in `shadow' face so the
+result never exceeds MAX-WIDTH."
+  (let* ((pfx (or prefix ""))
+         (ov-sep (or overflow-sep sep))
+         (full (concat pfx (mapconcat #'identity items sep))))
+    (if (<= (string-width full) max-width)
+        full
+      (let* ((total (length items))
+             (fitted nil))
+        (if (= total 1)
+            ;; Never turn a single item (such as `✗ telega-server') into `+1';
+            ;; truncate the item itself cleanly while preserving its face.
+            (let* ((item (car items))
+                   (face (get-text-property 0 'face item))
+                   (room (max 1 (- max-width (string-width pfx))))
+                   (cut (truncate-string-to-width item room nil nil "…")))
+              (concat pfx (if face (propertize cut 'face face) cut)))
+          (cl-loop for count downfrom (1- total) to 1
+                   until fitted
+                   do (let* ((head (mapconcat #'identity (cl-subseq items 0 count) sep))
+                             (tail (propertize (format "%s+%d" ov-sep (- total count))
+                                               'face 'shadow))
+                             (cand (concat pfx head tail)))
+                        (when (<= (string-width cand) max-width)
+                          (setq fitted cand))))
+          (or fitted
+              (let ((fallback (concat pfx (propertize (format "+%d" total) 'face 'shadow))))
+                (if (<= (string-width fallback) max-width)
+                    fallback
+                  (truncate-string-to-width fallback (max 1 max-width) nil nil "…")))))))))
+
+(defun etaf-install--manage-status-text (status mode)
+  "Return plain status text for STATUS under density MODE."
+  (pcase mode
+    ('narrow
+     (cond ((plist-get status :update) "↑")
+           ((plist-get status :installed-p) "●")
+           (t "○")))
+    ('compact
+     (cond ((plist-get status :update) "● Update")
+           ((plist-get status :installed-p) "● Installed")
+           (t "○ Available")))
+    (_
+     (cond ((plist-get status :update) "● Update")
+           ((plist-get status :installed-p) "● Installed")
+           (t "● Not installed")))))
+
+(defun etaf-install--manage-group-text (status mode)
+  "Return plain group text for STATUS under density MODE."
+  (let ((group (plist-get status :group)))
+    (if (eq mode 'wide)
+        (or (cdr (assq group etaf-install--group-labels))
+            (capitalize (symbol-name group)))
+      (or (cdr (assq group etaf-install--group-short-labels))
+          (capitalize (symbol-name group))))))
+
+(defun etaf-install--manage-version-text (version &optional update)
+  "Return plain version display text for VERSION and UPDATE flag."
+  (let ((ver (or version "—")))
+    (if update (concat ver " ↑") ver)))
+
+(defun etaf-install--cli-tool-name (tool)
+  "Return short display name for manual CLI TOOL."
+  (or (plist-get (cdr (assq tool etaf-install--cli-catalog)) :name)
+      (symbol-name tool)))
+
+(defun etaf-install--manage-cli-natural-width (status)
+  "Return natural display width needed for STATUS's System CLI cell."
+  (let ((cli (plist-get status :system-cli)))
+    (if (null cli)
+        1
+      (let ((req (plist-get cli :required))
+            (opt (plist-get cli :optional)))
+        (cond
+         (req
+          (string-width
+           (mapconcat (lambda (item)
+                        (format "✓ %s" (etaf-install--cli-tool-name (car item))))
+                      req " · ")))
+         (opt
+          (let* ((names (mapcar (lambda (item)
+                                  (etaf-install--cli-tool-name (car item)))
+                                opt))
+                 (sample (if (> (length names) 3)
+                             (format "opt: %s, %s, +%d"
+                                     (car names) (cadr names) (- (length names) 2))
+                           (concat "opt: " (mapconcat #'identity names ", ")))))
+            (string-width sample)))
+         (t 1))))))
+
+(defun etaf-install--manage-compute-layout (statuses total-width)
+  "Compute a content-driven responsive column layout for STATUSES in TOTAL-WIDTH."
+  (let* ((mode (cond ((>= total-width 120) 'wide)
+                     ((>= total-width 92) 'compact)
+                     (t 'narrow)))
+         (gutter (if (eq mode 'narrow) 0 1))
+         (h-status (if (eq mode 'narrow) "St" "Status"))
+         (h-target "Target")
+         (h-group (if (eq mode 'wide) "Group" "Grp"))
+         (h-inst (if (eq mode 'wide) "Installed" "Inst"))
+         (h-avail (if (eq mode 'wide) "Available" "Avail"))
+         (h-run (if (eq mode 'narrow) "Run" "Runtime"))
+         (h-cli (if (eq mode 'narrow) "CLI" "System CLI"))
+         (h-deps (if (eq mode 'narrow) "Deps" "Depends on"))
+         (max-w (lambda (fn floor)
+                  (cl-reduce #'max statuses :key fn :initial-value floor)))
+         (status-c (funcall max-w
+                            (lambda (s)
+                              (string-width (etaf-install--manage-status-text s mode)))
+                            (string-width h-status)))
+         (group-c (funcall max-w
+                           (lambda (s)
+                             (string-width (etaf-install--manage-group-text s mode)))
+                           (string-width h-group)))
+         (inst-c (funcall max-w
+                          (lambda (s)
+                            (string-width (etaf-install--manage-version-text
+                                           (plist-get s :installed)
+                                           (plist-get s :update))))
+                          (string-width h-inst)))
+         (avail-c (funcall max-w
+                           (lambda (s)
+                             (string-width (etaf-install--manage-version-text
+                                            (plist-get s :available)
+                                            (plist-get s :update))))
+                           (string-width h-avail)))
+         (run-nat (funcall max-w
+                           (lambda (s) (string-width (or (plist-get s :runtime) "—")))
+                           (string-width h-run)))
+         (target-nat (funcall max-w
+                              (lambda (s)
+                                (string-width (format "%s — %s"
+                                                      (plist-get s :package)
+                                                      (plist-get s :label))))
+                              (string-width h-target)))
+         (cli-nat (min 28 (funcall max-w
+                                   #'etaf-install--manage-cli-natural-width
+                                   (string-width h-cli))))
+         (deps-nat (funcall max-w
+                            (lambda (s)
+                              (let ((deps (plist-get s :dependencies)))
+                                (if deps
+                                    (string-width (mapconcat #'symbol-name deps " · "))
+                                  1)))
+                            (string-width h-deps)))
+         ;; Tabulated-list adds 1 left padding + 7 inter-column spaces; keep 1
+         ;; safety cell at the right edge so Emacs never draws truncation `→'.
+         (budget (max 56 (- total-width 9)))
+         (status-w (+ status-c gutter))
+         (group-w (+ group-c gutter))
+         (inst-w (+ inst-c gutter))
+         (avail-w (+ avail-c gutter))
+         (fixed (+ status-w group-w inst-w avail-w))
+         (flex (max 34 (- budget fixed)))
+         (run-want (+ run-nat gutter))
+         (target-want (+ target-nat gutter))
+         (cli-want (+ cli-nat gutter))
+         (deps-want deps-nat)
+         ;; Step 1: allocate clean floor widths to the 4 flexible columns.
+         (run-w (min run-want (pcase mode ('narrow 7) ('compact 12) (_ 18))))
+         (target-w (min target-want (pcase mode ('narrow 18) ('compact 24) (_ 28))))
+         (cli-w (min cli-want (pcase mode ('narrow 11) ('compact 15) (_ 18))))
+         (deps-w (min deps-want (pcase mode ('narrow 10) ('compact 14) (_ 18))))
+         (used (+ run-w target-w cli-w deps-w)))
+    ;; If floor widths exceed flex budget on an extreme narrow window, trim cleanly.
+    (when (> used flex)
+      (let ((over (- used flex)))
+        (let ((d (min over (max 0 (- deps-w 6)))))
+          (setq deps-w (- deps-w d) over (- over d)))
+        (let ((d (min over (max 0 (- cli-w 7)))))
+          (setq cli-w (- cli-w d) over (- over d)))
+        (let ((d (min over (max 0 (- target-w 12)))))
+          (setq target-w (- target-w d) over (- over d)))
+        (let ((d (min over (max 0 (- run-w 5)))))
+          (setq run-w (- run-w d) over (- over d)))))
+    ;; Step 2: distribute surplus by value — Runtime exact fit, then System CLI
+    ;; (capped in narrow/compact modes so Target and Depends on stay balanced),
+    ;; then split remaining room smoothly between Target and Depends on.
+    (let ((extra (max 0 (- flex (+ run-w target-w cli-w deps-w))))
+          (cli-cap (pcase mode ('narrow 16) ('compact 20) (_ cli-want))))
+      (when (> extra 0)
+        (let ((add (min extra (max 0 (- run-want run-w)))))
+          (setq run-w (+ run-w add) extra (- extra add))))
+      (when (> extra 0)
+        (let ((add (min extra (max 0 (- (min cli-want cli-cap) cli-w)))))
+          (setq cli-w (+ cli-w add) extra (- extra add))))
+      (when (> extra 0)
+        (let* ((t-need (max 0 (- target-want target-w)))
+               (t-share (min t-need (ceiling (* extra 0.6))))
+               (d-rem (- extra t-share))
+               (d-need (max 0 (- deps-want deps-w)))
+               (d-add (min d-rem d-need))
+               (leftover (- d-rem d-add))
+               (t-extra (min (max 0 (- t-need t-share)) leftover)))
+          (setq target-w (+ target-w t-share t-extra)
+                deps-w (+ deps-w d-add (max 0 (- leftover t-extra)))))))
+    (list :mode mode
+          :width total-width
+          :gutter gutter
+          :headers (list h-status h-target h-group h-inst h-avail h-run h-cli h-deps)
+          :widths (list status-w target-w group-w inst-w avail-w run-w cli-w deps-w)
+          :target-max (max 8 (- target-w gutter))
+          :runtime-max (max 5 (- run-w gutter))
+          :cli-max (max 6 (- cli-w gutter))
+          :deps-max (max 6 deps-w))))
+
+(defun etaf-install--manage-apply-layout (&optional width)
+  "Recompute and apply `tabulated-list-format' for WIDTH in `*ETAF Packages*'."
+  (let* ((total-width (or width (etaf-install--manage-window-width)))
+         (statuses (etaf-install--manage-statuses))
+         (layout (etaf-install--manage-compute-layout statuses total-width))
+         (headers (plist-get layout :headers))
+         (widths (plist-get layout :widths)))
+    (setq etaf-install--manage-layout layout
+          etaf-install--manage-last-width total-width
+          tabulated-list-format
+          (apply #'vector
+                 (cl-mapcar (lambda (title w) (list title w t)) headers widths)))
+    (tabulated-list-init-header)
+    layout))
+
+(defun etaf-install--manage-on-resize (&optional frame-or-window)
+  "Refit `*ETAF Packages*' columns when its window width changes."
+  (let ((win (cond
+              ((windowp frame-or-window) frame-or-window)
+              ((framep frame-or-window)
+               (get-buffer-window (current-buffer) frame-or-window))
+              (t (get-buffer-window (current-buffer))))))
+    (when (and (window-live-p win)
+               (eq (window-buffer win) (current-buffer)))
+      (let ((width (etaf-install--manage-window-width win)))
+        (unless (eql width etaf-install--manage-last-width)
+          (etaf-install--manage-apply-layout width)
+          (tabulated-list-print t))))))
+
+(defun etaf-install--manage-status-cell (status layout)
+  "Return the status cell for STATUS under LAYOUT."
+  (let* ((mode (plist-get layout :mode))
+         (text (etaf-install--manage-status-text status mode))
+         (face (cond ((plist-get status :update) 'font-lock-keyword-face)
+                     ((plist-get status :installed-p) 'success)
+                     (t 'shadow)))
+         (tip (cond
+               ((plist-get status :update)
+                (format "Update available: %s -> %s (press u to update)"
+                        (plist-get status :installed)
+                        (plist-get status :available)))
+               ((plist-get status :installed-p)
+                (format "Installed (%s)" (plist-get status :installed)))
+               (t "Not installed (press i to install)"))))
+    (etaf-install--manage-with-tooltip (propertize text 'face face) tip)))
+
+(defun etaf-install--manage-target-cell (status layout)
+  "Return the target cell for STATUS fitted to LAYOUT with a full tooltip."
+  (let* ((pkg (symbol-name (plist-get status :package)))
+         (label (or (plist-get status :label) ""))
+         (group (etaf-install--manage-group-text status 'wide))
+         (max-w (plist-get layout :target-max))
+         (tip (format "%s — %s (%s)" pkg label group))
+         (bold-pkg (propertize pkg 'face 'bold))
+         (full (concat bold-pkg " — " (propertize label 'face 'shadow)))
+         (text
+          (cond
+           ((<= (string-width full) max-w) full)
+           ((>= (- max-w (string-width pkg) 3) 4)
+            (let ((rem (- max-w (string-width pkg) 3)))
+              (concat bold-pkg " — "
+                      (propertize (truncate-string-to-width label rem nil nil "…")
+                                  'face 'shadow))))
+           ((<= (string-width pkg) max-w) bold-pkg)
+           (t (propertize (truncate-string-to-width pkg max-w nil nil "…")
+                          'face 'bold)))))
+    (etaf-install--manage-with-tooltip text tip)))
+
+(defun etaf-install--manage-group-cell (status layout)
+  "Return the group cell for STATUS under LAYOUT."
+  (let* ((mode (plist-get layout :mode))
+         (text (etaf-install--manage-group-text status mode))
+         (full (etaf-install--manage-group-text status 'wide)))
+    (etaf-install--manage-with-tooltip text (format "Group: %s" full))))
 
 (defun etaf-install--manage-version-cell (version &optional update)
   "Return a version cell for VERSION, highlighting UPDATE availability."
@@ -1752,19 +2049,23 @@ installed.  With NO-CONFIRM, skip the prompt."
         (concat (propertize version 'face 'font-lock-keyword-face) " ↑")
       (propertize version 'face 'shadow))))
 
-(defun etaf-install--manage-runtime-cell (status)
-  "Return the runtime cell for STATUS."
-  (let ((runtime (plist-get status :runtime)))
-    (propertize runtime
-                'face (cond ((or (equal runtime "Ready")
-                                 (string-prefix-p "Ready" runtime)) 'success)
-                            ((equal runtime "—") 'shadow)
-                            (t 'warning)))))
-
-(defun etaf-install--cli-tool-name (tool)
-  "Return short display name for manual CLI TOOL."
-  (or (plist-get (cdr (assq tool etaf-install--cli-catalog)) :name)
-      (symbol-name tool)))
+(defun etaf-install--manage-runtime-cell (status layout)
+  "Return the runtime cell for STATUS fitted to LAYOUT with full tooltip."
+  (let* ((runtime (or (plist-get status :runtime) "—"))
+         (remedy (plist-get status :remedy))
+         (max-w (plist-get layout :runtime-max))
+         (face (cond ((or (equal runtime "Ready")
+                          (string-prefix-p "Ready" runtime)) 'success)
+                     ((equal runtime "—") 'shadow)
+                     (t 'warning)))
+         (shown (if (<= (string-width runtime) max-w)
+                    runtime
+                  (truncate-string-to-width runtime max-w nil nil "…")))
+         (tip (if remedy
+                  (format "%s\n%s\nPress ? for full capability report." runtime remedy)
+                (unless (equal runtime "—")
+                  (format "%s (press ? for capability report)" runtime)))))
+    (etaf-install--manage-with-tooltip (propertize shown 'face face) tip)))
 
 (defun etaf-install--manage-cli-tooltip (cli)
   "Return hover tooltip text describing manual System CLI summary CLI."
@@ -1793,8 +2094,8 @@ installed.  With NO-CONFIRM, skip the prompt."
     (push "Press ? for details and copyable commands." parts)
     (mapconcat #'identity (nreverse parts) "\n")))
 
-(defun etaf-install--manage-cli-cell (status)
-  "Return the System CLI cell for STATUS.
+(defun etaf-install--manage-cli-cell (status layout)
+  "Return the System CLI cell for STATUS fitted to LAYOUT.
 Shows only external OS CLI tools the user must install manually (excluding
 auto-downloaded native modules, bundled package backends and managed engines)."
   (let ((cli (plist-get status :system-cli)))
@@ -1802,54 +2103,71 @@ auto-downloaded native modules, bundled package backends and managed engines)."
         (propertize "—" 'face 'shadow)
       (let* ((req (plist-get cli :required))
              (opt (plist-get cli :optional))
+             (max-w (plist-get layout :cli-max))
              (tip (etaf-install--manage-cli-tooltip cli))
              (text
               (cond
                (req
-                (mapconcat
-                 (lambda (item)
-                   (let ((ok (cdr item))
-                         (name (etaf-install--cli-tool-name (car item))))
-                     (propertize (format "%s %s" (if ok "✓" "✗") name)
-                                 'face (if ok 'success 'warning))))
-                 req
-                 (propertize " · " 'face 'shadow)))
+                (let* ((render-item
+                        (lambda (item)
+                          (let ((ok (cdr item))
+                                (name (etaf-install--cli-tool-name (car item))))
+                            (propertize (format "%s %s" (if ok "✓" "✗") name)
+                                        'face (if ok 'success 'warning)))))
+                       (sep (propertize " · " 'face 'shadow))
+                       (natural (mapconcat render-item req sep)))
+                  (if (<= (string-width natural) max-w)
+                      natural
+                    ;; When compacting, prioritize missing (`✗') tools first so
+                    ;; missing prerequisites never hide behind `+N'.
+                    (let* ((ordered (append (cl-remove-if #'cdr req)
+                                            (cl-remove-if-not #'cdr req)))
+                           (pills (mapcar render-item ordered)))
+                      (etaf-install--manage-fit-list pills sep max-w nil " · ")))))
                (opt
                 (let* ((names (mapcar (lambda (item)
-                                        (etaf-install--cli-tool-name (car item)))
+                                        (propertize (etaf-install--cli-tool-name (car item))
+                                                    'face 'shadow))
                                       opt))
-                       (shown (if (> (length names) 3)
-                                  (concat (mapconcat #'identity (cl-subseq names 0 2) ", ")
-                                          (format ", +%d" (- (length names) 2)))
-                                (mapconcat #'identity names ", "))))
-                  (propertize (concat "opt: " shown) 'face 'shadow)))
+                       (pfx (propertize "opt: " 'face 'shadow))
+                       (sep (propertize ", " 'face 'shadow)))
+                  (etaf-install--manage-fit-list names sep max-w pfx ", ")))
                (t (propertize "—" 'face 'shadow)))))
-        (propertize text 'help-echo tip)))))
+        (etaf-install--manage-with-tooltip text tip)))))
 
-(defun etaf-install--manage-dependency-cell (status)
-  "Return the dependency cell for STATUS."
+(defun etaf-install--manage-dependency-cell (status layout)
+  "Return the dependency cell for STATUS fitted to LAYOUT with `+N' overflow."
   (let ((dependencies (plist-get status :dependencies)))
-    (propertize (if dependencies
-                    (mapconcat #'symbol-name dependencies " · ")
-                  "—")
-                'face 'shadow)))
+    (if (null dependencies)
+        (propertize "—" 'face 'shadow)
+      (let* ((names (mapcar #'symbol-name dependencies))
+             (max-w (plist-get layout :deps-max))
+             (tip (format "Depends on (%d): %s"
+                          (length names)
+                          (mapconcat #'identity names " · ")))
+             (items (mapcar (lambda (n) (propertize n 'face 'shadow)) names))
+             (sep (propertize " · " 'face 'shadow))
+             (text (etaf-install--manage-fit-list items sep max-w nil " · ")))
+        (etaf-install--manage-with-tooltip text tip)))))
 
 (defun etaf-install--manage-entries ()
   "Return tabulated-list entries for ETAF targets."
-  (mapcar
-   (lambda (status)
-     (list (plist-get status :package)
-           (vector (etaf-install--manage-status-cell status)
-                   (etaf-install--manage-target-cell status)
-                   (etaf-install--manage-group-cell status)
-                   (etaf-install--manage-version-cell (plist-get status :installed)
-                                                      (plist-get status :update))
-                   (etaf-install--manage-version-cell (plist-get status :available)
-                                                      (plist-get status :update))
-                   (etaf-install--manage-runtime-cell status)
-                   (etaf-install--manage-cli-cell status)
-                   (etaf-install--manage-dependency-cell status))))
-   (etaf-install--manage-statuses)))
+  (let ((layout (or etaf-install--manage-layout
+                    (etaf-install--manage-apply-layout))))
+    (mapcar
+     (lambda (status)
+       (list (plist-get status :package)
+             (vector (etaf-install--manage-status-cell status layout)
+                     (etaf-install--manage-target-cell status layout)
+                     (etaf-install--manage-group-cell status layout)
+                     (etaf-install--manage-version-cell (plist-get status :installed)
+                                                        (plist-get status :update))
+                     (etaf-install--manage-version-cell (plist-get status :available)
+                                                        (plist-get status :update))
+                     (etaf-install--manage-runtime-cell status layout)
+                     (etaf-install--manage-cli-cell status layout)
+                     (etaf-install--manage-dependency-cell status layout))))
+     (etaf-install--manage-statuses))))
 
 (defconst etaf-install--manage-keys
   '(("i" . "install")
@@ -1980,10 +2298,16 @@ When HEADLINE is non-nil, display it above the key hints."
   (or (tabulated-list-get-id)
       (user-error "No ETAF target on this line")))
 
+(defun etaf-install--manage-on-revert ()
+  "Invalidate cached status and refit columns before reverting `*ETAF Packages*'."
+  (etaf-install--manage-invalidate)
+  (etaf-install--manage-apply-layout))
+
 (defun etaf-install--manage-reprint (&optional headline)
-  "Invalidate the cache and reprint the manage buffer.
+  "Invalidate the cache, refit columns and reprint the manage buffer.
 When HEADLINE is non-nil, display it above the key hints in the echo area."
   (etaf-install--manage-invalidate)
+  (etaf-install--manage-apply-layout)
   (tabulated-list-revert)
   (setq etaf-install--manage-last-status headline)
   (etaf-install--manage-show-current headline))
@@ -2091,13 +2415,14 @@ reopened."
 (define-derived-mode etaf-install--manage-mode tabulated-list-mode "ETAF Packages"
   "Major mode for the ETAF Packages buffer."
   (setq tabulated-list-format
-        [("Status" 16 t) ("Target" 54 t) ("Group" 13 t)
-         ("Installed" 11 t) ("Available" 11 t) ("Runtime" 27 t)
-         ("System CLI" 28 t) ("Depends on" 44 t)])
+        [("Status" 16 t) ("Target" 54 t) ("Group" 12 t)
+         ("Installed" 10 t) ("Available" 10 t) ("Runtime" 8 t)
+         ("System CLI" 27 t) ("Depends on" 44 t)])
   (setq tabulated-list-entries #'etaf-install--manage-entries)
   (setq tabulated-list-padding 1)
   (setq tabulated-list-sort-key nil)
-  (add-hook 'tabulated-list-revert-hook #'etaf-install--manage-invalidate nil t)
+  (add-hook 'tabulated-list-revert-hook #'etaf-install--manage-on-revert nil t)
+  (add-hook 'window-size-change-functions #'etaf-install--manage-on-resize nil t)
   (add-hook 'post-command-hook #'etaf-install--manage-post-command nil t)
   (setq-local mode-line-format '(:eval (etaf-install--manage-mode-line)))
   (hl-line-mode 1)
@@ -2108,7 +2433,9 @@ reopened."
   "Show and manage installed and available ETAF targets.
 The buffer is the whole interface: a native tabulated list of every target with
 its status, versions, runtime, manual System CLI tools and Lisp dependencies,
-plus the archive's community packages.  The echo area shows the key hints.
+plus the archive's community packages.  Column widths adapt to visible content
+and window width, keeping full details available on hover tooltips.  The echo
+area shows the key hints.
 `i' installs, `n' installs native modules, `u' updates, `U' updates all, `d'
 removes, RET opens, `?' reports capabilities, `g' refreshes the archives, `l'
 shows the standard package menu and `q' quits.  Removal deletes package files
@@ -2118,14 +2445,15 @@ only; application data, logins and caches stay."
   (etaf-install--archive)
   (etaf-install--register-installed-archives)
   (let ((buffer (get-buffer-create "*ETAF Packages*")))
-    (with-current-buffer buffer
-      (etaf-install--manage-mode)
-      (setq etaf-install--manage-cache nil)
-      (tabulated-list-print t))
-    ;; The table is the whole interface: take the frame instead of leaving the
-    ;; previous buffer in a window above or below it.
+    ;; The table is the whole interface: take the frame first so the initial
+    ;; responsive layout measures the real displayed window width.
     (delete-other-windows)
     (switch-to-buffer buffer)
+    (with-current-buffer buffer
+      (etaf-install--manage-mode)
+      (etaf-install--manage-invalidate)
+      (etaf-install--manage-apply-layout)
+      (tabulated-list-print t))
     (etaf-install--manage-show-current)))
 
 (etaf-install--register-installed-archives)

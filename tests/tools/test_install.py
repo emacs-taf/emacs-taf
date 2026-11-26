@@ -884,6 +884,94 @@ class InstallTests(unittest.TestCase):
     (error "Manage RET did not show *ETAF Installation* for missing required runtime")))
 """)
 
+    def test_manage_layout_fits_content_adapts_to_width_and_provides_tooltips(self):
+        self.run_lisp("""
+(etaf-install 'etaf-ui t)
+;; 1) Content-driven Runtime width: when only `Ready' and `—' exist, Runtime
+;; must stay tight (<= 9 cols) instead of wasting 27 columns of dead space.
+(let ((etaf-install--manage-width-override 190))
+  (etaf-install-manage)
+  (with-current-buffer "*ETAF Packages*"
+    (let* ((fmt (append tabulated-list-format nil))
+           (run-col (assoc "Runtime" fmt)))
+      (unless (and run-col (<= (cadr run-col) 9))
+        (error "Runtime column wasted space when only Ready/— exist: %S" run-col)))))
+
+;; 2) When a package with a longer runtime (`telega-server missing') is installed,
+;; Runtime expands dynamically to fit it!
+(etaf-install 'etaf-telega t)
+(let ((etaf-install--manage-width-override 190))
+  (etaf-install-manage)
+  (with-current-buffer "*ETAF Packages*"
+    (let* ((fmt (append tabulated-list-format nil))
+           (run-col (assoc "Runtime" fmt)))
+      (unless (and run-col (>= (cadr run-col) 21))
+        (error "Runtime column did not expand for telega-server missing: %S" run-col)))))
+
+;; 3) Across wide (180), medium (135), compact (105) and narrow (80) viewports:
+;; every rendered row must stay strictly inside the viewport width (zero right-edge
+;; truncation arrows) while preserving full descriptions, System CLI lists and
+;; complete dependency closures on `help-echo' tooltips!
+(cl-letf (((symbol-function 'executable-find)
+           (lambda (prog &rest _)
+             (when (member prog '("node" "python3"))
+               (concat "/usr/local/bin/" prog)))))
+  (dolist (width '(180 135 105 80))
+    (let ((etaf-install--manage-width-override width))
+      (etaf-install-manage)
+      (with-current-buffer "*ETAF Packages*"
+        (dolist (line (split-string (buffer-string) "\n" t))
+          (when (> (string-width line) width)
+            (error "Row overflowed viewport width %d (got %d): %S"
+                   width (string-width line) line)))
+        (let* ((find-row (lambda (pkg)
+                           (goto-char (point-min))
+                           (let (entry)
+                             (while (and (not entry) (not (eobp)))
+                               (if (eq (tabulated-list-get-id) pkg)
+                                   (setq entry (tabulated-list-get-entry))
+                                 (forward-line 1)))
+                             entry)))
+               (ui-row (funcall find-row 'etaf-ui))
+               (ncm-row (funcall find-row 'etaf-ncm))
+               (trans-row (funcall find-row 'etaf-translate)))
+          ;; Target tooltip ALWAYS holds full description even when compacted.
+          (let ((tip (get-text-property 0 'help-echo (aref trans-row 1))))
+            (unless (and (stringp tip)
+                         (string-match-p "Immersive page translation extension" tip))
+              (error "Target tooltip missing full description at width %d: %S" width tip)))
+          ;; System CLI tooltip ALWAYS holds all tools and missing status.
+          (let ((tip (get-text-property 0 'help-echo (aref ncm-row 6))))
+            (unless (and (stringp tip)
+                         (string-match-p "mpv" tip)
+                         (string-match-p "node" tip))
+              (error "System CLI tooltip incomplete at width %d: %S" width tip)))
+          ;; On narrow widths, missing `✗ mpv' must stay visible ahead of `+N'.
+          (when (<= width 105)
+            (let ((cell (substring-no-properties (aref ncm-row 6))))
+              (unless (string-match-p "✗ mpv" cell)
+                (error "Missing CLI hidden behind +N at width %d: %S" width cell))))
+          ;; Depends on tooltip ALWAYS holds full dependency closure.
+          (let ((tip (get-text-property 0 'help-echo (aref ui-row 7))))
+            (unless (and (stringp tip)
+                         (string-match-p "etaf" tip)
+                         (string-match-p "ebox" tip)
+                         (string-match-p "ecss" tip))
+              (error "Depends on tooltip incomplete at width %d: %S" width tip)))))))
+
+  ;; 4) Dynamic resize hook reflows columns cleanly when window width changes.
+  (let ((etaf-install--manage-width-override 180))
+    (etaf-install-manage))
+  (with-current-buffer "*ETAF Packages*"
+    (let ((wide-target-w (cadr (aref tabulated-list-format 1))))
+      (let ((etaf-install--manage-width-override 90))
+        (etaf-install--manage-on-resize (selected-window)))
+      (let ((narrow-target-w (cadr (aref tabulated-list-format 1))))
+        (unless (< narrow-target-w wide-target-w)
+          (error "Resize handler did not shrink Target column (%d -> %d)"
+                 wide-target-w narrow-target-w))))))
+""")
+
 
 if __name__ == "__main__":
     unittest.main()
