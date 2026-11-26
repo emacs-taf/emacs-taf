@@ -28,6 +28,8 @@
 (require 'etaf-weread-model)
 (require 'etaf-weread-views)
 
+(declare-function etaf-weread-doctor "etaf-weread" ())
+
 ;;; ---------------------------------------------------------------------------
 ;;; Buffer state and keys
 ;;; ---------------------------------------------------------------------------
@@ -673,6 +675,14 @@ minibuffer borrows keeps its layout until they return.  Cells the reader
 does not paint, such as the sub-cell remainder at the window edge, take the
 palette background."
   (interactive)
+  (when (and (called-interactively-p 'interactive)
+             (null model)
+             (fboundp 'etaf-weread-doctor))
+    (let ((missing (cl-remove-if #'cadr (plist-get (etaf-weread-doctor) :required))))
+      (when missing
+        (user-error "etaf-weread requires %s: %s (run M-x etaf-install-doctor for install commands)"
+                    (mapconcat #'car missing ", ")
+                    (nth 2 (car missing))))))
   (let* ((model (or model (etaf-weread-create)))
          (buffer
           (etaf-app-open

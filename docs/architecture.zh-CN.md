@@ -549,7 +549,7 @@ GUI 保持实际运行时的 GC 策略与用户设置，测量工具不能额外
 | --- | --- | --- |
 | Emacs 包（自有或公共） | `etaf-db`、`telega` | 在 `Package-Requires` 声明；`etaf-install` 注册所需归档（`etaf`、`gnu`、`nongnu`、`melpa`），由 `package.el` 自动解析安装；不关闭签名校验、不改用户其它源。归档包与安装目标由 `release-dependencies.json` 选择；`workspace.json` 只登记检出单元与远端，整仓提交就是发布版本 |
 | 自有组件与原生模块（脚本后端、Emacs C 动态模块） | `weread` 后端、`etaf-md` QuickJS 模块、`etaf` `libmpv` 模块、EKP C 模块 | 纯源码后端随包同一 tar 发布并计入 sha256；C 动态模块在源码仓维护并通过 CI 按 `(OS, Arch)` 矩阵对 Emacs 29.1 基线头文件预编译，包内只随 tar 发布带固定版本、HTTPS 镜像与 SHA-256 的 `native/manifest.json`；用户执行 `M-x etaf-install`（或 `M-x etaf-install-update`）时按依赖闭包自动下载、校验并热加载到 `${XDG_CACHE_HOME:-~/.cache}/emacs-taf/native/<包>/<版本>/`（不进 tar、不依赖本地编译器、升级包不丢失，且网络或平台不可用时优雅回退不阻断安装），也可随时用 `M-x etaf-install-native`（或在 `M-x etaf-install-manage` 按 `n`）手动重试或强制重装；源码检出仍保留本地 `native/` 构建路径 |
-| 系统程序与账号 | ffmpeg、mpv、node、TDLib、Godot、OpenSpiel、平台登录 | 只检测，给出按平台生成的一条可复制命令；不代跑 `sudo`/`brew`/`apt`。游戏引擎与预编译原生模块是受控下载路径：包内自带固定版本与 SHA-256 校验值的清单或脚本，仅在用户执行安装/更新命令（`M-x etaf-install` / `M-x etaf-install-native` / `M-x etaf-gamekit-install-*`）时下载并校验后写入 ETAF 缓存目录（`etaf-install-auto-native` 可设为 nil 关闭自动拉取）；包加载与启动路径绝不静默下载 |
+| 系统程序与账号 | ffmpeg、mpv、node、python3、rsvg-convert、TDLib、Godot、OpenSpiel、平台登录 | 只检测，按本机包管理器（`brew`/`apt`/`dnf`/`pacman`/`zypper`/`winget`/`scoop`）合并生成一条可复制命令；绝不代跑 `sudo`/`brew`/`apt`。`M-x etaf-install-manage` 单独提供 `System CLI` 列，只展示需要用户手工安装的外部 OS 命令行工具（含未安装包的前置预览与实时检测状态），明确排除自动下载的预编译原生模块、随包发布的 `backends/` 脚本和受管游戏引擎。游戏引擎与预编译原生模块属于受控下载路径：包内自带固定版本与 SHA-256 校验值的清单或脚本，仅在用户执行安装/更新命令（`M-x etaf-install` / `M-x etaf-install-native` / `M-x etaf-gamekit-install-*`）时下载并校验后写入 ETAF 缓存目录（`etaf-install-auto-native` 可设为 nil 关闭自动拉取）；包加载与启动路径绝不静默下载 |
 
 自有组件的源码必须跟随应用仓，不留在别的仓库或技能目录：一个版本一次提升，Lisp 与组件原子发布，避免跨仓版本对齐。引擎安装脚本属于包内组件，随同一个 tar 发布并计入 sha256，所以归档安装也能执行它。
 
@@ -566,7 +566,7 @@ GUI 保持实际运行时的 GC 策略与用户设置，测量工具不能额外
 
 ### 13.5 缺依赖时怎么说
 
-菜单条目直接显示状态；缺可选预编译原生模块给出 `M-x etaf-install-native`（或在 `M-x etaf-install-manage` 按 `n`），绝不要求归档用户进入 `elpa/` 目录手工执行 `make` 或 shell 构建脚本；缺系统程序给一条命令并提示“装完回来按 `r` 重新检测”，缺账号交给应用内的一次性配置。Godot 的那一条是 `M-x etaf-gamekit-install-godot`：后台执行包内脚本，进度写进 `*ETAF engine install*`，成败在 echo area 报告。阻塞与降级分开：缺 ffmpeg、缺 `typeset-native` 或缺 `ekp` C 模块只影响对应加速/媒体能力，允许打开并提示受限；缺 `telega-server` 或游戏引擎就明确拒绝启动。错误必须是一句人话加可复制命令，不输出 Lisp 堆栈。
+管理界面的 `Runtime` 与 `System CLI` 列在安装前后分别展示运行时状态与需手工安装的外部 OS 命令行工具（`System CLI` 只列手工 CLI，不含自动预编译原生模块、随包后端与受管游戏引擎）。缺依赖通过三道防线确保用户看到并可行动：第一道在安装与管理入口，交互式 `M-x etaf-install` 发现缺少受管游戏引擎时主动询问是否运行 `M-x etaf-gamekit-install-godot` / `etaf-gamekit-install-openspiel`（后台日志写进 `*ETAF engine install*`），发现缺少必需系统 CLI 时自动弹出可交互的 `*ETAF Installation*` 引导页（含合并后的单条跨平台安装命令、`c` 一键复制、`r` 装完回来重新检测、`o` 就绪后直接打开、`n` 手动安装预编译原生模块），`M-x etaf-install-doctor` 与管理界面的 `?` 在安装前同样可用；第二道针对可选 CLI，应用内按需就地降级提示（如缺 `qrencode` 时二维码卡片提示需要 `qrencode`，缺 `ffmpeg` 时视频卡片提示安装 `ffmpeg` 可内嵌播放，不阻塞文档阅读）；第三道针对绕过 `etaf-install` 直接 `M-x <应用>-open` 的交互调用，缺失必需 CLI 时在入口即给出可读错误与处理指引而非裸子进程报错。缺可选预编译原生模块始终给出 `M-x etaf-install-native`（或在 `M-x etaf-install-manage` 按 `n`），绝不要求归档用户进入 `elpa/` 目录手工执行 `make` 或 shell 构建脚本。错误必须是一句人话加可复制命令，不输出 Lisp 堆栈。
 
 ### 13.6 明确不做
 

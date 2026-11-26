@@ -743,6 +743,147 @@ class InstallTests(unittest.TestCase):
   (error "Corrupt or partial binary remained in cache after resilient auto-install"))
 """)
 
+    def test_manage_system_cli_column_lists_only_manual_cli_tools(self):
+        self.run_lisp("""
+(let ((etaf-install--package-manager-override 'brew))
+  (cl-letf (((symbol-function 'executable-find)
+             (lambda (prog &rest _)
+               (when (member prog '("node" "python3"))
+                 (concat "/usr/local/bin/" prog)))))
+    ;; Zero-CLI targets (including prebuilt-native `ekp' and managed-engine `etaf-tanks')
+    ;; must have nil :system-cli and show "—" in System CLI.
+    (dolist (pkg '(etaf-ui ekp etaf-tanks etaf-db))
+      (when (plist-get (etaf-install-status pkg) :system-cli)
+        (error "Expected no manual System CLI for %s: %S" pkg (etaf-install-status pkg))))
+    ;; `etaf-ncm' lists only manual OS CLIs (node/python3/mpv + optional qrencode),
+    ;; never its bundled `backends/netease/' scripts, and works before installation.
+    (let* ((ncm (etaf-install-status 'etaf-ncm))
+           (cli (plist-get ncm :system-cli)))
+      (unless (equal (plist-get cli :missing-required) '(mpv))
+        (error "Wrong missing required CLI for etaf-ncm: %S" cli))
+      (unless (equal (plist-get cli :install-command) "brew install mpv")
+        (error "Wrong install command for etaf-ncm: %S" cli)))
+    ;; `etaf-md' lists only optional manual CLIs, never `typeset-native'.
+    (let* ((md (etaf-install-status 'etaf-md))
+           (cli (plist-get md :system-cli)))
+      (when (plist-get cli :required)
+        (error "etaf-md should have no required manual CLI: %S" cli))
+      (when (assq 'typeset-native (plist-get cli :optional))
+        (error "Auto-downloaded native module leaked into System CLI: %S" cli)))
+    (etaf-install-manage)
+    (with-current-buffer "*ETAF Packages*"
+      (let ((cols (mapcar #'car (append tabulated-list-format nil))))
+        (unless (member "System CLI" cols)
+          (error "Manage table missing System CLI column: %S" cols)))
+      (let* ((find-row (lambda (pkg)
+                         (goto-char (point-min))
+                         (let (entry)
+                           (while (and (not entry) (not (eobp)))
+                             (if (eq (tabulated-list-get-id) pkg)
+                                 (setq entry (tabulated-list-get-entry))
+                               (forward-line 1)))
+                           entry)))
+             (cli-idx (cl-position "System CLI"
+                                   (mapcar #'car (append tabulated-list-format nil))
+                                   :test #'equal)))
+        (unless (equal (substring-no-properties (aref (funcall find-row 'ekp) cli-idx)) "—")
+          (error "ekp System CLI cell should be —"))
+        (unless (equal (substring-no-properties (aref (funcall find-row 'etaf-tanks) cli-idx)) "—")
+          (error "etaf-tanks System CLI cell should be —"))
+        (let ((ncm-cell (aref (funcall find-row 'etaf-ncm) cli-idx)))
+          (unless (equal (substring-no-properties ncm-cell) "✓ node · ✓ python3 · ✗ mpv")
+            (error "Wrong etaf-ncm System CLI cell: %S" (substring-no-properties ncm-cell))))
+        (let ((md-cell (substring-no-properties (aref (funcall find-row 'etaf-md) cli-idx))))
+          (unless (string-prefix-p "opt: ffmpeg, qrencode" md-cell)
+            (error "Wrong etaf-md System CLI cell: %S" md-cell)))
+        (let ((exp-cell (substring-no-properties (aref (funcall find-row 'etaf-export) cli-idx))))
+          (unless (string-match-p "rsvg-convert" exp-cell)
+            (error "Wrong etaf-export System CLI cell: %S" exp-cell)))))))
+""")
+
+    def test_platform_package_manager_commands_combine_missing_tools(self):
+        self.run_lisp("""
+(unless (equal (etaf-install--cli-combined-command '(node python3 mpv) 'brew)
+               "brew install node python mpv")
+  (error "Wrong brew combined command"))
+(unless (equal (etaf-install--cli-combined-command '(node python3 mpv) 'apt)
+               "sudo apt install nodejs python3 mpv")
+  (error "Wrong apt combined command"))
+(unless (equal (etaf-install--cli-combined-command '(node python3 mpv) 'pacman)
+               "sudo pacman -S nodejs python mpv")
+  (error "Wrong pacman combined command"))
+(unless (equal (etaf-install--cli-combined-command '(node python3 mpv) 'dnf)
+               "sudo dnf install nodejs python3 mpv")
+  (error "Wrong dnf combined command"))
+(unless (equal (etaf-install--cli-combined-command '(node mpv) 'winget)
+               "winget install OpenJS.NodeJS.LTS && winget install shinchiro.mpv")
+  (error "Wrong winget combined command"))
+(unless (equal (etaf-install--cli-combined-command '(ffmpeg ffmpeg) 'brew)
+               "brew install ffmpeg")
+  (error "Duplicate tools were not deduplicated"))
+""")
+
+    def test_doctor_works_before_install_and_supports_copy_and_recheck(self):
+        self.run_lisp("""
+(let ((etaf-install--package-manager-override 'brew)
+      (available-bins nil))
+  (cl-letf (((symbol-function 'executable-find)
+             (lambda (prog &rest _)
+               (when (member prog available-bins)
+                 (concat "/opt/homebrew/bin/" prog)))))
+    (let ((facts (etaf-install-doctor 'etaf-ncm)))
+      (when (plist-get facts :ready)
+        (error "Uninstalled etaf-ncm reported ready when node/python3/mpv missing"))
+      (etaf-install--display-doctor 'etaf-ncm facts))
+    (with-current-buffer "*ETAF Installation*"
+      (unless (derived-mode-p 'etaf-install--doctor-mode)
+        (error "Doctor buffer did not enable etaf-install--doctor-mode"))
+      (let ((text (buffer-string)))
+        (unless (string-match-p (regexp-quote "brew install node python mpv") text)
+          (error "Doctor buffer missing combined brew command: %s" text))
+        (unless (string-match-p (regexp-quote "[Copy command (c)]") text)
+          (error "Doctor buffer missing Copy command button"))
+        (unless (string-match-p (regexp-quote "[Re-check (r)]") text)
+          (error "Doctor buffer missing Re-check button")))
+      (let ((kill-ring nil))
+        (execute-kbd-macro "c")
+        (unless (equal (car kill-ring) "brew install node python mpv")
+          (error "Pressing c did not copy combined install command: %S" (car kill-ring))))
+      ;; Simulate user installing the missing tools and pressing `r'.
+      (setq available-bins '("node" "python3" "mpv"))
+      (execute-kbd-macro "r")
+      (unless (string-match-p "Prerequisites met" (buffer-string))
+        (error "Pressing r did not refresh doctor buffer to ready state: %s" (buffer-string))))))
+""")
+
+    def test_interactive_install_auto_opens_doctor_guide_when_required_cli_missing(self):
+        self.run_lisp("""
+;; Interactive `etaf-install' (no-open = nil, noninteractive = nil) must automatically
+;; display `*ETAF Installation*' when a required external tool is missing so users
+;; cannot miss a vanishing echo-area line.
+(let ((noninteractive nil))
+  (etaf-install 'etaf-telega nil))
+(unless (get-buffer-window "*ETAF Installation*")
+  (error "Interactive install did not auto-display *ETAF Installation* when required CLI missing"))
+(with-current-buffer "*ETAF Installation*"
+  (unless (string-match-p "telega-server-build" (buffer-string))
+    (error "Auto-opened doctor buffer missing telega-server remedy")))
+;; Pressing RET on an installed package with missing runtime in `*ETAF Packages*'
+;; should display `*ETAF Installation*' rather than calling its open command.
+(let (opened)
+  (cl-letf (((symbol-function 'etaf-telega-open) (lambda () (interactive) (setq opened t))))
+    (etaf-install-manage)
+    (with-current-buffer "*ETAF Packages*"
+      (goto-char (point-min))
+      (search-forward "etaf-telega")
+      (beginning-of-line)
+      (execute-kbd-macro (kbd "RET"))))
+  (when opened
+    (error "Manage RET opened target despite missing required runtime"))
+  (unless (get-buffer-window "*ETAF Installation*")
+    (error "Manage RET did not show *ETAF Installation* for missing required runtime")))
+""")
+
 
 if __name__ == "__main__":
     unittest.main()

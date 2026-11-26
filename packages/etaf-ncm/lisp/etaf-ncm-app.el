@@ -31,6 +31,8 @@
 (require 'etaf-ncm-meter)
 (require 'etaf-ncm-views)
 
+(declare-function etaf-ncm-doctor "etaf-ncm" ())
+
 ;;; ---------------------------------------------------------------------------
 ;;; Buffer state and wheel bindings
 ;;; ---------------------------------------------------------------------------
@@ -1307,6 +1309,14 @@ MODEL defaults to a session from `etaf-ncm-create', so the player opens on the
 daily recommendation with the signed-in account, queue and playback status of
 the backend.  A caller-provided MODEL keeps its library, queue and selection."
   (interactive)
+  (when (and (called-interactively-p 'interactive)
+             (null model)
+             (fboundp 'etaf-ncm-doctor))
+    (let ((missing (cl-remove-if #'cadr (plist-get (etaf-ncm-doctor) :required))))
+      (when missing
+        (user-error "etaf-ncm requires %s: %s (run M-x etaf-install-doctor for install commands)"
+                    (mapconcat #'car missing ", ")
+                    (nth 2 (car missing))))))
   (let* ((model (or model (etaf-ncm-create)))
          ;; Ebox paints whole character cells, so a window body that is not
          ;; a whole number of cells keeps a sub-cell remainder at its edge;

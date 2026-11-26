@@ -555,19 +555,24 @@ bound the rendered grid to the document's declared display size."
         (cond
          ((null native)
           ;; No decoder: the poster card opens the system player as before.
-          (etaf-node 'column
-                     (list :width 'stretch :cross-align 'center :item-gap '(lh 0)
-                           :on-press open :role 'button :tab-index 0
-                           :pointer 'hand
-                           :help-echo (format "%s（按 RET 播放）" caption))
-                     (list
-                      (etaf-node 'box
-                                 (list :border (list '(px 1) 'solid
-                                                     (etaf-md--env-color env :border)))
-                                 (list poster))
-                      (etaf-md--caption-view
-                       (format "▶ %s　·　按 RET 播放" caption)
-                       env))))
+          (let ((no-ffmpeg (not (executable-find "ffmpeg"))))
+            (etaf-node 'column
+                       (list :width 'stretch :cross-align 'center :item-gap '(lh 0)
+                             :on-press open :role 'button :tab-index 0
+                             :pointer 'hand
+                             :help-echo (if no-ffmpeg
+                                            (format "%s（按 RET 调用系统播放器；安装 ffmpeg 可内嵌播放）" caption)
+                                          (format "%s（按 RET 播放）" caption)))
+                       (list
+                        (etaf-node 'box
+                                   (list :border (list '(px 1) 'solid
+                                                       (etaf-md--env-color env :border)))
+                                   (list poster))
+                        (etaf-md--caption-view
+                         (if no-ffmpeg
+                             (format "▶ %s　·　按 RET 播放（安装 ffmpeg 可内嵌播放）" caption)
+                           (format "▶ %s　·　按 RET 播放" caption))
+                         env)))))
          ((funcall (plist-get env :video-active-p) (car card))
           ;; Playing inline: RET toggles this card's playback.
           (let ((handle (cdr card)))

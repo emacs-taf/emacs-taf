@@ -1,7 +1,7 @@
 ;;; -*- lexical-binding: t; -*-
 ;;; etaf-install.el --- Install ETAF with the Emacs package manager
 
-;; Version: 0.2.26
+;; Version: 0.2.27
 ;; Package-Requires: ((emacs "29.1"))
 ;; URL: https://github.com/emacs-taf/emacs-taf
 ;; Keywords: convenience
@@ -16,31 +16,39 @@
 ;; Function: etaf-install (&optional package no-open)
 ;; Install PACKAGE from the official archive and open its existing application.
 ;; Interactive use offers the supported targets grouped as framework,
-;; extensions, applications and games, with the component gallery as the default.  Each
-;; target may expose a `<package>-doctor' returning the same :required and
-;; :optional facts as `etaf-install-doctor', which are merged into its report.  NO-OPEN suppresses opening, for batch installation.  Return the
-;; installed package symbol.  Already installed targets can be opened offline.
-;; When `etaf-install-auto-native' is non-nil (the default), any prebuilt native
-;; dynamic modules declared by PACKAGE or its installed ETAF dependencies are
-;; automatically downloaded, verified (SHA-256), cached and activated before
-;; opening so users need no compiler and no second command; an unavailable or
-;; unreachable native prebuild never fails the Lisp installation.
-;; Missing mandatory Emacs capabilities or a conflicting source checkout signal
-;; user-error before installation.  An upgrade of a loaded dependency also
-;; requires a restart before installation.  A target's runtime tools are
-;; reported after installation; the install message names the first remedy and
-;; `etaf-install-doctor' lists all of them.  On failure, remove only packages added
-;; by this attempt, preserving older installations and unrelated packages. Report
-;; cleanup failures without hiding the installation error. Restart before retrying
-;; because partially loaded Lisp cannot be safely rolled back in this process.
-;; Use M-x etaf-install-manage for the supported lifecycle; package.el owns
-;; upgrades and removal.  Restart Emacs after upgrading loaded packages.
+;; extensions, applications and games, with the component gallery as the
+;; default.  Each target may expose a `<package>-doctor' returning the same
+;; :required and :optional facts as `etaf-install-doctor', which are merged
+;; into its report.  NO-OPEN suppresses opening, for batch installation.
+;; Return the installed package symbol.  Already installed targets can be
+;; opened offline.  When `etaf-install-auto-native' is non-nil (the default),
+;; any prebuilt native dynamic modules declared by PACKAGE or its installed
+;; ETAF dependencies are automatically downloaded, verified (SHA-256), cached
+;; and activated before opening so users need no compiler and no second
+;; command; an unavailable or unreachable native prebuild never fails the Lisp
+;; installation.  Missing mandatory Emacs capabilities or a conflicting source
+;; checkout signal user-error before installation.  An upgrade of a loaded
+;; dependency also requires a restart before installation.  A target's runtime
+;; tools are reported after installation; interactive runs offer to run
+;; ETAF-managed game engine installers when available and automatically open
+;; `*ETAF Installation*' with a platform-specific copyable install command when
+;; required system CLIs are missing.  On failure, remove only packages added by
+;; this attempt, preserving older installations and unrelated packages.  Report
+;; cleanup failures without hiding the installation error.  Restart before
+;; retrying because partially loaded Lisp cannot be safely rolled back in this
+;; process.  Use M-x etaf-install-manage for the supported lifecycle;
+;; package.el owns upgrades and removal.  Restart Emacs after upgrading loaded
+;; packages.
 ;;
 ;; Function: etaf-install-doctor (&optional package)
-;; Return a plist with :package, :ready, :required and :optional capability facts.
-;; Each capability fact is (LABEL AVAILABLE REMEDY).  PACKAGE defaults to
-;; etaf-ui.  Interactively show the facts in a standard help buffer.  This check
-;; performs no network requests, package installation or configuration writes.
+;; Return a plist with :package, :ready, :required and :optional capability
+;; facts.  Each capability fact is (LABEL AVAILABLE REMEDY).  PACKAGE defaults
+;; to etaf-ui and works both before and after PACKAGE is installed.
+;; Interactively show the facts in an interactive `*ETAF Installation*' buffer
+;; with `c' to copy the combined system install command, `r' to re-check, `o'
+;; to open when ready, `n' to install prebuilt native modules and `q' to quit.
+;; This check performs no network requests, package installation or
+;; configuration writes.
 ;;
 ;; Variable: etaf-install-archive-url
 ;; HTTPS URL of the ETAF package archive.  A local absolute directory is accepted
@@ -49,7 +57,10 @@
 ;;
 ;; Function: etaf-install-manage ()
 ;; Show installed and available ETAF targets in a native tabulated list.  The
-;; buffer supports install, update, remove, open, doctor and refresh through
+;; buffer includes a `System CLI' column showing only manual OS command-line
+;; tools the user must install (excluding auto-downloaded native modules,
+;; bundled package backends and managed game engines), and supports install,
+;; native download, update, remove, open, doctor and refresh through
 ;; package.el; it is the supported lifecycle entry for ETAF targets.
 ;;
 ;; Function: etaf-install-update (&optional package)
@@ -64,8 +75,9 @@
 ;; Application data, logins and caches are kept; shared dependencies remain.
 ;;
 ;; Function: etaf-install-status (&optional package)
-;; Return installed and available versions, the update flag and runtime facts
-;; for PACKAGE or every supported target.
+;; Return installed and available versions, the update flag, runtime status,
+;; manual `:system-cli' requirements and dependency closure for PACKAGE or
+;; every supported target.
 ;;
 ;; Function: etaf-install-native (&optional package force)
 ;; Download, verify (SHA-256) and install the prebuilt native dynamic module(s)
@@ -276,28 +288,499 @@ so the ETAF manager and later upgrades through `M-x list-packages` resolve them.
     (or (cdr (assoc choice choices))
         (user-error "No installation target selected"))))
 
-(defun etaf-install--display-doctor (package &optional facts)
-  "Show PACKAGE's doctor FACTS in a standard help buffer."
-  (let* ((facts (or facts (etaf-install-doctor package)))
+;;; Manual system CLI catalog and platform install commands
+
+(defvar etaf-install--package-manager-override nil
+  "Internal test override for `etaf-install--detect-package-manager'.
+When set to a package manager symbol (such as `brew', `apt', `pacman' or
+`winget'), forces that package manager; when `none', simulates none found.")
+
+(defconst etaf-install--cli-catalog
+  '((ffmpeg
+     :name "ffmpeg" :label "ffmpeg" :binaries ("ffmpeg" "ffprobe")
+     :packages ((brew . "ffmpeg") (apt . "ffmpeg") (dnf . "ffmpeg")
+                (pacman . "ffmpeg") (zypper . "ffmpeg")
+                (winget . "Gyan.FFmpeg") (scoop . "ffmpeg") (choco . "ffmpeg"))
+     :purpose "Video decoding, ffprobe metadata and inline playback.")
+    (mpv
+     :name "mpv" :label "mpv" :binaries ("mpv")
+     :packages ((brew . "mpv") (apt . "mpv") (dnf . "mpv")
+                (pacman . "mpv") (zypper . "mpv")
+                (winget . "shinchiro.mpv") (scoop . "mpv") (choco . "mpv"))
+     :purpose "Audio playback engine.")
+    (node
+     :name "node" :label "Node.js" :binaries ("node")
+     :packages ((brew . "node") (apt . "nodejs") (dnf . "nodejs")
+                (pacman . "nodejs") (zypper . "nodejs22")
+                (winget . "OpenJS.NodeJS.LTS") (scoop . "nodejs-lts")
+                (choco . "nodejs-lts"))
+     :purpose "Runs the package's bundled JavaScript backend (Node.js 22+).")
+    (python3
+     :name "python3" :label "Python 3" :binaries ("python3")
+     :packages ((brew . "python") (apt . "python3") (dnf . "python3")
+                (pacman . "python") (zypper . "python3")
+                (winget . "Python.Python.3.12") (scoop . "python")
+                (choco . "python"))
+     :purpose "Runs Python helper scripts or game-engine virtual environments.")
+    (rsvg-convert
+     :name "rsvg-convert" :label "rsvg-convert" :binaries ("rsvg-convert")
+     :extra-paths ("/opt/homebrew/bin/rsvg-convert"
+                   "/usr/local/bin/rsvg-convert"
+                   "/usr/bin/rsvg-convert")
+     :packages ((brew . "librsvg") (apt . "librsvg2-bin")
+                (dnf . "librsvg2-tools") (pacman . "librsvg")
+                (zypper . "rsvg-convert") (scoop . "librsvg"))
+     :purpose "Converts vector SVG pages to PDF (SVG/live preview need none).")
+    (telega-server
+     :name "telega-server" :label "telega-server" :binaries ("telega-server")
+     :packages nil
+     :custom-note
+     "Install TDLib (e.g. brew install tdlib), then run M-x telega-server-build and ensure telega-server is on exec-path."
+     :purpose "Native TDLib bridge required by Telega.")
+    (qrencode
+     :name "qrencode" :label "qrencode" :binaries ("qrencode")
+     :packages ((brew . "qrencode") (apt . "qrencode") (dnf . "qrencode")
+                (pacman . "qrencode") (zypper . "qrencode"))
+     :purpose "Draws PNG QR codes for QR blocks and QR sign-in.")
+    (git
+     :name "git" :label "git" :binaries ("git")
+     :packages ((brew . "git") (apt . "git") (dnf . "git")
+                (pacman . "git") (zypper . "git")
+                (winget . "Git.Git") (scoop . "git") (choco . "git"))
+     :purpose "Powers git-log and git-diff live document widgets.")
+    (rg
+     :name "rg" :label "ripgrep (rg)" :binaries ("rg")
+     :packages ((brew . "ripgrep") (apt . "ripgrep") (dnf . "ripgrep")
+                (pacman . "ripgrep") (zypper . "ripgrep")
+                (winget . "BurntSushi.ripgrep.MSVC") (scoop . "ripgrep")
+                (choco . "ripgrep"))
+     :purpose "Accelerates workspace backlink scans.")
+    (dot
+     :name "dot" :label "Graphviz (dot)" :binaries ("dot")
+     :packages ((brew . "graphviz") (apt . "graphviz") (dnf . "graphviz")
+                (pacman . "graphviz") (zypper . "graphviz")
+                (winget . "Graphviz.Graphviz") (scoop . "graphviz")
+                (choco . "graphviz"))
+     :purpose "Renders Graphviz dot source blocks.")
+    (plantuml
+     :name "plantuml" :label "PlantUML" :binaries ("plantuml")
+     :packages ((brew . "plantuml") (apt . "plantuml") (dnf . "plantuml")
+                (pacman . "plantuml") (zypper . "plantuml")
+                (scoop . "plantuml") (choco . "plantuml"))
+     :purpose "Renders PlantUML source blocks.")
+    (mmdc
+     :name "mmdc" :label "mermaid-cli (mmdc)" :binaries ("mmdc" "node")
+     :packages nil
+     :custom-cmd "npm install -g @mermaid-js/mermaid-cli"
+     :purpose "Renders Mermaid diagrams when native QuickJS is unavailable.")
+    (curl
+     :name "curl" :label "curl" :binaries ("curl")
+     :packages ((brew . "curl") (apt . "curl") (dnf . "curl")
+                (pacman . "curl") (zypper . "curl")
+                (winget . "cURL.cURL") (scoop . "curl") (choco . "curl"))
+     :purpose "Calls built-in HTTP translation engines (OpenAI/DeepL/Google)."))
+  "Catalog of external OS CLI tools users install themselves.
+Excludes prebuilt native dynamic modules (auto-downloaded via
+`etaf-install-native'), bundled `backends/' scripts shipped inside package
+tarballs, and ETAF-managed game engines (`etaf-gamekit-install-*').")
+
+(defconst etaf-install--system-tools
+  '((etaf-export       :required (rsvg-convert))
+    (etaf-translate    :optional (curl))
+    (etaf-md           :optional (ffmpeg qrencode git mmdc))
+    (etaf-org          :optional (ffmpeg qrencode git rg dot plantuml mmdc))
+    (etaf-video-player :required (ffmpeg))
+    (etaf-telega       :required (telega-server))
+    (etaf-weread       :required (node))
+    (etaf-ncm          :required (node python3 mpv) :optional (qrencode))
+    (etaf-xiangqi      :required (python3)
+                       :managed-engines (("OpenSpiel runtime" etaf-gamekit-install-openspiel)))
+    (etaf-tanks        :managed-engines (("Godot runtime" etaf-gamekit-install-godot))))
+  "Manual system CLI and managed-engine metadata for curated ETAF targets.
+`:required' and `:optional' list ONLY external OS CLI tool keys from
+`etaf-install--cli-catalog'.  Auto-downloaded prebuilt native modules and
+bundled package backends are intentionally excluded from `System CLI'.")
+
+(defun etaf-install--detect-package-manager ()
+  "Return the OS package manager available on PATH, or nil."
+  (cond
+   ((eq etaf-install--package-manager-override 'none) nil)
+   (etaf-install--package-manager-override)
+   ((eq system-type 'darwin)
+    (and (executable-find "brew") 'brew))
+   ((eq system-type 'windows-nt)
+    (cond ((executable-find "winget") 'winget)
+          ((executable-find "scoop") 'scoop)
+          ((executable-find "choco") 'choco)))
+   (t
+    (cond ((or (executable-find "apt") (executable-find "apt-get")) 'apt)
+          ((executable-find "dnf") 'dnf)
+          ((executable-find "pacman") 'pacman)
+          ((executable-find "zypper") 'zypper)
+          ((executable-find "brew") 'brew)))))
+
+(defun etaf-install--preferred-package-manager ()
+  "Return the detected OS package manager, or this OS's standard default."
+  (or (etaf-install--detect-package-manager)
+      (pcase system-type
+        ('darwin 'brew)
+        ('windows-nt 'winget)
+        (_ 'apt))))
+
+(defun etaf-install--cli-installed-p (tool)
+  "Return non-nil when manual system CLI TOOL is installed on this machine."
+  (let* ((spec (cdr (assq tool etaf-install--cli-catalog)))
+         (binaries (plist-get spec :binaries))
+         (extras (plist-get spec :extra-paths)))
+    (and binaries
+         (cl-every
+          (lambda (bin)
+            (or (executable-find bin)
+                (and extras
+                     (cl-some #'file-executable-p extras))))
+          binaries))))
+
+(defun etaf-install--pm-command (pm packages)
+  "Format one copyable shell command for package manager PM and PACKAGES."
+  (let ((pkgs (delete-dups (delq nil (copy-sequence packages)))))
+    (when pkgs
+      (pcase pm
+        ('brew (concat "brew install " (mapconcat #'identity pkgs " ")))
+        ('apt (concat "sudo apt install " (mapconcat #'identity pkgs " ")))
+        ('dnf (concat "sudo dnf install " (mapconcat #'identity pkgs " ")))
+        ('pacman (concat "sudo pacman -S " (mapconcat #'identity pkgs " ")))
+        ('zypper (concat "sudo zypper install " (mapconcat #'identity pkgs " ")))
+        ('scoop (concat "scoop install " (mapconcat #'identity pkgs " ")))
+        ('choco (concat "choco install " (mapconcat #'identity pkgs " ")))
+        ('winget (mapconcat (lambda (p) (concat "winget install " p)) pkgs " && "))
+        (_ nil)))))
+
+(defun etaf-install--cli-install-commands (tools &optional pm)
+  "Return combined copyable install command(s) for TOOLS under PM.
+Return a list of command strings (usually 1 string combining OS packages)."
+  (let* ((pm (or pm (etaf-install--preferred-package-manager)))
+         (pm-pkgs nil)
+         (custom-cmds nil))
+    (dolist (tool (delete-dups (copy-sequence tools)))
+      (let* ((spec (cdr (assq tool etaf-install--cli-catalog)))
+             (pkg (cdr (assq pm (plist-get spec :packages))))
+             (custom (plist-get spec :custom-cmd)))
+        (cond
+         (pkg (push pkg pm-pkgs))
+         (custom (push custom custom-cmds)))))
+    (let ((pm-cmd (etaf-install--pm-command pm (nreverse pm-pkgs)))
+          (extras (delete-dups (nreverse custom-cmds))))
+      (if pm-cmd (cons pm-cmd extras) extras))))
+
+(defun etaf-install--cli-combined-command (tools &optional pm)
+  "Return a single copyable shell command installing TOOLS, or nil."
+  (let ((cmds (etaf-install--cli-install-commands tools pm)))
+    (when cmds
+      (mapconcat #'identity cmds " && "))))
+
+(defun etaf-install--cli-remedy (tool &optional optional-p)
+  "Return a platform-aware remedy sentence for missing manual CLI TOOL."
+  (let* ((spec (cdr (assq tool etaf-install--cli-catalog)))
+         (label (or (plist-get spec :label) (symbol-name tool)))
+         (purpose (plist-get spec :purpose))
+         (custom-note (plist-get spec :custom-note))
+         (cmd (etaf-install--cli-combined-command (list tool)))
+         (prefix (if optional-p "Optional: " "")))
+    (cond
+     (custom-note (concat prefix custom-note))
+     (cmd (format "%sInstall %s (%s).%s"
+                  prefix label cmd
+                  (if purpose (concat " " purpose) "")))
+     (t (format "%sInstall %s with your system package manager.%s"
+                prefix label (if purpose (concat " " purpose) ""))))))
+
+(defun etaf-install--label-to-cli-tool (label)
+  "Map a doctor fact LABEL string to a tool key in `etaf-install--cli-catalog'."
+  (let ((low (downcase (or label ""))))
+    (cond
+     ((or (string-prefix-p "node" low) (equal low "node.js")) 'node)
+     ((or (string-prefix-p "python" low) (equal low "python3")) 'python3)
+     ((equal low "mpv") 'mpv)
+     ((member low '("ffmpeg" "ffprobe" "ffplay")) 'ffmpeg)
+     ((string-prefix-p "rsvg-convert" low) 'rsvg-convert)
+     ((equal low "telega-server") 'telega-server)
+     ((equal low "qrencode") 'qrencode)
+     ((equal low "git") 'git)
+     ((or (equal low "rg") (string-prefix-p "ripgrep" low)) 'rg)
+     ((or (equal low "dot") (string-prefix-p "graphviz" low)) 'dot)
+     ((string-prefix-p "plantuml" low) 'plantuml)
+     ((or (equal low "mmdc") (string-prefix-p "mermaid-cli" low)) 'mmdc)
+     ((equal low "curl") 'curl)
+     (t nil))))
+
+(defun etaf-install--enrich-fact (fact)
+  "Append a platform-specific install command to unavailable FACT when helpful."
+  (let ((label (car fact))
+        (avail (cadr fact))
+        (remedy (or (nth 2 fact) "")))
+    (if avail
+        fact
+      (let* ((tool (etaf-install--label-to-cli-tool label))
+             (cmd (and tool (etaf-install--cli-combined-command (list tool)))))
+        (if (and cmd (not (string-match-p (regexp-quote cmd) remedy)))
+            (list label avail (format "%s  Try: %s" remedy cmd))
+          fact)))))
+
+(defun etaf-install--system-cli-summary (package)
+  "Return manual system CLI summary plist for PACKAGE, or nil if none."
+  (let* ((entry (cdr (assq package etaf-install--system-tools)))
+         (req-tools (plist-get entry :required))
+         (opt-tools (plist-get entry :optional)))
+    (when (or req-tools opt-tools)
+      (let* ((req-alist (mapcar (lambda (tool)
+                                  (cons tool (and (etaf-install--cli-installed-p tool) t)))
+                                req-tools))
+             (opt-alist (mapcar (lambda (tool)
+                                  (cons tool (and (etaf-install--cli-installed-p tool) t)))
+                                opt-tools))
+             (missing-req (cl-loop for (tool . ok) in req-alist
+                                   unless ok collect tool))
+             (missing-opt (cl-loop for (tool . ok) in opt-alist
+                                   unless ok collect tool))
+             (cmd (etaf-install--cli-combined-command
+                   (or missing-req missing-opt))))
+        (list :required req-alist
+              :optional opt-alist
+              :missing-required missing-req
+              :missing-optional missing-opt
+              :install-command cmd)))))
+
+(defun etaf-install--missing-cli-tools-from-facts (facts section)
+  "Return manual CLI tool symbols unavailable in FACTS's SECTION."
+  (let (tools)
+    (dolist (fact (plist-get facts section))
+      (unless (cadr fact)
+        (when-let* ((tool (etaf-install--label-to-cli-tool (car fact))))
+          (push tool tools))))
+    (delete-dups (nreverse tools))))
+
+(defun etaf-install--missing-install-command (_package facts)
+  "Return the combined copyable install command for missing required CLIs."
+  (let ((missing-req (etaf-install--missing-cli-tools-from-facts facts :required)))
+    (when missing-req
+      (etaf-install--cli-combined-command missing-req))))
+
+(defun etaf-install--missing-managed-engine (package missing-facts)
+  "Return (LABEL COMMAND) for the first missing managed engine of PACKAGE."
+  (let ((engines (plist-get (cdr (assq package etaf-install--system-tools))
+                            :managed-engines)))
+    (cl-find-if
+     (lambda (eng)
+       (cl-some (lambda (fact) (equal (car fact) (car eng))) missing-facts))
+     engines)))
+
+;;; Interactive installation & doctor guide buffer
+
+(defvar-local etaf-install--doctor-package nil
+  "Target package currently displayed in `*ETAF Installation*'.")
+
+(defvar-local etaf-install--doctor-copy-cmd nil
+  "Combined shell command ready to copy from `*ETAF Installation*'.")
+
+(defun etaf-install--doctor-copy-command ()
+  "Copy the combined system install command in `*ETAF Installation*'."
+  (interactive)
+  (unless (and (stringp etaf-install--doctor-copy-cmd)
+               (not (string-empty-p etaf-install--doctor-copy-cmd)))
+    (user-error "No system install command to copy for %s"
+                (or etaf-install--doctor-package "this package")))
+  (kill-new etaf-install--doctor-copy-cmd)
+  (message "ETAF: copied install command: %s" etaf-install--doctor-copy-cmd))
+
+(defun etaf-install--doctor-recheck ()
+  "Re-run capability checks for the package shown in `*ETAF Installation*'."
+  (interactive)
+  (let ((package (or etaf-install--doctor-package
+                     (user-error "No ETAF package in this buffer"))))
+    (let ((facts (etaf-install-doctor package)))
+      (etaf-install--render-doctor-buffer package facts)
+      (when-let* ((mgr (get-buffer "*ETAF Packages*"))
+                  ((buffer-live-p mgr)))
+        (with-current-buffer mgr
+          (when (derived-mode-p 'etaf-install--manage-mode)
+            (etaf-install--manage-invalidate)
+            (tabulated-list-revert))))
+      (if (plist-get facts :ready)
+          (message "ETAF: %s is ready%s"
+                   package
+                   (if (and (package-installed-p package)
+                            (nth 3 (etaf-install--target package)))
+                       " — press `o' to open."
+                     "."))
+        (let ((missing (cl-remove-if #'cadr (plist-get facts :required))))
+          (message "ETAF: %s still missing %s."
+                   package (mapconcat #'car missing ", ")))))))
+
+(defun etaf-install--doctor-open ()
+  "Open the package shown in `*ETAF Installation*' when installed and ready."
+  (interactive)
+  (let* ((package (or etaf-install--doctor-package
+                      (user-error "No ETAF package in this buffer")))
+         (target (etaf-install--target package))
+         (open (nth 3 target)))
+    (unless (package-installed-p package)
+      (user-error "%s is not installed yet; run M-x etaf-install" package))
+    (unless open
+      (user-error "%s has no open command" package))
+    (let* ((facts (etaf-install-doctor package))
+           (missing (cl-remove-if #'cadr (plist-get facts :required))))
+      (when missing
+        (etaf-install--render-doctor-buffer package facts)
+        (user-error "%s still requires %s" package (mapconcat #'car missing ", "))))
+    (call-interactively open)))
+
+(defun etaf-install--doctor-install-native ()
+  "Install prebuilt native module(s) for the package in `*ETAF Installation*'."
+  (interactive)
+  (let ((package (or etaf-install--doctor-package
+                     (user-error "No ETAF package in this buffer"))))
+    (etaf-install-native package)
+    (etaf-install--render-doctor-buffer package (etaf-install-doctor package))))
+
+(defvar etaf-install--doctor-mode-map
+  (let ((map (make-sparse-keymap)))
+    (set-keymap-parent map special-mode-map)
+    (define-key map (kbd "c") #'etaf-install--doctor-copy-command)
+    (define-key map (kbd "r") #'etaf-install--doctor-recheck)
+    (define-key map (kbd "o") #'etaf-install--doctor-open)
+    (define-key map (kbd "n") #'etaf-install--doctor-install-native)
+    map)
+  "Keymap for `*ETAF Installation*' doctor guide buffer.")
+
+(define-derived-mode etaf-install--doctor-mode special-mode "ETAF Doctor"
+  "Major mode for the interactive `*ETAF Installation*' guide buffer."
+  (setq-local truncate-lines nil))
+
+(defun etaf-install--render-doctor-buffer (package facts)
+  "Render PACKAGE's doctor FACTS into `*ETAF Installation*' and return buffer."
+  (let* ((buf (get-buffer-create "*ETAF Installation*"))
          (required (plist-get facts :required))
-         (optional (plist-get facts :optional)))
-    (with-help-window "*ETAF Installation*"
-      (princ (format "ETAF installation: %s\nEmacs %s on %s\n\n"
-                     package emacs-version system-type))
-      (dolist (section (list (cons "Required" required) (cons "Optional" optional)))
-        (princ (format "%s\n" (car section)))
-        (dolist (fact (cdr section))
-          (princ (format "  %s: %s\n" (car fact) (if (cadr fact) "available" "unavailable")))
-          (unless (cadr fact) (princ (format "    %s\n" (nth 2 fact)))))
-        (princ "\n"))
-      (princ "Install: M-x etaf-install\nManage/update/remove: M-x etaf-install-manage\nRestart Emacs after upgrading loaded packages.\n"))))
+         (optional (plist-get facts :optional))
+         (missing-req (cl-remove-if #'cadr required))
+         (missing-req-tools (etaf-install--missing-cli-tools-from-facts facts :required))
+         (missing-opt-tools (etaf-install--missing-cli-tools-from-facts facts :optional))
+         (pm (etaf-install--preferred-package-manager))
+         (req-cmd (and missing-req-tools
+                       (etaf-install--cli-combined-command missing-req-tools pm)))
+         (opt-cmd (and (null req-cmd) missing-opt-tools
+                       (etaf-install--cli-combined-command missing-opt-tools pm)))
+         (copy-cmd (or req-cmd opt-cmd))
+         (engine (and missing-req (etaf-install--missing-managed-engine package missing-req)))
+         (installed-p (package-installed-p package))
+         (open-cmd (nth 3 (etaf-install--target package)))
+         (native-status (and installed-p (etaf-install--native-status package))))
+    (with-current-buffer buf
+      (let ((inhibit-read-only t))
+        (erase-buffer)
+        (etaf-install--doctor-mode)
+        (setq etaf-install--doctor-package package
+              etaf-install--doctor-copy-cmd copy-cmd)
+        (insert (propertize (format "ETAF installation: %s\n" package) 'face 'bold))
+        (insert (propertize (format "Emacs %s on %s" emacs-version system-type) 'face 'shadow))
+        (insert "   ")
+        (if missing-req
+            (insert (propertize
+                     (format "Missing %d required item%s\n\n"
+                             (length missing-req)
+                             (if (= (length missing-req) 1) "" "s"))
+                     'face 'warning))
+          (insert (propertize
+                   (if installed-p "Ready\n\n" "Prerequisites met (not installed yet)\n\n")
+                   'face 'success)))
+        (when (or req-cmd engine (eq native-status 'available)
+                  (and installed-p (null missing-req) open-cmd))
+          (insert (propertize "Quick actions\n" 'face 'bold))
+          (when req-cmd
+            (insert (format "  Install missing system CLI tools (%s):\n"
+                            (or pm system-type)))
+            (insert "    " (propertize req-cmd 'face 'font-lock-keyword-face) "\n"))
+          (insert "  ")
+          (when req-cmd
+            (insert-text-button
+             "[Copy command (c)]"
+             'action (lambda (_btn) (etaf-install--doctor-copy-command))
+             'follow-link t
+             'help-echo "Copy the system install command to the kill ring")
+            (insert "  "))
+          (when (and engine (fboundp (cadr engine)))
+            (let ((eng-cmd (cadr engine))
+                  (eng-label (car engine)))
+              (insert-text-button
+               (format "[Install %s]" eng-label)
+               'action (lambda (_btn) (call-interactively eng-cmd))
+               'follow-link t
+               'help-echo (format "Run M-x %s" eng-cmd))
+              (insert "  ")))
+          (when (eq native-status 'available)
+            (insert-text-button
+             "[Install native (n)]"
+             'action (lambda (_btn) (etaf-install--doctor-install-native))
+             'follow-link t
+             'help-echo "Download and verify prebuilt native dynamic module(s)")
+            (insert "  "))
+          (insert-text-button
+           "[Re-check (r)]"
+           'action (lambda (_btn) (etaf-install--doctor-recheck))
+           'follow-link t
+           'help-echo "Re-run capability checks after installing tools")
+          (when (and installed-p (null missing-req) open-cmd)
+            (insert "  ")
+            (insert-text-button
+             (format "[Open %s (o)]" package)
+             'action (lambda (_btn) (etaf-install--doctor-open))
+             'follow-link t
+             'help-echo (format "Run M-x %s" open-cmd)))
+          (insert "\n\n"))
+        (dolist (section (list (cons "Required" required) (cons "Optional" optional)))
+          (insert (propertize (format "%s\n" (car section)) 'face 'bold))
+          (dolist (fact (cdr section))
+            (let ((avail (cadr fact)))
+              (insert "  "
+                      (propertize (if avail "✓" "✗")
+                                  'face (if avail 'success
+                                          (if (equal (car section) "Required")
+                                              'warning 'shadow)))
+                      (format " %s: %s\n" (car fact)
+                              (if avail "available" "unavailable")))
+              (unless avail
+                (insert (propertize (format "    %s\n" (nth 2 fact)) 'face 'shadow)))))
+          (insert "\n"))
+        (when opt-cmd
+          (insert (propertize "Optional system CLI install command\n" 'face 'bold))
+          (insert "  " (propertize opt-cmd 'face 'font-lock-keyword-face) "  ")
+          (insert-text-button
+           "[Copy (c)]"
+           'action (lambda (_btn) (etaf-install--doctor-copy-command))
+           'follow-link t
+           'help-echo "Copy the optional system CLI install command")
+          (insert "\n\n"))
+        (insert (propertize
+                 "Keys: c copy command   r re-check   o open   n native   q quit\n"
+                 'face 'shadow))
+        (insert "Install: M-x etaf-install   Manage/update/remove: M-x etaf-install-manage\n")
+        (insert "Restart Emacs after upgrading loaded packages.\n")
+        (goto-char (point-min))))
+    buf))
+
+(defun etaf-install--display-doctor (package &optional facts)
+  "Show PACKAGE's doctor FACTS in the interactive `*ETAF Installation*' buffer."
+  (let* ((facts (or facts (etaf-install-doctor package)))
+         (buf (etaf-install--render-doctor-buffer package facts)))
+    (pop-to-buffer buf)
+    buf))
 
 ;;;###autoload
 (defun etaf-install-doctor (&optional package)
-  "Check required and optional capabilities for PACKAGE without changing anything."
+  "Check required and optional capabilities for PACKAGE without modifying state."
   (interactive (list (etaf-install--read-target)))
   (let* ((package (or package 'etaf-ui))
          (target (etaf-install--target package))
+         (doctor-fn (intern (format "%s-doctor" package)))
          (required
           (list (list "Emacs 29.1 or newer" (not (version< emacs-version "29.1"))
                       "Use Emacs 29.1 or newer; your existing configuration is preserved.")))
@@ -305,10 +788,35 @@ so the ETAF manager and later upgrades through `M-x list-packages` resolve them.
           (list (list "Native Lisp compilation"
                       (and (fboundp 'native-comp-available-p) (native-comp-available-p))
                       "Byte compilation works without it; a native-comp capable Emacs can improve speed."))))
-    (when (fboundp (intern (format "%s-doctor" package)))
-      (let ((facts (funcall (intern (format "%s-doctor" package)))))
-        (setq required (append required (plist-get facts :required))
-              optional (append optional (plist-get facts :optional)))))
+    (if (fboundp doctor-fn)
+        (let ((facts (funcall doctor-fn)))
+          (setq required (append required (mapcar #'etaf-install--enrich-fact
+                                                  (plist-get facts :required)))
+                optional (append optional (mapcar #'etaf-install--enrich-fact
+                                                  (plist-get facts :optional)))))
+      ;; Before PACKAGE is installed, synthesize manual System CLI and managed
+      ;; engine facts from the declarative catalog so users see prerequisites upfront.
+      (when-let* ((entry (cdr (assq package etaf-install--system-tools))))
+        (dolist (tool (plist-get entry :required))
+          (let ((spec (cdr (assq tool etaf-install--cli-catalog))))
+            (setq required
+                  (append required
+                          (list (list (or (plist-get spec :label) (symbol-name tool))
+                                      (and (etaf-install--cli-installed-p tool) t)
+                                      (etaf-install--cli-remedy tool)))))))
+        (dolist (eng (plist-get entry :managed-engines))
+          (setq required
+                (append required
+                        (list (list (car eng) nil
+                                    (format "Install it once after installing %s: M-x %s"
+                                            package (cadr eng)))))))
+        (dolist (tool (plist-get entry :optional))
+          (let ((spec (cdr (assq tool etaf-install--cli-catalog))))
+            (setq optional
+                  (append optional
+                          (list (list (or (plist-get spec :label) (symbol-name tool))
+                                      (and (etaf-install--cli-installed-p tool) t)
+                                      (etaf-install--cli-remedy tool t)))))))))
     (when (memq 'sqlite (nthcdr 4 target))
       (push (list "SQLite built into Emacs"
                   (and (fboundp 'sqlite-available-p) (sqlite-available-p))
@@ -490,12 +998,37 @@ INSTALLED-ONLY checks offline reopening without computing an upgrade plan."
            (native-installed (plist-get native-auto :installed))
            (native-failed (plist-get native-auto :failed))
            (native-restart (plist-get native-auto :restart))
-           (missing (cl-remove-if #'cadr (plist-get (etaf-install-doctor package) :required))))
-      (if missing
-          (message "ETAF: %s is installed; missing for use: %s. %s Run M-x etaf-install-doctor for all details."
+           (post-facts (etaf-install-doctor package))
+           (missing (cl-remove-if #'cadr (plist-get post-facts :required)))
+           (managed-started nil))
+      (when (and missing (not no-open) (not noninteractive))
+        (let* ((engine (etaf-install--missing-managed-engine package missing))
+               (missing-clis (etaf-install--missing-cli-tools-from-facts
+                              post-facts :required)))
+          (when (and engine
+                     (null missing-clis)
+                     (fboundp (cadr engine))
+                     (y-or-n-p (format "%s requires %s. Download and install it now? "
+                                       package (car engine))))
+            (call-interactively (cadr engine))
+            (setq managed-started (car engine)))))
+      (cond
+       (managed-started
+        (message "ETAF: %s is installed; installing %s in *ETAF engine install*. Re-run M-x etaf-install when done."
+                 package managed-started))
+       (missing
+        (when (and (not no-open) (not noninteractive))
+          (etaf-install--display-doctor package post-facts))
+        (let* ((cmd (etaf-install--missing-install-command package post-facts))
+               (first-remedy (or (nth 2 (car missing)) "")))
+          (message "ETAF: %s is installed; missing for use: %s. %s%s Run M-x etaf-install-doctor for all details."
                    package
                    (mapconcat (lambda (fact) (car fact)) missing ", ")
-                   (nth 2 (car missing)))
+                   first-remedy
+                   (if (and cmd (not (string-match-p (regexp-quote cmd) first-remedy)))
+                       (format " Try: %s." cmd)
+                     ""))))
+       (t
         (when (and (not no-open) (nth 3 target))
           (call-interactively (nth 3 target)))
         (cond
@@ -508,7 +1041,7 @@ INSTALLED-ONLY checks offline reopening without computing an upgrade plan."
          ((eq (etaf-install--native-status package) 'available)
           (message "ETAF: %s is ready. Optional prebuilt native acceleration available: run M-x etaf-install-native." package))
          (t
-          (message "ETAF: %s is ready.  M-x etaf-install opens installed targets; M-x etaf-install-manage updates or removes them." package)))))
+          (message "ETAF: %s is ready.  M-x etaf-install opens installed targets; M-x etaf-install-manage updates or removes them." package))))))
     package))
 
 ;;; Prebuilt native dynamic modules
@@ -1078,6 +1611,7 @@ dependencies rather than only direct requirements."
           :ready (and installed-p (null runtime-fact))
           :native native-status
           :runtime runtime
+          :system-cli (etaf-install--system-cli-summary package)
           :remedy remedy
           :dependencies (and descriptor (etaf-install--dependency-names descriptor)))))
 
@@ -1085,7 +1619,8 @@ dependencies rather than only direct requirements."
 (defun etaf-install-status (&optional package)
   "Return status plists for PACKAGE, or for every supported target.
 Each plist has :package, :label, :group, :installed, :available,
-:installed-p, :update, :ready, :runtime and :dependencies."
+:installed-p, :update, :ready, :native, :runtime, :system-cli, :remedy and
+:dependencies."
   (unless package--initialized (package-initialize))
   (if package
       (etaf-install--target-status package)
@@ -1226,6 +1761,71 @@ installed.  With NO-CONFIRM, skip the prompt."
                             ((equal runtime "—") 'shadow)
                             (t 'warning)))))
 
+(defun etaf-install--cli-tool-name (tool)
+  "Return short display name for manual CLI TOOL."
+  (or (plist-get (cdr (assq tool etaf-install--cli-catalog)) :name)
+      (symbol-name tool)))
+
+(defun etaf-install--manage-cli-tooltip (cli)
+  "Return hover tooltip text describing manual System CLI summary CLI."
+  (let* ((req (plist-get cli :required))
+         (opt (plist-get cli :optional))
+         (cmd (plist-get cli :install-command))
+         (parts nil))
+    (when req
+      (push (concat "Required: "
+                    (mapconcat (lambda (item)
+                                 (format "%s %s"
+                                         (if (cdr item) "✓" "✗")
+                                         (etaf-install--cli-tool-name (car item))))
+                               req ", "))
+            parts))
+    (when opt
+      (push (concat "Optional: "
+                    (mapconcat (lambda (item)
+                                 (format "%s %s"
+                                         (if (cdr item) "✓" "✗")
+                                         (etaf-install--cli-tool-name (car item))))
+                               opt ", "))
+            parts))
+    (when cmd
+      (push (concat "Install: " cmd) parts))
+    (push "Press ? for details and copyable commands." parts)
+    (mapconcat #'identity (nreverse parts) "\n")))
+
+(defun etaf-install--manage-cli-cell (status)
+  "Return the System CLI cell for STATUS.
+Shows only external OS CLI tools the user must install manually (excluding
+auto-downloaded native modules, bundled package backends and managed engines)."
+  (let ((cli (plist-get status :system-cli)))
+    (if (null cli)
+        (propertize "—" 'face 'shadow)
+      (let* ((req (plist-get cli :required))
+             (opt (plist-get cli :optional))
+             (tip (etaf-install--manage-cli-tooltip cli))
+             (text
+              (cond
+               (req
+                (mapconcat
+                 (lambda (item)
+                   (let ((ok (cdr item))
+                         (name (etaf-install--cli-tool-name (car item))))
+                     (propertize (format "%s %s" (if ok "✓" "✗") name)
+                                 'face (if ok 'success 'warning))))
+                 req
+                 (propertize " · " 'face 'shadow)))
+               (opt
+                (let* ((names (mapcar (lambda (item)
+                                        (etaf-install--cli-tool-name (car item)))
+                                      opt))
+                       (shown (if (> (length names) 3)
+                                  (concat (mapconcat #'identity (cl-subseq names 0 2) ", ")
+                                          (format ", +%d" (- (length names) 2)))
+                                (mapconcat #'identity names ", "))))
+                  (propertize (concat "opt: " shown) 'face 'shadow)))
+               (t (propertize "—" 'face 'shadow)))))
+        (propertize text 'help-echo tip)))))
+
 (defun etaf-install--manage-dependency-cell (status)
   "Return the dependency cell for STATUS."
   (let ((dependencies (plist-get status :dependencies)))
@@ -1247,6 +1847,7 @@ installed.  With NO-CONFIRM, skip the prompt."
                    (etaf-install--manage-version-cell (plist-get status :available)
                                                       (plist-get status :update))
                    (etaf-install--manage-runtime-cell status)
+                   (etaf-install--manage-cli-cell status)
                    (etaf-install--manage-dependency-cell status))))
    (etaf-install--manage-statuses)))
 
@@ -1425,7 +2026,14 @@ When HEADLINE is non-nil, display it above the key hints in the echo area."
       (user-error "%s is not installed" package))
     (unless open
       (user-error "%s has no open command" package))
-    (call-interactively open)))
+    (let* ((facts (etaf-install-doctor package))
+           (missing (cl-remove-if #'cadr (plist-get facts :required))))
+      (if missing
+          (progn
+            (etaf-install--display-doctor package facts)
+            (message "ETAF: %s requires %s — see *ETAF Installation*."
+                     package (mapconcat #'car missing ", ")))
+        (call-interactively open)))))
 
 (defun etaf-install--manage-install-native (&optional force)
   "Install prebuilt native module(s) for the target at point."
@@ -1483,9 +2091,9 @@ reopened."
 (define-derived-mode etaf-install--manage-mode tabulated-list-mode "ETAF Packages"
   "Major mode for the ETAF Packages buffer."
   (setq tabulated-list-format
-        [("Status" 16 t) ("Target" 51 t) ("Group" 16 t)
-         ("Installed" 14 t) ("Available" 16 t) ("Runtime" 30 t)
-         ("Depends on" 46 t)])
+        [("Status" 16 t) ("Target" 54 t) ("Group" 13 t)
+         ("Installed" 11 t) ("Available" 11 t) ("Runtime" 27 t)
+         ("System CLI" 28 t) ("Depends on" 44 t)])
   (setq tabulated-list-entries #'etaf-install--manage-entries)
   (setq tabulated-list-padding 1)
   (setq tabulated-list-sort-key nil)
@@ -1499,8 +2107,8 @@ reopened."
 (defun etaf-install-manage ()
   "Show and manage installed and available ETAF targets.
 The buffer is the whole interface: a native tabulated list of every target with
-its status, versions, runtime and dependencies, plus the archive's community
-packages.  The echo area shows the key hints.
+its status, versions, runtime, manual System CLI tools and Lisp dependencies,
+plus the archive's community packages.  The echo area shows the key hints.
 `i' installs, `n' installs native modules, `u' updates, `U' updates all, `d'
 removes, RET opens, `?' reports capabilities, `g' refreshes the archives, `l'
 shows the standard package menu and `q' quits.  Removal deletes package files
