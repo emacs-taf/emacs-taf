@@ -5,6 +5,7 @@
     "tests",
     "../etaf",
     "../etaf-ui",
+    "../etaf-db",
     "../ebox",
     "../ecss"
   ],
@@ -99,6 +100,76 @@
       "name": "etaf-bili-tests-view-mounts-in-a-host-buffer",
       "file": "tests/etaf-bili-tests.el",
       "purpose": "A host mounts the View in its own buffer, the client's keys reach the adopted session, and mounting the same session again keeps the loaded library instead of fetching it again."
+    },
+    {
+      "name": "etaf-bili-watch-tests-parse-target-bv-av-urls",
+      "file": "tests/etaf-bili-watch-tests.el",
+      "purpose": "Target parsing recognizes BV IDs, av numbers, bilibili.com URLs with p/t parameters, and b23.tv short links while leaving plain search keywords untouched."
+    },
+    {
+      "name": "etaf-bili-watch-tests-sqlite-store-progress-prefs-and-history",
+      "file": "tests/etaf-bili-watch-tests.el",
+      "purpose": "SQLite store persists watch progress with start/end resume clamping, viewing preferences of all JSON types, and deduplicated capped search history."
+    },
+    {
+      "name": "etaf-bili-watch-tests-subtitle-danmaku-and-timestamps",
+      "file": "tests/etaf-bili-watch-tests.el",
+      "purpose": "Binary-search subtitle lookup, bounded danmaku windowing, and comment MM:SS/H:MM:SS timestamp extraction return exact matches."
+    },
+    {
+      "name": "etaf-bili-watch-tests-cookie-jar-preserves-httponly-sessdata",
+      "file": "tests/etaf-bili-watch-tests.el",
+      "purpose": "The bundled Node account backend parses #HttpOnly_ Netscape cookies, clears bilibili.com entries on logout, and atomically preserves other #HttpOnly_ cookies."
+    },
+    {
+      "name": "etaf-bili-watch-tests-channels-filters-and-pagination",
+      "file": "tests/etaf-bili-watch-tests.el",
+      "purpose": "Expanded channels (rcmd, partitioned ranking, sorted search, dynamic, toview, history, favorites, UP space) send expected parameters and pagination appends deduplicated items."
+    },
+    {
+      "name": "etaf-bili-watch-tests-play-error-toast-preserves-gallery",
+      "file": "tests/etaf-bili-watch-tests.el",
+      "purpose": "A failed single-video stream resolution shows a non-destructive Toast without wiping the mounted gallery cards."
+    },
+    {
+      "name": "etaf-bili-watch-tests-watch-view-lifecycle-audio-only-and-org-link",
+      "file": "tests/etaf-bili-watch-tests.el",
+      "purpose": "Watch View displays tabs, quality dialog, theater mode, Org timestamp copy, and audio-only background mode with a persistent gallery mini-player."
+    },
+    {
+      "name": "etaf-bili-watch-tests-open-preserves-mode-line-and-reuses-buffer",
+      "file": "tests/etaf-bili-watch-tests.el",
+      "purpose": "etaf-bili-open preserves the user's mode-line and reuses an existing live *Bili* session instead of restarting it."
+    },
+    {
+      "name": "etaf-bili-watch-tests-unmount-resets-inflight-covers-for-remount",
+      "file": "tests/etaf-bili-watch-tests.el",
+      "purpose": "Unmounting a kept-alive session while covers are in-flight resets transfer state so remounting downloads the covers cleanly."
+    },
+    {
+      "name": "etaf-bili-watch-tests-danmaku-zero-jitter-and-audio-parity",
+      "file": "tests/etaf-bili-watch-tests.el",
+      "purpose": "Watch View defaults to 100% unity volume with Hi-Res audio badge, keeps stage geometry invariant when toggling native danmaku, and persists sidebar danmaku settings."
+    },
+    {
+      "name": "etaf-bili-watch-tests-hires-flac-audio-selection",
+      "file": "tests/etaf-bili-watch-tests.el",
+      "purpose": "DASH stream selection prioritizes lossless Hi-Res FLAC audio over standard 192K AAC when available."
+    },
+    {
+      "name": "etaf-bili-watch-tests-quality-dialog-keyboard-nav-and-alignment",
+      "file": "tests/etaf-bili-watch-tests.el",
+      "purpose": "Quality picker and sidebar rows align labels flush without dot/arrow prefixes, and the quality dialog supports up/down arrow selection with RET activation."
+    },
+    {
+      "name": "etaf-bili-watch-tests-fullscreen-modes-and-mode-line-restore",
+      "file": "tests/etaf-bili-watch-tests.el",
+      "purpose": "Watch View exposes window and frame Pure Fullscreen sharing the aligned cinema deck, hides and restores mode-line cleanly, and exits fullscreen on Escape before leaving Watch."
+    },
+    {
+      "name": "etaf-bili-watch-tests-cookie-jar-handles-crlf-windows-cookies",
+      "file": "tests/etaf-bili-watch-tests.el",
+      "purpose": "Windows CRLF Netscape cookie jars strip CR cleanly in both the bundled Node account backend and curl CSRF POST operations."
     }
   ]
 }

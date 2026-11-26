@@ -1,7 +1,7 @@
 ;;; -*- lexical-binding: t; -*-
 ;;; etaf-install.el --- Install ETAF with the Emacs package manager
 
-;; Version: 0.2.30
+;; Version: 0.2.31
 ;; Package-Requires: ((emacs "29.1"))
 ;; URL: https://github.com/emacs-taf/emacs-taf
 ;; Keywords: convenience
@@ -173,6 +173,8 @@ When nil, uses the pinned HTTPS mirrors declared in each package's
     (etaf-telega "Telegram client" application etaf-telega-open melpa gnu)
     (etaf-weread "WeChat Reading" application etaf-weread-open)
     (etaf-ncm "NetEase Cloud Music" application etaf-ncm-open)
+    (etaf-bili "Bilibili client" application etaf-bili-open)
+    (etaf-youtube "YouTube client" application etaf-youtube-open)
     (etaf-pomodoro "Focus timer" application etaf-pomodoro-open)
     (maillist "Mailing-list archive client" application maillist-open sqlite)
     (etaf-xiangqi "Xiangqi" game etaf-xiangqi-open)
@@ -373,7 +375,13 @@ When set to a package manager symbol (such as `brew', `apt', `pacman' or
      :packages ((brew . "curl") (apt . "curl") (dnf . "curl")
                 (pacman . "curl") (zypper . "curl")
                 (winget . "cURL.cURL") (scoop . "curl") (choco . "curl"))
-     :purpose "Calls built-in HTTP translation engines (OpenAI/DeepL/Google)."))
+     :purpose "Calls HTTP APIs, translation engines and thumbnail/cover downloads.")
+    (yt-dlp
+     :name "yt-dlp" :label "yt-dlp" :binaries ("yt-dlp")
+     :packages ((brew . "yt-dlp") (apt . "yt-dlp") (dnf . "yt-dlp")
+                (pacman . "yt-dlp") (zypper . "yt-dlp")
+                (winget . "yt-dlp.yt-dlp") (scoop . "yt-dlp") (choco . "yt-dlp"))
+     :purpose "Resolves adaptive YouTube video/audio streams, chapters and subtitles."))
   "Catalog of external OS CLI tools users install themselves.
 Excludes prebuilt native dynamic modules (auto-downloaded via
 `etaf-install-native'), bundled `backends/' scripts shipped inside package
@@ -388,6 +396,8 @@ tarballs, and ETAF-managed game engines (`etaf-gamekit-install-*').")
     (etaf-telega       :required (telega-server))
     (etaf-weread       :required (node))
     (etaf-ncm          :required (node python3 mpv) :optional (qrencode))
+    (etaf-bili         :required (curl) :optional (node ffmpeg mpv))
+    (etaf-youtube      :required (node yt-dlp curl) :optional (ffmpeg mpv))
     (etaf-xiangqi      :required (python3)
                        :managed-engines (("OpenSpiel runtime" etaf-gamekit-install-openspiel)))
     (etaf-tanks        :managed-engines (("Godot runtime" etaf-gamekit-install-godot))))
@@ -505,6 +515,7 @@ Return a list of command strings (usually 1 string combining OS packages)."
      ((or (equal low "dot") (string-prefix-p "graphviz" low)) 'dot)
      ((string-prefix-p "plantuml" low) 'plantuml)
      ((equal low "curl") 'curl)
+     ((equal low "yt-dlp") 'yt-dlp)
      (t nil))))
 
 (defun etaf-install--enrich-fact (fact)

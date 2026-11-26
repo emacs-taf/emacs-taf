@@ -128,6 +128,17 @@
         "backends"
       ]
     },
+    "etaf-bili": {
+      "resources": [
+        "docs",
+        "backends"
+      ]
+    },
+    "etaf-youtube": {
+      "resources": [
+        "backends"
+      ]
+    },
     "etaf-tanks": {
       "resources": [
         "docs",
@@ -168,6 +179,8 @@
     "etaf-xiangqi",
     "etaf-weread",
     "etaf-ncm",
+    "etaf-bili",
+    "etaf-youtube",
     "etaf-tanks",
     "etaf-pomodoro",
     "maillist"

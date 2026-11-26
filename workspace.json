@@ -147,6 +147,11 @@
       "branch": "main",
       "role": "game"
     },
+    "etaf-youtube": {
+      "url": "https://github.com/emacs-taf/etaf-youtube.git",
+      "branch": "main",
+      "role": "application"
+    },
     "maillist": {
       "url": "https://github.com/emacs-taf/maillist.git",
       "branch": "main",

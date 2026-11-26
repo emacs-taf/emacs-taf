@@ -1864,7 +1864,23 @@ stays proportional to the change."
     (if (etaf--slot-projection-captured-p projection)
         (let* ((content (etaf--slot-projection-content projection))
                (owners (etaf--slot-projection-style-owners projection))
-               (owner-ctx (if owners (etaf--ctx-inner owners) ctx)))
+               (owner-ctx
+                (cond
+                 ((null owners) ctx)
+                 ((eq (etaf--ictx-runtime owners) (etaf--ictx-runtime ctx))
+                  (etaf--ctx-inner owners))
+                 (t
+                  ;; Cross-Runtime portal projection: keep the caller's Context
+                  ;; and Theme while rebinding Runtime and instance ownership to
+                  ;; the target Runtime that mounts the projected Hosts.
+                  (etaf--ictx-make
+                   :runtime (etaf--ictx-runtime ctx)
+                   :owner (etaf--ictx-owner ctx)
+                   :root-p nil
+                   :context (or (etaf--ictx-context owners)
+                                (etaf--ictx-context ctx))
+                   :theme (or (etaf--ctx-theme owners)
+                              (etaf--ictx-theme ctx)))))))
           (etaf--patch-kids seg (etaf--flatten (etaf--slot-content-children content))
                             owner-ctx))
       (let ((name (etaf--slot-projection-name projection))

@@ -5,14 +5,15 @@ EMACS ?= emacs
 # Providers live beside the application (standalone) or two levels up (workspace).
 # Providers are siblings in the workspace and in a standalone clone;
 # override PROVIDER_ROOT to pin another checkout.
-PROVIDER_ROOT ?= ..
+PROVIDER_ROOT ?= $(if $(wildcard ../etaf/etaf.el),..,../..)
 
-LOAD_PATH = -L . -L lisp -L tests -L $(PROVIDER_ROOT)/etaf -L $(PROVIDER_ROOT)/etaf-ui \
-            -L $(PROVIDER_ROOT)/ebox -L $(PROVIDER_ROOT)/ecss
+LOAD_PATH = -L . -L lisp -L tests \
+            -L $(PROVIDER_ROOT)/etaf -L $(PROVIDER_ROOT)/etaf-ui \
+            -L $(PROVIDER_ROOT)/etaf-db -L $(PROVIDER_ROOT)/ebox -L $(PROVIDER_ROOT)/ecss
 
-SOURCES = lisp/etaf-bili-theme.el lisp/etaf-bili-service.el lisp/etaf-bili-model.el \
-          lisp/etaf-bili-account.el \
-          lisp/etaf-bili-views.el lisp/etaf-bili-app.el
+SOURCES = lisp/etaf-bili-theme.el lisp/etaf-bili-service.el lisp/etaf-bili-store.el \
+          lisp/etaf-bili-model.el lisp/etaf-bili-account.el \
+          lisp/etaf-bili-views.el lisp/etaf-bili-watch.el lisp/etaf-bili-app.el
 SOURCES += etaf-bili.el
 
 .PHONY: compile load check clean structure-check setup-hooks acceptance api-check test

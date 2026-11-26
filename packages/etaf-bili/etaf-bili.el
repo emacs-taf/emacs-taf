@@ -2,8 +2,8 @@
 
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 ;; Author: ETAF contributors
-;; Version: 0.1.0
-;; Package-Requires: ((emacs "29.1") (etaf "0.2.1") (etaf-ui "0.1.0"))
+;; Version: 0.2.0
+;; Package-Requires: ((emacs "29.1") (etaf "0.3.15") (etaf-ui "0.3.8") (etaf-db "0.1.0"))
 ;; Keywords: multimedia, ui
 ;; URL: https://github.com/emacs-taf/etaf-bili
 
@@ -12,21 +12,16 @@
 ;; Public API
 ;;
 ;; Load this package with (require 'etaf-bili) after adding this repository
-;; and the ETAF, ETAF UI, Ebox and ECSS roots to `load-path'.  The client
-;; browses Bilibili in one ETAF buffer: a searchable video list (the popular
-;; feed by default, the all-category ranking or search results), a details
-;; column for the selected row, and playback of the selected video inside the
-;; framework's `etaf-media-viewer' Component.  Streams are resolved through
-;; the web API and played with the Referer and User-Agent headers the CDN
-;; requires; curl performs every request asynchronously, so the interface
-;; never blocks.
-;;
-;; A session is one buffer (`*Bili*') with one backend client and one
-;; session record.  The commands below drive it, and the session-level
-;; functions (also listed here) take the session record directly so tests and
-;; scripts can drive them headless.  The default keymap binds the commands:
-;; j/k or n/p select a row, RET plays it, / searches, 1 loads the popular
-;; feed, 2 the ranking, g refreshes, T toggles the appearance, q closes.
+;; and the ETAF, ETAF UI, ETAF DB, Ebox and ECSS roots to `load-path'.  The
+;; client browses Bilibili and plays videos inside one ETAF buffer: a
+;; responsive cover gallery (popular, partitioned ranking, personalized
+;; recommendations, dynamic feed, Watch Later, watch history, favorites, UP
+;; space and WBI search with direct BV/URL navigation) paired with a dedicated
+;; Watch View offering WBI-signed DASH streams, quality/codec switching,
+;; multi-part/collection episodes, local and cloud resume, CC/AI subtitles
+;; with searchable transcript jump, danmaku, hot comments with timestamp jump,
+;; related videos, zero-CPU background audio mode, Picture-in-Picture and
+;; external mpv handoff.
 ;;
 ;; Only the interfaces listed below are supported for use by other packages.
 ;; All unlisted symbols and implementation features are internal, including
@@ -34,51 +29,18 @@
 ;; consumers.  This Commentary is the authoritative export list;
 ;; implementations and precise docstrings remain beside their definitions.
 ;;
-;; Function: etaf-bili-login (&optional session)
-;; Show the sign-in code as an `etaf-ui-qr-login' panel over the running
-;; client: the library keeps its content and only dims.  SESSION defaults to
-;; the current buffer's; without one the client opens first.  A phone
-;; confirms the scan, then the panel closes, the header's account chip shows
-;; the name and the library reloads.  The bundled backend (backends/bili,
-;; Node.js only) updates the cookie jar every request uses.  The phone-number
-;; method is absent because the site gates its SMS endpoint behind a graphical
-;; captcha.
+;; Function: etaf-bili-doctor ()
+;;;###autoload (autoload 'etaf-bili-doctor "etaf-bili" nil nil)
+;; Return capability facts for `etaf-bili' matching `etaf-install-doctor'.
 ;;
-;; Function: etaf-bili-account-cancel (session)
-;; Close SESSION's sign-in panel and stop polling for its code; the dismissal
-;; the panel's cancel button performs.
-;;
-;; Function: etaf-bili-logout (&optional session)
-;; Ask for confirmation, sign out through the backend and drop the stored
-;; Bilibili cookies; the account chip returns to the signed-out label.
-;;
-;; Function: etaf-bili-account (&optional session)
-;; Report the account the stored cookies belong to, or that nobody is signed
-;; in, and publish it to SESSION.
-;;
-;; Variable: etaf-bili-node-program
-;; Node.js executable that runs the bundled account backend, "node" by
-;; default.
-;;
-;; Variable: etaf-bili-backend-directory
-;; Directory of the bundled account backend (backends/bili in this
-;; repository).
-;;
-;; Variable: etaf-bili-backend-command
-;; Command prefix overriding the bundled backend, nil by default; the public
-;; suite injects a stand-in script through it.
-;;
-
-;; Variable: etaf-bili-login-poll-interval
-;; Seconds between two sign-in polls, 2 by default.
-;;
-;; Variable: etaf-bili-login-timeout
-;; Seconds the QR sign-in waits for confirmation, 180 by default.
-;;
-;; Function: etaf-bili-open ()
+;; Function: etaf-bili-open (&optional fresh)
 ;;;###autoload (autoload 'etaf-bili-open "etaf-bili" nil t)
-;; Open the client in its own buffer and return that buffer.
-;; The popular feed starts loading immediately.
+;; Open or focus the client buffer (`*Bili*') preserving the user's mode-line.
+;; Reuses an already-open session unless FRESH is non-nil.
+;;
+;; Function: etaf-bili-open-video (bvid-or-url &optional start-seconds cid)
+;;;###autoload (autoload 'etaf-bili-open-video "etaf-bili" nil t)
+;; Open BVID-OR-URL directly in Watch View at optional START-SECONDS and CID.
 ;;
 ;; Function: etaf-bili-close ()
 ;;;###autoload (autoload 'etaf-bili-close "etaf-bili" nil t)
@@ -86,130 +48,268 @@
 ;;
 ;; Function: etaf-bili-create ()
 ;;;###autoload (autoload 'etaf-bili-create "etaf-bili" nil t)
-;; Create a client session to mount through `etaf-bili-view'.
-;; A session is headless until a View is mounted and creation sends no
-;; request, so a caller can build it before a window exists.  Every host gets
-;; its own session, so a desktop window and a panel do not share selection or
-;; playback.
+;; Create a headless client session to mount through `etaf-bili-view'.
 ;;
 ;; Function: etaf-bili-view (session)
 ;;;###autoload (autoload 'etaf-bili-view "etaf-bili" nil t)
-;; Return SESSION's View for mounting in a host of your own.
-;; The View lays out for the region it is given and follows that region's
-;; resizes, so a desktop window or a floating panel reflows the card grid.
-;; Mounting adopts the host buffer: the client's keys, the inline search and
-;; the session-level commands find SESSION there.  The first mount loads the
-;; popular feed; a session that already has a library only refits, so a panel
-;; reopened with `:keep-alive' resumes where it was.  Unmounting stops the
-;; session's transfers and polling but keeps its library, selection and
-;; account for the next mount.
+;; Return SESSION's embeddable View, adapting to `(etaf-viewport)'.
+;;
+;; Function: etaf-bili-login (&optional session)
+;;;###autoload (autoload 'etaf-bili-login "etaf-bili" nil t)
+;; Show the Bilibili QR sign-in overlay over SESSION.
+;;
+;; Function: etaf-bili-account-cancel (session)
+;;;###autoload (autoload 'etaf-bili-account-cancel "etaf-bili" nil nil)
+;; Close SESSION's sign-in panel and stop its polling timer.
+;;
+;; Function: etaf-bili-logout (&optional session)
+;;;###autoload (autoload 'etaf-bili-logout "etaf-bili" nil t)
+;; Ask for confirmation, sign out through the backend and clear cookies.
+;;
+;; Function: etaf-bili-account (&optional session)
+;;;###autoload (autoload 'etaf-bili-account "etaf-bili" nil t)
+;; Report the account the stored cookies belong to and publish it to SESSION.
 ;;
 ;; Function: etaf-bili-next ()
-;; Select and focus the next video; clamp at the last item.
+;; Select and focus the next video in the gallery.
 ;;
 ;; Function: etaf-bili-previous ()
-;; Select and focus the previous video; clamp at the first item.
+;; Select and focus the previous video in the gallery.
 ;;
 ;; Function: etaf-bili-play ()
-;; Resolve the selected video's stream and open it in the media viewer.
+;; Resolve the selected video's stream and open it in Watch View.
 ;;
-;; Function: etaf-bili-search (session keyword)
-;; Search videos for KEYWORD and show the results in SESSION.
-;; Empty or whitespace-only keywords are ignored.
+;; Function: etaf-bili-search (session keyword &optional order)
+;; Search videos for KEYWORD (optional sort ORDER) and show results in SESSION.
 ;;
 ;; Function: etaf-bili-search-prompt ()
-;; Begin native editing of the in-page SearchField. Return submits the query;
-;; Escape keeps its draft. No minibuffer or additional window is opened.
+;; Begin native editing of the in-page SearchField (accepts keywords or BV/URL).
 ;;
 ;; Function: etaf-bili-details ()
-;; Open the selected video's metadata in a catalog Drawer. Escape closes it
-;; and restores focus; no permanently empty side column is reserved.
+;; Open the selected video's metadata in a catalog Drawer.
+;;
+;; Function: etaf-bili-open-author-space ()
+;; Open the current or selected video creator's upload space.
+;;
+;; Function: etaf-bili-return-to-watch ()
+;; Return to Watch View for the active video.
 ;;
 ;; Function: etaf-bili-popular ()
 ;; Load the currently popular videos.
 ;;
 ;; Function: etaf-bili-ranking ()
-;; Load the all-category ranking.
+;; Load the ranking feed.
+;;
+;; Function: etaf-bili-rcmd ()
+;; Load personalized home recommendations.
+;;
+;; Function: etaf-bili-dynamic ()
+;; Load followed creators' dynamic video feed.
+;;
+;; Function: etaf-bili-toview ()
+;; Load the Watch Later list.
+;;
+;; Function: etaf-bili-history ()
+;; Load watch history.
+;;
+;; Function: etaf-bili-favorites ()
+;; Load the signed-in user's favorite folders and videos.
 ;;
 ;; Function: etaf-bili-refresh ()
-;; Command: reload the current buffer's view.
+;; Reload the current buffer's active gallery channel.
 ;;
 ;; Function: etaf-bili-toggle-theme ()
 ;; Switch the client between the dark and light palette.
 ;;
+;; Function: etaf-bili-watch-toggle ()
+;; Toggle play/pause in Watch View or background audio mode.
+;;
+;; Function: etaf-bili-watch-back-10 ()
+;; Seek backward 10 seconds in Watch View.
+;;
+;; Function: etaf-bili-watch-forward-10 ()
+;; Seek forward 10 seconds in Watch View.
+;;
+;; Function: etaf-bili-watch-step ()
+;; Step one frame while paused in Watch View.
+;;
+;; Function: etaf-bili-watch-cycle-speed ()
+;; Cycle playback speed in Watch View.
+;;
+;; Function: etaf-bili-watch-speed-up ()
+;; Increase playback speed one step.
+;;
+;; Function: etaf-bili-watch-speed-down ()
+;; Decrease playback speed one step.
+;;
+;; Function: etaf-bili-watch-volume-down ()
+;; Decrease playback volume by 10%.
+;;
+;; Function: etaf-bili-watch-volume-up ()
+;; Increase playback volume by 10%.
+;;
+;; Function: etaf-bili-watch-toggle-audio ()
+;; Mute or unmute playback sound.
+;;
+;; Function: etaf-bili-watch-quality-menu ()
+;; Open or close the quality and CDN failover dialog.
+;;
+;; Function: etaf-bili-watch-cycle-subtitle ()
+;; Toggle or cycle CC/AI subtitle tracks.
+;;
+;; Function: etaf-bili-watch-toggle-danmaku ()
+;; Toggle danmaku display.
+;;
+;; Function: etaf-bili-watch-toggle-theater ()
+;; Toggle wide theater mode (hide/show side panel).
+;;
+;; Function: etaf-bili-watch-toggle-fullscreen ()
+;; Toggle in-window pure cinema fullscreen mode in Watch View (`f').
+;;
+;; Function: etaf-bili-watch-toggle-frame-fullscreen ()
+;; Toggle dedicated OS/frame fullscreen mode in Watch View (`F'), saving and
+;; restoring Emacs window splits, frame state and mode-line cleanly.
+;;
+;; Function: etaf-bili-watch-toggle-drawer ()
+;; Open or close the side panel Drawer in narrow/theater viewports.
+;;
+;; Function: etaf-bili-watch-toggle-audio-only ()
+;; Toggle zero-CPU background audio-only mode.
+;;
+;; Function: etaf-bili-watch-toggle-pip ()
+;; Toggle floating Picture-in-Picture child-frame video.
+;;
+;; Function: etaf-bili-watch-toggle-auto-next ()
+;; Toggle auto-advance on video completion.
+;;
+;; Function: etaf-bili-watch-next ()
+;; Advance to the next part, episode or gallery video.
+;;
+;; Function: etaf-bili-watch-previous ()
+;; Move to the previous part, episode or gallery video.
+;;
+;; Function: etaf-bili-watch-back ()
+;; Leave Watch View and return to the Gallery (keeping audio-only alive).
+;;
+;; Function: etaf-bili-watch-escape ()
+;; Dismiss the topmost Watch overlay or return to the Gallery.
+;;
+;; Function: etaf-bili-watch-jump-digit ()
+;; Jump to 0%..90% of video duration according to the pressed digit key.
+;;
+;; Function: etaf-bili-open-external ()
+;; Launch the configured external player (e.g. mpv) at the current second.
+;;
+;; Function: etaf-bili-open-in-browser ()
+;; Open the current video in the system web browser at the current timestamp.
+;;
+;; Function: etaf-bili-copy-org-link ()
+;; Copy an Org-mode timestamp link reopening this video at the current second.
+;;
 ;; Function: etaf-bili-session-create (&key client)
-;; Create a session with the backend CLIENT.
-;; CLIENT defaults to `etaf-bili-client-factory' when bound, otherwise the
-;; default curl client.  The session starts empty on the popular feed.
+;; Create a headless session with backend CLIENT.
 ;;
 ;; Function: etaf-bili-session-state (session)
 ;; Return SESSION's public state as a detached plist.
-;; Keys are `:mode', `:keyword', `:status', `:loading', `:items', `:selected'
-;; `:playback', `:error' and `:play-loading'; each `:items' row carries the fields documented on
-;; `etaf-bili-selected-row'.
 ;;
 ;; Function: etaf-bili-load-popular (session)
 ;; Load the popular feed into SESSION.
 ;;
-;; Function: etaf-bili-load-ranking (session)
-;; Load the all-category ranking into SESSION.
+;; Function: etaf-bili-load-ranking (session &optional rid)
+;; Load the ranking feed (optional partition RID) into SESSION.
+;;
+;; Function: etaf-bili-load-rcmd (session)
+;; Load personalized home recommendations into SESSION.
+;;
+;; Function: etaf-bili-load-dynamic (session)
+;; Load followed creators' dynamic videos into SESSION.
+;;
+;; Function: etaf-bili-load-toview (session)
+;; Load Watch Later into SESSION.
+;;
+;; Function: etaf-bili-load-history (session)
+;; Load watch history into SESSION.
+;;
+;; Function: etaf-bili-load-favorites (session &optional folder-id)
+;; Load favorites (optional FOLDER-ID) into SESSION.
+;;
+;; Function: etaf-bili-load-space (session mid &optional name)
+;; Load videos uploaded by creator MID into SESSION.
+;;
+;; Function: etaf-bili-load-more (session)
+;; Load the next page of SESSION's current paginated channel.
 ;;
 ;; Function: etaf-bili-reload (session)
-;; Reload SESSION's current view (popular, ranking or the last search).
+;; Reload SESSION's current gallery view.
 ;;
 ;; Function: etaf-bili-move (session delta)
-;; Move SESSION's selection by DELTA rows, clamped to the list.
+;; Move SESSION's selection by DELTA items, clamped to bounds.
 ;;
 ;; Function: etaf-bili-selected-row (session)
-;; Return SESSION's selected row plist, or nil when the list is empty.
-;; Rows carry `:bvid', `:aid', `:title', `:author', `:duration' (seconds),
-;; `:views' (a display string), `:date' and `:cover'.
+;; Return SESSION's selected video row plist, or nil.
 ;;
 ;; Function: etaf-bili-play-selected (session on-ready)
-;; Resolve the selected video's stream and call ON-READY with a source plist.
-;; The plist is an `etaf-video' source (`:url' plus the CDN `:headers') with
-;; `:title', `:bvid' and `:duration'; failures only change SESSION's status.
+;; Resolve SESSION's selected stream and deliver the source plist to ON-READY.
+;;
+;; Function: etaf-bili-play-target (session target on-ready &optional cid qn force-refresh)
+;; Resolve stream for TARGET plist (`:bvid' or `:aid') and deliver to ON-READY.
+;;
+;; Function: etaf-bili-parse-target (input)
+;; Parse INPUT string as a BV id, av number, video URL or b23.tv short URL.
+;;
+;; Function: etaf-bili-subtitle-at (cues seconds)
+;; Binary-search sorted subtitle CUES for the cue active at SECONDS.
+;;
+;; Function: etaf-bili-danmaku-window (entries seconds &optional span limit)
+;; Return up to LIMIT danmaku entries visible around SECONDS within SPAN.
+;;
+;; Function: etaf-bili-extract-timestamps (text)
+;; Extract `(SECONDS . LABEL)' timestamp jumps from comment TEXT.
+;;
+;; Function: etaf-bili-store-progress-put (bvid cid position duration &optional title)
+;; Save local resume POSITION and DURATION for BVID and CID.
+;;
+;; Function: etaf-bili-store-progress-get (bvid &optional cid)
+;; Return saved `(POSITION . DURATION)' for BVID and CID, or nil.
+;;
+;; Function: etaf-bili-store-resume-seconds (bvid &optional cid cloud-seconds duration)
+;; Compute the effective resume second from local and cloud progress.
+;;
+;; Function: etaf-bili-store-pref-put (key value)
+;; Persist viewing preference KEY with VALUE.
+;;
+;; Function: etaf-bili-store-pref-get (key &optional default)
+;; Return persisted viewing preference KEY or DEFAULT.
+;;
+;; Function: etaf-bili-store-search-history-add (keyword)
+;; Record KEYWORD in recent search history.
+;;
+;; Function: etaf-bili-store-search-history ()
+;; Return recent search keywords.
 ;;
 ;; Function: etaf-bili-make-client (&key state-directory timeout)
 ;; Create the default curl-backed backend client.
-;; STATE-DIRECTORY holds the cookie jar; both keywords default to the
-;; corresponding defcustoms.  The client is returned as a plist which
-;; `etaf-bili-client-call' accepts; a plain function accepting
-;; (REQUEST CALLBACK) may be used in its place.
 ;;
 ;; Function: etaf-bili-wbi-query (params mixin-key &optional wts)
-;; Sign PARAMS with MIXIN-KEY and return the query string with `w_rid'.
-;; A `wts' timestamp (defaulting to the current time) is appended, keys are
-;; sorted, values encode like `encodeURIComponent', and the MD5 covers the
-;; query plus the mixin key.  Exposed so the signature contract is testable
-;; without the network; a missing key signals `etaf-bili-error'.
+;; Sign PARAMS with MIXIN-KEY and return the WBI query string with `w_rid'.
 ;;
 ;; Function: etaf-bili-parse-videos (data)
-;; Parse a video list response DATA into row plists.
-;; DATA is the `data' object of a popular, ranking or search response parsed
-;; by `json-parse-string' with an alist object type; rows match the contract
-;; of `etaf-bili-selected-row'.
+;; Parse a video list response DATA into normalized row plists.
 ;;
 ;; Function: etaf-bili-client-call (client request callback)
-;; Perform one backend REQUEST and deliver the result to CALLBACK.
-;; REQUEST is a plist with an `:op': `(:op :popular :page N)',
-;; `(:op :ranking)', `(:op :search :keyword K :page N)',
-;; `(:op :video :bvid B)', `(:op :play :bvid B)' or `(:op :cover :url U)'.
-;; The cover operation accepts Bilibili image CDN URLs and returns a local
-;; cached image path. Downloads are capped at 2 MiB. CALLBACK receives
-;; `(:ok DATA)' or `(:error MESSAGE :hint HINT)'.  The `:play' operation
-;; chains the metadata and stream steps and returns the stream source.
+;; Perform one backend REQUEST and deliver `(:ok DATA)' or `(:error MSG)' to CALLBACK.
 ;;
 ;; Variable: etaf-bili-client-factory
-;; Function returning the backend client used by new sessions.
-;; Nil (the default) selects the curl client; tests bind this to a fake.
+;; Function returning the backend client used by new sessions (nil for curl).
 ;;
 ;; Error: etaf-bili-error
-;; Signaled for client-level failures such as unusable WBI keys or a
-;; non-JSON response body.
+;; Signaled for client-level failures such as unusable WBI keys or non-JSON bodies.
 ;;
 ;; Variable: etaf-bili-state-directory
-;; Directory holding the client's cookie jar and other local state.
+;; Directory holding the cookie jar, cover cache and local SQLite state.
+;;
+;; Variable: etaf-bili-store-file
+;; Optional override path for the SQLite watch-progress and preferences database.
 ;;
 ;; Variable: etaf-bili-request-timeout
 ;; Seconds before one backend request is abandoned (default 20).
@@ -217,9 +317,32 @@
 ;; Variable: etaf-bili-curl-program
 ;; curl executable used for every request.
 ;;
+;; Variable: etaf-bili-preferred-quality
+;; Preferred Bilibili quality id when opening a video (default 80 = 1080P).
+;;
+;; Variable: etaf-bili-preferred-codecs
+;; Ordered DASH video codec prefix preference (default H.264, HEVC, AV1).
+;;
+;; Variable: etaf-bili-external-player
+;; External video player executable launched by `etaf-bili-open-external' (default "mpv").
+;;
 ;; Variable: etaf-bili-theme-mode
-;; New-session appearance: `dark' (default) or `light', independent of
-;; Emacs's theme.  Press T to switch the running client.
+;; New-session appearance: `dark' (default) or `light'.
+;;
+;; Variable: etaf-bili-node-program
+;; Node.js executable that runs the bundled account backend ("node" by default).
+;;
+;; Variable: etaf-bili-backend-directory
+;; Directory of the bundled account backend (`backends/bili').
+;;
+;; Variable: etaf-bili-backend-command
+;; Command prefix overriding the bundled backend (nil by default).
+;;
+;; Variable: etaf-bili-login-poll-interval
+;; Seconds between two sign-in polls (default 2).
+;;
+;; Variable: etaf-bili-login-timeout
+;; Seconds QR sign-in waits for confirmation (default 180).
 
 ;;; Code:
 

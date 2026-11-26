@@ -4,78 +4,42 @@
 
 | Module | Responsibility |
 | --- | --- |
-| `etaf-bili-service` | Bilibili API and cookie protocol, WBI signing, bounded curl requests and atomic cover downloads |
-| `etaf-bili-model` | Library, selection, request identities and status refs; headless actions |
-| `etaf-bili-views` | Pure grid geometry and catalog composition: Card, SearchField, Tabs, Badge, Skeleton and metadata |
-| `etaf-bili-theme` | Two palettes and the catalog theme-token projection |
-| `etaf-bili-app` | Buffer lifecycle, viewport synchronization, visible-cover scheduling and modal composition |
+| `etaf-bili-service` | Bilibili HTTP/WBI protocol, cookie-mode isolation, zero-`ffprobe` DASH `fnval=4048` resolution, companion parsers (subtitles, chapters, danmaku XML, comments, related), direct BV/URL parsing and bounded cover cache |
+| `etaf-bili-store` | Fail-open `etaf-db` SQLite persistence (`bili_progress` and `bili_prefs` tables) with in-memory fallback |
+| `etaf-bili-model` | Reactive session struct, channel/pagination loaders, 30-minute TTL stream cache, non-destructive Toast state, companion loaders and pure subtitle/danmaku/timestamp helpers |
+| `etaf-bili-account` | Node.js `backends/bili/bili.mjs` bridge for QR login polling, status check and logout with per-session timers |
+| `etaf-bili-theme` | Dark and light palettes and catalog theme-token projection |
+| `etaf-bili-views` | Pure Gallery grid geometry, bordered cover cards, header, expanded tabs, context filter strip and floating Toast banner |
+| `etaf-bili-watch` | Responsive Watch View layout (split Theater + 38-column tabbed panel, narrow/Theater Drawer, quality/CDN picker dialog, Retained Host leaf anchors) |
+| `etaf-bili-app` | Standalone (`etaf-app-open :mode-line t`) and embeddable (`etaf-bili-view`) shell lifecycle, `(etaf-viewport)` sync with Watch resize debounce, cover queue, 250 ms HUD tick, background audio, child-frame PiP, external `mpv` handoff and commands |
 
-The native Image Host owns image preparation and drawing; the application
-only supplies the local source, cell bounds and fractional-row inset.
-MediaViewer owns playback controls and the native video Component owns
-stream decoding. Applications never call Ebox internals.
+Applications and components call only ETAF, `etaf-ui` and `etaf-db` public APIs; EBox internals remain hidden behind ETAF.
 
-## Publication and layout
+## View modes and layout
 
-The shell is a normal-flow column: one spacing row, a three-row header, one
-spacing row, a three-row navigation band, the gallery and a three-row footer.
-The footer includes a padding row above and below its controls. There is no
-overdraw allowance, off-canvas filler stripe or frame-wide background change.
+The top-level `etaf-bili--shell` switches cleanly between `'gallery` and `'watch` over one reactive session:
 
-The authoritative usable width comes from `etaf-runtime-window-viewport`
-(or the committed canvas viewport in batch), not raw `window-body-width`.
-A full-line display space exceeding the canvas's usable width can disappear
-at redisplay, exposing the user's frame background. The initial mount is
-conservative and immediately adopts the first measured viewport.
+- **Gallery View**: A normal-flow column with padded header (`lh 3`), channel tab bar (`lh 3`), optional context filter strip (`lh 2` for Ranking, Search, Favorites and UP Space), virtualized native-scroll cover grid (`etaf-bili--gallery`), and footer (`lh 3`) that converts into a compact mini-player strip when background audio-only mode is active.
+- **Watch View**: A full-viewport column (`lh 2` header + body row). At `total-cols >= 120` (unless Theater mode `w` is active), the body splits into a left Theater column (author/stats strip, optional 1-row danmaku lane, aspect-fitted `etaf-video` / audio-only / inline error stage, 1-row subtitle strip and 3-row transport panel) and a right 38-column tabbed side panel. Narrow viewports or Theater mode allocate the full width to the Theater column and mount the same side panel inside an on-demand `etaf-drawer`.
 
-Grid columns follow available width; card dimensions also respect available
-height. The content measure is capped, with one to four columns. A native
-scroll Host owns the sole scroll offset. Its `:on-scroll` callback projects
-the observed row into a virtual window, with neighboring rows overscanned;
-leading and trailing spacers preserve the full scroll extent. Scrolling
-within a row reuses the native cached lines. Keyboard selection uses the
-public scroll API, then focuses the card after its publication commits.
-Images are not forced to the rounded cell aspect:
-the source ratio determines image width and exact pixel height, and `:inset`
-accounts for the last partial row. Rendering reads cached image dimensions;
-file access and network work stay outside the View.
+Viewport sizing watches `(etaf-viewport)` so embedded hosts (`etaf-bili-view`) and standalone windows share one layout path. While Watch View is actively playing video, resize events are debounced by 200 ms so interactive window drags do not repeatedly kill and reconnect remote DASH streams.
 
-## Catalog and animation
+## Retained Host HUD and playback lifecycle
 
-The gallery composes catalog Cards rather than painting a wide text list.
-SearchField owns editing and its query draft; Tabs own channel selection;
-Drawer and MediaViewer own modal input; Alert and Empty own failure feedback.
-Application keys are declared once through ETAF `:keys`; there is no competing
-emulation keymap to swallow modal or input keys.
+Video playback runs through ETAF's native `etaf-video` component receiving pre-normalized `:kind 'url` plists (`:url`, `:audio-url`, `:width`, `:height`, `:fps`, `:duration`, `:audio t`, optional `:start`) produced directly from Bilibili's DASH JSON without invoking `ffprobe`.
 
-Each mounted card reads the shared selection through a computed boolean and
-owns a short `etaf-transition` for its accent fill, quantized to eight steps. A pending-operation
-component owns an `etaf-animation-frames` source. Scopes release both on
-unmount, and the framework's reduced-motion switch applies. Motion never
-adds a delay before a network request or controls media time.
+A 250 ms timer (`etaf-bili--watch-tick`) polls `etaf-video-state` (or the background `ffplay` clock in audio-only mode) and updates only leaf Retained Host anchors (`etaf-set-host-content` for clock, duration, active CC subtitle, top danmaku lane and buffering status; `etaf-set-host-geometry` for the seek bar fill). Nothing in the 250 ms tick triggers a full View re-render.
 
-## Requests and covers
+Stream errors detected from `etaf-video-state` trigger automatic failover to `:backup-urls` / `:audio-backup-urls` before surfacing an inline recovery panel with Retry, Failover CDN and `mpv` handoff buttons. Unmounting or leaving Watch View persists local progress and sends a throttled cloud heartbeat when signed in.
 
-List and playback requests have separate generation tokens. Newer requests
-invalidate older replies; disposed sessions cannot publish or reopen a viewer.
-An explicit `:ok nil` is an empty success, not an error. Duplicate video IDs
-are normalized before rendering keyed siblings.
+## Cookie isolation, caching and cleanup
 
-A session prepares stable cover refs before publishing the library. Only the
-visible virtual window enters the cover queue, capped at three concurrent transfers.
-Files are installed atomically after successful curl completion; failed
-partial files are deleted. A cover failure retains a placeholder and does
-not prevent playback. Closing the application cancels its cover processes.
+`backends/bili/bili.mjs` reads Netscape cookies including `#HttpOnly_` entries (such as `SESSDATA`), writes updates atomically via temporary file + rename, and is invoked with explicit `ETAF_BILI_STATE_DIRECTORY` / `ETAF_BILI_COOKIE_FILE` environment variables.
 
-The per-request curl deadline bounds remote operations. Both process streams
-are drained with zero-timeout reads before settlement; stderr's pipe sentinel
-cannot insert process-status prose into the backend diagnostic.
+In `etaf-bili-service.el`, each `curl` call specifies an explicit cookie mode: `:read` (`-b`) for normal API reads and posts, `:read-write` (`-b` + `-c`) only when seeding a missing `buvid3`, and `:none` for `hdslb.com` cover downloads. This prevents concurrent transfers from truncating or overwriting freshly written session cookies.
+
+Covers download atomically into `etaf-bili-state-directory/covers/` (capped at 3 concurrent transfers and pruned to 400 cached files). Unmounting cancels active cover processes, removes partial `.cover-*` temp files, resets `cover-active` to 0 and clears `'loading` map entries so `:keep-alive` remounts reload interrupted covers cleanly. Resolved stream URLs expire after 30 minutes and are invalidated immediately on login or logout.
 
 ## Validation
 
-Public acceptance covers model races, empty success, mounted catalog targets,
-native input, continuous scrolling, modal dismissal, frame preservation and the cover
-transport using an offline curl fixture. The GUI adapter separately checks
-real covers and viewport geometry and produces screenshots for visual review.
-The appearance workload is registered with the workspace performance driver;
-measurements, rather than UI composition alone, determine latency claims.
+Offline acceptance tests in `tests/` validate WBI signing, target parsing, SQLite progress/preference/history persistence, subtitle binary search, danmaku windowing, timestamp extraction, `#HttpOnly_` cookie round-trips through Node, expanded channels and deduplicated pagination, non-destructive error Toasts, full Watch View lifecycle, mode-line preservation, live buffer reuse and unmount cover cleanup. Real graphical appearance, line-height invariants and live Bilibili playback are verified separately through `scripts/etaf-bili-gui-scenarios.el` and live GUI inspection.

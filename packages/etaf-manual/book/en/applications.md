@@ -231,6 +231,138 @@ Hook run with `(ENTRY)` when `etaf-notify` records a notification.
 
 **Semantics.** Individual observer errors are isolated. Installing at least one observer suppresses the echo-area `message` fallback.
 
+## Floating Picture-in-Picture
+
+<!-- index: etaf-pip-open; etaf-pip-close; etaf-pip-bounds; picture-in-picture; child frame -->
+
+Video and monitoring applications often detach a compact always-on-top player while the user returns to another buffer. `etaf-pip-open` hosts any View inside a recycled floating child frame with a native-draggable adaptive header bar, a 4-pixel drag-resize border, focus-reactive border color, four-corner docking, S/M/L presets, and unpinned viewport synchronization so manual dragging adapts both layout and embedded GPU video layers smoothly.
+
+#### Function: etaf-pip-open (id view &key title parent (size 'medium) (corner 'bottom-right) theme on-return on-close on-resize on-size-change on-corner-change)
+
+Open a floating adaptive Picture-in-Picture window for symbol ID showing VIEW.
+
+**Arguments.** ID is a non-nil symbol identifying the PiP host; VIEW is the mounted View. TITLE is a string, ref, computed or zero-argument function for the header bar. PARENT names the enclosing top-level frame (default selected frame). SIZE is `small`, `medium` (default) or `large`; CORNER is `bottom-right` (default), `bottom-left`, `top-left` or `top-right`. THEME is a color plist or zero-argument function supplying `:bg`, `:panel`, `:chip`, `:hover`, `:ink`, `:muted`, `:accent`, `:accent-soft` and `:border-inactive`. ON-RETURN, ON-CLOSE, ON-RESIZE, ON-SIZE-CHANGE and ON-CORNER-CHANGE are optional callbacks.
+
+**Semantics.** Opening an ID that is already active closes the previous host first. On graphical frames the View mounts inside a recycled undecorated child frame without pinning viewport dimensions so Ebox and `etaf-pip-bounds` follow every edge/corner drag and synchronize native GPU video surfaces. In non-graphical sessions the View still mounts into its buffer with live bounds so tests exercise the full lifecycle.
+
+**Returns.** The mounted PiP buffer.
+
+**Errors.** `wrong-type-argument` when ID is not a non-nil symbol.
+
+#### Function: etaf-pip-close (id &optional restore-focus)
+
+Close floating Picture-in-Picture window ID and return non-nil if it was open.
+
+**Semantics.** Runs ON-CLOSE once, unmounts and kills the PiP buffer, parks graphical child frames for safe reuse, and restores input focus to the parent frame when RESTORE-FOCUS is non-nil or the PiP frame held focus.
+
+**Returns.** `t` when ID was active, nil otherwise.
+
+#### Function: etaf-pip-active-p (id)
+
+Return non-nil when floating Picture-in-Picture window ID is currently live.
+
+**Returns.** `t` when active, nil otherwise.
+
+#### Function: etaf-pip-bounds (id)
+
+Return reactive live inner bounds plist of Picture-in-Picture window ID.
+
+**Semantics.** Returns `(:width-px W :height-px H :cols C :rows R :cell-w CW :cell-h LH :size SIZE :corner CORNER)` or nil when ID is closed. Calling this inside a Component `:render` subscribes it to every manual drag-resize and preset change.
+
+**Returns.** The bounds plist or nil.
+
+#### Function: etaf-pip-frame (id)
+
+Return the floating child frame of Picture-in-Picture window ID, or nil.
+
+**Returns.** A live frame or nil.
+
+#### Function: etaf-pip-buffer (id)
+
+Return the mounted buffer of Picture-in-Picture window ID, or nil.
+
+**Returns.** A live buffer or nil.
+
+#### Function: etaf-pip-cycle-size (id)
+
+Cycle Picture-in-Picture window ID among `small`, `medium` and `large`.
+
+**Semantics.** Resizes the frame to the next preset, re-docks it into the active corner, updates `etaf-pip-bounds` and calls ON-SIZE-CHANGE.
+
+**Returns.** The new size symbol or nil when ID is not active.
+
+#### Function: etaf-pip-cycle-corner (id)
+
+Dock Picture-in-Picture window ID clockwise across parent frame corners.
+
+**Semantics.** Moves the floating frame to the next corner in `(bottom-right bottom-left top-left top-right)` while preserving any manually dragged dimensions, and calls ON-CORNER-CHANGE.
+
+**Returns.** The new corner symbol or nil when ID is not active.
+
+#### Function: etaf-pip-refresh-chrome (id)
+
+Repaint Picture-in-Picture window ID's surface, border and header bar.
+
+**Semantics.** Re-evaluates THEME and TITLE to update frame colors, border paint and the adaptive header line.
+
+**Returns.** `t` when ID is active, nil otherwise.
+
+## Two-Tier Fullscreen
+
+<!-- index: etaf-fullscreen-mode; etaf-fullscreen-enter; etaf-fullscreen-exit; etaf-fullscreen-toggle; fullscreen -->
+
+Media players, readers and presentation views need distraction-free fullscreen without losing the user's window splits or mode-line permanently. ETAF separates fullscreen into two tiers: `window` fullscreen hides the buffer's mode-line in place without disturbing Emacs splits or OS spaces, while `frame` fullscreen saves the current window configuration and frame `fullscreen` parameter, expands to a single window, enters graphical OS fullscreen when not already fullscreen, and restores everything cleanly on exit or buffer kill.
+
+#### Function: etaf-fullscreen-mode (&optional buffer)
+
+Return BUFFER's reactive fullscreen mode: nil, `window` or `frame`.
+
+**Arguments.** BUFFER defaults to the current buffer.
+
+**Semantics.** Reading this inside a Component `:render` subscribes the View to fullscreen transitions so layouts expand without remounting stateful media nodes.
+
+**Returns.** `window`, `frame`, or nil.
+
+#### Function: etaf-fullscreen-active-p (&optional buffer)
+
+Return non-nil when BUFFER is currently in `window` or `frame` fullscreen.
+
+**Arguments.** BUFFER defaults to the current buffer.
+
+**Returns.** `t` when fullscreen is active, nil otherwise.
+
+#### Function: etaf-fullscreen-enter (&optional mode buffer &key (hide-mode-line t) on-change)
+
+Enter fullscreen MODE (`window` or `frame`) for BUFFER.
+
+**Arguments.** MODE defaults to `window`; BUFFER defaults to the current buffer. When HIDE-MODE-LINE is non-nil (default `t`), BUFFER's `mode-line-format` is saved and temporarily set to nil. Optional ON-CHANGE runs with the new mode symbol on transitions.
+
+**Semantics.** Entering `frame` saves non-trivial window splits and the frame's previous `fullscreen` parameter before collapsing splits and switching graphical frames to `fullboth`. Switching directly from `frame` to `window` restores splits and OS fullscreen while keeping the mode-line hidden. Every transition triggers multi-phase viewport refits and native GPU video synchronization, and installs a buffer-kill guard so abrupt closure always restores frame state.
+
+**Returns.** The entered mode symbol (`window` or `frame`).
+
+**Errors.** `wrong-type-argument` when MODE is neither `window` nor `frame` (nor nil) or BUFFER is not a buffer or buffer name.
+
+#### Function: etaf-fullscreen-exit (&optional buffer)
+
+Exit fullscreen for BUFFER, restoring its mode-line, window splits and OS frame state.
+
+**Arguments.** BUFFER defaults to the current buffer.
+
+**Semantics.** Idempotent when BUFFER is not in fullscreen. Restores the exact original `mode-line-format` (killing the buffer-local binding when it was previously inherited), reverts OS frame `fullscreen` if changed, restores saved window splits and refits the canvas.
+
+**Returns.** nil.
+
+#### Function: etaf-fullscreen-toggle (&optional mode buffer &key (hide-mode-line t) on-change)
+
+Toggle fullscreen MODE (`window` or `frame`) for BUFFER.
+
+**Arguments.** MODE defaults to `window`; BUFFER, HIDE-MODE-LINE and ON-CHANGE match `etaf-fullscreen-enter`.
+
+**Semantics.** Exits fullscreen when BUFFER is already in MODE; otherwise transitions directly into MODE from normal view or from the other fullscreen tier.
+
+**Returns.** The new fullscreen mode (`window`, `frame` or nil).
+
 ## Errors and recovery
 
 Opening never leaves a half-open application: when a step fails, the close function runs, the buffer is killed and the condition propagates, so the caller can fix the cause and open again. A close function should not signal; when it does, `etaf-app-close` reports the error after the buffer is gone and killing the buffer reports it as a message. Either way the application is closed and its name can be opened again.

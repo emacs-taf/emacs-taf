@@ -3,7 +3,7 @@
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 
 ;; Author: ETAF contributors
-;; Version: 0.3.14
+;; Version: 0.3.15
 ;; Package-Requires: ((emacs "29.1") (ebox "3.1.6") (ecss "0.1.0"))
 ;; Keywords: ui, tools, convenience
 ;; URL: https://github.com/emacs-taf/etaf
@@ -302,6 +302,76 @@
 ;; Return the buffer of the open application NAME, or nil.  An entry command
 ;; that should reselect an open application instead of reopening it checks
 ;; this first.
+;;
+;; Function: etaf-pip-open (id view &key title parent (size 'medium) (corner 'bottom-right) theme on-return on-close on-resize on-size-change on-corner-change)
+;;;###autoload (autoload 'etaf-pip-open "etaf" nil nil)
+;; Open a floating adaptive Picture-in-Picture window for symbol ID showing
+;; VIEW and return its buffer.  Recycles graphical child frames safely,
+;; exposes a draggable adaptive header bar and 4px resize border, and tracks
+;; live window bounds without pinning the viewport so manual drag-resizing
+;; reflows the View and any embedded GPU video layer continuously.
+;;
+;; Function: etaf-pip-close (id &optional restore-focus)
+;;;###autoload (autoload 'etaf-pip-close "etaf" nil nil)
+;; Close floating Picture-in-Picture window ID, run its ON-CLOSE callback,
+;; park its graphical child frame for reuse and return non-nil if it was open.
+;;
+;; Function: etaf-pip-active-p (id)
+;;;###autoload (autoload 'etaf-pip-active-p "etaf" nil nil)
+;; Return non-nil when floating Picture-in-Picture window ID is currently live.
+;;
+;; Function: etaf-pip-bounds (id)
+;;;###autoload (autoload 'etaf-pip-bounds "etaf" nil nil)
+;; Return reactive live inner bounds plist of Picture-in-Picture window ID
+;; (`:width-px', `:height-px', `:cols', `:rows', `:cell-w', `:cell-h', `:size'
+;; and `:corner').
+;;
+;; Function: etaf-pip-frame (id)
+;;;###autoload (autoload 'etaf-pip-frame "etaf" nil nil)
+;; Return the floating child frame of Picture-in-Picture window ID, or nil.
+;;
+;; Function: etaf-pip-buffer (id)
+;;;###autoload (autoload 'etaf-pip-buffer "etaf" nil nil)
+;; Return the mounted buffer of Picture-in-Picture window ID, or nil.
+;;
+;; Function: etaf-pip-cycle-size (id)
+;;;###autoload (autoload 'etaf-pip-cycle-size "etaf" nil nil)
+;; Cycle Picture-in-Picture window ID among `small', `medium' and `large'.
+;;
+;; Function: etaf-pip-cycle-corner (id)
+;;;###autoload (autoload 'etaf-pip-cycle-corner "etaf" nil nil)
+;; Dock Picture-in-Picture window ID clockwise across the parent frame corners
+;; while preserving any manually dragged dimensions.
+;;
+;; Function: etaf-pip-refresh-chrome (id)
+;;;###autoload (autoload 'etaf-pip-refresh-chrome "etaf" nil nil)
+;; Repaint Picture-in-Picture window ID's background, border and header bar.
+;;
+;; Function: etaf-fullscreen-mode (&optional buffer)
+;;;###autoload (autoload 'etaf-fullscreen-mode "etaf" nil nil)
+;; Return BUFFER's reactive fullscreen mode: nil, `window' or `frame'.
+;; BUFFER defaults to the current buffer.
+;;
+;; Function: etaf-fullscreen-active-p (&optional buffer)
+;;;###autoload (autoload 'etaf-fullscreen-active-p "etaf" nil nil)
+;; Return non-nil when BUFFER is currently in `window' or `frame' fullscreen.
+;;
+;; Function: etaf-fullscreen-enter (&optional mode buffer &key (hide-mode-line t) on-change)
+;;;###autoload (autoload 'etaf-fullscreen-enter "etaf" nil nil)
+;; Enter fullscreen MODE (`window' or `frame') for BUFFER.
+;; `window' hides the buffer's mode-line in place without changing splits or OS
+;; spaces; `frame' saves window splits and the frame's `fullscreen' parameter,
+;; collapses to one window, enters OS fullscreen on graphical frames, and
+;; restores everything on exit or buffer kill.
+;;
+;; Function: etaf-fullscreen-exit (&optional buffer)
+;;;###autoload (autoload 'etaf-fullscreen-exit "etaf" nil nil)
+;; Exit fullscreen for BUFFER, restoring mode-line, splits and frame state.
+;;
+;; Function: etaf-fullscreen-toggle (&optional mode buffer &key (hide-mode-line t) on-change)
+;;;###autoload (autoload 'etaf-fullscreen-toggle "etaf" nil nil)
+;; Toggle fullscreen MODE (`window' or `frame') for BUFFER, switching directly
+;; between tiers or exiting when MODE is already active.
 ;;
 ;; Function: etaf-appearance ()
 ;;;###autoload (autoload 'etaf-appearance "etaf" nil nil)
@@ -2825,6 +2895,8 @@
 (require 'etaf-performance)
 (require 'etaf-viewport)
 (require 'etaf-app)
+(require 'etaf-fullscreen)
+(require 'etaf-pip)
 (require 'etaf-process)
 (require 'etaf-video-component)
 (require 'etaf-projection)

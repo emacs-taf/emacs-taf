@@ -1364,6 +1364,11 @@
       "purpose": "`etaf-video-state' reports `:render-backend' and `etaf-video-gpu-available-p' probes safely without signaling."
     },
     {
+      "name": "etaf-pip-lifecycle-presets-corners-and-reactive-bounds",
+      "file": "tests/etaf-pip-tests.el",
+      "purpose": "`etaf-pip-open' mounts a reactive PiP host, cycles S/M/L presets and corners, refreshes header chrome and cleans up cleanly on close."
+    },
+    {
       "name": "etaf-activity-publish-order-actions-and-reactive-ref",
       "file": "tests/etaf-activity-tests.el",
       "purpose": "Live activities validate inputs, sort by active state and priority, return detached snapshots, update the reactive ref, invoke publisher actions and isolate observer errors."
@@ -1377,6 +1382,21 @@
       "name": "etaf-notify-grouping-dismissal-and-observer-isolation",
       "file": "tests/etaf-activity-tests.el",
       "purpose": "`etaf-notify' merges grouped alerts with incremented counts, updates the reactive notification ref, isolates observer errors and supports single dismissal and full clearing."
+    },
+    {
+      "name": "etaf-component-slot-cross-runtime-rebinds-target-runtime",
+      "file": "tests/etaf-component-tests.el",
+      "purpose": "A captured slot projected into a second Runtime rebinds Runtime and instance ownership to the mounting target Runtime while preserving the caller's inherited Context and Theme."
+    },
+    {
+      "name": "etaf-fullscreen-window-frame-and-restore",
+      "file": "tests/etaf-fullscreen-tests.el",
+      "purpose": "Two-tier fullscreen updates reactive state across window and frame modes, temporarily hides and restores mode-line-format, and validates arguments."
+    },
+    {
+      "name": "etaf-fullscreen-frame-saves-and-restores-window-splits",
+      "file": "tests/etaf-fullscreen-tests.el",
+      "purpose": "Frame fullscreen snapshots and collapses multi-window splits, then restores the original split configuration and focus on exit."
     },
     {
       "name": "etaf-viewport-refit-batches-reactive-update-into-one-flush",

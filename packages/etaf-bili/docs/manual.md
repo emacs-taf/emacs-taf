@@ -1,117 +1,58 @@
 # ETAF Bili manual
 
-## Discover and search
+## Discover, filter and search
 
-Run `M-x etaf-bili-open`. The popular feed loads asynchronously into a cover
-card gallery. Click the channel tabs or press `1`/`2` for popular videos and
-the ranking. `/` starts editing the rounded search field in the page; text,
-Chinese input, undo and selection use the catalog's native editing session.
-Return submits. Escape keeps the draft without running a search.
+Run `M-x etaf-bili-open`. The standalone buffer reuses an already-open `*Bili*` session without interrupting playback (pass a prefix argument `C-u` to start fresh) and preserves your Emacs mode-line (`:mode-line t`). The popular feed loads asynchronously into a 1-to-4-column bordered cover gallery.
 
-Each card shows a proportionally fitted cover, duration, title, creator, view
-count and publication date. Wide windows show more columns; shorter windows
-use a smaller cover area. The main grid has a maximum reading width rather
-than stretching every card across the frame. The minimum usable content area
-is 64 columns by 28 lines. Below it the interface clips deliberately.
+Click the channel tabs or press `1`–`7` to switch between Popular (`1`), Ranking (`2`), Personalized Recommendations (`3`), Following Dynamics (`4`), Watch Later (`5`), Watch History (`6`) and Favorites (`7`). Ranking, Search, Favorites and UP Creator Space (`u`) automatically show a context filter strip for partitions, sort order (`综合`, `最多播放`, `最新发布`, `最多弹幕`), favorite folders or returning from a creator's space.
 
-The wheel or trackpad scrolls continuously through the loaded results; there
-are no page controls. Arrow keys move through the grid and `n`/`p` move
-sequentially, scrolling the selected card into view when necessary.
-`j`/`k` are sequential shortcuts only under the default direction scheme;
-with ETAF's Vim direction scheme they retain direction semantics.
+Press `/` to edit the in-page SearchField. Entering keywords runs a WBI-signed video search and records the query in local search history. Pasting a `BV` ID, `av` number, `https://www.bilibili.com/video/BV...?p=2&t=95` link or `https://b23.tv/...` short link resolves and opens that video directly in Watch View at the requested part and second.
 
-The details action (`i`) opens a Drawer. Escape closes it and restores focus.
-The metadata does not occupy a permanently empty sidebar. `?` lists the
-actual declared bindings and `M-g` selects the search, channel or video region.
+Each card renders an aspect-preserving cover, a bottom-right duration badge, an optional top-left badge (`续播 MM:SS`, `NP` or recommendation tag), a two-line title, a clickable creator link (`u`) and compact view/date metadata. Hover feedback is scoped strictly to homogeneous text targets so semantic colors and badges stay intact. Scrolling near the bottom automatically appends the next deduplicated page. Minimum usable viewport is 64 columns by 28 lines.
 
-## Loading and motion
+## Watch View
 
-The first request shows geometry-matched Skeleton cards. A scoped frame
-animation marks pending work; selecting another card animates its accent
-fill for 160 ms. Neither waits before sending a request. Animations belong
-to Component scopes and stop when the component disappears or the app closes.
-Set `etaf-animation-enabled` to nil for reduced motion.
+Press `RET` or click any card (or call `M-x etaf-bili-open-video`) to enter the dedicated Watch View. Single-video stream errors show a non-destructive Toast above the footer and leave the Gallery intact.
 
-A failed request shows an Alert and retry action; an empty successful search
-shows an Empty component, not the previous results. Late list or playback
-responses cannot replace a newer request. Closing the buffer makes outstanding
-callbacks inert and releases its cover transfers and animation scopes.
+On wide viewports (`≥ 120` columns), Watch View displays a 16:9 theater stage on the left and a 38-column tabbed panel on the right (`选集`, `字幕`, `弹幕`, `评论`, `相关`). Pressing `w` enters wide Theater mode, collapsing the side panel to maximize the video; on narrow viewports or in Theater mode, press `i` to open the same panel in a Drawer.
 
-Only visible card rows and a small overscan window are mounted and request
-covers, with at most three concurrent transfers. The image CDN download is capped at 2 MiB per file and atomically
-installed under `etaf-bili-state-directory/covers/`. Failed images show a
-placeholder without blocking video playback. Native image dimensions are read
-once outside rendering. Each cover is contained at its original aspect ratio;
-partial image rows use the Image Host's inset instead of distorting the image.
+Stream resolution calls WBI-signed `/x/player/wbi/playurl` (`fnval=4048`, `fourk=1`, `try_look=1`), selects the highest quality at or below your preferred tier (`etaf-bili-preferred-quality`, default 80 = 1080P) using codec preference `etaf-bili-preferred-codecs` (`H.264 > HEVC > AV1`), and delivers a pre-normalized source (`:width`, `:height`, `:fps`, `:duration`, `:audio t`) directly to `etaf-video` so no blocking `ffprobe` process is spawned. Press `Q` to switch quality or codecs at the exact current second, or to trigger CDN `backupUrl` failover manually (automatic failover also triggers on stream errors).
 
-## Playback
+During playback, a 250 ms timer updates elapsed time, total duration, hairline seek bar fill, active CC/AI subtitle text, buffering status and the optional top danmaku lane through ETAF Retained Host leaf updates without re-rendering the view tree. Audio starts enabled by default with saved volume (default 85%) and speed (`0.5x`–`2.0x`).
 
-Press Return on a card or activate its play button. The service first resolves
-video metadata and then a progressive stream, with the Referer and User-Agent
-headers required by the CDN. The catalog MediaViewer opens in the same buffer.
-Space plays/pauses, arrows seek, `m` toggles sound, `.` cycles speed, and `n`/`p`
-resolve the adjacent video. Escape or `q` closes the viewer, not the library.
+## Subtitles, danmaku, comments and chapters
 
-The server controls availability, quality and URL expiry. This client does not
-implement account libraries, comments, danmaku or paid-content access. Reopen
-playback to resolve an expired stream. No permanent stream URL is saved.
+When Watch View opens a video, companion loaders asynchronously fetch `/x/player/wbi/v2` (CC/AI subtitle tracks, clickable chapters and cloud `last_play_time`), `comment.bilibili.com/<cid>.xml` (danmaku), `/x/v2/reply/wbi/main` (pinned + hot comments) and `/x/web-interface/archive/related` (related videos).
 
-## Signing in
+- Press `c` to toggle or cycle subtitle tracks. The `字幕` tab includes a live search filter; clicking any transcript cue seeks directly to that second.
+- Press `d` to toggle the top danmaku lane. The `弹幕` tab lists nearby entries with clickable timestamps.
+- The `评论` tab parses `MM:SS` and `HH:MM:SS` timestamps in comments into clickable `↗ MM:SS` jump chips.
+- The `选集` tab switches multi-part pages (`P1`, `P2`, ...), `ugc_season` collection episodes and clickable chapters, and toggles auto-advance (`L`).
 
-The header's account chip reads 「登录」 while nobody is signed in and shows the
-signed-in name afterwards. Activating it, or `M-x etaf-bili-login`, paints the
-site's sign-in code inside an `etaf-ui-qr-login` panel mounted with the client:
-the library stays visible, dims once and keeps its scroll position, and the
-covered controls stay blocked until the panel closes. Escape, the header `x`
-and the panel's cancel button dismiss it and stop polling.
+## Local resume, background listening, PiP and handoff
 
-Confirm the scan in the Bilibili app; the panel then closes, the account chip
-updates and the current feed reloads with the new permissions. A code expires
-after `etaf-bili-login-timeout` seconds (180 by default) and the panel reports
-it; press the chip again for a fresh code. Polling follows
-`etaf-bili-login-poll-interval`.
+Watch positions and viewing preferences (`audio`, `volume`, `speed`, `quality`, `subtitle`, `danmaku`, `auto-next`, `search-history`) are stored in SQLite via `etaf-db` at `etaf-bili-state-directory/state.sqlite3` (overridable via `etaf-bili-store-file`). When SQLite is unavailable, persistence degrades gracefully to an in-memory fallback. Reopening a video compares local progress against cloud `last_play_time` and resumes automatically when the position is beyond 5 seconds and more than 12 seconds before the end; signed-in playback also sends periodic watch heartbeats.
 
-Only the code method is offered. Bilibili answers its SMS endpoint with a
-graphical captcha that a terminal cannot answer, so a phone-number tab could
-never complete. `M-x etaf-bili-account` reports which account the stored cookies
-belong to, and `M-x etaf-bili-logout` asks for confirmation, clears them and
-returns the chip to 「登录」.
+- Press `A` to switch into zero-CPU background audio-only mode (stops video decoding and plays the DASH audio stream through `ffplay`). Pressing `b` returns to the Gallery with a persistent mini-player bar in the footer while you browse or switch to another Emacs buffer; press `w` to return to Watch View.
+- Press `v` in graphical Emacs to open a floating child-frame Picture-in-Picture window positioned at the bottom-right corner (`SPC` toggles playback, `q` or `v` closes PiP).
+- Press `o` to launch `etaf-bili-external-player` (`mpv` by default) at the exact current second with matching `Referer`, `User-Agent` and `--audio-file`, pausing in-Emacs playback automatically. Press `O` to open the video URL with `?p=` and `&t=` in the system browser.
+- Press `y` to copy an Org timestamp link `[[elisp:(etaf-bili-open-video "BV..." SEC CID)][Title (MM:SS)]]` directly into the kill ring.
 
-Requests go through `backends/bili/bili.mjs`, which reads and writes the same
-`cookies.txt` the HTTP client uses. `etaf-bili-backend-command` replaces that
-command prefix; the public suite injects a stand-in script through it.
+## Signing in and account isolation
 
-## Integration
+Click the header account chip or run `M-x etaf-bili-login` to display the QR code inside an `etaf-ui-qr-login` overlay while the client stays dimmed underneath. Confirming on your phone writes `.bilibili.com` cookies (preserving `#HttpOnly_` prefixes such as `SESSDATA`) atomically through `backends/bili/bili.mjs`, invalidates guest stream caches and reloads the active feed. Signed-in accounts unlock personalized feeds, higher quality tiers, AI subtitles and header like/coin/favorite/Watch Later actions (`bili_jct` CSRF).
 
-The root Commentary documents session and client interfaces. A client may be a
-function accepting `(REQUEST CALLBACK)`, returning `(:ok DATA)` or
-`(:error MESSAGE :hint HINT)` through the callback. Tests use that injection
-point without touching the network. A `:cover` request returns a local image
-path; a fake client may return an error to exercise placeholders.
+`M-x etaf-bili-account` reports the signed-in user and `M-x etaf-bili-logout` signs out and clears `.bilibili.com` cookies. API curl requests use read-only cookie mode (`-b`) after `buvid3` is seeded, and `hdslb.com` cover transfers pass no cookies at all so concurrent requests never corrupt `cookies.txt`.
 
-Session actions are asynchronous; consume a result in its callback rather
-than assuming a load has completed in the next form:
+## Hosting the client and integration
 
-```elisp
-(let ((client (etaf-bili-make-client)))
-  (etaf-bili-client-call
-   client '(:op :search :keyword "Emacs 配置")
-   (lambda (reply)
-     (message "%s" (if (plist-member reply :ok)
-                       (format "%d results" (length (plist-get reply :ok)))
-                     (plist-get reply :error))))))
-```
+`etaf-bili-create` creates a headless session and `etaf-bili-view` returns its embeddable View. The View watches `(etaf-viewport)` so floating panels or desktop windows reflow both the Gallery grid and Watch split automatically. Unmounting stops transfers, timers, audio-only processes and PiP while preserving the library, selection and account for `:keep-alive` remounts.
 
-`etaf-bili-session-state` returns detached data for a session. Search signing
-uses the server's WBI keys and URI-component encoding; the session's cookie
-jar is maintained under `etaf-bili-state-directory`. Neither cookies nor
-signed stream URLs belong in a repository or diagnostic transcript.
+For programmatic use and offline testing, `etaf-bili-client-factory` accepts a function returning a `(REQUEST CALLBACK)` client answering `(:ok DATA)` or `(:error MESSAGE)`. See `etaf-bili.el` Commentary for the complete public API.
 
-## GUI verification
+## GUI and performance verification
 
-Use a dedicated graphical Emacs with the full user configuration. Keep the
-native title bar and foreground focus untouched. After compiling the package,
-load ETAF's maintained verification engine and this app's scenario adapter:
+Run real graphical verification with ETAF's maintained verifier and this package's scenario adapter:
 
 ```elisp
 (load "/path/to/etaf/scripts/emacs-gui-verifier.el")
@@ -119,44 +60,8 @@ load ETAF's maintained verification engine and this app's scenario adapter:
 (etaf-bili-gui-run "/tmp/bili-gui-evidence")
 ```
 
-The adapter drives actual catalog targets and native text input, verifies cover
-aspect ratios, drives a wheel event and keyboard reveal, searches and ranks
-real videos, opens and closes details, and
-captures both themes at ordinary, compact, wide and short sizes. Review the
-captures separately from the assertions. Playback and pointer feedback need
-their real-data pass too; batch acceptance does not certify those properties.
+Run `bili.appearance` and `bili.scroll` through the workspace performance driver:
 
-The workspace performance driver accepts
-`--scenario-file etaf-bili/benchmarks/performance-scenarios.el
---scenario bili.appearance --load-path etaf-bili` with `--mode batch`
-or `--mode gui --server NAME`. Use `--scenario bili.scroll` for continuous
-scrolling across virtual rows in a hundred-video offline library. Keep sources
-quiet during measurement and use
-three independent sets for a final latency claim.
-
-## Hosting the client
-
-`etaf-bili-create` returns a headless session and `etaf-bili-view` returns its
-View, so a host that already owns a buffer mounts the client instead of calling
-`etaf-bili-open`. Creation sends no request; the first mount loads the popular
-feed.
-
-The View lays out for the region it is mounted into, not for the whole frame:
-columns, card size and the visible row window come from the mounted Runtime's
-committed viewport, and a settled resize re-lays the grid out at the new width.
-A host narrower than the 64 by 28 minimum keeps that minimum layout and clips
-deliberately.
-
-Mounting adopts the host buffer. The client records the buffer and its change
-callback there, so the declared keys, the inline search, `M-x etaf-bili-next`
-and the other session commands find the mounted session; a desktop window and a
-panel each keep their own session, selection and playback. The palette is
-declared on the host's surface when the host provides one, so the panel border
-and title bar paint from the same theme as the gallery; the client buffer of
-`etaf-bili-open` keeps remapping its own default face instead.
-
-Unmounting stops cover transfers, backend requests and sign-in polling but keeps
-the library, selection and account, and pending replies are made inert. Mounting
-the same session again therefore resumes where it was and does not fetch the
-feed a second time, which is what a `:keep-alive` panel needs. `etaf-bili-close`
-remains the way to end the standalone client.
+```sh
+python3 scripts/performance.py --scenario-file packages/etaf-bili/benchmarks/performance-scenarios.el --scenario bili.appearance --load-path packages/etaf-bili --mode batch
+```

@@ -10,12 +10,12 @@
 | --- | --- | --- |
 | `ecss` | 0.1.3 | Emacs 28.1 |
 | `ekp` | 1.0.5 | Emacs 29.1 |
-| `ebox` | 3.1.8 | Emacs 29.1、`ecss 0.1.3` |
-| `etaf` | 0.3.12 | Emacs 29.1、`ebox 3.1.8`、`ecss 0.1.3` |
-| `etaf-ui` | 0.3.8 | Emacs 29.1、`etaf 0.3.12`、`ebox 3.1.8` |
-| `etaf-db` | 0.1.2 | Emacs 29.1、`etaf 0.3.12` |
-| `etaf-posframe` | 0.3.3 | Emacs 29.1、`etaf 0.3.12`、`etaf-ui 0.3.8`、Posframe 0.9.0 |
-| `etaf-manual` | 0.1.18 | Emacs 29.1、`etaf 0.3.12`、`etaf-ui 0.3.8` |
+| `ebox` | 3.1.9 | Emacs 29.1、`ecss 0.1.3` |
+| `etaf` | 0.3.15 | Emacs 29.1、`ebox 3.1.9`、`ecss 0.1.3` |
+| `etaf-ui` | 0.3.8 | Emacs 29.1、`etaf 0.3.15`、`ebox 3.1.9` |
+| `etaf-db` | 0.1.2 | Emacs 29.1、`etaf 0.3.15` |
+| `etaf-posframe` | 0.3.3 | Emacs 29.1、`etaf 0.3.15`、`etaf-ui 0.3.8`、Posframe 0.9.0 |
+| `etaf-manual` | 0.1.20 | Emacs 29.1、`etaf 0.3.15`、`etaf-ui 0.3.8` |
 
 第三列是本版记录的版本组合。每个包在 `Package-Requires` 头里声明它能安装的最低版本，可能更低。
 

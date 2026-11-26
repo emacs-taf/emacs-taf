@@ -504,6 +504,60 @@ builds its per-block repaint on this boundary."
   "Unknown Component tags are rejected at View construction."
   (should-error (etaf-node 'etaf-component-test-does-not-exist nil nil)))
 
+(defvar etaf-component-test--portal-captured nil
+  "Records (RUNTIME CONTEXT-VALUE) observed inside a cross-Runtime projected slot.")
+
+(etaf-define-component etaf-component-test--portal-probe ()
+  "Record the Runtime and inherited Context inside a projected slot."
+  :bindings ((rt (etaf-current-runtime))
+             (ctx (etaf-inject 'portal-tag nil)))
+  :setup
+  (etaf-on-mounted
+   (lambda ()
+     (setq etaf-component-test--portal-captured (cons rt ctx))))
+  :render
+  (etaf-view (text (expr (format "probe:%s" ctx)))))
+
+(etaf-define-component etaf-component-test--portal-sender (&key sink)
+  "Capture default slot in parent Runtime and deliver it to SINK."
+  :render
+  (progn
+    (funcall sink (etaf-current-slot 'default))
+    (etaf-view (text "sender"))))
+
+(etaf-define-component etaf-component-test--portal-provider (&key sink)
+  "Provide a Context value around a cross-Runtime slot sender."
+  :setup (etaf-provide 'portal-tag 'from-parent)
+  :render
+  (etaf-view
+   (etaf-component-test--portal-sender :sink sink
+     (etaf-component-test--portal-probe))))
+
+(ert-deftest etaf-component-slot-cross-runtime-rebinds-target-runtime ()
+  "A slot projected into another Runtime binds target Runtime while keeping Context."
+  (let ((parent-buf (generate-new-buffer " *etaf-slot-parent*"))
+        (child-buf (generate-new-buffer " *etaf-slot-child*"))
+        (captured-slot nil)
+        (etaf-component-test--portal-captured nil))
+    (unwind-protect
+        (progn
+          (etaf-mount parent-buf
+                      (etaf-view
+                       (etaf-component-test--portal-provider
+                        :sink (lambda (slot) (setq captured-slot slot)))))
+          (should captured-slot)
+          (etaf-mount child-buf
+                      (lambda () (etaf-node 'column nil captured-slot)))
+          (let ((child-rt (etaf-runtime-for-buffer child-buf)))
+            (should (eq (car etaf-component-test--portal-captured) child-rt))
+            (should (eq (cdr etaf-component-test--portal-captured) 'from-parent))
+            (with-current-buffer child-buf
+              (should (string-match-p "probe:from-parent" (buffer-string))))))
+      (when-let* ((rt (etaf-runtime-for-buffer child-buf))) (etaf-unmount rt))
+      (when-let* ((rt (etaf-runtime-for-buffer parent-buf))) (etaf-unmount rt))
+      (when (buffer-live-p child-buf) (kill-buffer child-buf))
+      (when (buffer-live-p parent-buf) (kill-buffer parent-buf)))))
+
 (provide 'etaf-component-tests)
 
 ;;; etaf-component-tests.el ends here

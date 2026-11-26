@@ -172,9 +172,6 @@
       (should (= 754 (plist-get row :duration)))
       (should (equal "1.2万" (plist-get row :views))))))
 
-(provide 'etaf-bili-tests)
-;;; etaf-bili-tests.el ends here
-
 ;;; Account commands
 
 (defconst etaf-bili-tests--account-backend
@@ -296,3 +293,6 @@ instead of fetching it again."
         (when-let* ((runtime (etaf-runtime-for-buffer buffer)))
           (etaf-unmount runtime))
         (kill-buffer buffer)))))
+
+(provide 'etaf-bili-tests)
+;;; etaf-bili-tests.el ends here

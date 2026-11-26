@@ -4,65 +4,26 @@
 
 ### Added
 
-- `M-x etaf-bili-create` and `etaf-bili-view` expose the client as an
-  embeddable View: a desktop window or a floating panel mounts it, lays the card
-  grid out for its own region, follows a settled resize and keeps the client's
-  keys. The first mount loads the popular feed; unmounting keeps the library,
-  selection and account for the next mount and makes pending replies inert.
-- `M-x etaf-bili-login` paints the site's sign-in code in an
-  `etaf-ui-qr-login` panel over the running client, which keeps its content and
-  only dims; the header's account chip opens it and shows the signed-in name.
-  `M-x etaf-bili-account` reports the account and `M-x etaf-bili-logout` signs
-  out and clears the cookie jar. The account backend ships in
-  `backends/bili/` and needs only Node.js.
-
-### Removed
-
-- The phone-number sign-in tab. Bilibili answers its SMS endpoint with a
-  graphical captcha, so the method could never complete from a terminal.
+- Dedicated responsive Watch View (`etaf-bili-watch.el`) replacing the modal viewer for video playback: 16:9 theater stage with wide split (`≥ 120` cols) tabbed side panel (Parts/Collection/Chapters, Searchable CC/AI Subtitle Transcript, Live Danmaku, Comments with clickable `MM:SS` timestamp jumps and Related videos), narrow/Theater mode (`w`) Drawer (`i`), and 250 ms Retained Host leaf updates for clock, hairline progress bar, live subtitle strip and optional top danmaku lane.
+- WBI-signed `/x/player/wbi/playurl` (`fnval=4048`, `fourk=1`, `try_look=1`) DASH resolution returning pre-normalized video/audio sources (`:width`, `:height`, `:fps`, `:duration`, `:audio t`) with codec preference (`H.264 > HEVC > AV1`), quality switcher dialog (`Q`) keeping the current timestamp, and automatic CDN `backupUrl` failover without running `ffprobe`.
+- Fail-open SQLite persistence (`etaf-bili-store.el` via `etaf-db`) storing per-`(bvid, cid)` local resume points (merged with cloud `last_play_time` and heartbeat write-back), viewing preferences (audio on by default, volume, speed, quality, subtitle, danmaku, auto-next) and deduplicated search history.
+- Expanded Gallery channels and filters: Personalized Recommendations (`3`), Partitioned Ranking (`2` with category filter strip), Search sort strip (`totalrank`, `click`, `pubdate`, `dm`), Following Dynamics (`4`), Watch Later (`5`), Watch History (`6`), Favorites (`7` with folder switcher), UP creator space (`u`), direct BV/av/URL/`b23.tv` search bar navigation, and infinite-scroll pagination.
+- Emacs-native viewing workflows: zero-CPU background audio-only mode (`A`) with persistent Gallery mini-player, floating child-frame Picture-in-Picture (`v`), external `mpv` handoff (`o`) at the exact second, browser handoff (`O`), Org timestamp link copy (`y`) paired with `etaf-bili-open-video`, and signed-in like/coin/favorite/Watch Later actions.
+- `M-x etaf-bili-create` and `etaf-bili-view` embeddable View API adapting to `(etaf-viewport)`, plus `M-x etaf-bili-login` QR sign-in overlay (`etaf-ui-qr-login`), `M-x etaf-bili-account` and `M-x etaf-bili-logout`.
 
 ### Changed
 
-- Replace the full-width text list and permanent details sidebar with a
-  responsive cover-card gallery composed from the ETAF UI catalog.
-- Search edits inside a rounded SearchField; channel Tabs, native scrolling and
-  a details Drawer make the main actions visible. Application keys now use
-  ETAF's scope-aware declarations instead of an emulation-map override.
-- Both themes use a padded header and footer; frame decoration and the user's
-  theme stay unchanged. The minimum usable window is 64 columns by 28 lines.
-- Loading uses Skeleton cards and a scoped indicator; selection has a short
-  accent transition and respects the framework reduced-motion switch.
+- Migrated `etaf-bili-open` onto `etaf-app-open` with `:mode-line t` (preserving the user's mode-line) and live `*Bili*` buffer reuse.
+- Upgraded Gallery cards to 1 px bordered cards with bottom-right duration badges, top-left multi-part/resume badges, strict title/author-only hover preserving child colors, and non-destructive Toast notifications so single-video failures never wipe the gallery.
+- Debounced Watch View resize relayout (200 ms) while playing so frame drags do not repeatedly reconnect HTTPS streams.
 
 ### Fixed
 
-- Fit covers at their native aspect ratio, including fractional-row insets,
-  instead of stretching images to a rounded character-cell rectangle.
-- Use the published usable viewport width so empty full-width rows keep their
-  application background instead of disappearing at redisplay.
-- Treat empty results as successful, reject stale playback replies, and make
-  pending callbacks inert after the buffer closes.
+- Fixed Netscape `#HttpOnly_` cookie parsing in `backends/bili/bili.mjs` (previously discarding `SESSDATA` on read), separated `httpOnly` from `includeSubdomains`, and made cookie jar writes atomic via temp file rename.
+- Isolated cookie modes in `etaf-bili-service.el` (`:read` for API calls, `:read-write` only when seeding missing `buvid3`, `:none` for `hdslb.com` cover downloads), eliminating concurrent `cookies.txt` corruption.
+- Fixed unmount cleanup to reset `cover-active`, clear `'loading` cover states and remove partial `.cover-*` temp files so `:keep-alive` remounts never stall cover loading; capped local cover cache size (400 files) and enforced 30-minute TTL with login/logout invalidation on stream URLs.
+- Fixed match-data clobbering in timestamp extraction and danmaku XML parsing, and moved Watch View Escape handling to ETAF's `:on-dismiss` contract.
 
-### Added
+### Removed
 
-- Browsing: the popular feed loads on open, `1`/`2` switch between it and
-  the all-category ranking, `g` refreshes, and the selection moves with
-  `j`/`k`, `n`/`p` or the arrow keys with a mouse-click target per row.
-- Search through the signed web API endpoint: `/` prompts for a keyword and
-  replaces the list.  WBI signing (sorted parameters, `encodeURIComponent`
-  encoding, MD5 over the query plus the permuted server key) is implemented
-  in Lisp and covered by an acceptance test.
-- A details Drawer showing the selected video's creator, duration, view count
-  and BV number without permanently reserving sidebar space.
-- Playback in the same buffer through ETAF's `etaf-media-viewer`: `RET`
-  resolves the stream (metadata chain plus the Referer and User-Agent headers
-  the CDN requires) and opens the viewer with its transport bar, sound,
-  seeking and speed control; `n`/`p` inside the viewer move to the next or
-  previous list entry and play it.
-- Dark and light appearances over one four-step depth palette; `T` switches
-  the running client.
-- A cookie jar under `etaf-bili-state-directory`, seeded once per session
-  with a homepage visit (`buvid3`), reused by every request.
-- The session is drivable headless: `etaf-bili-session-create`,
-  `etaf-bili-session-state` and the load/move/play actions take the session
-  record directly, with a fake backend injectable through
-  `etaf-bili-client-factory`.
+- Removed dead SMS sign-in commands from `backends/bili/bili.mjs` (gated by graphical captcha).

@@ -4,6 +4,7 @@
 
 ### Added
 
+- Floating Picture-in-Picture child-frame host (`etaf-pip-open`, `etaf-pip-close`, `etaf-pip-active-p`, `etaf-pip-bounds`, `etaf-pip-frame`, `etaf-pip-buffer`, `etaf-pip-cycle-size`, `etaf-pip-cycle-corner`, `etaf-pip-refresh-chrome`) and two-tier fullscreen (`etaf-fullscreen-mode`, `etaf-fullscreen-active-p`, `etaf-fullscreen-enter`, `etaf-fullscreen-exit`, `etaf-fullscreen-toggle`) with automatic mode-line and window-split restoration.
 - Cross-platform native GPU video playback for `etaf-video` on macOS (Metal/OpenGL `CALayer` with VideoToolbox), Windows (Win32 click-through child `HWND` + WGL OpenGL 3.2 Core with hardware decode such as `nvdec`), and Linux (X11 child window + `XShape` + EGL/GLX and Wayland `wl_subsurface` with `vaapi-copy`), plus `etaf-video-gpu-available-p` and POSIX sibling `libmpv` probing.
 - `etaf-scroll-viewport` scrolls the active reading viewport (enclosing scrollable Host at point first, then the Emacs window) by an explicit line delta so continuous document views can bind up/down arrow keys to line-by-line scrolling without calling Ebox directly.
 - Cross-application live activity (`etaf-activity-publish`, `etaf-activity-remove`, `etaf-activity-get`, `etaf-activity-list`, `etaf-activity-ref`, `etaf-activity-invoke`, `etaf-activity-change-functions`) and notification (`etaf-notify`, `etaf-notify-dismiss`, `etaf-notify-clear`, `etaf-notify-list`, `etaf-notify-ref`, `etaf-notify-functions`) reactive registries for shells and extensions.

@@ -231,6 +231,138 @@ View 只绘制它画出的单元格。窗口其余部分（例如短 View 下面
 
 **语义。** 单个观察者的错误被隔离。安装至少一个观察者后即抑制回显区 `message` 回退。
 
+## 悬浮画中画
+
+<!-- index: etaf-pip-open; etaf-pip-close; etaf-pip-bounds; 画中画; 子帧 -->
+
+视频与监控类应用常常需要在用户切回其他缓冲区时保留一个置顶小窗。`etaf-pip-open` 把任意 View 宿主在一个可复用的悬浮子帧里，自带原生可拖拽自适应顶栏、4 像素可拖缩放边框、焦点响应边框色、四角停靠、小/中/大预设，以及不锁定视口的实时尺寸同步，让手工拖拉宽高时界面布局与内嵌原生 GPU 视频层同步自适应。
+
+#### Function: etaf-pip-open (id view &key title parent (size 'medium) (corner 'bottom-right) theme on-return on-close on-resize on-size-change on-corner-change)
+
+为符号 ID 打开显示 VIEW 的悬浮自适应画中画窗口。
+
+**参数。** ID 为标识画中画宿主的非 nil 符号；VIEW 为待挂载视图。TITLE 为顶栏标题（字符串、ref、computed 或零参函数）。PARENT 为所属顶层 frame（默认当前 frame）。SIZE 为 `small`、`medium`（默认）或 `large`；CORNER 为 `bottom-right`（默认）、`bottom-left`、`top-left` 或 `top-right`。THEME 为颜色 plist 或零参函数，提供 `:bg`、`:panel`、`:chip`、`:hover`、`:ink`、`:muted`、`:accent`、`:accent-soft` 与 `:border-inactive`。ON-RETURN、ON-CLOSE、ON-RESIZE、ON-SIZE-CHANGE 与 ON-CORNER-CHANGE 为可选回调。
+
+**语义。** 若 ID 已处于打开状态则先关闭旧宿主。图形环境下会把 View 挂载到复用的无装饰子帧中且不锁定视口尺寸，让 Ebox 与 `etaf-pip-bounds` 实时跟随任意边角拖拽并同步原生 GPU 视频层；非图形环境下仍会挂载缓冲区并维护实时尺寸以便测试覆盖完整生命周期。
+
+**返回。** 已挂载的画中画缓冲区。
+
+**错误。** ID 不是非 nil 符号时触发 `wrong-type-argument`。
+
+#### Function: etaf-pip-close (id &optional restore-focus)
+
+关闭悬浮画中画窗口 ID，若此前处于打开状态则返回非 nil。
+
+**语义。** 执行一次 ON-CLOSE，卸载并销毁画中画缓冲区，将图形子帧停放进复用池；当 RESTORE-FOCUS 非 nil 或画中画正持有焦点时把输入焦点交回父 frame。
+
+**返回。** ID 原先存活时返回 `t`，否则返回 nil。
+
+#### Function: etaf-pip-active-p (id)
+
+当悬浮画中画窗口 ID 当前存活时返回非 nil。
+
+**返回。** 存活返回 `t`，否则返回 nil。
+
+#### Function: etaf-pip-bounds (id)
+
+返回悬浮画中画窗口 ID 的响应式实时内部尺寸 plist。
+
+**语义。** 返回 `(:width-px W :height-px H :cols C :rows R :cell-w CW :cell-h LH :size SIZE :corner CORNER)`，关闭时返回 nil。在 Component 的 `:render` 中读取它会自动订阅每次手工拖拽缩放与预设切换。
+
+**返回。** 尺寸 plist 或 nil。
+
+#### Function: etaf-pip-frame (id)
+
+返回悬浮画中画窗口 ID 对应的悬浮子帧，未打开或非图形环境返回 nil。
+
+**返回。** 存活的 frame 或 nil。
+
+#### Function: etaf-pip-buffer (id)
+
+返回悬浮画中画窗口 ID 对应的已挂载缓冲区，未打开时返回 nil。
+
+**返回。** 存活的缓冲区或 nil。
+
+#### Function: etaf-pip-cycle-size (id)
+
+在 `small`、`medium` 与 `large` 预设间循环切换画中画窗口 ID 的尺寸。
+
+**语义。** 按下一预设调整窗口尺寸并重新停靠到当前角落，更新 `etaf-pip-bounds` 并触发 ON-SIZE-CHANGE。
+
+**返回。** 新的尺寸符号；ID 未打开时返回 nil。
+
+#### Function: etaf-pip-cycle-corner (id)
+
+将画中画窗口 ID 顺时针停靠到父 frame 的下一个角落。
+
+**语义。** 按 `(bottom-right bottom-left top-left top-right)` 顺时针移动悬浮窗同时保留用户手动拖拽后的尺寸，并触发 ON-CORNER-CHANGE。
+
+**返回。** 新的角落符号；ID 未打开时返回 nil。
+
+#### Function: etaf-pip-refresh-chrome (id)
+
+重绘画中画窗口 ID 的背景、边框与自适应顶栏。
+
+**语义。** 重新求值 THEME 与 TITLE，同步更新窗口配色、边框色与可拖拽顶栏。
+
+**返回。** ID 存活时返回 `t`，否则返回 nil。
+
+## 两档全屏管理
+
+<!-- index: etaf-fullscreen-mode; etaf-fullscreen-enter; etaf-fullscreen-exit; etaf-fullscreen-toggle; 全屏 -->
+
+视频播放器、阅读器与演示类应用常常需要无干扰全屏，但又不能永久破坏用户的 Emacs 分屏布局或 `mode-line`。ETAF 将全屏拆成清晰的两档：`window`（网页全屏）在当前窗口内临时隐藏 `mode-line` 而不惊动分屏与系统桌面空间；`frame`（系统真全屏）暂存当前分屏配置与 frame 的 `fullscreen` 参数，独占整帧并在图形环境下切入系统全屏，退出或关闭缓冲区时原样还原一切。
+
+#### Function: etaf-fullscreen-mode (&optional buffer)
+
+返回 BUFFER 的响应式全屏模式：nil、`window` 或 `frame`。
+
+**参数。** BUFFER 默认为当前缓冲区。
+
+**语义。** 在 Component 的 `:render` 中读取该函数会自动订阅全屏切换，从而在不卸载重装 `<etaf-video>` 等有状态节点的前提下原地扩缩画布。
+
+**返回。** `window`、`frame` 或 nil。
+
+#### Function: etaf-fullscreen-active-p (&optional buffer)
+
+当 BUFFER 当前处于 `window` 或 `frame` 全屏模式时返回非 nil。
+
+**参数。** BUFFER 默认为当前缓冲区。
+
+**返回。** 处于全屏时返回 `t`，否则返回 nil。
+
+#### Function: etaf-fullscreen-enter (&optional mode buffer &key (hide-mode-line t) on-change)
+
+让 BUFFER 进入全屏 MODE（`window` 或 `frame`）。
+
+**参数。** MODE 默认为 `window`，BUFFER 默认为当前缓冲区。HIDE-MODE-LINE 非 nil（默认 `t`）时暂存并临时隐藏 `mode-line-format`。ON-CHANGE 为可选回调，在模式变化时接收新模式符号。
+
+**语义。** 进入 `frame` 时会先记录分屏布局与原 `fullscreen` 参数，再合并窗口并在图形环境下切至 `fullboth`；从 `frame` 直接切到 `window` 会还原分屏与系统全屏但保留隐藏 `mode-line`。每次切换都会执行多阶段视口重算与原生 GPU 视频层同步，并挂载缓冲区关闭钩子防止异常残留。
+
+**返回。** 进入的目标模式符号（`window` 或 `frame`）。
+
+**错误。** MODE 既非 `window`/`frame` 也非 nil，或 BUFFER 类型非法时触发 `wrong-type-argument`。
+
+#### Function: etaf-fullscreen-exit (&optional buffer)
+
+退出 BUFFER 的全屏状态，还原 `mode-line`、分屏配置与系统全屏参数。
+
+**参数。** BUFFER 默认为当前缓冲区。
+
+**语义。** 未处于全屏时调用幂等无副作用；退出时按原样恢复 `mode-line-format`（原为继承值时移除局部变量），并还原分屏布局、系统全屏状态与画布重算。
+
+**返回。** nil。
+
+#### Function: etaf-fullscreen-toggle (&optional mode buffer &key (hide-mode-line t) on-change)
+
+切换 BUFFER 的全屏 MODE（`window` 或 `frame`）。
+
+**参数。** MODE 默认为 `window`，BUFFER、HIDE-MODE-LINE 与 ON-CHANGE 同 `etaf-fullscreen-enter`。
+
+**语义。** 若 BUFFER 已处于 MODE 则退出全屏；若处于普通模式或另一档全屏则直接切入 MODE。
+
+**返回。** 切换后的模式符号（`window`、`frame` 或 nil）。
+
 ## 错误与恢复
 
 打开从不留下半开的应用：某一步失败时，关闭函数运行、缓冲区被杀掉、条件向外传播，调用者可以修正原因后再次打开。关闭函数不应该发出信号；如果发出了，`etaf-app-close` 在缓冲区消失之后报告该错误，杀掉缓冲区则以消息报告它。无论哪种情况，应用都已关闭，它的名字可以再次打开。

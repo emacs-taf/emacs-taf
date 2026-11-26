@@ -21,17 +21,17 @@
 
 (defconst etaf-bili--palettes
   '((dark
-     :bg "#0A0D12" :surface "#141820" :panel2 "#1B202B" :panel3 "#232A38"
-     :hover "#1D232F" :line "#2A303D"
-     :ink "#E9EDF4" :muted "#9AA4B4" :dim "#6B7484"
-     :accent "#FB7299" :accent-soft "#3A1D28"
+     :bg "#0B0E14" :surface "#131720" :panel2 "#191E29" :panel3 "#212836"
+     :hover "#1E2534" :line "#222938"
+     :ink "#ECF0F6" :muted "#8F9BAE" :dim "#5E687B"
+     :accent "#FB7299" :accent-soft "#341C28"
      :gold "#E8B45C" :ok "#4FB477" :warn "#E8B45C"
      :danger "#FF7A7A" :danger-bg "#3A1D22" :info "#6FB4E8")
     (light
-     :bg "#ECEEF2" :surface "#FFFFFF" :panel2 "#F5F6F9" :panel3 "#E3E6EC"
-     :hover "#F0F2F6" :line "#DADEE5"
-     :ink "#171A20" :muted "#5B6472" :dim "#8B93A0"
-     :accent "#D64D7C" :accent-soft "#FCE8EF"
+     :bg "#F1F3F7" :surface "#FFFFFF" :panel2 "#F7F8FB" :panel3 "#E9ECF2"
+     :hover "#ECEFF5" :line "#E2E6EE"
+     :ink "#181C24" :muted "#5A6475" :dim "#8892A2"
+     :accent "#D64D7C" :accent-soft "#FCE8F0"
      :gold "#B07A16" :ok "#2E7D4F" :warn "#B07A16"
      :danger "#C0392B" :danger-bg "#FBE4E2" :info "#2C6FA8"))
   "Palette of every supported appearance, keyed by mode.
@@ -54,9 +54,11 @@ grid and the surface around it repaint from one state.")
 
 (defun etaf-bili-color (key &optional mode)
   "Return the palette color named KEY.
-MODE defaults to `etaf-bili-theme-mode'.  An unknown KEY signals an error
-instead of painting an invisible surface."
-  (let* ((mode (if (eq (or mode etaf-bili-theme-mode) 'light) 'light 'dark))
+MODE defaults to the reactive `etaf-bili--theme-mode-ref', so every View
+reading colors repaints automatically on theme switches.  An unknown KEY
+signals an error instead of painting an invisible surface."
+  (let* ((active (or mode (etaf-value etaf-bili--theme-mode-ref)))
+         (mode (if (eq active 'light) 'light 'dark))
          (palette (cdr (assq mode etaf-bili--palettes)))
          (color (plist-get palette key)))
     (unless (and (keywordp key) color)
