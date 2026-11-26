@@ -2,7 +2,7 @@
 
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 ;; Author: ETAF contributors
-;; Version: 0.4.2
+;; Version: 0.4.3
 ;; Package-Requires: ((emacs "29.1") (etaf "0.3.10") (etaf-ui "0.3.6"))
 ;; Keywords: hypermedia, docs, org
 ;; URL: https://github.com/emacs-taf/etaf-org
@@ -33,7 +33,7 @@
 ;; Return capability facts for reading and extending Org documents.
 ;; The shape matches `etaf-install-doctor': `:required' and `:optional' lists
 ;; of `(LABEL AVAILABLE REMEDY)'.  Core reading needs no external program;
-;; optional capabilities cover `org', `ffmpeg', `mmdc', `qrencode', `git',
+;; optional capabilities cover `org', `typeset-native', `ffmpeg', `qrencode', `git',
 ;; `rg', `dot' and `plantuml'.
 ;;
 ;; Function: etaf-org-open (&optional source)
@@ -382,24 +382,32 @@
   "Return capability facts for `etaf-org'.
 The shape matches `etaf-install-doctor': `:required' and `:optional' lists of
 `(LABEL AVAILABLE REMEDY)'."
-  (list :required nil
-        :optional
-        (list (list "org" (featurep 'org)
-                    "Optional: load Org to resolve org-id links and org-todo-keywords.")
-              (list "mmdc" (and (executable-find "mmdc") (executable-find "node") t)
-                    "Optional: install @mermaid-js/mermaid-cli and node to render Mermaid diagrams and KaTeX math.")
-              (list "ffmpeg" (and (executable-find "ffmpeg") t)
-                    "Optional: install ffmpeg to play inline video blocks.")
-              (list "qrencode" (and (executable-find "qrencode") t)
-                    "Optional: install qrencode to draw PNG QR code cards.")
-              (list "git" (and (executable-find "git") t)
-                    "Optional: install git for git-log and git-diff live blocks.")
-              (list "rg" (and (executable-find "rg") t)
-                    "Optional: install ripgrep for faster workspace backlinks scans.")
-              (list "dot" (and (executable-find "dot") t)
-                    "Optional: install Graphviz (dot) to draw dot/graphviz source blocks.")
-              (list "plantuml" (and (executable-find "plantuml") t)
-                    "Optional: install PlantUML to draw plantuml source blocks."))))
+  (let* ((native-info (etaf-org-typeset--native-info))
+         (native-ok (and native-info t))
+         (native-remedy
+          (if native-info
+              (format "Built-in QuickJS native renderer active (Pele %s, MathJax %s, text: %s)."
+                      (plist-get native-info :pele)
+                      (plist-get native-info :mathjax)
+                      (plist-get native-info :text-backend))
+            "Optional: run M-x etaf-install-native (select etaf-org) to download the prebuilt QuickJS renderer for fast zero-browser Mermaid and math SVG rendering.")))
+    (list :required nil
+          :optional
+          (list (list "org" (featurep 'org)
+                      "Optional: load Org to resolve org-id links and org-todo-keywords.")
+                (list "typeset-native" native-ok native-remedy)
+                (list "ffmpeg" (and (executable-find "ffmpeg") t)
+                      "Optional: install ffmpeg to play inline video blocks.")
+                (list "qrencode" (and (executable-find "qrencode") t)
+                      "Optional: install qrencode to draw PNG QR code cards.")
+                (list "git" (and (executable-find "git") t)
+                      "Optional: install git for git-log and git-diff live blocks.")
+                (list "rg" (and (executable-find "rg") t)
+                      "Optional: install ripgrep for faster workspace backlinks scans.")
+                (list "dot" (and (executable-find "dot") t)
+                      "Optional: install Graphviz (dot) to draw dot/graphviz source blocks.")
+                (list "plantuml" (and (executable-find "plantuml") t)
+                      "Optional: install PlantUML to draw plantuml source blocks.")))))
 
 (provide 'etaf-org)
 ;;; etaf-org.el ends here

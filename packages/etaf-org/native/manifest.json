@@ -1,0 +1,49 @@
+{
+  "schema": 1,
+  "package": "etaf-org",
+  "modules": [
+    {
+      "name": "etaf-md-typeset-native",
+      "version": "1",
+      "description": "Embedded QuickJS renderer for Mermaid diagrams and MathJax display formulas",
+      "platforms": {
+        "darwin-arm64": {
+          "file": "etaf-md-typeset-native-v1-darwin-arm64.dylib",
+          "urls": [
+            "https://etaf.top/native/etaf-md/1/etaf-md-typeset-native-v1-darwin-arm64.dylib",
+            "https://github.com/emacs-taf/etaf-md/releases/download/native-v1/etaf-md-typeset-native-v1-darwin-arm64.dylib"
+          ],
+          "sha256": "c214f7c04ad225d05fadc9b227f92d7da9d48df77e16460d43abe6ee4d12df39",
+          "size": 3557936
+        },
+        "darwin-x86_64": {
+          "file": "etaf-md-typeset-native-v1-darwin-x86_64.dylib",
+          "urls": [
+            "https://etaf.top/native/etaf-md/1/etaf-md-typeset-native-v1-darwin-x86_64.dylib",
+            "https://github.com/emacs-taf/etaf-md/releases/download/native-v1/etaf-md-typeset-native-v1-darwin-x86_64.dylib"
+          ],
+          "sha256": "62432ca33fbd49b004778ad5aa074f4c5374405a7398d72da15843a8a0d1029a",
+          "size": 3607328
+        },
+        "linux-arm64": {
+          "file": "etaf-md-typeset-native-v1-linux-arm64.so",
+          "urls": [
+            "https://etaf.top/native/etaf-md/1/etaf-md-typeset-native-v1-linux-arm64.so",
+            "https://github.com/emacs-taf/etaf-md/releases/download/native-v1/etaf-md-typeset-native-v1-linux-arm64.so"
+          ],
+          "sha256": "7acc271b9b981e1ad6f77f9d320e9924c1d18665ec8998393a7fb5fdb12b9d8f",
+          "size": 3618360
+        },
+        "linux-x86_64": {
+          "file": "etaf-md-typeset-native-v1-linux-x86_64.so",
+          "urls": [
+            "https://etaf.top/native/etaf-md/1/etaf-md-typeset-native-v1-linux-x86_64.so",
+            "https://github.com/emacs-taf/etaf-md/releases/download/native-v1/etaf-md-typeset-native-v1-linux-x86_64.so"
+          ],
+          "sha256": "aae41bdcea10e3628ad3492bd322a5e48920b427668bd4d2344364286500e807",
+          "size": 3602592
+        }
+      }
+    }
+  ]
+}

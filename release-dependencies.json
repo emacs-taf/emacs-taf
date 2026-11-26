@@ -1,25 +1,33 @@
 {
   "schema": 1,
   "packages": {
-    "ecss": {},
+    "ecss": {
+      "resources": [
+        "docs"
+      ]
+    },
     "ebox": {
       "resources": [
+        "docs",
         "native"
       ]
     },
     "etaf": {
       "resources": [
+        "docs",
         "examples",
         "native"
       ]
     },
     "etaf-ui": {
       "resources": [
+        "docs",
         "examples"
       ]
     },
     "etaf-posframe": {
       "resources": [
+        "docs",
         "examples"
       ],
       "external": [
@@ -27,50 +35,69 @@
       ]
     },
     "etaf-ext": {
-      "resources": []
+      "resources": [
+        "docs"
+      ]
     },
     "etaf-hints": {
-      "resources": []
+      "resources": [
+        "docs"
+      ]
     },
     "etaf-highlight": {
-      "resources": []
+      "resources": [
+        "docs"
+      ]
     },
     "etaf-translate": {
-      "resources": []
+      "resources": [
+        "docs"
+      ]
     },
     "etaf-export": {
-      "resources": []
+      "resources": [
+        "docs"
+      ]
     },
-    "etaf-db": {},
+    "etaf-db": {
+      "resources": [
+        "docs"
+      ]
+    },
     "ekp": {
       "resources": [
+        "docs",
         "dictionaries",
         "native"
       ]
     },
     "etaf-manual": {
       "resources": [
+        "docs",
         "book"
       ]
     },
     "etaf-md": {
       "resources": [
         "docs",
-        "backends",
         "native/manifest.json"
       ]
     },
     "etaf-org": {
       "resources": [
         "docs",
-        "backends"
+        "native/manifest.json"
       ]
     },
     "etaf-video-player": {
-      "resources": []
+      "resources": [
+        "docs"
+      ]
     },
     "etaf-desktop": {
-      "resources": []
+      "resources": [
+        "docs"
+      ]
     },
     "etaf-telega": {
       "resources": [],
@@ -80,31 +107,43 @@
     },
     "etaf-gamekit": {
       "resources": [
+        "docs",
         "native"
       ]
     },
     "etaf-xiangqi": {
-      "resources": []
+      "resources": [
+        "docs"
+      ]
     },
     "etaf-weread": {
       "resources": [
+        "docs",
         "backends"
       ]
     },
     "etaf-ncm": {
       "resources": [
+        "docs",
         "backends"
       ]
     },
     "etaf-tanks": {
       "resources": [
+        "docs",
         "native"
       ]
     },
     "etaf-pomodoro": {
-      "resources": []
+      "resources": [
+        "docs"
+      ]
     },
-    "maillist": {}
+    "maillist": {
+      "resources": [
+        "docs"
+      ]
+    }
   },
   "targets": [
     "etaf-ui",

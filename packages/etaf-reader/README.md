@@ -10,11 +10,11 @@ keyboard, then mark it with a highlighter color, a straight underline or a wavy
 underline, attach thoughts, jump through the table of contents and notes, and
 resume exactly where the last session stopped.
 
-![The reader](examples/etaf-reader-wide.png)
+![The reader](media/etaf-reader-wide.png)
 
 Selected text opens the annotation toolbar above or below the line:
 
-![The annotation toolbar](examples/etaf-reader-toolbar.png)
+![The annotation toolbar](media/etaf-reader-toolbar.png)
 
 ## Capabilities
 

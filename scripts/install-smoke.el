@@ -225,7 +225,7 @@ report it immediately instead of retrying and hiding it."
             (unless (and (listp fact) (stringp (car fact)) (nth 2 fact))
               (error "%s-doctor returned a malformed fact: %S" target fact)))))))
   ;; Packages that ship a native module manifest must install it intact.
-  (when (memq target '(etaf-md etaf ekp))
+  (when (memq target '(etaf-md etaf-org etaf ekp))
     (let* ((desc (cadr (assq target package-alist)))
            (dir (and desc (package-desc-dir desc)))
            (manifest (and dir (expand-file-name "native/manifest.json" dir))))
@@ -246,13 +246,14 @@ report it immediately instead of retrying and hiding it."
                             "benchmarks"
                             "examples"
                             "scripts"
+                            "backends"
+                            "media"
                             "native/vendor"
                             "native/build"))
         (when (file-exists-p (expand-file-name unexpected dir))
           (error "Installed etaf-md should not ship %s" unexpected)))
       (dolist (expected '("docs/manual.md"
                           "docs/extensions.md"
-                          "backends/mermaid-render.mjs"
                           "native/manifest.json"))
         (unless (file-readable-p (expand-file-name expected dir))
           (error "Installed etaf-md is missing %s" expected)))
@@ -286,12 +287,14 @@ report it immediately instead of retrying and hiding it."
                             "tests"
                             "benchmarks"
                             "examples"
-                            "scripts"))
+                            "scripts"
+                            "backends"
+                            "media"))
         (when (file-exists-p (expand-file-name unexpected dir))
           (error "Installed etaf-org should not ship %s" unexpected)))
       (dolist (expected '("docs/manual.md"
                           "docs/extensions.md"
-                          "backends/mermaid-render.mjs"))
+                          "native/manifest.json"))
         (unless (file-readable-p (expand-file-name expected dir))
           (error "Installed etaf-org is missing %s" expected)))))
   (when (eq target 'etaf-manual)

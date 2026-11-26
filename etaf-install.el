@@ -1,7 +1,7 @@
 ;;; -*- lexical-binding: t; -*-
 ;;; etaf-install.el --- Install ETAF with the Emacs package manager
 
-;; Version: 0.2.29
+;; Version: 0.2.30
 ;; Package-Requires: ((emacs "29.1"))
 ;; URL: https://github.com/emacs-taf/emacs-taf
 ;; Keywords: convenience
@@ -368,11 +368,6 @@ When set to a package manager symbol (such as `brew', `apt', `pacman' or
                 (pacman . "plantuml") (zypper . "plantuml")
                 (scoop . "plantuml") (choco . "plantuml"))
      :purpose "Renders PlantUML source blocks.")
-    (mmdc
-     :name "mmdc" :label "mermaid-cli (mmdc)" :binaries ("mmdc" "node")
-     :packages nil
-     :custom-cmd "npm install -g @mermaid-js/mermaid-cli"
-     :purpose "Renders Mermaid diagrams when native QuickJS is unavailable.")
     (curl
      :name "curl" :label "curl" :binaries ("curl")
      :packages ((brew . "curl") (apt . "curl") (dnf . "curl")
@@ -387,8 +382,8 @@ tarballs, and ETAF-managed game engines (`etaf-gamekit-install-*').")
 (defconst etaf-install--system-tools
   '((etaf-export       :required (rsvg-convert))
     (etaf-translate    :optional (curl))
-    (etaf-md           :optional (ffmpeg qrencode git mmdc))
-    (etaf-org          :optional (ffmpeg qrencode git rg dot plantuml mmdc))
+    (etaf-md           :optional (ffmpeg qrencode git))
+    (etaf-org          :optional (ffmpeg qrencode git rg dot plantuml))
     (etaf-video-player :required (ffmpeg))
     (etaf-telega       :required (telega-server))
     (etaf-weread       :required (node))
@@ -509,7 +504,6 @@ Return a list of command strings (usually 1 string combining OS packages)."
      ((or (equal low "rg") (string-prefix-p "ripgrep" low)) 'rg)
      ((or (equal low "dot") (string-prefix-p "graphviz" low)) 'dot)
      ((string-prefix-p "plantuml" low) 'plantuml)
-     ((or (equal low "mmdc") (string-prefix-p "mermaid-cli" low)) 'mmdc)
      ((equal low "curl") 'curl)
      (t nil))))
 

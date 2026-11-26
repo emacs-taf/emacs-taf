@@ -458,7 +458,7 @@
     {
       "name": "etaf-md-tests-doctor-names-each-optional-program",
       "file": "tests/etaf-md-tests.el",
-      "purpose": "`etaf-md-doctor` names every optional capability a block can use — typeset-native, ffmpeg, mmdc, qrencode and git — with a remedy, so a reader whose block kept its source text learns why."
+      "purpose": "`etaf-md-doctor` names every optional capability a block can use — typeset-native, ffmpeg, qrencode and git — with a remedy, so a reader whose block kept its source text learns why."
     },
     {
       "name": "etaf-md-tests-a-mailto-link-goes-to-the-browser",

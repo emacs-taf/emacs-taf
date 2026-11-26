@@ -72,7 +72,7 @@ Use `(etaf-org-update-block session "block-id" new-view)` to dynamically replace
 
 ## Troubleshooting and recovery
 
-- Run `M-x etaf-org-doctor` to check availability of optional external tools (`mmdc`, `ffmpeg`, `qrencode`, `git`, `jj`, `rg`, `dot`, `plantuml`).
+- Run `M-x etaf-install-doctor` or evaluate `(etaf-org-doctor)` to check availability of the prebuilt native QuickJS typeset module (`typeset-native`, installed via `M-x etaf-install-native`) and optional external CLI tools (`ffmpeg`, `qrencode`, `git`, `jj`, `rg`, `dot`, `plantuml`).
 - Malformed container attributes, unclosed blocks, or invalid paths degrade inline with line-numbered diagnostics without blocking surrounding sections.
 - Failed file reloads signal `etaf-org-error` and keep the last valid render.
 - Remote images (`etaf-org-remote-images`) and diagram/formula caches are bounded by `etaf-org-cache-max-bytes` (default 100 MiB) with lazy LRU eviction.

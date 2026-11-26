@@ -235,15 +235,15 @@ make benchmark MD_PREVIEW_BENCH_SECTIONS=400
 
 本地图片通过 ETAF 的 image Host 渲染：图形界面下走原生图片，终端下回退到 chafa 或 ffmpeg 的半块转换；本地视频先以首帧封面出现，按 RET 挂载 ETAF 的原生视频组件在文档内播放，再按一次暂停或继续，播完后按 RET 从头重播。没有 ffmpeg 时封面不可用，按 RET 交给系统播放器打开。远程图片渲染为带网址的占位卡片，激活后在浏览器里打开；缺失的文件同样变成占位卡片，而不是让整篇文档渲染失败。
 
-![预览效果](etaf-md-preview-wide.png "宽窗口下的渲染效果")
+![预览效果](../media/etaf-md-preview-wide.png "宽窗口下的渲染效果")
 
-![演示视频](demo.mp4)
+![演示视频](../media/demo.mp4)
 
 ![远程徽章](https://example.com/badge.svg)
 
 HTML 的 `<video>` 与 `<img>` 元素也会被识别为媒体；其他 HTML 标签按字面显示，提醒作者当前渲染器不会执行它：
 
-<video src="demo.mp4" title="通过 HTML 元素嵌入的视频"></video>
+<video src="../media/demo.mp4" title="通过 HTML 元素嵌入的视频"></video>
 
 ### 脚注
 

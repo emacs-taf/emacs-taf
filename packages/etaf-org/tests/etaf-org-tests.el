@@ -1224,7 +1224,7 @@
   (let ((info (etaf-org-doctor)))
     (should (null (plist-get info :required)))
     (should (listp (plist-get info :optional)))
-    (should (assoc "mmdc" (plist-get info :optional)))
+    (should (assoc "typeset-native" (plist-get info :optional)))
     (should (assoc "git" (plist-get info :optional)))))
 
 (ert-deftest etaf-org-tests-src-renderer-hook ()

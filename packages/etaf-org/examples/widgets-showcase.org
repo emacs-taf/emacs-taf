@@ -200,8 +200,8 @@
 #+begin_pros-cons :title "纯文本 Org 活文档设计权衡"
 #+pro: 语义可读且工具链兼容
 所有扩展块都是合法 Org 特殊块，导出、版本控制与普通编辑器打开均不破坏结构。
-#+con: 外部矢量图形为可选依赖
-Mermaid 与 KaTeX 依赖 =mmdc= 与 =node=，缺失时自动优雅回退为清晰源码。
+#+con: 原生图形模块按需安装
+Mermaid 与 MathJax 矢量绘制由 =etaf-md-typeset-native= 预编译模块提供（=M-x etaf-install-native=），未安装时自动优雅回退为清晰源码。
 #+end_pros-cons
 
 #+begin_demo :title "效果画布与底部轻条源码对照"
@@ -232,8 +232,8 @@ Mermaid 与 KaTeX 依赖 =mmdc= 与 =node=，缺失时自动优雅回退为清�
 #+begin_file-tree :title "无连线紧凑文件树（lines=false）" :lines nil
 - packages/etaf-org/
   - **README.md** # 包说明文档
-  - scripts/
-    - mermaid-render.mjs # 公式互斥锁
+  - native/
+    - manifest.json # 预编译原生模块清单
 #+end_file-tree
 #+end_col
 #+end_columns

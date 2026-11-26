@@ -421,6 +421,7 @@ class PolicyTests(unittest.TestCase):
         self.write('packages/app/benchmarks/bench.el', ';; bench\n')
         self.write('packages/app/examples/demo.el', ';; demo\n')
         self.write('packages/app/examples/screenshot.png', 'PNG')
+        self.write('packages/app/media/demo-wide.png', 'PNG')
         self.write('packages/app/native/manifest.json', json.dumps({
             'schema': 1, 'package': 'app', 'modules': [{
                 'name': 'app-native', 'version': '1', 'description': 'test',
@@ -447,11 +448,11 @@ class PolicyTests(unittest.TestCase):
         }))
         self.assertEqual([], POLICY.archive_consistency_errors(self.root))
 
-        # 3) Shipping dev-only dirs, scripts/, Makefile, screenshot examples, or native/ with vendor/ is rejected.
+        # 3) Shipping dev-only dirs, scripts/, media/, Makefile, screenshot examples, or native/ with vendor/ is rejected.
         self.write('release-dependencies.json', json.dumps({
             'schema': 1,
             'packages': {'app': {'resources': [
-                'docs', 'backends', 'tests', 'benchmarks', 'Makefile',
+                'docs', 'backends', 'tests', 'benchmarks', 'media', 'Makefile',
                 'scripts', 'examples', 'native',
             ]}},
             'targets': ['app'],
@@ -459,20 +460,45 @@ class PolicyTests(unittest.TestCase):
         errors = '\n'.join(POLICY.archive_consistency_errors(self.root))
         self.assertIn('tests is development-only', errors)
         self.assertIn('benchmarks is development-only', errors)
+        self.assertIn('media is development-only', errors)
         self.assertIn('Makefile is development-only', errors)
         self.assertIn('dev-only scripts/', errors)
         self.assertIn('contains showcase media', errors)
         self.assertIn('contains vendor/ build sources', errors)
 
-        # 4) Forgetting on-disk runtime backends/ or native/manifest.json is also caught.
+        # 4) Forgetting on-disk docs/, runtime backends/ or native/manifest.json is also caught.
         self.write('release-dependencies.json', json.dumps({
             'schema': 1,
-            'packages': {'app': {'resources': ['docs']}},
+            'packages': {'app': {'resources': []}},
             'targets': ['app'],
         }))
         missing_errors = '\n'.join(POLICY.archive_consistency_errors(self.root))
+        self.assertIn('runtime directory docs/ exists on disk', missing_errors)
         self.assertIn('runtime directory backends/ exists on disk', missing_errors)
         self.assertIn('native/manifest.json exists on disk', missing_errors)
+
+    def test_showcase_media_belongs_in_media_not_examples_and_lisp_cannot_ref_dev_dirs(self):
+        self.write('media/wide.png', 'PNG')
+        self.assertEqual('', self.errors())
+
+        # Media inside examples/ is rejected at structure-check time.
+        self.write('examples/shot.png', 'PNG')
+        self.assertIn('showcase images and videos belong in media/', self.errors())
+        (self.root / 'examples/shot.png').unlink()
+
+        # Runtime Lisp referencing an existing top-level scripts/ file is rejected.
+        self.write('scripts/helper.mjs', 'console.log(1);\n')
+        self.write('lisp/package-runtime.el',
+                   '(defconst package--helper "scripts/helper.mjs")\n'
+                   '(provide \'package-runtime)\n')
+        self.assertIn('runtime Lisp must not reference dev-only scripts/helper.mjs', self.errors())
+
+        # A comment mentioning scripts/helper.mjs or a non-root relative path is allowed.
+        self.write('lisp/package-runtime.el',
+                   ';; dev helper lives at "scripts/helper.mjs"\n'
+                   '(defconst package--nested "scripts/only-inside-backend.mjs")\n'
+                   '(provide \'package-runtime)\n')
+        self.assertEqual('', self.errors())
 
 
 if __name__ == '__main__':unittest.main()

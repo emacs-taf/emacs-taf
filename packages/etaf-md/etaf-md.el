@@ -2,7 +2,7 @@
 
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 ;; Author: ETAF contributors
-;; Version: 0.3.6
+;; Version: 0.3.7
 ;; Package-Requires: ((emacs "29.1") (etaf "0.3.10") (etaf-ui "0.3.6"))
 ;; Keywords: hypermedia, docs
 ;; URL: https://github.com/emacs-taf/etaf-md
@@ -333,20 +333,17 @@
 ;; or `M-x etaf-install-native', or built from a source checkout with
 ;; `make native-build', combining vendored
 ;; Obsidian Pele + native CoreText/Pango text measurement and MathJax
-;; TeX-to-SVG, inspired by LuciusChen/pele.el) is available; `mermaid-cli' +
-;; KaTeX serves as an automatic fallback when the native module is absent or
-;; for diagram dialects Pele does not implement.  A render runs in the
+;; TeX-to-SVG, inspired by LuciusChen/pele.el) is available.  A render runs in the
 ;; background and is cached by its source and the page's colours, keeping the
 ;; last valid picture visible while editing until the replacement arrives.
-;; With this nil, or without any backend, the fence stays a code block and the
-;; formula keeps `etaf-ui-markdown-math-text', which is also what an inline
+;; With this nil, or without the native module, the fence stays a code block and
+;; the formula keeps `etaf-ui-markdown-math-text', which is also what an inline
 ;; formula always keeps, because a picture inside a line would change the line
 ;; height.
 ;;
 ;; Function: etaf-md-typeset-available-p ()
-;; Return non-nil when this system can draw diagrams and formulas.
-;; Checks the embedded QuickJS native module first, then `mermaid-cli' (`mmdc')
-;; plus `node' as fallback.
+;; Return non-nil when this system can draw diagrams and formulas using the
+;; embedded QuickJS native module (`etaf-md-typeset-native').
 ;;
 ;; Function: etaf-md-toggle-toc (&optional arg)
 ;; Toggle the independent right side-window outline (`*ETAF Outline*') for the
@@ -445,8 +442,6 @@ tells which block keeps its source text without it."
           (list (list "typeset-native" native-ok native-remedy)
                 (list "ffmpeg" (and (executable-find "ffmpeg") t)
                       "Optional: install ffmpeg to play video cards and convert terminal images.")
-                (list "mmdc" (etaf-md-typeset--mmdc-available-p)
-                      "Optional fallback: install mermaid-cli when the native renderer is not built or for unsupported Mermaid dialects.")
                 (list "qrencode" (and (executable-find "qrencode") t)
                       "Optional: install qrencode to draw a qrcode block.")
                 (list "git" (and (executable-find "git") t)

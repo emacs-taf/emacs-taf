@@ -233,7 +233,7 @@ f(x) &= x^2 + 2x + 1 \\
      &= (x + 1)^2
 \end{align}
 
-#+CAPTION: 流程图（已安装 mmdc 时异步绘制矢量 Mermaid，未安装时回退源码）
+#+CAPTION: 流程图（安装预编译原生模块后异步绘制矢量 Mermaid，未安装时回退源码）
 #+begin_src mermaid
 flowchart LR
   Org["纯文本 Org"] --> Parse["Parse + Derive"]
@@ -259,7 +259,7 @@ flowchart LR
 
 #+CAPTION: 本地图片（按 RET 或点击开启 etaf-media-viewer 页内灯箱）
 #+ATTR_ORG: :width 460 :alt Wi-Fi 延迟测量图
-[[file:figures/wifi-latency.png]]
+[[file:../media/wifi-latency.png]]
 
 #+INCLUDE: "etaf-org-demo.el" src elisp :lines "1-12"
 
@@ -568,7 +568,7 @@ make -C packages/etaf-org check
 #+end_col
 #+end_columns
 
-#+begin_image-card :src "figures/wifi-latency.png" :title "Wi-Fi 延迟图卡" :description "image-card 支持图文混排与点击页内灯箱查看原图"
+#+begin_image-card :src "../media/wifi-latency.png" :title "Wi-Fi 延迟图卡" :description "image-card 支持图文混排与点击页内灯箱查看原图"
 #+end_image-card
 
 #+begin_qrcode :text "https://etaf.top" :title "扫码访问 etaf.top"
@@ -643,8 +643,8 @@ make -C packages/etaf-org check
 不引入非标准围栏，Org 导出、Agenda 与版本控制继续无缝工作。
 #+pro: 零依赖优雅降级
 未安装外部工具时，图表与公式自动回退为清晰可读的源码。
-#+con: 外部图形需可选依赖
-KaTeX / Mermaid 矢量绘制依赖 =mmdc= 与 =node=。
+#+con: 矢量排版需安装预编译原生模块
+MathJax / Mermaid 矢量绘制由 =etaf-md-typeset-native= 原生模块驱动（通过 =M-x etaf-install-native= 一键拉取）。
 #+end_pros-cons
 
 - =demo=：顶部纯净预览画布 + 底部轻条按需展开/复制原始 Org 源码：

@@ -1584,7 +1584,7 @@ heading            built in; a document cannot write its name
 
 - When something looks wrong, follow one chain: what type is this block, which definition renders it, which component it calls, which layer supplied each value, and which token that landed on.
 - The error line is always on the page, so no log has to be opened.
-- `etaf-md-doctor` answers for the optional capabilities a page can use — `typeset-native`, `ffmpeg`, `mmdc`, `qrencode` and `git` — so a reader learns why a block kept its source text. Reporting the registry itself (how many types, which override is in place) is planned.
+- `etaf-md-doctor` answers for the optional capabilities a page can use — `typeset-native`, `ffmpeg`, `qrencode` and `git` — so a reader learns why a block kept its source text. Reporting the registry itself (how many types, which override is in place) is planned.
 
 ### 10.9 Trust model
 

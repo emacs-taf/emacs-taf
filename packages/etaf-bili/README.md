@@ -4,9 +4,9 @@ Browse Bilibili inside Emacs: real cover cards, inline search, popular videos
 and rankings, with playback in the same buffer. Built with
 [ETAF](https://github.com/emacs-taf/etaf) and its UI catalog.
 
-![Cover gallery in the dark theme](examples/etaf-bili-wide.png)
+![Cover gallery in the dark theme](media/etaf-bili-wide.png)
 
-[Light theme](examples/etaf-bili-light.png)
+[Light theme](media/etaf-bili-light.png)
 
 ## What it does
 

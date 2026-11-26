@@ -13,7 +13,7 @@ under `packages/`, each of which publishes as its own repository.
   root to the target files, then its README and the relevant contract sections.
 - Maintain common instructions here. Add a local AGENTS.md only when its scope
   needs special development commands, critical reminders or document navigation.
-- Before changing installation, packaging, release or dependency handling, read the distribution contract (section 13 of [the ecosystem contract](docs/architecture.zh-CN.md)) and the workflow in [the tool manual](docs/manual.md). Menu wording, the uniform directory-to-archive classification (runtime scripts in `backends/`, flat pure-Markdown offline docs in `docs/`, dev tools only in `scripts/`, prebuilt C dynamic modules via `native/manifest.json` + `/native/`, manual OS tools in `System CLI`, and never shipping `tests/`, `benchmarks/`, `scripts/`, `Makefile`, `native/vendor/` or screenshot `examples/` in ELPA tarballs) and the release pipeline are enforced by `scripts/check-repository.py`; do not invent a second install path.
+- Before changing installation, packaging, release or dependency handling, read the distribution contract (section 13 of [the ecosystem contract](docs/architecture.zh-CN.md)) and the workflow in [the tool manual](docs/manual.md). Menu wording, the uniform directory-to-archive classification (runtime scripts in `backends/`, flat pure-Markdown offline docs in `docs/`, README screenshots and demo videos in `media/`, dev tools only in `scripts/`, prebuilt C dynamic modules via `native/manifest.json` + `/native/`, manual OS tools in `System CLI`, and never shipping `tests/`, `benchmarks/`, `scripts/`, `media/`, `Makefile`, `design/`, `site/` or `native/vendor/` in ELPA tarballs) and the release pipeline are enforced by `scripts/check-repository.py`; do not invent a second install path.
 - For architecture or cross-package changes, read the applicable parts of
   [the ecosystem contract](docs/architecture.zh-CN.md) and the affected providers'
   public contracts. Select documents by the task and the responsible packages;
@@ -29,19 +29,21 @@ under `packages/`, each of which publishes as its own repository.
 - Checkout users add repository roots to load-path and require the package entry.
   Consumers must not require a provider's internal module. Keep entry loading,
   byte compilation, autoloads, resource paths and installation recipes aligned.
-- Organize by responsibility, not file extension. Use `tests/` for correctness
-  scenarios and their helpers, `tests/fixtures/` for data, and `tests/tools/`
-  for development-tool tests. Keep the acceptance inventory at `tests/acceptance.json`.
-- Use `benchmarks/` for performance workloads, dedicated measurement harnesses and
-  input data; use `scripts/` for build, release, environment and general runners.
-  Tests and benchmarks may use Lisp, Python, Shell or appropriate data formats.
-- Use `examples/` for runnable usage examples and `native/` for native implementations.
-  Standalone example applications use `examples/<app>/<app>.el` as their entry
-  and follow the same entry/lisp layout. Their entry Commentary owns their API;
-  those exports do not become framework APIs. The boundary gate checks each
-  such application as a separate consumer, including calls from tests.
-  Native subprojects follow their language's own layout. Keep domain resources in
-  descriptive directories such as `dictionaries/`; do not create generic dumping grounds.
+- Organize by responsibility, not file extension, and enforce one uniform directory-to-archive map across every package (`scripts/check-repository.py` rejects violations):
+
+| Directory / Root file | Responsibility | Ships in ELPA `.tar` |
+| --- | --- | --- |
+| `<pkg>.el`, `lisp/`, `README*`, `CHANGELOG*`, `LICENSE`/`COPYING`/`NOTICE` | Package root entry, implementation modules, top-level docs and legal notices | Always (automatic) |
+| `docs/` | Flat pure-Markdown offline manuals (`manual*.md`, `architecture*.md`, `extensions*.md`); never images or `.el` | Yes (`resources`, required whenever `docs/` exists) |
+| `backends/` | Pure-source runtime backend scripts invoked by the package at runtime (Node, Python, Shell) | Yes (`resources`, required whenever `backends/` exists) |
+| `dictionaries/`, `book/` | Domain runtime data dictionaries and reference-book chapters | Yes (`resources`, required whenever present) |
+| `native/` | Native C/C++/Rust sources, bridges, or `native/manifest.json` pointing at `https://etaf.top/native/` | `native/manifest.json` when `native/vendor/` exists; otherwise lightweight runtime `native/` (never `vendor/`, `build/`, or binaries) |
+| `examples/` | Pure runnable code or text samples (no `.png`/`.jpg`/`.mp4` media; standalone example apps use `examples/<app>/<app>.el`) | Optional (`resources` only when public commands load it at runtime) |
+| `media/` | README showcase screenshots (`.png`, `.jpg`, `.webp`) and demo videos (`.mp4`, `.mov`) | **Never** (dev/repo display only) |
+| `scripts/` | Build, release, GUI probe, and maintenance scripts; never referenced by runtime Lisp (`<pkg>.el` or `lisp/*.el`) | **Never** |
+| `tests/`, `benchmarks/`, `design/`, `site/`, `Makefile`, `AGENTS.md` | Acceptance tests (`tests/acceptance.json`, `tests/fixtures/`, `tests/tools/`), performance harnesses, SVG design mockups, static website builds, build rules, agent rules | **Never** |
+
+- Standalone example applications use `examples/<app>/<app>.el` as their entry and follow the same entry/lisp layout. Their entry Commentary owns their API; those exports do not become framework APIs. The boundary gate checks each such application as a separate consumer, including calls from tests. Keep domain resources in descriptive directories such as `dictionaries/`; do not create generic dumping grounds.
 - Use `site/` for a static website build: its source, content generator and
   publish scripts are maintained files; dependencies, generated content and
   the build output stay untracked. A repository that publishes a site provides

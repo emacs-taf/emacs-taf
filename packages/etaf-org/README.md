@@ -2,7 +2,7 @@
 
 `etaf-org` renders native Org-mode documents as modern interactive reading views inside Emacs using [ETAF](https://github.com/emacs-taf/etaf) and [Ebox](https://github.com/emacs-taf/ebox), and extends Org through a unified node registry, style-rule engine, Org-native container syntax, workspace live views, and an O(Δ) live-editing preview shell.
 
-![ETAF Org at a wide frame](examples/etaf-org-wide.png)
+![ETAF Org at a wide frame](media/etaf-org-wide.png)
 
 ## Capabilities
 
@@ -10,17 +10,18 @@
 - **Unified node & style-rule engine.** Every core Org construct (`headline`, `src`, `table`, `quote`, `drawer`, `planning`, `math`) and every extended container lives in `etaf-org-node-definitions`. Style rules (`etaf-org-set-attr`) and view overrides (`etaf-org-set-view`) apply uniformly; user nodes load automatically from `etaf-org-node-directory`.
 - **Focused editorial & Org living-document vocabulary.** Write containers as standard Org `#+begin_<name> :key val ... #+end_<name>`, affiliated `#+attr_etaf:`, `#+<marker>:` child markers, `#+BEGIN:` dynamic blocks, and inline link micro-widgets (`[[kbd:...]]`, `[[badge:...]]`, `[[sym:...]]`, `[[color:...]]`, `[[spoiler:...]]`, `[[icon:...]]`, `[[abbr:...]]`, `[[roam:...]]`, `[[denote:...]]`). Includes curated L0 layout/collection/visualization/comparison widgets, bounded workspace L1 views (`include`, `code-ref`, `symbol`, `project-tree`, `git-log`, `git-diff` supporting Git and Jujutsu), Org-exclusive live views (`org-query`, `kanban`, `clock-summary`, `transclude`, `backlinks`), and explicit confirmation-gated L2 actions (`run`, opt-in Babel). Switch to pure Org at any time with `:flavor 'standard` or `#+OPTIONS: etaf:nil`.
 - **Clean single-window reading & O(Δ) live editing.** `M-x etaf-org-open` opens full-width in the current window with zero prompt on `.org` buffers and syncs to the source line; `M-x etaf-org-preview` toggles a non-destructive right split with proportional follow-scroll (`f`) and cleans up only its own window; `v` toggles single-window ↔ side-by-side split; `e` / `o` jumps back to source; `C-c t` toggles an independent right-side `*ETAF Org Outline*` window; `C-c /` filters sections live; `K` shows in-buffer peek cards; `z`/`Z` folds sections; `S` toggles spoilers; `t` cycles themes; and `etaf-org-edit-mode` provides optional Lisp-enabled authoring help.
-- **Persistent SVG/KaTeX & diagram worker.** Display formulas and `mermaid` blocks render asynchronously via a serialized Chromium worker into a bounded LRU disk cache, tinted to the active palette (`auto`, `dark`, `light`, `sepia`). Pluggable `etaf-org-src-renderers` plus optional `svg`, `dot`, `plantuml`, and `qrencode` support.
+- **Native zero-browser Mermaid & MathJax rendering.** Display formulas (`$$...$$`, `\[...\]`, `\begin{align}...\end{align}`) and `mermaid` blocks render asynchronously inside a sandboxed QuickJS native module (vendored Obsidian Pele + MathJax TeX-to-SVG, auto-installed via `M-x etaf-install` / `M-x etaf-install-native`, zero browser or Node.js required) into a bounded LRU disk cache tinted to the active palette (`auto`, `dark`, `light`, `sepia`). Pluggable `etaf-org-src-renderers` plus optional `svg`, `dot`, `plantuml`, and `qrencode` support.
 
 ## Requirements
 
 - Emacs 29.1 or newer.
-- [ETAF](https://github.com/emacs-taf/etaf) 0.3.0, `etaf-ui` 0.2.0+, `ebox`, and `ecss`.
-- Optional external tools (inspect via `(etaf-org-doctor)`): `mmdc` + `node` (KaTeX/Mermaid), `ffmpeg` (inline video), `qrencode`, `git` / `jj`, `rg`, `dot`, `plantuml`.
+- [ETAF](https://github.com/emacs-taf/etaf) 0.3.10, `etaf-ui` 0.3.6+, `ebox`, and `ecss`.
+- Prebuilt QuickJS native module (`typeset-native`, downloaded and SHA-256 verified automatically by `M-x etaf-install` or `M-x etaf-install-native` into `~/.cache/emacs-taf/native/`) for Mermaid and MathJax SVGs.
+- Optional external CLI tools (inspect via `(etaf-org-doctor)`): `ffmpeg` (inline video), `qrencode`, `git` / `jj`, `rg`, `dot`, `plantuml`.
 
 ## Installation
 
-From the ETAF package archive, install `etaf-org` and load it:
+From the ETAF package archive, install via `M-x etaf-install` and select `etaf-org` (this installs all framework dependencies plus the prebuilt native Mermaid/MathJax module automatically), or load it after `package-install`:
 
 ```elisp
 (require 'etaf-org)

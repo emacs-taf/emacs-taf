@@ -187,7 +187,7 @@ Flavored Markdown says so itself; a session's `:flavor' argument still wins."
 With a decoder the press must not leave the card for an external player, and
 the repaint swaps the poster for the native canvas."
   (skip-unless (executable-find "ffmpeg"))
-  (let* ((video (expand-file-name "../examples/demo.mp4"
+  (let* ((video (expand-file-name "../media/demo.mp4"
                                   etaf-md-tests--directory))
          (session (etaf-md-create :text (format "![Movie](%s)" video)))
          (real (symbol-function 'call-process))
@@ -240,7 +240,7 @@ The card renders once with whatever decoder the environment provides and
 again with ffmpeg hidden; the second render must use its own poster probe
 instead of the cached playback metadata."
   (skip-unless (memq system-type '(darwin gnu/linux)))
-  (let* ((video (expand-file-name "../examples/demo.mp4"
+  (let* ((video (expand-file-name "../media/demo.mp4"
                                   etaf-md-tests--directory))
          (session (etaf-md-create :text (format "![Movie](%s)" video)))
          (real-process (symbol-function 'call-process))
@@ -2125,7 +2125,7 @@ A reader whose diagram or code block kept its source text asks `doctor' why,
 so a program the page can use but never names is a blind spot."
   (let ((optional (plist-get (etaf-md-doctor) :optional)))
     (should (equal (mapcar #'car optional)
-                   '("typeset-native" "ffmpeg" "mmdc" "qrencode" "git")))
+                   '("typeset-native" "ffmpeg" "qrencode" "git")))
     (dolist (entry optional)
       (should (= 3 (length entry)))
       (should (stringp (nth 2 entry))))))

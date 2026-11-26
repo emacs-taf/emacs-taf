@@ -13,7 +13,7 @@ import sys
 import tempfile
 from urllib.parse import unquote
 
-POLICY_VERSION = 13
+POLICY_VERSION = 14
 DOC_NAMES = {'README.md', 'README.zh-CN.md', 'CHANGELOG.md', 'CHANGELOG.zh-CN.md',
              'AGENTS.md', 'docs/manual.md', 'docs/manual.zh-CN.md',
              'docs/architecture.md', 'docs/architecture.zh-CN.md',
@@ -22,7 +22,7 @@ DOC_NAMES = {'README.md', 'README.zh-CN.md', 'CHANGELOG.md', 'CHANGELOG.zh-CN.md
              # parameters and the rules a definition follows.
              'docs/extensions.md', 'docs/extensions.zh-CN.md'}
 WORKSPACE_DOC_NAMES = {'docs/keyboard-navigation.zh-CN.md'}
-DIRS = {'lisp', 'tests', 'examples', 'benchmarks', 'scripts', 'docs', 'native', 'packages',
+DIRS = {'lisp', 'tests', 'examples', 'media', 'benchmarks', 'scripts', 'docs', 'native', 'packages',
         'dictionaries', 'design', 'book', 'site', 'backends', '.github', '.gitea', '.githooks'}
 # A reference book is product content rendered by its package: one Markdown
 # chapter per file under book/<language>/, with the same link checks as docs.
@@ -250,6 +250,16 @@ def check(root, files=None, notices=None):
             fail(f, 'use README, CHANGELOG, docs/manual or docs/architecture; merge or delete other documents')
         if f.startswith('docs/') and not instructions and (len(parts) != 2 or f not in doc_names):
             fail(f, 'documentation must be flat and use the fixed document names')
+        if parts[0] in ('examples', 'docs') and PurePosixPath(f).suffix.lower() in MEDIA_EXTENSIONS:
+            fail(f, 'showcase images and videos belong in media/ (or tests/fixtures/ for test inputs)')
+        if not workspace and f.endswith('.el') and ('/' not in f or parts[0] == 'lisp'):
+            el_text = (root / f).read_text(encoding='utf-8', errors='replace')
+            el_code = ELISP_COMMENT_OR_STRING.sub(
+                lambda m: m.group(0) if m.group(0).startswith('"') else '', el_text)
+            for m in RUNTIME_DEV_REF.finditer(el_code):
+                rel_ref = m.group(1)
+                if (root / rel_ref).exists():
+                    fail(f, f'runtime Lisp must not reference dev-only {rel_ref}; move runtime assets to backends/ or a shipped resource directory')
         if re.search(r'(^|/)(?:\.DS_Store|[^/]+\.(?:elc|eln|pyc|o|so|dylib|dll))$', f) or 'target' in parts or '__pycache__' in parts:
             fail(f, 'generated artifact must not be tracked')
         if len(parts)==1 and f.endswith('.el') and any(x in f for x in ['benchmark','-tests','-demo','-showcase']):
@@ -402,17 +412,20 @@ BROKEN_DOCTOR_REMEDY = re.compile(
 
 # Uniform directory-to-archive classification shared across every package:
 # dev/CI/showcase directories must NEVER ship in ELPA tarballs; runtime scripts
-# live in `backends/', flat pure-Markdown manuals live in `docs/', and heavy
-# native C build trees with `vendor/' ship only `native/manifest.json'.
+# live in `backends/', flat pure-Markdown manuals live in `docs/', README
+# screenshots/videos live in `media/', and heavy native C build trees with
+# `vendor/' ship only `native/manifest.json'.
 DEV_ONLY_RESOURCE_ROOTS = frozenset({
-    'tests', 'benchmarks', 'scripts', 'design', 'site',
+    'tests', 'benchmarks', 'scripts', 'media', 'design', 'site',
     '.github', '.gitea', '.githooks',
 })
 DEV_ONLY_RESOURCE_FILES = frozenset({'Makefile', 'AGENTS.md'})
 MEDIA_EXTENSIONS = frozenset({
     '.png', '.jpg', '.jpeg', '.gif', '.webp', '.mp4', '.mov', '.avi', '.mkv',
 })
-REQUIRED_RUNTIME_DIRS = ('backends', 'dictionaries', 'book')
+REQUIRED_RUNTIME_DIRS = ('docs', 'backends', 'dictionaries', 'book')
+ELISP_COMMENT_OR_STRING = re.compile(r'"(?:\\.|[^"\\])*"|;[^\n]*')
+RUNTIME_DEV_REF = re.compile(r'"((?:scripts|tests|benchmarks|media|design)/[^"\s\\]+)"')
 
 
 def _dir_has_media(directory):
@@ -428,22 +441,21 @@ def suggest_release_resources(pkg_dir):
 
     Applies the workspace's uniform directory-to-archive law:
     - Ships `docs` (flat pure-Markdown manuals), `backends`, `dictionaries`,
-      `book`, pure-code `examples` (no screenshots/media), and either
-      `native/manifest.json` (when `native/vendor/` exists) or `native`.
-    - Never ships `tests`, `benchmarks`, `scripts`, `Makefile`, `design`,
-      `site` or `native/vendor`.
+      `book`, and either `native/manifest.json` (when `native/vendor/` exists)
+      or `native`.
+    - Never ships `tests`, `benchmarks`, `scripts`, `media`, `Makefile`,
+      `design`, `site` or `native/vendor`.
+    - `examples/` is optional and only listed manually when public commands
+      load pure-code examples at runtime.
     """
     pkg_dir = Path(pkg_dir)
     resources = []
-    if (pkg_dir / 'docs').is_dir() and any((pkg_dir / 'docs').glob('*.md')):
-        resources.append('docs')
     for name in REQUIRED_RUNTIME_DIRS:
-        if (pkg_dir / name).is_dir():
+        target = pkg_dir / name
+        if target.is_dir():
+            if name == 'docs' and not any(target.glob('*.md')):
+                continue
             resources.append(name)
-    examples_dir = pkg_dir / 'examples'
-    if examples_dir.is_dir() and _dir_has_media(examples_dir) is None:
-        if any(examples_dir.rglob('*.el')):
-            resources.append('examples')
     native_dir = pkg_dir / 'native'
     if native_dir.is_dir():
         if (native_dir / 'vendor').exists():

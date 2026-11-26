@@ -47,6 +47,6 @@
 
 ## 诊断与恢复
 
-- 调用 `(etaf-org-doctor)` 检查外部可选能力（`mmdc`、`ffmpeg`、`qrencode`、`git`、`jj`、`rg`、`dot`、`plantuml` 等）。
+- 调用 `M-x etaf-install-doctor` 或 `(etaf-org-doctor)` 检查预编译原生排版模块（`typeset-native`，通过 `M-x etaf-install-native` 一键安装）及外部可选 CLI 能力（`ffmpeg`、`qrencode`、`git`、`jj`、`rg`、`dot`、`plantuml` 等）。
 - 扩展块属性错误、未闭合块或越界路径均在原位显示行号诊断卡，绝不阻塞文档其余部分。
 - 磁盘缓存目录遵循 `etaf-org-cache-max-bytes`（默认 100 MiB）自动做空闲 LRU 清理。

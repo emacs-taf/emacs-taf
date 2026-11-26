@@ -29,9 +29,9 @@ To read a chapter as Markdown, open its file below `book/en/` or `book/zh-CN/`; 
 
 `M-x etaf-manual-open` opens the manual in its own buffer, built with ETAF itself. The reader reopens at the remembered reading position and shows a navigation column listing the parts and chapters, the article with definition cards and runnable examples, and — on wide frames — an on-this-page column that marks the section being read. Drag the divider beside either side column to resize it, or focus the divider and press Left/Right; the remembered position includes the widths. A header carries the breadcrumb and the language switch, a footer shows the key hints, and each chapter ends with previous/next chapter cards. The palette is `auto` by default and follows the Emacs theme; `t` switches between the light and dark palette, and a floating panel's title bar offers `亮`, `随` and `暗`, writing the same palette mode. Every line keeps the standard line height, so scrolling never shifts the layout; on a narrow frame the navigation column collapses into an overview screen that also lists the current chapter's sections, so page navigation stays reachable.
 
-![The reader at a wide frame: navigation column, article and key-hint footer](examples/etaf-manual-reader-wide.png)
+![The reader at a wide frame: navigation column, article and key-hint footer](media/etaf-manual-reader-wide.png)
 
-![The reader at a narrow frame: the navigation column collapses to the overview switch](examples/etaf-manual-reader-narrow.png)
+![The reader at a narrow frame: the navigation column collapses to the overview switch](media/etaf-manual-reader-narrow.png)
 
 - `n` / `p` move between sections, `u` goes one level up, `l` / `r` walk the reading history.
 - `[` / `]` change chapter, `/` searches the whole book and `M-n` / `M-p` walk the matching sections, `i` jumps to a chapter, section, definition entry or index term, `g` switches between Chinese and English, `t` switches the palette, `q` closes the reader.

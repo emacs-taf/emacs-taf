@@ -11,7 +11,7 @@ SOURCES += $(wildcard examples/*.el)
 SOURCES += scripts/etaf-md-gui-probe.el
 SOURCES += benchmarks/performance-scenarios.el
 
-.PHONY: compile load check clean native-build native-clean structure-check setup-hooks acceptance api-check test benchmark mermaid-check
+.PHONY: compile load check clean native-build native-clean structure-check setup-hooks acceptance api-check test benchmark
 
 native-build:
 	$(MAKE) -C native EMACS="$(EMACS)"
@@ -49,11 +49,6 @@ api-check:
 
 benchmark:
 	$(EMACS) -Q --batch $(LOAD_PATH) --eval '(setq load-prefer-newer t)' -l benchmarks/render-large-document.el
-
-# Draws every mermaid fixture through the package's own diagram configuration.
-# It needs mermaid-cli and Pillow, so `check` leaves it to a machine that has them.
-mermaid-check:
-	python3 tests/tools/mermaid-matrix.py --emacs "$(EMACS)"
 
 test: acceptance
 

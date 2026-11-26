@@ -18,7 +18,7 @@ Level 1 (parse, derive, rendering env)
 
 Level 2 (publish-time & async assets — zero I/O in `:render')
   etaf-org-qrcode     Async `qrencode' PNG generation
-  etaf-org-typeset    Persistent Chromium SVG+KaTeX worker (FIFO formula mutex), `dot'/`plantuml'/`svg'
+  etaf-org-typeset    Embedded QuickJS native module (Pele Mermaid + MathJax TeX-to-SVG), `dot'/`plantuml'/`svg'
   etaf-org-assets     L1 workspace sandbox (`#+SETUPFILE:', `#+INCLUDE:', bib,
                       `org-query', `kanban', `clock-summary', `transclude',
                       `backlinks', `include', `code-ref', `symbol', `project-tree',
