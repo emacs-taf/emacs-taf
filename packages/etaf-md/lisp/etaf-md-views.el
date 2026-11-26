@@ -807,15 +807,18 @@ one line saying so; that block alone degrades and the rest of the page renders."
   "Center rendered block VIEW at SESSION's prose measure or wide figure budget.
 Prose blocks stay capped at SESSION's reading measure; wide tables and figures
 may expand up to `:figure-width' when the viewport allows while staying
-centered inside the page gutters."
+centered inside the page gutters, unless the user explicitly narrowed the
+reading column (`:width-locked')."
   (when view
     (let* ((width (etaf-md--read session :width))
+           (locked (plist-get env :width-locked))
            (figure (or (plist-get env :figure-width) width))
            (cell-width (or (plist-get (ignore-errors (etaf-display-metrics)) :char-width)
                            (frame-char-width)))
            (type (plist-get block :type))
-           (wide-p (or (eq type 'table)
-                       (etaf-md--figure-block-p block)))
+           (wide-p (and (not locked)
+                        (or (eq type 'table)
+                            (etaf-md--figure-block-p block))))
            (cap (if wide-p (max width figure) width)))
       (etaf-node 'column
                  (list :width 'stretch :cross-align 'center :item-gap '(lh 0))
@@ -849,10 +852,12 @@ video handles without traversing the rest of the document."
                              :font-family (face-attribute 'fixed-pitch :family nil t))
                        (list (etaf-md--block-marker block))))
            ((eq (plist-get block :type) 'table)
-            (let* ((figure (or (plist-get env :figure-width)
-                               (plist-get env :width)))
-                   (table-env (if figure
-                                  (plist-put (copy-sequence env) :table-max-width figure)
+            (let* ((table-max (if (plist-get env :width-locked)
+                                  (plist-get env :width)
+                                (or (plist-get env :figure-width)
+                                    (plist-get env :width))))
+                   (table-env (if table-max
+                                  (plist-put (copy-sequence env) :table-max-width table-max)
                                 env)))
               (etaf-ui-markdown-view-block block table-env)))
            (t (etaf-md--wrap-heading

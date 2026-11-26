@@ -1053,6 +1053,16 @@
       "name": "ebox-reparent-child-from-removed-wrapper-into-emptied-column",
       "file": "tests/ebox-update-tests.el",
       "purpose": "Removing a laid-out child from a wrapper, removing that wrapper to empty a stacked column, and re-inserting the child in one batch renders cleanly without sequence errors."
+    },
+    {
+      "name": "ebox-hover-preserves-ancestor-and-own-borders",
+      "file": "tests/ebox-interaction-tests.el",
+      "purpose": "Hover `mouse-face' preserves top overline, bottom underline and vertical side borders both on interactive boxes and on interactive children inside bordered containers."
+    },
+    {
+      "name": "ebox-bordered-accordion-collapse-and-switch-stay-on-lines-strategy",
+      "file": "tests/ebox-update-tests.el",
+      "purpose": "Collapsing, expanding and switching sections inside a bordered stack stay on incremental `lines' publication with exact border property parity."
     }
   ]
 }

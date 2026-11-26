@@ -54,6 +54,8 @@
     :ui-pagination-muted-fg "#526174"
     :ui-panel-fg "#252A2E"
     :ui-panel-bg "#FFFDF8"
+    :ui-panel-hover-bg (etaf-theme-token :ui-panel-bg "#FFFDF8"
+                                         etaf-ui--state-hover-shift)
     :ui-panel-border "#687386"
     :ui-playing-card-bg "#F7F4EC"
     :ui-playing-card-black "#253546"
@@ -309,7 +311,11 @@ wins."
           :ui-important-fg (funcall role :important)
           :ui-important-bg (funcall role :important-bg)
           :ui-important-border (funcall role :important-border)
-          :ui-panel-fg fg :ui-panel-bg panel :ui-panel-border border
+          :ui-panel-fg fg :ui-panel-bg panel
+          :ui-panel-hover-bg (if (and track (not (string-equal-ignore-case track panel)))
+                                 track
+                               (etaf-ui--state-hover-shift panel))
+          :ui-panel-border border
           :ui-divider-bg border
           :ui-progress-track track :ui-range-track track :ui-range-fill accent
           :ui-table-border border :ui-table-selected-fg accent
@@ -331,14 +337,15 @@ A dark surface gets a darker fill and a light one a lighter fill, so the
 fill moves away from the label a themed application paints on it instead
 of toward it: the label keeps at least its resting contrast, and one
 control adapts to both palettes instead of repeating one fixed tint.  A
-surface already at that extreme steps the other way so the hover stays
-visible."
+surface already near the light or dark extreme steps the other way so the
+hover stays visibly distinct."
   (if-let* ((luminance (etaf-ui--color-luminance color)))
       (let* ((dark-p (< luminance 0.5))
-             (away (if dark-p "#000000" "#FFFFFF"))
-             (fill (etaf-ui-color-mix color away amount)))
-        (if (equal fill color)
-            (etaf-ui-color-mix color (if dark-p "#FFFFFF" "#000000") amount)
+             (extreme-p (or (<= luminance 0.02) (>= luminance 0.98)))
+             (target (if (eq dark-p extreme-p) "#FFFFFF" "#000000"))
+             (fill (etaf-ui-color-mix color target amount)))
+        (if (string-equal-ignore-case fill color)
+            (etaf-ui-color-mix color (if (equal target "#FFFFFF") "#000000" "#FFFFFF") amount)
           fill))
     color))
 

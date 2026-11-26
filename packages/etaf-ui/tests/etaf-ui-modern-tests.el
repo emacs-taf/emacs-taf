@@ -443,4 +443,69 @@
       (should-error (etaf-mount (current-buffer) (etaf-node (car view) (cdr view) nil))
                     :type 'etaf-view-error))))
 
+(etaf-define-component etaf-ui-modern-test--themed-accordion (&key tokens open items multiple)
+  "Accordion mounted under TOKENS so theme-derived hover and borders are testable."
+  :setup (etaf-theme-provide tokens)
+  :render
+  (etaf-view
+   (column :width '(ch 50)
+     (etaf-accordion :items items :open open :multiple multiple
+                     :on-toggle (lambda (keys) (etaf-set-value open keys))))))
+
+(ert-deftest etaf-ui-accordion-compact-borders-visible-hover-and-empty-body ()
+  "Accordion headers stay compact, keep border paint on hover and skip empty bodies."
+  (dolist (spec `((light . ,(etaf-ui-theme-tokens
+                             '(:bg "#ffffff" :fg "#1f2328" :panel "#f6f8fa"
+                               :track "#e6ebf1" :border "#d1d9e0" :muted "#59636e")))
+                  (dark . ,(etaf-ui-theme-tokens
+                            '(:bg "#191a1c" :fg "#e6edf3" :panel "#212328"
+                              :track "#282b31" :border "#303338" :muted "#9198a1")))))
+    (let* ((tokens (cdr spec))
+           (open (etaf-ref nil))
+           (items '((:key first :label "First Section" :content "Body line")
+                    (:key empty :label "Empty Section" :content ""))))
+      (with-temp-buffer
+        (unwind-protect
+            (progn
+              (etaf-mount
+               (current-buffer)
+               (etaf-view
+                (etaf-ui-modern-test--themed-accordion
+                 :tokens tokens :open open :items items :multiple t)))
+              (let* ((runtime (etaf-runtime-for-buffer (current-buffer)))
+                     (plain (buffer-substring-no-properties (point-min) (point-max)))
+                     (collapsed-lines (length (split-string plain "\n")))
+                     (pos (1+ (string-match "First Section" plain)))
+                     (face (get-text-property pos 'face))
+                     (mf (get-text-property pos 'mouse-face)))
+                ;; Compact 1-row headers (2 headers = 2 lines total, no hollow 6-line bloat).
+                (should (= collapsed-lines 2))
+                ;; Header hover keeps top border overline and paints a distinct fill.
+                (should mf)
+                (should (equal (plist-get mf :overline) (plist-get tokens :ui-panel-border)))
+                (should (equal (plist-get (plist-get mf :underline) :color)
+                               (plist-get tokens :ui-panel-border)))
+                (should-not (string-equal-ignore-case
+                             (or (plist-get mf :background) "")
+                             (plist-get tokens :ui-panel-bg)))
+                ;; Primary foreground ink, not muted grey.
+                (should (string-match-p (regexp-quote (plist-get tokens :ui-panel-fg))
+                                        (format "%S" face)))
+                ;; Expanding empty section adds no hollow padded body box.
+                (etaf-ui-modern-test-activate runtime "Empty Section")
+                (should (equal (etaf-value open) '(empty)))
+                (should (= (length (split-string (buffer-substring-no-properties
+                                                  (point-min) (point-max))
+                                                 "\n"))
+                           2))
+                ;; Expanding non-empty section reveals body below consistent hairline.
+                (etaf-ui-modern-test-activate runtime "First Section")
+                (let* ((after (buffer-substring-no-properties (point-min) (point-max)))
+                       (p1 (1+ (string-match "First Section" after)))
+                       (f1 (format "%S" (get-text-property p1 'face))))
+                  (should (string-match-p "Body line" after))
+                  (should (string-match-p ":underline" f1)))))
+          (when-let* ((runtime (etaf-runtime-for-buffer (current-buffer))))
+            (etaf-unmount runtime)))))))
+
 ;;; etaf-ui-modern-tests.el ends here

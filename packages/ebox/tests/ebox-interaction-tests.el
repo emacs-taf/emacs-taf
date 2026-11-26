@@ -873,4 +873,37 @@ so the resting paint stays intact."
       (should (= (ebox-previous-interaction) (ebox-node-position
                                               (car (ebox-selector-query root "#a"))))))))
 
+(ert-deftest ebox-hover-preserves-ancestor-and-own-borders ()
+  "Hover `mouse-face' keeps ancestor and self top, bottom and side border paint."
+  ;; 1. Interactive child touching a bordered container's top and bottom edges.
+  (let* ((rendered (ebox-render
+                    '(column :width (ch 20) :border ((px 1) solid "#d1d9e0")
+                             (box :width 'stretch :background-color "#f6f8fa"
+                                  :hover-style (:background-color "#e6ebf1")
+                                  "Header"))))
+         (pos (string-match "Header" rendered))
+         (mf (and pos (get-text-property pos 'mouse-face rendered))))
+    (should pos)
+    (should mf)
+    (should (equal (plist-get mf :background) "#e6ebf1"))
+    (should (equal (plist-get mf :overline) "#d1d9e0"))
+    (should (equal (plist-get (plist-get mf :underline) :color) "#d1d9e0")))
+  ;; 2. Interactive node carrying its own 4-sided border keeps top, bottom and
+  ;; vertical side rules on hover.
+  (let* ((rendered (ebox-render
+                    '(box :width (ch 20)
+                          :border ((px 1) solid "#aabbcc")
+                          :background-color "#ffffff"
+                          :hover-style (:background-color "#eef2f6")
+                          "Button")))
+         (pos (string-match "Button" rendered))
+         (mf (and pos (get-text-property pos 'mouse-face rendered)))
+         (left-face (get-text-property 0 'face rendered))
+         (left-mf (get-text-property 0 'mouse-face rendered)))
+    (should pos)
+    (should (equal (plist-get mf :background) "#eef2f6"))
+    (should (equal (plist-get mf :overline) "#aabbcc"))
+    (should (equal (plist-get (plist-get mf :underline) :color) "#aabbcc"))
+    (should (equal left-mf left-face))))
+
 ;;; ebox-interaction-tests.el ends here

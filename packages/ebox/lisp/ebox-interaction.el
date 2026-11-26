@@ -147,6 +147,40 @@ explicit nil or an inner node's help still blocks it."
           (put-text-property pos next 'ebox-help-echo value string)))
         (setq pos next)))))
 
+(defun ebox--fill-mouse-face (string value)
+  "Put absent `mouse-face' runs in STRING with VALUE.
+Preserve border paint (`ebox-border' side rules, `:overline' top edges and
+`:underline' `:position' bottom edges) from each run's `face' so hovering never
+erases borders."
+  (let ((pos 0) (len (length string))
+        (base-ov-set (and value (plist-member (ebox--face-plist value) :overline))))
+    (while (< pos len)
+      (let* ((next (min (or (next-single-property-change pos 'mouse-face string len) len)
+                        (or (next-single-property-change pos 'face string len) len)
+                        (or (next-single-property-change pos 'ebox-border string len) len)))
+             (props (text-properties-at pos string)))
+        (unless (plist-member props 'mouse-face)
+          (let* ((face (plist-get props 'face))
+                 (hover
+                  (cond
+                   ((null value) nil)
+                   ((plist-get props 'ebox-border)
+                    ;; Side border cells keep their own border paint on hover.
+                    (or face value))
+                   (t
+                    (let* ((ov (and face (ebox--face-attribute face :overline)))
+                           (border-ov (and ov (or (stringp ov) (not base-ov-set)) ov))
+                           (ul (and face (ebox--face-attribute face :underline)))
+                           (border-ul (and (consp ul) (plist-get ul :position) ul))
+                           (res value))
+                      (when border-ov
+                        (setq res (ebox--merge-face-attr res :overline border-ov)))
+                      (when border-ul
+                        (setq res (ebox--merge-face-attr res :underline border-ul)))
+                      res)))))
+            (put-text-property pos next 'mouse-face hover string)))
+        (setq pos next)))))
+
 (defun ebox--decorate-interactive (node line &optional fresh)
   "Return LINE carrying NODE's interaction properties.
 LINE is copied first unless FRESH says the caller owns it.  A hidden node
@@ -158,9 +192,13 @@ paints nothing, so it carries no interaction feedback either."
          (hover-style (and (not hidden) (plist-get inter :hover-style)))
          (hover-content (and (not hidden) (plist-get inter :hover-content))))
     (while props
-      (if (eq (car props) 'help-echo)
-          (ebox--fill-help copy (cadr props))
-        (ebox--fill-property copy (car props) (cadr props)))
+      (cond
+       ((eq (car props) 'help-echo)
+        (ebox--fill-help copy (cadr props)))
+       ((eq (car props) 'mouse-face)
+        (ebox--fill-mouse-face copy (cadr props)))
+       (t
+        (ebox--fill-property copy (car props) (cadr props))))
       (setq props (cddr props)))
     (when (and ebox--current-mount (or hover-style hover-content))
       ;; Pointer feedback needs the pointer's node.  A painted help-echo

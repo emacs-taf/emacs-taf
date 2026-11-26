@@ -1203,6 +1203,10 @@ while keeping heading links active and body links underlined."
                         :follow-scroll nil
                         :follow-scroll-marker nil
                         :follow-scroll-line nil
+                        :resize-anchor nil
+                        :last-canvas-width nil
+                        :fit-pixel-width nil
+                        :fit-char-width nil
                         :asset-timer nil
                         :assets (make-hash-table :test #'equal)
                         :assets-pending (make-hash-table :test #'equal)
@@ -1240,7 +1244,8 @@ while keeping heading links active and body links underlined."
                         :theme-source (etaf-ref (if auto 'frame 'palette)
                                                 :name 'etaf-md-theme-source)
                         :theme-mode (etaf-ref requested :name 'etaf-md-theme-mode)
-                        :width (etaf-ref 92 :name 'etaf-md-width)
+                        :width (etaf-ref (etaf-md--clamp-width 92) :name 'etaf-md-width)
+                        :width-locked (etaf-ref nil :name 'etaf-md-width-locked)
                         :viewport-width (etaf-ref nil :name 'etaf-md-viewport-width)
                         :error (etaf-ref nil :name 'etaf-md-error-text)
                         :buffer nil
@@ -1836,9 +1841,20 @@ mode symbol."
 (defun etaf-md-adjust-width (session delta)
   "Widen SESSION's maximum reading measure by DELTA cells and return it.
 The window may still be narrower than the returned cap, in which case the
-column fills the window."
-  (let ((width (etaf-md--clamp-width
-                (+ (etaf-md--read session :width) delta))))
+column fills the window.  Narrowing binds wide tables and figures to the chosen
+reading measure so every block narrows monotonically alongside prose; widening
+past `etaf-md-width-max' restores automatic wide-table viewport breakout."
+  (let* ((current (etaf-md--read session :width))
+         (effective (if (< delta 0)
+                        (min current (car (etaf-md--page-widths session current)))
+                      current))
+         (raw (+ effective delta))
+         (width (etaf-md--clamp-width raw)))
+    (cond
+     ((< delta 0)
+      (etaf-md--write session :width-locked t))
+     ((and (> delta 0) (> raw etaf-md-width-max))
+      (etaf-md--write session :width-locked nil)))
     (etaf-md--write session :width width)
     width))
 
@@ -2251,6 +2267,7 @@ re-render after a theme switch instead of keeping the faces it first read."
           :rev (etaf-md--read session :appearance-rev)
           :viewport-width (etaf-md--read session :viewport-width)
           :width (etaf-md--read session :width)
+          :width-locked (etaf-md--read session :width-locked)
           :columns (cdr (etaf-md--page-widths
                             session (etaf-md--read session :width)))
           :background (etaf-md--page-background session)
@@ -2275,6 +2292,7 @@ re-render after a theme switch instead of keeping the faces it first read."
     (list :theme (etaf-md--read session :theme)
           :palette (etaf-md--session-palette session)
           :width (car widths)
+          :width-locked (etaf-md--read session :width-locked)
           :figure-width (cdr widths)
           :background (etaf-md--page-background session)
         :dir (plist-get session :dir)

@@ -679,6 +679,26 @@
       "name": "etaf-md-tests-doctor-recommends-prebuilt-native-install",
       "file": "tests/etaf-md-tests.el",
       "purpose": "`etaf-md-doctor' directs users to `M-x etaf-install-native' instead of an unshipped `make native-build' when `typeset-native' is not active."
+    },
+    {
+      "name": "etaf-md-tests-accordion-and-details-lifecycle-and-hover-borders",
+      "file": "tests/etaf-md-tests.el",
+      "purpose": "`:::details' and `:::accordion' close `open=true`/`expand=true' sections cleanly, clamp multi-open single-mode definitions, tolerate empty accordions, and preserve top border paint with distinct hover across dark, light and sepia themes."
+    },
+    {
+      "name": "etaf-md-tests-goto-source-cursor-accuracy",
+      "file": "tests/etaf-md-tests.el",
+      "purpose": "`etaf-md-goto-source' jumps to the exact source line and cursor column after `C-s'/`C-r' or point motion across front matter, inline-formatted words, single-line containers (`:::details', `:::center'), table cells, multiline code blocks and footnotes."
+    },
+    {
+      "name": "etaf-md-tests-narrower-shrinks-tables-monotonically",
+      "file": "tests/etaf-md-tests.el",
+      "purpose": "Narrowing the reading column via `etaf-md-adjust-width' shrinks 4-column and 8-column Markdown tables monotonically alongside prose without reverse jumps or freezing, folds wide tables into stacked cards at narrow widths, and restores wide-table breakout when widened past `etaf-md-width-max'."
+    },
+    {
+      "name": "etaf-md-tests-resize-preserves-scroll-and-source-alignment",
+      "file": "tests/etaf-md-tests.el",
+      "purpose": "Narrowing/widening the reading column and dragging/resizing the preview window width preserve the visible top block in single-window mode and keep preview aligned with the source window's visible line under follow-scroll."
     }
   ]
 }

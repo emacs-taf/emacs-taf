@@ -383,7 +383,7 @@ Each recognized token (`2fr', `20ch', `30%') becomes a flex or width plist."
        ('important :important-soft)
        (_ :quote-bg)))))
 
-(defun etaf-md--toggle-line (env label color command)
+(defun etaf-md--toggle-line (env label color command &optional expanded)
   "Return LABEL painted in COLOR as a focusable disclosure line in ENV.
 COMMAND runs when the line is activated; hover applies strictly to the leaf."
   (let ((hover (etaf-md--hover-fill env 'soft)))
@@ -393,6 +393,7 @@ COMMAND runs when the line is activated; hover applies strictly to the leaf."
                                 (append
                                  (list :color color :font-weight 'bold
                                        :role 'button :tab-index 0 :pointer 'hand
+                                       :aria-expanded (if expanded t 'false)
                                        :help-echo "点击展开或收起"
                                        :on-press command)
                                  (when hover
@@ -419,23 +420,25 @@ COMMAND runs when the line is activated; hover applies strictly to the leaf."
                    (etaf-md-surface env 'quote))))
          (bar-w (or (etaf-md-attr env :border-left-width) '(px 3))))
     (etaf-node
-     'box
+     'column
      (list :width 'stretch
-           :padding '((lh 1) (ch 2))
+           :item-gap '(lh 0)
+           :padding '((lh 0) (ch 2))
            :background-color bg
            :border-left (list bar-w 'solid (etaf-md-accent env accent)))
-     (append
-      (list
-       (if collapsible
-           (etaf-md--toggle-line
-            env
-            (concat (if open "▾ " "▸ ") title)
-            (etaf-md-accent env accent)
-            (lambda () (etaf-md-set-block-state env :open (not open))))
-         (etaf-node 'text (list :color (etaf-md-accent env accent)
-                                :font-weight 'bold)
-                    (list title))))
-      (when open (list (etaf-md-content env)))))))
+     (delq nil
+           (list
+            (if collapsible
+                (etaf-md--toggle-line
+                 env
+                 (concat (if open "▾ " "▸ ") title)
+                 (etaf-md-accent env accent)
+                 (lambda () (etaf-md-set-block-state env :open (not open)))
+                 open)
+              (etaf-node 'text (list :color (etaf-md-accent env accent)
+                                     :font-weight 'bold)
+                         (list title)))
+            (when open (etaf-md-content env)))))))
 
 (dolist (type '(note info tip important warning caution danger))
   (etaf-md--define-shipped type
@@ -446,6 +449,10 @@ COMMAND runs when the line is activated; hover applies strictly to the leaf."
 
 ;;; A single fold and the alignment containers
 
+(defun etaf-md--non-blank-children-p (nodes)
+  "Return non-nil when NODES contains at least one non-blank block."
+  (cl-some (lambda (node) (not (eq (plist-get node :type) 'blank))) nodes))
+
 (etaf-md--define-shipped 'details
   :name "details"
   :summary "一整块的折叠区，默认收起"
@@ -455,17 +462,20 @@ COMMAND runs when the line is activated; hover applies strictly to the leaf."
   (lambda (env)
     (let* ((block (etaf-md--block-identity env))
            (title (or (etaf-md-attr env :title) "详情"))
-           (open (etaf-md-block-state env :open (etaf-md-attr env :open))))
+           (open (etaf-md-block-state env :open (etaf-md-attr env :open)))
+           (has-body (etaf-md--non-blank-children-p (etaf-md-children env))))
       (etaf-view
         (etaf-accordion
          :items (list (list :key 0
                             :ref (intern (format "etaf-md-details-%s" block))
                             :label title
-                            :content (lambda () (etaf-md-content env))))
+                            :content (if has-body
+                                         (lambda () (etaf-md-content env))
+                                       "")))
          :open (when open '(0))
          :multiple t
          :on-toggle (lambda (opened)
-                      (etaf-md-set-block-state env :open opened)))))))
+                      (etaf-md-set-block-state env :open (and opened t))))))))
 
 (defun etaf-md--align-view (env)
   "Paint ENV's body with the alignment its own container name asks for."
@@ -1314,29 +1324,45 @@ sits flush under the tab bar without double boxes."
                                    most-positive-fixnum))
                              #'<
                              (etaf-md-children env)))
-                 (count (length collapses))
-                 (all (number-sequence 0 (1- count))))
-            (etaf-view
-             (etaf-accordion
-              :items (seq-map-indexed
-                      (lambda (collapse index)
-                        (list :key index
-                              :ref (intern (format "etaf-md-accordion-%s-%d"
-                                                   block index))
-                              :label (or (etaf-md-attr env :title collapse) "")
-                              :content (lambda () (etaf-md--child-view env collapse))))
-                      collapses)
-              :open (or (etaf-md-block-state env :open)
-                        (if expand
-                            all
-                          (seq-filter
-                           (lambda (index)
-                             (etaf-md-attr env :open (nth index collapses)))
-                           all)))
-              ;; Opening every fold needs the group to allow more than one.
-              :multiple (or expand (not (etaf-md-attr env :accordion)))
-              :on-toggle (lambda (open)
-                           (etaf-md-set-block-state env :open open)))))))
+                 (count (length collapses)))
+            (if (zerop count)
+                (etaf-node 'text (list :color (etaf-md--muted env)) '("（空折叠组）"))
+              (let* ((all (number-sequence 0 (1- count)))
+                     ;; Opening every fold needs the group to allow more than one.
+                     (multiple (or expand (not (etaf-md-attr env :accordion))))
+                     (raw-default (if expand
+                                      all
+                                    (seq-filter
+                                     (lambda (index)
+                                       (etaf-md-attr env :open (nth index collapses)))
+                                     all)))
+                     (default-open (if (and (not multiple) (cdr raw-default))
+                                       (list (car raw-default))
+                                     raw-default))
+                     (stored (etaf-md-block-state env :open default-open))
+                     (valid-open (seq-filter (lambda (k) (and (integerp k) (< k count) (>= k 0)))
+                                             (if (listp stored) stored nil)))
+                     (open (if (and (not multiple) (cdr valid-open))
+                               (list (car valid-open))
+                             valid-open)))
+                (etaf-view
+                 (etaf-accordion
+                  :items (seq-map-indexed
+                          (lambda (collapse index)
+                            (let ((has-body (etaf-md--non-blank-children-p
+                                             (etaf-md-children env collapse))))
+                              (list :key index
+                                    :ref (intern (format "etaf-md-accordion-%s-%d"
+                                                         block index))
+                                    :label (or (etaf-md-attr env :title collapse) "")
+                                    :content (if has-body
+                                                 (lambda () (etaf-md--child-view env collapse))
+                                               ""))))
+                          collapses)
+                  :open open
+                  :multiple multiple
+                  :on-toggle (lambda (next)
+                               (etaf-md-set-block-state env :open next)))))))))
 
 ;;; Edge containers
 

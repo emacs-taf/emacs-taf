@@ -1680,5 +1680,53 @@
           (setq bol (1+ bol)))
         (should-not has-img)))))
 
+(ert-deftest etaf-org-tests-accordion-and-details-edge-cases-and-hover-borders ()
+  "Org details and accordion blocks clamp multi-open single-mode definitions, close cleanly and preserve hover borders."
+  (let ((doc (concat
+              "#+begin_details :title \"OrgDetails\" :open t\n"
+              "OrgDetailsBody.\n"
+              "#+end_details\n\n"
+              "#+begin_accordion\n"
+              "#+begin_collapse :title \"OrgAccOne\" :open t\n"
+              "OrgAccOneBody.\n"
+              "#+end_collapse\n"
+              "#+begin_collapse :title \"OrgAccTwo\" :open t\n"
+              "OrgAccTwoBody.\n"
+              "#+end_collapse\n"
+              "#+end_accordion\n\n"
+              "#+begin_accordion\n"
+              "#+end_accordion\n")))
+    (dolist (theme '(dark light sepia))
+      (let* ((session (etaf-org-create :text doc :theme theme))
+             (buf (generate-new-buffer " *etaf-org-collapse-test*")))
+        (unwind-protect
+            (progn
+              (etaf-mount buf (etaf-org-view session))
+              (with-current-buffer buf
+                (let ((plain (buffer-substring-no-properties (point-min) (point-max))))
+                  (should (string-match-p "OrgDetailsBody" plain))
+                  (should (string-match-p "OrgAccOneBody" plain))
+                  (should-not (string-match-p "OrgAccTwoBody" plain))
+                  (should (string-match-p "空折叠组" plain))
+                  (let* ((pos (1+ (string-match "OrgDetails" plain)))
+                         (mf (get-text-property pos 'mouse-face))
+                         (border (cdr (assq :border (cdr (assq theme etaf-org-themes)))))
+                         (panel (cdr (assq :panel (cdr (assq theme etaf-org-themes))))))
+                    (should mf)
+                    (should (equal (plist-get mf :overline) border))
+                    (should-not (string-equal-ignore-case
+                                 (or (plist-get mf :background) "") panel)))
+                  (goto-char (point-min))
+                  (search-forward "OrgAccOne")
+                  (goto-char (match-beginning 0))
+                  (call-interactively (key-binding (kbd "RET")))
+                  (should-not (string-match-p "OrgAccOneBody"
+                                              (buffer-substring-no-properties
+                                               (point-min) (point-max)))))))
+          (when-let* ((rt (etaf-runtime-for-buffer buf)))
+            (etaf-unmount rt))
+          (when (buffer-live-p buf)
+            (kill-buffer buf)))))))
+
 (provide 'etaf-org-tests)
 ;;; etaf-org-tests.el ends here

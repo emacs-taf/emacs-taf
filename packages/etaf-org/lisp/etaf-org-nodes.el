@@ -680,11 +680,17 @@ Recognizes `2fr', `20ch', and `30%' tokens."
   :view (lambda (env)
           (let* ((title (or (etaf-org-attr env :title) "详情"))
                  (open (etaf-org-block-state env :open (etaf-org-attr env :open)))
+                 (slot-key (or (plist-get (etaf-org-env-slot env) :key)
+                               (sxhash title)))
+                 (has-body (and (etaf-org-children env) t))
                  (acc (etaf-node
                        'etaf-accordion
                        (list :items (list (list :key 0
+                                                :ref (intern (format "etaf-org-details-%s" slot-key))
                                                 :label title
-                                                :content (lambda () (etaf-org-content env))))
+                                                :content (if has-body
+                                                             (lambda () (etaf-org-content env))
+                                                           "")))
                              :open (when open '(0))
                              :multiple t
                              :on-toggle (lambda (opened)
@@ -1632,33 +1638,48 @@ Recognizes `2fr', `20ch', and `30%' tokens."
                  (items (seq-sort-by
                          (lambda (c) (or (etaf-org-attr env :index c) most-positive-fixnum))
                          #'< raw-items))
-                 (count (length items))
-                 (all (if (> count 0) (number-sequence 0 (1- count)) nil))
-                 (expand-all (etaf-org-attr env :expand))
-                 (single (etaf-org-attr env :accordion))
-                 (default-open
-                  (if expand-all all
-                    (cl-loop for it in items for i from 0
-                             when (etaf-org-attr env :open it) collect i)))
-                 (open-set (etaf-org-block-state env :open default-open)))
-            (if (null items)
+                 (count (length items)))
+            (if (zerop count)
                 (etaf-node 'text (list :color (etaf-org--muted env)) '("（空折叠组）"))
-              (etaf-node
-               'etaf-accordion
-               (list :items (cl-loop for it in items for i from 0
-                                     collect
-                                     (let ((node it))
-                                       (list :key i
-                                             :label (or (etaf-org-attr env :title node)
-                                                        (format "项目 %d" (1+ i)))
-                                             :content (lambda ()
-                                                        (etaf-org-content
-                                                         (etaf-org--env-for-node env node))))))
-                     :open open-set
-                     :multiple (or expand-all (not single))
-                     :on-toggle (lambda (opened)
-                                  (etaf-org-set-block-state env :open opened)))
-               nil)))))
+              (let* ((all (number-sequence 0 (1- count)))
+                     (expand-all (etaf-org-attr env :expand))
+                     (single (etaf-org-attr env :accordion))
+                     (multiple (or expand-all (not single)))
+                     (slot-key (or (plist-get (etaf-org-env-slot env) :key)
+                                   (sxhash items)))
+                     (raw-default
+                      (if expand-all all
+                        (cl-loop for it in items for i from 0
+                                 when (etaf-org-attr env :open it) collect i)))
+                     (default-open (if (and (not multiple) (cdr raw-default))
+                                       (list (car raw-default))
+                                     raw-default))
+                     (stored (etaf-org-block-state env :open default-open))
+                     (valid-open (seq-filter (lambda (k) (and (integerp k) (>= k 0) (< k count)))
+                                             (if (listp stored) stored nil)))
+                     (open-set (if (and (not multiple) (cdr valid-open))
+                                   (list (car valid-open))
+                                 valid-open)))
+                (etaf-node
+                 'etaf-accordion
+                 (list :items (cl-loop for it in items for i from 0
+                                       collect
+                                       (let* ((node it)
+                                              (cenv (etaf-org--env-for-node env node))
+                                              (has-body (and (etaf-org-children cenv) t)))
+                                         (list :key i
+                                               :ref (intern (format "etaf-org-accordion-%s-%d"
+                                                                    slot-key i))
+                                               :label (or (etaf-org-attr env :title node)
+                                                          (format "项目 %d" (1+ i)))
+                                               :content (if has-body
+                                                            (lambda () (etaf-org-content cenv))
+                                                          ""))))
+                       :open open-set
+                       :multiple multiple
+                       :on-toggle (lambda (opened)
+                                    (etaf-org-set-block-state env :open opened)))
+                 nil))))))
 
 (etaf-org--define-shipped 'swiper
   :name "swiper"

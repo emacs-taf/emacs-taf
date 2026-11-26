@@ -1442,6 +1442,11 @@
       "name": "etaf-ui-svg-stage-composites-only-overlapping-tiles-and-falls-back",
       "file": "tests/etaf-ui-animation-tests.el",
       "purpose": "SVG stage composites sprites onto overlapped tiles, dispatches tile activation and falls back to cell text when non-graphic."
+    },
+    {
+      "name": "etaf-ui-accordion-compact-borders-visible-hover-and-empty-body",
+      "file": "tests/etaf-ui-modern-tests.el",
+      "purpose": "Accordion headers stay compact with primary ink, preserve border overline/underline under visible theme-derived hover in dark and light palettes, and omit hollow body boxes for empty content."
     }
   ]
 }

@@ -1503,13 +1503,13 @@ band is then rebuilt as one step from the page toward its ink."
 (defun etaf-ui-markdown--table-compact-widths (weights avail)
   "Return per-column widths summing to `(- AVAIL 2)' for compact grid layout.
 Returns nil when AVAIL cannot fit every column with at least a minimal readable
-width (4 cells of content plus compact 1ch side padding and hairline border),
+width (6 cells of content plus compact 1ch side padding and hairline border),
 signaling that the table should fall back to stacked record cards."
   (let* ((columns (length weights))
          (inner-budget (- avail 2))
          (chrome 3) ; 1ch left pad + 1ch right pad + 1ch border
          (min-cols (mapcar (lambda (w)
-                             (+ chrome (min (max 2 (or w 2)) 4)))
+                             (+ chrome (min (max 2 (or w 2)) 6)))
                            weights))
          (min-sum (apply #'+ min-cols)))
     (when (and (> columns 0) (<= min-sum inner-budget))

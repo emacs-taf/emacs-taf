@@ -74,6 +74,8 @@ basename never overwrite or reuse each other's preview."
              (equal (etaf-md--canonical-file sfile) canonical)))
          (buffer-list)))))
 
+(defvar isearch-string)
+(defvar isearch-case-fold-search)
 (declare-function etaf-md--live-refresh "etaf-md-live" (session text &optional dirty-span live-p))
 (declare-function etaf-md-assets--compute-symbol "etaf-md-assets" (attrs &optional session))
 (declare-function etaf-md-assets--safe-path "etaf-md-assets" (session relpath))
@@ -172,45 +174,408 @@ two are both light."
     (etaf-md-refresh session)
     (message "Reloaded %s" (etaf-md--read session :title))))
 
+(defconst etaf-md--preview-border-re "[│┃▎▌┌┐└┘├┤┬┴┼─]"
+  "Regexp matching decorative box/table border characters in preview lines.")
+
+(defconst etaf-md--preview-chrome-prefix-re
+  "\\`[›⌄▸▾▶▼•◦▪☐☑✓✕✗●○◉★☆↩⧉]+[ \t]*"
+  "Regexp matching rendered UI prefixes that do not appear verbatim in source.")
+
+(defun etaf-md--preview-clean-segment (line col)
+  "Extract the cleaned preview text segment around COL in LINE.
+Returns `(TEXT . OFFSET)' where OFFSET is the 0-based cursor position inside
+TEXT, or nil when LINE carries only borders or whitespace."
+  (let* ((len (length line))
+         (c (max 0 (min len col)))
+         (beg c)
+         (end c))
+    ;; Isolate the cell/pane around C bounded by box-drawing borders so table
+    ;; cells and line-numbered code rows match their own column cleanly.
+    (while (and (> beg 0)
+                (not (string-match-p etaf-md--preview-border-re
+                                     (substring line (1- beg) beg))))
+      (setq beg (1- beg)))
+    (while (and (< end len)
+                (not (string-match-p etaf-md--preview-border-re
+                                     (substring line end (1+ end)))))
+      (setq end (1+ end)))
+    (let* ((raw (substring line beg end))
+           (rel (- c beg)))
+      ;; If cursor sits on a border or in outer centering margin spaces, scan
+      ;; right (then left) for the first non-blank text segment on the line.
+      (when (string-blank-p raw)
+        (let ((scan end)
+              (found nil))
+          (while (and (< scan len) (null found))
+            (if (string-match-p etaf-md--preview-border-re
+                                (substring line scan (1+ scan)))
+                (setq scan (1+ scan))
+              (let ((s-beg scan))
+                (while (and (< scan len)
+                            (not (string-match-p etaf-md--preview-border-re
+                                                 (substring line scan (1+ scan)))))
+                  (setq scan (1+ scan)))
+                (let ((piece (substring line s-beg scan)))
+                  (unless (string-blank-p piece)
+                    (setq raw piece rel 0 found t))))))
+          (unless found
+            (let ((lscan beg))
+              (while (and (> lscan 0) (null found))
+                (if (string-match-p etaf-md--preview-border-re
+                                    (substring line (1- lscan) lscan))
+                    (setq lscan (1- lscan))
+                  (let ((s-end lscan))
+                    (while (and (> lscan 0)
+                                (not (string-match-p etaf-md--preview-border-re
+                                                     (substring line (1- lscan) lscan))))
+                      (setq lscan (1- lscan)))
+                    (let ((piece (substring line lscan s-end)))
+                      (unless (string-blank-p piece)
+                        (setq raw piece rel (length piece) found t))))))))))
+      (unless (string-blank-p raw)
+        ;; Trim leading/trailing whitespace and UI chrome while preserving rel.
+        (let ((seg raw)
+              (off rel))
+          (when (string-match "\\`[ \t]+" seg)
+            (let ((n (match-end 0)))
+              (setq seg (substring seg n)
+                    off (max 0 (- off n)))))
+          (when (string-match "[ \t]+\\'" seg)
+            (setq seg (substring seg 0 (match-beginning 0))
+                  off (min (length seg) off)))
+          (when (string-match etaf-md--preview-chrome-prefix-re seg)
+            (let ((n (match-end 0)))
+              (setq seg (substring seg n)
+                    off (max 0 (- off n)))))
+          (when (string-match "[ \t]*↩[ \t]*\\'" seg)
+            (setq seg (substring seg 0 (match-beginning 0))
+                  off (min (length seg) off)))
+          (unless (string-empty-p seg)
+            (cons seg (max 0 (min (length seg) off)))))))))
+
+(defun etaf-md--push-anchor-candidate (candidates seen kind value offset &optional extra)
+  "Push candidate `(KIND VALUE OFFSET . EXTRA)' onto CANDIDATES if unseen."
+  (when (and (stringp value)
+             (not (string-blank-p value))
+             (or (eq kind :regex)
+                 (>= (length value) 2)
+                 (and (= (length value) 1)
+                      (>= (char-width (aref value 0)) 2))))
+    (let ((key (list kind value offset)))
+      (unless (gethash key seen)
+        (puthash key t seen)
+        (push (if extra
+                  (list kind value offset extra)
+                (list kind value offset))
+              candidates))))
+  candidates)
+
+(defun etaf-md--add-segment-windows (candidates seen seg rel)
+  "Add prioritized literal window candidates from SEG around REL."
+  (let* ((len (length seg))
+         (add-slice
+          (lambda (s e target)
+            (when (< s e)
+              (let* ((raw (substring seg s e))
+                     (off (- target s)))
+                (when (string-match "\\`[ \t]+" raw)
+                  (let ((n (match-end 0)))
+                    (setq raw (substring raw n)
+                          off (max 0 (- off n)))))
+                (when (string-match "[ \t]+\\'" raw)
+                  (setq raw (substring raw 0 (match-beginning 0))
+                        off (min (length raw) off)))
+                (setq candidates
+                      (etaf-md--push-anchor-candidate
+                       candidates seen :literal raw
+                       (max 0 (min (length raw) off)))))))))
+    (when (<= len 64)
+      (setq candidates
+            (etaf-md--push-anchor-candidate candidates seen :literal seg rel)))
+    (funcall add-slice (max 0 (- rel 14)) (min len (+ rel 14)) rel)
+    (funcall add-slice (max 0 (- rel 14)) rel rel)
+    (funcall add-slice rel (min len (+ rel 14)) rel)
+    candidates))
+
+(defun etaf-md--token-spans (seg)
+  "Return list of `(START END TEXT)' for non-whitespace tokens in SEG."
+  (let ((pos 0)
+        (len (length seg))
+        (spans nil))
+    (while (and (< pos len)
+                (string-match "[^ \t]+" seg pos))
+      (push (list (match-beginning 0) (match-end 0) (match-string 0 seg)) spans)
+      (setq pos (match-end 0)))
+    (nreverse spans)))
+
+(defun etaf-md--preview-isearch-hit (line col)
+  "Return `(TEXT . OFFSET)' when `isearch-string' sits adjacent to COL in LINE."
+  (when (and (boundp 'isearch-string)
+             (stringp isearch-string)
+             (> (length isearch-string) 0)
+             (<= (length isearch-string) (length line)))
+    (let* ((n (length isearch-string))
+           (fold (if (boundp 'isearch-case-fold-search)
+                     isearch-case-fold-search
+                   case-fold-search))
+           (eq-p (lambda (s)
+                   (if fold
+                       (string= (downcase s) (downcase isearch-string))
+                     (string= s isearch-string)))))
+      (cond
+       ;; `C-s' leaves point immediately after the matched string.
+       ((and (>= col n)
+             (funcall eq-p (substring line (- col n) col)))
+        (cons (substring line (- col n) col) n))
+       ;; `C-r' leaves point immediately before the matched string.
+       ((and (<= (+ col n) (length line))
+             (funcall eq-p (substring line col (+ col n))))
+        (cons (substring line col (+ col n)) 0))))))
+
+(defun etaf-md--preview-anchor-candidates (preview-buf pos)
+  "Return ordered source-search anchor candidates around POS in PREVIEW-BUF."
+  (with-current-buffer preview-buf
+    (save-excursion
+      (goto-char (max (point-min) (min (point-max) pos)))
+      (let* ((lbeg (line-beginning-position))
+             (lend (line-end-position))
+             (line (buffer-substring-no-properties lbeg lend))
+             (col (- (point) lbeg))
+             (cleaned (etaf-md--preview-clean-segment line col))
+             (isearch-hit (etaf-md--preview-isearch-hit line col))
+             (seen (make-hash-table :test #'equal))
+             (candidates nil))
+        (when cleaned
+          (let* ((seg (car cleaned))
+                 (rel (cdr cleaned))
+                 (len (length seg)))
+            ;; 1. Exact full segment & local windows around cursor.
+            (setq candidates (etaf-md--add-segment-windows candidates seen seg rel))
+            ;; 2. Active C-s / C-r match adjacent to point (handles inline
+            ;;    markup such as **bold** or `code` breaking a longer window).
+            (when isearch-hit
+              (setq candidates
+                    (etaf-md--push-anchor-candidate
+                     candidates seen :literal (car isearch-hit) (cdr isearch-hit))))
+            ;; 3. Inline-markup-tolerant regex across up to 4 tokens near rel.
+            (let* ((spans (etaf-md--token-spans seg))
+                   (count (length spans)))
+              (when (>= count 2)
+                (let* ((focus-idx 0))
+                  (cl-loop for sp in spans
+                           for idx from 0
+                           when (<= (nth 0 sp) rel)
+                           do (setq focus-idx idx))
+                  (let* ((start-idx (max 0 (min (- count 2) (1- focus-idx))))
+                         (end-idx (min count (+ start-idx 4)))
+                         (slice (cl-subseq spans start-idx end-idx))
+                         (focus-local (- focus-idx start-idx))
+                         (focus-span (nth focus-local slice))
+                         (focus-off (max 0 (min (- (nth 1 focus-span) (nth 0 focus-span))
+                                                (- rel (nth 0 focus-span)))))
+                         (parts
+                          (cl-loop for sp in slice
+                                   for i from 0
+                                   for q = (regexp-quote (nth 2 sp))
+                                   collect (if (= i focus-local)
+                                               (concat "\\(" q "\\)")
+                                             q)))
+                         (pattern (mapconcat #'identity parts "[ \t*_~`\\[\\]!$=]\\{0,12\\}")))
+                    (setq candidates
+                          (etaf-md--push-anchor-candidate
+                           candidates seen :regex pattern focus-off 1))))))
+            ;; 4. Stripped variants: stacked table card "Header · Value",
+            ;;    footnote numbers "1. ..." / "[1] ...", and code line numbers.
+            (when (string-match " · " seg)
+              (let ((split-pos (match-beginning 0))
+                    (after-pos (match-end 0)))
+                (if (>= rel split-pos)
+                    (setq candidates
+                          (etaf-md--add-segment-windows
+                           candidates seen
+                           (substring seg after-pos)
+                           (max 0 (- rel after-pos))))
+                  (setq candidates
+                        (etaf-md--add-segment-windows
+                         candidates seen (substring seg 0 split-pos) rel)))))
+            (dolist (prefix-re '("\\`\\(?:\\[[0-9A-Za-z_-]+\\]\\|[0-9]+\\.\\)[ \t]+"
+                                 "\\`[0-9]+[ \t]+"))
+              (when (string-match prefix-re seg)
+                (let* ((n (match-end 0))
+                       (stripped (substring seg n))
+                       (srel (max 0 (- rel n))))
+                  (unless (string-empty-p stripped)
+                    (setq candidates
+                          (etaf-md--add-segment-windows candidates seen stripped srel))))))
+            ;; 5. Immediate token/word and short slices around cursor.
+            (let ((word-re "[[:alnum:]_@/.:-]+\\|\\cC+"))
+              (let ((pos-i 0)
+                    (spanning nil)
+                    (left-tok nil)
+                    (right-tok nil))
+                (while (and (< pos-i len) (string-match word-re seg pos-i))
+                  (let ((tb (match-beginning 0))
+                        (te (match-end 0))
+                        (tw (match-string 0 seg)))
+                    (cond
+                     ((and (<= tb rel) (<= rel te))
+                      (setq spanning (cons tw (- rel tb))))
+                     ((< te rel)
+                      (setq left-tok (cons tw (length tw))))
+                     ((and (> tb rel) (null right-tok))
+                      (setq right-tok (cons tw 0)))))
+                  (setq pos-i (match-end 0)))
+                (dolist (hit (list spanning left-tok right-tok))
+                  (when hit
+                    (setq candidates
+                          (etaf-md--push-anchor-candidate
+                           candidates seen :literal (car hit) (cdr hit)))))))
+            (dolist (w '(6 4 2))
+              (when (>= rel w)
+                (let ((sub (string-trim (substring seg (- rel w) rel))))
+                  (setq candidates
+                        (etaf-md--push-anchor-candidate
+                         candidates seen :literal sub (length sub)))))
+              (when (<= (+ rel w) len)
+                (let ((sub (string-trim (substring seg rel (+ rel w)))))
+                  (setq candidates
+                        (etaf-md--push-anchor-candidate
+                         candidates seen :literal sub 0)))))
+            ;; 6. Line-start and longest-token fallback (e.g. cursor at margin).
+            (let ((head (string-trim (substring seg 0 (min len 24)))))
+              (setq candidates
+                    (etaf-md--push-anchor-candidate candidates seen :literal head 0)))
+            (let ((longest nil))
+              (dolist (sp (etaf-md--token-spans seg))
+                (when (or (null longest) (> (length (nth 2 sp)) (length longest)))
+                  (setq longest (nth 2 sp))))
+              (when longest
+                (setq candidates
+                      (etaf-md--push-anchor-candidate candidates seen :literal longest 0))))))
+        (when (and (null cleaned) isearch-hit)
+          (setq candidates
+                (etaf-md--push-anchor-candidate
+                 candidates seen :literal (car isearch-hit) (cdr isearch-hit))))
+        (nreverse candidates)))))
+
+(defun etaf-md--block-content-end (preview-buf pbeg pend)
+  "Return end pos in [PBEG, PEND] of PREVIEW-BUF without blank margins."
+  (with-current-buffer preview-buf
+    (save-excursion
+      (let* ((lo (max (point-min) (min (point-max) pbeg)))
+             (hi (max lo (min (point-max) pend)))
+             (content-end hi))
+        ;; Exclude trailing blank margin rows contributed by `:margin-bottom'.
+        (goto-char content-end)
+        (while (and (> content-end lo)
+                    (let ((lb (max lo (line-beginning-position))))
+                      (string-blank-p
+                       (buffer-substring-no-properties lb content-end))))
+          (let ((prev (max lo (1- (line-beginning-position)))))
+            (if (< prev content-end)
+                (progn (setq content-end prev)
+                       (goto-char content-end))
+              (setq content-end lo))))
+        content-end))))
+
+(defun etaf-md--preview-line-frac (preview-buf pbeg pend pos)
+  "Return 0-based vertical fraction [0.0, 1.0] of POS inside [PBEG, PEND].
+Trims trailing blank margin lines from PEND and counts from line beginnings so
+a mid-line cursor on line 0 always yields 0.0 instead of stepping onto line 1."
+  (with-current-buffer preview-buf
+    (save-excursion
+      (let* ((lo (max (point-min) (min (point-max) pbeg)))
+             (content-end (etaf-md--block-content-end preview-buf lo pend))
+             (clamped (max lo (min content-end pos)))
+             (start-bol (progn (goto-char lo) (line-beginning-position)))
+             (cur-bol (progn (goto-char clamped) (line-beginning-position)))
+             (end-bol (progn (goto-char content-end) (line-beginning-position)))
+             (total (count-lines start-bol end-bol))
+             (offset (count-lines start-bol cur-bol)))
+        (if (<= total 0)
+            0.0
+          (min 1.0 (/ (float offset) (float total))))))))
+
 (defun etaf-md--source-offset-at-point (session preview-buf pos)
-  "Return the 0-based source char offset matching POS in PREVIEW-BUF, or nil.
-Uses each block's host bounds and interpolates proportionally by line within
-tall blocks so jumping back from inside a long code block or table lands on
-the matching line."
+  "Return a source location plist matching POS in PREVIEW-BUF, or nil.
+Resolves front matter, body blocks and footnotes cleanly, computes a 0-based
+line fraction without mid-line off-by-one drift, and extracts cursor text
+anchors so jumping after `C-s' / `C-r' or point motion lands on the exact
+source line and column."
   (when-let* ((runtime (and (buffer-live-p preview-buf)
                             (etaf-runtime-for-buffer preview-buf)))
               (entries (plist-get session :entries)))
-    (let ((best-entry nil)
+    (let ((first-entry nil)
+          (first-bounds nil)
+          (last-entry nil)
+          (last-bounds nil)
+          (best-entry nil)
           (best-bounds nil)
           (prev-entry nil)
           (prev-bounds nil))
       (dolist (entry entries)
-        (unless best-entry
-          (when-let* ((ref (plist-get entry :ref))
-                      (bounds (etaf-host-ref-bounds runtime ref))
-                      (beg (car bounds))
-                      (end (cdr bounds)))
+        (when-let* ((ref (plist-get entry :ref))
+                    (bounds (etaf-host-ref-bounds runtime ref))
+                    (beg (car bounds))
+                    (end (cdr bounds)))
+          (unless first-entry
+            (setq first-entry entry first-bounds bounds))
+          (setq last-entry entry last-bounds bounds)
+          (unless best-entry
             (cond
              ((and (<= beg pos) (<= pos end))
               (setq best-entry entry best-bounds bounds))
              ((< beg pos)
               (setq prev-entry entry prev-bounds bounds))))))
-      (let* ((entry (or best-entry prev-entry (car entries)))
-             (bounds (or best-bounds prev-bounds))
-             (block (and entry (plist-get entry :block)))
-             (src-beg (and block (plist-get block :begin)))
-             (src-end (and block (plist-get block :end))))
-        (when (and (integerp src-beg) (integerp src-end))
-          (if (and best-bounds (> (cdr bounds) (car bounds)) (> src-end src-beg))
-              (let* ((pbeg (car bounds))
-                     (pend (cdr bounds))
-                     (p-lines (with-current-buffer preview-buf
-                                (max 1 (count-lines pbeg pend))))
-                     (p-offset (with-current-buffer preview-buf
-                                 (count-lines pbeg (max pbeg (min pend pos)))))
-                     (frac (min 1.0 (/ (float p-offset) (float p-lines)))))
-                (list src-beg src-end frac))
-            (list src-beg src-end 0.0)))))))
+      (let* ((candidates (etaf-md--preview-anchor-candidates preview-buf pos))
+             (first-block (and first-entry (plist-get first-entry :block)))
+             (first-src-beg (and first-block (plist-get first-block :begin)))
+             (doc (etaf-md--read session :document))
+             (has-footnotes (and (listp doc) (plist-get doc :footnotes))))
+        (cond
+         ;; Cursor in front matter / hero header before the first body block.
+         ((and first-bounds (< pos (car first-bounds))
+               (integerp first-src-beg) (> first-src-beg 0))
+          (list :begin 0
+                :end first-src-beg
+                :frac (etaf-md--preview-line-frac
+                       preview-buf
+                       (with-current-buffer preview-buf (point-min))
+                       (car first-bounds) pos)
+                :zone 'front-matter
+                :candidates candidates))
+         ;; Cursor inside the footnotes section rendered after the last block.
+         ((and last-bounds (> pos (cdr last-bounds)) has-footnotes)
+          (let* ((lb (plist-get last-entry :block))
+                 (lbeg (or (and lb (plist-get lb :begin)) 0))
+                 (lend (or (and lb (plist-get lb :end)) lbeg)))
+            (list :begin 0
+                  :end nil
+                  :frac (etaf-md--preview-line-frac
+                         preview-buf (cdr last-bounds)
+                         (with-current-buffer preview-buf (point-max)) pos)
+                  :zone 'footnote
+                  :fallback-begin lbeg
+                  :fallback-end lend
+                  :candidates candidates)))
+         ;; Cursor inside or near a body block.
+         (t
+          (let* ((entry (or best-entry prev-entry first-entry))
+                 (bounds (or best-bounds prev-bounds first-bounds))
+                 (block (and entry (plist-get entry :block)))
+                 (src-beg (and block (plist-get block :begin)))
+                 (src-end (and block (plist-get block :end))))
+            (when (and (integerp src-beg) (integerp src-end))
+              (let ((frac (if (and best-bounds (> (cdr bounds) (car bounds))
+                                   (> src-end src-beg))
+                              (etaf-md--preview-line-frac
+                               preview-buf (car bounds) (cdr bounds) pos)
+                            0.0)))
+                (list :begin src-beg
+                      :end src-end
+                      :frac frac
+                      :zone 'block
+                      :candidates candidates))))))))))
 
 (defun etaf-md--source-buffer-for (session)
   "Return a live source buffer for SESSION (opening its file if needed), or nil."
@@ -221,23 +586,109 @@ the matching line."
                       (and (file-readable-p file)
                            (find-file-noselect file)))))))
 
+(defun etaf-md--in-footnote-def-p ()
+  "Return non-nil when point in the current buffer lies in a footnote def."
+  (save-excursion
+    (beginning-of-line)
+    (cond
+     ((looking-at-p "^\\[\\^[^]\n]+\\]:") t)
+     ((looking-at-p "^[ \t]+[^ \t\n]")
+      (let ((found nil)
+            (stop nil))
+        (while (and (not stop) (zerop (forward-line -1)))
+          (cond
+           ((looking-at-p "^\\[\\^[^]\n]+\\]:")
+            (setq found t stop t))
+           ((not (looking-at-p "^[ \t]+"))
+            (setq stop t))))
+        found))
+     (t nil))))
+
+(defun etaf-md--search-nearest-in-range (cand b e est-pos &optional footnote-only-p)
+  "Find the occurrence of CAND inside [B, E] closest to EST-POS, or nil."
+  (let* ((kind (nth 0 cand))
+         (pattern (nth 1 cand))
+         (offset (nth 2 cand))
+         (group (or (nth 3 cand) 0))
+         (regex-p (eq kind :regex))
+         (best nil)
+         (best-dist most-positive-fixnum))
+    (catch 'done
+      (dolist (fold '(nil t))
+        (let ((case-fold-search fold))
+          (save-excursion
+            (goto-char b)
+            (while (if regex-p
+                       (re-search-forward pattern e t)
+                     (search-forward pattern e t))
+              (let ((mb (match-beginning group))
+                    (me (match-end group)))
+                (when (and mb me
+                           (or (not footnote-only-p)
+                               (save-excursion
+                                 (goto-char mb)
+                                 (etaf-md--in-footnote-def-p))))
+                  (let* ((target (+ mb (min offset (- me mb))))
+                         (dist (abs (- target est-pos))))
+                    (when (< dist best-dist)
+                      (setq best target best-dist dist)))))
+              ;; Guard against zero-length regex matches.
+              (when (= (match-beginning 0) (match-end 0))
+                (forward-char 1))))
+          (when best
+            (throw 'done best)))))
+    best))
+
 (defun etaf-md--target-pos-in-source (source-buf loc)
-  "Return the 1-based line-start position in SOURCE-BUF corresponding to LOC."
+  "Return the 1-based position in SOURCE-BUF corresponding to LOC.
+Prefers exact cursor text anchors inside the block's source range (disambiguated
+by proximity to the 0-based line estimate), falling back to the line estimate
+when point rests on non-textual decoration."
   (with-current-buffer source-buf
     (if (null loc)
         (point-min)
-      (pcase-let* ((`(,src-beg ,src-end ,frac) loc)
-                   (pmin (point-min))
-                   (pmax (point-max))
-                   (b (max pmin (min pmax (+ pmin src-beg))))
-                   (e (max b (min pmax (+ pmin src-end))))
-                   (lines (max 1 (count-lines b e)))
-                   (step (min (max 0 (1- lines))
-                              (round (* frac (max 0 (1- lines)))))))
-        (save-excursion
-          (goto-char b)
-          (when (> step 0) (forward-line step))
-          (line-beginning-position))))))
+      (let* ((src-beg (plist-get loc :begin))
+             (src-end (plist-get loc :end))
+             (frac (or (plist-get loc :frac) 0.0))
+             (zone (plist-get loc :zone))
+             (candidates (plist-get loc :candidates))
+             (pmin (point-min))
+             (pmax (point-max))
+             (b (max pmin (min pmax (+ pmin (or src-beg 0)))))
+             (e (if (integerp src-end)
+                    (max b (min pmax (+ pmin src-end)))
+                  pmax))
+             ;; Trim trailing blank/newline characters from E so `frac = 1.0'
+             ;; lands on the last content line instead of a trailing blank line.
+             (e-trim (save-excursion
+                       (goto-char e)
+                       (skip-chars-backward " \t\r\n" b)
+                       (max b (point))))
+             (start-bol (save-excursion (goto-char b) (line-beginning-position)))
+             (end-bol (save-excursion (goto-char e-trim) (line-beginning-position)))
+             (steps (count-lines start-bol end-bol))
+             (step (min steps (max 0 (round (* frac steps)))))
+             (est-pos (save-excursion
+                        (goto-char b)
+                        (when (> step 0) (forward-line step))
+                        (line-beginning-position))))
+        (or
+         ;; For footnotes, prefer matches inside `[^label]:' definitions first.
+         (when (eq zone 'footnote)
+           (cl-loop for cand in candidates
+                    thereis (etaf-md--search-nearest-in-range
+                             cand b e est-pos t)))
+         ;; General search inside [b, e] closest to est-pos.
+         (cl-loop for cand in candidates
+                  thereis (etaf-md--search-nearest-in-range
+                           cand b e est-pos nil))
+         ;; Fallback when point is on a divider, image or blank margin.
+         (if (and (eq zone 'footnote)
+                  (integerp (plist-get loc :fallback-begin)))
+             (save-excursion
+               (goto-char (max pmin (min pmax (+ pmin (plist-get loc :fallback-begin)))))
+               (line-beginning-position))
+           est-pos))))))
 
 (defun etaf-md-goto-source ()
   "Jump from the current preview point to the matching line in the source file.
@@ -264,17 +715,197 @@ has no backing source."
           (pulse-momentary-highlight-one-line (point))))
       target-pos)))
 
+(defun etaf-md--anchor-for-pos (session preview-buf runtime pos)
+  "Return a block-relative viewport anchor plist for POS in PREVIEW-BUF."
+  (let ((entries (plist-get session :entries))
+        (first-beg nil)
+        (last-end nil)
+        (match nil)
+        (next-entry nil))
+    (dolist (entry entries)
+      (when-let* ((ref (plist-get entry :ref))
+                  (bounds (etaf-host-ref-bounds runtime ref))
+                  (beg (car bounds))
+                  (end (cdr bounds)))
+        (unless first-beg (setq first-beg beg))
+        (setq last-end end)
+        (unless match
+          (cond
+           ((and (<= beg pos) (<= pos end))
+            (setq match
+                  (list :zone 'block
+                        :ref ref
+                        :frac (etaf-md--preview-line-frac
+                               preview-buf beg end pos))))
+           ((and (> beg pos) (null next-entry))
+            (setq next-entry entry))))))
+    (cond
+     (match match)
+     ((or (null first-beg) (< pos first-beg))
+      (list :zone 'top))
+     ((and last-end (> pos last-end))
+      (list :zone 'tail
+            :frac (etaf-md--preview-line-frac
+                   preview-buf last-end
+                   (with-current-buffer preview-buf (point-max)) pos)))
+     (next-entry
+      (list :zone 'block :ref (plist-get next-entry :ref) :frac 0.0))
+     (t (list :zone 'top)))))
+
+(defun etaf-md--capture-viewport-anchor (session preview-buf window)
+  "Capture WINDOW's current scroll and cursor block anchors in PREVIEW-BUF."
+  (when (and (buffer-live-p preview-buf)
+             (window-live-p window)
+             (eq (window-buffer window) preview-buf))
+    (when-let* ((runtime (etaf-runtime-for-buffer preview-buf))
+                ((etaf-runtime-mounted-p runtime)))
+      (list :start (etaf-md--anchor-for-pos
+                    session preview-buf runtime (window-start window))
+            :point (etaf-md--anchor-for-pos
+                    session preview-buf runtime (window-point window))))))
+
+(defun etaf-md--resolve-anchor-position (session preview-buf runtime anchor)
+  "Resolve ANCHOR to a column-0 buffer position in PREVIEW-BUF, or nil."
+  (when (and anchor (buffer-live-p preview-buf) runtime)
+    (with-current-buffer preview-buf
+      (save-excursion
+        (pcase (plist-get anchor :zone)
+          ('top (point-min))
+          ('block
+           (when-let* ((ref (plist-get anchor :ref))
+                       (bounds (etaf-host-ref-bounds runtime ref))
+                       (pbeg (car bounds))
+                       (pend (cdr bounds)))
+             (let* ((lo (max (point-min) (min (point-max) pbeg)))
+                    (content-end (etaf-md--block-content-end preview-buf lo pend))
+                    (start-bol (progn (goto-char lo) (line-beginning-position)))
+                    (end-bol (progn (goto-char content-end) (line-beginning-position)))
+                    (total (count-lines start-bol end-bol))
+                    (frac (or (plist-get anchor :frac) 0.0))
+                    (step (min total (max 0 (round (* frac total))))))
+               (goto-char start-bol)
+               (when (> step 0) (forward-line step))
+               (line-beginning-position))))
+          ('tail
+           (let ((last-end nil))
+             (dolist (entry (plist-get session :entries))
+               (when-let* ((ref (plist-get entry :ref))
+                           (bounds (etaf-host-ref-bounds runtime ref)))
+                 (setq last-end (cdr bounds))))
+             (let* ((lo (max (point-min) (min (point-max) (or last-end (point-min)))))
+                    (content-end (etaf-md--block-content-end preview-buf lo (point-max)))
+                    (start-bol (progn (goto-char lo) (line-beginning-position)))
+                    (end-bol (progn (goto-char content-end) (line-beginning-position)))
+                    (total (count-lines start-bol end-bol))
+                    (frac (or (plist-get anchor :frac) 0.0))
+                    (step (min total (max 0 (round (* frac total))))))
+               (goto-char start-bol)
+               (when (> step 0) (forward-line step))
+               (line-beginning-position)))))))))
+
+(defun etaf-md--restore-viewport-anchor (session preview-buf window anchor)
+  "Restore WINDOW's scroll and point in PREVIEW-BUF from ANCHOR."
+  (when (and anchor (buffer-live-p preview-buf)
+             (window-live-p window)
+             (eq (window-buffer window) preview-buf))
+    (when-let* ((runtime (etaf-runtime-for-buffer preview-buf))
+                ((etaf-runtime-mounted-p runtime))
+                (new-start (etaf-md--resolve-anchor-position
+                            session preview-buf runtime
+                            (plist-get anchor :start))))
+      (let* ((raw-pt (or (etaf-md--resolve-anchor-position
+                          session preview-buf runtime
+                          (plist-get anchor :point))
+                         new-start))
+             (max-rows (max 0 (- (window-body-height window) 2)))
+             (new-pt (with-current-buffer preview-buf
+                       (save-excursion
+                         (goto-char new-start)
+                         (let* ((limit (progn
+                                         (when (> max-rows 0)
+                                           (forward-line max-rows))
+                                         (line-beginning-position))))
+                           (if (and (>= raw-pt new-start) (<= raw-pt limit))
+                               raw-pt
+                             new-start))))))
+        (set-window-start window new-start nil)
+        (set-window-point window new-pt)
+        (when (eq (current-buffer) preview-buf)
+          (goto-char new-pt))
+        (force-window-update window)
+        new-start))))
+
+(defun etaf-md--realign-after-resize (session preview-buf window anchor)
+  "Keep PREVIEW-BUF aligned with its source or prior reading position in WINDOW.
+When follow-scroll is active with a visible source window, re-syncs directly to
+the source window's visible top line; otherwise restores ANCHOR."
+  (let* ((source (plist-get session :source-buffer))
+         (source-win (and (plist-get session :follow-scroll)
+                          (buffer-live-p source)
+                          (get-buffer-window source t))))
+    (cond
+     ((window-live-p source-win)
+      (etaf-md--follow-scroll-sync session t source-win))
+     (anchor
+      (etaf-md--restore-viewport-anchor session preview-buf window anchor)))))
+
+(defun etaf-md--on-fit (session window)
+  "Fit SESSION's viewport width to WINDOW and keep alignment."
+  (when (window-live-p window)
+    (let* ((cols (window-body-width window))
+           (px-w (window-body-width window t))
+           (prev-cols (etaf-md--read session :viewport-width))
+           (prev-px-w (plist-get session :fit-pixel-width))
+           (buf (plist-get session :buffer))
+           (rt (and (buffer-live-p buf) (etaf-runtime-for-buffer buf)))
+           (mounted (and rt (etaf-runtime-mounted-p rt)))
+           (char-w (and mounted
+                        (plist-get (ignore-errors (etaf-display-metrics rt))
+                                   :char-width)))
+           (prev-char-w (plist-get session :fit-char-width))
+           (width-changed (or (not (equal cols prev-cols))
+                              (and prev-px-w (not (equal px-w prev-px-w)))
+                              (and prev-char-w char-w (not (equal char-w prev-char-w)))))
+           (anchor (when (and mounted (or width-changed (plist-get session :resize-anchor)))
+                     (or (plist-get session :resize-anchor)
+                         (etaf-md--capture-viewport-anchor session buf window)))))
+      (plist-put session :fit-pixel-width px-w)
+      (when char-w (plist-put session :fit-char-width char-w))
+      (unless (equal cols prev-cols)
+        (etaf-md--write session :viewport-width cols))
+      (when mounted
+        (plist-put session :resize-anchor nil)
+        (when (or width-changed anchor)
+          (etaf-next-tick
+           (lambda ()
+             (when (and (buffer-live-p buf) (window-live-p window)
+                        (eq (window-buffer window) buf))
+               (etaf-md--realign-after-resize session buf window anchor)))))))))
+
+(defun etaf-md--adjust-width-preserving-view (session delta)
+  "Adjust SESSION's width by DELTA while keeping visible position stable."
+  (let* ((buf (plist-get session :buffer))
+         (win (and (buffer-live-p buf) (get-buffer-window buf t)))
+         (rt (and (buffer-live-p buf) (etaf-runtime-for-buffer buf)))
+         (anchor (and (window-live-p win)
+                      (etaf-md--capture-viewport-anchor session buf win)))
+         (cap (etaf-md-adjust-width session delta)))
+    (when (and rt (etaf-runtime-mounted-p rt) (window-live-p win))
+      (etaf-runtime-flush rt)
+      (etaf-md--realign-after-resize session buf win anchor))
+    cap))
+
 (defun etaf-md-wider ()
   "Widen the current preview's reading column."
   (let* ((session (etaf-md--current-session))
-         (cap (etaf-md-adjust-width session 4)))
+         (cap (etaf-md--adjust-width-preserving-view session 4)))
     (message "Reading width: %d (max %d)"
              (etaf-md--effective-width session) cap)))
 
 (defun etaf-md-narrower ()
   "Narrow the current preview's reading column."
   (let* ((session (etaf-md--current-session))
-         (cap (etaf-md-adjust-width session -4)))
+         (cap (etaf-md--adjust-width-preserving-view session -4)))
     (message "Reading width: %d (max %d)"
              (etaf-md--effective-width session) cap)))
 
@@ -991,17 +1622,37 @@ intact."
                                      (sb (max pmin (min pmax (+ pmin src-beg))))
                                      (se (max sb (min pmax (+ pmin src-end))))
                                      (sp (max sb (min se start)))
-                                     (src-lines (with-current-buffer source
-                                                  (max 1 (count-lines sb se))))
-                                     (src-off (with-current-buffer source
-                                                (count-lines sb sp)))
-                                     (prev-lines (with-current-buffer buffer
-                                                   (max 1 (count-lines (car bounds)
-                                                                       (cdr bounds))))))
-                                (if (> prev-lines 1)
-                                    (min (1- prev-lines)
-                                         (round (* (/ (float src-off) (float src-lines))
-                                                   (1- prev-lines))))
+                                     (src-frac
+                                      (with-current-buffer source
+                                        (save-excursion
+                                          (let* ((se-trim (progn
+                                                            (goto-char se)
+                                                            (skip-chars-backward " \t\r\n" sb)
+                                                            (max sb (point))))
+                                                 (sb-bol (progn (goto-char sb)
+                                                                (line-beginning-position)))
+                                                 (sp-bol (progn (goto-char sp)
+                                                                (line-beginning-position)))
+                                                 (se-bol (progn (goto-char se-trim)
+                                                                (line-beginning-position)))
+                                                 (total (count-lines sb-bol se-bol))
+                                                 (off (count-lines sb-bol sp-bol)))
+                                            (if (<= total 0)
+                                                0.0
+                                              (min 1.0 (/ (float off) (float total))))))))
+                                     (prev-steps
+                                      (with-current-buffer buffer
+                                        (save-excursion
+                                          (let* ((pb (car bounds))
+                                                 (pe (etaf-md--block-content-end
+                                                      buffer pb (cdr bounds)))
+                                                 (pb-bol (progn (goto-char pb)
+                                                                (line-beginning-position)))
+                                                 (pe-bol (progn (goto-char pe)
+                                                                (line-beginning-position))))
+                                            (count-lines pb-bol pe-bol))))))
+                                (if (> prev-steps 0)
+                                    (min prev-steps (round (* src-frac prev-steps)))
                                   0))
                             0))
                          (row-start
@@ -1135,7 +1786,24 @@ editing inside an existing block wakes only that block's Component."
          (lambda ()
            (etaf-md--cancel-asset-timer preview)
            (when (eq (plist-get preview :buffer) buf)
-             (plist-put preview :buffer nil))))))
+             (plist-put preview :buffer nil)))))
+      (etaf-watch-effect
+       (lambda ()
+         (when (etaf-runtime-mounted-p rt)
+           (let* ((vp (etaf-runtime-viewport rt))
+                  (vw (car-safe vp))
+                  (prev-vw (plist-get preview :last-canvas-width)))
+             (plist-put preview :last-canvas-width vw)
+             (when (and prev-vw vw (not (equal vw prev-vw)))
+               (etaf-next-tick
+                (lambda ()
+                  (when-let* ((pbuf (plist-get preview :buffer))
+                              ((buffer-live-p pbuf))
+                              (win (get-buffer-window pbuf t)))
+                    (let ((anchor (plist-get preview :resize-anchor)))
+                      (plist-put preview :resize-anchor nil)
+                      (etaf-md--realign-after-resize preview pbuf win anchor)))))))))
+       :name 'etaf-md-viewport-realign))
     ;; One appearance state: `auto' resolves to the frame's faces, a named
     ;; mode paints its fixed page, and a panel's title-bar switch writes the
     ;; same cell as `t', so the document and the panel chrome follow it.
@@ -1350,11 +2018,14 @@ the initial split width."
           (etaf-view (etaf-md-app :session session :keys etaf-md--keys))
           :state session
           :mode-line t
+          :on-fit (lambda (window)
+                    (etaf-md--on-fit session window))
           :background (lambda () (etaf-md--page-background session))
           :on-close (lambda ()
                       (etaf-md--cleanup-source-kill-hook session)
                       (etaf-md--outline-close session)
                       (etaf-md--follow-unregister (plist-get session :file))
+                      (plist-put session :resize-anchor nil)
                       (plist-put session :buffer nil)))))
     (plist-put session :buffer buffer)
     (etaf-md--follow-register session)
@@ -1366,16 +2037,23 @@ the initial split width."
                 (etaf-md--follow-unregister (plist-get session :file)))
               t t)
     (with-current-buffer buffer
-      (let ((sync-viewport
+      ;; Snapshot the pre-resize block anchor on the first size-change event
+      ;; before Ebox's debounced refit re-wraps the buffer; `:on-fit' restores
+      ;; it (or re-syncs to source when follow-scroll is active) once settled.
+      (let ((capture-anchor
              (lambda (&optional _frame-or-win)
                (when-let* ((buf (plist-get session :buffer))
                            ((buffer-live-p buf))
                            (win (get-buffer-window buf t)))
                  (let ((cols (window-body-width win)))
-                   (unless (equal cols (etaf-md--read session :viewport-width))
-                     (etaf-md--write session :viewport-width cols)))))))
-        (add-hook 'window-size-change-functions sync-viewport t t)
-        (funcall sync-viewport))
+                   (when (and (null (plist-get session :resize-anchor))
+                              (or (not (equal cols (etaf-md--read session :viewport-width)))
+                                  (and (plist-get session :fit-pixel-width)
+                                       (not (equal (window-body-width win t)
+                                                   (plist-get session :fit-pixel-width))))))
+                     (plist-put session :resize-anchor
+                                (etaf-md--capture-viewport-anchor session buf win))))))))
+        (add-hook 'window-size-change-functions capture-anchor -10 t))
       (setq-local imenu-create-index-function
                   (lambda ()
                     (let ((outline (etaf-md-outline session)))

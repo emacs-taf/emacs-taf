@@ -380,14 +380,52 @@ cell wide, so use them only where the width table agrees."
 (defun ebox--border-side (width color side bgface)
   "Return a WIDTH-cell vertical border on SIDE painted with COLOR.
 A graphical frame fills the cells; a text frame draws one rule on the outer
-edge over the background of BGFACE."
-  (if (not (ebox--text-border-rules-p))
-      (ebox--space width (ebox--border-face color))
-    (let* ((bg (ebox--face-background bgface))
-           (rule (propertize "│" 'face (ebox--text-border-face color bg)))
-           (pad (ebox--space (max 0 (1- width))
-                             (and bg (ebox--intern-face (list :background bg))))))
-      (if (eq side 'left) (concat rule pad) (concat pad rule)))))
+edge over the background of BGFACE.  Side border cells carry `ebox-border' so
+hover decoration preserves their border paint instead of erasing it."
+  (let ((cell
+         (if (not (ebox--text-border-rules-p))
+             (ebox--space width (ebox--border-face color))
+           (let* ((bg (ebox--face-background bgface))
+                  (rule (propertize "│" 'face (ebox--text-border-face color bg)))
+                  (pad (ebox--space (max 0 (1- width))
+                                    (and bg (ebox--intern-face (list :background bg))))))
+             (if (eq side 'left) (concat rule pad) (concat pad rule))))))
+    (when (> (length cell) 0)
+      (setq cell (copy-sequence cell))
+      (put-text-property 0 (length cell) 'ebox-border t cell)
+      (puthash cell width ebox--part-widths))
+    cell))
+
+(defun ebox--merge-face-attr (face key value)
+  "Return FACE carrying border attribute KEY VALUE without mutating FACE.
+Keeps a flat plist face as a single interned plist so callers reading
+`mouse-face' attributes with `plist-get' and row-sharing `eq' checks both hold."
+  (ebox--intern-face
+   (cond
+    ((null face) (list key value))
+    ((keywordp (car-safe face))
+     (plist-put (copy-sequence face) key value))
+    ((listp face)
+     (cons (list key value) face))
+    (t (list (list key value) face)))))
+
+(defun ebox--add-border-face (string key value)
+  "Apply border attribute KEY VALUE to STRING's `face' and any `mouse-face' runs.
+Emacs renders `mouse-face' instead of `face' while the pointer hovers a run, so
+a child control's hover face on an ancestor's top or bottom edge would otherwise
+erase the border rule on hover."
+  (let ((len (length string)))
+    (when (> len 0)
+      (add-face-text-property 0 len (list key value) t string)
+      (let ((pos 0))
+        (while (< pos len)
+          (let* ((next (or (next-single-property-change pos 'mouse-face string len) len))
+                 (mf (get-text-property pos 'mouse-face string)))
+            (when mf
+              (put-text-property pos next 'mouse-face
+                                 (ebox--merge-face-attr mf key value)
+                                 string))
+            (setq pos next)))))))
 
 (defun ebox--text-frame-ink-p (line)
   "Return non-nil when LINE holds only blanks and vertical border rules."
@@ -1841,11 +1879,12 @@ lines that showed an overlay before the shift must be repainted as well."
                      (cl-every
                       (lambda (damage)
                         (and (= (nth 2 damage) (nth 3 damage))
-                             (let ((range (ebox--damage-range damage)))
-                               (or (null range)
-                                   (and (>= (car range) (max 0 top))
-                                        (<= (+ (car range) (nth 2 range))
-                                            (min limit bottom)))))))
+                             (cl-every
+                              (lambda (range)
+                                (and (>= (car range) (max 0 top))
+                                     (<= (+ (car range) (nth 2 range))
+                                         (min limit bottom))))
+                              (ebox--damage-range damage))))
                       inner)))
               ;; No inner damage also means no repaint: a logical descendant
               ;; can be a root-layer overlay laid out by a different host.
@@ -2224,10 +2263,9 @@ make room for decoration.  Ordinary middle rows keep the existing fast path."
                                      (get-text-property (1- (length middle)) 'face middle))) base))
                  (stroke (if (eq color 'default) (face-foreground 'default nil t) color)))
             (when (= bi 0)
-              (add-face-text-property 0 (length middle) (list :overline stroke) t middle))
+              (ebox--add-border-face middle :overline stroke))
             (when (= bi (1- (ebox-geo-bh geo)))
-              (add-face-text-property 0 (length middle)
-                                      (list :underline (list :position t :color stroke)) t middle))
+              (ebox--add-border-face middle :underline (list :position t :color stroke)))
             (puthash middle (- width (* 2 r)) ebox--part-widths)
             (list (ebox--outline-slice r 0 width height (* bi lh) r left-bg outside stroke)
                   middle
@@ -2313,16 +2351,13 @@ is then joined into one string."
                   ;; A terminal has no overline face attribute, so this only
                   ;; decorates displays that can draw it.
                   (let ((c (ebox-cs-btc cs)))
-                    (add-face-text-property 0 (length line)
-                                            (list :overline (if (eq c 'default) t c))
-                                            t line)))
+                    (ebox--add-border-face line :overline (if (eq c 'default) t c))))
                 (when bottom
-                  (add-face-text-property 0 (length line)
-                                          (list :underline
-                                                (list :position t
-                                                      :color (let ((c (ebox-cs-bbc cs)))
-                                                               (if (eq c 'default) 'foreground-color c))))
-                                          t line))
+                  (ebox--add-border-face
+                   line :underline
+                   (list :position t
+                         :color (let ((c (ebox-cs-bbc cs)))
+                                  (if (eq c 'default) 'foreground-color c)))))
                 (cons line tail))))))))))
 
 (defvar ebox--part-widths (make-hash-table :test 'eq :weakness 'key)
@@ -2981,6 +3016,16 @@ copied, so the strut keeps its zero-width height display."
       (ebox-node-host node)
     (ebox-node-parent node)))
 
+(defun ebox--clip-same-height (ranges top end)
+  "Return same-height RANGES clipped to visible span [TOP, END)."
+  (let (out)
+    (dolist (r ranges (nreverse out))
+      (let* ((from (max (car r) top))
+             (to (min (+ (car r) (nth 2 r)) end)))
+        (when (< from to)
+          (let ((n (- to from)))
+            (push (list from n n nil) out)))))))
+
 (defun ebox--clip-range (range node &optional child)
   "Restrict root-line RANGE (START OLD NEW WHOLE) through NODE and its ancestors.
 NODE is the innermost node whose content box holds RANGE; CHILD, when
@@ -2990,14 +3035,16 @@ range (OLD /= NEW) cannot shift root buffer lines across a non-stack
 container (whose siblings may share lines) or across a node hosting
 placed overlays, so it becomes a same-height rewrite before any enclosing
 clip applies; pure insertions or deletions at a bordered or rounded
-ancestor's first or last border-box line extend by one line so the
-adjacent border or corner line is repainted cleanly.  Return nil when no
-shown line changes."
-  (pcase-let ((`(,start ,old ,new ,whole) range))
-    (while (and node start)
+ancestor's first or last border-box line emit an accompanying 1-line
+same-height border repaint instead of mutating the pure edit, so adjacent
+edits merge without spurious overlap.  Return a list of ranges, or nil when
+no shown line changes."
+  (pcase-let ((`(,start ,old ,new ,whole) range)
+              (extras nil))
+    (while (and node (or start extras))
       (let ((geo (ebox-node-layout node)))
         (when geo
-          (when (/= old new)
+          (when (and start (/= old new))
             (let ((non-stack (not (ebox-geo-stack geo)))
                   (overlays (cl-some #'ebox-node-placed (ebox-node-overlays node))))
               (when (or non-stack overlays)
@@ -3013,15 +3060,18 @@ shown line changes."
                   (if (< from to)
                       (setq start from old (- to from) new (- to from) whole nil)
                     (setq start nil))))))
-          (when (and start (or (> (ebox-geo-ch geo) (ebox-geo-vh geo))
-                               (> (ebox-geo-scroll geo) 0)))
+          (when (or (> (ebox-geo-ch geo) (ebox-geo-vh geo))
+                    (> (ebox-geo-scroll geo) 0))
             (let* ((top (+ (ebox--item-top-in-root node) (ebox-geo-mt geo) (ebox-geo-pt geo)))
-                   (end (+ top (ebox-geo-vh geo)))
-                   (from (max start top))
-                   (to (if (= old new) (min (+ start new) end) end)))
-              (if (< from to)
-                  (setq start from old (- to from) new (- to from) whole nil)
-                (setq start nil))))
+                   (end (+ top (ebox-geo-vh geo))))
+              (when start
+                (let ((from (max start top))
+                      (to (if (= old new) (min (+ start new) end) end)))
+                  (if (< from to)
+                      (setq start from old (- to from) new (- to from) whole nil)
+                    (setq start nil))))
+              (when extras
+                (setq extras (ebox--clip-same-height extras top end)))))
           (when (and start (/= old new) (or (zerop old) (zerop new)))
             (let* ((cs (ebox-node-cs node))
                    (bh (ebox-geo-bh geo))
@@ -3031,16 +3081,18 @@ shown line changes."
               (when (> bh 0)
                 (when (and (or (ebox-cs-btop cs) rounded)
                            (<= start btop) (< (+ start new) bend))
-                  (setq old (1+ old) new (1+ new) whole nil))
+                  (push (list (+ start new) 1 1 nil) extras))
                 (when (and (or (ebox-cs-bbot cs) rounded)
                            (>= (+ start new) bend) (> start btop))
-                  (setq start (1- start) old (1+ old) new (1+ new) whole nil)))))))
+                  (push (list (1- start) 1 1 nil) extras)))))))
       (setq child node
             node (ebox--clip-parent node)))
-    (and start (list start old new whole))))
+    (if start
+        (cons (list start old new whole) extras)
+      extras)))
 
 (defun ebox--damage-range (damage)
-  "Return (START OLD NEW WHOLE) root lines for DAMAGE (ITEM FROM OLD NEW), or nil.
+  "Return a list of (START OLD NEW WHOLE) root ranges for DAMAGE, or nil.
 WHOLE is non-nil when the range covers a whole node's margin box.  Ranges
 inside scrolling or clipped containers keep only their shown lines; nil
 means the damage is not shown."
@@ -3083,15 +3135,16 @@ the next pass believes it painted."
   (let ((height (ebox-node-h root))
         ranges merged)
     (dolist (damage damages)
-      (let ((r (and (ebox--damage-live-p damage root) (ebox--damage-range damage))))
-        ;; Overlays may extend past the root; only its lines exist.
-        (cond ((null r))
-              ((/= (nth 1 r) (nth 2 r)) (push r ranges))
-              ((>= (car r) height))
-              ((> (+ (car r) (nth 2 r)) height)
-               (let ((n (- height (car r))))
-                 (push (list (car r) n n (nth 3 r)) ranges)))
-              (t (push r ranges)))))
+      (when (ebox--damage-live-p damage root)
+        (dolist (r (ebox--damage-range damage))
+          ;; Overlays may extend past the root; only its lines exist.
+          (cond ((null r))
+                ((/= (nth 1 r) (nth 2 r)) (push r ranges))
+                ((>= (car r) height))
+                ((> (+ (car r) (nth 2 r)) height)
+                 (let ((n (- height (car r))))
+                   (push (list (car r) n n (nth 3 r)) ranges)))
+                (t (push r ranges))))))
     (setq ranges (nreverse ranges))
     (when (cdr ranges)
       (setq ranges
@@ -3123,7 +3176,8 @@ the next pass believes it painted."
                   (nth 2 prev) (+ (nth 2 prev) (nth 2 range))
                   (nth 3 prev) nil))
            ((and (<= end prev-end)
-                 (or (= (nth 1 range) (nth 2 range)) (nth 3 prev)))
+                 (or (= (nth 1 range) (nth 2 range))
+                     (and (nth 3 prev) (/= (nth 1 prev) (nth 2 prev)))))
             ;; Nested in lines the previous edit already rewrites.
             nil)
            ((or (= (nth 1 prev) (nth 2 prev)) (= (nth 1 range) (nth 2 range)))

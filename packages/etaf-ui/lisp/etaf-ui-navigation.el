@@ -137,9 +137,9 @@ Each item has :key, :label and :content. Content may be a string or a
 zero-argument function returning a View. MULTIPLE permits more than one open
 section; ON-TOGGLE receives the next list of keys.
 
-The headers share one bordered panel: each title is a full-width row with a
-hairline under it, and an open body is indented under its title instead of
-sitting in a second, separate panel."
+The headers share one bordered panel: each title is a compact full-width row
+tinted with the panel surface and crisp primary ink, separated from its open
+body and neighbouring rows by consistent hairlines."
   :validate
   (progn
     (etaf-ui--navigation-items items 'etaf-accordion)
@@ -149,7 +149,13 @@ sitting in a second, separate panel."
   :render
   (let* ((items (etaf-ui--navigation-items items 'etaf-accordion))
          (open (etaf-ui--reactive-value open))
-         (line (etaf-theme-token :ui-panel-border "#D9DDE3")))
+         (line (etaf-theme-token :ui-panel-border "#D9DDE3"))
+         (fg (etaf-theme-token :ui-panel-fg "#252A2E"))
+         (header-bg (etaf-theme-token :ui-panel-bg "#FFFDF8"))
+         (header-hover-bg (etaf-theme-token
+                           :ui-panel-hover-bg
+                           (etaf-theme-token :ui-panel-bg "#FFFDF8"
+                                             'etaf-ui--state-hover-shift))))
     (etaf-check-prop :open open
                      (and (proper-list-p open)
                           (cl-every (lambda (key)
@@ -169,52 +175,63 @@ sitting in a second, separate panel."
        (let* ((key (plist-get item :key))
               (expanded (member key open))
               (content (plist-get item :content))
-              (last (= index (1- (length items)))))
-         (etaf-check-prop :content content
-                          (or (stringp content) (functionp content))
-                          "a string or zero-argument function"
-                          'etaf-accordion)
+              (last (= index (1- (length items))))
+              (_ (etaf-check-prop :content content
+                                  (or (stringp content) (functionp content))
+                                  "a string or zero-argument function"
+                                  'etaf-accordion))
+              (body-view (when expanded
+                           (cond
+                            ((functionp content) (funcall content))
+                            ((not (string-blank-p content))
+                             (etaf-node 'etaf-label (list :text content) nil)))))
+              (has-body (and expanded body-view
+                             (not (and (stringp body-view)
+                                       (string-blank-p body-view))))))
          ;; A row that carries :ref keeps the same Host across a repaint, so a
          ;; caller that re-renders around the accordion updates the title in
          ;; place instead of leaving the previous header above the new one.
-         (list
-          (etaf-node 'etaf-button
-                     (append
-                      (list :label (etaf-ui--disclosure-label
-                                    (plist-get item :label)
-                                    (if expanded 'chevron-down 'chevron-right) t)
-                            :aria-label (plist-get item :label)
-                            :aria-expanded (if expanded t 'false)
-                            :variant 'ghost
-                            :width 'stretch
-                            :pointer 'hand
-                            :font-weight 'bold
-                            :padding '((lh 1) (ch 2))
-                            :border-bottom (unless last
-                                             (etaf-ui--style-border line))
-                            :on-press
-                            (lambda ()
-                              (funcall on-toggle
-                                       (if expanded
-                                           (delete key (copy-sequence open))
-                                         (if multiple
-                                             (cons key (copy-sequence open))
-                                           (list key))))))
-                      (when-let* ((ref (plist-get item :ref)))
-                        (list :ref ref)))
-                     nil)
-          (when expanded
-            (etaf-node
-             'box
-             (append
-              (list :width 'stretch
-                    :padding '((lh 0) (ch 4) (lh 1) (ch 2))
-                    :border-bottom (unless last (etaf-ui--style-border line)))
-              (when-let* ((ref (plist-get item :ref)))
-                (list :ref (intern (format "%s-body" ref)))))
-             (list (if (functionp content)
-                       (funcall content)
-                     (etaf-node 'etaf-label (list :text content) nil)))))))))))
+         (delq
+          nil
+          (list
+           (etaf-node 'etaf-button
+                      (append
+                       (list :label (etaf-ui--disclosure-label
+                                     (plist-get item :label)
+                                     (if expanded 'chevron-down 'chevron-right) t)
+                             :aria-label (plist-get item :label)
+                             :aria-expanded (if expanded t 'false)
+                             :variant 'ghost
+                             :color fg
+                             :bgcolor header-bg
+                             :hover-style (list :background-color header-hover-bg)
+                             :width 'stretch
+                             :pointer 'hand
+                             :font-weight 'bold
+                             :padding '((lh 0) (ch 2))
+                             :border-bottom (when (or has-body (not last))
+                                              (etaf-ui--style-border line))
+                             :on-press
+                             (lambda ()
+                               (funcall on-toggle
+                                        (if expanded
+                                            (delete key (copy-sequence open))
+                                          (if multiple
+                                              (cons key (copy-sequence open))
+                                            (list key))))))
+                       (when-let* ((ref (plist-get item :ref)))
+                         (list :ref ref)))
+                      nil)
+           (when has-body
+             (etaf-node
+              'box
+              (append
+               (list :width 'stretch
+                     :padding '((lh 1) (ch 2))
+                     :border-bottom (unless last (etaf-ui--style-border line)))
+               (when-let* ((ref (plist-get item :ref)))
+                 (list :ref (intern (format "%s-body" ref)))))
+              (list body-view))))))))))
 
 (etaf-define-component etaf-breadcrumb (&key items on-select)
   "Render a breadcrumb trail from string ITEMS.

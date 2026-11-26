@@ -3887,3 +3887,263 @@ grid on medium viewports, and folds into stacked cards on narrow viewports."
     (should-not (cadr entry))
     (should (string-match-p "etaf-install-native" remedy))
     (should-not (string-match-p "make native-build" remedy))))
+
+(ert-deftest etaf-md-tests-accordion-and-details-lifecycle-and-hover-borders ()
+  "Details and accordion blocks close open=true/expand=true sections, handle edge cases, and keep borders on hover."
+  (let ((doc (concat
+              ":::details {title=\"SingleDetails\" open=true}\nSingleDetailsBody.\n:::\n\n"
+              ":::accordion\n"
+              ":::collapse {title=\"AccOne\" open=true}\nAccOneBody.\n:::\n"
+              ":::collapse {title=\"AccTwo\" open=true}\nAccTwoBody.\n:::\n"
+              ":::\n\n"
+              ":::accordion {expand=true}\n"
+              ":::collapse {title=\"ExpOne\"}\nExpOneBody.\n:::\n"
+              ":::collapse {title=\"ExpTwo\"}\n:::\n"
+              ":::\n\n"
+              ":::accordion\n:::\n")))
+    (dolist (theme '(dark light sepia))
+      (let ((session (etaf-md-create :text doc :theme theme)))
+        (etaf-md-tests--with-mount session
+          (let ((plain (buffer-substring-no-properties (point-min) (point-max))))
+            ;; Multiple open=true under accordion=true clamps to first without error.
+            (should (string-match-p "AccOneBody" plain))
+            (should-not (string-match-p "AccTwoBody" plain))
+            ;; Empty accordion degrades cleanly without throwing.
+            (should (string-match-p "空折叠组" plain))
+            ;; Hovering top header keeps border overline and paints distinct hover bg.
+            (let* ((pos (1+ (string-match "SingleDetails" plain)))
+                   (mf (get-text-property pos 'mouse-face))
+                   (panel (etaf-md-color :panel theme))
+                   (border (etaf-md-color :border theme)))
+              (should mf)
+              (should (equal (plist-get mf :overline) border))
+              (should-not (string-equal-ignore-case (or (plist-get mf :background) "") panel)))
+            ;; Clicking an open=true accordion item actually closes it (no sticky re-open).
+            (goto-char (point-min))
+            (search-forward "AccOne")
+            (goto-char (match-beginning 0))
+            (call-interactively (key-binding (kbd "RET")))
+            (should-not (string-match-p "AccOneBody" (buffer-substring-no-properties (point-min) (point-max))))
+            ;; Clicking an expand=true accordion item actually closes it too.
+            (goto-char (point-min))
+            (search-forward "ExpOne")
+            (goto-char (match-beginning 0))
+            (call-interactively (key-binding (kbd "RET")))
+            (should-not (string-match-p "ExpOneBody" (buffer-substring-no-properties (point-min) (point-max))))))))))
+
+(ert-deftest etaf-md-tests-goto-source-cursor-accuracy ()
+  "`etaf-md-goto-source' lands on the exact source line and column after cursor motion or `C-s'/`C-r'.
+Covers front matter, inline-formatted words, single-line containers (`:::details',
+`:::center'), multi-column tables, repeated code lines and footnotes."
+  (let* ((file (make-temp-file "etaf-md-goto-" nil ".md"))
+         source preview)
+    (unwind-protect
+        (progn
+          (with-temp-file file
+            (insert "---\n"
+                    "title: Cursor Jump Guide\n"
+                    "author: Alice\n"
+                    "---\n\n"
+                    "# Section Alpha\n\n"
+                    "包含 **粗体词**、`inline-code` 与普通文字[^note1]。\n\n"
+                    ":::details {title=\"展开看完整报错\"}\n"
+                    "报错详情第一行\n"
+                    "报错详情第二行\n"
+                    ":::\n\n"
+                    ":::center\n"
+                    "这一行居中展示。\n"
+                    ":::\n\n"
+                    "| 列A | 列B | 列C |\n"
+                    "| --- | --- | --- |\n"
+                    "| alpha | beta-cell | @scope |\n"
+                    "| gamma | delta-cell | @layer |\n\n"
+                    "```js\n"
+                    "return 1;\n"
+                    "return 2;\n"
+                    "return 3;\n"
+                    "return 4;\n"
+                    "return 5;\n"
+                    "```\n\n"
+                    "[^note1]: 这是第一条脚注内容。\n"))
+          (setq source (find-file-noselect file))
+          (setq preview (with-current-buffer source (etaf-md-open file)))
+          (cl-labels
+              ((check-jump (needle side expect-line-re expect-looking)
+                 (with-current-buffer preview
+                   (goto-char (point-min))
+                   (should (search-forward needle nil t))
+                   (when (eq side 'before)
+                     (goto-char (match-beginning 0)))
+                   (let ((isearch-string needle)
+                         (isearch-case-fold-search t))
+                     (let ((pos (etaf-md-goto-source)))
+                       (should (eq (current-buffer) source))
+                       (should (= (point) pos))
+                       (let ((ltxt (buffer-substring-no-properties
+                                    (line-beginning-position)
+                                    (line-end-position))))
+                         (should (string-match-p expect-line-re ltxt)))
+                       (when expect-looking
+                         (if (eq side 'before)
+                             (should (looking-at-p (regexp-quote expect-looking)))
+                           (should (looking-back (regexp-quote expect-looking)
+                                                 (line-beginning-position))))))))))
+            ;; Front matter hero lands on YAML title line, not body text.
+            (check-jump "Cursor Jump Guide" 'after "title: Cursor Jump Guide" "Cursor Jump Guide")
+            ;; Inline formatted word jumps directly onto the bold word.
+            (check-jump "粗体词" 'after "\\*\\*粗体词\\*\\*" "粗体词")
+            ;; Single-line `:::details' header lands on opening line, never closing `:::'.
+            (check-jump "展开看完整报错" 'after ":::details" "展开看完整报错")
+            (check-jump "展开看完整报错" 'before ":::details" "展开看完整报错")
+            ;; Single-line `:::center' body lands on the text line, never closing `:::'.
+            (check-jump "这一行居中展示" 'after "这一行居中展示" "这一行居中展示")
+            ;; Table cell jumps to exact row and column.
+            (check-jump "@layer" 'after "| gamma | delta-cell | @layer |" "@layer")
+            ;; Repeated token in multiline code block lands on exact line.
+            (check-jump "return 4;" 'after "return 4;" "return 4;")
+            ;; Footnote body jumps directly to `[^note1]:' definition.
+            (check-jump "这是第一条脚注内容" 'after "\\[\\^note1\\]:" "这是第一条脚注内容")))
+      (when (buffer-live-p preview)
+        (with-current-buffer preview (ignore-errors (etaf-md-close))))
+      (when (buffer-live-p source) (kill-buffer source))
+      (delete-file file))))
+
+(ert-deftest etaf-md-tests-narrower-shrinks-tables-monotonically ()
+  "Narrowing via `etaf-md-adjust-width' shrinks all tables monotonically alongside prose.
+Wide multi-column tables still break out automatically on initial open in a wide
+viewport, shrink smoothly without reverse jumps once narrowed, fold to cards at
+narrow widths, widen smoothly back up, and restore breakout when widened past
+`etaf-md-width-max'."
+  (let* ((md (concat
+              "普通段落文字用来对照阅读栏宽度，确认表格在缩窄时与段落同步收缩。\n\n"
+              "| 特性 | CommonMark | GFM | ETAF |\n"
+              "| --- | --- | --- | --- |\n"
+              "| 表格 | 不支持 | 支持 | 支持对齐与宽表适配 |\n"
+              "| 容器 | 不支持 | 不支持 | 支持 details/tabs/accordion |\n\n"
+              "| 标准 | 方法论 (BEM/SMACSS) | 预处理器 (Sass) | CSS 模块 | 运行时 CSS-in-JS | 编译时 CSS-in-JS | 实用工具优先 (Tailwind) | 现代原生 CSS |\n"
+              "| --- | --- | --- | --- | --- | --- | --- | --- |\n"
+              "| 作用域机制 | 手动命名约定 | 无 (全局) | 构建时哈希化类名 | JS闭包/运行时生成 | 构建时提取/哈希化 | 无 (依赖组合) | @scope |\n"))
+         (session (etaf-md-create :text md))
+         (char (frame-char-width))
+         (vw 170))
+    (etaf-md-tests--with-mount session
+      (let ((rt (etaf-runtime-for-buffer (current-buffer))))
+        (cl-labels
+            ((line-visual-width (needle)
+               (save-excursion
+                 (goto-char (point-min))
+                 (should (search-forward needle nil t))
+                 (let ((blank (etaf-md-tests--page-margin-pixels)))
+                   (- (* vw char) (car blank) (cdr blank))))))
+          (etaf-runtime-refit rt (* vw char) 60)
+          ;; Default open: wide 8-col table breaks out wider than 100 cells.
+          (let ((wide-initial (line-visual-width "@scope")))
+            (should (> wide-initial (* 100 char)))
+            ;; Narrow step by step via negative `etaf-md-adjust-width': both the
+            ;; 4-col table and 8-col table must shrink monotonically without
+            ;; jumping wider or freezing.
+            (let ((prev4 (line-visual-width "特性"))
+                  (prev8 wide-initial))
+              (dolist (expected-w '(88 80 72 64 56 48 44 40))
+                (let ((delta (- expected-w (plist-get (etaf-md-state session) :width))))
+                  (when (< delta 0)
+                    (etaf-md-adjust-width session delta)))
+                (etaf-runtime-flush rt)
+                (let ((w4 (line-visual-width "特性"))
+                      (w8 (line-visual-width "@scope")))
+                  (should (<= w4 prev4))
+                  (should (<= w8 prev8))
+                  (should (<= w4 (* (+ expected-w 2) char)))
+                  (should (<= w8 (* (+ expected-w 2) char)))
+                  (setq prev4 w4 prev8 w8)))
+              ;; At narrowest 40ch, 8-col table folded cleanly into stacked cards.
+              (should (string-match-p
+                       "标准 · 作用域机制"
+                       (buffer-substring-no-properties (point-min) (point-max))))
+              ;; Widening back up to 96 keeps tables in lockstep with reading width.
+              (etaf-md-adjust-width session 56)
+              (etaf-runtime-flush rt)
+              (should (<= (line-visual-width "@scope") (* 98 char)))
+              ;; Widening once more past `etaf-md-width-max' restores wide-table breakout.
+              (etaf-md-adjust-width session 4)
+              (etaf-runtime-flush rt)
+              (should (> (line-visual-width "@scope") (* 100 char))))))))))
+
+(ert-deftest etaf-md-tests-resize-preserves-scroll-and-source-alignment ()
+  "Width changes and split window resizes preserve reading position and source sync.
+Narrowing/widening with `etaf-md-narrower'/`etaf-md-wider' keeps the top block
+pinned in single-window reading, and resizing the preview window in side-by-side
+follow-scroll mode re-aligns preview `window-start' to the source window's line."
+  (let* ((file (make-temp-file "etaf-md-resize-sync-" nil ".md"))
+         source preview)
+    (unwind-protect
+        (progn
+          (with-temp-file file
+            (insert "# Resize Sync Demo\n\n")
+            (dotimes (i 24)
+              (insert (format "## 第 %d 节\n\n" i))
+              (insert (format "第 %d 节正文内容非常长，用来在缩窄或拉宽预览窗口宽度时触发显著的多行折行变化，检验顶部显示位置不会偏移。\n\n" i))))
+          (setq source (find-file-noselect file))
+          (delete-other-windows)
+          ;; 1. Single-window reading: narrow/widen keeps top heading pinned.
+          (setq preview (with-current-buffer source (etaf-md-open file)))
+          (let ((win (get-buffer-window preview)))
+            (should (window-live-p win))
+            (select-window win)
+            (with-current-buffer preview
+              (goto-char (point-min))
+              (should (search-forward "第 16 节" nil t))
+              (let ((bol (line-beginning-position)))
+                (set-window-start win bol nil)
+                (set-window-point win bol))
+              ;; Narrow significantly (wrapping all blocks above into more lines).
+              (dotimes (_ 10) (etaf-md-narrower))
+              (let ((top-text (buffer-substring-no-properties
+                               (window-start win)
+                               (min (point-max) (+ (window-start win) 80)))))
+                (should (string-match-p "第 16 节" top-text)))
+              ;; Widen back up (unwrapping all blocks above).
+              (dotimes (_ 10) (etaf-md-wider))
+              (let ((top-text (buffer-substring-no-properties
+                               (window-start win)
+                               (min (point-max) (+ (window-start win) 80)))))
+                (should (string-match-p "第 16 节" top-text)))
+              (etaf-md-close)))
+          ;; 2. Side-by-side split with follow-scroll: resizing preview width
+          ;;    re-aligns preview `window-start' to the source window's top line.
+          (delete-other-windows)
+          (switch-to-buffer source)
+          (let ((src-win (selected-window)))
+            (goto-char (point-min))
+            (should (search-forward "## 第 14 节" nil t))
+            (let ((bol (line-beginning-position)))
+              (goto-char bol)
+              (set-window-start src-win bol nil))
+            (setq preview (etaf-md-preview))
+            (let* ((prev-win (get-buffer-window preview))
+                   (rt (etaf-runtime-for-buffer preview)))
+              (should (window-live-p prev-win))
+              (should rt)
+              ;; Simulate dragging the split narrower and refitting to the new width.
+              (with-current-buffer preview
+                (let ((old-w (window-body-width prev-win)))
+                  (when (> old-w 36)
+                    (window-resize prev-win (- 32 old-w) t)
+                    (run-hook-with-args 'window-size-change-functions (selected-frame))
+                    (etaf-refit rt prev-win)
+                    (let ((top-text (buffer-substring-no-properties
+                                     (window-start prev-win)
+                                     (min (point-max) (+ (window-start prev-win) 120)))))
+                      (should (string-match-p "第 14 节" top-text)))
+                    ;; Drag wider again and verify alignment holds.
+                    (window-resize prev-win 14 t)
+                    (run-hook-with-args 'window-size-change-functions (selected-frame))
+                    (etaf-refit rt prev-win)
+                    (let ((top-text (buffer-substring-no-properties
+                                     (window-start prev-win)
+                                     (min (point-max) (+ (window-start prev-win) 120)))))
+                      (should (string-match-p "第 14 节" top-text)))))))))
+      (when (buffer-live-p preview)
+        (with-current-buffer preview (ignore-errors (etaf-md-close))))
+      (when (buffer-live-p source) (kill-buffer source))
+      (delete-file file))))

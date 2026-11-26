@@ -439,6 +439,11 @@
       "name": "etaf-org-tests-code-blank-line-has-no-svg-cursor-box",
       "file": "tests/etaf-org-tests.el",
       "purpose": "Blank lines inside rendered source blocks carry no SVG image display property that would trigger a full-row GUI cursor box."
+    },
+    {
+      "name": "etaf-org-tests-accordion-and-details-edge-cases-and-hover-borders",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "Org `details' and `accordion' blocks clamp multiple `:open t' sections in single-open mode, close cleanly and preserve border overlines with distinct hover fill across dark, light and sepia themes."
     }
   ]
 }

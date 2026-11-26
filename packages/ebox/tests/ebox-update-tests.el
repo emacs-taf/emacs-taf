@@ -774,4 +774,66 @@ B "))
       (let ((matches (ebox-test-buffer-matches-render-p root buffer)))
         (should matches)))))
 
+(ert-deftest ebox-bordered-accordion-collapse-and-switch-stay-on-lines-strategy ()
+  "Collapsing or switching sections in a bordered stack uses incremental `lines' edits."
+  (let* ((padding (cl-loop for i below 60
+                           collect `(box :id ,(format "p%d" i) ,(format "Pad-%02d" i)))))
+    (ebox-test-with-mounted
+        (buffer root
+                `(column :width (ch 40)
+                         ,@padding
+                         (column :id "acc" :border ((px 1) solid "#888888")
+                                 (box :id "h0" :border-bottom ((px 1) solid "#888888")
+                                      (text :id "t0" "v First"))
+                                 (box :id "b0" :border-bottom ((px 1) solid "#888888")
+                                      (column "B0-1" "B0-2" "B0-3"))
+                                 (box :id "h1"
+                                      (text :id "t1" "> Second")))
+                         (box "After")))
+      (let ((acc (car (ebox-selector-query root "#acc")))
+            (t0 (car (ebox-selector-query root "#t0")))
+            (t1 (car (ebox-selector-query root "#t1")))
+            (b0 (car (ebox-selector-query root "#b0")))
+            (h1 (car (ebox-selector-query root "#h1"))))
+        ;; 1. Collapse open section (update header + remove body in one batch).
+        (ebox-with-batch
+          (ebox-node-set-text t0 "> First")
+          (ebox-node-remove b0))
+        (let* ((report (ebox-buffer-update-report buffer))
+               (buf-lines (split-string (with-current-buffer buffer (buffer-string)) "\n"))
+               (ref-lines (split-string (ebox-render root) "\n")))
+          (should (eq (plist-get report :strategy) 'lines))
+          (should (< (plist-get report :lines) 10))
+          (should (ebox-test-buffer-matches-render-p root buffer))
+          (should (cl-every #'equal-including-properties buf-lines ref-lines)))
+        ;; 2. Expand second section (update last header + insert body at end).
+        (let ((b1 (ebox-build '(box :id "b1" (column "B1-1" "B1-2" "B1-3")))))
+          (ebox-with-batch
+            (ebox-node-set-text t1 "v Second")
+            (ebox-node-put h1 :border-bottom '((px 1) solid "#888888"))
+            (ebox-node-insert acc b1 2))
+          (let* ((report (ebox-buffer-update-report buffer))
+                 (buf-lines (split-string (with-current-buffer buffer (buffer-string)) "\n"))
+                 (ref-lines (split-string (ebox-render root) "\n")))
+            (should (eq (plist-get report :strategy) 'lines))
+            (should (< (plist-get report :lines) 10))
+            (should (ebox-test-buffer-matches-render-p root buffer))
+            (should (cl-every #'equal-including-properties buf-lines ref-lines)))
+          ;; 3. Switch back to first section (insert b0 + remove b1 + update both headers).
+          (let ((b0-new (ebox-build '(box :id "b0n" :border-bottom ((px 1) solid "#888888")
+                                          (column "B0-1" "B0-2" "B0-3")))))
+            (ebox-with-batch
+              (ebox-node-set-text t0 "v First")
+              (ebox-node-insert acc b0-new 1)
+              (ebox-node-set-text t1 "> Second")
+              (ebox-node-set-props h1 '(:id "h1"))
+              (ebox-node-remove b1))
+            (let* ((report (ebox-buffer-update-report buffer))
+                   (buf-lines (split-string (with-current-buffer buffer (buffer-string)) "\n"))
+                   (ref-lines (split-string (ebox-render root) "\n")))
+              (should (eq (plist-get report :strategy) 'lines))
+              (should (< (plist-get report :lines) 12))
+              (should (ebox-test-buffer-matches-render-p root buffer))
+              (should (cl-every #'equal-including-properties buf-lines ref-lines)))))))))
+
 ;;; ebox-update-tests.el ends here

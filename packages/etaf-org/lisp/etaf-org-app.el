@@ -591,6 +591,26 @@ non-nil when side-by-side split is active."
 ;;; Window fitting
 ;;; ---------------------------------------------------------------------------
 
+(defun etaf-org--realign-after-resize (session window anchor-line)
+  "Keep Org preview WINDOW aligned with its source or prior ANCHOR-LINE."
+  (let* ((buf (plist-get session :buffer))
+         (src (plist-get session :source-buffer))
+         (swin (and (plist-get session :follow-scroll)
+                    (buffer-live-p src)
+                    (get-buffer-window src t))))
+    (cond
+     ((window-live-p swin)
+      (etaf-org--sync-preview-scroll session t swin))
+     ((and (integerp anchor-line) (buffer-live-p buf) (window-live-p window)
+           (eq (window-buffer window) buf))
+      (when-let* ((target (etaf-org--position-for-source-line session anchor-line)))
+        (with-current-buffer buf
+          (let ((bol (save-excursion (goto-char target) (line-beginning-position))))
+            (set-window-start window bol nil)
+            (set-window-point window bol)
+            (when (eq (current-buffer) buf) (goto-char bol))
+            (force-window-update window))))))))
+
 (defun etaf-org--fit-width (session &optional window)
   "Fit SESSION's `:viewport-width' and reading measure to WINDOW."
   (let* ((buffer (plist-get session :buffer))
@@ -598,6 +618,7 @@ non-nil when side-by-side split is active."
                      (and (buffer-live-p buffer) (get-buffer-window buffer t)))))
     (if (window-live-p window)
         (let* ((body (window-body-width window))
+               (prev-body (plist-get session :fit-body))
                (gutter (* 2 etaf-org--measure-gutter))
                (width
                 (cond
@@ -605,13 +626,25 @@ non-nil when side-by-side split is active."
                   (min etaf-org-width-max (- body gutter)))
                  ((>= body etaf-org-width-min)
                   etaf-org-width-min)
-                 (t (max 12 body)))))
+                 (t (max 12 body))))
+               (rt (and (buffer-live-p buffer) (etaf-runtime-for-buffer buffer)))
+               (anchor-line (plist-get session :resize-anchor-line)))
           (etaf-org--write session :viewport-width body)
-          (if (equal (plist-get session :fit-body) body)
-              (etaf-org--read session :width)
-            (plist-put session :fit-body body)
-            (etaf-org--write session :width width)
-            width))
+          (plist-put session :resize-anchor-line nil)
+          (prog1
+              (if (equal prev-body body)
+                  (etaf-org--read session :width)
+                (plist-put session :fit-body body)
+                (etaf-org--write session :width width)
+                width)
+            (when (and rt (etaf-runtime-mounted-p rt)
+                       (or (and prev-body (not (equal prev-body body)))
+                           anchor-line))
+              (etaf-next-tick
+               (lambda ()
+                 (when (and (buffer-live-p buffer) (window-live-p window)
+                            (eq (window-buffer window) buffer))
+                   (etaf-org--realign-after-resize session window anchor-line)))))))
       (etaf-org--read session :width))))
 
 ;;; ---------------------------------------------------------------------------
@@ -631,7 +664,25 @@ non-nil when side-by-side split is active."
     (etaf-theme-provide tokens)
     (when-let* ((surface (etaf-surface-host)))
       (etaf-surface-declare surface :theme tokens :mode nil
-                            :modes etaf-org--surface-modes)))
+                            :modes etaf-org--surface-modes))
+    (when-let* ((rt (etaf-current-runtime)))
+      (etaf-watch-effect
+       (lambda ()
+         (when (etaf-runtime-mounted-p rt)
+           (let* ((vp (etaf-runtime-viewport rt))
+                  (vw (car-safe vp))
+                  (prev-vw (plist-get session :last-canvas-width)))
+             (plist-put session :last-canvas-width vw)
+             (when (and prev-vw vw (not (equal vw prev-vw)))
+               (etaf-next-tick
+                (lambda ()
+                  (when-let* ((buf (plist-get session :buffer))
+                              ((buffer-live-p buf))
+                              (win (get-buffer-window buf t)))
+                    (let ((anchor (plist-get session :resize-anchor-line)))
+                      (plist-put session :resize-anchor-line nil)
+                      (etaf-org--realign-after-resize session win anchor)))))))))
+       :name 'etaf-org-viewport-realign)))
   :render
   (etaf-org--view-document
    (etaf-value document)
@@ -696,6 +747,20 @@ Org document in any ETAF layout via `etaf-mount'."
     (etaf-org--request-async-assets session)
     (with-current-buffer buffer
       (add-hook 'kill-buffer-hook cleanup t t)
+      (add-hook 'window-size-change-functions
+                (lambda (&optional _frame-or-win)
+                  (when-let* ((buf (plist-get session :buffer))
+                              ((buffer-live-p buf))
+                              (win (get-buffer-window buf t)))
+                    (let ((cols (window-body-width win)))
+                      (when (and (null (plist-get session :resize-anchor-line))
+                                 (not (equal cols (plist-get session :fit-body))))
+                        (plist-put session :resize-anchor-line
+                                   (with-current-buffer buf
+                                     (save-excursion
+                                       (goto-char (window-start win))
+                                       (etaf-org--source-line-at-point session))))))))
+                -10 t)
       (add-hook 'post-command-hook
                 (lambda () (etaf-org--sync-active-section session))
                 nil t)
