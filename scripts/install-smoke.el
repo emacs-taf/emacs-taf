@@ -241,18 +241,19 @@ report it immediately instead of retrying and hiding it."
   (when (eq target 'etaf-md)
     (let* ((desc (cadr (assq 'etaf-md package-alist)))
            (dir (and desc (package-desc-dir desc))))
-      (dolist (unexpected '("native/build"))
+      (dolist (unexpected '("Makefile"
+                            "tests"
+                            "benchmarks"
+                            "examples"
+                            "scripts"
+                            "native/vendor"
+                            "native/build"))
         (when (file-exists-p (expand-file-name unexpected dir))
           (error "Installed etaf-md should not ship %s" unexpected)))
-      (dolist (expected '("Makefile"
-                          "examples/all-syntax.markdown"
-                          "docs/manual.md"
-                          "scripts/mermaid-render.mjs"
-                          "tests/etaf-md-tests.el"
-                          "benchmarks/performance-scenarios.el"
-                          "native/manifest.json"
-                          "native/Makefile"
-                          "native/etaf_md_typeset.c"))
+      (dolist (expected '("docs/manual.md"
+                          "docs/extensions.md"
+                          "backends/mermaid-render.mjs"
+                          "native/manifest.json"))
         (unless (file-readable-p (expand-file-name expected dir))
           (error "Installed etaf-md is missing %s" expected)))
       (let* ((facts (funcall (intern "etaf-md-doctor")))
@@ -281,12 +282,16 @@ report it immediately instead of retrying and hiding it."
   (when (eq target 'etaf-org)
     (let* ((desc (cadr (assq 'etaf-org package-alist)))
            (dir (and desc (package-desc-dir desc))))
-      (dolist (expected '("Makefile"
-                          "examples/complete-gallery.org"
-                          "docs/manual.md"
-                          "scripts/mermaid-render.mjs"
-                          "tests/etaf-org-tests.el"
-                          "benchmarks/performance-scenarios.el"))
+      (dolist (unexpected '("Makefile"
+                            "tests"
+                            "benchmarks"
+                            "examples"
+                            "scripts"))
+        (when (file-exists-p (expand-file-name unexpected dir))
+          (error "Installed etaf-org should not ship %s" unexpected)))
+      (dolist (expected '("docs/manual.md"
+                          "docs/extensions.md"
+                          "backends/mermaid-render.mjs"))
         (unless (file-readable-p (expand-file-name expected dir))
           (error "Installed etaf-org is missing %s" expected)))))
   (when (eq target 'etaf-manual)

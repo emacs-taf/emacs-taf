@@ -55,23 +55,15 @@
     },
     "etaf-md": {
       "resources": [
-        "examples",
         "docs",
-        "scripts",
-        "tests",
-        "benchmarks",
-        "Makefile",
-        "native"
+        "backends",
+        "native/manifest.json"
       ]
     },
     "etaf-org": {
       "resources": [
-        "examples",
         "docs",
-        "scripts",
-        "tests",
-        "benchmarks",
-        "Makefile"
+        "backends"
       ]
     },
     "etaf-video-player": {

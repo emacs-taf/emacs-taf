@@ -16,7 +16,7 @@
 ;; standalone SVGs directly to the disk cache.
 ;;
 ;; When the native module is absent, or for a diagram family Pele does not
-;; support, `scripts/mermaid-render.mjs' (mermaid-cli + KaTeX) serves as an
+;; support, `backends/mermaid-render.mjs' (mermaid-cli + KaTeX) serves as an
 ;; automatic fallback.
 ;;
 ;; A render is asynchronous and cached by what it depends on, so a repaint of
@@ -232,7 +232,7 @@ Return non-nil when the native module is ready to accept jobs."
 (defun etaf-md-typeset--renderer-script ()
   "Return the fallback drawing program's path, or nil when this checkout lacks it."
   (when-let* ((root (etaf-md-typeset--package-root))
-              (script (expand-file-name "scripts/mermaid-render.mjs" root))
+              (script (expand-file-name "backends/mermaid-render.mjs" root))
               ((file-exists-p script)))
     script))
 
@@ -248,7 +248,7 @@ Return non-nil when the native module is ready to accept jobs."
 (defun etaf-md-typeset-available-p ()
   "Return non-nil when this system can draw diagrams and formulas.
 Prefers the embedded QuickJS native module (`native/etaf-md-typeset-native')
-and falls back to `scripts/mermaid-render.mjs' when `mmdc' and `node' exist."
+and falls back to `backends/mermaid-render.mjs' when `mmdc' and `node' exist."
   (and etaf-md-typeset
        (or (etaf-md-typeset--native-available-p)
            (etaf-md-typeset--mmdc-available-p))))
@@ -934,7 +934,7 @@ face-derived `auto'), so diagrams harmonize with the surrounding document."
       t)))
 
 ;;; ---------------------------------------------------------------------------
-;;; Fallback backend: scripts/mermaid-render.mjs (mermaid-cli + KaTeX)
+;;; Fallback backend: backends/mermaid-render.mjs (mermaid-cli + KaTeX)
 ;;; ---------------------------------------------------------------------------
 
 (defun etaf-md--renderer-start (script)
@@ -1086,7 +1086,7 @@ failures leave the block eligible for retry."
 (defun etaf-md--typeset-start (key kind source env done)
   "Draw SOURCE as KIND under KEY on ENV's page and call DONE when ready.
 Uses the embedded QuickJS native module when available, falling back to
-`scripts/mermaid-render.mjs' otherwise."
+`backends/mermaid-render.mjs' otherwise."
   (if (etaf-md-typeset--native-available-p)
       (etaf-md--typeset-start-native key kind source env done)
     (etaf-md--typeset-start-mmdc key kind source env done)))

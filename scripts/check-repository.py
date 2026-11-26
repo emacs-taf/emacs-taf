@@ -400,13 +400,68 @@ BROKEN_DOCTOR_REMEDY = re.compile(
     re.IGNORECASE,
 )
 
+# Uniform directory-to-archive classification shared across every package:
+# dev/CI/showcase directories must NEVER ship in ELPA tarballs; runtime scripts
+# live in `backends/', flat pure-Markdown manuals live in `docs/', and heavy
+# native C build trees with `vendor/' ship only `native/manifest.json'.
+DEV_ONLY_RESOURCE_ROOTS = frozenset({
+    'tests', 'benchmarks', 'scripts', 'design', 'site',
+    '.github', '.gitea', '.githooks',
+})
+DEV_ONLY_RESOURCE_FILES = frozenset({'Makefile', 'AGENTS.md'})
+MEDIA_EXTENSIONS = frozenset({
+    '.png', '.jpg', '.jpeg', '.gif', '.webp', '.mp4', '.mov', '.avi', '.mkv',
+})
+REQUIRED_RUNTIME_DIRS = ('backends', 'dictionaries', 'book')
+
+
+def _dir_has_media(directory):
+    """Return the first media/screenshot path inside DIRECTORY, or None."""
+    for path in sorted(directory.rglob('*')):
+        if path.is_file() and path.suffix.lower() in MEDIA_EXTENSIONS:
+            return path
+    return None
+
+
+def suggest_release_resources(pkg_dir):
+    """Return the recommended `release-dependencies.json` `resources` list for PKG_DIR.
+
+    Applies the workspace's uniform directory-to-archive law:
+    - Ships `docs` (flat pure-Markdown manuals), `backends`, `dictionaries`,
+      `book`, pure-code `examples` (no screenshots/media), and either
+      `native/manifest.json` (when `native/vendor/` exists) or `native`.
+    - Never ships `tests`, `benchmarks`, `scripts`, `Makefile`, `design`,
+      `site` or `native/vendor`.
+    """
+    pkg_dir = Path(pkg_dir)
+    resources = []
+    if (pkg_dir / 'docs').is_dir() and any((pkg_dir / 'docs').glob('*.md')):
+        resources.append('docs')
+    for name in REQUIRED_RUNTIME_DIRS:
+        if (pkg_dir / name).is_dir():
+            resources.append(name)
+    examples_dir = pkg_dir / 'examples'
+    if examples_dir.is_dir() and _dir_has_media(examples_dir) is None:
+        if any(examples_dir.rglob('*.el')):
+            resources.append('examples')
+    native_dir = pkg_dir / 'native'
+    if native_dir.is_dir():
+        if (native_dir / 'vendor').exists():
+            if (native_dir / 'manifest.json').is_file():
+                resources.append('native/manifest.json')
+        elif (native_dir / 'manifest.json').is_file() or any(native_dir.rglob('*')):
+            resources.append('native')
+    return resources
+
 
 def archive_consistency_errors(root):
-    """Validate release resource paths, native manifests and archive-safe remedies.
+    """Validate release resource paths, directory-to-archive policy and native manifests.
 
-    Catches drift where a package README or `*-doctor' tells archive users to
-    run an unshipped root Makefile or shell build script inside `elpa/', or
-    where a shipped `native/manifest.json' fails schema/checksum validation.
+    Enforces the uniform directory-to-archive classification (blocking dev-only
+    directories such as `tests', `benchmarks', `scripts', `Makefile',
+    `native/vendor' and screenshot `examples/' from ELPA tarballs while
+    requiring declared runtime `backends/' and `native/manifest.json'), catches
+    broken `elpa/ && make' remedies, and validates `native/manifest.json'.
     """
     selection_path = root / 'release-dependencies.json'
     packages_dir = root / 'packages'
@@ -431,21 +486,75 @@ def archive_consistency_errors(root):
         if not pkg_dir.is_dir():
             continue
         resources = (options or {}).get('resources') or []
+        resource_set = set(resources)
         for resource in resources:
             rel = PurePosixPath(resource)
             target = pkg_dir / resource
             if (rel.is_absolute() or not rel.parts or any(part in ('.', '..') for part in rel.parts)
                     or not (target.is_dir() or target.is_file())):
                 errors.append(f'release-dependencies.json: {name}: missing resource {resource}')
+                continue
+            top = rel.parts[0]
+            if top == 'scripts':
+                errors.append(
+                    f'release-dependencies.json: {name}: {resource} is in dev-only scripts/; '
+                    f'move runtime scripts into backends/ instead of shipping scripts/'
+                )
+            elif top in DEV_ONLY_RESOURCE_ROOTS or resource in DEV_ONLY_RESOURCE_FILES:
+                errors.append(
+                    f'release-dependencies.json: {name}: {resource} is development-only '
+                    f'and must not be shipped in ELPA tarballs'
+                )
+            elif top == 'native':
+                if 'vendor' in rel.parts or 'build' in rel.parts:
+                    errors.append(
+                        f'release-dependencies.json: {name}: {resource} must not ship '
+                        f'native vendor/build artifacts in ELPA tarballs'
+                    )
+                elif resource == 'native' and (pkg_dir / 'native' / 'vendor').exists():
+                    errors.append(
+                        f'release-dependencies.json: {name}: native/ contains vendor/ build sources; '
+                        f'list only "native/manifest.json" and host prebuilt binaries on /native/'
+                    )
+            elif top == 'examples' and target.is_dir():
+                media = _dir_has_media(target)
+                if media is not None:
+                    rel_media = media.relative_to(pkg_dir).as_posix()
+                    errors.append(
+                        f'release-dependencies.json: {name}: {resource} contains showcase media '
+                        f'({rel_media}); ship examples/ only when it holds pure runnable code'
+                    )
+            elif top == 'docs' and target.is_dir():
+                for item in sorted(target.rglob('*')):
+                    if item.is_file() and item.suffix.lower() != '.md':
+                        rel_item = item.relative_to(pkg_dir).as_posix()
+                        errors.append(
+                            f'release-dependencies.json: {name}: docs/ must contain only '
+                            f'Markdown files (found {rel_item})'
+                        )
+        # Ensure runtime directories present on disk are not forgotten in resources.
+        for req_dir in REQUIRED_RUNTIME_DIRS:
+            if (pkg_dir / req_dir).is_dir():
+                if not any(r == req_dir or r.startswith(req_dir + '/') for r in resource_set):
+                    errors.append(
+                        f'release-dependencies.json: {name}: runtime directory {req_dir}/ '
+                        f'exists on disk but is missing from resources'
+                    )
         manifest_path = pkg_dir / 'native' / 'manifest.json'
-        if manifest_path.is_file() and native_validator is not None:
-            try:
-                doc = json.loads(manifest_path.read_text(encoding='utf-8'))
-            except (OSError, ValueError) as error:
-                errors.append(f'packages/{name}/native/manifest.json: invalid JSON: {error}')
-            else:
-                for err in native_validator(doc, expected_package=name):
-                    errors.append(f'packages/{name}/native/manifest.json: {err}')
+        if manifest_path.is_file():
+            if not any(r in ('native', 'native/manifest.json') for r in resource_set):
+                errors.append(
+                    f'release-dependencies.json: {name}: native/manifest.json exists on disk '
+                    f'but is missing from resources'
+                )
+            if native_validator is not None:
+                try:
+                    doc = json.loads(manifest_path.read_text(encoding='utf-8'))
+                except (OSError, ValueError) as error:
+                    errors.append(f'packages/{name}/native/manifest.json: invalid JSON: {error}')
+                else:
+                    for err in native_validator(doc, expected_package=name):
+                        errors.append(f'packages/{name}/native/manifest.json: {err}')
         # Archive packages never ship a root Makefile; doctor remedies and ELPA
         # install guides must not tell archive users to run one.
         for doc_name, pattern in (('README.md', BROKEN_ELPA_DOC),

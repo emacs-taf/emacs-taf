@@ -104,9 +104,21 @@ def main():
         root_entry.write_text(entry_text(args.name, args.url), encoding='utf-8')
         print(f'wrote a root entry at {root_entry.relative_to(ROOT)}')
 
+    recommended = []
+    if not args.dry_run and target.is_dir():
+        import importlib.util
+        policy_path = ROOT / 'scripts' / 'check-repository.py'
+        spec = importlib.util.spec_from_file_location('check_repository', policy_path)
+        policy = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(policy)
+        recommended = policy.suggest_release_resources(target)
+
     print()
     print(f'{args.name} is in the checkout. Still a person\'s decision:')
-    print(f'  release-dependencies.json -- whether it ships, and its resource directories')
+    print(f'  release-dependencies.json -- whether it ships; recommended resources: {json.dumps(recommended)}')
+    print('    (runtime backends belong in backends/, offline manuals in docs/;')
+    print('     tests/, benchmarks/, scripts/, Makefile and native/vendor never ship)')
+    print(f'  etaf-install.el -- add target, plus manual OS tools (if any) in etaf-install--system-tools')
     print(f'  its Package-Requires -- which providers it declares')
     print('Then run: make structure-check && make -C packages/' + args.name + ' check')
 

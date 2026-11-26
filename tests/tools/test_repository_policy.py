@@ -402,5 +402,77 @@ class PolicyTests(unittest.TestCase):
         self.assertIn('demo.el: archive users do not receive root Makefile', errors)
         self.assertIn('native/manifest.json: expected schema 1', errors)
 
+    def test_archive_resource_policy_enforces_uniform_directory_classification(self):
+        self.write('AGENTS.md', '# Workspace instructions\n')
+        self.write('docs/architecture.zh-CN.md', '# Ecosystem contract\n')
+        (self.root / 'package.el').unlink()
+        self.write('workspace.json', json.dumps({'schema': 2, 'packages': {
+            'app': {'url': 'https://example.invalid/app.git', 'branch': 'main', 'role': 'application'},
+        }}))
+        self.installer_fixture(['app'], ['app'], ['app'])
+        self.write('packages/app/app.el',
+                   ';;; app.el --- App -*- lexical-binding: t; -*-\n'
+                   ';; Version: 0.1.0\n;; Package-Requires: ((emacs "29.1"))\n(provide \'app)\n')
+        self.write('packages/app/Makefile', 'check:\n\t@true\n')
+        self.write('packages/app/docs/manual.md', '# Manual\n')
+        self.write('packages/app/backends/worker.mjs', 'console.log("ok");\n')
+        self.write('packages/app/scripts/dev-probe.el', ';; dev only\n')
+        self.write('packages/app/tests/app-tests.el', ';; tests\n')
+        self.write('packages/app/benchmarks/bench.el', ';; bench\n')
+        self.write('packages/app/examples/demo.el', ';; demo\n')
+        self.write('packages/app/examples/screenshot.png', 'PNG')
+        self.write('packages/app/native/manifest.json', json.dumps({
+            'schema': 1, 'package': 'app', 'modules': [{
+                'name': 'app-native', 'version': '1', 'description': 'test',
+                'platforms': {'darwin-arm64': {
+                    'file': 'app-native-v1-darwin-arm64.dylib',
+                    'urls': ['https://etaf.top/native/app/1/app-native-v1-darwin-arm64.dylib'],
+                    'sha256': '0' * 64, 'size': 16,
+                }},
+            }],
+        }) + '\n')
+        self.write('packages/app/native/vendor/lib.c', '/* vendor */\n')
+
+        # 1) Smart suggestion picks ONLY offline docs, runtime backends and native/manifest.json.
+        self.assertEqual(
+            ['docs', 'backends', 'native/manifest.json'],
+            POLICY.suggest_release_resources(self.root / 'packages/app'),
+        )
+
+        # 2) Passing the clean recommended list has zero errors.
+        self.write('release-dependencies.json', json.dumps({
+            'schema': 1,
+            'packages': {'app': {'resources': ['docs', 'backends', 'native/manifest.json']}},
+            'targets': ['app'],
+        }))
+        self.assertEqual([], POLICY.archive_consistency_errors(self.root))
+
+        # 3) Shipping dev-only dirs, scripts/, Makefile, screenshot examples, or native/ with vendor/ is rejected.
+        self.write('release-dependencies.json', json.dumps({
+            'schema': 1,
+            'packages': {'app': {'resources': [
+                'docs', 'backends', 'tests', 'benchmarks', 'Makefile',
+                'scripts', 'examples', 'native',
+            ]}},
+            'targets': ['app'],
+        }))
+        errors = '\n'.join(POLICY.archive_consistency_errors(self.root))
+        self.assertIn('tests is development-only', errors)
+        self.assertIn('benchmarks is development-only', errors)
+        self.assertIn('Makefile is development-only', errors)
+        self.assertIn('dev-only scripts/', errors)
+        self.assertIn('contains showcase media', errors)
+        self.assertIn('contains vendor/ build sources', errors)
+
+        # 4) Forgetting on-disk runtime backends/ or native/manifest.json is also caught.
+        self.write('release-dependencies.json', json.dumps({
+            'schema': 1,
+            'packages': {'app': {'resources': ['docs']}},
+            'targets': ['app'],
+        }))
+        missing_errors = '\n'.join(POLICY.archive_consistency_errors(self.root))
+        self.assertIn('runtime directory backends/ exists on disk', missing_errors)
+        self.assertIn('native/manifest.json exists on disk', missing_errors)
+
 
 if __name__ == '__main__':unittest.main()

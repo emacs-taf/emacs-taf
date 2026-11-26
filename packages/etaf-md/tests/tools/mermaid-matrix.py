@@ -3,7 +3,7 @@
 
 This is the tool's own check, separate from any application: it takes the
 package's diagram configuration for each page palette, sends the whole matrix
-to `scripts/mermaid-render.mjs` the way the preview does, and asserts what a
+to `backends/mermaid-render.mjs` the way the preview does, and asserts what a
 picture must satisfy before an application should trust it:
 
   * every kind draws, at a size that is not degenerate;
@@ -37,7 +37,7 @@ from PIL import Image, ImageChops
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURES = ROOT / "tests" / "fixtures" / "mermaid"
-RENDERER = ROOT / "scripts" / "mermaid-render.mjs"
+RENDERER = ROOT / "backends" / "mermaid-render.mjs"
 PROVIDERS = ("etaf", "etaf-ui", "ebox", "ecss")
 
 PALETTES = ("dark", "light", "sepia")

@@ -9,7 +9,7 @@
 ;; such as `svg', `dot'/`graphviz', `plantuml') asynchronously into bounded LRU
 ;; disk caches.
 ;;
-;; Mermaid and KaTeX share one long-lived Chromium worker (`scripts/mermaid-render.mjs')
+;; Mermaid and KaTeX share one long-lived Chromium worker (`backends/mermaid-render.mjs')
 ;; that produces sharp SVG vectors (plus raster fallback) tinted to the active
 ;; page palette, with per-page cached configuration.  Rendering never starts a
 ;; subprocess; finished pictures repaint only their owning block.
@@ -91,10 +91,10 @@ View, or nil to fall back to the built-in code/diagram renderer.")
   "Idle shutdown timer for the worker process.")
 
 (defun etaf-org-typeset--renderer-script ()
-  "Return path to `scripts/mermaid-render.mjs', or nil if absent."
+  "Return path to `backends/mermaid-render.mjs', or nil if absent."
   (when-let* ((entry (locate-library "etaf-org"))
               ((not (string-suffix-p ".eln" entry)))
-              (script (expand-file-name "scripts/mermaid-render.mjs"
+              (script (expand-file-name "backends/mermaid-render.mjs"
                                         (file-name-directory entry)))
               ((file-exists-p script)))
     script))
