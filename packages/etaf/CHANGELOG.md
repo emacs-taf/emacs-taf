@@ -10,6 +10,7 @@
 
 ### Fixed
 
+- `etaf-video` native GPU overlay no longer falsely treats a canvas whose bottom rows are clipped by a shorter container as occluded, and clamps its overlay height to the rendered row spans so video remains visible without overlapping adjacent chrome.
 - Directional arrow fallback scrolling moves one line per keypress instead of three, keeping mouse wheel scrolling at `ebox-scroll-step`.
 - `etaf-runtime-set-key-layer` validates all entries atomically before mutating the keymap, and `etaf-runtime-clear-key-layer` / layer updates prune stale key sequences and empty prefix submaps so rebinding shorter keys on a previously used prefix succeeds cleanly.
 

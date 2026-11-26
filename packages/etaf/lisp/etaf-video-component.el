@@ -742,12 +742,23 @@ frame does not pay for an ordinary ETAF publication."
                  (setf (etaf-video--instance-session instance) nil)))
              (message "etaf-video: %s" (error-message-string problem)))))))))
 
-(defun etaf-video--instance-gpu-occluded-p (instance runtime buffer spans rows)
-  "Return non-nil when an in-buffer overlay/modal covers INSTANCE's canvas."
+(defun etaf-video--instance-gpu-occluded-p (instance runtime buffer spans _rows)
+  "Return non-nil when an in-buffer overlay/modal covers INSTANCE's canvas.
+A canvas whose bottom rows are clipped by a shorter container still has
+contiguous rendered row spans and remains visible (clamped to its rendered
+spans) rather than falsely treated as occluded."
   (or (etaf-runtime-surface runtime)
       (etaf-runtime-overlay-entries runtime)
       (null spans)
-      (< (length spans) rows)
+      (let ((prev nil)
+            (gap nil))
+        (dolist (span spans)
+          (let ((row (car span)))
+            (when (and prev (integerp prev) (integerp row)
+                       (/= row (1+ prev)))
+              (setq gap t))
+            (setq prev row)))
+        gap)
       (with-current-buffer buffer
         (cl-some
          (lambda (span)
@@ -857,10 +868,18 @@ frame does not pay for an ordinary ETAF publication."
                          (wr (nth 2 edges))
                          (wb (nth 3 edges))
                          (disp (etaf-video--instance-display-size instance))
+                         (cell-h (max 1 (or (cdr (etaf-video--canvas-cell runtime frame))
+                                            (frame-char-height frame))))
+                         (last-beg (cadr (car (last spans))))
+                         (last-posn (and last-beg (posn-at-point last-beg window)))
+                         (last-xy (and last-posn (posn-x-y last-posn)))
+                         (spans-h (if last-xy
+                                      (max cell-h (+ (- (cdr last-xy) (cdr xy)) cell-h))
+                                    (* (length spans) cell-h)))
                          (fx (+ wl (car xy)))
                          (fy (+ wt (cdr xy)))
                          (fw (max 0 (min (car disp) (- wr fx))))
-                         (fh (max 0 (min (cdr disp) (- wb fy))))
+                         (fh (max 0 (min (cdr disp) spans-h (- wb fy))))
                          (is-child (and (frame-parent frame) t))
                          (outer
                           (let ((raw (or (ignore-errors (frame-edges frame 'outer-edges))
