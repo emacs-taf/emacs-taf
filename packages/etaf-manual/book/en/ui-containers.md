@@ -99,7 +99,7 @@ Render a horizontal or vertical separator, optionally with a centered label.
 
 ## The surface tokens
 
-<!-- index: ui-panel-fg; ui-panel-bg; ui-panel-border; surface triple -->
+<!-- index: ui-panel-fg; ui-panel-bg; ui-panel-hover-bg; ui-panel-border; surface triple -->
 
 #### Token: :ui-panel-fg
 
@@ -112,6 +112,12 @@ The foreground of a catalog surface.
 The background of a catalog surface.
 
 **Semantics.** The fill behind panel and card content, and behind the floating surfaces' panels. The `flat` panel variant omits it deliberately.
+
+#### Token: :ui-panel-hover-bg
+
+The hover background of an interactive row or header on a catalog surface.
+
+**Semantics.** Interactive catalog surfaces (such as collapsible accordion headers) paint pointer hover feedback with this color so hover stays distinct and legible in both light and dark themes. When a Theme omits it, it is derived from `:ui-panel-bg`.
 
 #### Token: :ui-panel-border
 

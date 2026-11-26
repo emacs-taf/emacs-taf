@@ -97,12 +97,37 @@ contain only paint parameters, never nodes, input handlers or mounted trees.")
     (puthash source variants ebox-image--composites)
     (cdr entry)))
 
+(defvar ebox-image--verified (make-hash-table :test #'equal)
+  "Bounded cache of verified static image sources mapped to (TYPE . BYTES).
+A verified source already passed `image-size' decoding on its frame; resizing
+the same unmodified file or bytes to a new grid skips redundant disk reads and
+synchronous rasterization so off-screen images decode lazily on display.")
+
+(defconst ebox-image--verified-limit 128
+  "Maximum cached verified static image entries.")
+
+(defvar ebox-image--truenames (make-hash-table :test #'equal)
+  "Bounded cache of canonical paths keyed by (PATH DEV . INO).")
+
 (defun ebox-image-cache-clear ()
   "Release cached preparations and composites without changing live images.
 Call after installing converters or changing their configuration."
   (clrhash ebox-image--cache)
   (clrhash ebox-image--composites)
+  (clrhash ebox-image--verified)
+  (clrhash ebox-image--truenames)
   (setq ebox-image--cache-uses 0))
+
+(defun ebox-image--cached-truename (path attrs)
+  "Return canonical truename of PATH with ATTRS, reusing cached lookup."
+  (let* ((key (list path (file-attribute-device-number attrs)
+                    (file-attribute-inode-number attrs)))
+         (hit (gethash key ebox-image--truenames)))
+    (or hit
+        (let ((true (file-truename path)))
+          (when (>= (hash-table-count ebox-image--truenames) 256)
+            (clrhash ebox-image--truenames))
+          (puthash key true ebox-image--truenames)))))
 
 (defun ebox-image--source (source)
   "Validate SOURCE and return an owned source and its cache identity."
@@ -113,7 +138,7 @@ Call after installing converters or changing their configuration."
     (let* ((path (expand-file-name source))
            (attrs (file-attributes path 'integer)))
       (list path
-            (list path (and attrs (file-truename path))
+            (list path (and attrs (ebox-image--cached-truename path attrs))
                   (and attrs (list (file-attribute-size attrs)
                                    (file-attribute-modification-time attrs)
                                    (file-attribute-status-change-time attrs)
@@ -195,15 +220,22 @@ descriptor's ascent percentage."
              (want (if (eq inset 'bottom) font-ascent (- height (- lh font-ascent)))))
         (list (list 'raise (/ (float (- want own)) lh)) slice descriptor)))))
 
-(defun ebox-image--graphics (source columns rows metrics frame &optional inset)
+(defun ebox-image--graphics (source identity columns rows metrics frame &optional inset)
   "Prepare SOURCE as COLUMNS by ROWS display slices using METRICS on FRAME.
-INSET is (TOP . BOTTOM) pixels left empty above and below the image."
+IDENTITY names SOURCE's immutable bytes or file stat tuple so repeated resizes
+of an already-verified static image skip redundant reads and synchronous
+rasterization.  INSET is (TOP . BOTTOM) pixels left empty above and below."
   (let* ((canvas (and (consp source)
                       (eq (plist-get (cdr source) :type) 'canvas)))
-         (data (unless canvas (ebox-image--bytes source)))
-         (type (if canvas 'canvas
-                 (image-type data (and (consp source)
-                                       (plist-get (cdr source) :type)) t))))
+         (vkey (and (not canvas) (list identity frame)))
+         (verified (and vkey (gethash vkey ebox-image--verified)))
+         (data (cond (canvas nil)
+                     (verified (cdr verified))
+                     (t (ebox-image--bytes source))))
+         (type (cond (canvas 'canvas)
+                     (verified (car verified))
+                     (t (image-type data (and (consp source)
+                                              (plist-get (cdr source) :type)) t)))))
     (when (image-type-available-p type)
       (pcase-let* ((`(,cw ,lh ,ascent) metrics)
                    (top (min (or (car inset) 0) (1- lh)))
@@ -238,13 +270,21 @@ INSET is (TOP . BOTTOM) pixels left empty above and below the image."
                                              (and ebox-image--background
                                                   (list :background
                                                         ebox-image--background)))))))
-        ;; A type that cannot decode/scale this source is not usable.  Decoding
-        ;; here also warms Emacs' cache before a caller publishes the block.
-        ;; Each row is one glyph showing a full-width slice: redisplay
-        ;; draws an image once per glyph, so per-cell slices multiply the
-        ;; cost of every scroll and repaint by the column count.
-        (when (and descriptor (equal (image-size descriptor t frame)
-                                     (cons width height)))
+        ;; Validate on first preparation of each static source so corrupt or
+        ;; unscalable inputs still degrade cleanly; subsequent resizes of the
+        ;; exact same verified bytes skip synchronous rasterization so off-screen
+        ;; diagrams decode lazily when scrolled into view.
+        (when (and descriptor
+                   (or verified
+                       (and (equal (image-size descriptor t frame)
+                                   (cons width height))
+                            (progn
+                              (when vkey
+                                (when (>= (hash-table-count ebox-image--verified)
+                                          ebox-image--verified-limit)
+                                  (clrhash ebox-image--verified))
+                                (puthash vkey (cons type data) ebox-image--verified))
+                              t))))
           (mapconcat
            (lambda (y)
              (let* ((start (max 0 (- (* y lh) top)))
@@ -490,7 +530,7 @@ Repeat after source or frame/font changes; identical preparations are cached."
     (or cached
         (let ((text (and metrics
                          (ignore-errors
-                           (ebox-image--graphics owned columns rows metrics frame inset))))
+                           (ebox-image--graphics owned identity columns rows metrics frame inset))))
               (selected 'graphics) converter)
           (unless text
             (setq selected 'text)

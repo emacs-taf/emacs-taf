@@ -888,13 +888,20 @@ returns only blank lines before the first trailing definition."
                                  (mapconcat #'identity
                                             (plist-get block :cached-images) "|"))))))
 
+(defun etaf-md--wide-block-p (block)
+  "Return non-nil when BLOCK may break out wider than the prose column."
+  (and (listp block)
+       (or (eq (plist-get block :type) 'table)
+           (etaf-md--figure-block-p block))))
+
 (defun etaf-md--make-entry (session block text trailing widths &optional reuse-entry)
   "Build or update a published block entry for BLOCK with TRAILING blank lines.
 When REUSE-ENTRY is supplied, keeps its stable `:slot', `:ref' and `:cell',
 updating `:cell' in place only when rendered content changed, and keeping its
-`eq' `:view' when `:trailing' and figure-block status are unchanged."
+`eq' `:view' when `:trailing', figure-block and wide-block status are unchanged."
   (let* ((digest (etaf-md--block-digest block text))
-         (figure (and (etaf-md--figure-block-p block) t)))
+         (figure (and (etaf-md--figure-block-p block) t))
+         (wide (and (etaf-md--wide-block-p block) t)))
     (if reuse-entry
         (let* ((slot (plist-get reuse-entry :slot))
                (ref (plist-get reuse-entry :ref))
@@ -904,7 +911,8 @@ updating `:cell' in place only when rendered content changed, and keeping its
                                   (equal (etaf-md--rendered-block old-block)
                                          (etaf-md--rendered-block block))))
                (same-shell (and (eql (plist-get reuse-entry :trailing) trailing)
-                                (eq (plist-get reuse-entry :figure-p) figure)))
+                                (eq (plist-get reuse-entry :figure-p) figure)
+                                (eq (plist-get reuse-entry :wide-p) wide)))
                (view (if same-shell
                          (plist-get reuse-entry :view)
                        (etaf-md--block-view
@@ -915,7 +923,7 @@ updating `:cell' in place only when rendered content changed, and keeping its
             (unless (gethash slot states)
               (puthash slot (etaf-ref nil :name 'etaf-md-block-state) states)))
           (list :slot slot :ref ref :cell cell :key digest :block block
-                :trailing trailing :figure-p figure :view view))
+                :trailing trailing :figure-p figure :wide-p wide :view view))
       (let* ((slot (etaf-md--make-slot))
              (ref (make-symbol etaf-md--block-ref-prefix))
              (cell (etaf-ref block :name 'etaf-md-block-cell))
@@ -924,7 +932,7 @@ updating `:cell' in place only when rendered content changed, and keeping its
         (when-let* ((states (plist-get session :block-states)))
           (puthash slot (etaf-ref nil :name 'etaf-md-block-state) states))
         (list :slot slot :ref ref :cell cell :key digest :block block
-              :trailing trailing :figure-p figure :view view)))))
+              :trailing trailing :figure-p figure :wide-p wide :view view)))))
 
 (defun etaf-md--reconcile-slice (session old-entries new-blocks next-begin
                                          text widths env &optional has-footnotes)
@@ -1205,6 +1213,7 @@ while keeping heading links active and body links underlined."
                         :follow-scroll-line nil
                         :resize-anchor nil
                         :last-canvas-width nil
+                        :fit-cols nil
                         :fit-pixel-width nil
                         :fit-char-width nil
                         :asset-timer nil
@@ -1229,8 +1238,10 @@ while keeping heading links active and body links underlined."
                         :block-state (etaf-ref nil :name 'etaf-md-block-state)
                         ;; Saved buffer positions for footnote `↩' back-links.
                         :footnote-origins (make-hash-table :test #'equal)
-                        ;; The rendering environment shared by the blocks of
-                        ;; one appearance.
+                        ;; The rendering environments shared by the blocks of
+                        ;; one appearance (`:base-env-cache' is width-free so
+                        ;; prose blocks stay untouched across width resizes).
+                        :base-env-cache nil
                         :env-cache nil
                         :title (etaf-ref (or title
                                              (and file
@@ -1717,6 +1728,11 @@ performs zero work and only that single block Component re-renders."
           (etaf-set-value (etaf-md--ref session :page-structure)
                           (list :meta meta
                                 :leading leading
+                                :items (mapcar (lambda (e)
+                                                 (list (plist-get e :slot)
+                                                       (plist-get e :wide-p)
+                                                       (plist-get e :view)))
+                                               entries)
                                 :views (mapcar (lambda (e) (plist-get e :view)) entries)
                                 :footnotes footnotes)))
         (etaf-md--write session :title
@@ -1850,12 +1866,13 @@ past `etaf-md-width-max' restores automatic wide-table viewport breakout."
                       current))
          (raw (+ effective delta))
          (width (etaf-md--clamp-width raw)))
-    (cond
-     ((< delta 0)
-      (etaf-md--write session :width-locked t))
-     ((and (> delta 0) (> raw etaf-md-width-max))
-      (etaf-md--write session :width-locked nil)))
-    (etaf-md--write session :width width)
+    (etaf-batch
+      (cond
+       ((< delta 0)
+        (etaf-md--write session :width-locked t))
+       ((and (> delta 0) (> raw etaf-md-width-max))
+        (etaf-md--write session :width-locked nil)))
+      (etaf-md--write session :width width))
     width))
 
 (defun etaf-md--fit-width (session)
@@ -2252,24 +2269,16 @@ frame, so FRAME nil reads that frame."
         (etaf-md--write session :lightbox (list :items items :index idx))
         t))))
 
-(defun etaf-md--env-inputs (session)
-  "Return the values SESSION's rendering environment is built from.
-Every value the environment prints is read here, once.  Reading them is what
-makes the shared environment follow a palette, width or theme change, so a new
-input belongs both in this list and in `etaf-md--build-env'.  A
-face-derived palette also reads the appearance, which is what makes a block
-re-render after a theme switch instead of keeping the faces it first read."
+(defun etaf-md--base-env-inputs (session)
+  "Return the non-width inputs SESSION's base rendering environment depends on.
+Excluding `:width', `:width-locked' and viewport columns lets width-independent
+prose blocks skip re-rendering across window resizes and column adjustments."
   (let* ((source (etaf-md--read session :theme-source))
          (face-derived (not (eq source 'palette)))
          (frame (etaf-md--display-frame session)))
     (list :theme (etaf-md--read session :theme)
           :source source
           :rev (etaf-md--read session :appearance-rev)
-          :viewport-width (etaf-md--read session :viewport-width)
-          :width (etaf-md--read session :width)
-          :width-locked (etaf-md--read session :width-locked)
-          :columns (cdr (etaf-md--page-widths
-                            session (etaf-md--read session :width)))
           :background (etaf-md--page-background session)
           :surface (and face-derived (etaf-md--frame-surface frame))
           :appearance (and face-derived (etaf-appearance))
@@ -2278,6 +2287,17 @@ re-render after a theme switch instead of keeping the faces it first read."
           :annotations (plist-get session :annotations)
           :reveal-spoilers (etaf-md--read session :reveal-spoilers))))
 
+(defun etaf-md--env-inputs (session)
+  "Return the values SESSION's width-aware rendering environment is built from.
+Reads `etaf-md--page-widths' (which tracks `etaf-canvas-columns' reactively
+when mounted) without double-subscribing to `:viewport-width'."
+  (let* ((max-width (etaf-md--read session :width))
+         (widths (etaf-md--page-widths session max-width)))
+    (list :base (etaf-md--base-env-inputs session)
+          :width (car widths)
+          :figure-width (cdr widths)
+          :width-locked (etaf-md--read session :width-locked))))
+
 (declare-function etaf-md--render-code-block "etaf-md-typeset" (block env))
 (declare-function etaf-md--render-math "etaf-md-typeset" (block env))
 (declare-function etaf-md-typeset-request "etaf-md-typeset" (session))
@@ -2285,16 +2305,12 @@ re-render after a theme switch instead of keeping the faces it first read."
 (declare-function etaf-md-typeset-available-p "etaf-md-typeset" ())
 (declare-function etaf-md--typeset-block-kind "etaf-md-typeset" (block))
 
-(defun etaf-md--build-env (session)
-  "Build SESSION's rendering environment from its current inputs."
-  (let* ((max-width (etaf-md--read session :width))
-         (widths (etaf-md--page-widths session max-width)))
-    (list :theme (etaf-md--read session :theme)
-          :palette (etaf-md--session-palette session)
-          :width (car widths)
-          :width-locked (etaf-md--read session :width-locked)
-          :figure-width (cdr widths)
-          :background (etaf-md--page-background session)
+(defun etaf-md--build-base-env (session)
+  "Build SESSION's width-free rendering environment from its appearance inputs."
+  (list :session session
+        :theme (etaf-md--read session :theme)
+        :palette (etaf-md--session-palette session)
+        :background (etaf-md--page-background session)
         :dir (plist-get session :dir)
         :features (plist-get session :features)
         :annotations (plist-get session :annotations)
@@ -2332,13 +2348,33 @@ re-render after a theme switch instead of keeping the faces it first read."
         ;; A picture costs a program, so only a session with a file may start
         ;; one: the finished render repaints that file's page.
         :render-code-block #'etaf-md--render-code-block
-        :render-math #'etaf-md--render-math)))
+        :render-math #'etaf-md--render-math))
+
+(defun etaf-md--base-env (session)
+  "Return SESSION's cached width-free rendering environment."
+  (let* ((inputs (etaf-md--base-env-inputs session))
+         (cached (plist-get session :base-env-cache)))
+    (if (equal (car cached) inputs)
+        (cdr cached)
+      (let ((env (etaf-md--build-base-env session)))
+        (plist-put session :base-env-cache (cons inputs env))
+        env))))
+
+(defun etaf-md--build-env (session)
+  "Build SESSION's width-aware rendering environment from its current inputs."
+  (let* ((base (etaf-md--base-env session))
+         (max-width (etaf-md--read session :width))
+         (widths (etaf-md--page-widths session max-width)))
+    (append (list :width (car widths)
+                  :width-locked (etaf-md--read session :width-locked)
+                  :figure-width (cdr widths))
+            base)))
 
 (defun etaf-md--env (session)
   "Return SESSION's rendering environment, reused until one of its inputs changes.
-A block Component reads this plist in its own render, so its colors and
-measure follow the session; a publish that changes no input hands every
-retained block the same environment object, which keeps its props unchanged."
+Width-sensitive blocks read this plist in their own render so tables and figures
+follow measure changes; width-independent prose blocks read `etaf-md--base-env'
+instead so window resizes never rebuild their VDOM subtrees."
   (let ((inputs (etaf-md--env-inputs session)))
     (let ((cached (plist-get session :env-cache)))
       (if (equal (car cached) inputs)

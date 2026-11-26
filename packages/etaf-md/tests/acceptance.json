@@ -699,6 +699,16 @@
       "name": "etaf-md-tests-resize-preserves-scroll-and-source-alignment",
       "file": "tests/etaf-md-tests.el",
       "purpose": "Narrowing/widening the reading column and dragging/resizing the preview window width preserve the visible top block in single-window mode and keep preview aligned with the source window's visible line under follow-scroll."
+    },
+    {
+      "name": "etaf-md-tests-width-change-uses-single-flush-and-keeps-state",
+      "file": "tests/etaf-md-tests.el",
+      "purpose": "Viewport refits and reading-column adjustments (`etaf-md-narrower` / `etaf-md-wider`) settle in a single flush while preserving interactive widget state, tables and prose layout."
+    },
+    {
+      "name": "etaf-md-tests-goto-source-clears-highlight-on-tty",
+      "file": "tests/etaf-md-tests.el",
+      "purpose": "`etaf-md-goto-source' automatically clears its momentary source-line highlight on terminal frames where `pulse' cannot fade, matching GUI behavior while still honoring `pulse-flag' set to `never'."
     }
   ]
 }

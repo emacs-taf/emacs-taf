@@ -343,7 +343,11 @@ never starts a render."
 (defun etaf-md--typeset-figure (kind path env)
   "Return the View of the SVG picture at PATH for KIND in ENV."
   (let* ((width (max 24 (or (plist-get env :figure-width)
-                            (plist-get env :width) 92)))
+                            (plist-get env :width)
+                            (when-let* ((session (plist-get env :session)))
+                              (cdr (etaf-md--page-widths
+                                    session (etaf-md--read session :width))))
+                            92)))
          (pixels (when-let* ((natural (ignore-errors
                                         (etaf-md--image-pixels path))))
                    (cons (/ (car natural) (float etaf-md-typeset--scale))

@@ -217,5 +217,44 @@ lay the page out at half the width it has."
       (should (equal (etaf-fit-columns 40 42 30)
                      '(:across 1 :item 40 :offset 0))))))
 
+(etaf-define-component etaf-test-viewport-single-flush-comp (&key log)
+  "Viewport-reactive test component recording updated host sizes."
+  :setup
+  (progn
+    (etaf-on-updated
+     (lambda ()
+       (when (functionp log)
+         (funcall log (etaf-host-ref-size (etaf-current-runtime) 'panel)))))
+    nil)
+  :render
+  (let ((w (car (etaf-runtime-viewport))))
+    (etaf-node 'box (list :ref 'panel :width '(vw 100))
+               (list (etaf-node 'text nil (list (format "vw=%s" w)))))))
+
+(ert-deftest etaf-viewport-refit-batches-reactive-update-into-one-flush ()
+  "Refitting a Runtime with viewport-reactive Components flushes once and settles geometry."
+  (let ((flushes 0)
+        (updated-sizes nil))
+    (etaf-test-with-mount
+        (runtime (etaf-node 'etaf-test-viewport-single-flush-comp
+                            (list :log (lambda (sz) (push sz updated-sizes)))
+                            nil))
+      (let ((flush-hook (lambda (rt)
+                          (when (eq rt runtime)
+                            (setq flushes (1+ flushes))))))
+        (add-hook 'etaf-runtime-after-flush-functions flush-hook)
+        (unwind-protect
+            (progn
+              (setq flushes 0 updated-sizes nil)
+              (should (etaf-runtime-refit runtime 320 12))
+              (should (= flushes 1))
+              (should (equal (car updated-sizes) (cons 320 1)))
+              (should (string-match-p "vw=320" (buffer-string)))
+              (should (etaf-runtime-refit runtime 180 12))
+              (should (= flushes 2))
+              (should (equal (car updated-sizes) (cons 180 1)))
+              (should (string-match-p "vw=180" (buffer-string))))
+          (remove-hook 'etaf-runtime-after-flush-functions flush-hook))))))
+
 (provide 'etaf-viewport-tests)
 ;;; etaf-viewport-tests.el ends here

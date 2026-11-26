@@ -257,11 +257,23 @@ refit 是一次操作、一个结果：测量视口，与已提交值不同时�
 
 <!-- index: 视口变化钩子; 稳定尺寸 -->
 
+#### Hook: ebox-viewport-prepare-functions
+
+视口尺寸更新后、重排 flush 之前，在已挂载缓冲区上运行的异常钩子。
+
+**语义。** `ebox-refit` 写入新视口尺寸并把依赖视口的节点标脏后，先于 flush 运行该钩子。钩子内读 `ebox-mount-viewport` 已能拿到新尺寸，但树尚未按新尺寸重排，ETAF 等响应式层借此在同一轮 flush 中提交视口驱动的节点更新，避免两次整页重绘。
+
+**返回。** 钩子的返回值被忽略。
+
+**错误。** 其中一个函数报错不会阻止其它函数。
+
+**参见。** `ebox-viewport-change-functions`、`ebox-mount-viewport`。
+
 #### Hook: ebox-viewport-change-functions
 
 视口尺寸变化后，在已挂载缓冲区上运行的异常钩子，窗口 resize 或 `ebox-mount-set-viewport` 触发的都算。
 
-**语义。** 它在新尺寸的重排稳定后运行一次，所以钩子内读 `ebox-mount-viewport` 会得到新尺寸，而且缓冲区已显示新布局。ETAF 用它更新 Runtime 的响应式视口 cell，`etaf-viewport` 的读者随之重跑；应用也可以用它做一些必须发生在渲染之外的自适应工作。
+**语义。** 它在新尺寸的重排稳定后运行一次，所以钩子内读 `ebox-mount-viewport` 会得到新尺寸，而且缓冲区已显示新布局。应用可以用它做一些需要在渲染之外读取已稳定几何的自适应工作。
 
 **返回。** 钩子的返回值被忽略。
 

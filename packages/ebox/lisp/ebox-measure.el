@@ -605,26 +605,31 @@ instead of reading the CJK font as an overflowing fallback glyph."
 (defvar ebox--row-strut-cache nil
   "Cons of a row-metric key and the row strut built from it.")
 
+(defvar ebox--active-row-strut 'unset
+  "When not `unset', the precomputed row strut for the current flush/render.")
+
 (defun ebox--row-strut ()
   "Return the shared string that fills a published row to one line height.
 Its zero-width space is exactly the line high and places the baseline where
 images align, so a row holding only shorter glyphs still measures one line.
 It starts the row, inside the visible area, so the truncation boundary
 cannot drop it.  Return nil when ordinary text already reaches the line."
-  (let* ((metrics (or ebox--active-metrics
-                      (ebox--display-metrics ebox--measure-buffer)))
-         (line (plist-get metrics :line-height))
-         (ascent (plist-get metrics :ascent))
-         (text (ebox--face-text-height nil))
-         (key (list line ascent text ebox--width-epoch)))
-    (unless (equal key (car ebox--row-strut-cache))
-      (setq ebox--row-strut-cache
-            (cons key (and (> line text)
-                           (propertize "\u200b"
-                                       'display (list 'space :width '(0)
-                                                      :height (list line)
-                                                      :ascent ascent))))))
-    (cdr ebox--row-strut-cache)))
+  (if (not (eq ebox--active-row-strut 'unset))
+      ebox--active-row-strut
+    (let* ((metrics (or ebox--active-metrics
+                        (ebox--display-metrics ebox--measure-buffer)))
+           (line (plist-get metrics :line-height))
+           (ascent (plist-get metrics :ascent))
+           (text (ebox--face-text-height nil))
+           (key (list line ascent text ebox--width-epoch)))
+      (unless (equal key (car ebox--row-strut-cache))
+        (setq ebox--row-strut-cache
+              (cons key (and (> line text)
+                             (propertize "\u200b"
+                                         'display (list 'space :width '(0)
+                                                        :height (list line)
+                                                        :ascent ascent))))))
+      (cdr ebox--row-strut-cache))))
 
 (defun ebox--fit-row-height (cluster face scale)
   "Return the height of a row holding CLUSTER at SCALE beside text under FACE."

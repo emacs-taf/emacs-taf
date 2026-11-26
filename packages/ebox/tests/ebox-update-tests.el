@@ -836,4 +836,58 @@ B "))
               (should (ebox-test-buffer-matches-render-p root buffer))
               (should (cl-every #'equal-including-properties buf-lines ref-lines)))))))))
 
+(ert-deftest ebox-viewport-prepare-hook-batches-mutations-into-one-flush ()
+  "Mutations applied during `ebox-viewport-prepare-functions' share the refit flush."
+  (ebox-test-with-mounted (buffer root '(column :width (vw 100)
+                                                (box :id "label" "initial")))
+    (let* ((label (car (ebox-selector-query root "#label")))
+           (settled nil)
+           (before (ebox-mount-flush-count buffer))
+           (prepare-hook
+            (lambda (changed)
+              (when (eq changed buffer)
+                (ebox-node-set-text (ebox-node-child label 0)
+                                    (format "w=%d" (car (ebox-mount-viewport changed)))))))
+           (change-hook
+            (lambda (changed)
+              (when (eq changed buffer)
+                (push (list (ebox-mount-viewport changed)
+                            (plist-get (ebox-node-geometry root) :width)
+                            (string-trim (ebox-test-buffer-text changed)))
+                      settled)))))
+      (add-hook 'ebox-viewport-prepare-functions prepare-hook)
+      (add-hook 'ebox-viewport-change-functions change-hook)
+      (unwind-protect
+          (progn
+            (ebox-mount-set-viewport buffer 30 10)
+            (should (= (ebox-mount-flush-count buffer) (1+ before)))
+            (should (equal settled (list (list '(30 . 10) 30 "w=30"))))
+            (let ((ebox-viewport-width 30) (ebox-viewport-height 10))
+              (should (ebox-test-buffer-matches-render-p root buffer))))
+        (remove-hook 'ebox-viewport-prepare-functions prepare-hook)
+        (remove-hook 'ebox-viewport-change-functions change-hook)))))
+
+(ert-deftest ebox-bulk-line-reflow-matches-render-and-preserves-positions ()
+  "Large width reflows taking the bulk buffer rewrite stay identical to `ebox-render'."
+  (let* ((rows (cl-loop for i from 1 to 160
+                        collect (list 'box :width 'stretch
+                                      (format "Row %03d alpha beta gamma delta epsilon" i))))
+         (tree (cons 'column (cons :width (cons '(vw 100) rows)))))
+    (ebox-test-with-mounted (buffer root tree)
+      (ebox-mount-set-viewport buffer 60 20)
+      (let ((ebox-viewport-width 60) (ebox-viewport-height 20))
+        (should (ebox-test-buffer-matches-render-p root buffer)))
+      (with-current-buffer buffer
+        (goto-char (point-min))
+        (forward-line 40))
+      (let ((before (ebox-mount-flush-count buffer)))
+        (ebox-mount-set-viewport buffer 24 20)
+        (should (= (ebox-mount-flush-count buffer) (1+ before)))
+        (let ((ebox-viewport-width 24) (ebox-viewport-height 20))
+          (should (ebox-test-buffer-matches-render-p root buffer)))
+        (ebox-mount-set-viewport buffer 56 20)
+        (should (= (ebox-mount-flush-count buffer) (+ 2 before)))
+        (let ((ebox-viewport-width 56) (ebox-viewport-height 20))
+          (should (ebox-test-buffer-matches-render-p root buffer)))))))
+
 ;;; ebox-update-tests.el ends here

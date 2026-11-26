@@ -4147,3 +4147,119 @@ follow-scroll mode re-aligns preview `window-start' to the source window's line.
         (with-current-buffer preview (ignore-errors (etaf-md-close))))
       (when (buffer-live-p source) (kill-buffer source))
       (delete-file file))))
+
+(ert-deftest etaf-md-tests-width-change-uses-single-flush-and-keeps-state ()
+  "Refitting or adjusting width flushes once per change while preserving layout and widget state."
+  (let* ((file (make-temp-file "etaf-md-single-flush-" nil ".md"))
+         (preview nil)
+         (flushes 0))
+    (unwind-protect
+        (progn
+          (with-temp-file file
+            (insert "# Width Fluency Test\n\n"
+                    "Paragraph one with plenty of words so narrowing wraps cleanly across multiple lines.\n\n"
+                    ":::details {title=\"Toggle Me\"}\n"
+                    "Hidden detail body revealed after click.\n"
+                    ":::\n\n"
+                    ":::card {title=\"Prose Card\"}\n"
+                    "Card prose content stays readable across width changes.\n"
+                    ":::\n\n"
+                    "| ColA | ColB | ColC | ColD |\n"
+                    "| --- | --- | --- | --- |\n"
+                    "| alpha value | beta value | gamma value | delta value |\n\n"
+                    ":::columns {cols=2}\n"
+                    ":::column\nLeft column prose.\n:::\n"
+                    ":::column\nRight column prose.\n:::\n"
+                    ":::\n"))
+          (setq preview (etaf-md-open file))
+          (let* ((rt (etaf-runtime-for-buffer preview))
+                 (flush-hook (lambda (r)
+                               (when (eq r rt)
+                                 (setq flushes (1+ flushes))))))
+            (should rt)
+            ;; Open the details block so we verify state survives width changes.
+            (with-current-buffer preview
+              (goto-char (point-min))
+              (should (search-forward "Toggle Me" nil t))
+              (goto-char (match-beginning 0))
+              (call-interactively (key-binding (kbd "RET")))
+              (should (string-match-p "Hidden detail body revealed after click"
+                                      (buffer-string))))
+            (add-hook 'etaf-runtime-after-flush-functions flush-hook)
+            (unwind-protect
+                (with-current-buffer preview
+                  ;; 1. Viewport refit narrow -> single flush.
+                  (setq flushes 0)
+                  (etaf-runtime-refit rt 560 40)
+                  (should (<= flushes 1))
+                  (should (string-match-p "Hidden detail body revealed after click"
+                                          (buffer-string)))
+                  (should (string-match-p "alpha value" (buffer-string)))
+                  ;; 2. Viewport refit wide -> single flush.
+                  (setq flushes 0)
+                  (etaf-runtime-refit rt 960 40)
+                  (should (<= flushes 1))
+                  ;; 3. Narrower `[` (`etaf-md-narrower`) batches width+lock into 1 flush.
+                  (setq flushes 0)
+                  (etaf-md-narrower)
+                  (should (= flushes 1))
+                  (should (string-match-p "Hidden detail body revealed after click"
+                                          (buffer-string)))
+                  ;; 4. Wider `]` (`etaf-md-wider`) flushes once.
+                  (setq flushes 0)
+                  (etaf-md-wider)
+                  (should (= flushes 1)))
+              (remove-hook 'etaf-runtime-after-flush-functions flush-hook))))
+      (when (buffer-live-p preview)
+        (with-current-buffer preview (ignore-errors (etaf-md-close))))
+      (delete-file file))))
+
+(ert-deftest etaf-md-tests-goto-source-clears-highlight-on-tty ()
+  "`etaf-md-goto-source' auto-clears its line highlight on non-pulsing TTY frames.
+When `pulse-flag' is nil (or `pulse-available-p' is nil as on terminals with
+`unspecified-bg'), the highlight still clears automatically after a short delay
+without waiting for another command, while `pulse-flag' = `never' suppresses it."
+  (require 'pulse)
+  (let* ((file (make-temp-file "etaf-md-tty-pulse-" nil ".md"))
+         (source nil)
+         (preview nil))
+    (unwind-protect
+        (progn
+          (with-temp-file file
+            (insert "# Heading\n\n"
+                    "| Key | Description |\n"
+                    "| --- | --- |\n"
+                    "| `C-c t` | Toggle outline sidebar |\n"))
+          (setq source (find-file-noselect file))
+          (setq preview (etaf-md-open file))
+          (let ((pulse-flag nil)
+                (pulse-delay 0.02)
+                (pulse-iterations 5))
+            (with-current-buffer preview
+              (goto-char (point-min))
+              (should (search-forward "C-c t" nil t))
+              (goto-char (match-beginning 0))
+              (etaf-md-goto-source))
+            (with-current-buffer source
+              ;; Immediately highlighted on jump.
+              (should (overlayp pulse-momentary-overlay))
+              ;; Clears automatically without any subsequent command.
+              (let ((deadline (+ (float-time) 1.0)))
+                (while (and pulse-momentary-overlay (< (float-time) deadline))
+                  (accept-process-output nil 0.05)))
+              (should-not pulse-momentary-overlay)
+              (should-not (memq #'pulse-momentary-unhighlight pre-command-hook))))
+          ;; Respect `pulse-flag' = `never'.
+          (let ((pulse-flag 'never))
+            (with-current-buffer preview
+              (goto-char (point-min))
+              (should (search-forward "C-c t" nil t))
+              (goto-char (match-beginning 0))
+              (etaf-md-goto-source))
+            (should-not pulse-momentary-overlay)))
+      (when (fboundp 'pulse-momentary-unhighlight)
+        (pulse-momentary-unhighlight))
+      (when (buffer-live-p preview)
+        (with-current-buffer preview (ignore-errors (etaf-md-close))))
+      (when (buffer-live-p source) (kill-buffer source))
+      (delete-file file))))

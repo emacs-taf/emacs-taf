@@ -2307,6 +2307,8 @@ Host's `:ref' and to Host query, focus or event APIs."
     (let ((mounted (etaf-runtime-new-instances runtime))
           (updated (etaf-runtime-updated-instances runtime))
           (retired (etaf-runtime-retired-instances runtime)))
+      (when (and (not did-commit) (or mounted updated))
+        (ebox-flush))
       (setf (etaf-runtime-last-new-count runtime) (length mounted)
             (etaf-runtime-last-updated-count runtime) (length updated)
             (etaf-runtime-last-retired-count runtime) (length retired))
@@ -2329,16 +2331,24 @@ Host's `:ref' and to Host query, focus or event APIs."
                (etaf-runtime-mounted-p runtime))
       (etaf--run-runtime-hooks 'etaf-runtime-after-commit-functions runtime))))
 
+(defvar etaf--in-viewport-prepare nil
+  "Non-nil while draining viewport-prepare updates before `ebox-refit' settles.")
+
 (defun etaf--drain-commit ()
   "Commit every dirty Runtime; return non-nil when one was committed.
 When a pre or render effect failed, first roll back the transaction so
 only work committed before it remains."
   (let ((txn etaf--txn))
-    (if (and txn (null etaf--dirty-runtimes) (not etaf--drain-failed)
-             (etaf--txn-pristine-p txn))
-        ;; Nothing ran since the last commit; keep its transaction.
-        nil
-      (etaf--drain-commit-1 txn))))
+    (prog1
+        (if (and txn (null etaf--dirty-runtimes) (not etaf--drain-failed)
+                 (etaf--txn-pristine-p txn))
+            ;; Nothing ran since the last commit; keep its transaction.
+            nil
+          (etaf--drain-commit-1 txn))
+      ;; Flush any viewport refit queued by `ebox-refit' before post-flush
+      ;; effects and `etaf-next-tick' callbacks inspect layout geometry.
+      (when etaf--in-viewport-prepare
+        (ebox-flush)))))
 
 (defun etaf--txn-pristine-p (txn)
   "Return non-nil when TXN recorded nothing since it began."
@@ -2940,9 +2950,10 @@ Runtime signals `etaf-runtime-error'."
   "Publish BUFFER's new viewport to readers of its Runtime's viewport."
   (when-let* ((runtime (etaf-runtime-for-buffer buffer))
               (cell (etaf-runtime-viewport-ref runtime)))
-    (etaf-set-value cell (ebox-mount-viewport buffer))))
+    (let ((etaf--in-viewport-prepare t))
+      (etaf-set-value cell (ebox-mount-viewport buffer)))))
 
-(add-hook 'ebox-viewport-change-functions #'etaf--runtime-viewport-changed)
+(add-hook 'ebox-viewport-prepare-functions #'etaf--runtime-viewport-changed)
 
 (defun etaf-display-metrics (&optional runtime)
   "Return RUNTIME's effective default-face metrics as a fresh plist.

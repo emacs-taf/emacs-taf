@@ -1973,24 +1973,66 @@ may sit inside another overlay, so placement repeats until it settles."
   "Return the stacked item in GEO covering content line CI, or nil."
   (let* ((seq (ebox-geo-items geo))
          (runs (ebox-seq-runs seq))
-         (lo 0) (hi (1- (ebox-seq-nr seq))))
-    ;; The last run whose first item starts at or before CI.
-    (while (< lo hi)
-      (let ((mid (/ (+ lo hi 1) 2)))
-        (if (<= (ebox--item-y (aref (ebox-run-vec (aref runs mid)) 0)) ci)
-            (setq lo mid)
-          (setq hi (1- mid)))))
-    (when (>= hi 0)
-      (let* ((run (aref runs lo)) (vec (ebox-run-vec run)) (dy (ebox-run-dy run))
-             (lo 0) (hi (1- (ebox-run-n run))) found)
-        (while (and (<= lo hi) (not found))
-          (let* ((mid (/ (+ lo hi) 2))
-                 (item (aref vec mid))
-                 (y (+ dy (if (ebox-para-p item) (ebox-para-y item) (ebox-node-y item)))))
-            (cond ((< ci y) (setq hi (1- mid)))
-                  ((>= ci (+ y (ebox--item-h item))) (setq lo (1+ mid)))
-                  (t (setq found item)))))
-        found))))
+         (nr (ebox-seq-nr seq)))
+    (when (> nr 0)
+      ;; O(1) sequential cursor check for forward line composition scans.
+      (let* ((cr (ebox-seq-cr seq))
+             (cidx (ebox-seq-ci seq))
+             (hit 'miss))
+        (when (and (>= cr 0) (< cr nr))
+          (let* ((run (aref runs cr))
+                 (rn (ebox-run-n run)))
+            (when (and (>= cidx 0) (< cidx rn))
+              (let* ((vec (ebox-run-vec run))
+                     (dy (ebox-run-dy run))
+                     (item (aref vec cidx))
+                     (y (+ dy (if (ebox-para-p item) (ebox-para-y item) (ebox-node-y item))))
+                     (end (+ y (ebox--item-h item))))
+                (cond
+                 ((and (>= ci y) (< ci end))
+                  (setq hit item))
+                 ((>= ci end)
+                  (let* ((nr2 (if (< (1+ cidx) rn) cr (1+ cr)))
+                         (ni2 (if (< (1+ cidx) rn) (1+ cidx) 0)))
+                    (if (>= nr2 nr)
+                        (setq hit nil)
+                      (let* ((run2 (aref runs nr2))
+                             (rn2 (ebox-run-n run2)))
+                        (when (< ni2 rn2)
+                          (let* ((item2 (aref (ebox-run-vec run2) ni2))
+                                 (y2 (+ (ebox-run-dy run2)
+                                        (if (ebox-para-p item2)
+                                            (ebox-para-y item2)
+                                          (ebox-node-y item2)))))
+                            (cond
+                             ((< ci y2) (setq hit nil))
+                             ((< ci (+ y2 (ebox--item-h item2)))
+                              (setf (ebox-seq-cr seq) nr2
+                                    (ebox-seq-ci seq) ni2)
+                              (setq hit item2))))))))))))))
+        (if (not (eq hit 'miss))
+            hit
+          (let ((lo 0) (hi (1- nr)))
+            ;; The last run whose first item starts at or before CI.
+            (while (< lo hi)
+              (let ((mid (/ (+ lo hi 1) 2)))
+                (if (<= (ebox--item-y (aref (ebox-run-vec (aref runs mid)) 0)) ci)
+                    (setq lo mid)
+                  (setq hi (1- mid)))))
+            (when (>= hi 0)
+              (let* ((r lo)
+                     (run (aref runs r)) (vec (ebox-run-vec run)) (dy (ebox-run-dy run))
+                     (lo 0) (hi (1- (ebox-run-n run))) found)
+                (while (and (<= lo hi) (not found))
+                  (let* ((mid (/ (+ lo hi) 2))
+                         (item (aref vec mid))
+                         (y (+ dy (if (ebox-para-p item) (ebox-para-y item) (ebox-node-y item)))))
+                    (cond ((< ci y) (setq hi (1- mid)))
+                          ((>= ci (+ y (ebox--item-h item))) (setq lo (1+ mid)))
+                          (t (setf (ebox-seq-cr seq) r
+                                   (ebox-seq-ci seq) mid)
+                             (setq found item)))))
+                found))))))))
 
 ;; Emacs composites an image's transparent pixels over the frame
 ;; background unless the descriptor names one, so a round avatar on a tinted
@@ -2074,17 +2116,23 @@ The strings span the content width CW in pixels."
              ;; overlay splice must receive exactly the advertised width or
              ;; the surplus shifts every later window on the same row.
              (if (> (+ x w) cw)
-                 (nconc (list (ebox--space (min x cw) padface))
+                 (nconc (when (> (min x cw) 0)
+                          (list (ebox--space (min x cw) padface)))
                         (when (< x cw)
                           (car (ebox--split-parts
                                 (ebox--join-parts
                                  (ebox--item-parts item (- ci (ebox--item-y item)) nil))
                                 (- cw x))))
                         tail)
-               (cons (ebox--space x padface)
-                     (ebox--item-parts item (- ci (ebox--item-y item))
-                                       (cons (ebox--space (- cw x w) padface)
-                                             tail))))))))
+               (let* ((right (- cw x w))
+                      (parts (ebox--item-parts
+                              item (- ci (ebox--item-y item))
+                              (if (> right 0)
+                                  (cons (ebox--space right padface) tail)
+                                tail))))
+                 (if (> x 0)
+                     (cons (ebox--space x padface) parts)
+                   parts)))))))
       (_
        (let ((cursor 0) (hits nil) (sorted t) (last -1) (shown nil))
          (dotimes (i (ebox-geo-n geo))
@@ -2287,11 +2335,11 @@ is then joined into one string."
       (push (ebox--border-side (ebox-geo-br geo) (ebox-cs-brc cs) 'right
                                (or padface (ebox--parent-padface node)))
             parts))
-    (let* ((shape (ebox--shape node geo bi))
+    (let* ((shape (and (ebox-cs-shaped cs) (ebox--shape node geo bi)))
            (lshape (and (not (ebox-cs-blc cs)) shape))
            (rshape (and (not (ebox-cs-brc cs)) shape))
            (inner (- (ebox-geo-bw geo) (ebox-geo-bl geo) (ebox-geo-br geo)))
-           (lh (ebox--line-px)))
+           (lh (and shape (ebox--line-px))))
       (setq parts
             (cond
              ((and shape (or (>= (car shape) lh) (<= (cadr shape) 0)))
@@ -2309,16 +2357,20 @@ is then joined into one string."
                             (if rshape (ebox--shape-end rshape nil (- inner half) padface)
                               (list (ebox--space (- inner half) padface)))
                             parts))
-                (cons (ebox--space inner padface) parts)))
+                (if (> inner 0)
+                    (cons (ebox--space inner padface) parts)
+                  parts)))
              (t
-              (append (if lshape (ebox--shape-end lshape t (ebox-geo-pl geo) padface)
-                        (list (ebox--space (ebox-geo-pl geo) padface)))
-                      (ebox--content-parts
-                       node geo (+ (- bi pt) (ebox-geo-scroll geo))
-                       (append (if rshape
-                                   (ebox--shape-end rshape nil (ebox-geo-pr geo) padface)
-                                 (list (ebox--space (ebox-geo-pr geo) padface)))
-                               parts)))))))
+              (let* ((pl (ebox-geo-pl geo))
+                     (pr (ebox-geo-pr geo))
+                     (rtail (cond (rshape (append (ebox--shape-end rshape nil pr padface) parts))
+                                  ((> pr 0) (cons (ebox--space pr padface) parts))
+                                  (t parts)))
+                     (mid (ebox--content-parts
+                           node geo (+ (- bi pt) (ebox-geo-scroll geo)) rtail)))
+                (cond (lshape (append (ebox--shape-end lshape t pl padface) mid))
+                      ((> pl 0) (cons (ebox--space pl padface) mid))
+                      (t mid)))))))
     (when (ebox-cs-blc cs)
       (push (ebox--border-side (ebox-geo-bl geo) (ebox-cs-blc cs) 'left
                                (or padface (ebox--parent-padface node)))
@@ -2389,7 +2441,7 @@ The list is cached on NODE and shared; callers copy it before changing it."
             (let ((vec (make-vector (ebox-node-h node) nil)))
               (when (< i (length vec)) (aset vec i parts))
               (setf (ebox-node-lines node) vec)))
-           (t (setf (ebox-node-lines node) t)))
+           ((not (eq cache t)) (setf (ebox-node-lines node) t)))
           parts))))
 
 (defun ebox--node-line (node i)
@@ -2402,20 +2454,53 @@ A node composes its margins, borders, padding and items into one flat list of
 its descendants' strings, so a line is concatenated once when it is written.
 An interactive node joins its line to carry its interaction properties."
   (let* ((geo (ebox-node-layout node))
-         (mt (ebox-geo-mt geo))
-         (parts
-          (if (or (< i mt) (>= i (+ mt (ebox-geo-bh geo))) (ebox--hidden-p node))
-              (list (ebox--space (ebox-node-w node) (ebox--parent-padface node)))
-            (let* ((ml (ebox-geo-ml geo)) (mr (ebox-geo-mr geo))
-                   (face (and (or (> ml 0) (> mr 0)) (ebox--parent-padface node))))
-              (cons (ebox--space ml face)
-                    (ebox--border-parts node geo (- i mt)
-                                        (list (ebox--space mr face))))))))
-    (if (and (ebox-node-inter node) ebox--decorate-function)
-        (let ((line (funcall ebox--decorate-function node (ebox--join-fresh parts) t)))
-          (puthash line (ebox-node-w node) ebox--part-widths)
-          (list line))
-      parts)))
+         (cs (ebox-node-cs node))
+         (mt (ebox-geo-mt geo)))
+    (if (and (eq (ebox-geo-kind geo) 'stack)
+             (zerop mt) (zerop (ebox-geo-ml geo)) (zerop (ebox-geo-mr geo))
+             (zerop (ebox-geo-pt geo)) (zerop (ebox-geo-pl geo)) (zerop (ebox-geo-pr geo))
+             (zerop (ebox-geo-bl geo)) (zerop (ebox-geo-br geo))
+             (zerop (ebox-geo-scroll geo))
+             (not (ebox-cs-btop cs)) (not (ebox-cs-bbot cs))
+             (not (ebox-cs-shaped cs)) (not (ebox-cs-hidden cs))
+             (not (ebox-node-overlays node)) (not (ebox-node-inter node))
+             (>= i 0) (< i (ebox-geo-vh geo)))
+        (let ((cw (ebox-geo-cw geo))
+              (padface (ebox-cs-padface cs))
+              (item (ebox--find-item geo i)))
+          (if (null item)
+              (list (ebox--space cw padface))
+            (let ((x (ebox--item-x item)) (w (ebox--item-w item)))
+              (if (> (+ x w) cw)
+                  (nconc (when (> (min x cw) 0)
+                           (list (ebox--space (min x cw) padface)))
+                         (when (< x cw)
+                           (car (ebox--split-parts
+                                 (ebox--join-parts
+                                  (ebox--item-parts item (- i (ebox--item-y item)) nil))
+                                 (- cw x)))))
+                (let* ((right (- cw x w))
+                       (parts (ebox--item-parts
+                               item (- i (ebox--item-y item))
+                               (when (> right 0)
+                                 (list (ebox--space right padface))))))
+                  (if (> x 0)
+                      (cons (ebox--space x padface) parts)
+                    parts))))))
+      (let ((parts
+             (if (or (< i mt) (>= i (+ mt (ebox-geo-bh geo))) (ebox--hidden-p node))
+                 (list (ebox--space (ebox-node-w node) (ebox--parent-padface node)))
+               (let* ((ml (ebox-geo-ml geo)) (mr (ebox-geo-mr geo))
+                      (face (and (or (> ml 0) (> mr 0)) (ebox--parent-padface node)))
+                      (inner (ebox--border-parts
+                              node geo (- i mt)
+                              (when (> mr 0) (list (ebox--space mr face))))))
+                 (if (> ml 0) (cons (ebox--space ml face) inner) inner)))))
+        (if (and (ebox-node-inter node) ebox--decorate-function)
+            (let ((line (funcall ebox--decorate-function node (ebox--join-fresh parts) t)))
+              (puthash line (ebox-node-w node) ebox--part-widths)
+              (list line))
+          parts)))))
 
 (defun ebox--px-cut (string x pos px)
   "Find the display unit of STRING holding pixel X, walking from POS at PX.
@@ -2965,22 +3050,31 @@ height.  A leading strut is inside the visible area, so the truncation
 boundary cannot drop it the way it drops a trailing one."
   (let ((parts (ebox--join-parts (ebox--node-parts root i))))
     (if-let* ((strut (ebox--row-strut))
-              (head (cl-find-if (lambda (part) (> (length part) 0)) parts)))
+              (head (car parts)))
         (cons (ebox--row-strut-part strut head) parts)
       parts)))
+
+(defvar ebox--strut-part-cache nil
+  "Last (STRUT HEAD-PROPS . PART) built by `ebox--row-strut-part'.")
 
 (defun ebox--row-strut-part (strut head)
   "Return STRUT carrying HEAD's first cell's text properties.
 The strut starts a row, so that cell keeps the line's first column: its face,
 hover, help, pointer and key bindings.  HEAD's own display property is not
 copied, so the strut keeps its zero-width height display."
-  (let ((part (substring strut 0))
-        (props (text-properties-at 0 head)))
-    (while props
-      (unless (eq (car props) 'display)
-        (put-text-property 0 (length part) (car props) (cadr props) part))
-      (setq props (cddr props)))
-    part))
+  (let ((props (text-properties-at 0 head)))
+    (if (and ebox--strut-part-cache
+             (eq (car ebox--strut-part-cache) strut)
+             (equal (cadr ebox--strut-part-cache) props))
+        (cddr ebox--strut-part-cache)
+      (let ((part (substring strut 0))
+            (rest props))
+        (while rest
+          (unless (eq (car rest) 'display)
+            (put-text-property 0 (length part) (car rest) (cadr rest) part))
+          (setq rest (cddr rest)))
+        (setq ebox--strut-part-cache (cons strut (cons props part)))
+        part))))
 
 (defun ebox--node-lines (node from to)
   "Return NODE's margin-box lines FROM (inclusive) TO (exclusive)."

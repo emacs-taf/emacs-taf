@@ -832,38 +832,51 @@ trailing newline."
   (let* ((new (length lines))
          (total (ebox-mount-lines mount))
          (common (min old new)))
-    (when (> common 0)
-      (ebox--goto-line mount start)
-      ;; Rewrite shared lines in place so line-start markers stay put.
-      (dotimes (i common)
-        (when (> i 0) (forward-line 1))
-        (ebox--write-line mount (+ start i) (pop lines))))
-    (unless (= new old) (ebox--forget-written mount (+ start common)))
-    (cond
-     ((> new old)
-      (cond
-       ((> common 0) (insert "\n") (ebox--insert-lines lines))
-       ((< start total)
-        (ebox--goto-line mount start) (ebox--insert-lines lines) (insert "\n"))
-       ((> total 0) (goto-char (point-max)) (insert "\n") (ebox--insert-lines lines))
-       (t (goto-char (point-min)) (ebox--insert-lines lines))))
-     ((< new old)
-      (cond
-       ((> common 0)
-        (let ((from (point)))
-          (forward-line (- old new))
-          (delete-region from (line-end-position))))
-       ((< (+ start old) total)
+    (if (and (>= old 128) (>= new 128) (>= (* old 2) total))
+        ;; Bulk reflow fast path: when most of a large buffer shifts (such as
+        ;; width changes), one delete + sequential insert avoids O(N) per-line
+        ;; diffing, concatenation and gap movement.
+        (progn
+          (ebox--goto-line mount start)
+          (let ((from (point)))
+            (forward-line (1- old))
+            (delete-region from (line-end-position)))
+          (ebox--insert-lines lines)
+          (ebox--forget-written mount start)
+          (setf (ebox-mount-lines mount) (+ total (- new old)))
+          (ebox--rebuild-anchors mount))
+      (when (> common 0)
         (ebox--goto-line mount start)
-        (let ((from (point)))
-          (forward-line old)
-          (delete-region from (point))))
-       ((> start 0)
-        (ebox--goto-line mount (1- start))
-        (delete-region (line-end-position) (point-max)))
-       (t (delete-region (point-min) (point-max))))))
-    (ebox--shift-anchors mount start old new total)
-    (setf (ebox-mount-lines mount) (+ total (- new old)))))
+        ;; Rewrite shared lines in place so line-start markers stay put.
+        (dotimes (i common)
+          (when (> i 0) (forward-line 1))
+          (ebox--write-line mount (+ start i) (pop lines))))
+      (unless (= new old) (ebox--forget-written mount (+ start common)))
+      (cond
+       ((> new old)
+        (cond
+         ((> common 0) (insert "\n") (ebox--insert-lines lines))
+         ((< start total)
+          (ebox--goto-line mount start) (ebox--insert-lines lines) (insert "\n"))
+         ((> total 0) (goto-char (point-max)) (insert "\n") (ebox--insert-lines lines))
+         (t (goto-char (point-min)) (ebox--insert-lines lines))))
+       ((< new old)
+        (cond
+         ((> common 0)
+          (let ((from (point)))
+            (forward-line (- old new))
+            (delete-region from (line-end-position))))
+         ((< (+ start old) total)
+          (ebox--goto-line mount start)
+          (let ((from (point)))
+            (forward-line old)
+            (delete-region from (point))))
+         ((> start 0)
+          (ebox--goto-line mount (1- start))
+          (delete-region (line-end-position) (point-max)))
+         (t (delete-region (point-min) (point-max))))))
+      (ebox--shift-anchors mount start old new total)
+      (setf (ebox-mount-lines mount) (+ total (- new old))))))
 
 (defmacro ebox--writing (&rest body)
   "Run BODY with buffer writes that bypass read-only, undo and hooks."
@@ -971,7 +984,8 @@ every row an interactive element spans."
         (dolist (edit edits)
           (let ((start (car edit)) (new (nth 2 edit)) lines)
             (dotimes (i new)
-              (push (ebox--root-parts root (+ start (- new i 1))) lines))
+              (push (ebox--root-parts root (+ start i)) lines))
+            (setq lines (nreverse lines))
             (ebox--replace-lines mount start (nth 1 edit) lines)
             ;; The newline before START may be new, and each rewritten
             ;; line may now end over another background.
@@ -1005,6 +1019,8 @@ every row an interactive element spans."
          (ebox--measure-buffer (ebox-mount-buffer mount))
          (ebox--active-metric-key (ebox--compute-metric-key))
          (ebox--active-metrics (ebox--display-metrics ebox--measure-buffer))
+         (ebox--active-row-strut (let ((ebox--active-row-strut 'unset))
+                                   (ebox--row-strut)))
          (ebox--vw (ebox-mount-vw mount))
          (ebox--vh (ebox-mount-vh mount))
          (ebox--damage (ebox-mount-report mount))
@@ -1243,6 +1259,11 @@ Return non-nil when the buffer had a mount."
           (ebox-buffer-mode -1)
           t)))))
 
+(defvar ebox-viewport-prepare-functions nil
+  "Abnormal hook run with a mounted buffer after its viewport size updated.
+It runs before the relayout flushes so reactive layers can apply
+viewport-dependent tree changes in the same flush.")
+
 (defvar ebox-viewport-change-functions nil
   "Abnormal hook run with a mounted buffer after its viewport size changed.
 It runs once the relayout for the new size has settled.")
@@ -1298,6 +1319,8 @@ when the layout changed."
                                             (and height (memq 'vh units))))
                                (ebox--mark node ebox--d-layout)))
 			   ebox--viewport-nodes)
+		  (ebox-with-batch
+		    (run-hook-with-args 'ebox-viewport-prepare-functions (ebox-mount-buffer mount)))
 		  (ebox--settle))
 		(run-hook-with-args 'ebox-viewport-change-functions (ebox-mount-buffer mount))
 		t))

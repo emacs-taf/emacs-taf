@@ -496,7 +496,11 @@ bound the rendered grid to the document's declared display size."
                                      (functionp lb)
                                      (funcall lb cached-remote alt))
                           (funcall (plist-get env :open-url) url))))))))
-         (columns (plist-get env :width))
+         (columns (or (plist-get env :width)
+                      (when-let* ((session (plist-get env :session)))
+                        (car (etaf-md--page-widths
+                              session (etaf-md--read session :width))))
+                      92))
          (caption (or alt (and (not remote) path (file-name-nondirectory path)) url))
          (help-label (if (and (stringp caption) (not (string-empty-p caption)))
                          caption
@@ -651,6 +655,7 @@ bound the rendered grid to the document's declared display size."
 ;;; Block rendering
 ;;; ---------------------------------------------------------------------------
 
+(declare-function etaf-md--base-env "etaf-md-model" (session))
 (declare-function etaf-md--env "etaf-md-model" (session))
 (declare-function etaf-md--block-marker "etaf-md-model" (block))
 (declare-function etaf-md--block-empty-p "etaf-md-model" (block &optional text))
@@ -772,16 +777,35 @@ renderer when nothing overrides it."
       :block block))
     (_ (etaf-md-node-create :type (plist-get block :type) :block block))))
 
+(defun etaf-md--block-needs-width-p (block)
+  "Return non-nil when BLOCK's own VDOM depends on available column width.
+Plain prose blocks (`paragraph', `heading', `list', `blockquote', `code-block')
+without nested tables or figures let Ebox reflow them from the outer reading
+measure without rebuilding their VDOM on resize."
+  (when (listp block)
+    (let ((type (plist-get block :type)))
+      (cond
+       ((eq type 'table) t)
+       ((etaf-md--figure-block-p block) t)
+       ((eq type 'blockquote)
+        (cl-some #'etaf-md--block-needs-width-p (plist-get block :children)))
+       ((eq type 'list)
+        (cl-some (lambda (item)
+                   (cl-some #'etaf-md--block-needs-width-p
+                            (plist-get item :children)))
+                 (plist-get block :items)))
+       (t nil)))))
+
 (defun etaf-md--container-view (session env block &optional slot)
   "Return the view BLOCK's definition gives it, under SESSION and ENV.
 SLOT is the stable block slot symbol so container state survives edits above
-the container.  A container whose name has no definition shows its source and
-one line saying so; that block alone degrades and the rest of the page renders."
+the container.  Leaves `:width' nil so `etaf-md-available-width' resolves
+lazily and containers that never query width skip resize re-renders."
   (let* ((node (etaf-md--node-for-block block))
          (paint-env (etaf-md-env-create
                      :session session
                      :node node
-                     :width (plist-get env :width)
+                     :width nil
                      :palette (plist-get env :palette)
                      :theme (plist-get env :theme)
                      :block block
@@ -804,43 +828,41 @@ one line saying so; that block alone degrades and the rest of the page renders."
       view)))
 
 (defun etaf-md--wrap-block-width (block view session env)
-  "Center rendered block VIEW at SESSION's prose measure or wide figure budget.
-Prose blocks stay capped at SESSION's reading measure; wide tables and figures
-may expand up to `:figure-width' when the viewport allows while staying
-centered inside the page gutters, unless the user explicitly narrowed the
-reading column (`:width-locked')."
+  "Center wide BLOCK (table or figure) at SESSION's prose or wide figure budget.
+Prose blocks already live inside a shared measured run wrapper owned by
+`etaf-md--view-document', so returning VIEW directly avoids subscribing every
+prose block Component to `:width'."
   (when view
-    (let* ((width (etaf-md--read session :width))
-           (locked (plist-get env :width-locked))
-           (figure (or (plist-get env :figure-width) width))
-           (cell-width (or (plist-get (ignore-errors (etaf-display-metrics)) :char-width)
-                           (frame-char-width)))
-           (type (plist-get block :type))
-           (wide-p (and (not locked)
-                        (or (eq type 'table)
-                            (etaf-md--figure-block-p block))))
-           (cap (if wide-p (max width figure) width)))
-      (etaf-node 'column
-                 (list :width 'stretch :cross-align 'center :item-gap '(lh 0))
-                 (list
-                  (if (eq type 'table)
-                      ;; Table nodes manage their own `:max-width' (prose measure
-                      ;; for ordinary tables, breakout up to `:table-max-width'
-                      ;; for wide multi-column tables).
-                      view
-                    (etaf-md--measured-view cap cell-width view)))))))
+    (let ((type (plist-get block :type)))
+      (cond
+       ((eq type 'table)
+        (etaf-node 'column
+                   (list :width 'stretch :cross-align 'center :item-gap '(lh 0))
+                   (list view)))
+       ((etaf-md--figure-block-p block)
+        (let* ((width (etaf-md--read session :width))
+               (locked (plist-get env :width-locked))
+               (figure (or (plist-get env :figure-width) width))
+               (cell-width (or (plist-get (ignore-errors (etaf-display-metrics)) :char-width)
+                               (frame-char-width)))
+               (cap (if locked width (max width figure))))
+          (etaf-node 'column
+                     (list :width 'stretch :cross-align 'center :item-gap '(lh 0))
+                     (list (etaf-md--measured-view cap cell-width view)))))
+       (t view)))))
 
 (etaf-define-component etaf-md-block (&key session slot cell)
   "Render one published markdown block of SESSION owned by stable SLOT.
 CELL is a per-block reactive `etaf-ref' holding the block's current AST.
-Editing inside this block writes CELL in place so only this Component
-re-renders, preserving its Scope, Hosts, interactive container state and
-video handles without traversing the rest of the document."
+Width-independent prose blocks read `etaf-md--base-env' so window resizes and
+reading-measure adjustments never rebuild their VDOM subtrees."
   :render
   (let* ((block (etaf-value cell))
-         (env (etaf-md--card-env session
-                                 (etaf-md--env session)
-                                 slot))
+         (need-w (etaf-md--block-needs-width-p block))
+         (raw-env (if need-w
+                      (etaf-md--env session)
+                    (etaf-md--base-env session)))
+         (env (etaf-md--card-env session raw-env slot))
          (rendered
           (cond
            ((null block) nil)
@@ -971,8 +993,16 @@ inside the page gutters when the window narrows, without clipping."
 
 (defun etaf-md--memoized-footnotes (session footnotes env)
   "Return memoized footnotes column for FOOTNOTES and ENV, or nil."
-  (let ((cached (plist-get session :footnotes-cache)))
-    (if (and cached (equal (car cached) footnotes) (eq (cadr cached) env))
+  (let* ((fn-env
+          (if (and footnotes
+                   (cl-some (lambda (fn)
+                              (cl-some #'etaf-md--block-needs-width-p
+                                       (plist-get fn :children)))
+                            footnotes))
+              (etaf-md--env session)
+            env))
+         (cached (plist-get session :footnotes-cache)))
+    (if (and cached (equal (car cached) footnotes) (eq (cadr cached) fn-env))
         (cddr cached)
       (let ((node (when footnotes
                     (etaf-node 'column
@@ -984,8 +1014,8 @@ inside the page gutters when the window narrows, without clipping."
                                       (etaf-md--spacer))
                                 (etaf-ui-markdown-view-blocks
                                  footnotes (etaf-md--card-env
-                                            session env 'footnotes)))))))
-        (plist-put session :footnotes-cache (cons footnotes (cons env node)))
+                                            session fn-env 'footnotes)))))))
+        (plist-put session :footnotes-cache (cons footnotes (cons fn-env node)))
         node))))
 
 (defun etaf-md--link-preview-card (session preview env)
@@ -1071,16 +1101,61 @@ inside the page gutters when the window narrows, without clipping."
                              (list :items items :index (mod (1+ idx) count))))))
          nil)))))
 
+(defun etaf-md--measured-column (width cell-width views &optional key)
+  "Return a centered column of VIEWS capped at WIDTH cells.
+CELL-WIDTH is the canvas cell those columns resolve against.  Combining the
+`:max-width' measure with the stacked column eliminates redundant wrapper boxes
+across every prose run."
+  (etaf-node 'column
+             (append (when key (list :key key))
+                     (list :width 'stretch
+                           :max-width (list 'px (* width cell-width))
+                           :cross-align 'center
+                           :item-gap '(lh 0)))
+             views))
+
+(defun etaf-md--group-body-views (items block-views width cell-width)
+  "Group consecutive prose blocks under shared measured columns.
+Wide blocks (tables and display figures) stay directly in the centered body
+column so they can break out across wide viewports while prose blocks share
+coarse `:max-width' columns that update without waking prose Components."
+  (if (null items)
+      (when block-views
+        (list (etaf-md--measured-column width cell-width block-views
+                                        'etaf-md-run-default)))
+    (let ((out nil)
+          (run nil)
+          (run-key nil))
+      (cl-labels
+          ((flush-run ()
+             (when run
+               (push (etaf-md--measured-column
+                      width cell-width (nreverse run)
+                      (format "etaf-md-run-%s" run-key))
+                     out)
+               (setq run nil run-key nil))))
+        (dolist (item items)
+          (pcase-let ((`(,slot ,wide-p ,view) item))
+            (if wide-p
+                (progn
+                  (flush-run)
+                  (push view out))
+              (unless run-key (setq run-key slot))
+              (push view run))))
+        (flush-run))
+      (nreverse out))))
+
 (defun etaf-md--view-document (session structure env)
   "Return the reading View of SESSION's page STRUCTURE rendered in ENV.
-STRUCTURE is a plist `(:meta META :leading N :views VIEWS :footnotes FN)'.
-Every top-level block carries a stable `:key' on its outer box, and hero,
-leading blank spacer and footnotes are keyed and memoized so unrelated block
-edits never create spurious damage outside the edited block."
+STRUCTURE is a plist with `:meta', `:leading', `:items', `:views' and
+`:footnotes'.  Every top-level block carries a stable `:key' on its outer box,
+and hero, leading blank spacer and footnotes are keyed and memoized so
+unrelated block edits never create spurious damage outside the edited block."
   (let* ((width (etaf-md--read session :width))
          (background (plist-get env :background))
          (meta (plist-get structure :meta))
          (leading (or (plist-get structure :leading) 0))
+         (items (plist-get structure :items))
          (block-views (plist-get structure :views))
          (footnotes (plist-get structure :footnotes))
          (preview (etaf-md--read session :link-preview))
@@ -1105,22 +1180,22 @@ edits never create spurious damage outside the edited block."
                                (when hero-box (list hero-box))
                                (when leading-box (list leading-box))))
          (fn-view (etaf-md--memoized-footnotes session footnotes env))
-         (main-col (etaf-node
-                    'column
-                    (list :width 'stretch :cross-align 'center :item-gap '(lh 0))
-                    (append
-                     (when chrome-views
-                       (list (etaf-md--measured-view width cell-width
-                                                     (etaf-md--view-blocks chrome-views)
-                                                     'etaf-md-chrome)))
-                     (list (etaf-node 'box
-                                      (list :key 'etaf-md-body :width 'stretch)
-                                      (list (etaf-md--view-blocks block-views))))
-                     (when fn-view
-                       (list (etaf-md--measured-view width cell-width
-                                                     fn-view
-                                                     'etaf-md-footnotes))))))
-         (body (list main-col)))
+         (body-children (etaf-md--group-body-views items block-views width cell-width))
+         (page-children
+          (append
+           (when chrome-views
+             (list (etaf-md--measured-column width cell-width chrome-views
+                                             'etaf-md-chrome)))
+           (list (etaf-node 'column
+                            (list :key 'etaf-md-body
+                                  :width 'stretch
+                                  :cross-align 'center
+                                  :item-gap '(lh 0))
+                            body-children))
+           (when fn-view
+             (list (etaf-md--measured-view width cell-width
+                                           fn-view
+                                           'etaf-md-footnotes))))))
     (etaf-node 'column
                (append (list :width '(vw 100) :cross-align 'center
                              :aria-label "Markdown 预览"
@@ -1148,7 +1223,7 @@ edits never create spurious damage outside the edited block."
                                                       (list 'ch etaf-md--measure-gutter))
                                        :item-gap '(lh 0)
                                        :color (etaf-md--env-color env :ink))
-                                 body)
+                                 page-children)
                       (when lightbox
                         (etaf-md--lightbox-view session lightbox)))))))
 

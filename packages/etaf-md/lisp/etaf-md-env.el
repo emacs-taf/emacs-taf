@@ -22,8 +22,12 @@
 (require 'etaf-md-theme)
 
 (declare-function etaf-md--republish "etaf-md-model" (session))
+(declare-function etaf-md--base-env "etaf-md-model" (session))
 (declare-function etaf-md--env "etaf-md-model" (session))
+(declare-function etaf-md--read "etaf-md-model" (session key))
 (declare-function etaf-md--open-url "etaf-md-model" (session url))
+(declare-function etaf-md--page-widths "etaf-md-views" (session width))
+(declare-function etaf-md--block-needs-width-p "etaf-md-views" (block))
 (declare-function etaf-md--wrap-heading "etaf-md-views" (block view))
 
 (cl-defstruct (etaf-md-env (:constructor etaf-md-env-create)
@@ -32,6 +36,7 @@
   session
   node
   width
+  width-adjust
   state
   palette
   theme
@@ -45,6 +50,7 @@
    :session (etaf-md-env-session env)
    :node (etaf-md-env-node env)
    :width (max 1 width)
+   :width-adjust nil
    :state (etaf-md-env-state env)
    :palette (etaf-md-env-palette env)
    :theme (etaf-md-env-theme env)
@@ -52,16 +58,46 @@
    :slot (etaf-md-env-slot env)
    :root-begin (etaf-md-env-root-begin env)))
 
-(defun etaf-md--markdown-env (env)
-  "Return the `etaf-ui-markdown' rendering env for paint ENV.
-Preserves the page services (media, links, footnotes) while binding `:width'
-to ENV's own available columns and bridging per-block interactive state."
+(defun etaf-md--env-narrow-lazy (env adjust)
+  "Return a copy of ENV deferring width narrowing through function ADJUST.
+ADJUST receives the outer available width and returns the narrowed width, and is
+invoked only if a descendant actually queries `etaf-md-available-width' or
+renders a width-dependent Markdown block (such as a table or figure)."
+  (let ((prev (etaf-md-env-width-adjust env)))
+    (etaf-md-env-create
+     :session (etaf-md-env-session env)
+     :node (etaf-md-env-node env)
+     :width (etaf-md-env-width env)
+     :width-adjust (if prev
+                       (lambda (avail) (funcall adjust (funcall prev avail)))
+                     adjust)
+     :state (etaf-md-env-state env)
+     :palette (etaf-md-env-palette env)
+     :theme (etaf-md-env-theme env)
+     :block (etaf-md-env-block env)
+     :slot (etaf-md-env-slot env)
+     :root-begin (etaf-md-env-root-begin env))))
+
+(defun etaf-md--markdown-env (env &optional block)
+  "Return the `etaf-ui-markdown' rendering env for paint ENV and optional BLOCK.
+Preserves page services and interactive state while subscribing to width only
+when ENV carries an explicit narrowed width or BLOCK actually requires width."
   (let* ((session (etaf-md-env-session env))
-         (base (if session
-                   (copy-sequence (etaf-md--env session))
+         (explicit-w (etaf-md-env-width env))
+         (adjust (etaf-md-env-width-adjust env))
+         (need-w (or explicit-w
+                     (and block (etaf-md--block-needs-width-p block))))
+         (base (cond
+                ((and session need-w)
+                 (copy-sequence (etaf-md--env session)))
+                (session
+                 (copy-sequence (etaf-md--base-env session)))
+                (t
                  (list :theme (etaf-md-env-theme env)
-                       :palette (etaf-md-env-palette env)))))
-    (setq base (plist-put base :width (etaf-md-env-width env)))
+                       :palette (etaf-md-env-palette env))))))
+    (cond
+     ((or explicit-w (and need-w adjust))
+      (setq base (plist-put base :width (etaf-md-available-width env)))))
     (when session
       (setq base (plist-put base :block-state
                             (lambda (key &optional default)
@@ -86,6 +122,7 @@ to ENV's own available columns and bridging per-block interactive state."
                     :session (etaf-md-env-session env)
                     :node node
                     :width (etaf-md-env-width env)
+                    :width-adjust (etaf-md-env-width-adjust env)
                     :state (etaf-md-env-state env)
                     :palette (etaf-md-env-palette env)
                     :theme (etaf-md-env-theme env)
@@ -112,7 +149,7 @@ to ENV's own available columns and bridging per-block interactive state."
           ;; A block painted below a container keeps the page services: media,
           ;; links and the page directory are part of the environment the block
           ;; was written for, and a minimal plist would show a placeholder.
-          (etaf-md--markdown-env env)))))
+          (etaf-md--markdown-env env block)))))
      (t
       (etaf-md--failure-view
        env (or (etaf-md-node-source node)
@@ -350,8 +387,16 @@ never wakes this one."
   value)
 
 (defun etaf-md-available-width (env)
-  "Return the columns ENV's block may occupy."
-  (etaf-md-env-width env))
+  "Return the columns ENV's block may occupy.
+Resolves lazily from ENV's session when no narrower inner width was explicitly
+set, applying any deferred container inset only when a descendant asks."
+  (let ((base (or (etaf-md-env-width env)
+                  (when-let* ((session (etaf-md-env-session env)))
+                    (car (etaf-md--page-widths
+                          session (etaf-md--read session :width))))
+                  92))
+        (adjust (etaf-md-env-width-adjust env)))
+    (if adjust (max 1 (funcall adjust base)) base)))
 
 (provide 'etaf-md-env)
 ;;; etaf-md-env.el ends here

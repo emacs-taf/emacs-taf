@@ -207,6 +207,11 @@
 ;; focused node, or nil, and the new node, or nil when focus was cleared.
 ;; Focus that Ebox restores after a publication does not run it.
 ;;
+;; Hook: ebox-viewport-prepare-functions
+;; Abnormal hook run with a mounted buffer after its viewport size updated and
+;; before the relayout flushes.  Reactive layers use it to apply viewport-driven
+;; mutations in the same flush; read the new size with `ebox-mount-viewport'.
+;;
 ;; Hook: ebox-viewport-change-functions
 ;; Abnormal hook run with a mounted buffer after its viewport size changed,
 ;; whether a window resize or `ebox-mount-set-viewport' caused it.  It runs

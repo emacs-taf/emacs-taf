@@ -92,15 +92,17 @@ Vertical space is a whole number of lines, so a width unit draws none."
   :view (lambda (env)
           (let* ((declared-width (etaf-md-attr env :width))
                  (pad (etaf-md-attr env :padding))
-                 (available (etaf-md-available-width env))
-                 (outer (if (consp declared-width)
-                            (min available
-                                 (max 1 (etaf-md--length-columns
-                                         declared-width available)))
-                          available))
-                 (pad-ch (* 2 (etaf-md--length-columns pad outer)))
-                 (inner-env (etaf-md--env-with-width
-                             env (max 8 (- outer pad-ch 2)))))
+                 (inner-env
+                  (etaf-md--env-narrow-lazy
+                   env
+                   (lambda (available)
+                     (let* ((outer (if (consp declared-width)
+                                       (min available
+                                            (max 1 (etaf-md--length-columns
+                                                    declared-width available)))
+                                     available))
+                            (pad-ch (* 2 (etaf-md--length-columns pad outer))))
+                       (max 8 (- outer pad-ch 2)))))))
             (etaf-view
              (box :width (or declared-width 'stretch)
                   :text-align (etaf-md-attr env :text-align)
@@ -159,15 +161,18 @@ resolving fixed tracks first and sharing remaining space by `:flex-grow'."
   :view (lambda (env)
           (let* ((href (etaf-md-attr env :href))
                  (declared-width (etaf-md-attr env :width))
-                 (available (etaf-md-available-width env))
-                 (outer (if (consp declared-width)
-                            (min available
-                                 (max 1 (etaf-md--length-columns
-                                         declared-width available)))
-                          available))
                  ;; `etaf-card' draws 1px borders and 2ch horizontal padding on
                  ;; each side (6 cells total), so children size to its interior.
-                 (inner-env (etaf-md--env-with-width env (max 8 (- outer 6)))))
+                 (inner-env
+                  (etaf-md--env-narrow-lazy
+                   env
+                   (lambda (available)
+                     (let ((outer (if (consp declared-width)
+                                      (min available
+                                           (max 1 (etaf-md--length-columns
+                                                   declared-width available)))
+                                    available)))
+                       (max 8 (- outer 6)))))))
             (etaf-view
              (etaf-card :title (etaf-md-attr env :title)
                         :icon (etaf-md-attr env :icon)

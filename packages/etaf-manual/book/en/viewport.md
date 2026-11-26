@@ -257,11 +257,23 @@ Return RUNTIME's display-window viewport as (WIDTH . HEIGHT).
 
 <!-- index: viewport change hook; settled size -->
 
+#### Hook: ebox-viewport-prepare-functions
+
+Abnormal hook run with a mounted buffer after its viewport size updated and before the relayout flushes.
+
+**Semantics.** `ebox-refit` stores the new viewport dimensions and marks viewport-dependent nodes dirty, then runs this hook before flushing. Reading `ebox-mount-viewport` returns the new size while the tree has not been laid out for it yet, so reactive layers such as ETAF can update viewport-driven nodes and let both the viewport relayout and those updates flush together in one pass.
+
+**Returns.** The hook's value is ignored.
+
+**Errors.** An error in one function does not stop the others.
+
+**See also.** `ebox-viewport-change-functions`, `ebox-mount-viewport`.
+
 #### Hook: ebox-viewport-change-functions
 
 Abnormal hook run with a mounted buffer after its viewport size changed, whether a window resize or `ebox-mount-set-viewport` caused it.
 
-**Semantics.** It runs once the relayout for the new size has settled, so reading `ebox-mount-viewport` inside the hook gives the new size and the buffer already shows the new layout. ETAF uses it to update the Runtime's reactive viewport cell, which is what makes `etaf-viewport` rerun its readers; applications can use it for their own adaptive work that must happen outside the render.
+**Semantics.** It runs once the relayout for the new size has settled, so reading `ebox-mount-viewport` inside the hook gives the new size and the buffer already shows the new layout. Applications can use it for their own adaptive work that reads settled geometry outside the render.
 
 **Returns.** The hook's value is ignored.
 

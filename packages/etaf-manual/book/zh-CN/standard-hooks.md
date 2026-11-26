@@ -9,6 +9,7 @@
 | [`ebox-unmount-functions`](ebox-mount-lifecycle.md#hook-ebox-unmount-functions) | `ebox-unmount-buffer` 释放挂载时，在挂载被摘下、显示设置被恢复之前，所以缓冲区此时仍能回答 `ebox-buffer-mount`。 | 缓冲区 | 出错会从 `ebox-unmount-buffer` 向外抛出、中止释放，挂载保持存活。 |
 | [`ebox-focus-change-functions`](focus.md#hook-ebox-focus-change-functions) | `ebox-focus` 移动了挂载的焦点；焦点未变时不运行，且在焦点操作内部运行，因此挂载已经报告新焦点。 | 之前的焦点节点（或 nil）与新的焦点节点（或 nil） | 错误从运行该钩子的焦点操作向外传播。 |
 | [`ebox-after-flush-functions`](incremental-updates-and-publication.md#hook-ebox-after-flush-functions) | 一次 flush 真正发布之后，在观察者与后台同步之后；缓冲区已显示新输出，几何已确定。 | 缓冲区 | 一个函数出错不影响其余函数运行。 |
+| [`ebox-viewport-prepare-functions`](viewport.md#hook-ebox-viewport-prepare-functions) | `ebox-refit` 更新视口尺寸之后、重排 flush 之前，供响应式层在同一轮 flush 中提交视口驱动更新。 | 缓冲区 | 一个函数出错不阻止其余函数。 |
 | [`ebox-viewport-change-functions`](viewport.md#hook-ebox-viewport-change-functions) | 视口尺寸变化后——窗口缩放或 `ebox-mount-set-viewport`——新尺寸的重排完成时。 | 缓冲区 | 一个函数出错不阻止其余函数。 |
 | [`ebox-display-change-functions`](viewport.md#hook-ebox-display-change-functions) | 缓冲区文本缩放稳定且保留树完成重新测量后，固定尺寸视口也会收到通知。 | 缓冲区 | 回调错误由视口任务报告；中断后未开始的工作留在队列里。 |
 | [`ebox-display-window-change-functions`](viewport.md#hook-ebox-display-window-change-functions) | 窗口变化稳定且挂载已 refit，窗口刚成为缓冲区的显示窗口或其正文像素尺寸变了；固定视口也会收到，借走的行不算。 | 缓冲区和它的显示窗口 | 出错会中止该 frame 这一批的剩余工作，由视口任务报告。 |

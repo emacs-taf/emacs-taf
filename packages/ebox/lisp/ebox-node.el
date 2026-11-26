@@ -63,7 +63,7 @@ stored y."
 
 (ebox--defstruct (ebox-seq (:constructor ebox-seq--make) (:copier nil))
   "Sequence of NR runs holding N elements."
-  (runs (make-vector 2 nil)) (nr 0) (n 0))
+  (runs (make-vector 2 nil)) (nr 0) (n 0) (cr 0) (ci 0))
 
 (defconst ebox--run-max 64
   "Maximum number of elements in one run.")
@@ -593,7 +593,7 @@ also serves ids that are not valid `#' selector identifiers."
   width min-width max-width height min-height max-height
   pt pr pb pl mt mr mb ml bl br btop bbot btc bbc blc brc
   box-sizing position outer overflow wrap align gap cross
-  z abs vcbh vunits lkey)
+  z abs vcbh vunits lkey shaped)
 
 (defun ebox--viewport-units (value &optional units)
   "Return UNITS plus the viewport units, vw and vh, that VALUE refers to."
@@ -1127,7 +1127,20 @@ the normal font-weight cascade.  Graphical frames return VALS unchanged."
             (ebox-cs-blc cs) (border "left" (ebox-cs-bl cs))
             (ebox-cs-brc cs) (border "right" (ebox-cs-br cs))
             (ebox-cs-btop cs) (and (ebox-cs-btc cs) t)
-            (ebox-cs-bbot cs) (and (ebox-cs-bbc cs) t)))
+            (ebox-cs-bbot cs) (and (ebox-cs-bbc cs) t))
+      (when (ebox-cs-padface cs)
+        (let ((rad (plist-get vals 'ebox/border-radius))
+              (pt (ebox-cs-pt cs))
+              (pb (ebox-cs-pb cs)))
+          (setf (ebox-cs-shaped cs)
+                (and (or (and rad (not (equal rad '(px 0))) (not (eql rad 0)))
+                         (not (or (null pt) (integerp pt)
+                                  (and (eq (car-safe pt) 'px) (eql (cadr pt) 0))
+                                  (and (eq (car-safe pt) 'lh) (integerp (cadr pt)))))
+                         (not (or (null pb) (integerp pb)
+                                  (and (eq (car-safe pb) 'px) (eql (cadr pb) 0))
+                                  (and (eq (car-safe pb) 'lh) (integerp (cadr pb))))))
+                     t)))))
     (dolist (side '("top" "right" "bottom" "left"))
       (let ((style (plist-get vals (intern (format "ebox/border-%s-style" side)))))
         (when (memq style '(dashed dotted double))

@@ -387,6 +387,32 @@ the side window is open and nil when closed."
     (etaf-org--peek-at-point session)
     (etaf-org--flush session)))
 
+(defvar etaf-org--pulse-clear-timer nil
+  "One-shot timer clearing a non-pulsing highlight overlay on TTY frames.")
+
+(defun etaf-org--pulse-line (pos)
+  "Momentarily highlight the line at POS, auto-clearing on TTY frames too.
+On terminal frames where `pulse' cannot fade out on its own timer, schedule a
+matching one-shot cleanup timer so TTY and GUI frames behave consistently."
+  (when (timerp etaf-org--pulse-clear-timer)
+    (cancel-timer etaf-org--pulse-clear-timer)
+    (setq etaf-org--pulse-clear-timer nil))
+  (when (and (require 'pulse nil t)
+             (not (eq (bound-and-true-p pulse-flag) 'never)))
+    (pulse-momentary-highlight-one-line pos)
+    (when (and (bound-and-true-p pulse-momentary-overlay)
+               (memq #'pulse-momentary-unhighlight pre-command-hook))
+      (let* ((ov pulse-momentary-overlay)
+             (delay (max 0.25 (* (or (bound-and-true-p pulse-delay) 0.03)
+                                 (or (bound-and-true-p pulse-iterations) 10)))))
+        (setq etaf-org--pulse-clear-timer
+              (run-at-time
+               delay nil
+               (lambda ()
+                 (setq etaf-org--pulse-clear-timer nil)
+                 (when (eq (bound-and-true-p pulse-momentary-overlay) ov)
+                   (pulse-momentary-unhighlight)))))))))
+
 (defun etaf-org-goto-source (&optional session)
   "Jump from preview point to the matching line in the Org source (`e'/`o').
 Selects the source window when already visible; otherwise switches to the
@@ -404,8 +430,7 @@ source buffer in the current window without creating an unexpected split."
         (goto-char (point-min))
         (forward-line (max 0 (1- line)))
         (recenter)
-        (when (require 'pulse nil t)
-          (pulse-momentary-highlight-one-line (point))))
+        (etaf-org--pulse-line (point)))
       line)))
 
 (defun etaf-org-follow-scroll (&optional arg)

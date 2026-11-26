@@ -1063,6 +1063,16 @@
       "name": "ebox-bordered-accordion-collapse-and-switch-stay-on-lines-strategy",
       "file": "tests/ebox-update-tests.el",
       "purpose": "Collapsing, expanding and switching sections inside a bordered stack stay on incremental `lines' publication with exact border property parity."
+    },
+    {
+      "name": "ebox-viewport-prepare-hook-batches-mutations-into-one-flush",
+      "file": "tests/ebox-update-tests.el",
+      "purpose": "`ebox-viewport-prepare-functions' runs before the refit flush so tree mutations share a single flush while `ebox-viewport-change-functions' still observes settled geometry."
+    },
+    {
+      "name": "ebox-bulk-line-reflow-matches-render-and-preserves-positions",
+      "file": "tests/ebox-update-tests.el",
+      "purpose": "Large multi-hundred-line width reflows taking the bulk rewrite fast path stay byte- and property-identical to `ebox-render' across narrowing and widening."
     }
   ]
 }

@@ -99,7 +99,7 @@
 
 ## 表面 token
 
-<!-- index: ui-panel-fg; ui-panel-bg; ui-panel-border; surface triple -->
+<!-- index: ui-panel-fg; ui-panel-bg; ui-panel-hover-bg; ui-panel-border; surface triple -->
 
 #### Token: :ui-panel-fg
 
@@ -112,6 +112,12 @@
 目录表面的背景。
 
 **语义。** 面板与卡片内容之后的填充，也是浮层表面底板的填充。`flat` 面板变体有意省略它。
+
+#### Token: :ui-panel-hover-bg
+
+目录表面上可交互行或标题栏的悬停背景。
+
+**语义。** 折叠手风琴标题等可交互目录表面用它绘制指针悬停反馈，以在浅色与深色主题下都保持清晰可读。Theme 未提供时由 `:ui-panel-bg` 派生。
 
 #### Token: :ui-panel-border
 

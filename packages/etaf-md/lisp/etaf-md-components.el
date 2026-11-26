@@ -63,7 +63,8 @@ A definition's environment carries the page services; the views that draw
 prose take the plain plist they were written for, so the two are bridged
 here once instead of in every card."
   (let ((session (etaf-md-env-session env)))
-    (list :theme (etaf-md-env-theme env)
+    (list :session session
+          :theme (etaf-md-env-theme env)
           :palette (etaf-md-env-palette env)
           :width (etaf-md-env-width env)
           :dir (plist-get session :dir)
@@ -161,7 +162,7 @@ in both palettes."
            (href (etaf-md-attr env :href))
            (view-env (etaf-md--component-view-env env))
            (max-columns (min (or (etaf-md-attr env :width) 46)
-                             (max 20 (- (etaf-md-env-width env) 4))))
+                             (max 20 (- (etaf-md-available-width env) 4))))
            (grid (etaf-md--media-picture-size src view-env max-columns 14))
            (columns (if grid (car grid) max-columns))
            (body (list 'ch columns))
@@ -314,7 +315,7 @@ in both palettes."
                                   (list :width 'stretch :cross-align 'center)
                                   (list (etaf-md--media-picture
                                          picture view-env
-                                         (max 8 (- (etaf-md-env-width env) 8))
+                                         (max 8 (- (etaf-md-available-width env) 8))
                                          12))))
                (list (etaf-md--child-view env slide))))))))))
 

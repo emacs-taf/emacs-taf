@@ -1377,6 +1377,11 @@
       "name": "etaf-notify-grouping-dismissal-and-observer-isolation",
       "file": "tests/etaf-activity-tests.el",
       "purpose": "`etaf-notify' merges grouped alerts with incremented counts, updates the reactive notification ref, isolates observer errors and supports single dismissal and full clearing."
+    },
+    {
+      "name": "etaf-viewport-refit-batches-reactive-update-into-one-flush",
+      "file": "tests/etaf-viewport-tests.el",
+      "purpose": "Refitting a mounted Runtime with viewport-reactive Components batches reactive patches and Ebox relayout into a single flush and delivers settled geometry to `etaf-on-updated'."
     }
   ]
 }

@@ -32,7 +32,40 @@
 (declare-function etaf-md-set-block-state "etaf-md-env" (env key value))
 (declare-function find-lisp-object-file-name "find-func" (object type))
 (declare-function help-function-arglist "help-fns" (def &optional preserve-names))
+(defvar pulse-flag)
+(defvar pulse-delay)
+(defvar pulse-iterations)
+(defvar pulse-momentary-overlay)
 (declare-function pulse-momentary-highlight-one-line "pulse" (point &optional face))
+(declare-function pulse-momentary-unhighlight "pulse" ())
+
+(defvar etaf-md--pulse-clear-timer nil
+  "One-shot timer clearing a non-pulsing highlight overlay on TTY frames.")
+
+(defun etaf-md--pulse-line (pos)
+  "Momentarily highlight the line at POS, auto-clearing on TTY frames too.
+On GUI frames with an explicit default background `pulse' fades out on its own
+timer.  On terminal frames (where `default' background is `unspecified-bg' or
+`pulse-flag' is nil), `pulse' leaves a static highlight until the next command;
+schedule a matching one-shot cleanup timer so TTY and GUI behave consistently."
+  (when (timerp etaf-md--pulse-clear-timer)
+    (cancel-timer etaf-md--pulse-clear-timer)
+    (setq etaf-md--pulse-clear-timer nil))
+  (when (and (require 'pulse nil t)
+             (not (eq (bound-and-true-p pulse-flag) 'never)))
+    (pulse-momentary-highlight-one-line pos)
+    (when (and (bound-and-true-p pulse-momentary-overlay)
+               (memq #'pulse-momentary-unhighlight pre-command-hook))
+      (let* ((ov pulse-momentary-overlay)
+             (delay (max 0.25 (* (or (bound-and-true-p pulse-delay) 0.03)
+                                 (or (bound-and-true-p pulse-iterations) 10)))))
+        (setq etaf-md--pulse-clear-timer
+              (run-at-time
+               delay nil
+               (lambda ()
+                 (setq etaf-md--pulse-clear-timer nil)
+                 (when (eq (bound-and-true-p pulse-momentary-overlay) ov)
+                   (pulse-momentary-unhighlight)))))))))
 
 ;;; ---------------------------------------------------------------------------
 ;;; Trust and behavior customization
@@ -828,8 +861,7 @@ Returns updated string, or nil when no task marker was found on that line."
           (goto-char (point-min))
           (forward-line (1- line))
           (recenter)
-          (when (require 'pulse nil t)
-            (pulse-momentary-highlight-one-line (point)))))
+          (etaf-md--pulse-line (point))))
     (message "无法打开文件：%s" abs-path)))
 
 (provide 'etaf-md-assets)
