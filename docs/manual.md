@@ -243,34 +243,36 @@ jjosh bookmark set main -r @- && jjosh git push --remote aliyun --bookmark main
 
 ## Publish an install target
 
-`M-x etaf-install` is the single entry users see; `package.el` is the mechanism
-underneath it. The bootstrap line `(package-install 'etaf-install)` appears once
-because the installer cannot install itself. The accepted contract, including
-what is deliberately out of scope, is section 13 of
-[the ecosystem contract](architecture.zh-CN.md).
+`M-x etaf-install` is the single entry users see; `package.el` is the mechanism underneath it. The bootstrap line `(package-install 'etaf-install)` appears once because the installer cannot install itself. The accepted contract, including the 4-tier boundary and what is deliberately out of scope, is section 13 of [the ecosystem contract](architecture.zh-CN.md).
 
-Dependencies split three ways, and each has one owner:
+Classify every asset and dependency using this 4-tier table before packaging or releasing:
 
-| Kind | Owner | Handling |
-| --- | --- | --- |
-| Emacs packages, ours or public (`etaf-db`, `telega`) | `Package-Requires` | `etaf-install` registers the archives its targets need (`etaf`, `gnu`, `nongnu`, `melpa`); `package.el` resolves them; signature checks stay enabled |
-| Our components (CLI, Node backend, buildable module) | the application repository | shipped in the same tar and checksum; installed into `package-user-dir/etaf/<package>/<version>/`; `npm ci` or `make` runs there with a log; the entry checks the component version at startup |
-| System programs and accounts (ffmpeg, mpv, node, TDLib, Godot, login) | the user | detected only; print one command; never run `sudo`, `brew` or `apt`. Game engines are the one exception: the package ships a pinned, checksum-verified setup script, and one command (`M-x etaf-gamekit-install-godot`) downloads that release into the ETAF cache |
+| Tier | Examples | Packaging & hosting | Shown in `System CLI` column |
+| --- | --- | --- | --- |
+| L0 Standard ELPA packages | `etaf`, `etaf-db`, `telega`, `posframe` | Declare in `Package-Requires`; list off-archive deps in `release-dependencies.json` `external` and target archive capabilities (`gnu`/`nongnu`/`melpa`) in `etaf-install--targets`; `package.el` installs and compiles them with signature checks intact | No (shown in `Depends on`) |
+| L1 Bundled source components & runtime data | `backends/weread/`, `backends/netease/`, engine setup scripts, dictionaries | Keep in the application repository and list in `release-dependencies.json` `resources` so they ship atomically inside the `.tar` and work immediately after extraction; never ship `Makefile`, `native/vendor/`, platform binaries or `node_modules/` in ELPA tarballs | No |
+| L2 Prebuilt native dynamic modules & managed game engines | `etaf-md` QuickJS, `etaf` `libmpv`, `ekp` C module; Godot / OpenSpiel | Keep C sources under `native/` for checkout builds; prebuild per `(OS, Arch)` via `scripts/native-release.py` or `.github/workflows/native-modules.yml` and host on `https://etaf.top/native/`; ship only `native/manifest.json` in `resources` so `M-x etaf-install` downloads, SHA-256 verifies and loads binaries into `~/.cache/emacs-taf/native/`; register managed game engines under `:managed-engines` in `etaf-install--system-tools` for `M-x etaf-gamekit-install-*` | No (shown in `Runtime`) |
+| L3 / L4 External OS CLI tools | `ffmpeg`, `mpv`, `node`, `python3`, `rsvg-convert`, `telega-server`, `qrencode`, `git`, `rg`, `dot`, `plantuml`, `mmdc`, `curl` | Never bundle and never run `sudo`/`brew`/`apt`; register tool package names in `etaf-install--cli-catalog`, declare `:required` / `:optional` per target in `etaf-install--system-tools`, and match `<package>-doctor`; missing required tools auto-open `*ETAF Installation*` with one combined copyable command | **Yes (this tier only)** |
 
-A target's standard-archive capabilities must cover its whole dependency
-closure, not only its direct archive. The installer keeps only the archives
-named by the target's capability list when it refreshes for installation;
-Telega, for example, names `melpa` for Telega and Transient and `gnu` for
-Compat. A missing archive surfaces as `Package 'compat' ... is unavailable`.
+A target's standard-archive capabilities must cover its whole dependency closure, not only its direct archive. The installer keeps only the archives named by the target's capability list when it refreshes for installation; Telega, for example, names `melpa` for Telega and Transient and `gnu` for Compat. A missing archive surfaces as `Package 'compat' ... is unavailable`.
 
-A component's source lives in the application repository, never in another
-repository or a skill directory, so one version bump publishes the Lisp and the
-component together.
+A component's source lives in the application repository, never in another repository or a skill directory, so one version bump publishes the Lisp and the component together.
 
-A framework target that depends on a standard archive names it in its
-capability list: the installer keeps only the archives a target asks for when
-it refreshes for installation, so `etaf-posframe` names `gnu` for the
-`posframe` window manager it builds on.
+A framework target that depends on a standard archive names it in its capability list: the installer keeps only the archives a target asks for when it refreshes for installation, so `etaf-posframe` names `gnu` for the `posframe` window manager it builds on.
+
+### Publish prebuilt native dynamic modules (`/native/`)
+
+When adding or updating a C/C++ Emacs dynamic module, publish the verified binaries and commit the updated `native/manifest.json` before releasing the ELPA tarball:
+
+```sh
+# 1. Build and smoke-test per (OS, Arch) locally or via .github/workflows/native-modules.yml
+python3 scripts/native-release.py build --output /tmp/native-builds --package etaf-md
+# 2. Assemble verified manifests into packages/<pkg>/native/manifest.json and stage /native/
+python3 scripts/native-release.py manifest --input /tmp/native-builds --write-packages --stage /tmp/native-stage
+python3 scripts/native-release.py verify --all --stage /tmp/native-stage
+# 3. Publish to https://etaf.top/native/ (verifies manifest and generates /native/index.html)
+python3 packages/etaf-manual/site/scripts/publish.py --native-only /tmp/native-stage
+```
 
 Two lanes keep development fast without risking a stale archive:
 
@@ -289,35 +291,13 @@ make release-publish RELEASE_DIR=/tmp/release-next
 
 Adding a package to the archive is a fixed sequence; do not invent another route:
 
-1. Keep the package under `packages/<name>` and register it in
-   `workspace.json` (`python3 scripts/add-package.py NAME --url URL`).
-2. Declare `Version` and every Emacs dependency in `Package-Requires`; put
-   components and runtime resources inside the repository and list resource
-   directories in `release-dependencies.json`. The entry must also resolve its
-   own `lisp/` while the byte compiler runs: prefer
-   `byte-compile-current-file`, then `load-file-name`, then
-   `buffer-file-name`. An archive install otherwise reports
-   `Cannot open load file` for the modules.
-3. Implement `<package>-doctor` returning `(LABEL AVAILABLE REMEDY)` facts, and
-   mark blocking versus degraded capabilities; the installer aggregates them.
-   An application also presents itself through `<package>-open`: the install
-   gate requires that name before it accepts the target, and the menu's Open
-   action runs it.
-4. Add the target to `etaf-install--targets` with its group and open command so
-   the menu shows its status before installation. A target the menu does not
-   list is not installable at all: `etaf-install` answers
-   `Unsupported target`. Add the same package to the application or game list
-   in `scripts/install-smoke.el`, or give a framework its own functional check
-   there, so the release gate reopens and diagnoses the installed package.
-5. Place the package in the archive page's section list, `GROUPS` in
-   `etaf-manual/site/scripts/archive_pages.py`. The page writer reports every
-   package no section places and the publisher refuses to deploy such a page,
-   so an unplaced package stops the release instead of reaching readers as a
-   nameless `Other` entry.
-6. Run the package's `make check`, then the dev-lane install on Emacs 29.1, 30.2
-   and 31.1 (29.1 lives on `lightos`, see the host notes).
-7. Commit with jjosh, publish the package projection and push the checkout's
-   `main` (see [Commit and publish one cross-package change](#commit-and-publish-one-cross-package-change)),
+1. Keep the package under `packages/<name>` and register it in `workspace.json` (`python3 scripts/add-package.py NAME --url URL`).
+2. Declare `Version` and every Emacs dependency in `Package-Requires`; classify non-Lisp files using the 4-tier table: put pure-source backends and runtime data in `release-dependencies.json` `resources`, and for C dynamic modules publish via `/native/` and include only `native/manifest.json` in `resources` (never `Makefile`, `native/vendor/` or compiled binaries). The entry must also resolve its own `lisp/` while the byte compiler runs: prefer `byte-compile-current-file`, then `load-file-name`, then `buffer-file-name`. An archive install otherwise reports `Cannot open load file` for the modules.
+3. Implement `<package>-doctor` returning `(LABEL AVAILABLE REMEDY)` facts, and mark blocking versus degraded capabilities; register any manual external OS CLI tools in `etaf-install.el`'s `etaf-install--cli-catalog` and `etaf-install--system-tools` (never prebuilt native modules, bundled `backends/`, or managed game engines; list managed engines under `:managed-engines`). An application also presents itself through `<package>-open`: the install gate requires that name before it accepts the target, and the menu's Open action runs it.
+4. Add the target to `etaf-install--targets` with its group and open command so the menu shows its status before installation. A target the menu does not list is not installable at all: `etaf-install` answers `Unsupported target`. Add the same package to the application or game list in `scripts/install-smoke.el`, or give a framework its own functional check there, so the release gate reopens and diagnoses the installed package.
+5. Place the package in the archive page's section list, `GROUPS` in `etaf-manual/site/scripts/archive_pages.py`. The page writer reports every package no section places and the publisher refuses to deploy such a page, so an unplaced package stops the release instead of reaching readers as a nameless `Other` entry.
+6. Run the package's `make check`, `make structure-check`, `make installer-compile` and `tests/tools/test_install.py`, then the dev-lane install on Emacs 29.1, 30.2 and 31.1 (29.1 lives on `lightos`, see the host notes).
+7. Commit with jjosh, publish the package projection and push the checkout's `main` (see [Commit and publish one cross-package change](#commit-and-publish-one-cross-package-change)),
    then build the sealed archive and run `make release-check`.
 8. Publish with `make release-publish`, then read back `archive-contents` and the
    package page over HTTPS.

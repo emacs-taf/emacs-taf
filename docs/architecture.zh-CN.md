@@ -543,15 +543,18 @@ GUI 保持实际运行时的 GC 策略与用户设置，测量工具不能额外
 
 用户只面对一个入口：`M-x etaf-install`。`package.el` 是本项目的机制，不是并列推荐路径；文档只在一次性引导里出现 `package-install 'etaf-install`，因为安装器无法自举自己。菜单按框架、应用、游戏三段组织，候选文字以包名开头，便于按名字补全，末尾用括号标注分组；每个条目显示当前前提状态。目标的 `<包>-doctor` 返回与 `etaf-install-doctor` 相同的 `:required`/`:optional` 形状，由安装器合并展示；没有额外前提的目标可以不实现它。
 
-### 13.2 依赖分为三类，各有归属
+### 13.2 打包与依赖的四层归属判定
 
-| 类别 | 例子 | 归属与机制 |
-| --- | --- | --- |
-| Emacs 包（自有或公共） | `etaf-db`、`telega` | 在 `Package-Requires` 声明；`etaf-install` 注册所需归档（`etaf`、`gnu`、`nongnu`、`melpa`），由 `package.el` 自动解析安装；不关闭签名校验、不改用户其它源。归档包与安装目标由 `release-dependencies.json` 选择；`workspace.json` 只登记检出单元与远端，整仓提交就是发布版本 |
-| 自有组件与原生模块（脚本后端、Emacs C 动态模块） | `weread` 后端、`etaf-md` QuickJS 模块、`etaf` `libmpv` 模块、EKP C 模块 | 纯源码后端随包同一 tar 发布并计入 sha256；C 动态模块在源码仓维护并通过 CI 按 `(OS, Arch)` 矩阵对 Emacs 29.1 基线头文件预编译，包内只随 tar 发布带固定版本、HTTPS 镜像与 SHA-256 的 `native/manifest.json`；用户执行 `M-x etaf-install`（或 `M-x etaf-install-update`）时按依赖闭包自动下载、校验并热加载到 `${XDG_CACHE_HOME:-~/.cache}/emacs-taf/native/<包>/<版本>/`（不进 tar、不依赖本地编译器、升级包不丢失，且网络或平台不可用时优雅回退不阻断安装），也可随时用 `M-x etaf-install-native`（或在 `M-x etaf-install-manage` 按 `n`）手动重试或强制重装；源码检出仍保留本地 `native/` 构建路径 |
-| 系统程序与账号 | ffmpeg、mpv、node、python3、rsvg-convert、TDLib、Godot、OpenSpiel、平台登录 | 只检测，按本机包管理器（`brew`/`apt`/`dnf`/`pacman`/`zypper`/`winget`/`scoop`）合并生成一条可复制命令；绝不代跑 `sudo`/`brew`/`apt`。`M-x etaf-install-manage` 单独提供 `System CLI` 列，只展示需要用户手工安装的外部 OS 命令行工具（含未安装包的前置预览与实时检测状态），明确排除自动下载的预编译原生模块、随包发布的 `backends/` 脚本和受管游戏引擎。游戏引擎与预编译原生模块属于受控下载路径：包内自带固定版本与 SHA-256 校验值的清单或脚本，仅在用户执行安装/更新命令（`M-x etaf-install` / `M-x etaf-install-native` / `M-x etaf-gamekit-install-*`）时下载并校验后写入 ETAF 缓存目录（`etaf-install-auto-native` 可设为 nil 关闭自动拉取）；包加载与启动路径绝不静默下载 |
+每个包涉及的代码、资源、二进制与外部工具必须按下列四层归属之一落地，不留灰区：
 
-自有组件的源码必须跟随应用仓，不留在别的仓库或技能目录：一个版本一次提升，Lisp 与组件原子发布，避免跨仓版本对齐。引擎安装脚本属于包内组件，随同一个 tar 发布并计入 sha256，所以归档安装也能执行它。
+| 层次 | 适用对象与例子 | 存放与打包方式（进不进 tar） | 安装与更新机制 | 是否进管理界面 `System CLI` 列 |
+| --- | --- | --- | --- | --- |
+| L0 标准 ELPA 依赖 | 自有框架包与公共 ELPA 包（`etaf`、`etaf-db`、`telega`、`posframe`） | 在 `Package-Requires` 声明；归档外依赖同时列入 `release-dependencies.json` 的 `external` 与 `etaf-install--targets` 能力标签（`gnu`/`nongnu`/`melpa`） | `etaf-install` 自动注册所需归档，由 `package.el` 解析安装与字节编译；不关闭签名校验、不改用户其它源 | 否（显示在 `Depends on` 列） |
+| L1 随包源码组件与运行资源 | 纯源码自有脚本后端与数据（`backends/weread/`、`backends/netease/`、引擎安装脚本、字典、资源文件） | 放在本应用仓内，并在 `release-dependencies.json` 的 `resources` 列出，随包同一 `.tar` 原子发布并计入 sha256；绝不塞入 `.dylib`/`.so`/`.dll`、`Makefile`、`native/vendor/`、`tests/`、`.elc` 或 `node_modules/` | `package.el` 解包即可直接运行，无需用户手工编译或额外步骤，版本随包原子升级 | 否 |
+| L2 预编译原生模块与受管引擎 | Emacs C/C++ 动态模块（`etaf-md-typeset-native`、`etaf-video-mpv`、`ekp`）及受管游戏引擎（Godot、OpenSpiel） | C 模块源码留仓内 `native/` 供源码检出本地构建；二进制由 `scripts/native-release.py` / CI 按 `(OS, Arch)` 矩阵对 Emacs 29.1 基线预编译并托管到 `https://etaf.top/native/`（辅以 GitHub Releases 镜像），`.tar` 内只通过 `resources` 随包携带带固定版本与 SHA-256 的 `native/manifest.json`（不进二进制、不进 `native/vendor/`）。游戏引擎把固定版本与 SHA-256 校验脚本放进 L1 资源，并在 `etaf-install--system-tools` 的 `:managed-engines` 登记 | 用户执行 `M-x etaf-install` / `M-x etaf-install-update` 时按依赖闭包自动下载、校验 SHA-256、写入 `${XDG_CACHE_HOME:-~/.cache}/emacs-taf/native/<包>/<版本>/` 并热加载（升级包不丢失，失败回退不阻断安装，可设 `etaf-install-auto-native` 为 nil 关闭或用 `M-x etaf-install-native` / `n` 手动重装）；游戏引擎在交互安装时 `y-or-n-p` 询问后运行 `M-x etaf-gamekit-install-*` 写入 `~/.cache/emacs-taf/game-engines/`；包加载与启动路径绝不静默联网 | 否（状态显示在 `Runtime` 列） |
+| L3 / L4 外部系统 CLI 与账号 | 需用户自行安装的 OS 命令行工具（L3 可选增强：`ffmpeg`、`qrencode`、`git`、`rg`、`dot`、`plantuml`、`mmdc`、`curl`；L4 必选核心：`ffmpeg`、`mpv`、`node`、`python3`、`rsvg-convert`、`telega-server`）及第三方账号登录 | 绝不打包、不代装；工具包名统一登记在 `etaf-install.el` 的 `etaf-install--cli-catalog`，各包的 `:required` / `:optional` 登记在 `etaf-install--system-tools`，并在包内实现 `<包>-doctor` 保持一致 | 只检测并按本机包管理器（`brew`/`apt`/`dnf`/`pacman`/`zypper`/`winget`/`scoop`/`choco`）合并生成一条可复制命令，绝不代跑 `sudo`/`brew`/`apt`；L4 缺失时自动弹出 `*ETAF Installation*` 引导页，L3 缺失时在应用内按需就地降级提示 | **是（唯一进入 `System CLI` 列的内容）** |
+
+自有组件的源码必须跟随应用仓，不留在别的仓库或技能目录：一个版本一次提升，Lisp 与组件原子发布，避免跨仓版本对齐。归档包与安装目标由 `release-dependencies.json` 选择；`workspace.json` 只登记检出单元与远端，整仓封口提交就是发布版本。
 
 ### 13.3 版本不可变与来源可复算
 
