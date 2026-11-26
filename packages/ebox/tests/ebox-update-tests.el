@@ -890,4 +890,37 @@ B "))
         (let ((ebox-viewport-width 56) (ebox-viewport-height 20))
           (should (ebox-test-buffer-matches-render-p root buffer)))))))
 
+(ert-deftest ebox-flex-child-removal-clears-painted-tail ()
+  "Removing trailing children from a fixed-height flex repaints its line.
+Even when the container's own dimensions and the remaining children's positions
+do not change, removed children must not stay ghost-painted in the buffer."
+  (let ((tree '(column :width (ch 60) :item-gap (lh 0)
+                       (flex :id "strip" :width stretch :gap ((lh 0) (ch 1))
+                             :align-items center :flex-wrap wrap
+                             (text :id "first" "FIRST")
+                             (text :id "sep" "·")
+                             (text :id "btn" :tab-index 0
+                                   "REMOVED_BTN")))))
+    (ebox-test-with-mounted (buffer root tree)
+      (should (string-match-p "REMOVED_BTN" (ebox-test-buffer-text buffer)))
+      (let ((strip (car (ebox-selector-query root "#strip")))
+            (sep (car (ebox-selector-query root "#sep")))
+            (btn (car (ebox-selector-query root "#btn"))))
+        (ebox-with-batch
+          (ebox-node-remove sep)
+          (ebox-node-remove btn)
+          (ebox-node-insert root
+                            (ebox-build '(column :width stretch "EXPANDED_DETAIL"))))
+        (should (ebox-test-buffer-matches-render-p root buffer))
+        (let ((txt (ebox-test-buffer-text buffer)))
+          (should (string-match-p "FIRST" txt))
+          (should (string-match-p "EXPANDED_DETAIL" txt))
+          (should-not (string-match-p "REMOVED_BTN" txt)))
+        ;; Also verify removing a child from a row whose height is unchanged.
+        (let ((first (ebox-node-child strip 0)))
+          (ebox-with-batch
+            (ebox-node-remove first))
+          (should (ebox-test-buffer-matches-render-p root buffer))
+          (should-not (string-match-p "FIRST" (ebox-test-buffer-text buffer))))))))
+
 ;;; ebox-update-tests.el ends here

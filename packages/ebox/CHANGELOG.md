@@ -6,6 +6,8 @@ All notable changes to Ebox are documented here.
 
 ### Fixed
 
+- Removing a child from a fixed-height `flex`, `row`, or `grid` container now marks layout dirty and repaints the full container line instead of leaving ghost-painted text and stale keymaps from the removed child.
+
 - Downward window scrolling stops once the last line of the mounted buffer is fully visible, preventing blank overscroll past the end of a page.
 
 - Repainting a mounted buffer aligns restored window starts to column 0 of their row rather than preserving a mid-line column offset, so a truncated engine row never loses its leading cells (such as container left padding).

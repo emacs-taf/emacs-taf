@@ -1073,6 +1073,11 @@
       "name": "ebox-bulk-line-reflow-matches-render-and-preserves-positions",
       "file": "tests/ebox-update-tests.el",
       "purpose": "Large multi-hundred-line width reflows taking the bulk rewrite fast path stay byte- and property-identical to `ebox-render' across narrowing and widening."
+    },
+    {
+      "name": "ebox-flex-child-removal-clears-painted-tail",
+      "file": "tests/ebox-update-tests.el",
+      "purpose": "Removing trailing children from a fixed-height flex container whose size and remaining children's positions stay unchanged still repaints its line so removed children never stay ghost-painted."
     }
   ]
 }

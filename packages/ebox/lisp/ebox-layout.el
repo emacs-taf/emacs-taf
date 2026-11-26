@@ -929,12 +929,15 @@ Return nil when NODE's content depends on its forced height."
 
 (defun ebox--layout-full (node avail mode cbh fh)
   "Lay out NODE completely and record its damage.
-A container whose own style is unchanged and whose relayout leaves its size
-and every child's place unchanged records only its children's damage."
+A container whose own style is unchanged, has no pending child structure
+changes or vacated overlay regions, and whose relayout leaves its size and
+every child's place unchanged records only its children's damage."
   (let* ((old-h (ebox-node-h node))
          (fresh (null (ebox-node-layout node)))
          (precise (and ebox--record (not fresh)
                        (zerop (logand (ebox-node-dirty node) 7))
+                       (null (ebox-node-ops node))
+                       (null (gethash node ebox--vacated))
                        (memq (ebox-node-tag node) '(column row flex grid))))
          (before (and precise (ebox--layout-places node)))
          (inner nil))
@@ -1542,12 +1545,13 @@ lines it inserted or deleted."
     (if full
         (let ((key (ebox--constraint node)))
           (setf (ebox-node-intr node) nil)
-          ;; Partial layout has already replaced CHANGED children's sizes.
-          ;; A fresh place snapshot would compare their new sizes with
-          ;; themselves and wrongly forward a child insertion/deletion through
-          ;; a fixed-size parent.  Repaint this boundary instead; its old
-          ;; outer height is still intact and siblings outside it cannot move.
-          (when changed
+          ;; Partial layout has already replaced CHANGED children's sizes, and
+          ;; structural OPS have already mutated NODE's child list.  A fresh
+          ;; place snapshot would compare the post-mutation state with itself
+          ;; and miss removed children or wrongly forward child changes through
+          ;; a fixed-size parent.  Repaint this boundary instead; its old outer
+          ;; height is still intact and siblings outside it cannot move.
+          (when (or changed ops)
             (setf (ebox-node-dirty node)
                   (logior (ebox-node-dirty node) ebox--d-layout)))
           (ebox--layout-full node (aref key 0) (aref key 1) (aref key 2) (aref key 3))
