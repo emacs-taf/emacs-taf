@@ -2,7 +2,7 @@
 
 [中文说明](README.zh-CN.md)
 
-`etaf-ext` is a pure, universal Chrome/VS Code-style extension engine and manager for any mounted ETAF View. It contains only the engine runtime, permission gating, isolated storage, circuit-breaker isolation, Pure Mode, and the responsive Extension Manager (`M-x etaf-ext-manage`); concrete extensions live in their own independent packages (such as `etaf-translate`, `etaf-hints`, and `etaf-highlight`) or in a user's personal Emacs configuration.
+`etaf-ext` is a pure, universal Chrome/VS Code-style extension engine and manager for any mounted ETAF View. It contains only the engine runtime, permission gating, isolated storage, circuit-breaker isolation, Pure Mode, and the responsive Extension Manager (`M-x etaf-ext-manage`); concrete extensions live in their own independent packages (such as `etaf-translate`, `etaf-hints`, `etaf-highlight`, and `etaf-export`) or in a user's personal Emacs configuration.
 
 ## Capabilities
 
@@ -16,10 +16,10 @@
 
 ## Ecosystem Extensions
 
-- [etaf-translate](https://github.com/emacs-taf/etaf-translate): universal zero-invasion immersive page translation and quick popup built natively on `etaf-ext` (`C-c C-e t`).
-- [etaf-hints](https://github.com/emacs-taf/etaf-hints): standalone Vimium-style quick-jump badges (`M-f` / `C-c C-e f`).
-- [etaf-highlight](https://github.com/emacs-taf/etaf-highlight): standalone universal span highlighter and persisted companion note cards (`C-c C-e h`).
-- [etaf-export](https://github.com/emacs-taf/etaf-export): zero-browser vector PDF and SVG exporter for any mounted ETAF page (`C-c C-e x`).
+- [etaf-translate](https://github.com/emacs-taf/etaf-translate): universal zero-invasion immersive page translation and quick popup built natively on `etaf-ext`.
+- [etaf-hints](https://github.com/emacs-taf/etaf-hints): standalone Vimium-style quick-jump badges for any mounted ETAF page.
+- [etaf-highlight](https://github.com/emacs-taf/etaf-highlight): standalone universal span highlighter and persisted companion note cards.
+- [etaf-export](https://github.com/emacs-taf/etaf-export): zero-browser live vector preview and PDF / SVG exporter for any mounted ETAF page.
 
 ## Prerequisites
 

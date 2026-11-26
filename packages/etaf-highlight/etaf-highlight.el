@@ -2,7 +2,7 @@
 
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 ;; Author: ETAF contributors
-;; Version: 0.1.0
+;; Version: 0.1.1
 ;; Package-Requires: ((emacs "29.1") (etaf "0.3.10") (etaf-ui "0.3.6") (etaf-ext "0.1.0"))
 ;; Keywords: convenience, extensions, ui
 ;; URL: https://github.com/emacs-taf/etaf-highlight
@@ -342,7 +342,7 @@ Return `(HOST-ID BEG END)' or nil when no matching text Host exists."
       (etaf-view (etaf-divider :orientation 'horizontal))
       (if (null entries)
           (etaf-view (etaf-empty :title "暂无高亮"
-                                 :description "按 C-c C-e h h 或通过命令面板高亮当前选区或段落。"))
+                                 :description "运行 M-x etaf-highlight-add，或通过扩展分发器 / 命令面板高亮当前选区或段落。"))
         (etaf-node
          'column (list :width 'stretch :item-gap '(lh 1))
          (mapcar
@@ -449,7 +449,7 @@ Return `(HOST-ID BEG END)' or nil when no matching text Host exists."
   "Register the standalone `etaf-highlight' extension inside `etaf-ext'."
   (etaf-ext-define etaf-highlight
     :name "划词高亮与批注"
-    :version "0.1.0"
+    :version "0.1.1"
     :icon "标"
     :tone 'success
     :prefix-hint "h"

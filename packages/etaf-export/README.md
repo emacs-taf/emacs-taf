@@ -24,11 +24,13 @@
 (etaf-ext-mode 1)
 ```
 
-Inside any mounted ETAF page (`etaf-md`, `etaf-org`, `etaf-manual`, `etaf-agenda`, etc.):
+Inside any mounted ETAF page (`etaf-md`, `etaf-org`, `etaf-manual`, `etaf-agenda`, etc.), invoke the public commands directly:
 
-- `C-c C-e x x` (`M-x etaf-export`): open the live vector Export Preview workspace.
-- `C-c C-e x p` (`M-x etaf-export-pdf`): export the current page to vector PDF.
-- `C-c C-e x s` (`M-x etaf-export-svg`): export the current page to standalone vector SVG file(s).
+- `M-x etaf-export`: open the live vector Export Preview workspace.
+- `M-x etaf-export-pdf`: export the current page to vector PDF.
+- `M-x etaf-export-svg`: export the current page to standalone vector SVG file(s).
+
+With `etaf-ext-mode` enabled, these commands are also reachable inside ETAF buffers via `M-x etaf-ext-command-palette` or the configurable two-step dispatcher `M-x etaf-ext-dispatch` (default `etaf-ext-key-prefix` is `C-c C-e`, with default extension hint `x` and subkeys `x`, `p`, `s`); customize or disable the prefix and bind personal direct shortcuts in `M-x etaf-ext-manage` or via `etaf-ext-set-key`.
 
 ## Documentation
 

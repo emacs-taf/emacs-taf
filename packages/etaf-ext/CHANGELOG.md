@@ -2,7 +2,13 @@
 
 All notable changes to `etaf-ext` are documented in this file. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.1.1] - 2026-11-26
+
+### Changed
+
+- Updated README ecosystem extension descriptions to avoid presenting configurable `etaf-ext` dispatcher chords as fixed keybindings and included `etaf-export`'s live vector preview capability.
+
+## [0.1.0] - 2026-11-26
 
 ### Added
 

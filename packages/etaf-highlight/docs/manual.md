@@ -4,10 +4,13 @@
 
 ## Commands
 
-- `C-c C-e h h` (`etaf-highlight-add`): highlights the active region inside a text Host, or the entire text Host at point when no region is active.
-- `C-c C-e h n`: prompts for a note string and attaches a companion note card beneath the highlighted paragraph.
-- `C-c C-e h d` (`etaf-highlight-remove`): removes highlights attached to the text Host at point.
-- `C-c C-e h l` (`etaf-highlight-list`): opens the floating highlights overview popup listing every highlight on the current page.
+Invoke `etaf-highlight` commands directly via `M-x` on any mounted ETAF page:
+
+- `M-x etaf-highlight-add`: highlights the active region inside a text Host, or the entire text Host at point when no region is active (accepts optional color and note).
+- `M-x etaf-highlight-remove`: removes highlights attached to the text Host at point.
+- `M-x etaf-highlight-list`: opens the floating highlights overview popup listing every highlight on the current page.
+
+Inside `etaf-ext`, `etaf-highlight` also registers four extension actions (`highlight`, `note`, `remove`, `list`, with default `:prefix-hint "h"` and subkeys `"h"`, `"n"`, `"d"`, `"l"`). With `etaf-ext-mode` enabled, reach them through `M-x etaf-ext-command-palette` or the configurable per-page dispatcher `M-x etaf-ext-dispatch` (`etaf-ext-key-prefix`, default `C-c C-e`, or `nil` to disable), and customize direct shortcuts in `M-x etaf-ext-manage` or via `etaf-ext-set-key`.
 
 ## Programmatic Usage
 

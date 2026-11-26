@@ -18,11 +18,13 @@ Customize the default layout, color strategy, page numbers, margin, font stack a
 
 ## Interactive Workflows
 
-`etaf-export` exposes three core interactive commands both via `M-x` and under `etaf-ext`'s unified extension prefix (`C-c C-e x`):
+`etaf-export` exposes three core interactive commands for any mounted ETAF page:
 
-- `C-c C-e x x` (`M-x etaf-export`): open the live vector Export Preview workspace for the current mounted ETAF page. The workspace shows a real-time vector preview of each page alongside controls for pagination (`a4`, `letter`, `single`), color theme (`current`, `light`), margin presets (`16`, `28`, `40` pt) and page numbers, persisting your last interactive choices via `etaf-ext` storage. Inside the workspace, use `n`/`p` (or `[`/`]`) to flip pages, `z` to toggle fit-page/fit-width zoom, `m`/`t`/`b`/`#` to change options, `e` to export PDF, `s` to export SVG, `g` to recapture the live source buffer and `q` or `Esc` to close and return.
-- `C-c C-e x p` (`M-x etaf-export-pdf`): prompt for a `.pdf` path and export the active page using the configured defaults.
-- `C-c C-e x s` (`M-x etaf-export-svg`): prompt for a `.svg` path and export standalone vector SVG page(s).
+- `M-x etaf-export`: open the live vector Export Preview workspace for the current mounted ETAF page. The workspace shows a real-time vector preview of each page alongside controls for pagination (`a4`, `letter`, `single`), color theme (`current`, `light`), margin presets (`16`, `28`, `40` pt) and page numbers, persisting your last interactive choices via `etaf-ext` storage. Inside the workspace, use `n`/`p` (or `[`/`]`) to flip pages, `z` to toggle fit-page/fit-width zoom, `m`/`t`/`b`/`#` to change options, `e` to export PDF, `s` to export SVG, `g` to recapture the live source buffer and `q` or `Esc` to close and return.
+- `M-x etaf-export-pdf`: prompt for a `.pdf` path and export the active page using the configured defaults.
+- `M-x etaf-export-svg`: prompt for a `.svg` path and export standalone vector SVG page(s).
+
+With `etaf-ext-mode` active, all three commands are also registered inside `etaf-ext` (declaring `:prefix-hint "x"` and subkeys `"x"`, `"p"`, `"s"`). Reach them via `M-x etaf-ext-command-palette` or `M-x etaf-ext-dispatch` (bound inside ETAF buffers to the configurable `etaf-ext-key-prefix`, default `C-c C-e`, or `nil` to disable), and bind personal direct shortcuts in `M-x etaf-ext-manage` or with `(etaf-ext-set-key 'etaf-export 'preview KEY)`.
 
 ## Programmatic API and Personal Presets
 

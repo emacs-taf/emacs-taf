@@ -2,7 +2,7 @@
 
 [English README](README.md)
 
-`etaf-ext` 是面向 ETAF 生态的纯粹通用扩展引擎与管理中心。本包只包含扩展引擎、权限门禁、独立持久化存储、错误熔断、纯净模式与响应式扩展管理中心（`M-x etaf-ext-manage`），不捆绑任何具体业务插件；具体扩展按独立包（如 `etaf-translate`、`etaf-hints`、`etaf-highlight`）或个人配置微脚本的方式按需加载。
+`etaf-ext` 是面向 ETAF 生态的纯粹通用扩展引擎与管理中心。本包只包含扩展引擎、权限门禁、独立持久化存储、错误熔断、纯净模式与响应式扩展管理中心（`M-x etaf-ext-manage`），不捆绑任何具体业务插件；具体扩展按独立包（如 `etaf-translate`、`etaf-hints`、`etaf-highlight`、`etaf-export`）或个人配置微脚本的方式按需加载。
 
 ## 核心能力
 
@@ -16,10 +16,10 @@
 
 ## 配套独立扩展
 
-- [etaf-translate](https://github.com/emacs-taf/etaf-translate)：原生基于 `etaf-ext` 的零侵入沉浸式页面翻译与快译浮窗扩展（`C-c C-e t`）。
-- [etaf-hints](https://github.com/emacs-taf/etaf-hints)：独立 Vimium 风格快捷跳转扩展（`M-f` / `C-c C-e f`）。
-- [etaf-highlight](https://github.com/emacs-taf/etaf-highlight)：独立通用划词高亮与持久化批注卡片扩展（`C-c C-e h`）。
-- [etaf-export](https://github.com/emacs-taf/etaf-export)：任意 ETAF 渲染页面零浏览器真矢量 PDF / SVG 导出扩展（`C-c C-e x`）。
+- [etaf-translate](https://github.com/emacs-taf/etaf-translate)：原生基于 `etaf-ext` 的零侵入沉浸式页面翻译与快译浮窗扩展。
+- [etaf-hints](https://github.com/emacs-taf/etaf-hints)：面向任意 ETAF 页面的独立 Vimium 风格快捷跳转扩展。
+- [etaf-highlight](https://github.com/emacs-taf/etaf-highlight)：独立通用划词高亮与持久化批注卡片扩展。
+- [etaf-export](https://github.com/emacs-taf/etaf-export)：面向任意 ETAF 渲染页面的零浏览器实时矢量预览与 PDF / SVG 导出扩展。
 
 ## 快速上手
 

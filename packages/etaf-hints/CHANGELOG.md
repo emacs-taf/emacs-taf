@@ -2,7 +2,13 @@
 
 All notable changes to `etaf-hints` are documented in this file. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.1.1] - 2026-11-26
+
+### Changed
+
+- Updated README, manual, Commentary and manifest description to lead with `M-x etaf-hints-start` and clarify that `M-f` and `etaf-ext-dispatch` keys are configurable, conflict-checked defaults rather than fixed bindings.
+
+## [0.1.0] - 2026-11-26
 
 ### Added
 

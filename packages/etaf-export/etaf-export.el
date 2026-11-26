@@ -2,7 +2,7 @@
 
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 ;; Author: ETAF contributors
-;; Version: 0.2.0
+;; Version: 0.2.1
 ;; Package-Requires: ((emacs "29.1") (etaf "0.3.6") (etaf-ui "0.3.4") (etaf-ext "0.1.0"))
 ;; Keywords: convenience, docs, extensions, ui
 ;; URL: https://github.com/emacs-taf/etaf-export
@@ -303,7 +303,7 @@ its underlying source runtime."
   "Register the standalone `etaf-export' extension inside `etaf-ext'."
   (etaf-ext-define etaf-export
     :name "页面导出 PDF / SVG"
-    :version "0.2.0"
+    :version "0.2.1"
     :icon "导"
     :tone 'info
     :prefix-hint "x"

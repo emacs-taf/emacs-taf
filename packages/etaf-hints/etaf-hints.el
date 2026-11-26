@@ -2,7 +2,7 @@
 
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 ;; Author: ETAF contributors
-;; Version: 0.1.0
+;; Version: 0.1.1
 ;; Package-Requires: ((emacs "29.1") (etaf "0.3.10") (etaf-ui "0.3.6") (etaf-ext "0.1.0"))
 ;; Keywords: convenience, extensions, ui
 ;; URL: https://github.com/emacs-taf/etaf-hints
@@ -10,9 +10,10 @@
 ;;; Commentary:
 
 ;; Standalone Vimium-style quick-jump extension built strictly on `etaf-ext''s
-;; public API.  Pressing `M-f' overlays prefix-free letter badges over every
-;; visible clickable or focusable Host in the current ETAF page; typing a code
-;; dispatches semantic press or focus and removes the overlay cleanly.
+;; public API.  Invoking `etaf-hints-start' overlays prefix-free letter badges
+;; over every visible clickable or focusable Host in the current ETAF page;
+;; typing a code dispatches semantic press or focus and removes the overlay
+;; cleanly.
 ;;
 ;; Public API
 ;;
@@ -309,11 +310,11 @@ Return `:activated', `:prefix', or `:cancelled'."
   "Register the standalone `etaf-hints' extension inside `etaf-ext'."
   (etaf-ext-define etaf-hints
     :name "快捷跳转 (Hints)"
-    :version "0.1.0"
+    :version "0.1.1"
     :icon "跳"
     :tone 'warning
     :prefix-hint "f"
-    :description "按 M-f 或 C-c C-e f 在页面所有可见可交互元素旁浮现无前缀冲突的字母标签，按键直达点击或聚焦。"
+    :description "在当前 ETAF 页面所有可见可交互元素旁浮现无前缀冲突的字母标签，键入字母直达点击或聚焦。"
     :activation 'on-command
     :matches '(:apps t)
     :priority 20

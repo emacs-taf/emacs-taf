@@ -24,11 +24,13 @@
 (etaf-ext-mode 1)
 ```
 
-在任意已挂载的 ETAF 页面中按以下快捷键即可使用：
+在任意已挂载的 ETAF 页面中直接调用公开命令即可使用：
 
-- `C-c C-e x x`（或 `M-x etaf-export`）：打开实时矢量导出预览工作台。
-- `C-c C-e x p`（或 `M-x etaf-export-pdf`）：导出当前页面为矢量 PDF。
-- `C-c C-e x s`（或 `M-x etaf-export-svg`）：导出当前页面为矢量 SVG 文件。
+- `M-x etaf-export`：打开实时矢量导出预览工作台。
+- `M-x etaf-export-pdf`：导出当前页面为矢量 PDF。
+- `M-x etaf-export-svg`：导出当前页面为矢量 SVG 文件。
+
+开启 `etaf-ext-mode` 后，也可在 ETAF 页面内通过 `M-x etaf-ext-command-palette` 模糊搜索，或通过可配置的 `etaf-ext` 两级命令分发器（`etaf-ext-dispatch`，默认前缀 `etaf-ext-key-prefix` 为 `C-c C-e`，本扩展默认建议字母 `x`，子键 `x` / `p` / `s`）调用；前缀与直达快捷键均可在 `M-x etaf-ext-manage` 或经 `etaf-ext-set-key` 自由修改或关闭。
 
 ## 文档与验收
 
