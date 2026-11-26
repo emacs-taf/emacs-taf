@@ -93,20 +93,50 @@
                out t t))
         out))))
 
-(defun etaf-export--embed-inline-svg (svg-bytes x y w h prefix theme orig-bg)
-  "Build a nested `<svg>' element embedding SVG-BYTES at (X Y W H)."
+(defun etaf-export--find-last-svg-close (svg-text start)
+  "Return index of the last `</svg>' (case-insensitive) in SVG-TEXT from START."
+  (let ((pos nil)
+        (from start))
+    (while-let ((hit (string-search "</svg>" svg-text from)))
+      (setq pos hit
+            from (+ hit 6)))
+    (or pos
+        (let ((case-fold-search t)
+              (p start)
+              (last nil))
+          (while (string-match "</svg>" svg-text p)
+            (setq last (match-beginning 0)
+                  p (match-end 0)))
+          last))))
+
+(defun etaf-export--split-svg-root (svg-text)
+  "Return `(ATTRS . INNER)' for outermost `<svg ...>...</svg>' in SVG-TEXT, or nil.
+Uses linear substring search without backtracking regexps so arbitrarily large
+SVGs never trigger `Stack overflow in regexp matcher'."
+  (when (stringp svg-text)
+    (let ((case-fold-search t))
+      (when-let* ((open-start (string-match "<svg\\(?:[ \t\n\r]\\|>\\)" svg-text))
+                  (open-end (string-search ">" svg-text open-start))
+                  ((> open-end open-start))
+                  ((/= (aref svg-text (1- open-end)) ?/))
+                  (close-pos (etaf-export--find-last-svg-close svg-text (1+ open-end))))
+        (cons (substring svg-text (+ open-start 4) open-end)
+              (substring svg-text (1+ open-end) close-pos))))))
+
+(defun etaf-export--embed-inline-svg (svg-bytes x y w h prefix theme orig-bg &optional fallback-color)
+  "Build a nested `<svg>' element embedding SVG-BYTES at (X Y W H).
+When the inner `<svg>' omits an explicit `color' attribute, FALLBACK-COLOR is
+forwarded so icons using `currentColor' inherit the Emacs face foreground."
   (let* ((raw (if (multibyte-string-p svg-bytes)
                   svg-bytes
                 (decode-coding-string svg-bytes 'utf-8 t)))
-         (clean (replace-regexp-in-string "\\`\xef\xbb\xbf" "" raw))
-         (clean (replace-regexp-in-string "<\\?xml[^>]*\\?>" "" clean))
-         (clean (replace-regexp-in-string "<!DOCTYPE[^>]*>" "" clean))
          (clean (if (eq theme 'light)
-                    (etaf-export--remap-svg-light clean orig-bg)
-                  clean)))
-    (if (string-match "<svg\\([^>]*\\)>\\(\\(?:.\\|\n\\)*\\)</svg>" clean)
-        (let* ((attrs (match-string 1 clean))
-               (inner (match-string 2 clean))
+                    (etaf-export--remap-svg-light raw orig-bg)
+                  raw))
+         (parts (etaf-export--split-svg-root clean)))
+    (if parts
+        (let* ((attrs (car parts))
+               (inner (cdr parts))
                (vb (etaf-export--extract-xml-attr attrs "viewBox"))
                (ow (etaf-export--parse-num-attr (etaf-export--extract-xml-attr attrs "width")))
                (oh (etaf-export--parse-num-attr (etaf-export--extract-xml-attr attrs "height")))
@@ -114,7 +144,8 @@
                (style (etaf-export--extract-xml-attr attrs "style"))
                (fill (etaf-export--extract-xml-attr attrs "fill"))
                (stroke (etaf-export--extract-xml-attr attrs "stroke"))
-               (color (etaf-export--extract-xml-attr attrs "color"))
+               (color (or (etaf-export--extract-xml-attr attrs "color")
+                          fallback-color))
                (preserve (or (etaf-export--extract-xml-attr attrs "preserveAspectRatio")
                              "xMidYMid meet"))
                (scoped (etaf-export--scope-svg-ids inner prefix))
@@ -382,18 +413,32 @@ where each page is (:index N :start-row R0 :end-row R1 :y0 Y0 :y1 Y1 :page-h H).
                            (push (format "<rect x=\"%.2f\" y=\"%.2f\" width=\"%.2f\" height=\"%.2f\" fill=\"none\" stroke=\"%s\" stroke-width=\"%d\"/>"
                                          (+ rx 0.5) (+ ly 0.5) (max 1.0 (- rw 1.0)) (max 1.0 (- lh 1.0)) bx bw)
                                  dec-elems))))
-                     ;; Inline (non-stitched) 1-row images & Ebox corner SVGs
+                     ;; Inline (non-stitched) 1-row images, icons & Ebox corner SVGs
                      (when (and (eq kind 'image) (not (plist-get run :stitched)))
-                       (when-let* ((pair (etaf-export--image-bytes (plist-get run :display))))
-                         (let ((ih (plist-get run :h)))
-                           (setq svg-seq (1+ svg-seq))
-                           (push (if (eq (car pair) 'svg)
-                                     (etaf-export--embed-inline-svg
-                                      (cdr pair) rx ly rw ih
-                                      (format "p%d_i%d_" page-idx svg-seq)
-                                      theme orig-bg)
-                                   (etaf-export--embed-raster (car pair) (cdr pair) rx ly rw ih))
-                                 img-elems))))
+                       (let ((disp (plist-get run :display)))
+                         (when-let* ((pair (etaf-export--image-bytes disp)))
+                           (let* ((ih (plist-get run :h))
+                                  (img-ascent (plist-get disp :ascent))
+                                  (ascent-ratio (/ base-ascent (max 1.0 base-lh)))
+                                  (iy (cond
+                                       ((plist-get disp :slice) ly)
+                                       ((eq img-ascent 'center)
+                                        (+ ly (/ (max 0.0 (- lh ih)) 2.0)))
+                                       ((and (numberp img-ascent) (< ih lh))
+                                        (max ly
+                                             (min (+ ly (- lh ih))
+                                                  (- (+ ly (* lh ascent-ratio))
+                                                     (* ih (/ (float img-ascent) 100.0))))))
+                                       (t ly))))
+                             (setq svg-seq (1+ svg-seq))
+                             (push (if (eq (car pair) 'svg)
+                                       (etaf-export--embed-inline-svg
+                                        (cdr pair) rx iy rw ih
+                                        (format "p%d_i%d_" page-idx svg-seq)
+                                        theme orig-bg
+                                        (plist-get style :fg))
+                                     (etaf-export--embed-raster (car pair) (cdr pair) rx iy rw ih))
+                                   img-elems)))))
                      ;; Visible text runs
                      (when (eq kind 'text)
                        (let ((txt (plist-get run :text)))
@@ -471,6 +516,50 @@ where each page is (:index N :start-row R0 :end-row R1 :y0 Y0 :y1 Y1 :page-h H).
           :svg-pages (mapcar (lambda (pg)
                                (etaf-export--render-page-svg snapshot layout pg total page-numbers))
                              pages))))
+
+(defun etaf-export--compose-preview-svg (page-svg page-w page-h stage-w stage-h stage-bg border-color shadow-color)
+  "Compose PAGE-SVG (PAGE-W x PAGE-H pt) into a STAGE-W x STAGE-H px SVG.
+The outer SVG declares exact integer pixel dimensions so Emacs's `ebox-image'
+renderer receives a 1:1 pixel match without aspect-ratio rejection, showing the
+centered paper sheet over STAGE-BG with a subtle drop shadow and 1px border."
+  (let* ((sw (max 32 (round stage-w)))
+         (sh (max 32 (round stage-h)))
+         (pw (max 1.0 (float page-w)))
+         (ph (max 1.0 (float page-h)))
+         (pad-x (min 14.0 (* sw 0.04)))
+         (pad-y (min 12.0 (* sh 0.04)))
+         (avail-w (max 16.0 (- sw (* 2.0 pad-x))))
+         (avail-h (max 16.0 (- sh (* 2.0 pad-y))))
+         (scale (min (/ avail-w pw) (/ avail-h ph)))
+         (sheet-w (* pw scale))
+         (sheet-h (* ph scale))
+         (sx (/ (- sw sheet-w) 2.0))
+         (sy (/ (- sh sheet-h) 2.0))
+         (inner (or (cdr (etaf-export--split-svg-root page-svg)) "")))
+    (concat
+     (format "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" width=\"%d\" height=\"%d\" viewBox=\"0 0 %d %d\">\n"
+             sw sh sw sh)
+     (format "<rect x=\"0\" y=\"0\" width=\"%d\" height=\"%d\" fill=\"%s\"/>\n"
+             sw sh (etaf-export--xml-escape (or stage-bg "#e5e7eb")))
+     (format "<rect x=\"%.2f\" y=\"%.2f\" width=\"%.2f\" height=\"%.2f\" rx=\"2\" fill=\"%s\" fill-opacity=\"0.22\"/>\n"
+             (+ sx 2.0) (+ sy 3.0) sheet-w sheet-h
+             (etaf-export--xml-escape (or shadow-color "#000000")))
+     (format "<svg x=\"%.2f\" y=\"%.2f\" width=\"%.2f\" height=\"%.2f\" viewBox=\"0 0 %.2f %.2f\" preserveAspectRatio=\"xMidYMid meet\" overflow=\"hidden\">\n%s\n</svg>\n"
+             sx sy sheet-w sheet-h pw ph inner)
+     (format "<rect x=\"%.2f\" y=\"%.2f\" width=\"%.2f\" height=\"%.2f\" fill=\"none\" stroke=\"%s\" stroke-width=\"1\"/>\n"
+             (+ sx 0.5) (+ sy 0.5) (max 1.0 (- sheet-w 1.0)) (max 1.0 (- sheet-h 1.0))
+             (etaf-export--xml-escape (or border-color "#cbd5e1")))
+     "</svg>\n")))
+
+(defun etaf-export--preview-svg-descriptor (page-svg page-w page-h stage-w stage-h stage-bg border-color shadow-color)
+  "Return an in-memory Emacs SVG image descriptor for previewing PAGE-SVG."
+  (let ((svg (etaf-export--compose-preview-svg
+              page-svg page-w page-h stage-w stage-h
+              stage-bg border-color shadow-color)))
+    (list 'image
+          :type 'svg
+          :data (encode-coding-string svg 'utf-8-unix)
+          :scale 1)))
 
 (provide 'etaf-export-svg)
 ;;; etaf-export-svg.el ends here

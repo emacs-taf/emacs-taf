@@ -18,6 +18,12 @@
 (require 'etaf)
 (require 'etaf-ui)
 
+;; Native graphics/font primitives (declared for Emacs 29 & emacs-nox builds).
+(declare-function image-size "image.c" (spec &optional pixels frame))
+(declare-function font-info "font.c" (name &optional frame))
+(declare-function internal-char-font "font.c" (position &optional ch))
+(declare-function font-get "font.c" (font-object prop))
+
 (defconst etaf-export--default-font-stack
   "Menlo, SF Mono, Monaco, LXGW WenKai Mono, PingFang SC, Hiragino Sans GB, Noto Sans Mono CJK SC, monospace"
   "Default fallback font stack for monospace Latin, box drawing and CJK.")
@@ -122,8 +128,11 @@
               (etaf-export--rgb01-to-hex (nth 0 nrgb) (nth 1 nrgb) (nth 2 nrgb)))
           (etaf-ui-color-legible c "#ffffff" 3.2)))))))
 
-(defun etaf-export--remap-fg-light (hex bg-light canvas-hex)
-  "Remap foreground HEX from dark CANVAS-HEX so it is legible over BG-LIGHT."
+(defun etaf-export--remap-fg-light (hex bg-light canvas-hex &optional rule-p)
+  "Remap foreground HEX from dark CANVAS-HEX so it is legible over BG-LIGHT.
+When RULE-P is non-nil (for pure box-drawing rules), subtle dark-on-dark ink
+remaps to crisp light-paper border grey; readable text always preserves at
+least 4.5:1 WCAG AA contrast over BG-LIGHT."
   (let ((c (etaf-export--color-hex hex))
         (bg (or bg-light "#ffffff")))
     (cond
@@ -134,11 +143,13 @@
                    (chroma (etaf-export--rgb-chroma r g b))
                    (`(,h ,s ,l) (color-rgb-to-hsl r g b)))
         (cond
-         ;; Subtle dark-on-dark box-drawing characters (table rules/dividers)
-         ((and (< chroma 0.09) (< l 0.38))
+         ;; Subtle dark-on-dark box-drawing rules/dividers only
+         ((and rule-p (< chroma 0.09) (< l 0.38))
           (etaf-export--remap-border-light c canvas-hex))
          ((< chroma 0.09)
-          (let* ((nl (max 0.12 (min 0.44 (- 1.03 l))))
+          (let* ((nl (if (< l 0.38)
+                         (max 0.12 (min 0.35 l))
+                       (max 0.12 (min 0.44 (- 1.03 l)))))
                  (nrgb (color-hsl-to-rgb h (* s 0.18) nl))
                  (cand (etaf-export--rgb01-to-hex (nth 0 nrgb) (nth 1 nrgb) (nth 2 nrgb))))
             (etaf-ui-color-legible cand bg 4.5)))
@@ -148,33 +159,69 @@
                  (cand (etaf-export--rgb01-to-hex (nth 0 nrgb) (nth 1 nrgb) (nth 2 nrgb))))
             (etaf-ui-color-legible cand bg 4.5)))))))))
 
+(defconst etaf-export--svg-named-colors
+  '(("white" . "#ffffff")
+    ("black" . "#000000")
+    ("gray" . "#808080")
+    ("grey" . "#808080")
+    ("silver" . "#c0c0c0")
+    ("lightgray" . "#d3d3d3")
+    ("lightgrey" . "#d3d3d3")
+    ("darkgray" . "#a9a9a9")
+    ("darkgrey" . "#a9a9a9")
+    ("dimgray" . "#696969")
+    ("dimgrey" . "#696969")
+    ("gainsboro" . "#dcdcdc")
+    ("whitesmoke" . "#f5f5f5"))
+  "Common CSS named neutral colors recognized during SVG light-paper remapping.")
+
+(defun etaf-export--parse-css-color-hex (raw)
+  "Convert CSS color RAW (`#rrggbb', `#rgb', `rgb(...)' or name) to `#rrggbb'."
+  (let ((s (downcase (string-trim (or raw "")))))
+    (cond
+     ((string-match "\\`#\\([0-9a-f]\\{6\\}\\)\\'" s) s)
+     ((string-match "\\`#\\([0-9a-f]\\)\\([0-9a-f]\\)\\([0-9a-f]\\)\\'" s)
+      (format "#%s%s%s%s%s%s"
+              (match-string 1 s) (match-string 1 s)
+              (match-string 2 s) (match-string 2 s)
+              (match-string 3 s) (match-string 3 s)))
+     ((string-match "\\`rgb([ \t]*\\([0-9]+\\)[ \t]*,[ \t]*\\([0-9]+\\)[ \t]*,[ \t]*\\([0-9]+\\)[ \t]*)\\'" s)
+      (format "#%02x%02x%02x"
+              (max 0 (min 255 (string-to-number (match-string 1 s))))
+              (max 0 (min 255 (string-to-number (match-string 2 s))))
+              (max 0 (min 255 (string-to-number (match-string 3 s))))))
+     (t (cdr (assoc s etaf-export--svg-named-colors))))))
+
 (defun etaf-export--remap-svg-light (svg-text canvas-hex)
-  "Adapt dark-themed hex colors inside SVG-TEXT for crisp light-paper printing."
+  "Adapt dark-themed colors inside SVG-TEXT for crisp light-paper printing.
+Handles `#rrggbb', `#rgb', `rgb(r,g,b)' and common CSS neutral color names."
   (if (not (and (stringp svg-text) (etaf-export--dark-p canvas-hex)))
       svg-text
     (let ((case-fold-search t))
       (replace-regexp-in-string
-       "\\b\\(fill\\|stroke\\|color\\)\\([ \t]*[:=][ \t]*[\"']?\\)\\(#[0-9a-fA-F]\\{6\\}\\)"
+       "\\b\\(fill\\|stroke\\|color\\)\\([ \t]*[:=][ \t]*[\"']?\\)\\(#[0-9a-fA-F]\\{6\\}\\|#[0-9a-fA-F]\\{3\\}\\|rgb([ \t]*[0-9]+[ \t]*,[ \t]*[0-9]+[ \t]*,[ \t]*[0-9]+[ \t]*)\\|white\\|black\\|gray\\|grey\\|silver\\|lightgray\\|lightgrey\\|darkgray\\|darkgrey\\|dimgray\\|dimgrey\\|gainsboro\\|whitesmoke\\)\\b"
        (lambda (match)
          (let* ((prop (downcase (match-string 1 match)))
                 (sep (match-string 2 match))
-                (raw (downcase (match-string 3 match)))
+                (tok (match-string 3 match))
+                (raw (etaf-export--parse-css-color-hex tok))
                 (mapped
-                 (cond
-                  ((equal raw canvas-hex) "#ffffff")
-                  ((string= prop "color")
-                   (etaf-export--remap-fg-light raw "#ffffff" canvas-hex))
-                  ((string= prop "stroke")
-                   (if (< (etaf-export--color-luma raw) 0.25)
-                       (etaf-export--remap-border-light raw canvas-hex)
-                     (etaf-export--remap-fg-light raw "#ffffff" canvas-hex)))
-                  ;; fill: dark neutral/tinted boxes become light paper; bright white text becomes dark ink
-                  ((> (etaf-export--color-luma raw) 0.65)
-                   (etaf-export--remap-fg-light raw "#ffffff" canvas-hex))
-                  ((< (etaf-export--color-luma raw) 0.22)
-                   (etaf-export--remap-bg-light raw canvas-hex))
-                  (t raw))))
-           (concat prop sep (or mapped raw))))
+                 (when raw
+                   (cond
+                    ((equal raw canvas-hex) "#ffffff")
+                    ((string= prop "color")
+                     (etaf-export--remap-fg-light raw "#ffffff" canvas-hex))
+                    ((string= prop "stroke")
+                     (if (< (etaf-export--color-luma raw) 0.25)
+                         (etaf-export--remap-border-light raw canvas-hex)
+                       (etaf-export--remap-fg-light raw "#ffffff" canvas-hex)))
+                    ;; fill: dark neutral/tinted boxes become light paper; bright white text becomes dark ink
+                    ((> (etaf-export--color-luma raw) 0.65)
+                     (etaf-export--remap-fg-light raw "#ffffff" canvas-hex))
+                    ((< (etaf-export--color-luma raw) 0.22)
+                     (etaf-export--remap-bg-light raw canvas-hex))
+                    (t raw)))))
+           (concat prop sep (or mapped tok))))
        svg-text t t))))
 
 ;;;; Face & Display Property Extraction
@@ -204,12 +251,27 @@
                          (if (etaf-export--dark-p def-bg) "#e6edf3" "#1f2328"))))
         (list def-bg def-fg)))))
 
+(defun etaf-export--frame-cjk-family (frame)
+  "Return the active CJK font family on graphic FRAME, or nil."
+  (when (and frame (display-graphic-p frame)
+             (fboundp 'internal-char-font)
+             (fboundp 'font-get))
+    (let* ((font (ignore-errors
+                   (with-selected-frame frame
+                     (car-safe (internal-char-font nil ?汉)))))
+           (fam (and font (ignore-errors (font-get font :family)))))
+      (cond
+       ((and (stringp fam) (not (string-empty-p fam))) fam)
+       ((symbolp fam) (symbol-name fam))
+       (t nil)))))
+
 (defun etaf-export--font-metrics (runtime buffer &optional font-override)
   "Return cell and font metrics plist for RUNTIME and BUFFER.
 Optional FONT-OVERRIDE replaces the inherited font stack."
   (with-current-buffer buffer
     (let* ((win (get-buffer-window buffer t))
-           (frame (and win (window-frame win)))
+           (frame (or (and win (window-frame win))
+                      (and (display-graphic-p (selected-frame)) (selected-frame))))
            (graphic (and frame (display-graphic-p frame)))
            (dm (ignore-errors (etaf-display-metrics runtime)))
            (dm-cw (and dm (plist-get dm :char-width)))
@@ -224,31 +286,47 @@ Optional FONT-OVERRIDE replaces the inherited font stack."
                        (/ cw (float (max 1 (or dm-cw 1))))))
            (base-h (let ((h (face-attribute 'default :height frame t)))
                      (if (and (integerp h) (> h 0)) h 120)))
-           ;; Match Emacs's real logical font height (base-h / 10 on macOS NS,
-           ;; or ~0.78..0.88 of line-height on 96dpi displays) so CJK/Latin run
-           ;; widths stay aligned with Emacs cells without artificial shrinking.
+           (native-px (when (and graphic (fboundp 'font-info))
+                        (when-let* ((fnt (ignore-errors (face-font 'default frame)))
+                                    (info (ignore-errors (font-info fnt frame)))
+                                    (px (and (vectorp info) (> (length info) 2) (aref info 2))))
+                          (when (and (numberp px) (> px 4)) (float px)))))
+           ;; Prefer the native default font pixel size so generous line-spacing
+           ;; does not artificially inflate SVG text size relative to Emacs.
            (font-size (if pixel-metrics
-                          (min (* lh 0.88)
-                               (max (* lh 0.78)
-                                    (if (>= base-h 60)
-                                        (/ (float base-h) 10.0)
-                                      (* lh 0.82))))
+                          (min (* lh 0.92)
+                               (max (* lh 0.55)
+                                    (or native-px
+                                        (if (>= base-h 60)
+                                            (/ (float base-h) 10.0)
+                                          (* lh 0.80)))))
                         14.0))
            (ascent (if (and pixel-metrics (numberp dm-asc) (> dm-asc 0))
                        (* lh (/ (float (min 95 (max 60 dm-asc))) 100.0))
                      (* lh 0.76)))
            (frame-fam (and graphic (face-attribute 'default :family frame t)))
+           (cjk-fam (etaf-export--frame-cjk-family frame))
+           (lead-fams (delq nil
+                            (list (and (stringp frame-fam)
+                                       (not (string-empty-p frame-fam))
+                                       (not (string= frame-fam "default"))
+                                       frame-fam)
+                                  (and (stringp cjk-fam)
+                                       (not (string-empty-p cjk-fam))
+                                       (not (equal cjk-fam frame-fam))
+                                       cjk-fam))))
            (family (cond
                     ((and (stringp font-override) (not (string-empty-p font-override)))
                      font-override)
-                    ((and (stringp frame-fam)
-                          (not (string-empty-p frame-fam))
-                          (not (string= frame-fam "default")))
-                     (concat frame-fam ", " etaf-export--default-font-stack))
+                    (lead-fams
+                     (concat (mapconcat #'identity lead-fams ", ")
+                             ", " etaf-export--default-font-stack))
                     (t etaf-export--default-font-stack))))
       (list :cw cw
             :lh lh
             :px-scale px-scale
+            :pixel-metrics pixel-metrics
+            :frame frame
             :font-size font-size
             :ascent ascent
             :base-height base-h
@@ -373,13 +451,19 @@ Optional FONT-OVERRIDE replaces the inherited font stack."
             :extend extend
             :family family))))
 
-(defun etaf-export--apply-theme-to-style (style theme orig-canvas-bg)
+(defun etaf-export--box-rule-text-p (text)
+  "Return non-nil when TEXT contains only whitespace and box-drawing rules."
+  (and (stringp text)
+       (string-match-p "[\u2500-\u257f]" text)
+       (string-match-p "\\`[ \t\u2500-\u257f]+\\'" text)))
+
+(defun etaf-export--apply-theme-to-style (style theme orig-canvas-bg &optional rule-p)
   "Apply THEME (`current' or `light') to STYLE derived from ORIG-CANVAS-BG."
   (if (or (not (eq theme 'light)) (not (etaf-export--dark-p orig-canvas-bg)))
       style
     (let* ((copy (copy-sequence style))
            (bg (etaf-export--remap-bg-light (plist-get style :bg) orig-canvas-bg))
-           (fg (etaf-export--remap-fg-light (plist-get style :fg) bg orig-canvas-bg))
+           (fg (etaf-export--remap-fg-light (plist-get style :fg) bg orig-canvas-bg rule-p))
            (ul (when-let* ((u (plist-get style :underline)))
                  (if (equal u (plist-get style :fg))
                      fg
@@ -405,16 +489,22 @@ Optional FONT-OVERRIDE replaces the inherited font stack."
    ((stringp display) (list :kind 'string :text display))
    ((eq (car-safe display) 'space)
     (let ((w (plist-get (cdr display) :width))
+          (h (plist-get (cdr display) :height))
           (a (plist-get (cdr display) :align-to)))
-      (cond
-       ((and (consp w) (numberp (car w)))
-        (list :kind 'space :px (float (car w))))
-       ((numberp w)
-        (list :kind 'space :cols (float w)))
-       (a (list :kind 'align-to :spec a))
-       (t (list :kind 'space :cols 1.0)))))
+      (let ((h-px (cond
+                   ((and (consp h) (numberp (car h))) (float (car h)))
+                   (t nil))))
+        (cond
+         ((and (consp w) (numberp (car w)))
+          (list :kind 'space :px (float (car w)) :height-px h-px))
+         ((numberp w)
+          (list :kind 'space :cols (float w) :height-px h-px))
+         (a (list :kind 'align-to :spec a :height-px h-px))
+         (t (list :kind 'space :cols 1.0 :height-px h-px))))))
    ((eq (car-safe display) 'raise)
     (list :kind 'raise :factor (if (numberp (cadr display)) (float (cadr display)) 0.0)))
+   ((eq (car-safe display) 'height)
+    (list :kind 'height :factor (if (numberp (cadr display)) (float (cadr display)) 1.0)))
    ((eq (car-safe display) 'image)
     (let ((props (cdr display)))
       (list :kind 'image
@@ -424,16 +514,20 @@ Optional FONT-OVERRIDE replaces the inherited font stack."
             :file (plist-get props :file)
             :img-w (plist-get props :width)
             :img-h (plist-get props :height)
+            :scale (plist-get props :scale)
+            :ascent (plist-get props :ascent)
             :slice nil
             :raise nil)))
    ((and (consp display) (listp (car display)))
-    (let ((img nil) (slice nil) (raise nil))
+    (let ((img nil) (slice nil) (raise nil) (height nil))
       (dolist (item display)
         (pcase (car-safe item)
           ('image (setq img item))
           ('slice (setq slice (cdr item)))
           ('raise (when (numberp (cadr item))
-                    (setq raise (float (cadr item)))))))
+                    (setq raise (float (cadr item)))))
+          ('height (when (numberp (cadr item))
+                     (setq height (float (cadr item)))))))
       (cond
        (img
         (let ((props (cdr img)))
@@ -444,9 +538,12 @@ Optional FONT-OVERRIDE replaces the inherited font stack."
                 :file (plist-get props :file)
                 :img-w (plist-get props :width)
                 :img-h (plist-get props :height)
+                :scale (plist-get props :scale)
+                :ascent (plist-get props :ascent)
                 :slice slice
                 :raise raise)))
-       (raise (list :kind 'raise :factor raise))
+       ((or raise height)
+        (list :kind 'text-mod :raise (or raise 0.0) :height height))
        (t nil))))
    (t nil)))
 
@@ -478,89 +575,306 @@ Optional FONT-OVERRIDE replaces the inherited font stack."
         (setq eff-type 'svg))
       (cons (or eff-type 'png) bytes))))
 
+(defun etaf-export--parse-svg-length (val)
+  "Parse positive numeric pixel/unit length from SVG attribute VAL, or nil."
+  (when (and (stringp val)
+             (not (string-match-p "%" val))
+             (string-match "\\`[ \t]*\\([0-9]+\\(?:\\.[0-9]+\\)?\\)" val))
+    (let ((n (string-to-number (match-string 1 val))))
+      (when (> n 0) (float n)))))
+
+(defun etaf-export--intrinsic-image-size (type bytes)
+  "Return intrinsic `(WIDTH . HEIGHT)' floats from image TYPE and BYTES, or nil."
+  (when (and (stringp bytes) (> (length bytes) 0))
+    (pcase type
+      ('svg
+       (let* ((head (if (multibyte-string-p bytes)
+                        (substring bytes 0 (min 2048 (length bytes)))
+                      (decode-coding-string
+                       (substring bytes 0 (min 2048 (length bytes))) 'utf-8 t))))
+         (when (string-match "<svg\\([^>]*\\)>" head)
+           (let* ((attrs (match-string 1 head))
+                  (get-attr
+                   (lambda (name)
+                     (let ((case-fold-search nil)
+                           (re (format "\\b%s[ \t\n]*=[ \t\n]*\\(?:\"\\([^\"]*\\)\"\\|'\\([^']*\\)'\\)"
+                                       (regexp-quote name))))
+                       (when (string-match re attrs)
+                         (or (match-string 1 attrs) (match-string 2 attrs))))))
+                  (w (etaf-export--parse-svg-length (funcall get-attr "width")))
+                  (h (etaf-export--parse-svg-length (funcall get-attr "height")))
+                  (vb (funcall get-attr "viewBox")))
+             (when (and (or (null w) (null h)) (stringp vb))
+               (let ((nums (mapcar #'string-to-number
+                                   (split-string (string-trim vb) "[ \t,]+" t))))
+                 (when (= (length nums) 4)
+                   (unless w (setq w (float (nth 2 nums))))
+                   (unless h (setq h (float (nth 3 nums)))))))
+             (when (and w h (> w 0) (> h 0))
+               (cons w h))))))
+      ('png
+       (when (and (>= (length bytes) 24)
+                  (= (aref bytes 0) #x89) (= (aref bytes 1) ?P)
+                  (= (aref bytes 2) ?N) (= (aref bytes 3) ?G))
+         (let ((w (+ (ash (aref bytes 16) 24) (ash (aref bytes 17) 16)
+                     (ash (aref bytes 18) 8) (aref bytes 19)))
+               (h (+ (ash (aref bytes 20) 24) (ash (aref bytes 21) 16)
+                     (ash (aref bytes 22) 8) (aref bytes 23))))
+           (when (and (> w 0) (> h 0))
+             (cons (float w) (float h))))))
+      ('gif
+       (when (and (>= (length bytes) 10)
+                  (or (string-prefix-p "GIF87a" bytes)
+                      (string-prefix-p "GIF89a" bytes)))
+         (let ((w (+ (aref bytes 6) (ash (aref bytes 7) 8)))
+               (h (+ (aref bytes 8) (ash (aref bytes 9) 8))))
+           (when (and (> w 0) (> h 0))
+             (cons (float w) (float h))))))
+      ('jpeg
+       (when (and (>= (length bytes) 4)
+                  (= (aref bytes 0) #xff) (= (aref bytes 1) #xd8))
+         (let ((i 2) (len (length bytes)) (found nil))
+           (while (and (< (+ i 9) len) (null found))
+             (if (/= (aref bytes i) #xff)
+                 (setq i (1+ i))
+               (while (and (< i len) (= (aref bytes i) #xff))
+                 (setq i (1+ i)))
+               (when (< i len)
+                 (let ((marker (aref bytes i)))
+                   (setq i (1+ i))
+                   (cond
+                    ((memq marker '(#xc0 #xc1 #xc2 #xc3 #xc5 #xc6 #xc7
+                                         #xc9 #xca #xcb #xcd #xce #xcf))
+                     (when (< (+ i 6) len)
+                       (let ((h (+ (ash (aref bytes (+ i 3)) 8) (aref bytes (+ i 4))))
+                             (w (+ (ash (aref bytes (+ i 5)) 8) (aref bytes (+ i 6)))))
+                         (when (and (> w 0) (> h 0))
+                           (setq found (cons (float w) (float h)))))))
+                    ((memq marker '(#xd8 #xd9 #x01)) nil)
+                    ((<= #xd0 marker #xd7) nil)
+                    (t
+                     (if (< (+ i 1) len)
+                         (let ((seg-len (+ (ash (aref bytes i) 8) (aref bytes (1+ i)))))
+                           (setq i (+ i (max 2 seg-len))))
+                       (setq i len))))))))
+           found)))
+      ('webp
+       (when (and (>= (length bytes) 30)
+                  (string-prefix-p "RIFF" bytes)
+                  (string= (substring bytes 8 12) "WEBP"))
+         (let ((chunk (substring bytes 12 16)))
+           (cond
+            ((and (string= chunk "VP8X") (>= (length bytes) 30))
+             (let ((w (1+ (+ (aref bytes 24) (ash (aref bytes 25) 8) (ash (aref bytes 26) 16))))
+                   (h (1+ (+ (aref bytes 27) (ash (aref bytes 28) 8) (ash (aref bytes 29) 16)))))
+               (cons (float w) (float h))))
+            ((and (string= chunk "VP8 ") (>= (length bytes) 30)
+                  (= (aref bytes 23) #x9d) (= (aref bytes 24) #x01) (= (aref bytes 25) #x2a))
+             (let ((w (logand (+ (aref bytes 26) (ash (aref bytes 27) 8)) #x3fff))
+                   (h (logand (+ (aref bytes 28) (ash (aref bytes 29) 8)) #x3fff)))
+               (when (and (> w 0) (> h 0))
+                 (cons (float w) (float h)))))
+            ((and (string= chunk "VP8L") (>= (length bytes) 25)
+                  (= (aref bytes 20) #x2f))
+             (let* ((b0 (aref bytes 21)) (b1 (aref bytes 22))
+                    (b2 (aref bytes 23)) (b3 (aref bytes 24))
+                    (w (1+ (logior b0 (ash (logand b1 #x3f) 8))))
+                    (h (1+ (logior (ash b1 -6) (ash b2 2) (ash (logand b3 #x0f) 10)))))
+               (cons (float w) (float h))))))))
+      (_ nil))))
+
+(defun etaf-export--resolve-image-size (disp cw lh frame pixel-metrics)
+  "Resolve rendered `(WIDTH . HEIGHT)' floats for image DISP.
+Honors slices (both pixel integers and 0..1 ratios), native Emacs `image-size'
+on graphic frames, explicit `:width'/`:height'/`:scale' properties, and
+intrinsic SVG/PNG/GIF/JPEG/WebP dimensions so unsliced inline icons (such as
+`etaf-ui-icon') never fall back to a single ASCII cell width."
+  (let* ((desc (plist-get disp :descriptor))
+         (slice (plist-get disp :slice))
+         (prop-w (plist-get disp :img-w))
+         (prop-h (plist-get disp :img-h))
+         (scale (plist-get disp :scale))
+         (native (when (and pixel-metrics frame (display-graphic-p frame)
+                            (fboundp 'image-size) desc)
+                   (ignore-errors (image-size desc t frame))))
+         (full-w (and (consp native) (numberp (car native)) (> (car native) 0)
+                      (float (car native))))
+         (full-h (and (consp native) (numberp (cdr native)) (> (cdr native) 0)
+                      (float (cdr native)))))
+    ;; Headless/fallback full size from explicit props + intrinsic media headers
+    (unless (and full-w full-h)
+      (let* ((pair (etaf-export--image-bytes disp))
+             (intr (and pair (etaf-export--intrinsic-image-size (car pair) (cdr pair))))
+             (iw (and intr (car intr)))
+             (ih (and intr (cdr intr)))
+             (sc (if (and (numberp scale) (> scale 0)) (float scale) 1.0)))
+        (cond
+         ((and (numberp prop-w) (numberp prop-h))
+          (setq full-w (float prop-w) full-h (float prop-h)))
+         ((and (numberp prop-w) iw ih (> iw 0))
+          (setq full-w (float prop-w) full-h (* (float prop-w) (/ ih iw))))
+         ((and (numberp prop-h) iw ih (> ih 0))
+          (setq full-h (float prop-h) full-w (* (float prop-h) (/ iw ih))))
+         ((and iw ih)
+          (setq full-w (* iw sc) full-h (* ih sc)))
+         (t
+          (when (numberp prop-w) (setq full-w (float prop-w)))
+          (when (numberp prop-h) (setq full-h (float prop-h)))))))
+    (if slice
+        (let* ((sw-raw (nth 2 slice))
+               (sh-raw (nth 3 slice))
+               (sw (cond
+                    ((and (floatp sw-raw) (<= sw-raw 1.0) full-w) (* sw-raw full-w))
+                    ((and (numberp sw-raw) (> sw-raw 0)) (float sw-raw))
+                    (full-w full-w)
+                    (t cw)))
+               (sh (cond
+                    ((and (floatp sh-raw) (<= sh-raw 1.0) full-h) (* sh-raw full-h))
+                    ((and (numberp sh-raw) (> sh-raw 0)) (float sh-raw))
+                    (full-h full-h)
+                    (t lh))))
+          (cons sw sh))
+      (cons (or full-w cw) (or full-h lh)))))
+
+(defun etaf-export--expand-tabs (text start-col tw)
+  "Expand literal tab characters in TEXT using tab width TW from START-COL."
+  (if (not (string-search "\t" text))
+      text
+    (let ((tw (max 1 (or tw 8)))
+          (col (max 0 start-col))
+          (out nil))
+      (cl-loop for ch across text
+               do (if (= ch ?\t)
+                      (let ((n (- tw (% col tw))))
+                        (push (make-string n ?\s) out)
+                        (setq col (+ col n)))
+                    (push (char-to-string ch) out)
+                    (setq col (+ col (max 0 (char-width ch))))))
+      (apply #'concat (nreverse out)))))
+
+(defun etaf-export--next-run-end (pos end disp-prop)
+  "Return end offset of the visual run starting at POS within END.
+Matches Emacs's display engine and `ebox--line-width': an active `display'
+object owns its full contiguous `eq' span (never split by `help-echo' or
+`mouse-face'), while non-display runs break only on `face', `display' or
+`invisible' changes."
+  (if disp-prop
+      (min end (or (next-single-property-change pos 'display nil end) end))
+    (let ((n-disp (or (next-single-property-change pos 'display nil end) end))
+          (n-face (or (next-single-property-change pos 'face nil end) end))
+          (n-inv  (or (next-single-property-change pos 'invisible nil end) end)))
+      (min end n-disp n-face n-inv))))
+
 ;;;; Snapshot Construction & Multi-Row Image Stitching
 
-(defun etaf-export--capture-line (beg end row-idx cw lh px-scale base-height orig-bg orig-fg theme)
+(defun etaf-export--capture-line (beg end row-idx cw lh px-scale base-height orig-bg orig-fg theme pixel-metrics frame)
   "Capture one rendered buffer line [BEG, END) at ROW-IDX."
   (let ((pos beg)
         (x 0.0)
         (runs nil)
         (max-scale 1.0)
         (max-img-h 0.0)
+        (max-strut-h 0.0)
         (has-ink nil)
-        (line-extend nil))
+        (line-extend nil)
+        (tw (or tab-width 8)))
     (while (< pos end)
-      (let* ((next (min end (or (next-property-change pos nil end) end)))
-             (face-prop (get-text-property pos 'face))
-             (disp-prop (get-text-property pos 'display))
-             (raw-style (etaf-export--resolve-face face-prop orig-bg orig-fg base-height))
-             (style (etaf-export--apply-theme-to-style raw-style theme orig-bg))
-             (disp (etaf-export--parse-display disp-prop)))
-        (when (plist-get style :extend)
-          (setq line-extend style))
-        (pcase (plist-get disp :kind)
-          ('space
-           (let ((w (if-let* ((px (plist-get disp :px)))
-                        (* px px-scale)
-                      (* (or (plist-get disp :cols) 1.0) cw))))
-             (when (or (plist-get style :explicit-bg)
-                       (plist-get style :overline)
-                       (plist-get style :underline)
-                       (plist-get style :box))
-               (setq has-ink t))
-             (push (list :kind 'space :x x :w w :style style) runs)
-             (setq x (+ x w))))
-          ('align-to
-           (let* ((spec (plist-get disp :spec))
-                  (target (cond
-                           ((and (consp spec) (numberp (car spec))) (* (float (car spec)) px-scale))
-                           ((numberp spec) (* (float spec) cw))
-                           (t x)))
-                  (w (max 0.0 (- target x))))
-             (when (> w 0.0)
-               (push (list :kind 'space :x x :w w :style style) runs)
-               (setq x (+ x w)))))
-          ('image
-           (let* ((slice (plist-get disp :slice))
-                  (sw (float (or (and slice (nth 2 slice))
-                                 (plist-get disp :img-w)
-                                 cw)))
-                  (sh (float (or (and slice (nth 3 slice))
-                                 (plist-get disp :img-h)
-                                 lh))))
-             (setq has-ink t
-                   max-img-h (max max-img-h sh))
-             (push (list :kind 'image
-                         :x x :w sw :h sh
-                         :row row-idx
-                         :style style
-                         :display disp)
-                   runs)
-             (setq x (+ x sw))))
-          (_
-           (let* ((text (if (eq (plist-get disp :kind) 'string)
-                            (plist-get disp :text)
-                          (buffer-substring-no-properties pos next)))
-                  (raise (if (eq (plist-get disp :kind) 'raise)
-                             (plist-get disp :factor)
-                           0.0))
-                  (sc (plist-get style :scale))
-                  (w (* (float (string-width text)) cw sc)))
-             (setq max-scale (max max-scale sc))
-             (when (or (string-match-p "[^ \t]" text)
-                       (plist-get style :explicit-bg)
-                       (plist-get style :overline)
-                       (plist-get style :underline)
-                       (plist-get style :strike)
-                       (plist-get style :box))
-               (setq has-ink t))
-             (push (list :kind 'text
-                         :x x :w w
-                         :text text
-                         :raise raise
-                         :style style)
-                   runs)
-             (setq x (+ x w)))))
+      (let* ((disp-prop (get-text-property pos 'display))
+             (next (etaf-export--next-run-end pos end disp-prop))
+             (inv-prop (get-text-property pos 'invisible)))
+        (unless (and inv-prop (invisible-p inv-prop))
+          (let* ((face-prop (get-text-property pos 'face))
+                 (disp (etaf-export--parse-display disp-prop))
+                 (rule-p (and (null disp)
+                              (etaf-export--box-rule-text-p
+                               (buffer-substring-no-properties pos next))))
+                 (raw-style (etaf-export--resolve-face face-prop orig-bg orig-fg base-height))
+                 (style (etaf-export--apply-theme-to-style raw-style theme orig-bg rule-p)))
+            (when (plist-get style :extend)
+              (setq line-extend style))
+            (when-let* ((h-px (plist-get disp :height-px)))
+              (setq max-strut-h (max max-strut-h (* h-px px-scale))))
+            (pcase (plist-get disp :kind)
+              ('space
+               (let ((w (cond
+                         ((plist-get disp :px)
+                          (* (plist-get disp :px) px-scale))
+                         (pixel-metrics
+                          (float (etaf-string-pixel-width (buffer-substring pos next))))
+                         (t (* (or (plist-get disp :cols) 1.0) cw)))))
+                 (when (and (> w 0.0)
+                            (or (plist-get style :explicit-bg)
+                                (plist-get style :overline)
+                                (plist-get style :underline)
+                                (plist-get style :box)))
+                   (setq has-ink t))
+                 (when (> w 0.0)
+                   (push (list :kind 'space :x x :w w :style style) runs)
+                   (setq x (+ x w)))))
+              ('align-to
+               (let* ((spec (plist-get disp :spec))
+                      (target (cond
+                               ((and (consp spec) (numberp (car spec))) (* (float (car spec)) px-scale))
+                               ((numberp spec) (* (float spec) cw))
+                               (t x)))
+                      (w (max 0.0 (- target x))))
+                 (when (> w 0.0)
+                   (push (list :kind 'space :x x :w w :style style) runs)
+                   (setq x (+ x w)))))
+              ('image
+               (let* ((sz (etaf-export--resolve-image-size disp cw lh frame pixel-metrics))
+                      (sw (car sz))
+                      (sh (cdr sz)))
+                 (setq has-ink t
+                       max-img-h (max max-img-h sh))
+                 (push (list :kind 'image
+                             :x x :w sw :h sh
+                             :row row-idx
+                             :style style
+                             :display disp)
+                       runs)
+                 (setq x (+ x sw))))
+              (_
+               (let* ((raw-text (if (eq (plist-get disp :kind) 'string)
+                                    (plist-get disp :text)
+                                  (buffer-substring-no-properties pos next)))
+                      (text (etaf-export--expand-tabs raw-text (round (/ x (max 1.0 cw))) tw))
+                      (raise (pcase (plist-get disp :kind)
+                               ('raise (or (plist-get disp :factor) 0.0))
+                               ('text-mod (or (plist-get disp :raise) 0.0))
+                               (_ 0.0)))
+                      (disp-h (pcase (plist-get disp :kind)
+                                ('height (plist-get disp :factor))
+                                ('text-mod (plist-get disp :height))
+                                (_ nil)))
+                      (eff-style (if (and (numberp disp-h) (> disp-h 0))
+                                     (let ((copy (copy-sequence style)))
+                                       (plist-put copy :scale
+                                                  (max 0.5 (min 4.0 (float disp-h))))
+                                       copy)
+                                   style))
+                      (sc (plist-get eff-style :scale))
+                      ;; On graphic frames, use ETAF's exact pixel measurement
+                      ;; (the same engine Ebox uses for layout) so CJK, bold,
+                      ;; symbols and custom fonts never drift from card borders.
+                      (w (if pixel-metrics
+                             (float (etaf-string-pixel-width (buffer-substring pos next)))
+                           (* (float (string-width text)) cw sc))))
+                 (setq max-scale (max max-scale sc))
+                 (when (or (string-match-p "[^ \t]" text)
+                           (plist-get eff-style :explicit-bg)
+                           (plist-get eff-style :overline)
+                           (plist-get eff-style :underline)
+                           (plist-get eff-style :strike)
+                           (plist-get eff-style :box))
+                   (setq has-ink t))
+                 (push (list :kind 'text
+                             :x x :w w
+                             :text text
+                             :raise raise
+                             :style eff-style)
+                       runs)
+                 (setq x (+ x w)))))))
         (setq pos next)))
     ;; Check trailing newline extend face (Ebox puts :extend t on the line break)
     (when (< end (point-max))
@@ -570,6 +884,7 @@ Optional FONT-OVERRIDE replaces the inherited font stack."
           (setq line-extend (etaf-export--apply-theme-to-style raw theme orig-bg)))))
     (let ((row-h (max lh
                       max-img-h
+                      max-strut-h
                       (if (> max-scale 1.05)
                           (float (ceiling (* lh (min max-scale 2.8) 0.90)))
                         lh))))
@@ -739,6 +1054,8 @@ clean white paper without touching the live buffer)."
                  (cw (plist-get metrics :cw))
                  (lh (plist-get metrics :lh))
                  (px-scale (plist-get metrics :px-scale))
+                 (pixel-metrics (plist-get metrics :pixel-metrics))
+                 (frame (plist-get metrics :frame))
                  (base-h (plist-get metrics :base-height))
                  (lines nil)
                  (row-idx 0))
@@ -749,7 +1066,7 @@ clean white paper without touching the live buffer)."
             (let ((beg (line-beginning-position))
                   (end (line-end-position)))
               (push (etaf-export--capture-line beg end row-idx cw lh px-scale base-h
-                                               orig-bg orig-fg theme)
+                                               orig-bg orig-fg theme pixel-metrics frame)
                     lines)
               (setq row-idx (1+ row-idx))
               (if (= (forward-line 1) 0)

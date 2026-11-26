@@ -31,21 +31,27 @@
                            "/usr/local/bin/rsvg-convert"
                            "/usr/bin/rsvg-convert"))))))
 
+(defun etaf-export--rsvg-install-hint ()
+  "Return a concise platform-specific command to install `rsvg-convert'."
+  (pcase system-type
+    ('darwin "brew install librsvg")
+    ('windows-nt "pacman -S mingw-w64-x86_64-librsvg (MSYS2)")
+    (_ "apt install librsvg2-bin / dnf install librsvg2-tools")))
+
 (defun etaf-export--doctor-report ()
   "Return capability report plist matching `etaf-install-doctor'."
   (let* ((rsvg (etaf-export--rsvg-executable))
-         (remedy (if (eq system-type 'darwin)
-                     "brew install librsvg"
-                   "Install librsvg (e.g. apt install librsvg2-bin)")))
+         (hint (etaf-export--rsvg-install-hint))
+         (remedy (format "Install librsvg for PDF export (%s); live preview and SVG export need no external tools."
+                         hint)))
     (list :package 'etaf-export
           :ready (if rsvg t nil)
           :required (list (list "rsvg-convert (vector PDF backend)" (if rsvg t nil) remedy))
           :optional nil)))
 
-(defun etaf-export--default-filename (snapshot extension)
-  "Suggest an output path with EXTENSION for SNAPSHOT."
-  (let* ((uri (plist-get snapshot :uri))
-         (title (or (plist-get snapshot :title) "etaf-page"))
+(defun etaf-export--default-filename-from-meta (uri title extension)
+  "Suggest an output path with EXTENSION from runtime URI and TITLE."
+  (let* ((title (or title "etaf-page"))
          (from-file (and (stringp uri)
                          (not (string-match-p "\\`https?://" uri))
                          (file-exists-p uri)
@@ -57,6 +63,47 @@
                    (setq clean (string-trim clean "-+" "-+"))
                    (if (string-empty-p clean) "etaf-page" clean)))))
     (expand-file-name (concat stem "." extension) dir)))
+
+(defun etaf-export--default-filename-for-runtime (runtime extension)
+  "Suggest an output path with EXTENSION for mounted RUNTIME without snapshotting."
+  (let* ((meta (etaf-runtime-meta runtime))
+         (buf (etaf-runtime-buffer runtime))
+         (uri (plist-get meta :uri))
+         (title (or (plist-get meta :title)
+                    (and (buffer-live-p buf) (buffer-name buf)))))
+    (etaf-export--default-filename-from-meta uri title extension)))
+
+(defun etaf-export--default-filename (snapshot extension)
+  "Suggest an output path with EXTENSION for SNAPSHOT."
+  (etaf-export--default-filename-from-meta
+   (plist-get snapshot :uri)
+   (plist-get snapshot :title)
+   extension))
+
+(defun etaf-export--prompt-output-path (runtime extension)
+  "Prompt interactively for an output path with EXTENSION for RUNTIME.
+Confirms before overwriting an existing file."
+  (let* ((default-path (etaf-export--default-filename-for-runtime runtime extension))
+         (dest (read-file-name (format "导出 %s 到: " (upcase extension))
+                               (file-name-directory default-path)
+                               default-path nil
+                               (file-name-nondirectory default-path))))
+    (when (and (file-exists-p dest)
+               (not (y-or-n-p (format "文件 %s 已存在，是否覆盖？ "
+                                      (file-name-nondirectory dest)))))
+      (user-error "已取消导出"))
+    dest))
+
+(defun etaf-export--open-file (path)
+  "Open exported file PATH with the OS default viewer when interactive."
+  (when (and (stringp path) (file-exists-p path) (not noninteractive))
+    (cond
+     ((and (eq system-type 'darwin) (executable-find "open"))
+      (start-process "etaf-export-open" nil "open" (expand-file-name path)))
+     ((executable-find "xdg-open")
+      (start-process "etaf-export-open" nil "xdg-open" (expand-file-name path)))
+     (t
+      (browse-url-of-file (expand-file-name path))))))
 
 (defun etaf-export--write-svg-files (svg-pages output-file)
   "Write SVG-PAGES to OUTPUT-FILE (or numbered siblings when >1 page).
@@ -87,7 +134,8 @@ Return list of written file paths."
   (let ((rsvg (etaf-export--rsvg-executable)))
     (unless rsvg
       (signal 'etaf-export-error
-              (list "rsvg-convert not found; install librsvg (macOS: brew install librsvg)")))
+              (list (format "rsvg-convert not found; install librsvg (%s)"
+                            (etaf-export--rsvg-install-hint)))))
     (let* ((abs (expand-file-name output-file))
            (dir (file-name-directory abs))
            (tmp-dir (make-temp-file "etaf-export-svg-" t))
