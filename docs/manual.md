@@ -272,6 +272,8 @@ python3 scripts/native-release.py manifest --input /tmp/native-builds --write-pa
 python3 scripts/native-release.py verify --all --stage /tmp/native-stage
 # 3. Publish to https://etaf.top/native/ (verifies manifest and generates /native/index.html)
 python3 packages/etaf-manual/site/scripts/publish.py --native-only /tmp/native-stage
+# Or refresh hosted manifest metadata and regenerate /native/index.html without re-uploading binaries:
+python3 packages/etaf-manual/site/scripts/publish.py --native-pages-only
 ```
 
 Two lanes keep development fast without risking a stale archive:

@@ -137,6 +137,8 @@ python3 scripts/native-release.py manifest --input /tmp/native-builds --write-pa
 python3 scripts/native-release.py verify --all --stage /tmp/native-stage
 # 3. 单独发布到 https://etaf.top/native/（自动校验清单并生成可浏览的 /native/index.html）
 python3 packages/etaf-manual/site/scripts/publish.py --native-only /tmp/native-stage
+# 仅刷新已托管清单的模块/版本元数据并重新生成 /native/index.html（不重复上传二进制）：
+python3 packages/etaf-manual/site/scripts/publish.py --native-pages-only
 ```
 
 开发与发布分开，既快又不会发布旧字节：

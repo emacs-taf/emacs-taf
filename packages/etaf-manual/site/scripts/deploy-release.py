@@ -29,7 +29,18 @@ NAME = re.compile(r"[a-z][a-z0-9-]*\Z")
 VERSION = re.compile(r"[0-9]+(?:\.[0-9]+)*\Z")
 SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 NATIVE_FILE = re.compile(r"[a-z0-9][a-z0-9._-]*\.(?:dylib|so|dll)\Z")
+NATIVE_LIB_NAME = re.compile(r"[a-z0-9][a-z0-9._-]*\.(?:dylib|so(?:\.[0-9]+)*|dll)\Z")
+NATIVE_TIMESTAMP = re.compile(
+    r"[0-9]{4}-[0-9]{2}-[0-9]{2}(?:T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:[+-][0-9]{2}:[0-9]{2}|Z))?\Z"
+)
 NATIVE_PLATFORMS = {"darwin-arm64", "darwin-x86_64", "linux-x86_64", "linux-arm64", "windows-x86_64"}
+NATIVE_ROLES = {"module", "library"}
+NATIVE_STATUSES = {"current", "archived"}
+NATIVE_TOP_KEYS = {"schema", "artifacts", "modules"}
+NATIVE_REQUIRED_ARTIFACT_KEYS = {"package", "module", "version", "platform", "path", "sha256", "size"}
+NATIVE_OPTIONAL_ARTIFACT_KEYS = {"role", "owner_module", "runtime_name", "note", "built_at"}
+NATIVE_MODULE_KEYS = {"package", "current_version", "description", "used_by", "versions"}
+NATIVE_VERSION_KEYS = {"status", "summary", "min_package_version", "max_package_version", "released"}
 SITE_PAGES = ("index.html", "zh-cn/index.html", "introduction/index.html",
               "zh-cn/introduction/index.html", "symbol-index/index.html", "zh-cn/symbol-index/index.html")
 
@@ -136,6 +147,46 @@ def packages(directory, *, historical=False, partial=False):
     return manifest
 
 
+def _validate_native_modules(modules):
+    if not isinstance(modules, dict):
+        raise ValueError("Native manifest modules catalog must be a JSON object")
+    for mod_id, info in modules.items():
+        if not isinstance(mod_id, str) or not NAME.fullmatch(mod_id) or not isinstance(info, dict):
+            raise ValueError(f"Invalid native module catalog entry: {mod_id!r}")
+        if set(info) - NATIVE_MODULE_KEYS:
+            raise ValueError(f"Native module catalog entry contains non-public fields: {mod_id}")
+        if (not isinstance(info.get("package"), str) or not NAME.fullmatch(info["package"])
+                or not isinstance(info.get("current_version"), str) or not VERSION.fullmatch(info["current_version"])
+                or not isinstance(info.get("description"), str) or not info["description"].strip()
+                or len(info["description"]) > 400):
+            raise ValueError(f"Invalid native module catalog fields: {mod_id}")
+        used_by = info.get("used_by")
+        if used_by is not None:
+            if not isinstance(used_by, list) or not all(isinstance(u, str) and NAME.fullmatch(u) for u in used_by):
+                raise ValueError(f"Invalid native module used_by list: {mod_id}")
+        versions = info.get("versions")
+        if versions is not None:
+            if not isinstance(versions, dict):
+                raise ValueError(f"Invalid native module versions map: {mod_id}")
+            for ver, vinfo in versions.items():
+                if not isinstance(ver, str) or not VERSION.fullmatch(ver) or not isinstance(vinfo, dict):
+                    raise ValueError(f"Invalid native module version entry: {mod_id}@{ver!r}")
+                if set(vinfo) - NATIVE_VERSION_KEYS:
+                    raise ValueError(f"Native version entry contains non-public fields: {mod_id}@{ver}")
+                if vinfo.get("status") not in NATIVE_STATUSES:
+                    raise ValueError(f"Invalid native version status: {mod_id}@{ver}")
+                summary = vinfo.get("summary")
+                if summary is not None and (not isinstance(summary, str) or not summary.strip() or len(summary) > 300):
+                    raise ValueError(f"Invalid native version summary: {mod_id}@{ver}")
+                for bound in ("min_package_version", "max_package_version"):
+                    bval = vinfo.get(bound)
+                    if bval is not None and (not isinstance(bval, str) or not VERSION.fullmatch(bval)):
+                        raise ValueError(f"Invalid {bound}: {mod_id}@{ver}")
+                released = vinfo.get("released")
+                if released is not None and (not isinstance(released, str) or not NATIVE_TIMESTAMP.fullmatch(released)):
+                    raise ValueError(f"Invalid released timestamp: {mod_id}@{ver}")
+
+
 def native_artifacts(directory, *, partial=False):
     """Validate public native/ manifest and artifact allowlist."""
     if directory.is_symlink() or not directory.is_dir():
@@ -146,12 +197,15 @@ def native_artifacts(directory, *, partial=False):
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     if manifest.get("schema") != 1 or not isinstance(manifest.get("artifacts"), list):
         raise ValueError("Expected a schema 1 native artifact manifest")
-    if set(manifest) != {"schema", "artifacts"}:
+    if set(manifest) - NATIVE_TOP_KEYS:
         raise ValueError("Native manifest contains non-public fields")
+    if "modules" in manifest:
+        _validate_native_modules(manifest["modules"])
     indexed = {}
     for item in manifest["artifacts"]:
         if (not isinstance(item, dict)
-                or set(item) != {"package", "module", "version", "platform", "path", "sha256", "size"}
+                or not NATIVE_REQUIRED_ARTIFACT_KEYS.issubset(item)
+                or set(item) - (NATIVE_REQUIRED_ARTIFACT_KEYS | NATIVE_OPTIONAL_ARTIFACT_KEYS)
                 or not NAME.fullmatch(str(item["package"]))
                 or not NAME.fullmatch(str(item["module"]))
                 or not VERSION.fullmatch(str(item["version"]))
@@ -159,6 +213,20 @@ def native_artifacts(directory, *, partial=False):
                 or not SHA256.fullmatch(str(item["sha256"]))
                 or not isinstance(item["size"], int) or isinstance(item["size"], bool) or item["size"] <= 0):
             raise ValueError("Invalid native artifact record")
+        if "role" in item and item["role"] not in NATIVE_ROLES:
+            raise ValueError(f"Invalid native artifact role: {item['role']!r}")
+        if "owner_module" in item and (not isinstance(item["owner_module"], str)
+                                       or not NAME.fullmatch(item["owner_module"])):
+            raise ValueError(f"Invalid native artifact owner_module: {item['owner_module']!r}")
+        if "runtime_name" in item and (not isinstance(item["runtime_name"], str)
+                                       or not NATIVE_LIB_NAME.fullmatch(item["runtime_name"])):
+            raise ValueError(f"Invalid native artifact runtime_name: {item['runtime_name']!r}")
+        if "note" in item and (not isinstance(item["note"], str) or not item["note"].strip()
+                               or len(item["note"]) > 300):
+            raise ValueError("Invalid native artifact note")
+        if "built_at" in item and (not isinstance(item["built_at"], str)
+                                   or not NATIVE_TIMESTAMP.fullmatch(item["built_at"])):
+            raise ValueError(f"Invalid native artifact built_at: {item['built_at']!r}")
         rel = PurePosixPath(str(item["path"]))
         if (rel.is_absolute() or len(rel.parts) != 3
                 or rel.parts[:2] != (item["package"], item["version"])
@@ -186,6 +254,33 @@ def native_artifacts(directory, *, partial=False):
     return manifest
 
 
+def _merge_native_modules(prior_modules, incoming_modules):
+    """Merge module catalogs across native releases, preserving archived version history."""
+    merged = {}
+    for mod_id, info in (prior_modules or {}).items():
+        entry = dict(info)
+        if "versions" in info:
+            entry["versions"] = {ver: dict(vinfo) for ver, vinfo in info["versions"].items()}
+        merged[mod_id] = entry
+    for mod_id, info in (incoming_modules or {}).items():
+        existing = merged.get(mod_id)
+        entry = dict(info)
+        versions = {}
+        if existing and "versions" in existing:
+            for ver, vinfo in existing["versions"].items():
+                versions[ver] = dict(vinfo)
+        for ver, vinfo in (info.get("versions") or {}).items():
+            prev = versions.get(ver, {})
+            versions[ver] = {**prev, **vinfo}
+        if versions:
+            cur = entry["current_version"]
+            for ver, vinfo in versions.items():
+                vinfo["status"] = "current" if ver == cur else "archived"
+            entry["versions"] = dict(sorted(versions.items()))
+        merged[mod_id] = entry
+    return dict(sorted(merged.items()))
+
+
 def preserve_native(previous, candidate, mode):
     """Carry immutable native artifacts across site/package deploys, or merge a native payload."""
     old = previous / "native" if previous else None
@@ -198,7 +293,8 @@ def preserve_native(previous, candidate, mode):
             shutil.copytree(old, new)
         return set()
     incoming = native_artifacts(new, partial=True)
-    merged = {item["path"]: item for item in incoming["artifacts"]}
+    merged = {item["path"]: dict(item) for item in incoming["artifacts"]}
+    merged_modules = incoming.get("modules")
     shipped = {"native/manifest.json"}
     if (new / "index.html").is_file():
         shipped.add("native/index.html")
@@ -216,14 +312,22 @@ def preserve_native(previous, candidate, mode):
             if rel in merged:
                 if merged[rel]["sha256"] != item["sha256"] or merged[rel]["size"] != item["size"]:
                     raise ValueError(f"Immutable native artifact differs: {rel}; increment native version")
+                # Allow metadata enrichment on unchanged bytes while retaining prior optional fields.
+                combined = dict(item)
+                combined.update(merged[rel])
+                merged[rel] = combined
                 if not new_file.exists():
                     new_file.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copyfile(old_file, new_file)
             else:
-                merged[rel] = item
+                merged[rel] = dict(item)
                 new_file.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(old_file, new_file)
+        if prior.get("modules") or incoming.get("modules"):
+            merged_modules = _merge_native_modules(prior.get("modules"), incoming.get("modules"))
     final_manifest = {"schema": 1, "artifacts": sorted(merged.values(), key=lambda entry: entry["path"])}
+    if merged_modules:
+        final_manifest["modules"] = merged_modules
     (new / "manifest.json").write_text(json.dumps(final_manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     native_artifacts(new)
     return shipped

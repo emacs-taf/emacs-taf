@@ -375,10 +375,13 @@ th.src, td.src { width: 1%; text-align: right; white-space: nowrap; }
 """
 
 
-def page(title, body, downloads="downloads.json", *, canonical, description):
+def page(title, body, downloads="downloads.json", *, canonical, description,
+         extra_style="", script=None):
     title = html.escape(title)
     description = html.escape(description)
     canonical = html.escape(canonical)
+    page_script = PAGE_SCRIPT if script is None else script
+    style = STYLE + ("\n" + extra_style if extra_style else "")
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -402,13 +405,13 @@ def page(title, body, downloads="downloads.json", *, canonical, description):
 <meta name="twitter:description" content="{description}">
 <meta name="twitter:image" content="https://etaf.top/og/archive.png">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-<style>{STYLE}</style>
+<style>{style}</style>
 <script>{THEME_SCRIPT}</script>
 </head>
 <body data-downloads-url="{downloads}">
 {HEADER}
 {body}
-<script>{PAGE_SCRIPT}</script>
+<script>{page_script}</script>
 </body>
 </html>
 """
@@ -831,11 +834,530 @@ The archive is built from the commit above; rebuild it from that commit to compa
         description=item.get("summary", "")))
 
 
-NATIVE_DESCRIPTIONS = {
-    "etaf-md": "Embedded QuickJS renderer for Mermaid diagrams and MathJax display formulas (CoreText on macOS, runtime dlopen Pango on Linux).",
-    "etaf": "Cross-platform libmpv dynamic module for hardware-accelerated native video playback in ETAF buffers.",
-    "ekp": "Multi-threaded C Knuth–Plass line-breaking engine for high-throughput paragraph layout.",
+NATIVE_PLATFORMS = (
+    ("darwin-arm64",   "macOS",   "arm64",  "macOS · arm64"),
+    ("darwin-x86_64",  "macOS",   "x86_64", "macOS · x86_64"),
+    ("linux-x86_64",   "Linux",   "x86_64", "Linux · x86_64"),
+    ("linux-arm64",    "Linux",   "arm64",  "Linux · arm64"),
+    ("windows-x86_64", "Windows", "x86_64", "Windows · x86_64"),
+)
+NATIVE_PLATFORM_META = {
+    plat_id: {"os": os_name, "arch": arch, "label": label, "order": idx}
+    for idx, (plat_id, os_name, arch, label) in enumerate(NATIVE_PLATFORMS)
 }
+NATIVE_DATE_ONLY = re.compile(r"([0-9]{4}-[0-9]{2}-[0-9]{2})\Z")
+
+COPY_ICON = ('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" '
+             'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+             '<rect x="9" y="9" width="13" height="13" rx="2"/>'
+             '<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>')
+
+CHEVRON_ICON = ('<svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" '
+                'stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+                '<path d="M6 4l4 4-4 4"/></svg>')
+
+NATIVE_STYLE = """:root {
+  --paper-3: #ebe7dd;
+  --accent-soft: #ece6f8;
+  --ok: #1d6b43;
+  --ok-soft: #e6f4ec;
+  --warn: #945200;
+  --warn-soft: #fdf2e2;
+}
+:root[data-theme="dark"] {
+  --paper-3: #25272b;
+  --accent-soft: #2b2540;
+  --ok: #6ee7a8;
+  --ok-soft: #1a2d24;
+  --warn: #f4be6a;
+  --warn-soft: #2e2517;
+}
+.native-hero { padding: clamp(2rem, 4.5vw, 3.2rem) 0 1.4rem; }
+.native-hero-grid { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 1.4rem; }
+.native-hero-copy { flex: 1 1 28rem; min-width: 0; }
+.native-kpis { display: flex; flex-wrap: wrap; gap: .6rem; font-family: var(--font-mono); }
+.kpi { padding: .5rem .8rem; border: 1px solid var(--rule); border-radius: 3px; background: var(--paper-2);
+  min-width: 6.2rem; }
+.kpi-label { display: block; font-size: .64rem; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); }
+.kpi-val { display: block; margin-top: .15rem; font-size: 1.05rem; font-weight: 600; color: var(--ink);
+  font-variant-numeric: tabular-nums; }
+.kpi-val.muted { color: var(--ink-2); }
+.setup-bar { margin-top: 1.1rem; border: 1px solid var(--rule); border-radius: 3px; background: var(--paper-2); }
+.setup-bar > summary { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: .6rem; padding: .6rem .9rem; cursor: pointer; list-style: none; font-size: .88rem; }
+.setup-bar > summary::-webkit-details-marker { display: none; }
+.setup-bar-left { display: inline-flex; flex-wrap: wrap; align-items: center; gap: .35rem .5rem; min-width: 0; color: var(--ink); }
+.setup-bar-hint { color: var(--ink-3); font-size: .84rem; }
+.setup-bar-toggle { font-family: var(--font-mono); font-size: .72rem; color: var(--accent); white-space: nowrap; }
+.setup-bar[open] .setup-bar-body { padding: .75rem .9rem .95rem; border-top: 1px solid var(--rule); }
+.chev { width: .85rem; height: .85rem; flex: none; color: var(--ink-3); transition: transform .15s ease; }
+details[open] > summary .chev { transform: rotate(90deg); }
+.matrix-card { margin-top: 1.4rem; border: 1px solid var(--rule); border-radius: 3px; background: var(--paper-2);
+  padding: .9rem 1rem 1rem; max-width: 100%; }
+.matrix-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: .5rem; }
+.matrix-head h2 { font-family: var(--font-mono); font-size: .72rem; font-weight: 600;
+  letter-spacing: .13em; text-transform: uppercase; color: var(--ink-3); }
+.matrix-head span { font-size: .8rem; color: var(--ink-3); }
+.matrix-scroll { max-width: 100%; overflow-x: auto; margin-top: .55rem; -webkit-overflow-scrolling: touch; }
+table.matrix { margin-top: 0; font-family: var(--font-mono); font-size: .75rem; }
+table.matrix thead th { padding: .4rem .5rem; font-size: .64rem; white-space: nowrap; }
+table.matrix tbody td { padding: .48rem .5rem; vertical-align: middle; }
+table.matrix th.m-plat, table.matrix td.m-plat { text-align: center; }
+table.matrix tbody tr:hover td { background: var(--paper-3); }
+.m-mod { color: var(--ink); font-weight: 600; text-decoration: none; }
+.m-mod:hover { color: var(--accent); }
+.m-pkg { color: var(--accent); text-decoration: none; }
+.m-pkg:hover { text-decoration: underline; }
+.m-ok { display: inline-flex; align-items: center; gap: .22rem; padding: .12rem .42rem;
+  border: 1px solid transparent; border-radius: 2px; background: var(--ok-soft); color: var(--ok);
+  font-family: var(--font-mono); font-size: .72rem; cursor: pointer; }
+.m-ok:hover { border-color: var(--ok); }
+.m-ok .m-lib { color: var(--ink-2); font-size: .66rem; }
+.m-none { color: var(--ink-3); opacity: .5; }
+.controls-bar { margin-top: 1.8rem; display: flex; flex-direction: column; gap: .75rem; }
+.controls-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; }
+.plat-tabs { display: flex; flex-wrap: wrap; gap: .4rem; }
+.plat-tab { display: inline-flex; align-items: center; gap: .4rem; padding: .34rem .68rem;
+  border: 1px solid var(--rule); border-radius: 3px; background: var(--paper-2); color: var(--ink-2);
+  font-family: var(--font-mono); font-size: .73rem; cursor: pointer; }
+.plat-tab:hover { color: var(--ink); border-color: var(--accent); }
+.plat-tab[aria-selected="true"] { background: var(--accent-soft); border-color: var(--accent);
+  color: var(--accent); font-weight: 600; }
+.plat-tab .cnt { font-size: .68rem; opacity: .8; font-variant-numeric: tabular-nums; }
+.plat-tab .here { width: .4rem; height: .4rem; border-radius: 50%; background: var(--ok); flex: none; }
+.view-switch { display: inline-flex; padding: .18rem; border: 1px solid var(--rule);
+  border-radius: 3px; background: var(--paper-2); font-family: var(--font-mono); font-size: .72rem; }
+.view-btn { padding: .24rem .62rem; border: 0; border-radius: 2px; background: transparent;
+  color: var(--ink-3); font: inherit; cursor: pointer; }
+.view-btn:hover { color: var(--ink); }
+.view-btn[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.controls-search { display: flex; flex-wrap: wrap; align-items: stretch; gap: .6rem; }
+.controls-search .filter { margin: 0; flex: 1 1 20rem; }
+.arch-toggle { display: inline-flex; align-items: center; gap: .45rem; padding: .42rem .72rem;
+  border: 1px solid var(--rule); border-radius: 2px; background: var(--paper-2); color: var(--ink-2);
+  font-family: var(--font-mono); font-size: .74rem; cursor: pointer; user-select: none; }
+.arch-toggle:hover { border-color: var(--accent); color: var(--ink); }
+.arch-toggle input { margin: 0; accent-color: var(--accent); cursor: pointer; }
+.mod-card { margin-top: 1.5rem; border: 1px solid var(--rule); border-radius: 3px;
+  background: var(--paper); overflow: hidden; }
+.mod-head { padding: 1rem 1.15rem .9rem; background: var(--paper-2); border-bottom: 1px solid var(--rule); }
+.mod-head-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .6rem; }
+.mod-title-group { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+.mod-title-group h2 { font-family: var(--font-mono); font-size: 1.15rem; font-weight: 600; letter-spacing: -.01em; }
+.pill { display: inline-flex; align-items: center; padding: .12rem .48rem; border: 1px solid var(--rule);
+  border-radius: 2px; background: var(--paper); color: var(--ink-2); font-family: var(--font-mono);
+  font-size: .7rem; white-space: nowrap; text-decoration: none; }
+.pill.current { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.pill.pkg-link { color: var(--accent); }
+.pill.pkg-link:hover { border-color: var(--accent); }
+.pill.compat { color: var(--ink-3); }
+.pill.archived { color: var(--ink-3); background: var(--paper-2); }
+.mod-desc { margin: .55rem 0 0; color: var(--ink-2); font-size: .92rem; line-height: 1.55; max-width: 58rem; }
+.mod-submeta { margin: .55rem 0 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: .35rem 1.2rem;
+  font-size: .8rem; color: var(--ink-3); }
+.mod-submeta strong { color: var(--ink-2); font-weight: 600; }
+.used-list { font-family: var(--font-mono); font-size: .73rem; }
+.used-list a { color: var(--ink-2); text-decoration-color: var(--rule-strong); }
+.used-list a:hover { color: var(--accent); }
+.mod-table-wrap { overflow-x: auto; }
+table.native-tbl { margin-top: 0; }
+table.native-tbl thead th { padding: .5rem .8rem; background: var(--paper); border-bottom: 1px solid var(--rule); }
+table.native-tbl tbody td { padding: .72rem .8rem; border-bottom: 1px solid var(--rule); vertical-align: top; }
+table.native-tbl tbody tr:last-child td { border-bottom: 0; }
+table.native-tbl th:first-child, table.native-tbl td:first-child { padding-left: 1.15rem; }
+table.native-tbl th:last-child, table.native-tbl td:last-child { padding-right: 1.15rem; }
+.bin-main { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; }
+.bin-prefix { color: var(--ink-3); font-family: var(--font-mono); user-select: none; }
+.bin-name { font-family: var(--font-mono); font-size: .82rem; font-weight: 600; color: var(--ink);
+  text-decoration: none; overflow-wrap: anywhere; }
+.bin-name:hover { color: var(--accent); text-decoration: underline; }
+.role-badge { display: inline-flex; align-items: center; padding: .06rem .38rem; border-radius: 2px;
+  font-family: var(--font-mono); font-size: .66rem; white-space: nowrap; }
+.role-badge.role-module { border: 1px solid var(--rule); background: var(--paper-2); color: var(--ink-3); }
+.role-badge.role-library { border: 1px solid var(--warn); background: var(--warn-soft); color: var(--warn); font-weight: 500; }
+.bin-note { display: block; margin-top: .22rem; color: var(--ink-3); font-size: .8rem; line-height: 1.45; }
+.bin-note code { font-size: .74rem; }
+.plat-btn { display: inline-flex; align-items: center; padding: .14rem .48rem; border: 1px solid var(--rule);
+  border-radius: 2px; background: var(--paper-2); color: var(--ink-2); font-family: var(--font-mono);
+  font-size: .73rem; white-space: nowrap; cursor: pointer; }
+.plat-btn:hover { border-color: var(--accent); color: var(--accent); }
+.built-cell { font-family: var(--font-mono); font-size: .74rem; color: var(--ink-3); white-space: nowrap; }
+.sha-cell { white-space: nowrap; }
+.sha-wrap { display: inline-flex; align-items: center; gap: .38rem; }
+.sha-code { font-family: var(--font-mono); font-size: .72rem; color: var(--ink-3); }
+.copy-mini { display: inline-flex; align-items: center; gap: .25rem; padding: .16rem .42rem;
+  border: 1px solid var(--rule); border-radius: 2px; background: transparent; color: var(--ink-3);
+  font-family: var(--font-mono); font-size: .66rem; cursor: pointer; }
+.copy-mini:hover, .copy-mini.done { border-color: var(--accent); color: var(--accent); }
+.copy-mini svg { width: .72rem; height: .72rem; }
+.dl-btn { display: inline-flex; align-items: center; gap: .32rem; padding: .24rem .58rem;
+  border: 1px solid var(--rule-strong); border-radius: 2px; background: var(--paper-2); color: var(--ink-2);
+  font-family: var(--font-mono); font-size: .72rem; text-decoration: none; white-space: nowrap; }
+.dl-btn:hover { border-color: var(--accent); color: var(--accent); }
+.dl-btn svg { width: .82rem; height: .82rem; flex: none; }
+.mod-empty { padding: .85rem 1.15rem; font-size: .84rem; color: var(--ink-3);
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem; }
+.link-btn { padding: 0; border: 0; background: none; color: var(--accent); font-family: var(--font-mono);
+  font-size: .74rem; cursor: pointer; text-decoration: underline; }
+.archived-drawer { border-top: 1px solid var(--rule); background: var(--paper-2); }
+.archived-drawer > summary { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: .5rem; padding: .62rem 1.15rem; cursor: pointer; list-style: none; font-size: .8rem; color: var(--ink-3); }
+.archived-drawer > summary::-webkit-details-marker { display: none; }
+.archived-drawer > summary:hover { background: var(--paper-3); color: var(--ink-2); }
+.archived-summary-left { display: inline-flex; flex-wrap: wrap; align-items: center; gap: .45rem;
+  font-family: var(--font-mono); font-size: .74rem; }
+.archived-ver-bar { padding: .48rem 1.15rem; border-top: 1px solid var(--rule); background: var(--paper-3);
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem;
+  font-size: .78rem; color: var(--ink-3); }
+.archived-ver-left { display: inline-flex; flex-wrap: wrap; align-items: center; gap: .45rem;
+  font-family: var(--font-mono); font-size: .73rem; }
+.archived-drawer table.native-tbl { background: var(--paper); }
+.archived-drawer table.native-tbl tbody tr { opacity: .88; }
+.empty-banner { margin-top: 1.5rem; padding: 1.5rem; border: 1px solid var(--rule); border-radius: 3px;
+  background: var(--paper-2); text-align: center; }
+.empty-banner p { margin: 0 0 .7rem; color: var(--ink-2); font-size: .92rem; }
+@media (max-width: 760px) {
+  .native-hero { padding: 1.5rem 0 1rem; }
+  .native-hero-copy { flex: 1 1 100%; }
+  .native-hero h1 { font-size: 2rem; }
+  .native-kpis { width: 100%; }
+  .kpi { flex: 1 1 calc(50% - .4rem); min-width: 0; }
+  .setup-bar-hint { display: none; }
+  .matrix-card { padding: .8rem .85rem .85rem; }
+  table.matrix { min-width: 34rem; }
+  table.matrix thead { display: table-header-group; }
+  table.matrix tbody tr { display: table-row; padding: 0; border-bottom: 0; }
+  table.matrix tbody td { display: table-cell; padding: .44rem .45rem; border-bottom: 1px solid var(--rule); }
+  table.matrix tbody tr:last-child td { border-bottom: 0; }
+  .mod-table-wrap { overflow-x: visible; }
+  table.native-tbl thead { display: none; }
+  table.native-tbl tbody tr { display: grid; grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "bin bin" "plat meta" "sha dl";
+    gap: .45rem .65rem; align-items: center; padding: .8rem .9rem; border-bottom: 1px solid var(--rule); }
+  table.native-tbl tbody td { padding: 0 !important; border-bottom: 0; }
+  table.native-tbl tbody tr:hover td { background: none; }
+  table.native-tbl td.bin-cell { grid-area: bin; min-width: 0; }
+  table.native-tbl td.plat-cell, table.native-tbl td.ver-cell { grid-area: plat; justify-self: start; }
+  table.native-tbl td.size-cell { grid-area: meta; justify-self: end; text-align: right; font-size: .76rem; }
+  table.native-tbl td.built-cell { display: none; }
+  table.native-tbl td.sha-cell { grid-area: sha; min-width: 0; white-space: normal; }
+  table.native-tbl td.dl-cell { grid-area: dl; justify-self: end; width: auto; }
+  .sha-wrap { flex-wrap: wrap; }
+  .sha-code { font-size: .68rem; }
+  .mod-head { padding: .85rem .9rem; }
+  .archived-drawer > summary, .archived-ver-bar { padding-left: .9rem; padding-right: .9rem; }
+}"""
+
+NATIVE_SCRIPT = """(() => {
+  const copyText = async (text, button, idleLabel) => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (error) {
+      const area = document.createElement('textarea');
+      area.value = text;
+      area.setAttribute('readonly', '');
+      area.style.position = 'fixed';
+      area.style.opacity = '0';
+      document.body.appendChild(area);
+      area.select();
+      document.execCommand('copy');
+      area.remove();
+    }
+    const label = button.querySelector('[data-copy-label]') || button;
+    label.textContent = 'Copied';
+    button.classList.add('done');
+    setTimeout(() => {
+      label.textContent = idleLabel;
+      button.classList.remove('done');
+    }, 1500);
+  };
+
+  document.addEventListener('click', (event) => {
+    if (!(event.target instanceof Element)) return;
+    const copySel = event.target.closest('[data-copy]');
+    if (copySel) {
+      const target = document.querySelector(copySel.dataset.copy);
+      if (target) copyText(target.textContent, copySel, 'Copy');
+      return;
+    }
+    const copyRaw = event.target.closest('[data-copy-text]');
+    if (copyRaw) {
+      copyText(copyRaw.dataset.copyText, copyRaw, 'Copy');
+      return;
+    }
+  });
+
+  const controls = document.querySelector('[data-native-controls]');
+  const modView = document.getElementById('native-module-view');
+  const platView = document.getElementById('native-platform-view');
+  const searchInput = document.getElementById('native-filter');
+  const archToggle = document.getElementById('native-expand-archived');
+  const emptyBanner = document.querySelector('[data-filter-empty]');
+  if (!controls || !modView || !platView || !searchInput) return;
+
+  controls.hidden = false;
+
+  // Detect visitor OS family for a gentle hint dot on matching platform tab(s).
+  const ua = (navigator.userAgent || '') + ' ' + (navigator.platform || '');
+  const detectedOs = /Mac/i.test(ua) ? 'darwin' : /Win/i.test(ua) ? 'windows' : /Linux|X11/i.test(ua) ? 'linux' : '';
+  if (detectedOs) {
+    controls.querySelectorAll('[data-plat-tab]').forEach((btn) => {
+      if (btn.dataset.platTab.startsWith(detectedOs + '-')) {
+        const dot = document.createElement('span');
+        dot.className = 'here';
+        dot.title = 'Matches your operating system';
+        btn.prepend(dot);
+      }
+    });
+  }
+
+  const state = { platform: 'all', mode: 'module', query: '', expandArchived: false };
+  const allRows = Array.from(modView.querySelectorAll('tr[data-artifact-path]'));
+  const modCards = Array.from(modView.querySelectorAll('section.mod-card'));
+
+  const platLabels = {};
+  controls.querySelectorAll('[data-plat-tab]').forEach((btn) => {
+    if (btn.dataset.platTab !== 'all') {
+      platLabels[btn.dataset.platTab] = btn.dataset.platLabel || btn.dataset.platTab;
+    }
+  });
+  const platOrder = Object.keys(platLabels);
+
+  const rowMatches = (row) => {
+    if (state.platform !== 'all' && row.dataset.platform !== state.platform) return false;
+    const terms = state.query.trim().toLowerCase().split(/\\s+/).filter(Boolean);
+    if (!terms.length) return true;
+    const hay = row.dataset.search || '';
+    return terms.every((term) => hay.includes(term));
+  };
+
+  const renderPlatformView = () => {
+    const targets = state.platform === 'all' ? platOrder : [state.platform];
+    const queryActive = state.query.trim().length > 0;
+    const frag = document.createDocumentFragment();
+    let visibleSections = 0;
+
+    for (const plat of targets) {
+      const matched = allRows.filter((row) => row.dataset.platform === plat && rowMatches(row));
+      if (!matched.length) continue;
+      visibleSections += 1;
+      const cur = matched.filter((r) => r.dataset.current === '1');
+      const arch = matched.filter((r) => r.dataset.current !== '1');
+
+      const section = document.createElement('section');
+      section.className = 'mod-card';
+
+      const head = document.createElement('div');
+      head.className = 'mod-head';
+      const top = document.createElement('div');
+      top.className = 'mod-head-top';
+      const titleGroup = document.createElement('div');
+      titleGroup.className = 'mod-title-group';
+      const h2 = document.createElement('h2');
+      h2.textContent = platLabels[plat] || plat;
+      const code = document.createElement('span');
+      code.className = 'pill';
+      code.textContent = plat;
+      titleGroup.append(h2, code);
+
+      const countTag = document.createElement('span');
+      countTag.className = 'tag';
+      countTag.textContent = cur.length + ' current' + (arch.length ? ' · ' + arch.length + ' archived' : '');
+      top.append(titleGroup, countTag);
+      head.append(top);
+      section.append(head);
+
+      const makeTable = (rows, withHead) => {
+        const wrap = document.createElement('div');
+        wrap.className = 'mod-table-wrap';
+        const tbl = document.createElement('table');
+        tbl.className = 'native-tbl';
+        if (withHead) {
+          tbl.innerHTML = '<thead><tr><th scope="col">Binary</th><th scope="col">Version</th>'
+            + '<th scope="col" class="num">Size</th><th scope="col">Built</th>'
+            + '<th scope="col">SHA-256</th><th scope="col" class="src">Download</th></tr></thead>';
+        }
+        const tbody = document.createElement('tbody');
+        for (const orig of rows) {
+          const clone = orig.cloneNode(true);
+          clone.hidden = false;
+          clone.removeAttribute('data-artifact-path');
+          const platCell = clone.querySelector('td.plat-cell');
+          if (platCell) {
+            platCell.className = 'ver-cell';
+            platCell.innerHTML = '';
+            const vp = document.createElement('span');
+            vp.className = 'pill';
+            vp.textContent = orig.dataset.module + ' v' + orig.dataset.version;
+            platCell.append(vp);
+          }
+          tbody.append(clone);
+        }
+        tbl.append(tbody);
+        wrap.append(tbl);
+        return wrap;
+      };
+
+      if (cur.length) section.append(makeTable(cur, true));
+
+      if (arch.length) {
+        const details = document.createElement('details');
+        details.className = 'archived-drawer';
+        if (state.expandArchived || (queryActive && cur.length === 0)) details.open = true;
+        const summary = document.createElement('summary');
+        const left = document.createElement('span');
+        left.className = 'archived-summary-left';
+        left.innerHTML = '<svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 4l4 4-4 4"/></svg>'
+          + '<span>Archived versions</span><span class="pill archived">' + arch.length + (arch.length === 1 ? ' binary' : ' binaries') + '</span>';
+        summary.append(left);
+        details.append(summary, makeTable(arch, cur.length === 0));
+        section.append(details);
+      }
+
+      frag.append(section);
+    }
+
+    platView.innerHTML = '';
+    platView.append(frag);
+    if (emptyBanner) emptyBanner.hidden = visibleSections > 0;
+  };
+
+  const apply = () => {
+    controls.querySelectorAll('[data-plat-tab]').forEach((btn) => {
+      btn.setAttribute('aria-selected', String(btn.dataset.platTab === state.platform));
+    });
+    controls.querySelectorAll('[data-view-mode]').forEach((btn) => {
+      btn.setAttribute('aria-pressed', String(btn.dataset.viewMode === state.mode));
+    });
+
+    if (state.mode === 'platform') {
+      modView.hidden = true;
+      platView.hidden = false;
+      renderPlatformView();
+      return;
+    }
+
+    modView.hidden = false;
+    platView.hidden = true;
+    const queryActive = state.query.trim().length > 0;
+    let visibleCards = 0;
+
+    for (const card of modCards) {
+      const curRows = Array.from(card.querySelectorAll('tbody[data-current-body] tr[data-artifact-path]'));
+      const archDrawer = card.querySelector('details[data-archived-drawer]');
+      const archRows = archDrawer ? Array.from(archDrawer.querySelectorAll('tr[data-artifact-path]')) : [];
+      let curVisible = 0;
+      let archVisible = 0;
+
+      for (const row of curRows) {
+        const ok = rowMatches(row);
+        row.hidden = !ok;
+        if (ok) curVisible += 1;
+      }
+      for (const row of archRows) {
+        const ok = rowMatches(row);
+        row.hidden = !ok;
+        if (ok) archVisible += 1;
+      }
+
+      if (archDrawer) {
+        archDrawer.querySelectorAll('[data-archived-version-group]').forEach((grp) => {
+          const any = Array.from(grp.querySelectorAll('tr[data-artifact-path]')).some((r) => !r.hidden);
+          grp.hidden = !any;
+        });
+        archDrawer.hidden = archVisible === 0;
+        const archBadge = archDrawer.querySelector('[data-archived-count]');
+        if (archBadge) {
+          const vers = archBadge.dataset.archivedVersions || '';
+          archBadge.textContent = (vers ? vers + ' · ' : '') + archVisible + (archVisible === 1 ? ' binary' : ' binaries');
+        }
+        if (state.expandArchived || (queryActive && archVisible > 0)) {
+          archDrawer.open = true;
+        } else if (!queryActive) {
+          archDrawer.open = false;
+        }
+      }
+
+      const curWrap = card.querySelector('[data-current-table-wrap]');
+      const modEmpty = card.querySelector('[data-mod-empty]');
+      if (curWrap) curWrap.hidden = curVisible === 0;
+      if (modEmpty) {
+        const showPlatformNotice = !queryActive && state.platform !== 'all' && curVisible === 0;
+        modEmpty.hidden = !showPlatformNotice;
+        const slot = modEmpty.querySelector('[data-missing-plat]');
+        if (slot) slot.textContent = platLabels[state.platform] || state.platform;
+      }
+
+      const cardVisible = queryActive ? (curVisible + archVisible > 0) : true;
+      card.hidden = !cardVisible;
+      if (cardVisible) visibleCards += 1;
+
+      const tag = card.querySelector('[data-mod-count]');
+      if (tag) {
+        tag.textContent = curVisible + ' current' + (archVisible ? ' · ' + archVisible + ' archived' : '');
+      }
+    }
+
+    if (emptyBanner) emptyBanner.hidden = visibleCards > 0;
+  };
+
+  document.addEventListener('click', (event) => {
+    if (!(event.target instanceof Element)) return;
+    const tab = event.target.closest('[data-plat-tab]');
+    if (tab) {
+      state.platform = tab.dataset.platTab;
+      apply();
+      return;
+    }
+    const pick = event.target.closest('[data-pick-platform]');
+    if (pick) {
+      const next = pick.dataset.pickPlatform;
+      state.platform = state.platform === next ? 'all' : next;
+      apply();
+      return;
+    }
+    const modeBtn = event.target.closest('[data-view-mode]');
+    if (modeBtn) {
+      state.mode = modeBtn.dataset.viewMode;
+      apply();
+      return;
+    }
+    if (event.target.closest('[data-reset-filters]')) {
+      state.platform = 'all';
+      state.query = '';
+      searchInput.value = '';
+      apply();
+    }
+  });
+
+  searchInput.addEventListener('input', () => {
+    state.query = searchInput.value;
+    apply();
+  });
+
+  if (archToggle) {
+    archToggle.addEventListener('change', () => {
+      state.expandArchived = archToggle.checked;
+      apply();
+    });
+  }
+
+  document.addEventListener('keydown', (event) => {
+    const active = document.activeElement;
+    if (event.key === '/' && !event.metaKey && !event.ctrlKey && !event.altKey) {
+      if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) return;
+      event.preventDefault();
+      searchInput.focus();
+    } else if (event.key === 'Escape' && active === searchInput) {
+      searchInput.value = '';
+      state.query = '';
+      apply();
+      searchInput.blur();
+    }
+  });
+
+  apply();
+})();"""
 
 
 def format_bytes(size):
@@ -845,101 +1367,397 @@ def format_bytes(size):
     return f"{max(1, round(size / 1024))} KB"
 
 
+def native_version_key(version):
+    """Return numeric sort key for a dotted native version string."""
+    return tuple(int(part) for part in str(version).split("."))
+
+
+def native_date_cell(value):
+    """Format an ISO timestamp or YYYY-MM-DD date string for native tables."""
+    day = stamp_date(value)
+    if not day and isinstance(value, str):
+        match = NATIVE_DATE_ONLY.fullmatch(value)
+        if match:
+            try:
+                day = date.fromisoformat(match[1])
+            except ValueError:
+                day = None
+    if not day:
+        return '<td class="built-cell"><span aria-label="not recorded">—</span></td>'
+    return (f'<td class="built-cell"><time datetime="{html.escape(value)}" '
+            f'title="{html.escape(long_date(day))}">{short_date(day)}</time></td>')
+
+
+def _native_short_date(value):
+    day = stamp_date(value)
+    if not day and isinstance(value, str) and NATIVE_DATE_ONLY.fullmatch(value):
+        try:
+            day = date.fromisoformat(value)
+        except ValueError:
+            day = None
+    return short_date(day) if day else ""
+
+
+def _native_platform_order(plat):
+    meta = NATIVE_PLATFORM_META.get(plat)
+    return (meta["order"], plat) if meta else (99, plat)
+
+
+def _native_platform_label(plat):
+    meta = NATIVE_PLATFORM_META.get(plat)
+    return meta["label"] if meta else plat
+
+
+def _native_artifact_row(item, owner_module, is_current):
+    """Render one binary artifact row with binary filename as primary identity."""
+    plat = item["platform"]
+    plat_label = _native_platform_label(plat)
+    pkg = item["package"]
+    mod = item["module"]
+    ver = item["version"]
+    role = item.get("role", "module")
+    path = item["path"]
+    filename = Path(path).name
+    sha = item["sha256"]
+    size_label = format_bytes(item["size"])
+    runtime_name = item.get("runtime_name", "")
+    note = item.get("note", "")
+
+    role_label = "Runtime lib" if role == "library" else "Module"
+    role_cls = "role-library" if role == "library" else "role-module"
+    prefix_html = '<span class="bin-prefix" aria-hidden="true">↳</span>' if role == "library" else ""
+    note_parts = []
+    if role == "library" and runtime_name:
+        note_parts.append(f"cached as <code>{html.escape(runtime_name)}</code>")
+    if note:
+        note_parts.append(html.escape(note))
+    note_html = f'<span class="bin-note">{" — ".join(note_parts)}</span>' if note_parts else ""
+
+    search_terms = " ".join(filter(None, [
+        pkg, owner_module, mod, f"v{ver}", ver, plat, plat_label,
+        filename, role, role_label, runtime_name, sha,
+    ])).lower()
+
+    return (
+        f'<tr data-artifact-path="{html.escape(path, quote=True)}"'
+        f' data-platform="{html.escape(plat, quote=True)}"'
+        f' data-module="{html.escape(owner_module, quote=True)}"'
+        f' data-package="{html.escape(pkg, quote=True)}"'
+        f' data-version="{html.escape(ver, quote=True)}"'
+        f' data-role="{html.escape(role, quote=True)}"'
+        f' data-current="{"1" if is_current else "0"}"'
+        f' data-search="{html.escape(search_terms, quote=True)}">'
+        f'<td class="bin-cell"><div class="bin-main">{prefix_html}'
+        f'<a class="bin-name" href="{html.escape(path, quote=True)}">{html.escape(filename)}</a>'
+        f'<span class="role-badge {role_cls}">{role_label}</span></div>{note_html}</td>'
+        f'<td class="plat-cell"><button class="plat-btn" type="button"'
+        f' data-pick-platform="{html.escape(plat, quote=True)}"'
+        f' title="Filter by {html.escape(plat, quote=True)}">{html.escape(plat_label)}</button></td>'
+        f'<td class="num size-cell">{html.escape(size_label)}</td>'
+        f'{native_date_cell(item.get("built_at"))}'
+        f'<td class="sha-cell"><span class="sha-wrap">'
+        f'<code class="sha-code" title="{html.escape(sha, quote=True)}">{html.escape(sha[:12])}…{html.escape(sha[-6:])}</code>'
+        f'<button class="copy-mini" type="button" data-copy-text="{html.escape(sha, quote=True)}"'
+        f' title="Copy full SHA-256">{COPY_ICON}<span data-copy-label>Copy</span></button>'
+        f'</span></td>'
+        f'<td class="src dl-cell"><a class="dl-btn" href="{html.escape(path, quote=True)}"'
+        f' title="Download {html.escape(filename, quote=True)}">{TAR_ICON}<span>Download</span></a></td>'
+        '</tr>'
+    )
+
+
 def native_pages(native_dir, manifest=None):
-    """Write a browsable index.html for the hosted prebuilt native modules."""
+    """Write a browsable, data-driven index.html for hosted prebuilt native binaries."""
     if manifest is None:
         manifest = json.loads((native_dir / "manifest.json").read_text(encoding="utf-8"))
-    artifacts = sorted(manifest.get("artifacts", []),
-                       key=lambda item: (item["package"], item["module"], item["version"], item["platform"]))
-    by_package = {}
+    artifacts = list(manifest.get("artifacts", []))
+    modules_catalog = manifest.get("modules") or {}
+
+    # Group artifacts by owning module (attaching companion runtime libraries to their module).
+    by_module = {}
     for item in artifacts:
-        by_package.setdefault(item["package"], []).append(item)
-    platforms = sorted({item["platform"] for item in artifacts})
-    sections = []
-    for pkg in sorted(by_package):
-        items = by_package[pkg]
+        owner = item.get("owner_module") or item["module"]
+        by_module.setdefault(owner, []).append(item)
+
+    present_platforms = sorted({item["platform"] for item in artifacts}, key=_native_platform_order)
+    matrix_platforms = [p[0] for p in NATIVE_PLATFORMS if p[0] in present_platforms]
+    for plat in present_platforms:
+        if plat not in matrix_platforms:
+            matrix_platforms.append(plat)
+
+    module_names = sorted(by_module)
+    current_total = 0
+    archived_total = 0
+    current_by_platform = {plat: 0 for plat in matrix_platforms}
+    matrix_rows = []
+    module_sections = []
+
+    for mod_name in module_names:
+        items = by_module[mod_name]
+        meta = modules_catalog.get(mod_name) or {}
+        pkg = meta.get("package") or items[0]["package"]
+        versions_present = sorted({item["version"] for item in items}, key=native_version_key, reverse=True)
+        declared_current = meta.get("current_version")
+        current_ver = declared_current if declared_current in versions_present else versions_present[0]
+        archived_vers = [v for v in versions_present if v != current_ver]
+
+        current_items = sorted(
+            [i for i in items if i["version"] == current_ver],
+            key=lambda i: (_native_platform_order(i["platform"]), 0 if i.get("role", "module") == "module" else 1, i["path"]),
+        )
+        archived_items = [i for i in items if i["version"] != current_ver]
+        current_total += len(current_items)
+        archived_total += len(archived_items)
+        for i in current_items:
+            current_by_platform[i["platform"]] = current_by_platform.get(i["platform"], 0) + 1
+
+        safe_mod = html.escape(mod_name)
         safe_pkg = html.escape(pkg)
-        desc = html.escape(NATIVE_DESCRIPTIONS.get(pkg, f"Prebuilt native dynamic module(s) for {pkg}."))
-        rows = []
-        for item in items:
-            plat = html.escape(item["platform"])
-            mod = html.escape(item["module"])
-            ver = html.escape(item["version"])
-            path = html.escape(item["path"])
-            filename = html.escape(Path(item["path"]).name)
-            sha = html.escape(item["sha256"])
-            size = html.escape(format_bytes(item["size"]))
-            search = html.escape(f"{pkg} {item['module']} {item['platform']} {filename}".lower())
-            rows.append(
-                f'<tr data-search="{search}">'
-                f'<td class="pkg"><a href="{path}"><strong>{plat}</strong></a>'
-                f'<span class="summary"><code>{filename}</code></span></td>'
-                f'<td class="version-cell"><span class="version">{mod} v{ver}</span></td>'
-                f'<td class="num">{size}</td>'
-                f'<td class="requires"><code title="{sha}">{sha[:16]}…{sha[-8:]}</code></td>'
-                f'<td class="src"><a class="tar-link" href="{path}" title="Download {filename}" '
-                f'aria-label="Download {filename}">{TAR_ICON}</a></td>'
-                "</tr>")
-        sections.append(f"""<section class="group" id="{safe_pkg}">
-<div class="group-head"><h2><a href="../packages/{safe_pkg}/">{safe_pkg}</a></h2>
-<span class="tag" data-count="{len(items)}">{len(items)} artifacts</span></div>
-<p class="note">{desc}</p>
-<table>
-<thead><tr><th scope="col">Platform</th><th scope="col">Module</th>
-<th scope="col" class="num">Size</th><th scope="col" class="requires">SHA-256</th>
-<th scope="col" class="src"><span class="visually-hidden">Download</span></th></tr></thead>
+        safe_cur = html.escape(current_ver)
+        desc = html.escape(meta.get("description") or f"Prebuilt native dynamic module for {pkg}.")
+        versions_meta = meta.get("versions") or {}
+        cur_vmeta = versions_meta.get(current_ver) or {}
+        used_by = meta.get("used_by") or [pkg]
+
+        # Support matrix row
+        plat_cells = []
+        for plat in matrix_platforms:
+            matched = [i for i in current_items if i["platform"] == plat]
+            if not matched:
+                plat_cells.append(f'<td class="m-plat"><span class="m-none" title="No prebuild for {html.escape(_native_platform_label(plat))}">—</span></td>')
+            else:
+                has_lib = any(i.get("role") == "library" for i in matched)
+                lib_tag = '<span class="m-lib">+lib</span>' if has_lib else ""
+                tip = f"Filter by {_native_platform_label(plat)}" + (" (includes companion runtime library)" if has_lib else "")
+                plat_cells.append(
+                    f'<td class="m-plat"><button class="m-ok" type="button"'
+                    f' data-pick-platform="{html.escape(plat, quote=True)}"'
+                    f' title="{html.escape(tip, quote=True)}">✓{lib_tag}</button></td>'
+                )
+        matrix_rows.append(
+            f'<tr>'
+            f'<td><a class="m-mod" href="#mod-{safe_mod}">{safe_mod}</a></td>'
+            f'<td><a class="m-pkg" href="../packages/{safe_pkg}/">{safe_pkg}</a></td>'
+            f'<td><span class="pill current">v{safe_cur}</span></td>'
+            f'{"".join(plat_cells)}'
+            f'</tr>'
+        )
+
+        # Module header pills & metadata
+        compat_pill = ""
+        if cur_vmeta.get("min_package_version"):
+            compat_pill = f'<span class="pill compat">{safe_pkg} ≥ {html.escape(cur_vmeta["min_package_version"])}</span>'
+
+        submeta_parts = []
+        if cur_vmeta.get("summary"):
+            submeta_parts.append(f'<span><strong>Release note:</strong> {html.escape(cur_vmeta["summary"])}</span>')
+        cur_rel = _native_short_date(cur_vmeta.get("released"))
+        if cur_rel:
+            submeta_parts.append(f'<span><strong>Released:</strong> <time datetime="{html.escape(cur_vmeta["released"], quote=True)}">{html.escape(cur_rel)}</time></span>')
+        used_links = ", ".join(
+            f'<a href="../packages/{html.escape(u, quote=True)}/">{html.escape(u)}</a>'
+            for u in used_by
+        )
+        submeta_parts.append(f'<span class="used-list">Used by: {used_links}</span>')
+
+        count_label = f"{len(current_items)} current" + (f" · {len(archived_items)} archived" if archived_items else "")
+        cur_rows_html = "\n".join(_native_artifact_row(i, mod_name, True) for i in current_items)
+
+        # Collapsed archived versions drawer
+        archived_html = ""
+        if archived_vers:
+            ver_blocks = []
+            for ver in archived_vers:
+                v_items = sorted(
+                    [i for i in archived_items if i["version"] == ver],
+                    key=lambda i: (_native_platform_order(i["platform"]), 0 if i.get("role", "module") == "module" else 1, i["path"]),
+                )
+                vmeta = versions_meta.get(ver) or {}
+                v_compat = ""
+                if vmeta.get("max_package_version"):
+                    v_compat = f'<span class="pill compat">{safe_pkg} ≤ {html.escape(vmeta["max_package_version"])}</span>'
+                elif vmeta.get("min_package_version"):
+                    v_compat = f'<span class="pill compat">{safe_pkg} ≥ {html.escape(vmeta["min_package_version"])}</span>'
+                v_rel = _native_short_date(vmeta.get("released"))
+                v_rel_html = f'<span>{html.escape(v_rel)}</span>' if v_rel else ""
+                v_summary = html.escape(vmeta.get("summary") or "Archived compatibility release retained for older package manifests.")
+                v_rows_html = "\n".join(_native_artifact_row(i, mod_name, False) for i in v_items)
+                ver_blocks.append(f"""<div data-archived-version-group="{html.escape(ver, quote=True)}">
+<div class="archived-ver-bar">
+<span class="archived-ver-left"><span class="pill archived">v{html.escape(ver)}</span><span>Archived</span>{v_compat}{v_rel_html}</span>
+<span>{v_summary}</span>
+</div>
+<div class="mod-table-wrap">
+<table class="native-tbl">
 <tbody>
-{chr(10).join(rows)}
+{v_rows_html}
 </tbody>
 </table>
+</div>
+</div>""")
+            ver_list_label = ", ".join(f"v{v}" for v in archived_vers)
+            arch_noun = "binary" if len(archived_items) == 1 else "binaries"
+            archived_html = f"""<details class="archived-drawer" data-archived-drawer>
+<summary>
+<span class="archived-summary-left">{CHEVRON_ICON}<span>Archived versions</span>
+<span class="pill archived" data-archived-count data-archived-versions="{html.escape(ver_list_label, quote=True)}">{html.escape(ver_list_label)} · {len(archived_items)} {arch_noun}</span></span>
+<span>Retained immutably for older ELPA package manifests</span>
+</summary>
+{chr(10).join(ver_blocks)}
+</details>"""
+
+        module_sections.append(f"""<section class="mod-card" id="mod-{safe_mod}">
+<div class="mod-head">
+<div class="mod-head-top">
+<div class="mod-title-group">
+<h2>{safe_mod}</h2>
+<span class="pill current">v{safe_cur} · Current</span>
+<a class="pill pkg-link" href="../packages/{safe_pkg}/">package: {safe_pkg} ↗</a>
+{compat_pill}
+</div>
+<span class="tag" data-mod-count>{count_label}</span>
+</div>
+<p class="mod-desc">{desc}</p>
+<div class="mod-submeta">{"".join(submeta_parts)}</div>
+</div>
+<div class="mod-table-wrap" data-current-table-wrap>
+<table class="native-tbl">
+<thead><tr><th scope="col">Binary</th><th scope="col">Platform</th>
+<th scope="col" class="num">Size</th><th scope="col">Built</th>
+<th scope="col">SHA-256</th><th scope="col" class="src">Download</th></tr></thead>
+<tbody data-current-body>
+{cur_rows_html}
+</tbody>
+</table>
+</div>
+<div class="mod-empty" data-mod-empty hidden>
+<span>No prebuilt binary published for <strong data-missing-plat></strong> yet. <code>{safe_pkg}</code> falls back cleanly without blocking installation.</span>
+<button class="link-btn" type="button" data-plat-tab="all">Show all platforms</button>
+</div>
+{archived_html}
 </section>""")
+
+    # Platform category filter tabs
+    plat_tabs = [
+        f'<button class="plat-tab" type="button" role="tab" aria-selected="true" data-plat-tab="all">'
+        f'<span>All platforms</span><span class="cnt">{current_total}</span></button>'
+    ]
+    for plat in matrix_platforms:
+        label = _native_platform_label(plat)
+        plat_tabs.append(
+            f'<button class="plat-tab" type="button" role="tab" aria-selected="false"'
+            f' data-plat-tab="{html.escape(plat, quote=True)}"'
+            f' data-plat-label="{html.escape(label, quote=True)}">'
+            f'<span>{html.escape(label)}</span><span class="cnt">{current_by_platform.get(plat, 0)}</span></button>'
+        )
+
+    matrix_headers = "".join(
+        f'<th scope="col" class="m-plat">{html.escape(_native_platform_label(p))}</th>'
+        for p in matrix_platforms
+    )
+
+    packages_count = len({item["package"] for item in artifacts})
+    archived_kpi = (
+        f'<div class="kpi"><span class="kpi-label">Archived</span>'
+        f'<span class="kpi-val muted">{archived_total}</span></div>'
+        if archived_total else ""
+    )
+
     body = f"""<main class="wrap">
 <nav class="crumbs" aria-label="Breadcrumb"><a href="/">ETAF</a>
 <span aria-hidden="true">/</span><a href="/packages/">Packages</a>
-<span aria-hidden="true">/</span><span>Native modules</span></nav>
-<section class="hero">
+<span aria-hidden="true">/</span><span>Native binaries</span></nav>
+<section class="native-hero">
+<div class="native-hero-grid">
+<div class="native-hero-copy">
 <p class="eyebrow">Prebuilt Emacs dynamic modules</p>
 <h1>ETAF native binaries</h1>
-<p class="lead">Checksum-verified prebuilt C dynamic modules for ETAF packages.
-<code>M-x etaf-install</code> downloads, verifies (SHA-256) and activates the matching binary automatically
-into <code>~/.cache/emacs-taf/native/</code> — no C compiler, Make or manual build required.</p>
-<p class="meta"><span><strong>{len(by_package)}</strong> packages</span>
-<span class="dot" aria-hidden="true">·</span>
-<span><strong>{len(artifacts)}</strong> binaries</span>
-<span class="dot" aria-hidden="true">·</span>
-<span>{len(platforms)} platforms ({html.escape(", ".join(platforms))})</span>
-<span class="dot" aria-hidden="true">·</span>
-<span>Emacs 29.1+ ABI</span></p>
-</section>
-<section class="install" aria-labelledby="install-title">
-<div class="install-head"><h2 id="install-title">Automatic installation</h2>
+<p class="lead">Checksum-verified prebuilt binaries for ETAF packages.
+<code>M-x etaf-install</code> downloads, verifies (SHA-256) and activates matching binaries automatically
+into <code>~/.cache/emacs-taf/native/</code> — no C compiler or manual build required.</p>
+</div>
+<div class="native-kpis" aria-label="Summary counts">
+<div class="kpi"><span class="kpi-label">Modules</span><span class="kpi-val">{len(module_names)}</span></div>
+<div class="kpi"><span class="kpi-label">Current</span><span class="kpi-val">{current_total}</span></div>
+{archived_kpi}
+<div class="kpi"><span class="kpi-label">ABI</span><span class="kpi-val">Emacs 29.1+</span></div>
+</div>
+</div>
+<details class="setup-bar">
+<summary>
+<span class="setup-bar-left">{CHEVRON_ICON}<strong>Install automatically inside Emacs</strong>
+<span class="setup-bar-hint">— <code>M-x etaf-install</code> or <code>M-x etaf-install-native</code></span></span>
+<span class="setup-bar-toggle">Show bootstrap snippet</span>
+</summary>
+<div class="setup-bar-body">
+<div class="install-head"><span class="note" style="margin:0">Evaluate once to bootstrap <code>etaf-install</code>, or press <code>n</code> in <code>M-x etaf-install-manage</code> to manage native modules.</span>
 <button class="copy" type="button" data-copy="#bootstrap">Copy</button></div>
 <pre id="bootstrap"><code>{BOOTSTRAP}</code></pre>
-<p class="note">Selecting a target such as <code>etaf-md</code>, <code>etaf-video-player</code>,
-<code>etaf</code> or <code>ekp</code> in <code>M-x etaf-install</code> automatically installs matching
-native binaries for the target and its dependencies. You can also run <code>M-x etaf-install-native</code>
-(or press <code>n</code> in <code>M-x etaf-install-manage</code>) at any time, or inspect
-<a href="manifest.json"><code>manifest.json</code></a> for the full machine-readable index.</p>
+</div>
+</details>
 </section>
-<div class="filter" data-filter-box hidden>
-<label class="visually-hidden" for="native-filter">Filter native artifacts</label>
-<input id="native-filter" type="search" data-filter autocomplete="off" spellcheck="false"
- placeholder="Filter by package, module or platform (e.g. darwin-arm64, linux-x86_64)">
+<section class="matrix-card" aria-labelledby="matrix-title">
+<div class="matrix-head">
+<h2 id="matrix-title">Current release support matrix</h2>
+<span>Click a check mark to filter by platform · <a href="manifest.json">manifest.json</a></span>
+</div>
+<div class="matrix-scroll">
+<table class="matrix">
+<thead><tr><th scope="col">Module</th><th scope="col">Package</th><th scope="col">Current</th>{matrix_headers}</tr></thead>
+<tbody>
+{chr(10).join(matrix_rows)}
+</tbody>
+</table>
+</div>
+</section>
+<section class="controls-bar" data-native-controls hidden aria-label="Filter and view options">
+<div class="controls-top">
+<div class="plat-tabs" role="tablist" aria-label="Filter by platform category">
+{chr(10).join(plat_tabs)}
+</div>
+<div class="view-switch" role="group" aria-label="Group binaries by">
+<button class="view-btn" type="button" data-view-mode="module" aria-pressed="true">By Module</button>
+<button class="view-btn" type="button" data-view-mode="platform" aria-pressed="false">By Platform</button>
+</div>
+</div>
+<div class="controls-search">
+<div class="filter">
+<label class="visually-hidden" for="native-filter">Filter native binaries</label>
+<input id="native-filter" type="search" autocomplete="off" spellcheck="false"
+ placeholder="Filter by binary filename, module, package, platform, version (e.g. v1) or SHA-256">
 <kbd>/</kbd>
 </div>
-<p class="note" data-filter-empty hidden>No native artifact matches that filter.</p>
-{chr(10).join(sections)}
+{f'<label class="arch-toggle"><input id="native-expand-archived" type="checkbox"><span>Expand archived ({archived_total})</span></label>' if archived_total else ''}
+</div>
+</section>
+<div class="empty-banner" data-filter-empty hidden>
+<p>No native binary matches the current filter.</p>
+<button class="copy" type="button" data-reset-filters>Reset filters</button>
+</div>
+<div id="native-module-view">
+{chr(10).join(module_sections)}
+</div>
+<div id="native-platform-view" hidden></div>
 <footer class="site-footer">
-<p>This page is generated from <a href="manifest.json">manifest.json</a> on every native release.
-Every binary is immutable under its versioned path and verified by SHA-256 before loading.</p>
+<p>Every binary under <code>/native/&lt;package&gt;/&lt;version&gt;/</code> is immutable and SHA-256 verified before loading.
+Older versions stay hosted under <em>Archived versions</em> so existing ELPA releases whose <code>native/manifest.json</code> pins them never break.</p>
+<p>Generated deterministically from <a href="manifest.json">manifest.json</a> on every native release.</p>
 </footer>
 </main>"""
     (native_dir / "index.html").write_text(page(
         "ETAF prebuilt native modules", body, "",
         canonical="https://etaf.top/native/",
-        description="Checksum-verified prebuilt Emacs dynamic modules for ETAF packages (macOS, Linux, Windows)."),
+        description="Checksum-verified prebuilt Emacs dynamic modules for ETAF packages (macOS, Linux, Windows).",
+        extra_style=NATIVE_STYLE,
+        script=NATIVE_SCRIPT),
         encoding="utf-8")
-    return {"packages": len(by_package), "artifacts": len(artifacts)}
+    return {
+        "packages": packages_count,
+        "modules": len(module_names),
+        "artifacts": len(artifacts),
+        "current": current_total,
+        "archived": archived_total,
+    }
 
 
 def main():
@@ -947,6 +1765,8 @@ def main():
     command = parser.add_subparsers(dest="command")
     write_parser = command.add_parser("write", help="Write archive pages from a package directory")
     write_parser.add_argument("--directory", type=Path, required=True)
+    native_parser = command.add_parser("write-native", help="Write native binary index page from a native directory")
+    native_parser.add_argument("--directory", type=Path, required=True)
     args_list = sys.argv[1:]
     if not args_list or args_list == ["help"]:
         parser.print_help()
@@ -955,7 +1775,10 @@ def main():
         args_list = [*args_list[1:], "--help"]
     args = parser.parse_args(args_list)
     directory = args.directory.resolve()
-    report = archive_pages(directory)
+    if args.command == "write-native":
+        report = native_pages(directory)
+    else:
+        report = archive_pages(directory)
     print(json.dumps({"directory": str(directory), **report}, indent=2))
     return 0
 

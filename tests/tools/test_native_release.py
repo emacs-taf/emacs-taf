@@ -129,6 +129,77 @@ class NativeReleaseTests(unittest.TestCase):
             bad["modules"][0]["platforms"]["windows-x86_64"]["libraries"][0]["name"] = "../evil.dll"
             self.assertTrue(any("library name" in e for e in NATIVE.validate_manifest(bad)))
 
+            # Assembled hosted index carries enriched catalog + artifact metadata.
+            idx = result["index"]
+            self.assertIn("modules", idx)
+            self.assertEqual("2", idx["modules"]["etaf-video-mpv"]["current_version"])
+            self.assertEqual("current", idx["modules"]["etaf-video-mpv"]["versions"]["2"]["status"])
+            by_path = {a["path"]: a for a in idx["artifacts"]}
+            lib_rec = by_path["etaf/2/libmpv-2-v2-windows-x86_64.dll"]
+            self.assertEqual("library", lib_rec["role"])
+            self.assertEqual("etaf-video-mpv", lib_rec["owner_module"])
+            self.assertEqual("libmpv-2.dll", lib_rec["runtime_name"])
+            self.assertIn("built_at", lib_rec)
+
+    def test_enrich_index_manifest_backfills_catalog_and_rejects_bad_schema_fields(self):
+        legacy = {
+            "schema": 1,
+            "artifacts": [
+                {
+                    "package": "etaf",
+                    "module": "etaf-video-mpv",
+                    "version": "1",
+                    "platform": "darwin-arm64",
+                    "path": "etaf/1/etaf-video-mpv-v1-darwin-arm64.dylib",
+                    "sha256": "1" * 64,
+                    "size": 34808,
+                },
+                {
+                    "package": "etaf",
+                    "module": "etaf-video-mpv",
+                    "version": "2",
+                    "platform": "windows-x86_64",
+                    "path": "etaf/2/etaf-video-mpv-v2-windows-x86_64.dll",
+                    "sha256": "2" * 64,
+                    "size": 148712,
+                },
+                {
+                    "package": "etaf",
+                    "module": "libmpv-2",
+                    "version": "2",
+                    "platform": "windows-x86_64",
+                    "path": "etaf/2/libmpv-2-v2-windows-x86_64.dll",
+                    "sha256": "3" * 64,
+                    "size": 121789952,
+                },
+            ],
+        }
+        enriched = NATIVE.enrich_index_manifest(legacy)
+        self.assertEqual([], NATIVE.validate_index_manifest(enriched, allow_missing=True))
+        mod = enriched["modules"]["etaf-video-mpv"]
+        self.assertEqual("2", mod["current_version"])
+        self.assertEqual("current", mod["versions"]["2"]["status"])
+        self.assertEqual("0.3.14", mod["versions"]["2"]["min_package_version"])
+        self.assertEqual("archived", mod["versions"]["1"]["status"])
+        self.assertEqual("0.3.13", mod["versions"]["1"]["max_package_version"])
+        by_path = {a["path"]: a for a in enriched["artifacts"]}
+        self.assertEqual("library", by_path["etaf/2/libmpv-2-v2-windows-x86_64.dll"]["role"])
+        self.assertEqual("etaf-video-mpv", by_path["etaf/2/libmpv-2-v2-windows-x86_64.dll"]["owner_module"])
+        self.assertEqual("3" * 64, by_path["etaf/2/libmpv-2-v2-windows-x86_64.dll"]["sha256"])
+
+        # Reject invalid optional fields and unknown keys.
+        bad_role = json.loads(json.dumps(enriched))
+        bad_role["artifacts"][0]["role"] = "driver"
+        self.assertTrue(any("role" in e for e in NATIVE.validate_index_manifest(bad_role)))
+
+        bad_key = json.loads(json.dumps(enriched))
+        bad_key["artifacts"][0]["secret"] = "nope"
+        self.assertTrue(any("unexpected fields" in e for e in NATIVE.validate_index_manifest(bad_key)))
+
+        bad_mod = json.loads(json.dumps(enriched))
+        bad_mod["modules"]["etaf-video-mpv"]["versions"]["2"]["status"] = "beta"
+        self.assertTrue(any("status" in e for e in NATIVE.validate_index_manifest(bad_mod)))
+
 
 if __name__ == "__main__":
     unittest.main()

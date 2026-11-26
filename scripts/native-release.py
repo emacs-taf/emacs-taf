@@ -11,6 +11,7 @@ downloaded into `${XDG_CACHE_HOME:-~/.cache}/emacs-taf/native/` by
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
 import hashlib
 import json
 import os
@@ -30,6 +31,25 @@ SHA256_RE = re.compile(r"[0-9a-f]{64}\Z")
 FILE_RE = re.compile(r"[a-z0-9][a-z0-9._-]*\.(?:dylib|so|dll)\Z")
 LIB_NAME_RE = re.compile(r"[a-z0-9][a-z0-9._-]*\.(?:dylib|so(?:\.[0-9]+)*|dll)\Z")
 HTTPS_RE = re.compile(r"https://[^\s\"']+\Z")
+TIMESTAMP_RE = re.compile(
+    r"[0-9]{4}-[0-9]{2}-[0-9]{2}(?:T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:[+-][0-9]{2}:[0-9]{2}|Z))?\Z"
+)
+
+VALID_ROLES = ("module", "library")
+VALID_STATUSES = ("current", "archived")
+INDEX_TOP_KEYS = frozenset({"schema", "artifacts", "modules"})
+INDEX_REQUIRED_ARTIFACT_KEYS = frozenset(
+    {"package", "module", "version", "platform", "path", "sha256", "size"}
+)
+INDEX_OPTIONAL_ARTIFACT_KEYS = frozenset(
+    {"role", "owner_module", "runtime_name", "note", "built_at"}
+)
+INDEX_MODULE_KEYS = frozenset(
+    {"package", "current_version", "description", "used_by", "versions"}
+)
+INDEX_VERSION_KEYS = frozenset(
+    {"status", "summary", "min_package_version", "max_package_version", "released"}
+)
 
 VALID_PLATFORMS = (
     "darwin-arm64",
@@ -51,8 +71,14 @@ NATIVE_PACKAGES = {
     "etaf-md": {
         "module": "etaf-md-typeset-native",
         "version": "1",
-        "description": "Embedded QuickJS renderer for Mermaid diagrams and MathJax display formulas",
+        "description": "Embedded QuickJS + Pele + MathJax worker for zero-browser Mermaid diagrams and display math SVGs (CoreText on macOS, runtime dlopen Pango on Linux).",
+        "min_package_version": "0.3.0",
+        "used_by": ("etaf-md", "etaf-org", "etaf-web"),
+        "version_summary": "Portable CoreText (macOS) and dlopen-Pango (Linux) builds; Windows falls back cleanly.",
+        "released": "2026-11-25T13:42:04Z",
         "platforms": ("darwin-arm64", "darwin-x86_64", "linux-x86_64", "linux-arm64"),
+        "versions": {},
+        "libraries": {},
         "smoke": (
             '(progn '
             '(unless (fboundp (quote etaf-md--native-info)) (error "etaf-md--native-info missing")) '
@@ -65,8 +91,26 @@ NATIVE_PACKAGES = {
     "etaf": {
         "module": "etaf-video-mpv",
         "version": "2",
-        "description": "Cross-platform libmpv native GPU video playback module",
+        "description": "Cross-platform libmpv dynamic module with native GPU video layers (macOS Metal/CAOpenGL, Windows Win32/WGL, Linux X11/Wayland EGL).",
+        "min_package_version": "0.3.14",
+        "used_by": ("etaf-video-player", "etaf-bili", "etaf-youtube"),
+        "version_summary": "Adds Windows and Linux native GPU layers plus bundled Windows libmpv-2.dll.",
+        "released": "2026-11-26T17:16:50Z",
         "platforms": ("darwin-arm64", "darwin-x86_64", "linux-x86_64", "linux-arm64", "windows-x86_64"),
+        "versions": {
+            "1": {
+                "status": "archived",
+                "max_package_version": "0.3.13",
+                "summary": "Initial libmpv playback bridge retained immutably for older etaf manifests.",
+                "released": "2026-11-25T13:42:04Z",
+            },
+        },
+        "libraries": {
+            "libmpv-2": {
+                "runtime_name": "libmpv-2.dll",
+                "note": "Bundled Windows runtime library loaded via LoadLibrary; macOS and Linux use system libmpv.",
+            },
+        },
         "smoke": (
             '(progn '
             '(unless (fboundp (quote etaf-video-mpv--native-available-p)) '
@@ -78,8 +122,14 @@ NATIVE_PACKAGES = {
     "ekp": {
         "module": "ekp",
         "version": "1.6",
-        "description": "Multi-threaded C Knuth-Plass line-breaking engine",
+        "description": "Multi-threaded C Knuth-Plass paragraph line-breaking engine for high-throughput layout.",
+        "min_package_version": "1.0.5",
+        "used_by": ("ekp", "ebox", "etaf"),
+        "version_summary": "Portable multi-threaded C engine across macOS, Linux and Windows.",
+        "released": "2026-11-25T13:42:04Z",
         "platforms": ("darwin-arm64", "darwin-x86_64", "linux-x86_64", "linux-arm64", "windows-x86_64"),
+        "versions": {},
+        "libraries": {},
         "smoke": (
             '(progn '
             '(ekp-c-init) '
@@ -88,6 +138,16 @@ NATIVE_PACKAGES = {
         ),
     },
 }
+
+
+def utc_now_iso() -> str:
+    """Return the current UTC timestamp in strict ISO 8601 format."""
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def version_key(version: str) -> tuple[int, ...]:
+    """Return a numeric comparison tuple for a dotted native version string."""
+    return tuple(int(part) for part in version.split("."))
 
 
 def sha256_file(path: Path) -> str:
@@ -228,14 +288,81 @@ def validate_manifest(data: dict, expected_package: str | None = None) -> list[s
     return errors
 
 
+def validate_index_modules(modules: object) -> list[str]:
+    """Validate the optional top-level `modules` catalog in hosted `native/manifest.json`."""
+    errors: list[str] = []
+    if not isinstance(modules, dict):
+        return ["modules catalog must be a JSON object"]
+    for mod_id, info in modules.items():
+        prefix = f"modules[{mod_id!r}]"
+        if not isinstance(mod_id, str) or not NAME_RE.fullmatch(mod_id):
+            errors.append(f"{prefix}: invalid module id")
+            continue
+        if not isinstance(info, dict):
+            errors.append(f"{prefix}: entry must be a JSON object")
+            continue
+        extra = set(info) - INDEX_MODULE_KEYS
+        if extra:
+            errors.append(f"{prefix}: unexpected fields {sorted(extra)}")
+        pkg = info.get("package")
+        if not isinstance(pkg, str) or not NAME_RE.fullmatch(pkg):
+            errors.append(f"{prefix}: invalid package {pkg!r}")
+        cur = info.get("current_version")
+        if not isinstance(cur, str) or not VERSION_RE.fullmatch(cur):
+            errors.append(f"{prefix}: invalid current_version {cur!r}")
+        desc = info.get("description")
+        if not isinstance(desc, str) or not desc.strip() or len(desc) > 400:
+            errors.append(f"{prefix}: description must be a nonempty string (<= 400 chars)")
+        used_by = info.get("used_by")
+        if used_by is not None:
+            if (not isinstance(used_by, list)
+                    or not all(isinstance(u, str) and NAME_RE.fullmatch(u) for u in used_by)):
+                errors.append(f"{prefix}: used_by must be a list of valid package names")
+        versions = info.get("versions")
+        if versions is not None:
+            if not isinstance(versions, dict):
+                errors.append(f"{prefix}: versions must be a JSON object")
+            else:
+                for ver, vinfo in versions.items():
+                    vprefix = f"{prefix}.versions[{ver!r}]"
+                    if not isinstance(ver, str) or not VERSION_RE.fullmatch(ver):
+                        errors.append(f"{vprefix}: invalid version key")
+                        continue
+                    if not isinstance(vinfo, dict):
+                        errors.append(f"{vprefix}: entry must be a JSON object")
+                        continue
+                    vextra = set(vinfo) - INDEX_VERSION_KEYS
+                    if vextra:
+                        errors.append(f"{vprefix}: unexpected fields {sorted(vextra)}")
+                    status = vinfo.get("status")
+                    if status not in VALID_STATUSES:
+                        errors.append(f"{vprefix}: invalid status {status!r}")
+                    summary = vinfo.get("summary")
+                    if summary is not None and (not isinstance(summary, str) or not summary.strip() or len(summary) > 300):
+                        errors.append(f"{vprefix}: summary must be a nonempty string (<= 300 chars)")
+                    for bound in ("min_package_version", "max_package_version"):
+                        bval = vinfo.get(bound)
+                        if bval is not None and (not isinstance(bval, str) or not VERSION_RE.fullmatch(bval)):
+                            errors.append(f"{vprefix}: invalid {bound} {bval!r}")
+                    released = vinfo.get("released")
+                    if released is not None and (not isinstance(released, str) or not TIMESTAMP_RE.fullmatch(released)):
+                        errors.append(f"{vprefix}: invalid released timestamp {released!r}")
+    return errors
+
+
 def validate_index_manifest(data: dict, directory: Path | None = None,
                             allow_missing: bool = False) -> list[str]:
     """Validate a hosted `native/manifest.json` index (schema 1) and optional bytes."""
     errors: list[str] = []
     if not isinstance(data, dict):
         return ["native index must be a JSON object"]
+    extra_top = set(data) - INDEX_TOP_KEYS
+    if extra_top:
+        errors.append(f"native index contains unexpected top-level fields: {sorted(extra_top)}")
     if data.get("schema") != 1:
         errors.append(f"expected native index schema 1, got {data.get('schema')!r}")
+    if "modules" in data:
+        errors.extend(validate_index_modules(data["modules"]))
     artifacts = data.get("artifacts")
     if not isinstance(artifacts, list):
         return [*errors, "artifacts must be a list"]
@@ -245,6 +372,9 @@ def validate_index_manifest(data: dict, directory: Path | None = None,
         if not isinstance(item, dict):
             errors.append(f"{prefix}: entry must be an object")
             continue
+        extra_keys = set(item) - (INDEX_REQUIRED_ARTIFACT_KEYS | INDEX_OPTIONAL_ARTIFACT_KEYS)
+        if extra_keys:
+            errors.append(f"{prefix}: unexpected fields {sorted(extra_keys)}")
         pkg = item.get("package")
         mod = item.get("module")
         ver = item.get("version")
@@ -260,6 +390,24 @@ def validate_index_manifest(data: dict, directory: Path | None = None,
             errors.append(f"{prefix}: invalid version {ver!r}")
         if plat not in VALID_PLATFORMS:
             errors.append(f"{prefix}: invalid platform {plat!r}")
+        if "role" in item and item["role"] not in VALID_ROLES:
+            errors.append(f"{prefix}: invalid role {item['role']!r}")
+        if "owner_module" in item:
+            owner = item["owner_module"]
+            if not isinstance(owner, str) or not NAME_RE.fullmatch(owner):
+                errors.append(f"{prefix}: invalid owner_module {owner!r}")
+        if "runtime_name" in item:
+            rname = item["runtime_name"]
+            if not isinstance(rname, str) or not LIB_NAME_RE.fullmatch(rname):
+                errors.append(f"{prefix}: invalid runtime_name {rname!r}")
+        if "note" in item:
+            note = item["note"]
+            if not isinstance(note, str) or not note.strip() or len(note) > 300:
+                errors.append(f"{prefix}: invalid note {note!r}")
+        if "built_at" in item:
+            built_at = item["built_at"]
+            if not isinstance(built_at, str) or not TIMESTAMP_RE.fullmatch(built_at):
+                errors.append(f"{prefix}: invalid built_at {built_at!r}")
         if not isinstance(rel, str):
             errors.append(f"{prefix}: path must be a string")
         else:
@@ -375,12 +523,15 @@ def build_package(package: str, output: Path, emacs: str,
     record = {
         "package": package,
         "module": module_name,
+        "owner_module": module_name,
+        "role": "module",
         "version": version,
         "platform": plat,
         "file": out_filename,
         "path": f"{package}/{version}/{out_filename}",
         "sha256": sha256_file(dest),
         "size": dest.stat().st_size,
+        "built_at": utc_now_iso(),
     }
     meta_dir = output / "records"
     meta_dir.mkdir(parents=True, exist_ok=True)
@@ -408,12 +559,15 @@ def register_module(package: str, plat: str, source: Path, output: Path) -> dict
     record = {
         "package": package,
         "module": module_name,
+        "owner_module": module_name,
+        "role": "module",
         "version": version,
         "platform": plat,
         "file": out_filename,
         "path": f"{package}/{version}/{out_filename}",
         "sha256": sha256_file(dest),
         "size": dest.stat().st_size,
+        "built_at": utc_now_iso(),
     }
     meta_dir = output / "records"
     meta_dir.mkdir(parents=True, exist_ok=True)
@@ -423,7 +577,7 @@ def register_module(package: str, plat: str, source: Path, output: Path) -> dict
 
 
 def register_library(package: str, plat: str, name: str, module: str,
-                     source: Path, output: Path) -> dict:
+                     source: Path, output: Path, note: str | None = None) -> dict:
     """Stage a companion shared library binary under OUTPUT and write its record."""
     if package not in NATIVE_PACKAGES:
         raise ValueError(f"Unknown native package: {package}; choose from {sorted(NATIVE_PACKAGES)}")
@@ -442,23 +596,149 @@ def register_library(package: str, plat: str, name: str, module: str,
     dest.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(source, dest)
     dest.chmod(0o644)
+    lib_meta = (spec.get("libraries") or {}).get(module, {})
+    resolved_note = (note or lib_meta.get("note") or "").strip()
     record = {
         "kind": "library",
+        "role": "library",
         "package": package,
         "module": module,
+        "owner_module": spec["module"],
         "name": name,
+        "runtime_name": name,
         "version": version,
         "platform": plat,
         "file": out_filename,
         "path": f"{package}/{version}/{out_filename}",
         "sha256": sha256_file(dest),
         "size": dest.stat().st_size,
+        "built_at": utc_now_iso(),
     }
+    if resolved_note:
+        record["note"] = resolved_note
     meta_dir = output / "records"
     meta_dir.mkdir(parents=True, exist_ok=True)
     (meta_dir / f"{package}-lib-{module}-{plat}.json").write_text(
         json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return record
+
+
+def _index_artifact_from_record(rec: dict) -> dict:
+    """Build one validated hosted index artifact entry from a build/staging record."""
+    pkg = rec["package"]
+    spec = NATIVE_PACKAGES.get(pkg) or {}
+    is_lib = rec.get("role") == "library" or rec.get("kind") == "library"
+    if not is_lib and spec and rec["module"] != spec.get("module") and rec["module"] in (spec.get("libraries") or {}):
+        is_lib = True
+    role = "library" if is_lib else "module"
+    owner = rec.get("owner_module") or (spec.get("module") if is_lib and spec else rec["module"])
+    entry = {
+        "package": pkg,
+        "module": rec["module"],
+        "owner_module": owner,
+        "role": role,
+        "version": rec["version"],
+        "platform": rec["platform"],
+        "path": rec["path"],
+        "sha256": rec["sha256"],
+        "size": rec["size"],
+    }
+    lib_meta = (spec.get("libraries") or {}).get(rec["module"], {}) if is_lib else {}
+    runtime_name = rec.get("runtime_name") or rec.get("name") or lib_meta.get("runtime_name")
+    if is_lib and runtime_name:
+        entry["runtime_name"] = runtime_name
+    note = rec.get("note") or lib_meta.get("note")
+    if note:
+        entry["note"] = note
+    built_at = rec.get("built_at")
+    if not built_at and spec:
+        if rec["version"] == spec.get("version") and spec.get("released"):
+            built_at = spec["released"]
+        elif rec["version"] in (spec.get("versions") or {}):
+            built_at = spec["versions"][rec["version"]].get("released")
+    if built_at:
+        entry["built_at"] = built_at
+    return entry
+
+
+def build_modules_catalog(artifacts: list[dict], existing_modules: dict | None = None) -> dict:
+    """Build the hosted `modules` catalog covering every owner module in ARTIFACTS."""
+    by_owner: dict[str, list[dict]] = {}
+    for item in artifacts:
+        owner = item.get("owner_module") or item["module"]
+        by_owner.setdefault(owner, []).append(item)
+
+    spec_by_module = {spec["module"]: (pkg, spec) for pkg, spec in NATIVE_PACKAGES.items()}
+    catalog: dict[str, dict] = {}
+    for owner, items in sorted(by_owner.items()):
+        existing = (existing_modules or {}).get(owner) or {}
+        pkg_spec = spec_by_module.get(owner)
+        pkg = pkg_spec[0] if pkg_spec else items[0]["package"]
+        spec = pkg_spec[1] if pkg_spec else {}
+        present_versions = sorted({item["version"] for item in items}, key=version_key, reverse=True)
+        # Prefer declared current version if present in artifacts, else highest numeric version.
+        if spec.get("version") in present_versions:
+            current_ver = spec["version"]
+        elif existing.get("current_version") in present_versions:
+            current_ver = existing["current_version"]
+        else:
+            current_ver = present_versions[0]
+
+        description = spec.get("description") or existing.get("description") or f"Prebuilt native dynamic module for {pkg}."
+        used_by = list(spec.get("used_by") or existing.get("used_by") or [pkg])
+
+        versions_map: dict[str, dict] = {}
+        for ver in present_versions:
+            v_existing = dict((existing.get("versions") or {}).get(ver) or {})
+            v_spec = dict((spec.get("versions") or {}).get(ver) or {})
+            v_entry: dict[str, object] = {**v_existing, **v_spec}
+            v_entry["status"] = "current" if ver == current_ver else "archived"
+            if ver == spec.get("version"):
+                if spec.get("min_package_version"):
+                    v_entry["min_package_version"] = spec["min_package_version"]
+                if spec.get("version_summary"):
+                    v_entry["summary"] = spec["version_summary"]
+                if spec.get("released") and "released" not in v_entry:
+                    v_entry["released"] = spec["released"]
+            if "released" not in v_entry:
+                built_dates = sorted(i["built_at"] for i in items if i["version"] == ver and i.get("built_at"))
+                if built_dates:
+                    v_entry["released"] = built_dates[-1]
+            versions_map[ver] = v_entry
+
+        catalog[owner] = {
+            "package": pkg,
+            "current_version": current_ver,
+            "description": description,
+            "used_by": used_by,
+            "versions": dict(sorted(versions_map.items(), key=lambda kv: version_key(kv[0]), reverse=True)),
+        }
+    return catalog
+
+
+def enrich_index_manifest(manifest: dict) -> dict:
+    """Enrich a hosted `native/manifest.json` with module catalog and artifact metadata.
+
+    Preserves every artifact's exact `path`, `sha256` and `size` while adding
+    data-driven `role`, `owner_module`, `runtime_name`, `note`, `built_at` and
+    the top-level `modules` catalog.
+    """
+    if not isinstance(manifest, dict) or manifest.get("schema") != 1 or not isinstance(manifest.get("artifacts"), list):
+        raise ValueError("Expected a schema 1 hosted native manifest")
+    enriched_artifacts = sorted(
+        [_index_artifact_from_record(item) for item in manifest["artifacts"]],
+        key=lambda item: item["path"],
+    )
+    modules_catalog = build_modules_catalog(enriched_artifacts, manifest.get("modules"))
+    result = {
+        "schema": 1,
+        "modules": modules_catalog,
+        "artifacts": enriched_artifacts,
+    }
+    errs = validate_index_manifest(result, allow_missing=True)
+    if errs:
+        raise ValueError("Enriched native manifest invalid: " + "; ".join(errs))
+    return result
 
 
 def assemble_manifests(input_dir: Path, *, write_packages: bool = False,
@@ -556,23 +836,14 @@ def assemble_manifests(input_dir: Path, *, write_packages: bool = False,
         if write_packages:
             manifest_path.write_text(json.dumps(doc, indent=2) + "\n", encoding="utf-8")
 
+    index_artifacts = sorted(
+        [_index_artifact_from_record(r) for r in records],
+        key=lambda item: item["path"],
+    )
     index_doc = {
         "schema": 1,
-        "artifacts": sorted(
-            [
-                {
-                    "package": r["package"],
-                    "module": r["module"],
-                    "version": r["version"],
-                    "platform": r["platform"],
-                    "path": r["path"],
-                    "sha256": r["sha256"],
-                    "size": r["size"],
-                }
-                for r in records
-            ],
-            key=lambda item: item["path"],
-        ),
+        "modules": build_modules_catalog(index_artifacts),
+        "artifacts": index_artifacts,
     }
 
     if stage is not None:
@@ -639,6 +910,7 @@ def main() -> int:
     p_library.add_argument("--platform", required=True, choices=VALID_PLATFORMS)
     p_library.add_argument("--name", required=True, help="Runtime filename in cache directory (e.g. libmpv-2.dll)")
     p_library.add_argument("--module", required=True, help="Artifact identifier prefix (e.g. libmpv-2)")
+    p_library.add_argument("--note", help="Optional human-readable companion library description")
     p_library.add_argument("--source", type=Path, required=True)
     p_library.add_argument("--output", type=Path, required=True)
 
@@ -652,6 +924,10 @@ def main() -> int:
                             help="Write a verified deployable native/ directory here")
     p_manifest.add_argument("--base-url", default="https://etaf.top/native")
     p_manifest.add_argument("--github-org", default="emacs-taf")
+
+    p_enrich = sub.add_parser("enrich", help="Enrich a hosted native/manifest.json with catalog and artifact metadata")
+    p_enrich.add_argument("--input", type=Path, required=True, help="Input hosted native/manifest.json")
+    p_enrich.add_argument("--output", type=Path, required=True, help="Output path for enriched manifest.json")
 
     p_verify = sub.add_parser("verify", help="Validate package or staged native manifests")
     p_verify.add_argument("--manifest", type=Path, help="Single package native/manifest.json to check")
@@ -680,7 +956,8 @@ def main() -> int:
         return 0
     if args.command == "library":
         record = register_library(args.package, args.platform, args.name,
-                                  args.module, args.source.resolve(), args.output.resolve())
+                                  args.module, args.source.resolve(), args.output.resolve(),
+                                  note=args.note)
         print(json.dumps(record, indent=2))
         return 0
     if args.command == "manifest":
@@ -694,6 +971,14 @@ def main() -> int:
         )
         print(json.dumps({"packages": sorted(result["manifests"]),
                           "artifacts": len(result["index"]["artifacts"])}, indent=2))
+        return 0
+    if args.command == "enrich":
+        source = json.loads(args.input.resolve().read_text(encoding="utf-8"))
+        enriched = enrich_index_manifest(source)
+        args.output.resolve().write_text(
+            json.dumps(enriched, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        print(json.dumps({"modules": len(enriched.get("modules", {})),
+                          "artifacts": len(enriched["artifacts"])}, indent=2))
         return 0
     if args.command == "verify":
         errs: list[str] = []

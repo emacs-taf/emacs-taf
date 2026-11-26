@@ -143,12 +143,26 @@ def already_served(directory, served):
     return reused
 
 
+def load_native_release():
+    """Load the shared workspace native-release helper for manifest enrichment."""
+    import importlib.util
+    tool = TOOLS / "native-release.py"
+    if not tool.is_file():
+        return None
+    spec = importlib.util.spec_from_file_location("native_release", tool)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def publish(args):
     package_input = args.packages_only or args.packages
     pages_input = args.pages_only
     native_input = args.native_only
+    native_pages_only = args.native_pages_only
+    native_mode = bool(native_input or native_pages_only)
     archive_input = package_input or pages_input
-    mode = ("native" if native_input else
+    mode = ("native" if native_mode else
             "packages" if pages_input or args.packages_only else
             "combined" if args.packages else "site")
     keep = int(os.environ.get("ETAF_TOP_KEEP", "5"))
@@ -156,7 +170,24 @@ def publish(args):
         raise ValueError("ETAF_TOP_KEEP must retain at least two releases")
     with tempfile.TemporaryDirectory(prefix="etaf-top-") as temporary:
         work = Path(temporary)
-        if native_input:
+        if native_pages_only:
+            remote_manifest = published_native_manifest()
+            if not isinstance(remote_manifest, dict) or not remote_manifest.get("artifacts"):
+                raise ValueError("Could not read currently published https://etaf.top/native/manifest.json")
+            native_release = load_native_release()
+            if native_release is None:
+                raise ValueError("scripts/native-release.py is required for --native-pages-only")
+            enriched = native_release.enrich_index_manifest(remote_manifest)
+            errs = native_release.validate_index_manifest(enriched, allow_missing=True)
+            if errs:
+                raise ValueError("Enriched native manifest invalid: " + "; ".join(errs))
+            (work / "native").mkdir()
+            (work / "native" / "manifest.json").write_text(
+                json.dumps(enriched, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            native_report = archive_pages.native_pages(work / "native", manifest=enriched)
+            print(f"Native index page for {native_report['modules']} module(s), "
+                  f"{native_report['artifacts']} artifact(s) (metadata + page only)")
+        elif native_input:
             subprocess.run([sys.executable, str(TOOLS / "native-release.py"),
                             "verify", "--stage", str(native_input.resolve())],
                            check=True, timeout=120)
@@ -164,14 +195,27 @@ def publish(args):
             local_manifest = json.loads((work / "native" / "manifest.json").read_text(encoding="utf-8"))
             remote_manifest = published_native_manifest()
             merged_artifacts = {}
+            merged_modules = {}
             if isinstance(remote_manifest, dict):
+                merged_modules.update(remote_manifest.get("modules") or {})
                 for item in remote_manifest.get("artifacts", ()):
-                    merged_artifacts[item["path"]] = item
+                    merged_artifacts[item["path"]] = dict(item)
+            merged_modules.update(local_manifest.get("modules") or {})
             for item in local_manifest.get("artifacts", ()):
-                merged_artifacts[item["path"]] = item
+                prev = merged_artifacts.get(item["path"], {})
+                merged_artifacts[item["path"]] = {**prev, **item}
             page_manifest = {"schema": 1, "artifacts": list(merged_artifacts.values())}
+            if merged_modules:
+                page_manifest["modules"] = merged_modules
+            native_release = load_native_release()
+            if native_release is not None:
+                page_manifest = native_release.enrich_index_manifest(page_manifest)
+                # Keep uploaded staged manifest enriched with module catalog metadata too.
+                local_enriched = native_release.enrich_index_manifest(local_manifest)
+                (work / "native" / "manifest.json").write_text(
+                    json.dumps(local_enriched, indent=2, sort_keys=True) + "\n", encoding="utf-8")
             native_report = archive_pages.native_pages(work / "native", manifest=page_manifest)
-            print(f"Native index page for {native_report['packages']} package(s), "
+            print(f"Native index page for {native_report['modules']} module(s), "
                   f"{native_report['artifacts']} artifact(s)")
         elif package_input:
             # This command rejects partial/stale evidence and developer archives,
@@ -181,7 +225,7 @@ def publish(args):
                             "--output", str(work / "packages")], check=True, timeout=120)
         elif pages_input:
             pages_source(work / "packages", pages_input.resolve())
-        if not args.no_build and not (args.packages_only or pages_input or native_input):
+        if not args.no_build and not (args.packages_only or pages_input or native_mode):
             subprocess.run(["npm", "run", "build"], cwd=SITE, check=True, timeout=600)
         if args.build_only:
             print(f"Built {SITE / 'dist'}")
@@ -211,7 +255,7 @@ def publish(args):
                     total = sum(1 for item in (work / "packages").iterdir() if item.is_file())
                     print(f"Sending {total - len(reused)} of {total} file(s); "
                           f"{len(reused)} already served")
-            if native_input:
+            if native_mode:
                 served = published_native_digests()
                 reused = already_served(work / "native", served)
                 for path in sorted((work / "native").rglob("*")):
@@ -256,6 +300,14 @@ def publish(args):
                 print(checked.stdout.strip())
                 if checked.returncode:
                     raise ValueError(f"Published pages do not match the manifest:\n{checked.stdout}")
+            if native_mode:
+                checked = subprocess.run(
+                    [sys.executable, str(SITE / "scripts/check-archive.py"),
+                     "--native", "https://etaf.top/native/"],
+                    capture_output=True, text=True, timeout=120)
+                print(checked.stdout.strip())
+                if checked.returncode:
+                    raise ValueError(f"Published native page does not match manifest:\n{checked.stdout}")
             print(f"Published https://etaf.top ({mode}, release {stamp}); current read back")
         finally:
             try:
@@ -276,8 +328,11 @@ def main():
                           help="Regenerate archive pages from an already published archive; package bytes stay unchanged")
     packages.add_argument("--native-only", type=Path,
                           help="Publish verified prebuilt native modules under native/ without changing site or packages")
+    packages.add_argument("--native-pages-only", action="store_true",
+                          help="Enrich published native/manifest.json metadata and regenerate native/index.html without re-uploading binaries")
     args = parser.parse_args()
-    if args.build_only and (args.packages or args.packages_only or args.pages_only or args.native_only):
+    if args.build_only and (args.packages or args.packages_only or args.pages_only
+                            or args.native_only or args.native_pages_only):
         parser.error("--build-only cannot publish packages, archive pages or native artifacts")
     publish(args)
 

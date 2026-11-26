@@ -258,23 +258,31 @@ class DeploymentTests(unittest.TestCase):
         self.assertIn("Site-only", result.stderr)
         self.assertEqual((self.base / "current/index.html").read_text(), "stable")
 
-    def native_payload(self, artifacts, index_html=None):
-        """Build a native-only payload from {relpath: (pkg, mod, ver, plat, bytes)}."""
+    def native_payload(self, artifacts, index_html=None, *, modules=None, metadata_only=False):
+        """Build a native-only payload from {relpath: (pkg, mod, ver, plat, bytes[, extra_dict])}."""
         import hashlib
         self.sequence += 1
         output = self.work / f"native-payload-{self.sequence}.tgz"
         records = []
         with tarfile.open(output, "w:gz") as archive:
-            for rel, (pkg, mod, ver, plat, data) in sorted(artifacts.items()):
-                records.append({
+            for rel, entry in sorted(artifacts.items()):
+                pkg, mod, ver, plat, data = entry[:5]
+                extra = entry[5] if len(entry) > 5 else {}
+                rec = {
                     "package": pkg, "module": mod, "version": ver,
                     "platform": plat, "path": rel,
                     "sha256": hashlib.sha256(data).hexdigest(), "size": len(data),
-                })
-                member = tarfile.TarInfo("native/" + rel)
-                member.size = len(data)
-                archive.addfile(member, io.BytesIO(data))
-            manifest_bytes = (json.dumps({"schema": 1, "artifacts": records}, indent=2) + "\n").encode()
+                    **extra,
+                }
+                records.append(rec)
+                if not metadata_only:
+                    member = tarfile.TarInfo("native/" + rel)
+                    member.size = len(data)
+                    archive.addfile(member, io.BytesIO(data))
+            manifest_doc = {"schema": 1, "artifacts": records}
+            if modules is not None:
+                manifest_doc["modules"] = modules
+            manifest_bytes = (json.dumps(manifest_doc, indent=2) + "\n").encode()
             member = tarfile.TarInfo("native/manifest.json")
             member.size = len(manifest_bytes)
             archive.addfile(member, io.BytesIO(manifest_bytes))
@@ -318,6 +326,75 @@ class DeploymentTests(unittest.TestCase):
             arm_rel: ("etaf-md", "etaf-md-typeset-native", "1", "darwin-arm64", b"tampered"),
         }), "native", success=False)
         self.assertIn("Immutable native artifact differs", result.stderr)
+        self.assertEqual((self.base / "current").readlink(), previous)
+
+    def test_native_metadata_enrichment_and_version_archiving_preserve_binaries(self):
+        self.deploy(self.payload(page="site one", packages=self.package()), "combined")
+        v1_rel = "etaf/1/etaf-video-mpv-v1-darwin-arm64.dylib"
+        v2_rel = "etaf/2/etaf-video-mpv-v2-windows-x86_64.dll"
+        lib_rel = "etaf/2/libmpv-2-v2-windows-x86_64.dll"
+        self.deploy(self.native_payload({
+            v1_rel: ("etaf", "etaf-video-mpv", "1", "darwin-arm64", b"mpv-v1"),
+            v2_rel: ("etaf", "etaf-video-mpv", "2", "windows-x86_64", b"mpv-v2"),
+            lib_rel: ("etaf", "libmpv-2", "2", "windows-x86_64", b"libmpv-bytes"),
+        }, index_html="<h1>Legacy</h1>"), "native")
+
+        # Metadata-only + page-only deploy enriches manifest without re-sending binary bytes.
+        modules_meta = {
+            "etaf-video-mpv": {
+                "package": "etaf",
+                "current_version": "2",
+                "description": "libmpv GPU module",
+                "used_by": ["etaf-video-player"],
+                "versions": {
+                    "2": {"status": "current", "min_package_version": "0.3.14", "released": "2026-11-26T17:16:50Z"},
+                    "1": {"status": "archived", "max_package_version": "0.3.13", "released": "2026-11-25T13:42:04Z"},
+                },
+            }
+        }
+        self.deploy(self.native_payload({
+            v1_rel: ("etaf", "etaf-video-mpv", "1", "darwin-arm64", b"mpv-v1",
+                     {"role": "module", "owner_module": "etaf-video-mpv", "built_at": "2026-11-25T13:42:04Z"}),
+            v2_rel: ("etaf", "etaf-video-mpv", "2", "windows-x86_64", b"mpv-v2",
+                     {"role": "module", "owner_module": "etaf-video-mpv", "built_at": "2026-11-26T17:16:50Z"}),
+            lib_rel: ("etaf", "libmpv-2", "2", "windows-x86_64", b"libmpv-bytes",
+                      {"role": "library", "owner_module": "etaf-video-mpv", "runtime_name": "libmpv-2.dll",
+                       "note": "Windows runtime library", "built_at": "2026-11-26T17:16:50Z"}),
+        }, index_html="<h1>Enriched</h1>", modules=modules_meta, metadata_only=True), "native")
+
+        served = json.loads((self.base / "current/native/manifest.json").read_text())
+        self.assertEqual((self.base / "current/native/index.html").read_text(), "<h1>Enriched</h1>")
+        self.assertEqual((self.base / "current/native" / lib_rel).read_bytes(), b"libmpv-bytes")
+        self.assertEqual(served["modules"]["etaf-video-mpv"]["versions"]["1"]["status"], "archived")
+        by_path = {item["path"]: item for item in served["artifacts"]}
+        self.assertEqual(by_path[lib_rel]["role"], "library")
+        self.assertEqual(by_path[lib_rel]["owner_module"], "etaf-video-mpv")
+
+        # Deploying v3 automatically flips v2 from current to archived while keeping v1 history.
+        v3_rel = "etaf/3/etaf-video-mpv-v3-darwin-arm64.dylib"
+        self.deploy(self.native_payload({
+            v3_rel: ("etaf", "etaf-video-mpv", "3", "darwin-arm64", b"mpv-v3",
+                     {"role": "module", "owner_module": "etaf-video-mpv", "built_at": "2026-12-01T00:00:00Z"}),
+        }, modules={
+            "etaf-video-mpv": {
+                "package": "etaf",
+                "current_version": "3",
+                "description": "libmpv GPU module v3",
+                "versions": {"3": {"status": "current", "min_package_version": "0.4.0"}},
+            }
+        }), "native")
+        served_v3 = json.loads((self.base / "current/native/manifest.json").read_text())
+        vers = served_v3["modules"]["etaf-video-mpv"]["versions"]
+        self.assertEqual(vers["3"]["status"], "current")
+        self.assertEqual(vers["2"]["status"], "archived")
+        self.assertEqual(vers["1"]["status"], "archived")
+
+        # Unknown metadata field is rejected and current release stays intact.
+        previous = (self.base / "current").readlink()
+        bad = self.deploy(self.native_payload({
+            v3_rel: ("etaf", "etaf-video-mpv", "3", "darwin-arm64", b"mpv-v3", {"unknown": "bad"}),
+        }, metadata_only=True), "native", success=False)
+        self.assertIn("Invalid native artifact record", bad.stderr)
         self.assertEqual((self.base / "current").readlink(), previous)
 
 

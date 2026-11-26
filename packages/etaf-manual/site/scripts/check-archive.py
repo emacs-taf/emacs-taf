@@ -95,11 +95,66 @@ def check(base, quiet=False):
     return not problems
 
 
+def check_native(base):
+    """Verify the served /native/ page matches /native/manifest.json."""
+    manifest = json.loads(fetch(base.rstrip("/") + "/manifest.json"))
+    artifacts = manifest.get("artifacts", [])
+    page = fetch(base.rstrip("/") + "/")
+    problems = []
+    # Every artifact path must appear as a downloadable href in the rendered page.
+    hrefs = re.findall(r'data-artifact-path="([^"]+)"', page)
+    expected_paths = sorted(item["path"] for item in artifacts)
+    if sorted(hrefs) != expected_paths:
+        missing = sorted(set(expected_paths) - set(hrefs))
+        extra = sorted(set(hrefs) - set(expected_paths))
+        duplicates = sorted({p for p in hrefs if hrefs.count(p) > 1})
+        if missing:
+            problems.append(f"missing from page: {missing}")
+        if extra:
+            problems.append(f"unexpected on page: {extra}")
+        if duplicates:
+            problems.append(f"listed twice: {duplicates}")
+    # Archived artifacts must live inside archived <details>, current ones outside.
+    modules_meta = manifest.get("modules", {})
+    archived_block_paths = set()
+    for block in re.findall(r'<details class="archived-drawer".*?</details>', page, re.S):
+        archived_block_paths.update(re.findall(r'data-artifact-path="([^"]+)"', block))
+    # Determine current version per owner module.
+    def ver_key(value):
+        return tuple(int(part) for part in str(value).split("."))
+
+    owner_versions = {}
+    for item in artifacts:
+        owner = item.get("owner_module") or item["module"]
+        owner_versions.setdefault(owner, set()).add(item["version"])
+    current_ver = {}
+    for owner, vers in owner_versions.items():
+        declared = (modules_meta.get(owner) or {}).get("current_version")
+        current_ver[owner] = declared if declared in vers else max(vers, key=ver_key)
+    for item in artifacts:
+        owner = item.get("owner_module") or item["module"]
+        is_current = item["version"] == current_ver[owner]
+        in_archived = item["path"] in archived_block_paths
+        if is_current and in_archived:
+            problems.append(f"current artifact placed in archived drawer: {item['path']}")
+        elif not is_current and not in_archived:
+            problems.append(f"archived artifact not collapsed in archived drawer: {item['path']}")
+    print(f"native={base}\nartifacts={len(artifacts)}\nmodules={len(owner_versions)}")
+    for problem in problems:
+        print(problem)
+    print("ok=yes" if not problems else "ok=no")
+    return not problems
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--archive", default="https://etaf.top/packages/")
+    parser.add_argument("--native", nargs="?", const="https://etaf.top/native/",
+                        help="Check a hosted native binary index (defaults to https://etaf.top/native/)")
     arguments = parser.parse_args()
     try:
+        if arguments.native:
+            return 0 if check_native(arguments.native) else 1
         return 0 if check(arguments.archive) else 1
     except (URLError, OSError, ValueError, KeyError) as error:
         print(f"error=check\nhint={error}")

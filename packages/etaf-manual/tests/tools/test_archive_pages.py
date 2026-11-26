@@ -241,5 +241,177 @@ class ArchivePageTests(unittest.TestCase):
         self.assertIn("Updated", index)
 
 
+class NativePageTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.native_dir = Path(self.temp.name) / "native"
+        self.native_dir.mkdir()
+
+    def write_native_manifest(self, doc):
+        (self.native_dir / "manifest.json").write_text(
+            json.dumps(doc, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    def run_write_native(self):
+        result = subprocess.run(
+            [sys.executable, str(PAGES_TOOL), "write-native", "--directory", str(self.native_dir)],
+            capture_output=True, text=True, timeout=60)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        return json.loads(result.stdout)
+
+    def test_native_page_leads_with_binary_names_separates_archived_versions_and_runtime_libs(self):
+        manifest = {
+            "schema": 1,
+            "modules": {
+                "etaf-video-mpv": {
+                    "package": "etaf",
+                    "current_version": "2",
+                    "description": "Cross-platform libmpv GPU playback module.",
+                    "used_by": ["etaf-video-player", "etaf-bili"],
+                    "versions": {
+                        "2": {
+                            "status": "current",
+                            "min_package_version": "0.3.14",
+                            "summary": "Adds Windows and Linux GPU layers.",
+                            "released": "2026-11-26T17:16:50Z",
+                        },
+                        "1": {
+                            "status": "archived",
+                            "max_package_version": "0.3.13",
+                            "summary": "Initial bridge retained for older etaf.",
+                            "released": "2026-11-25T13:42:04Z",
+                        },
+                    },
+                },
+                "etaf-md-typeset-native": {
+                    "package": "etaf-md",
+                    "current_version": "1",
+                    "description": "QuickJS Mermaid and MathJax renderer.",
+                    "used_by": ["etaf-md", "etaf-org"],
+                    "versions": {
+                        "1": {
+                            "status": "current",
+                            "min_package_version": "0.3.0",
+                            "released": "2026-11-25T13:42:04Z",
+                        },
+                    },
+                },
+            },
+            "artifacts": [
+                {
+                    "package": "etaf", "module": "etaf-video-mpv", "owner_module": "etaf-video-mpv",
+                    "role": "module", "version": "1", "platform": "darwin-arm64",
+                    "path": "etaf/1/etaf-video-mpv-v1-darwin-arm64.dylib",
+                    "sha256": "1" * 64, "size": 34808, "built_at": "2026-11-25T13:42:04Z",
+                },
+                {
+                    "package": "etaf", "module": "etaf-video-mpv", "owner_module": "etaf-video-mpv",
+                    "role": "module", "version": "2", "platform": "darwin-arm64",
+                    "path": "etaf/2/etaf-video-mpv-v2-darwin-arm64.dylib",
+                    "sha256": "2" * 64, "size": 93960, "built_at": "2026-11-26T17:16:50Z",
+                },
+                {
+                    "package": "etaf", "module": "etaf-video-mpv", "owner_module": "etaf-video-mpv",
+                    "role": "module", "version": "2", "platform": "windows-x86_64",
+                    "path": "etaf/2/etaf-video-mpv-v2-windows-x86_64.dll",
+                    "sha256": "3" * 64, "size": 148712, "built_at": "2026-11-26T17:16:50Z",
+                },
+                {
+                    "package": "etaf", "module": "libmpv-2", "owner_module": "etaf-video-mpv",
+                    "role": "library", "runtime_name": "libmpv-2.dll",
+                    "note": "Bundled Windows runtime library.",
+                    "version": "2", "platform": "windows-x86_64",
+                    "path": "etaf/2/libmpv-2-v2-windows-x86_64.dll",
+                    "sha256": "4" * 64, "size": 121789952, "built_at": "2026-11-26T17:16:50Z",
+                },
+                {
+                    "package": "etaf-md", "module": "etaf-md-typeset-native", "owner_module": "etaf-md-typeset-native",
+                    "role": "module", "version": "1", "platform": "darwin-arm64",
+                    "path": "etaf-md/1/etaf-md-typeset-native-v1-darwin-arm64.dylib",
+                    "sha256": "5" * 64, "size": 3557936, "built_at": "2026-11-25T13:42:04Z",
+                },
+            ],
+        }
+        self.write_native_manifest(manifest)
+        report = self.run_write_native()
+        self.assertEqual(report["modules"], 2)
+        self.assertEqual(report["artifacts"], 5)
+        self.assertEqual(report["current"], 4)
+        self.assertEqual(report["archived"], 1)
+
+        html_text = (self.native_dir / "index.html").read_text(encoding="utf-8")
+        # Primary row labels are binary filenames, never bare platform triples.
+        self.assertIn('>etaf-video-mpv-v2-darwin-arm64.dylib</a>', html_text)
+        self.assertNotIn('<strong>darwin-arm64</strong>', html_text)
+        # Platform is rendered as a structured category button and support matrix column.
+        self.assertIn('macOS · arm64', html_text)
+        self.assertIn('Windows · x86_64', html_text)
+        self.assertIn('+lib', html_text)
+        # Companion runtime library is clearly badged and shows its cached runtime name.
+        self.assertIn('Runtime lib', html_text)
+        self.assertIn('cached as <code>libmpv-2.dll</code>', html_text)
+        self.assertIn('Bundled Windows runtime library.', html_text)
+        # v2 is outside the archived drawer; v1 is collapsed inside <details class="archived-drawer">.
+        drawer_start = html_text.index('<details class="archived-drawer"')
+        drawer_end = html_text.index('</details>', drawer_start)
+        drawer = html_text[drawer_start:drawer_end]
+        outside = html_text[:drawer_start] + html_text[drawer_end:]
+        self.assertIn('etaf/1/etaf-video-mpv-v1-darwin-arm64.dylib', drawer)
+        self.assertNotIn('etaf/2/etaf-video-mpv-v2-darwin-arm64.dylib', drawer)
+        self.assertIn('etaf/2/etaf-video-mpv-v2-darwin-arm64.dylib', outside)
+        # Copy SHA-256 and visible Download controls are present (no broken .tar-link class).
+        self.assertIn(f'data-copy-text="{"2" * 64}"', html_text)
+        self.assertIn('class="dl-btn"', html_text)
+        self.assertNotIn('tar-link', html_text)
+        # View switch supports By Module and By Platform.
+        self.assertIn('data-view-mode="module"', html_text)
+        self.assertIn('data-view-mode="platform"', html_text)
+
+        # Verify check-archive.py --native passes against a real local HTTP server.
+        import functools
+        from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+        import threading
+
+        class QuietHandler(SimpleHTTPRequestHandler):
+            def log_message(self, *_args):
+                pass
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), functools.partial(
+            QuietHandler, directory=str(self.native_dir)))
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            checked = subprocess.run(
+                [sys.executable, str(ROOT / "site/scripts/check-archive.py"),
+                 "--native", f"http://127.0.0.1:{server.server_port}/"],
+                capture_output=True, text=True, timeout=30)
+            self.assertEqual(checked.returncode, 0, checked.stdout + checked.stderr)
+            self.assertIn("ok=yes", checked.stdout)
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=5)
+
+    def test_native_page_falls_back_cleanly_on_legacy_manifest_without_modules_catalog(self):
+        legacy = {
+            "schema": 1,
+            "artifacts": [
+                {
+                    "package": "ekp", "module": "ekp", "version": "1.6",
+                    "platform": "darwin-arm64", "path": "ekp/1.6/ekp-v1.6-darwin-arm64.dylib",
+                    "sha256": "a" * 64, "size": 52184,
+                },
+            ],
+        }
+        self.write_native_manifest(legacy)
+        report = self.run_write_native()
+        self.assertEqual(report["modules"], 1)
+        self.assertEqual(report["current"], 1)
+        self.assertEqual(report["archived"], 0)
+        html_text = (self.native_dir / "index.html").read_text(encoding="utf-8")
+        self.assertIn('>ekp-v1.6-darwin-arm64.dylib</a>', html_text)
+        self.assertNotIn('<details class="archived-drawer"', html_text)
+
+
 if __name__ == "__main__":
     unittest.main()
