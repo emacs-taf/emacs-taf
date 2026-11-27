@@ -6,7 +6,9 @@
 
 ## 开发
 
-所有包在同一份检出里，所以一次改动可以横跨框架层和用它的应用。发布时按包投影出去，每个仓库保持普通单包仓库的形状，仍然通过 package.el 安装。
+本仓库（`https://github.com/emacs-taf/emacs-taf`）是 ETAF 生态的公开单仓与统一的开发、提 PR 入口。所有已登记包都在 `packages/` 目录下，一次改动和单个 PR 就能同时横跨框架层和消费它的应用。
+
+`https://github.com/emacs-taf/<包名>` 下的各个独立仓库是由本单仓按目录投影生成的**只读镜像**，用来保持普通单包仓库形态（便于 `straight.el`、`elpaca` 安装与单包浏览）。外部贡献者（特别是使用 `jj` / `jjosh` 的开发者）请直接克隆本单仓开发并提 PR，不要把多个投影子仓拉进同一个 Jujutsu 仓库（跨包提交在投影后保留相同 `change-id`，同时拉取会触发 `divergent` 冲突）。
 
 ```sh
 make check                # 按依赖顺序验证整份检出，发布前用
@@ -16,7 +18,7 @@ make order                # 查看可并行的依赖分层
 make -C packages/etaf-ui check
 ```
 
-每个已发布仓库都带着 `pre-mono` 标签，记录统一检出之前的历史；早于那次变更的克隆需要重新获取，不能直接 pull。
+本单仓与每个已发布投影仓库都带着 `pre-mono` 标签，记录统一单仓之前的历史；早于那次变更的克隆需要重新获取，不能直接 pull。
 
 ## 在已有 Emacs 中安装
 
@@ -122,9 +124,9 @@ make -C packages/etaf-ui check
 样式与交互语义、ETAF 组件与 API 易用性、异步资源与错误恢复、当前差距、迁移顺序和
 公共行为验收条件，并明确区分开发目标与当前实现。
 
-`workspace.json` 登记的所有包都直接位于本 `jjosh` 单仓检出的 `packages/` 目录下，
+`workspace.json` 登记的所有包都直接位于本单仓检出的 `packages/` 目录下，
 不需要单独克隆同级仓库，也不要在 `packages/` 内嵌套 `.git` 或 `.jj`。
-规范工具需要 Python 3.10+ 和 `jjosh`；各包的验证还需要合适版本的 Emacs，
+外部贡献者只需普通 Git（`git clone https://github.com/emacs-taf/emacs-taf.git`）和 Python 3.10+ 即可本地校验并提 PR；维护者的变更图操作与按包投影发布需要 `jjosh`。各包的验证还需要合适版本的 Emacs，
 可通过 `make check EMACS=/path/to/emacs` 指定可执行文件。
 运行 `make setup-hooks` 可在 Git 检出中配置钩子，或在 `jjosh` 检出中打印对应的检查指引。
 
@@ -185,7 +187,7 @@ README 只负责入门和导航。完整用法及跨模块接口契约放入 `do
 
 将并发开发期与串行交付期拆开：日常开发多个包时直接在主工作副本 `default@` 修改，让本地 Emacs 随时实测最新代码，单个任务只跑目标包的 `make -C packages/<包> check`（改动共享底包时加跑 `make check-affected JOBS=4`）。需要提交单个包或整批收口时，串行执行一次 `make check-affected JOBS=4` 与 `make structure-check`，用 `python3 scripts/check-commit-message.py <文件>` 校验 [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) 消息（标题最多 72 字符且包含 `Validation:` 行），并用 `jjosh`（不要混用普通 `jj`）按路径原地切分提交，其他包的未完成改动继续留在 `@` 中互不干扰。
 
-推送与归档发布是显式的批量收口动作，不必每个小改动单独执行。整批提交后向仓库级私有 `aliyun` 远端推一次根 `main`，构建归档前运行 `jjosh git export`，源码同步时用 `python3 scripts/publish-packages.py --package <包名>...` 只投影本批改动过的包（若立即发归档则交给归档发布一次性完成）。每当 `main` 前进后，务必把 `default@` 对齐回 `main`（空则 `jjosh new main`，有未完成 WIP 则 `jjosh rebase -s @ -d main`）。不强制覆盖历史，不隐式推送其他分支或标签。
+推送与归档发布是显式的批量收口动作，不必每个小改动单独执行。整批提交后向公开单仓 `origin`（`github.com/emacs-taf/emacs-taf`）与私有备份 `aliyun` 远端推一次根 `main`，构建归档前运行 `jjosh git export`，源码同步时用 `python3 scripts/publish-packages.py --package <包名>...` 只投影本批改动过的包到各自只读子仓（若立即发归档则交给归档发布一次性完成）。每当 `main` 前进后，务必把 `default@` 对齐回 `main`（空则 `jjosh new main`，有未完成 WIP 则 `jjosh rebase -s @ -d main`）。不强制覆盖历史，不隐式推送其他分支或标签。
 
 ## 持续约束
 

@@ -224,6 +224,7 @@ python3 scripts/check-commit-message.py /tmp/message.txt
 make structure-check
 python3 scripts/publish-packages.py --dry-run  # then without --dry-run
 jjosh bookmark set main -r @- && jjosh git push --remote aliyun --bookmark main
+jjosh git push --remote origin --bookmark main
 ```
 
 - The message is one Conventional Commit with a concrete scope, a body that
@@ -234,10 +235,11 @@ jjosh bookmark set main -r @- && jjosh git push --remote aliyun --bookmark main
   commit and pushes it to the package's own `aliyun`, `laycat` and `origin`
   remotes, one package after another. `--package NAME` and `--remote NAME`
   narrow a run; an unchanged package costs one request.
-- The checkout itself is backed up by the repository-wide `aliyun` remote
-  (`emacs-taf/etaf-mono` on forgejo, private). It is the only remote holding
-  the installer source, the shared tooling, the workspace contracts and the
-  cross-package history, so push its `main` after every delivery.
+- The checkout itself publishes to two repository-wide remotes holding the
+  installer source, shared tooling, workspace contracts and cross-package
+  history: the public canonical monorepo `origin` (`github.com/emacs-taf/emacs-taf`,
+  where external PRs land) and the private backup `aliyun` (`emacs-taf/etaf-mono`
+  on forgejo). Push `main` after every delivery.
 - `make check` covers the whole checkout and belongs before a release;
   `make check-affected` is the everyday gate.
 

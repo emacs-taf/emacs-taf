@@ -10,10 +10,18 @@ version, public interfaces, releases and behavior checks.
 
 ## Development
 
-Every package lives in one Jujutsu checkout under `packages/`, so a change can
-span a provider and the applications that use it. Publishing projects one
-package out of that checkout: each repository keeps its ordinary single-package
-history and installs through package.el as before.
+This repository (`https://github.com/emacs-taf/emacs-taf`) is the public monorepo
+and canonical entry point for development and pull requests across the ETAF
+ecosystem. Every registered package lives under `packages/`, so a single change
+and PR can span a provider and the applications that consume it.
+
+The individual repositories under `https://github.com/emacs-taf/<package>` are
+**read-only projections** published from this monorepo so each package keeps an
+ordinary single-repository history for package managers (`straight.el`, `elpaca`)
+and single-package browsing. Contributors—especially `jj` / `jjosh` users—should
+clone this monorepo directly rather than pulling multiple projected package
+repositories into one Jujutsu checkout (which share `change-id`s across
+projections and produce divergent commits).
 
 ```sh
 make check                # the whole checkout in dependency order, before a release
@@ -23,9 +31,9 @@ make order                # show parallelizable dependency layers
 make -C packages/etaf-ui check
 ```
 
-The published repositories each carry a `pre-mono` tag naming the history they
-had before the checkout was unified; a clone older than that has to be replaced
-rather than pulled.
+This repository and the projected package repositories each carry a `pre-mono`
+tag naming the history they had before the checkout was unified; a clone older
+than that has to be replaced rather than pulled.
 
 ## Install in an existing Emacs
 
@@ -146,11 +154,11 @@ These repositories build on the framework but are not part of this checkout. The
 ## Setup
 
 All packages listed in `workspace.json` live under `packages/` in this single
-`jjosh` checkout; do not clone separate sibling repositories or nest `.git`/`.jj`
+monorepo checkout; do not clone separate sibling repositories or nest `.git`/`.jj`
 directories inside `packages/`. Package READMEs specify optional runtime
 requirements; native builds are explicit package targets.
 
-Python 3.10+ and `jjosh` are required for policy and change-graph tooling; package
+External contributors can clone and open pull requests with ordinary Git (`git clone https://github.com/emacs-taf/emacs-taf.git`) and Python 3.10+. Maintainers use `jjosh` for change-graph operations and per-package projection publishing. Package
 checks also require an appropriate Emacs executable (`make check EMACS=/path/to/emacs`).
 Run `make setup-hooks` to configure hooks in a Git checkout or print the equivalent
 manual gates for a `jjosh` checkout.
@@ -227,7 +235,7 @@ and [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), not a universal fi
 
 Separate concurrent development from serialized delivery so multiple packages can evolve in `default@` while local Emacs tests the latest code directly. During development, validate only the edited package (`make -C packages/<pkg> check`, plus `make check-affected JOBS=4` when editing a shared provider). When committing a finished package or batch, run one `make check-affected JOBS=4` + `make structure-check` pass, verify each [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) message (72-character title limit plus a `Validation:` line) with `python3 scripts/check-commit-message.py <file>`, and seal path-scoped commits in place from `@` with `jjosh` (never mix plain `jj` on a `jjosh` checkout) so unfinished work in other packages stays undisturbed in `@`.
 
-Push and release are explicit batch steps rather than per-task actions. Push the checkout root (`main`) once to its private `aliyun` remote after a batch of sealed commits, run `jjosh git export` before building archives, and project only changed packages to their independent remotes (`origin` at `github.com/emacs-taf` plus maintainer mirrors) via `python3 scripts/publish-packages.py --package <name>...` (or let a single batch archive release publish all drifted packages together). Keep `default@` aligned to `main` (`jjosh new main` or `jjosh rebase -s @ -d main`) whenever `main` advances. Do not force-push or implicitly publish other branches or tags.
+Push and release are explicit batch steps rather than per-task actions. Push the checkout root (`main`) once to the public `origin` remote (`github.com/emacs-taf/emacs-taf`) and the private `aliyun` backup mirror after a batch of sealed commits, run `jjosh git export` before building archives, and project only changed packages to their read-only per-package remotes (`origin` at `github.com/emacs-taf` plus maintainer mirrors) via `python3 scripts/publish-packages.py --package <name>...` (or let a single batch archive release publish all drifted packages together). Keep `default@` aligned to `main` (`jjosh new main` or `jjosh rebase -s @ -d main`) whenever `main` advances. Do not force-push or implicitly publish other branches or tags.
 
 ## Enforcement
 

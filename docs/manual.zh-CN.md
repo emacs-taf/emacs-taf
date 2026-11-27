@@ -98,6 +98,7 @@ python3 scripts/check-commit-message.py /tmp/message.txt
 make structure-check
 python3 scripts/publish-packages.py --dry-run  # 确认后去掉 --dry-run
 jjosh bookmark set main -r @- && jjosh git push --remote aliyun --bookmark main
+jjosh git push --remote origin --bookmark main
 ```
 
 - 消息是一条带具体 scope 的 Conventional Commit，正文解释改动，并用 `Validation:`
@@ -106,8 +107,9 @@ jjosh bookmark set main -r @- && jjosh git push --remote aliyun --bookmark main
 - `publish-packages.py` 把每个包目录从共享提交里投影出来，依次推到该包自己的
   `aliyun`、`laycat` 和 `origin` 远端。`--package NAME` 与 `--remote NAME` 缩小范围；
   没有变化的包只花一次请求。
-- 检出本身由仓库级的 `aliyun` 远端备份（forgejo 上的私有仓库 `emacs-taf/etaf-mono`）。
-  安装器源码、共享工具、工作区契约与跨包历史只存在于这个远端，所以每次交付后都推它的 `main`。
+- 检出本身推向两个仓库级远端，完整保存安装器源码、共享工具、工作区契约与跨包历史：
+  公开主单仓 `origin`（GitHub 上的 `emacs-taf/emacs-taf`，也是外部 PR 入口）与私有备份
+  `aliyun`（forgejo 上的 `emacs-taf/etaf-mono`）。每次交付后推送 `main`。
 - `make check` 覆盖整份检出，用于发布前；`make check-affected` 是日常门禁。
 
 ## 发布一个安装目标

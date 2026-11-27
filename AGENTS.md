@@ -375,7 +375,7 @@ Separate concurrent day-to-day development from serialized delivery so multiple 
 | --- | --- | --- | --- |
 | **1. Develop** | Default for every feature, fix or UI task | Only the edited package (`make -C packages/<pkg> check` + GUI acceptance); add `make check-affected JOBS=4` when editing a shared provider | Edit directly in `default@`. **Do not** commit, create a disposable delivery workspace, run workspace-wide `make structure-check`/`make check`, push remotes or publish archives |
 | **2. Commit** | Only when the user explicitly asks to commit a package or batch wrap-up | Run **once** per batch: `make check-affected JOBS=4` + `make structure-check` + `scripts/check-commit-message.py` | Serialize in one conversation; seal finished packages **in place** by path from `@`, leaving unfinished WIP in `@`; advance `main` and run `jjosh git export` |
-| **3. Push** | Only when the user explicitly asks to push/sync source repos | Sealed commits already validated at Stage 2 | Push root `main` once to `aliyun` (with `git ls-remote` readback); project **only changed packages** via `publish-packages.py --package <pkg>...` (skip if releasing immediately) |
+| **3. Push** | Only when the user explicitly asks to push/sync source repos | Sealed commits already validated at Stage 2 | Push root `main` once to `aliyun` (private backup) and, on explicit public release/push confirmation, to `origin` (`github.com/emacs-taf/emacs-taf`, with `git ls-remote` readback); project **only changed packages** via `publish-packages.py --package <pkg>...` (skip if releasing immediately) |
 | **4. Release** | Only when the user explicitly asks to publish to `etaf.top` / update `M-x etaf-install` | One full/auto-scoped release gate inside `etaf-archive-release` | Batch all drifted packages in **one** `pi-skill etaf-archive-release release --yes` run, then immediately realign `default@` onto the new `main` |
 
 ### Keeping `default@` aligned with `main` (mandatory)
@@ -400,9 +400,16 @@ The user's local Emacs loads `~/src/etaf-mono/packages/*` directly from `default
 
 ### Remotes
 
-The checkout itself is backed up to one repository-wide remote, `aliyun` (`https://forgejo.vhkd.top/emacs-taf/etaf-mono.git`, private). It is the only remote holding the installer, the shared tooling, the workspace contracts and the cross-package history. When pushing a batch of sealed commits, advance `main` once (`jjosh bookmark set main -r @- && jjosh git export`) and run `jjosh git push --remote aliyun --bookmark main`.
+The checkout itself pushes repository-wide (`main`) to two whole-repo remotes holding the installer, shared tooling, workspace contracts and cross-package history:
 
-Every package publishes to three remotes, all named after the package:
+| Remote | Form | Visibility & credentials |
+| --- | --- | --- |
+| `origin` | `https://github.com/emacs-taf/emacs-taf.git` | Public canonical monorepo (PR entry); `GIT_ASKPASS` from `gh auth token` |
+| `aliyun` | `https://forgejo.vhkd.top/emacs-taf/etaf-mono.git` | Private backup mirror; `GIT_ASKPASS` from `git credential fill` |
+
+When pushing a batch of sealed commits, advance `main` once (`jjosh bookmark set main -r @- && jjosh git export`), push `aliyun`, and—when approved for public GitHub sync—push `origin` (`GIT_ASKPASS="$PWD/scripts/askpass.sh" jjosh git push --remote origin --bookmark main`).
+
+Every package projects out of the shared tree as a **read-only** single-package repository to three remotes, all named after the package:
 
 | Remote | Form | Credentials |
 | --- | --- | --- |
