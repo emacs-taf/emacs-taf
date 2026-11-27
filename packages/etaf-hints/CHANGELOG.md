@@ -2,6 +2,12 @@
 
 All notable changes to `etaf-hints` are documented in this file. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## Unreleased
+
+### Fixed
+
+- Bound each hint key inside a fresh lexical `let` in `etaf-hints--install-transient` so interactive hint keystrokes dispatch their own letter instead of the final alphabet character.
+
 ## [0.1.1] - 2026-11-26
 
 ### Changed

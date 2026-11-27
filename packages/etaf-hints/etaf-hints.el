@@ -199,14 +199,15 @@ Return `:activated', `:prefix', or `:cancelled'."
     (let ((map (make-sparse-keymap)))
       (cl-loop for c across etaf-hints-alphabet
                for s = (char-to-string c)
-               do (define-key map s
-                    (lambda ()
-                      (interactive)
-                      (etaf-hints--handle-char ctx s)))
-               do (define-key map (upcase s)
-                    (lambda ()
-                      (interactive)
-                      (etaf-hints--handle-char ctx s))))
+               do (let ((key s))
+                    (define-key map key
+                      (lambda ()
+                        (interactive)
+                        (etaf-hints--handle-char ctx key)))
+                    (define-key map (upcase key)
+                      (lambda ()
+                        (interactive)
+                        (etaf-hints--handle-char ctx key)))))
       (define-key map (kbd "C-g")
         (lambda () (interactive) (etaf-hints--stop ctx)))
       (define-key map [escape]
