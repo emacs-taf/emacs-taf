@@ -420,10 +420,9 @@ def main():
         for pkg_dir in sorted(workspace.iterdir()):
             if not pkg_dir.is_dir() or pkg_dir.name.startswith('.') or pkg_dir.name in packages:
                 continue
-            entries = list(pkg_dir.glob('*.el'))
-            if len(entries) != 1:
+            entry = pkg_dir / (pkg_dir.name + '.el')
+            if not entry.is_file():
                 continue
-            entry = entries[0]
             pkg_api, pkg_errs = declarations(entry)
             errors.extend(pkg_errs)
             pkg_files = [entry] + sorted((pkg_dir / 'lisp').glob('*.el'))
