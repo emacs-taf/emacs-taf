@@ -267,7 +267,7 @@ def last_change(git_dir, revision, files):
     raw, _ = run(["git", "--git-dir", str(git_dir), "log", "-1",
                   "--format=%cI", revision, "--", *files])
     value = raw.decode().strip()
-    if not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[+-][0-9]{2}:[0-9]{2}", value):
+    if not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:[+-][0-9]{2}:[0-9]{2}|Z)", value):
         raise ValueError(f"Cannot date the newest change of {revision[:12]}: {value!r}")
     return value
 
