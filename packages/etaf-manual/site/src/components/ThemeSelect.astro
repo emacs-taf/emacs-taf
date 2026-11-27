@@ -26,6 +26,24 @@
   const root = document.documentElement;
   if (!root.dataset.etafThemeBound) {
     root.dataset.etafThemeBound = 'true';
+    const resolveTheme = () => {
+      let stored = null;
+      try {
+        stored = localStorage.getItem('starlight-theme');
+      } catch (error) {
+        // Ignore storage errors and follow system preference.
+      }
+      return stored === 'light' || stored === 'dark' ? stored
+        : matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+    };
+    window.addEventListener('pageshow', () => {
+      root.dataset.theme = resolveTheme();
+    });
+    window.addEventListener('storage', (event) => {
+      if (event.key === 'starlight-theme') {
+        root.dataset.theme = resolveTheme();
+      }
+    });
     document.addEventListener('click', (event) => {
       if (!(event.target instanceof Element)) return;
       if (!event.target.closest('[data-etaf-theme-toggle]')) return;

@@ -75,11 +75,17 @@ HEADER = """<header class="site-header">
 
 THEME_SCRIPT = """(() => {
   const root = document.documentElement;
-  let stored = null;
-  try { stored = localStorage.getItem('starlight-theme'); } catch (error) {}
-  const systemDark = matchMedia('(prefers-color-scheme: dark)').matches;
-  root.dataset.theme = stored === 'light' || stored === 'dark' ? stored
-    : systemDark ? 'dark' : 'light';
+  const resolveTheme = () => {
+    let stored = null;
+    try { stored = localStorage.getItem('starlight-theme'); } catch (error) {}
+    return stored === 'light' || stored === 'dark' ? stored
+      : matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  };
+  root.dataset.theme = resolveTheme();
+  window.addEventListener('pageshow', () => { root.dataset.theme = resolveTheme(); });
+  window.addEventListener('storage', (event) => {
+    if (event.key === 'starlight-theme') root.dataset.theme = resolveTheme();
+  });
   document.addEventListener('click', (event) => {
     if (!(event.target instanceof Element)) return;
     const button = event.target.closest('[data-theme-toggle]');
@@ -212,13 +218,14 @@ STYLE = """*, *::before, *::after { box-sizing: border-box; }
   --ink-3: #89877f;
   --accent: #c3b0ff;
 }
+:root[data-theme="dark"],
 :root[data-theme="dark"] body {
   background-color: var(--paper);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.055'/%3E%3C/svg%3E");
   background-size: 160px 160px;
 }
-html { -webkit-text-size-adjust: 100%; }
-body { margin: 0; background: var(--paper); color: var(--ink);
+html { -webkit-text-size-adjust: 100%; background-color: var(--paper); }
+body { margin: 0; min-height: 100vh; background-color: var(--paper); color: var(--ink);
   font-family: var(--font-text); font-size: 1rem; line-height: 1.65; }
 [hidden] { display: none !important; }
 a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
@@ -246,8 +253,8 @@ pre code { background: none; border: 0; padding: 0; font: inherit; }
 .theme:hover { color: var(--accent); border-color: var(--accent); }
 .theme svg { width: 1rem; height: 1rem; }
 .theme .sun, .theme .moon { display: none; }
-:root[data-theme="dark"] .theme .sun { display: block; }
-:root[data-theme="light"] .theme .moon { display: block; }
+:root[data-theme="dark"] .theme .moon { display: block; }
+:root[data-theme="light"] .theme .sun { display: block; }
 .hero { padding: clamp(3rem, 7vw, 5rem) 0 1.6rem; }
 .eyebrow { margin: 0 0 .9rem; font-family: var(--font-mono); font-size: .72rem;
   letter-spacing: .16em; text-transform: uppercase; color: var(--accent); }
@@ -383,7 +390,7 @@ def page(title, body, downloads="downloads.json", *, canonical, description,
     page_script = PAGE_SCRIPT if script is None else script
     style = STYLE + ("\n" + extra_style if extra_style else "")
     return f"""<!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">

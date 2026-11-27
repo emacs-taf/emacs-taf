@@ -411,6 +411,14 @@ class NativePageTests(unittest.TestCase):
         html_text = (self.native_dir / "index.html").read_text(encoding="utf-8")
         self.assertIn('>ekp-v1.6-darwin-arm64.dylib</a>', html_text)
         self.assertNotIn('<details class="archived-drawer"', html_text)
+        # Theme painting covers both html and body, aligns icon convention with the
+        # landing/manual pages (dark -> moon, light -> sun), and syncs across pageshow/storage.
+        self.assertIn('<html lang="en" data-theme="dark">', html_text)
+        self.assertIn('html { -webkit-text-size-adjust: 100%; background-color: var(--paper); }', html_text)
+        self.assertIn(':root[data-theme="dark"] .theme .moon { display: block; }', html_text)
+        self.assertIn(':root[data-theme="light"] .theme .sun { display: block; }', html_text)
+        self.assertIn("window.addEventListener('pageshow'", html_text)
+        self.assertIn("window.addEventListener('storage'", html_text)
 
 
 if __name__ == "__main__":

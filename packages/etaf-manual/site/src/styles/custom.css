@@ -53,7 +53,14 @@
   --sl-color-text: var(--etaf-ink-2);
 }
 
+/* Paint html with the same paper surface as body so overscroll and dynamic
+   theme switches never reveal an unpainted root canvas behind the page. */
+html {
+  background-color: var(--etaf-paper);
+}
+
 /* The grain belongs to the page surfaces, not to cards or images. */
+:root[data-theme='dark'],
 :root[data-theme='dark'] body,
 :root[data-theme='dark'] .header,
 :root[data-theme='dark'] .sidebar-pane {
