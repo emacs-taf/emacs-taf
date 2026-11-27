@@ -2,9 +2,32 @@
 
 ## Unreleased
 
+### Added
+
+- Public monorepo published under `https://github.com/emacs-taf/emacs-taf`
+  as the single canonical checkout and pull-request entry across all 32
+  registered packages, while per-package repositories stay read-only
+  projections with `pre-mono` history tags.
+- `manifest.json` now exports a verified `catalog` map of curated targets
+  (group, label, open command, capabilities and manual system CLI metadata),
+  allowing `M-x etaf-install` and `etaf.top` archive pages to discover newly
+  published packages and tool metadata dynamically without upgrading the
+  installer first.
+- Repository policy 15 enforces tracked media/file size ceilings (blocking
+  videos > 256 KB, images > 1200 KB, binary archives > 512 KB, and non-vendor
+  files > 2 MB) plus workspace README/registry alignment.
+
 ### Changed
 
-- Reissued as 0.2.20 after package-loading and workspace updates since 0.2.19.
+- `etaf-install` 0.2.21–0.2.35: added automatic prebuilt native dynamic module
+  download with SHA-256 verification (`etaf-install-auto-native`,
+  `M-x etaf-install-native`), the 4-tier `System CLI` column and copyable OS
+  install command guide in `*ETAF Installation*`, bottom-up dependency closure
+  upgrades with superseded package pruning (`etaf-install-update`), universal
+  extensions (`etaf-ext`, `etaf-hints`, `etaf-highlight`, `etaf-translate`,
+  `etaf-export`), and `etaf-bili` / `etaf-youtube` application targets.
+
+## Earlier milestones (0.1.6–0.2.20)
 
 ### Added
 

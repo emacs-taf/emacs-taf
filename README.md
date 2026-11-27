@@ -52,7 +52,7 @@ gallery is the default):
 
 Afterward, use `M-x etaf-install`; installed targets reopen offline. When installing or updating a target, `etaf-install` automatically downloads, verifies (SHA-256) and activates any prebuilt native dynamic modules declared by that target or its ETAF dependencies (such as `etaf-md`'s QuickJS Mermaid/MathJax renderer, `etaf`'s `libmpv` bridge or `ekp`'s C line-breaking engine) directly into `~/.cache/emacs-taf/native/` without a compiler or a second command (set `etaf-install-auto-native` to nil to opt out, or run `M-x etaf-install-native` / press `n` in `M-x etaf-install-manage` to retry or force-refresh). Use `M-x etaf-install-manage` to see installed and available versions, runtime readiness, manual `System CLI` prerequisites (only external OS tools you install yourself—excluding auto-downloaded native modules, bundled package backends and managed game engines), Lisp dependencies, native module actions (`n`) and doctor reports (`?`); one window holds the table and the echo area names the keys (`i` install, `n` native, `u` update, `U` update all, `d` remove, `RET` open, `?` doctor, `g` refresh, `l` list-packages, `q` quit). When a target misses a required OS CLI tool during interactive `M-x etaf-install`, `*ETAF Installation*` opens automatically with a combined copyable command for your package manager (`c` copy, `r` re-check, `o` open). `M-x list-packages` remains the advanced package menu. Package.el owns dependency installation, local byte compilation, updates and removal. No Git, Python, system compiler, Pi or replacement Emacs configuration is required.
 
-The installer groups its targets: framework (`etaf-install`, the `etaf-ui` gallery, `etaf`, `ebox`, `ecss`, `ekp`, `etaf-db`, `etaf-gamekit`, `etaf-posframe`, `etaf-ext`), extensions (`etaf-hints`, `etaf-highlight`, `etaf-translate`, `etaf-export`), applications (`etaf-manual`, `etaf-md`, `etaf-org`, `etaf-video-player`, `etaf-desktop`, `etaf-telega`, `etaf-weread`, `etaf-ncm`, `etaf-pomodoro`, `maillist`) and games (`etaf-xiangqi`, `etaf-tanks`). Each entry reports what is missing before opening. SQLite needs an Emacs build with SQLite support; `M-x etaf-install-doctor` reports required and optional capabilities without installing anything. External service accounts and media programs are detected, not installed; an application's own backend ships in its package.  For Telega the installer installs the Emacs `telega` package but not the native `telega-server`: install TDLib, run `M-x telega-server-build` (or follow the Telega installation guide), and put `telega-server` on `exec-path`.  The install message, `M-x etaf-install-doctor` and the `?` key in
+The installer groups its targets: framework (`etaf-install`, the `etaf-ui` gallery, `etaf`, `ebox`, `ecss`, `ekp`, `etaf-db`, `etaf-gamekit`, `etaf-posframe`, `etaf-ext`), extensions (`etaf-hints`, `etaf-highlight`, `etaf-translate`, `etaf-export`), applications (`etaf-manual`, `etaf-md`, `etaf-org`, `etaf-video-player`, `etaf-desktop`, `etaf-telega`, `etaf-weread`, `etaf-ncm`, `etaf-bili`, `etaf-youtube`, `etaf-pomodoro`, `maillist`) and games (`etaf-xiangqi`, `etaf-tanks`). Each entry reports what is missing before opening. SQLite needs an Emacs build with SQLite support; `M-x etaf-install-doctor` reports required and optional capabilities without installing anything. External service accounts and media programs are detected, not installed; an application's own backend ships in its package.  For Telega the installer installs the Emacs `telega` package but not the native `telega-server`: install TDLib, run `M-x telega-server-build` (or follow the Telega installation guide), and put `telega-server` on `exec-path`.  The install message, `M-x etaf-install-doctor` and the `?` key in
 `M-x etaf-install-manage` print this remedy.
 
 Use `M-x etaf-install-manage` for the supported targets and `M-x list-packages`
@@ -78,8 +78,20 @@ Framework packages and workspace tooling developed in this checkout:
 | [etaf-ui](https://github.com/emacs-taf/etaf-ui) | Reusable UI components | etaf |
 | [etaf-gamekit](https://github.com/emacs-taf/etaf-gamekit) | Game definitions, independent instances, actions and backend adapters | etaf |
 | [etaf-posframe](https://github.com/emacs-taf/etaf-posframe) | Floating child-frame panels for any ETAF View | etaf |
+| [etaf-ext](https://github.com/emacs-taf/etaf-ext) | Universal extension engine, lifecycle manager and host hooks for ETAF apps | etaf, etaf-ui, etaf-posframe |
 | [etaf-db](https://github.com/emacs-taf/etaf-db) | Database backends for ETAF; currently SQLite | etaf |
 | [etaf-manual](https://github.com/emacs-taf/etaf-manual) | The ETAF Reference Manual for the core packages, in English and Chinese, checked against their public interfaces; published at <https://etaf.top> | etaf, etaf-ui; its gate reads ecss, ekp, ebox and etaf-db |
+
+### Extensions
+
+Extensions build on [etaf-ext](https://github.com/emacs-taf/etaf-ext) and attach cross-cutting capabilities to any ETAF buffer or application:
+
+| Extension | Responsibility | Framework dependencies |
+| --- | --- | --- |
+| [etaf-hints](https://github.com/emacs-taf/etaf-hints) | Quick keyboard jump hints for interactive targets | etaf-ext, etaf, etaf-ui, ebox |
+| [etaf-highlight](https://github.com/emacs-taf/etaf-highlight) | Text highlighting and anchored notes across ETAF views | etaf-ext, etaf, etaf-ui, ebox |
+| [etaf-translate](https://github.com/emacs-taf/etaf-translate) | Immersive inline and side-by-side translation for ETAF views | etaf-ext, etaf, etaf-ui, etaf-db, ebox |
+| [etaf-export](https://github.com/emacs-taf/etaf-export) | Vector SVG and PDF export for ETAF rendered pages | etaf-ext, etaf, etaf-ui, ebox |
 
 [etaf-gamekit](https://github.com/emacs-taf/etaf-gamekit) provides game
 definitions and a common action/observation lifecycle over Godot, boardgame.io
@@ -115,11 +127,12 @@ table names the framework packages each one uses:
 | [etaf-telega](https://github.com/emacs-taf/etaf-telega) | Telegram client on Telega's TDLib backend: chats, live message stream, composer and message actions | etaf, etaf-ui, ebox |
 | [etaf-video-player](https://github.com/emacs-taf/etaf-video-player) | Local video and streams as image frames, density characters or true-color half blocks, with sound | etaf, etaf-ui, ebox |
 | [etaf-bili](https://github.com/emacs-taf/etaf-bili) | Bilibili client: popular feed, ranking and search with in-buffer playback | etaf, etaf-ui, ebox |
+| [etaf-youtube](https://github.com/emacs-taf/etaf-youtube) | YouTube client: account feeds, search, channels, playlists and in-canvas video playback | etaf, etaf-ui, etaf-db, ebox |
 | [etaf-screensaver](https://github.com/emacs-taf/etaf-screensaver) | Idle screensavers: canvas-only animation, input dismissal, grouped playback and adapted recorded animations | etaf, ebox |
 | [etaf-web](https://github.com/emacs-taf/etaf-web) | Web article reader: compiles HTML to `etaf-md` intermediate language with local caching and opens it in an `etaf-md` reading buffer | etaf-md, etaf, etaf-ui, ebox |
 | [etaf-agenda](https://github.com/emacs-taf/etaf-agenda) | Personal agenda: daily log, year/month/week calendar, grouped task list, project stages, habit tracker and monthly review on SQLite | etaf, etaf-ui, etaf-db, ebox |
 
-`etaf-agenda`, `etaf-bili`, `etaf-reader`, `etaf-rss`, `etaf-screensaver` and `etaf-web` live and pass their checks in this checkout but are not in the package archive yet; `M-x etaf-install` does not list them.
+`etaf-agenda`, `etaf-reader`, `etaf-rss`, `etaf-screensaver` and `etaf-web` live and pass their checks in this checkout but are not in the package archive yet; `M-x etaf-install` does not list them.
 
 ### Games
 
@@ -143,7 +156,6 @@ These repositories build on the framework but are not part of this checkout. The
 | [etaf-playground](https://github.com/emacs-taf/etaf-playground) | ETAF/UI integration examples and acceptance surfaces |
 | [etaf-pi](https://github.com/emacs-taf/etaf-pi) | Native Pi agent client: streamed conversations, tool output, session recovery and multiline input |
 | [etaf-video-studio](https://github.com/emacs-taf/etaf-video-studio) | Record, edit and publish software tutorials through the video-project skill: recording, non-destructive edits, background previews/exports and a two-step publish flow |
-| [etaf-youtube](https://github.com/emacs-taf/etaf-youtube) | YouTube client: account feeds, search, channels, playlists and in-canvas video playback |
 | [etaf-browser](https://github.com/emacs-taf/etaf-browser) | Browser client with an address and status shell in the ETAF canvas |
 | [etaf-algo-lab](https://github.com/emacs-taf/etaf-algo-lab) | Learn algorithms by watching, steering and comparing them inside Emacs |
 | [etaf-slides](https://github.com/emacs-taf/etaf-slides) | Present a markdown deck as slides: an aspect-preserving 16:9 stage, speaker notes, a slide overview and a presentation clock |

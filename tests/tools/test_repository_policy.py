@@ -575,5 +575,32 @@ class PolicyTests(unittest.TestCase):
         (self.root / 'native/vendor/lib/upstream.c').write_bytes(b'a' * (2100 * 1024))
         self.assertEqual('', self.errors())
 
+    def test_workspace_readme_alignment_rejects_outside_overlap_and_missing_pkg(self):
+        (self.root / 'packages/etaf-alpha').mkdir(parents=True)
+        (self.root / 'packages/etaf-beta').mkdir(parents=True)
+        self.write('workspace.json', json.dumps({
+            'schema': 2,
+            'packages': {
+                'etaf-alpha': {'url': 'https://github.com/emacs-taf/etaf-alpha.git', 'role': 'application'},
+                'etaf-beta': {'url': 'https://github.com/emacs-taf/etaf-beta.git', 'role': 'application'},
+            },
+        }))
+        self.write('README.md',
+                   '# Workspace\n\n## Applications\n\n'
+                   '| [etaf-alpha](https://github.com/emacs-taf/etaf-alpha) | Alpha | etaf |\n\n'
+                   '## Outside this checkout\n\n'
+                   '| [etaf-beta](https://github.com/emacs-taf/etaf-beta) | Beta |\n')
+        errors = '\n'.join(POLICY.workspace_readme_errors(self.root))
+        self.assertIn('README.md: registered package etaf-beta is listed under Outside this checkout', errors)
+        self.assertIn('README.md: registered package etaf-beta is missing from the in-checkout tables', errors)
+
+        self.write('README.md',
+                   '# Workspace\n\n## Applications\n\n'
+                   '| [etaf-alpha](https://github.com/emacs-taf/etaf-alpha) | Alpha | etaf |\n'
+                   '| [etaf-beta](https://github.com/emacs-taf/etaf-beta) | Beta | etaf |\n\n'
+                   '## Outside this checkout\n\n'
+                   '| [etaf-other](https://github.com/emacs-taf/etaf-other) | Other |\n')
+        self.assertEqual([], POLICY.workspace_readme_errors(self.root))
+
 
 if __name__ == '__main__':unittest.main()

@@ -339,18 +339,18 @@ python3 scripts/tui-capture.py --cols 120 --rows 40 --out /tmp/app-wide.png -- \
 
 ## 在真实 GUI 中验证隔离检出
 
-`jj workspace add` 检出必须在完整用户配置里运行，且绝不能加载主检出的代码代。用户 init 会从
-`emacs-taf-dir` 取包根，但 `init-etaf.el` 与提前加载的 `use-package` 还会添加
-`~/emacs-taf` 路径，且已加入的路径会赢得解析。
+`jjosh workspace add` 检出必须在完整用户配置里运行，且绝不能加载主检出的代码代。用户 init 会从
+`emacs-taf-dir` 取包根，但 `init-etaf.el` 与提前加载的 `use-package` 还会添加主检出路径
+（`~/src/etaf-mono/packages/*` 与独立仓 `~/emacs-taf/*`），且已加入的路径会赢得解析。
 
 1. 用 `EMACSLOADPATH=<私有目录>:` 让私有的 `site-start.el` 排在加载路径最前。它在 init
    文件之前运行，因此可以用 `setq`（不能用 `defvar`）把 `emacs-taf-dir` 指向隔离根，设置
    私有 `server-name`、`load-prefer-newer` 和有界的 `kill-emacs` 看门狗，并对 `require`
-   与 `load` 加 advice，把 `~/emacs-taf` 库与相对名重定向到隔离根。只 advice
+   与 `load` 加 advice，把主检出路径（`~/src/etaf-mono/packages` 与 `~/emacs-taf`）的库和相对名重定向到隔离根。只 advice
    `load` 不够：Emacs 31 的 `require` 不会调用被 advice 的 subr。
 2. 不抢焦点地启动后台实例：`open -g -n -a Emacs --env 'EMACSLOADPATH=<私有目录>:'
    --args -l <启动文件>`。启动文件在 init 文件之后运行：把隔离根放到最前、移除
-   `~/emacs-taf` 条目、启动命名 server 并记录 PID。后台测量不能被 App Nap
+   `~/src/etaf-mono/packages` 与 `~/emacs-taf` 条目、启动命名 server 并记录 PID。后台测量不能被 App Nap
    限制；按「执行一次测评」一节的方法确认，不要传 `-NSAppSleepDisabled`，
    Emacs 会把它当作未知选项拒绝。
 3. 测量前先证明只有一个代码代：每个 provider 的 `locate-library` 结果与 `load-history`

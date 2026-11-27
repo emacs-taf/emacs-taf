@@ -36,7 +36,7 @@ make -C packages/etaf-ui check
 
 以后运行 `M-x etaf-install` 即可；已安装的目标可以离线重开。安装或更新目标时，`etaf-install` 会按依赖闭包自动下载、校验 SHA-256 并热加载可用的预编译原生动态模块（如 `etaf-md` 的 QuickJS Mermaid/MathJax 渲染器、`etaf` 的 `libmpv` 播放桥、`ekp` 的 C 排版引擎）到 `~/.cache/emacs-taf/native/`，全程无需本机编译器也无需第二条命令（可通过 `etaf-install-auto-native` 设为 nil 关闭，或用 `M-x etaf-install-native` / `M-x etaf-install-manage` 中的 `n` 键手动重试或重装）。用 `M-x etaf-install-manage` 查看已安装/可用版本、运行时状态、需手工安装的外部 `System CLI` 依赖（仅列出需用户自行安装的 OS 命令行工具，不含自动下载的原生模块、随包后端与受管游戏引擎）、预编译原生模块（`n`）与 doctor 报告（`?`）；交互式 `M-x etaf-install` 若缺少必需的系统 CLI，会自动弹出 `*ETAF Installation*` 引导页并给出当前系统包管理器的合并安装命令（`c` 复制、`r` 重检、`o` 打开）。`M-x list-packages` 仍是高级包菜单。依赖安装、本地字节编译、更新和卸载均由 package.el 管理，不需要 Git、Python、系统编译器或 Pi，也不替换现有 Emacs 配置。
 
-安装入口按框架、扩展、应用与游戏分组：框架含 `etaf-install`、组件画廊（`etaf-ui`）、`etaf`、`ebox`、`ecss`、`ekp`、`etaf-db`、`etaf-gamekit`、`etaf-posframe`、`etaf-ext`；扩展含 `etaf-hints`、`etaf-highlight`、`etaf-translate`、`etaf-export`；应用含 `etaf-manual`、`etaf-md`、`etaf-org`、`etaf-video-player`、`etaf-desktop`、`etaf-telega`、`etaf-weread`、`etaf-ncm`、`etaf-pomodoro`、`maillist`；游戏含 `etaf-xiangqi`、`etaf-tanks`。每个条目在打开前报告缺少什么。SQLite 需要 Emacs 本身具备 SQLite 支持；`M-x etaf-install-doctor` 只检查必需和可选能力，不执行安装。外部服务账号与媒体程序只检测、不代装；应用自己的后端随包发布。Telega 的 `telega` Emacs 包会自动安装，但原生 `telega-server` 不会：先安装 TDLib，再运行 `M-x telega-server-build`（或按 Telega README 手工构建），把 `telega-server` 放进 `exec-path`。安装消息、`M-x etaf-install-doctor` 和 `M-x etaf-install-manage` 里的 `?` 都会显示这条提示。
+安装入口按框架、扩展、应用与游戏分组：框架含 `etaf-install`、组件画廊（`etaf-ui`）、`etaf`、`ebox`、`ecss`、`ekp`、`etaf-db`、`etaf-gamekit`、`etaf-posframe`、`etaf-ext`；扩展含 `etaf-hints`、`etaf-highlight`、`etaf-translate`、`etaf-export`；应用含 `etaf-manual`、`etaf-md`、`etaf-org`、`etaf-video-player`、`etaf-desktop`、`etaf-telega`、`etaf-weread`、`etaf-ncm`、`etaf-bili`、`etaf-youtube`、`etaf-pomodoro`、`maillist`；游戏含 `etaf-xiangqi`、`etaf-tanks`。每个条目在打开前报告缺少什么。SQLite 需要 Emacs 本身具备 SQLite 支持；`M-x etaf-install-doctor` 只检查必需和可选能力，不执行安装。外部服务账号与媒体程序只检测、不代装；应用自己的后端随包发布。Telega 的 `telega` Emacs 包会自动安装，但原生 `telega-server` 不会：先安装 TDLib，再运行 `M-x telega-server-build`（或按 Telega README 手工构建），把 `telega-server` 放进 `exec-path`。安装消息、`M-x etaf-install-doctor` 和 `M-x etaf-install-manage` 里的 `?` 都会显示这条提示。
 
 支持的目标用 `M-x etaf-install-manage` 更新或卸载；高级或第三方包用 `M-x list-packages`。更新后重启 Emacs；卸载只删包文件，应用数据、登录与缓存保留，共享依赖不删。安装失败时只清理本次新增的包，报告清理失败并保留旧安装；由于已加载的部分 Lisp 无法回滚，重试前需要重启。同一依赖不要混用源码检出和包安装。详见[安装参考](https://etaf.top/zh-cn/introduction/#安装)。下面的源码检出说明面向开发者。
 
@@ -53,8 +53,20 @@ make -C packages/etaf-ui check
 | [etaf-ui](https://github.com/emacs-taf/etaf-ui) | 通用 UI 组件 | etaf |
 | [etaf-gamekit](https://github.com/emacs-taf/etaf-gamekit) | 游戏定义、独立运行实例、动作与后端适配器 | etaf |
 | [etaf-posframe](https://github.com/emacs-taf/etaf-posframe) | 任意 ETAF View 的浮动子框面板 | etaf |
+| [etaf-ext](https://github.com/emacs-taf/etaf-ext) | 通用扩展引擎、生命周期管理与宿主钩子 | etaf、etaf-ui、etaf-posframe |
 | [etaf-db](https://github.com/emacs-taf/etaf-db) | ETAF 数据库后端；目前支持 SQLite | etaf |
 | [etaf-manual](https://github.com/emacs-taf/etaf-manual) | 核心包的《ETAF 参考手册》，中英双语，对照公共接口检查；发布于 <https://etaf.top> | etaf、etaf-ui；门禁还读取 ecss、ekp、ebox 和 etaf-db |
+
+### 扩展
+
+扩展构建在 [etaf-ext](https://github.com/emacs-taf/etaf-ext) 之上，为任意 ETAF 视图与应用提供通用增强能力：
+
+| 扩展 | 职责 | 框架依赖 |
+| --- | --- | --- |
+| [etaf-hints](https://github.com/emacs-taf/etaf-hints) | 交互元素的快速键盘跳转提示 | etaf-ext、etaf、etaf-ui、ebox |
+| [etaf-highlight](https://github.com/emacs-taf/etaf-highlight) | 跨 ETAF 视图的高亮与批注笔记 | etaf-ext、etaf、etaf-ui、ebox |
+| [etaf-translate](https://github.com/emacs-taf/etaf-translate) | 面向 ETAF 视图的沉浸式双语对照翻译 | etaf-ext、etaf、etaf-ui、etaf-db、ebox |
+| [etaf-export](https://github.com/emacs-taf/etaf-export) | 将 ETAF 渲染页面导出为矢量 SVG 与 PDF | etaf-ext、etaf、etaf-ui、ebox |
 
 [etaf-gamekit](https://github.com/emacs-taf/etaf-gamekit) 提供游戏定义，
 以及 Godot、boardgame.io、OpenSpiel 共用的动作、观察结果和
@@ -84,11 +96,12 @@ make -C packages/etaf-ui check
 | [etaf-telega](https://github.com/emacs-taf/etaf-telega) | 基于 Telega TDLib 的 Telegram 客户端：会话、实时消息、就地编辑与消息操作 | etaf、etaf-ui、ebox |
 | [etaf-video-player](https://github.com/emacs-taf/etaf-video-player) | 在 Emacs 里播放本地视频与流：图像帧、密度字符或真彩半块，带声音 | etaf、etaf-ui、ebox |
 | [etaf-bili](https://github.com/emacs-taf/etaf-bili) | B 站客户端：热门、排行榜与搜索，可在 buffer 内直接播放 | etaf、etaf-ui、ebox |
+| [etaf-youtube](https://github.com/emacs-taf/etaf-youtube) | YouTube 客户端：账号订阅流、搜索、频道、播放列表与画布内播放 | etaf、etaf-ui、etaf-db、ebox |
 | [etaf-screensaver](https://github.com/emacs-taf/etaf-screensaver) | 空闲屏保：纯画布动画、输入唤回、组合播放与适配的外部录制动画 | etaf、ebox |
 | [etaf-web](https://github.com/emacs-taf/etaf-web) | 网页文章阅读器：将 HTML 编译为 `etaf-md` 中间语言并做本地缓存，由 `etaf-md` 渲染进 Emacs buffer | etaf-md、etaf、etaf-ui、ebox |
 | [etaf-agenda](https://github.com/emacs-taf/etaf-agenda) | 个人日程与任务工作台：今日、日历（年/月/周）、清单、项目、习惯与月度回顾共用本地 SQLite 模型 | etaf、etaf-ui、etaf-db、ebox |
 
-`etaf-agenda`、`etaf-bili`、`etaf-reader`、`etaf-rss`、`etaf-screensaver`、`etaf-web` 已在本检出中开发并通过检查，但还没有进入包归档；`M-x etaf-install` 不会列出它们。
+`etaf-agenda`、`etaf-reader`、`etaf-rss`、`etaf-screensaver`、`etaf-web` 已在本检出中开发并通过检查，但还没有进入包归档；`M-x etaf-install` 不会列出它们。
 
 ### 游戏
 
@@ -110,7 +123,6 @@ make -C packages/etaf-ui check
 | [etaf-playground](https://github.com/emacs-taf/etaf-playground) | ETAF/UI 集成示例与验收入口 |
 | [etaf-pi](https://github.com/emacs-taf/etaf-pi) | 原生 Pi 代理客户端：流式对话、工具输出、会话恢复与多行输入 |
 | [etaf-video-studio](https://github.com/emacs-taf/etaf-video-studio) | 通过 video-project 技能录制、剪辑并发布软件教程：录屏、非破坏性剪辑、后台预览/导出与两步发布 |
-| [etaf-youtube](https://github.com/emacs-taf/etaf-youtube) | YouTube 客户端：账号订阅流、搜索、频道、播放列表与画布内播放 |
 | [etaf-browser](https://github.com/emacs-taf/etaf-browser) | 带地址栏与状态栏外壳的浏览器客户端，界面画在 ETAF 画布里 |
 | [etaf-algo-lab](https://github.com/emacs-taf/etaf-algo-lab) | 在 Emacs 里观看、操控并比较算法运行 |
 | [etaf-slides](https://github.com/emacs-taf/etaf-slides) | 将 Markdown 演示稿呈现为幻灯片：等比 16:9 舞台、演讲者备注、幻灯片总览与计时器 |

@@ -217,6 +217,7 @@ def check(root, files=None, notices=None):
     if workspace:
         errors.extend(install_selection_errors(root))
         errors.extend(archive_consistency_errors(root))
+        errors.extend(workspace_readme_errors(root))
         # One workspace owns every checkout: a nested workspace root would fork
         # the registry, its shared tooling and its integration checkpoint again.
         for name in sorted(allowed_dirs - DIRS):
@@ -512,6 +513,59 @@ def install_selection_errors(root):
         errors.append(f'etaf-install.el: target {name} is not in release-dependencies targets')
     for name in sorted(gated - targets):
         errors.append(f'release-dependencies.json: target {name} is not an installer target')
+    return errors
+
+
+README_PKG_LINK = re.compile(r'\|\s*\[([a-z][a-z0-9-]*)\]\(https://github\.com/emacs-taf/[a-z][a-z0-9-]*(?:\.git)?/?\)')
+OUTSIDE_HEADING = re.compile(r'^## (?:Outside this checkout|不在本检出中的仓库)\s*$', re.M)
+NEXT_H2_HEADING = re.compile(r'^## \S', re.M)
+
+
+def workspace_readme_errors(root):
+    """Ensure workspace README package tables stay aligned with workspace.json.
+
+    Catches two common drifts as packages move into the monorepo:
+    - a registered package left behind in the "Outside this checkout" table,
+    - a registered package omitted from the in-checkout tables altogether.
+    """
+    ws_path = root / 'workspace.json'
+    if not ws_path.is_file() or not (root / 'packages').is_dir():
+        return []
+    try:
+        registry = json.loads(ws_path.read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return []
+    registered = registry.get('packages')
+    if not isinstance(registered, dict) or not registered:
+        return []
+    reg_set = set(registered)
+    errors = []
+    for readme_name in ('README.md', 'README.zh-CN.md'):
+        path = root / readme_name
+        if not path.is_file():
+            continue
+        text = path.read_text(encoding='utf-8', errors='replace')
+        outside_match = OUTSIDE_HEADING.search(text)
+        if outside_match:
+            in_text = text[:outside_match.start()]
+            rest = text[outside_match.end():]
+            next_h2 = NEXT_H2_HEADING.search(rest)
+            out_text = rest[:next_h2.start()] if next_h2 else rest
+        else:
+            in_text, out_text = text, ''
+        in_pkgs = set(README_PKG_LINK.findall(in_text))
+        out_pkgs = set(README_PKG_LINK.findall(out_text))
+        if not in_pkgs and not out_pkgs:
+            continue
+        for name in sorted(out_pkgs & reg_set):
+            errors.append(
+                f'{readme_name}: registered package {name} is listed under Outside this checkout; '
+                'move it to the in-checkout tables'
+            )
+        for name in sorted(reg_set - in_pkgs):
+            errors.append(
+                f'{readme_name}: registered package {name} is missing from the in-checkout tables'
+            )
     return errors
 
 

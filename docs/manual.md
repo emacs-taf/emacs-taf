@@ -577,22 +577,24 @@ an absent command is reported in one line instead of a traceback.
 
 ## Validate an isolated checkout in a real GUI
 
-A `jj workspace add` checkout must be exercised in the full user configuration
+A `jjosh workspace add` checkout must be exercised in the full user configuration
 without ever loading the main checkout's code generation. The user init reads
 `emacs-taf-dir` for package roots, but `init-etaf.el` and eager `use-package`
-forms also add `~/emacs-taf` paths, and an added path wins the resolution.
+forms also add primary checkout paths (`~/src/etaf-mono/packages/*` and legacy
+standalone `~/emacs-taf/*`), and an added path wins the resolution.
 
 1. Put a private `site-start.el` first on the load path with
    `EMACSLOADPATH=<private directory>:`. It runs before the init file, so it can
    `setq` (never `defvar`) `emacs-taf-dir` to the isolated root, set a private
    `server-name`, `load-prefer-newer` and a bounded `kill-emacs` watchdog, and
-   advise `require` and `load` to redirect `~/emacs-taf` libraries and relative
-   names to the isolated root. Advising `load` alone is not enough: Emacs 31's
+   advise `require` and `load` to redirect primary checkout libraries (`~/src/etaf-mono/packages`
+   and `~/emacs-taf`) and relative names to the isolated root. Advising `load` alone is not enough: Emacs 31's
    `require` does not call the advised subr.
 2. Start a background instance with
    `open -g -n -a Emacs --env 'EMACSLOADPATH=<private directory>:' --args -l
    <start file>`. The start file runs after the init file: it puts the isolated
-   roots first, removes the `~/emacs-taf` entries, starts the named server and
+   roots first, removes the primary checkout entries (`~/src/etaf-mono/packages`
+   and `~/emacs-taf`), starts the named server and
    records its PID. Background measurement must not be App-Nap throttled; check
    it as described in [Run a measured change](#run-a-measured-change) instead of
    passing `-NSAppSleepDisabled`, which Emacs rejects as an unknown option.
