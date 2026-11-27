@@ -416,9 +416,9 @@
       "purpose": "etaf-org-open opens full-width without splitting, v toggles side-by-side split, e/o jumps in place, and q restores origin buffer."
     },
     {
-      "name": "etaf-org-tests-in-buffer-toc-peek-and-widget-fixes",
+      "name": "etaf-org-tests-side-window-toc-peek-and-widget-fixes",
       "file": "tests/etaf-org-tests.el",
-      "purpose": "In-buffer resizable ETAF TOC (left default and right option, distinct per-item click jumps and n/p navigation), floating K peek dialog toggle, clean property drawer collapse without ghost text, and collapsible file-tree directory toggle all work cleanly."
+      "purpose": "Independent configurable TOC side window (left default and right option, distinct per-item click jumps and n/p navigation), floating K peek dialog toggle, clean property drawer collapse without ghost text, and collapsible file-tree directory toggle all work cleanly."
     },
     {
       "name": "etaf-org-tests-four-tier-hover-discipline",

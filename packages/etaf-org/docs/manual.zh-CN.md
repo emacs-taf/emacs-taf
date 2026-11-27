@@ -20,7 +20,7 @@
 | `RET` | `etaf-org-open-link` | 激活光标处链接、脚注、按钮或图片 |
 | `K` | `etaf-org-preview-link` | 打开或关闭光标处链接/脚注/引用/符号的居中速览浮层 |
 | `f` | `etaf-org-follow-scroll` | 切换源码到预览的比例跟随滚动 |
-| `T` | `etaf-org-toggle-toc` | 开关缓冲区内可拖拽调宽的 ETAF 目录侧栏（默认左侧，由 `etaf-org-toc-side` / `etaf-org-toc-width` 配置） |
+| `T` | `etaf-org-toggle-toc` | 开关独立 `*ETAF Org Outline*` 目录侧窗（默认左侧，由 `etaf-org-toc-side` / `etaf-org-toc-width` 配置） |
 | `/` | `etaf-org-filter` | 按 TODO、`:tag:`、`#A` 或关键词实时筛选章节 |
 | `z` / `Z` | `etaf-org-cycle-fold` / `etaf-org-cycle-global-fold` | 折叠/展开当前节或全文 |
 | `S` | `etaf-org-toggle-spoilers` | 全局显示/隐藏剧透遮罩 |

@@ -20,7 +20,7 @@
 | `RET` | `etaf-org-open-link` | Activate link, footnote, control, or image |
 | `K` | `etaf-org-preview-link` | Toggle floating peek dialog for link, footnote, citation, or symbol |
 | `f` | `etaf-org-follow-scroll` | Toggle proportional source-to-preview scroll sync |
-| `T` | `etaf-org-toggle-toc` | Toggle in-buffer resizable ETAF TOC sidebar (`etaf-org-toc-side`, default `left`) |
+| `T` | `etaf-org-toggle-toc` | Toggle independent `*ETAF Org Outline*` side window (`etaf-org-toc-side` default `left`, `etaf-org-toc-width` default `28`) |
 | `/` | `etaf-org-filter` | Filter sections live by TODO, `:tag:`, `#A`, or text |
 | `z` / `Z` | `etaf-org-cycle-fold` / `etaf-org-cycle-global-fold` | Fold/unfold current section or whole document |
 | `S` | `etaf-org-toggle-spoilers` | Reveal or mask all spoilers |

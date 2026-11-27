@@ -4,7 +4,7 @@
 
 ### Changed
 
-- Replaced the external `*ETAF Org Outline*` side window with an in-buffer resizable ETAF TOC sidebar (`T` / `M-x etaf-org-toggle-toc`, configurable via `etaf-org-toc-side` defaulting to `'left` and `etaf-org-toc-width` defaulting to `28`), with a sticky header, draggable `etaf-pane-resizer`, independent scrolling, and narrow-window fallback.
+- Redesigned the independent `*ETAF Org Outline*` TOC side window (`T` / `M-x etaf-org-toggle-toc`, configurable via `etaf-org-toc-side` defaulting to `'left` and `etaf-org-toc-width` defaulting to `28`) so variable-height headlines and media in the preview buffer never stretch or jitter TOC rows during scrolling, while preserving pure native whole-buffer scrolling, active-section tracking, and automatic teardown on close.
 - Upgraded `etaf-org-preview-link` (`K`) to a viewport-centered floating `etaf-dialog` with scrollable body, second-press toggle dismissal, and full `[[sym:...]]` symbol peek support.
 - Adopted a two-tier interactive command surface and customizable single-key defaults (`etaf-org-keys`): globally autoloaded `M-x` exposes strictly `etaf-org-open` and `etaf-org-preview`, while all preview actions are buffer-scoped interactive commands (`completion-predicate`) bound to single keys (`T`, `/`, `H`, `j`, etc.) with zero `C-c` / `C-t` / `C-x` prefix shadowing.
 

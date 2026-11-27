@@ -47,59 +47,33 @@
   :group 'etaf-org)
 
 (defcustom etaf-org-toc-side 'left
-  "Side of the preview buffer where the in-buffer TOC sidebar appears.
+  "Side of the frame where the independent TOC side window opens.
 Set to `left' (the default) or `right'."
   :type '(choice (const :tag "Left" left)
                  (const :tag "Right" right))
   :group 'etaf-org)
 
 (defcustom etaf-org-toc-width 28
-  "Default width of the in-buffer TOC sidebar, in character cells.
-Dragged widths stay clamped between 18 and 52 columns while keeping at least
-42 columns for the reading pane."
+  "Width of the independent TOC side window, in character cells.
+Clamped between 18 and 52 columns."
   :type 'integer
   :group 'etaf-org)
 
 (defconst etaf-org--toc-width-min 18
-  "Narrowest width of the in-buffer TOC sidebar, in character cells.")
+  "Narrowest width of the independent TOC side window, in character cells.")
 
 (defconst etaf-org--toc-width-max 52
-  "Widest width of the in-buffer TOC sidebar, in character cells.")
-
-(defconst etaf-org--toc-min-article 42
-  "Minimum columns kept for the reading pane beside an open TOC sidebar.")
+  "Widest width of the independent TOC side window, in character cells.")
 
 (defun etaf-org--section-ref (id)
   "Return the deterministic host ref symbol for Org section ID."
   (when (and (stringp id) (not (string-empty-p id)))
     (intern (concat "etaf-org-section-" id))))
 
-(defun etaf-org--toc-side-by-side-p (raw-cols)
-  "Return non-nil when RAW-COLS can display the TOC beside the reading pane."
-  (and (integerp raw-cols)
-       (>= raw-cols (+ etaf-org--toc-width-min etaf-org--toc-min-article 1))))
-
-(defun etaf-org--clamp-toc-width (width &optional available)
-  "Clamp TOC WIDTH to valid sidebar columns, respecting AVAILABLE viewport."
-  (let* ((base (if (integerp width) width etaf-org-toc-width))
-         (cap (if (and (integerp available) (> available 0))
-                  (min etaf-org--toc-width-max
-                       (max etaf-org--toc-width-min
-                            (- available etaf-org--toc-min-article 1)))
-                etaf-org--toc-width-max)))
-    (max etaf-org--toc-width-min (min cap base))))
-
-(defun etaf-org--set-toc-width (session width)
-  "Update SESSION's in-buffer TOC sidebar width to WIDTH (clamped)."
-  (let* ((buf (plist-get session :buffer))
-         (rt (and (buffer-live-p buf) (etaf-runtime-for-buffer buf)))
-         (avail (or (and rt (etaf-runtime-mounted-p rt)
-                         (ignore-errors (etaf-canvas-columns rt)))
-                    (etaf-org--read session :viewport-width)))
-         (clamped (etaf-org--clamp-toc-width width avail)))
-    (unless (equal clamped (etaf-org--read session :toc-width))
-      (etaf-org--write session :toc-width clamped))
-    clamped))
+(defun etaf-org--clamp-toc-width (width)
+  "Clamp TOC WIDTH to valid side-window columns."
+  (let ((base (if (integerp width) width etaf-org-toc-width)))
+    (max etaf-org--toc-width-min (min etaf-org--toc-width-max base))))
 
 (defcustom etaf-org-image-max-height 24
   "Tallest image, in text lines."
@@ -718,8 +692,7 @@ LINK-HOVER and HEADING-UNDERLINE default to t."
                         :hidden (etaf-ref nil :name 'org-hidden)
                         :toc-visible (etaf-ref t :name 'org-toc)
                         :toc-open (etaf-ref nil :name 'org-toc-open)
-                        :toc-width (etaf-ref (etaf-org--clamp-toc-width etaf-org-toc-width)
-                                             :name 'org-toc-width)
+                        :toc-buffer nil
                         :active-section (etaf-ref nil :name 'org-active-section)
                         :spoilers-revealed (etaf-ref nil :name 'org-spoilers)
                         :filter (etaf-ref nil :name 'org-filter)
@@ -889,6 +862,18 @@ Return the new theme mode symbol."
                      '(scroll auto)))
              lineage)))
 
+(defun etaf-org--sync-outline-scroll (session)
+  "Flush SESSION's open outline side window and keep its active row visible."
+  (when-let* ((obuf (plist-get session :toc-buffer))
+              ((buffer-live-p obuf))
+              (ort (etaf-runtime-for-buffer obuf))
+              ((etaf-runtime-mounted-p ort)))
+    (etaf-runtime-flush ort)
+    (when-let* ((pos (etaf-host-ref-position ort 'etaf-org-toc-active-row))
+                (owin (get-buffer-window obuf t)))
+      (with-current-buffer obuf
+        (set-window-point owin pos)))))
+
 (defun etaf-org--locate-id (session id)
   "Move point to SESSION's section ID (pushing mark) and bring it into view."
   (let* ((buffer (etaf-org--buffer session))
@@ -896,16 +881,17 @@ Return the new theme mode symbol."
          (ref (etaf-org--section-ref id))
          (in-scroller nil))
     (when (buffer-live-p buffer)
+      (plist-put session :resize-anchor-line nil)
+      (plist-put session :locate-gen (1+ (or (plist-get session :locate-gen) 0)))
       (etaf-org--write session :active-section id)
+      (when (etaf-org--read session :toc-open)
+        (etaf-org--sync-outline-scroll session))
       (when (and runtime (etaf-runtime-mounted-p runtime)
                  ref (etaf-runtime-host-props-for runtime ref))
         (setq in-scroller (etaf-org--scrollable-ancestor-p runtime ref))
         (when in-scroller
           (etaf-scroll-into-view runtime ref 'start)
-          (etaf-runtime-flush runtime)
-          (ignore-errors
-            (when (etaf-runtime-host-props-for runtime 'etaf-org-toc-active-row)
-              (etaf-scroll-into-view runtime 'etaf-org-toc-active-row)))))
+          (etaf-runtime-flush runtime)))
       (when-let* ((position (etaf-org--position session id)))
         (with-current-buffer buffer
           (push-mark (point) t)
@@ -924,23 +910,13 @@ Return the new theme mode symbol."
 
 (defun etaf-org--sync-active-section (session &optional force)
   "Update SESSION's `:active-section' ref to match point in its preview buffer.
-Runs only when the in-buffer TOC is open unless FORCE is non-nil."
+Runs only when the outline side window is open unless FORCE is non-nil."
   (when (and session (or force (etaf-org--read session :toc-open)))
-    (let* ((toc-open (etaf-org--read session :toc-open))
-           (positions (etaf-org--positions session))
-           (buffer (etaf-org--buffer session))
-           (pt (if (buffer-live-p buffer) (with-current-buffer buffer (point)) 0)))
-      ;; When scrolling inside `:overflow scroll', headings scrolled above the
-      ;; viewport clamp to line 1; only sync from headings strictly below top.
-      (let ((id (if (and toc-open (not force) positions)
-                    (let* ((top-pos (cdr (car positions)))
-                           (lower (cl-remove-if-not
-                                   (lambda (c) (and (> (cdr c) top-pos) (<= (cdr c) pt)))
-                                   positions)))
-                      (and lower (car (car (last lower)))))
-                  (etaf-org--reading-section session))))
-        (when (and id (not (equal id (etaf-org--read session :active-section))))
-          (etaf-org--write session :active-section id))))))
+    (when-let* ((id (etaf-org--reading-section session)))
+      (unless (equal id (etaf-org--read session :active-section))
+        (etaf-org--write session :active-section id)
+        (when (etaf-org--read session :toc-open)
+          (etaf-org--sync-outline-scroll session))))))
 
 (defun etaf-org--ancestor-path (session id)
   "Return the ids of ID's ancestors in SESSION, outermost first."
@@ -999,32 +975,15 @@ Runs only when the in-buffer TOC is open unless FORCE is non-nil."
                         (with-current-buffer buffer (point))
                       0))
          (positions (etaf-org--positions session))
-         (toc-open (etaf-org--read session :toc-open)))
-    (if toc-open
-        (let* ((outline (etaf-org-outline session))
-               (count (length outline))
-               (top-pos (if positions (cdr (car positions)) 0))
-               (lower-before (cl-remove-if-not
-                              (lambda (c) (and (> (cdr c) top-pos) (<= (cdr c) point-now)))
-                              positions))
-               (cur-id (or (and lower-before (car (car (last lower-before))))
-                           (etaf-org--read session :active-section)
-                           (nth 2 (car outline))))
-               (cur-idx (or (cl-position cur-id outline
-                                         :key (lambda (e) (nth 2 e)) :test #'equal)
-                            0))
-               (next-idx (+ cur-idx direction)))
-          (when (and (>= next-idx 0) (< next-idx count))
-            (etaf-org-locate session next-idx)))
-      (let* ((current (and (< direction 0) (etaf-org--reading-section session)))
-             (reference (or (and current (cdr (assoc current positions))) point-now))
-             (target (if (> direction 0)
-                         (cl-find-if (lambda (cell) (> (cdr cell) point-now)) positions)
-                       (car (last (cl-remove-if-not
-                                   (lambda (cell) (< (cdr cell) reference))
-                                   positions))))))
-        (when target
-          (etaf-org--locate-id session (car target)))))))
+         (current (and (< direction 0) (etaf-org--reading-section session)))
+         (reference (or (and current (cdr (assoc current positions))) point-now))
+         (target (if (> direction 0)
+                     (cl-find-if (lambda (cell) (> (cdr cell) point-now)) positions)
+                   (car (last (cl-remove-if-not
+                               (lambda (cell) (< (cdr cell) reference))
+                               positions))))))
+    (when target
+      (etaf-org--locate-id session (car target)))))
 
 (defun etaf-org--host-source-line (session props)
   "Extract 1-based Org source line from host PROPS in SESSION, or nil."
@@ -1439,8 +1398,6 @@ Runs only when the in-buffer TOC is open unless FORCE is non-nil."
         :frame (etaf-org--display-frame session)
         :width (etaf-org--read session :width)
         :viewport-width (etaf-org--read session :viewport-width)
-        :toc-open (etaf-org--read session :toc-open)
-        :toc-width (etaf-org--read session :toc-width)
         :hidden (etaf-org--read session :hidden)
         :toc-visible (etaf-org--read session :toc-visible)
         :spoilers-revealed (etaf-org--read session :spoilers-revealed)
@@ -1456,25 +1413,13 @@ Runs only when the in-buffer TOC is open unless FORCE is non-nil."
         :link-hover (plist-get session :link-hover)
         :styles-count (length etaf-org-styles)))
 
-(defun etaf-org--effective-env-width (session)
-  "Return SESSION's effective reading width accounting for open TOC sidebar."
-  (let* ((cap (etaf-org--read session :width))
-         (vp (etaf-org--read session :viewport-width))
-         (toc-open (etaf-org--read session :toc-open)))
-    (if (and toc-open (etaf-org--toc-side-by-side-p vp))
-        (let* ((toc-cols (etaf-org--clamp-toc-width
-                          (etaf-org--read session :toc-width) vp))
-               (avail (max 24 (- vp toc-cols 1 (* 2 etaf-org--measure-gutter)))))
-          (min cap avail))
-      cap)))
-
 (defun etaf-org--build-env (session)
   "Build SESSION's rendering environment from its current inputs."
   (list :session session
         :document (etaf-org--read session :document)
         :theme (etaf-org--read session :theme)
         :palette (etaf-org--session-palette session)
-        :width (etaf-org--effective-env-width session)
+        :width (etaf-org--read session :width)
         :viewport-width (etaf-org--read session :viewport-width)
         :background (etaf-org--page-background session)
         :base-pixels (etaf-org--base-pixels)

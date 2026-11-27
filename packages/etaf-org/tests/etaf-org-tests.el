@@ -1428,8 +1428,8 @@
       (when (buffer-live-p src) (kill-buffer src))
       (delete-file file))))
 
-(ert-deftest etaf-org-tests-in-buffer-toc-peek-and-widget-fixes ()
-  "In-buffer resizable TOC (left/right, distinct click jumps, `n'/`p'), floating `K' peek toggle, clean property drawer collapse without ghost text, and collapsible `file-tree' directories all work."
+(ert-deftest etaf-org-tests-side-window-toc-peek-and-widget-fixes ()
+  "Independent configurable TOC side window (left/right, distinct click jumps, `n'/`p'), floating `K' peek toggle, clean property drawer collapse without ghost text, and collapsible `file-tree' directories all work."
   (let* ((filler (mapconcat (lambda (i) (format "填充段落第 %d 行，用于产生足够滚动高度。\n" i))
                             (number-sequence 1 16) "\n"))
          (doc (concat
@@ -1452,7 +1452,12 @@
           (delete-other-windows)
           (setq prv (etaf-org-open file))
           (with-current-buffer prv
-            (let ((rt (etaf-runtime-for-buffer prv)))
+            (let ((rt (etaf-runtime-for-buffer prv))
+                  (find-outline
+                   (lambda ()
+                     (cl-find-if (lambda (b)
+                                   (string-prefix-p "*ETAF Org Outline*" (buffer-name b)))
+                                 (buffer-list)))))
               ;; 1. Drawer toggle (`属性 3') collapses without leaving ghost `记录' chip.
               (goto-char (point-min))
               (should (search-forward "属性 3" nil t))
@@ -1479,48 +1484,58 @@
               (etaf-activate rt)
               (etaf-runtime-flush rt)
               (should (string-match-p "etaf-org\\.el" (etaf-org-tests--text)))
-              ;; 3. In-buffer resizable TOC opens in the single preview window (left default).
+              ;; 3. Independent TOC side window opens on left by default.
               (should (eq t (etaf-org-toggle-toc)))
-              (should (= 1 (length (window-list))))
-              (should-not (cl-find-if (lambda (b)
-                                        (string-prefix-p "*ETAF Org Outline*" (buffer-name b)))
-                                      (buffer-list)))
-              (should (etaf-runtime-host-props-for rt 'etaf-org-toc-pane))
-              (should (etaf-runtime-host-props-for rt 'etaf-org-toc-resizer))
-              (should (etaf-runtime-host-props-for rt 'etaf-org-article-pane))
-              ;; Clicking distinct TOC items jumps to distinct scroll positions.
-              (let ((click-toc (lambda (label)
-                                 (goto-char (point-min))
-                                 (should (search-forward label nil t))
-                                 (goto-char (match-beginning 0))
-                                 (let ((on-press (plist-get (etaf-runtime-host-props-for
-                                                             rt (etaf-host-ref-at rt (point)))
-                                                            :on-press)))
-                                   (if (functionp on-press)
-                                       (funcall on-press)
-                                     (etaf-activate rt)))
-                                 (etaf-runtime-flush rt)
-                                 (etaf-scroll-offset rt 'etaf-org-article-pane))))
-                (let ((off-2 (funcall click-toc "第二章节"))
-                      (off-3 (funcall click-toc "目标章节"))
-                      (off-1 (funcall click-toc "概览章节")))
-                  (should (> off-3 off-2))
-                  (should (> off-2 off-1))))
-              ;; `n'/`p' heading navigation keeps working while TOC is open.
-              (let ((before (etaf-scroll-offset rt 'etaf-org-article-pane)))
+              (let* ((obuf (funcall find-outline))
+                     (owin (and obuf (get-buffer-window obuf t))))
+                (should (buffer-live-p obuf))
+                (should (window-live-p owin))
+                (should (eq 'left (window-parameter owin 'window-side)))
+                (should (= 2 (length (window-list))))
+                (with-current-buffer obuf
+                  (let ((txt (buffer-substring-no-properties (point-min) (point-max))))
+                    (should (string-match-p "目录" txt))
+                    (should (string-match-p "第二章节" txt))
+                    (should (string-match-p "目标章节" txt))))
+                ;; Clicking distinct TOC items jumps preview point to distinct positions.
+                (let ((click-toc
+                       (lambda (label)
+                         (with-current-buffer obuf
+                           (let ((ort (etaf-runtime-for-buffer obuf)))
+                             (goto-char (point-min))
+                             (should (search-forward label nil t))
+                             (goto-char (match-beginning 0))
+                             (let ((on-press (plist-get (etaf-runtime-host-props-for
+                                                         ort (etaf-host-ref-at ort (point)))
+                                                        :on-press)))
+                               (if (functionp on-press)
+                                   (funcall on-press)
+                                 (etaf-activate ort)))))
+                         (with-current-buffer prv (point)))))
+                  (let ((pos-2 (funcall click-toc "第二章节"))
+                        (pos-3 (funcall click-toc "目标章节"))
+                        (pos-1 (funcall click-toc "概览章节")))
+                    (should (> pos-3 pos-2))
+                    (should (> pos-2 pos-1)))))
+              ;; `n'/`p' heading navigation keeps working while side window is open.
+              (let ((before (point)))
                 (etaf-org-next-heading)
-                (should (> (etaf-scroll-offset rt 'etaf-org-article-pane) before))
+                (should (> (point) before))
                 (etaf-org-previous-heading)
-                (should (= (etaf-scroll-offset rt 'etaf-org-article-pane) before)))
-              ;; Right-side TOC mounts cleanly in the same single window.
+                (should (= (point) before)))
+              ;; Right-side TOC honors `etaf-org-toc-side'.
               (let ((etaf-org-toc-side 'right))
-                (etaf-org-toggle-toc)
+                (should-not (etaf-org-toggle-toc))
+                (should-not (funcall find-outline))
                 (should (eq t (etaf-org-toggle-toc)))
-                (should (= 1 (length (window-list))))
-                (should (etaf-runtime-host-props-for rt 'etaf-org-toc-pane)))
-              ;; Close TOC cleanly.
+                (let* ((obuf (funcall find-outline))
+                       (owin (and obuf (get-buffer-window obuf t))))
+                  (should (buffer-live-p obuf))
+                  (should (eq 'right (window-parameter owin 'window-side)))))
+              ;; Close TOC cleanly and restore single window.
               (should-not (etaf-org-toggle-toc))
-              (should-not (etaf-runtime-host-props-for rt 'etaf-org-toc-pane))
+              (should-not (funcall find-outline))
+              (should (= 1 (length (window-list))))
               ;; 4. Floating `K' peek dialog opens on symbol and dismisses on 2nd `K'.
               (goto-char (point-min))
               (should (search-forward "etaf-org-open" nil t))

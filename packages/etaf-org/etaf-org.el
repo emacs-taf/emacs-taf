@@ -169,18 +169,18 @@
 ;; Works from either the preview buffer or its source Org buffer.
 ;;
 ;; Function: etaf-org-toggle-toc (&optional arg)
-;; Toggle the in-buffer resizable TOC sidebar (`T') inside the current preview.
-;; Renders on `etaf-org-toc-side' (default `left') with an `etaf-pane-resizer'
-;; divider and independent scrolling.  Returns non-nil when open and nil when
-;; closed.
+;; Toggle the independent `*ETAF Org Outline*' side window (`T') for the
+;; current preview.  Opens on `etaf-org-toc-side' (default `left') with width
+;; `etaf-org-toc-width' so scaled headings never affect TOC row height or
+;; scrolling.  Returns non-nil when open and nil when closed.
 ;;
 ;; Variable: etaf-org-toc-side (default `left')
-;; Side of the preview buffer where the in-buffer TOC sidebar appears: `left'
+;; Side of the frame where the independent TOC side window opens: `left'
 ;; (default) or `right'.
 ;;
 ;; Variable: etaf-org-toc-width (default 28)
-;; Default width of the in-buffer TOC sidebar in character cells (clamped
-;; between 18 and 52 while reserving at least 42 columns for the reading pane).
+;; Width of the independent TOC side window in character cells (clamped
+;; between 18 and 52).
 ;;
 ;; Variable: etaf-org-keys
 ;; Customizable list of `(KEY COMMAND LABEL)' entries active in a preview

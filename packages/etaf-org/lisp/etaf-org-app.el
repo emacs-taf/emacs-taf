@@ -8,7 +8,7 @@
 ;; geometry, reading actions, full-width reading (`etaf-org-open'),
 ;; non-destructive live side-by-side preview (`etaf-org-preview'),
 ;; single-window <-> split toggle (`v'), reverse source navigation (`e' / `o'),
-;; follow-scroll (`f'), in-buffer resizable TOC sidebar (`T'),
+;; follow-scroll (`f'), independent configurable TOC side window (`T'),
 ;; floating peek dialog (`K'), live section filter (`/'), section folding
 ;; (`z' / `Z'), hidden drawers/comments toggle (`H'), and spoiler reveal (`S').
 ;;
@@ -35,7 +35,7 @@
   '(("n" etaf-org-next-heading "下一个标题")
     ("p" etaf-org-previous-heading "上一个标题")
     ("j" etaf-org-goto-heading "选择标题")
-    ("T" etaf-org-toggle-toc "开关目录侧栏")
+    ("T" etaf-org-toggle-toc "开关目录侧窗")
     ("K" etaf-org-preview-link "速览光标处链接/脚注/引用")
     ("e" etaf-org-goto-source "跳回 Org 源码行")
     ("o" etaf-org-goto-source "跳回 Org 源码行")
@@ -180,27 +180,219 @@ rely solely on `M-x' / `M-X' interactive commands or your own bindings."
                            (find-file-noselect file)))))))
 
 ;;; ---------------------------------------------------------------------------
-;;; In-buffer resizable TOC sidebar (`T')
+;;; Independent TOC side window (`T')
 ;;; ---------------------------------------------------------------------------
 
+(defun etaf-org--outline-buffer-name (session)
+  "Return the side-window outline buffer name for SESSION."
+  (let ((count (length (etaf-org-outline session))))
+    (if (> count 0)
+        (format "*ETAF Org Outline* (%d)" count)
+      "*ETAF Org Outline*")))
+
+(defun etaf-org--outline-background (session)
+  "Return the canvas background color for SESSION's outline side window.
+Uses `:panel' for fixed palettes (`dark', `light', `sepia') so the sidebar
+keeps a calm distinct tint from top to bottom, and nil for `auto' so the
+active Emacs theme background stays intact."
+  (when (eq (etaf-org--read session :theme-source) 'palette)
+    (etaf-org--palette-value (etaf-org--session-palette session) :panel)))
+
+(defun etaf-org--outline-close (session)
+  "Close and clean up SESSION's independent TOC side window."
+  (when session
+    (let* ((preview-buf (plist-get session :buffer))
+           (preview-win (and (buffer-live-p preview-buf)
+                             (get-buffer-window preview-buf t)))
+           (buf (plist-get session :toc-buffer))
+           (win (and (buffer-live-p buf) (get-buffer-window buf t)))
+           (was-selected (and (window-live-p win) (eq win (selected-window)))))
+      (when (etaf-org--ref session :toc-open)
+        (etaf-org--write session :toc-open nil))
+      (plist-put session :toc-buffer nil)
+      (when (buffer-live-p buf)
+        (when (and (window-live-p win) (not (one-window-p t)))
+          (ignore-errors (delete-window win)))
+        (when-let* ((rt (etaf-runtime-for-buffer buf)))
+          (ignore-errors (etaf-unmount rt)))
+        (ignore-errors (kill-buffer buf)))
+      (when (and was-selected (window-live-p preview-win))
+        (select-window preview-win)))))
+
+(etaf-define-component etaf-org--outline-app (&key session)
+  "Independent side-window TOC panel synced reactively with SESSION."
+  :setup
+  (etaf-theme-provide
+   (etaf-computed
+    (lambda ()
+      (etaf-org-theme-tokens (etaf-org--session-palette session)))))
+  :render
+  (let* ((env (etaf-org--env session))
+         (outline (etaf-org-outline session))
+         (active-id (or (etaf-org--read session :active-section)
+                        (nth 2 (car outline))))
+         (ink (etaf-org--env-color env :ink))
+         (muted (etaf-org--env-color env :muted))
+         (faint (or (etaf-org--env-color env :faint) muted))
+         (border (etaf-org--env-color env :border))
+         (accent (etaf-org--env-color env :accent))
+         (accent-soft (etaf-org--env-color env :accent-soft))
+         (hover (when (if (plist-member env :link-hover) (plist-get env :link-hover) t)
+                  (etaf-org--env-color env :panel2)))
+         (min-lv (if outline (apply #'min (mapcar #'car outline)) 1))
+         (count (length outline))
+         (bg (etaf-org--outline-background session))
+         (rest-border (or bg (etaf-org--env-color env :bg))))
+    (etaf-node
+     'column
+     (append
+      (list :width '(vw 100)
+            :color ink
+            :item-gap '(lh 0)
+            :aria-label "文档目录"
+            :on-direction
+            (lambda (direction)
+              (pcase direction
+                ('down
+                 (when-let* ((rt (etaf-runtime-for-buffer (current-buffer))))
+                   (etaf-scroll-viewport rt 1))
+                 'handled)
+                ('up
+                 (when-let* ((rt (etaf-runtime-for-buffer (current-buffer))))
+                   (etaf-scroll-viewport rt -1))
+                 'handled)
+                (_ 'release))))
+      (when bg (list :background-color bg)))
+     (append
+      (list
+       (etaf-node
+        'flex
+        (list :width 'stretch :align-items 'center
+              :padding '((lh 0) (ch 2))
+              :border-bottom (list '(px 1) 'solid border))
+        (delq nil
+              (list
+               (etaf-node 'text (list :font-weight 'bold :color ink) (list "目录"))
+               (when (> count 0)
+                 (etaf-node 'text (list :color faint) (list (format " · %d" count))))
+               (etaf-node 'box (list :flex-basis '(ch 0) :flex-grow 1 :min-width '(ch 1)) nil)
+               (etaf-node 'text
+                          (append
+                           (list :color muted :role 'button :tab-index 0 :pointer 'hand
+                                 :help-echo "关闭目录侧窗（T 或 q）"
+                                 :on-press (lambda () (etaf-org--outline-close session)))
+                           (when hover (list :hover-style (list :background-color hover))))
+                          (list "×")))))
+       (etaf-node 'box (list :width 'stretch :height '(lh 1)) nil))
+      (if (null outline)
+          (list (etaf-node 'box (list :width 'stretch :padding '((lh 0) (ch 2)))
+                           (list (etaf-node 'text (list :color muted)
+                                            (list "（文档暂无标题）")))))
+        (cl-loop for entry in outline
+                 for idx from 0
+                 for lv = (nth 0 entry)
+                 for text = (nth 1 entry)
+                 for id = (nth 2 entry)
+                 for is-active = (equal id active-id)
+                 for indent = (* 2 (min 3 (max 0 (- lv min-lv))))
+                 collect
+                 (let ((target-idx idx))
+                   (etaf-node
+                    'box
+                    (append
+                     (when is-active (list :ref 'etaf-org-toc-active-row))
+                     (list :width 'stretch
+                           :box-sizing 'border-box
+                           :padding (list '(lh 0) '(ch 1) '(lh 0) (list 'ch (+ 2 indent)))
+                           :border-left (list '(px 2) 'solid
+                                              (if is-active accent rest-border))
+                           :wrap-mode 'word
+                           :color (cond (is-active accent)
+                                        ((= lv min-lv) ink)
+                                        (t muted))
+                           :font-weight (when (or is-active (= lv min-lv)) 'bold)
+                           :role 'link :tab-index 0
+                           :pointer (unless is-active 'hand)
+                           :aria-selected (when is-active t)
+                           :help-echo (format "跳转到 %s" text)
+                           :on-press (lambda () (etaf-org-locate session target-idx)))
+                     (when is-active (list :background-color accent-soft))
+                     (when (and hover (not is-active))
+                       (list :hover-style (list :background-color hover))))
+                    (list (etaf-node 'text nil (list text)))))))))))
+
+(defun etaf-org--outline-open (session)
+  "Open SESSION's independent TOC side window on `etaf-org-toc-side'."
+  (let* ((preview-buf (plist-get session :buffer))
+         (preview-win (or (and (buffer-live-p preview-buf)
+                               (get-buffer-window preview-buf t))
+                          (selected-window)))
+         (side (if (eq etaf-org-toc-side 'right) 'right 'left))
+         (width (etaf-org--clamp-toc-width etaf-org-toc-width))
+         (alist `((side . ,side) (slot . 0) (window-width . ,width)
+                  (preserve-size . (t . nil))))
+         (existing (plist-get session :toc-buffer))
+         (toc-keys (list (list "q" (lambda () (interactive) (etaf-org--outline-close session)) "关闭目录侧窗")
+                         (list "T" #'etaf-org-toggle-toc "开关目录侧窗")
+                         (list "n" #'etaf-org-next-heading "下一个标题")
+                         (list "p" #'etaf-org-previous-heading "上一个标题")
+                         (list "t" #'etaf-org-cycle-theme "切换主题"))))
+    (etaf-org--sync-active-section session t)
+    (etaf-org--write session :toc-open t)
+    (let ((buf (if (buffer-live-p existing)
+                   (progn
+                     (display-buffer-in-side-window existing alist)
+                     existing)
+                 (let ((b (etaf-app-open
+                           (generate-new-buffer-name
+                            (etaf-org--outline-buffer-name session))
+                           (etaf-view (etaf-org--outline-app :session session
+                                                             :keys toc-keys))
+                           :state session
+                           :mode-line t
+                           :display (lambda (obuf)
+                                      (display-buffer-in-side-window obuf alist))
+                           :background (lambda () (etaf-org--outline-background session))
+                           :on-close (lambda ()
+                                       (when (etaf-org--ref session :toc-open)
+                                         (etaf-org--write session :toc-open nil))
+                                       (plist-put session :toc-buffer nil)))))
+                   (with-current-buffer b
+                     (setq-local cursor-in-non-selected-windows nil)
+                     (setq-local left-fringe-width 0)
+                     (setq-local right-fringe-width 0))
+                   (plist-put session :toc-buffer b)
+                   b))))
+      (when-let* ((owin (get-buffer-window buf t)))
+        (set-window-fringes owin 0 0))
+      (when (window-live-p preview-win)
+        (select-window preview-win))
+      (etaf-org--sync-outline-scroll session)
+      buf)))
+
 (defun etaf-org-toggle-toc (&optional arg)
-  "Toggle the in-buffer resizable TOC sidebar for the current preview (`T').
-The sidebar sits inside the preview buffer on `etaf-org-toc-side' (default
-`left') with an `etaf-pane-resizer' divider.  With prefix ARG, open when
-positive and close otherwise.  Return the new boolean state."
+  "Toggle the independent `*ETAF Org Outline*' side window (`T').
+Opens on `etaf-org-toc-side' (default `left') with width `etaf-org-toc-width'.
+With prefix ARG, open when positive and close otherwise.  Return the new
+boolean state."
   (declare (completion etaf-org--preview-command-p))
   (interactive "P")
   (let* ((session (etaf-org--current-session))
          (effective (or arg current-prefix-arg))
+         (open-p (and (etaf-org--read session :toc-open)
+                      (buffer-live-p (plist-get session :toc-buffer))
+                      (get-buffer-window (plist-get session :toc-buffer) t)))
          (next (if effective
                    (> (prefix-numeric-value effective) 0)
-                 (not (etaf-org--read session :toc-open)))))
-    (when next
-      (etaf-org--sync-active-section session t))
-    (etaf-org--write session :toc-open (and next t))
-    (etaf-org--flush session)
-    (message "目录侧栏：%s" (if next "已打开" "已关闭"))
-    (and next t)))
+                 (not open-p))))
+    (if next
+        (progn
+          (etaf-org--outline-open session)
+          (message "目录侧窗：已打开")
+          t)
+      (etaf-org--outline-close session)
+      (message "目录侧窗：已关闭")
+      nil)))
 
 ;;; ---------------------------------------------------------------------------
 ;;; Preview navigation and display commands (buffer-scoped interactive)
@@ -443,6 +635,7 @@ without deleting the window."
                          (and (buffer-live-p source-buf)
                               (not (eq source-buf preview-buf))
                               source-buf))))
+    (etaf-org--outline-close session)
     (etaf-org--cleanup-source-kill-hook session)
     (etaf-org--set-follow-scroll session nil)
     (etaf-app-close)
@@ -559,11 +752,13 @@ non-nil when side-by-side split is active."
             (when (and rt (etaf-runtime-mounted-p rt)
                        (or (and prev-body (not (equal prev-body body)))
                            anchor-line))
-              (etaf-next-tick
-               (lambda ()
-                 (when (and (buffer-live-p buffer) (window-live-p window)
-                            (eq (window-buffer window) buffer))
-                   (etaf-org--realign-after-resize session window anchor-line)))))))
+              (let ((gen (plist-get session :locate-gen)))
+                (etaf-next-tick
+                 (lambda ()
+                   (when (and (eql gen (plist-get session :locate-gen))
+                              (buffer-live-p buffer) (window-live-p window)
+                              (eq (window-buffer window) buffer))
+                     (etaf-org--realign-after-resize session window anchor-line))))))))
       (etaf-org--read session :width))))
 
 ;;; ---------------------------------------------------------------------------
@@ -593,14 +788,16 @@ non-nil when side-by-side split is active."
                   (prev-vw (plist-get session :last-canvas-width)))
              (plist-put session :last-canvas-width vw)
              (when (and prev-vw vw (not (equal vw prev-vw)))
-               (etaf-next-tick
-                (lambda ()
-                  (when-let* ((buf (plist-get session :buffer))
-                              ((buffer-live-p buf))
-                              (win (get-buffer-window buf t)))
-                    (let ((anchor (plist-get session :resize-anchor-line)))
-                      (plist-put session :resize-anchor-line nil)
-                      (etaf-org--realign-after-resize session win anchor)))))))))
+               (let ((gen (plist-get session :locate-gen)))
+                 (etaf-next-tick
+                  (lambda ()
+                    (when (eql gen (plist-get session :locate-gen))
+                      (when-let* ((buf (plist-get session :buffer))
+                                  ((buffer-live-p buf))
+                                  (win (get-buffer-window buf t)))
+                        (let ((anchor (plist-get session :resize-anchor-line)))
+                          (plist-put session :resize-anchor-line nil)
+                          (etaf-org--realign-after-resize session win anchor)))))))))))
        :name 'etaf-org-viewport-realign)))
   :render
   (etaf-org--view-document
@@ -632,6 +829,7 @@ Org document in any ETAF layout via `etaf-mount'."
 (defun etaf-org--display (session name &optional source-buffer)
   "Mount SESSION into application buffer NAME (linked to SOURCE-BUFFER)."
   (let* ((cleanup (lambda ()
+                    (etaf-org--outline-close session)
                     (etaf-org--cleanup-source-kill-hook session)
                     (etaf-org--set-follow-scroll session nil)
                     (etaf-org--live-unregister session)
