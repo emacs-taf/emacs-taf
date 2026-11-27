@@ -6,6 +6,8 @@ All notable changes to Ebox are documented here.
 
 ### Fixed
 
+- Guard `ebox--display-window-notify` against a `nil` cached geometry before calling `car`, preventing a segmentation fault triggered by Emacs 29.3 native compilation when echo-area space is borrowed during initial display.
+
 - Removing a child from a fixed-height `flex`, `row`, or `grid` container now marks layout dirty and repaints the full container line instead of leaving ghost-painted text and stale keymaps from the removed child.
 
 - Downward window scrolling stops once the last line of the mounted buffer is fully visible, preventing blank overscroll past the end of a page.

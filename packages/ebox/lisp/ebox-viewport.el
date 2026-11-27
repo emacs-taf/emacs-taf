@@ -66,7 +66,7 @@ body than last delivered is not a change."
                         (window-body-height window t)))
         (last (gethash buffer ebox--display-window-geometry)))
     (unless (or (equal geometry last)
-                (and borrowed (eq window (car last))
+                (and borrowed (consp last) (eq window (car last))
                      (< (nth 2 geometry) (nth 2 last))))
       (puthash buffer geometry ebox--display-window-geometry)
       (with-current-buffer buffer
