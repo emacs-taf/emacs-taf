@@ -27,7 +27,7 @@ ETAF Markdown Preview 把本地 Markdown 文档渲染为 Emacs 原生的现代�
 - **零浏览器原生 Mermaid 与 MathJax 渲染**：通过 `M-x etaf-install-native` 一键下载校验预编译 QuickJS 原生动态模块（架构借鉴 [LuciusChen/pele.el](https://github.com/LuciusChen/pele.el)，全程无需本机编译器）后，`mermaid` 代码块经由内嵌 [Obsidian Pele](https://github.com/obsidianmd/pele) + CoreText / Pango 原生文本测量直接渲染为清晰矢量 SVG，`$$` 块级公式经由内嵌 [MathJax](https://github.com/mathjax/MathJax-src) TeX-to-SVG 在独立后台线程中渲染——无需 Chromium、无需 Node.js、零子进程开销，结果落盘缓存；实时编辑期间保留上一帧有效图片不闪烁。
 - **可扩展 `:::` 文档容器与活文档工作台**：内置 35+ 种文档构件（`card`、`columns`、`box`、`steps`、`timeline`、`stats`、`field`、`file-tree`、`chat`、`tabs`、`code-tabs`、`accordion`、`details`、`table`、`window`、`panel`、`tab-panel`、`form`、`chart`、`progress`、`keymap`、`breadcrumb`、`diff`、`pros-cons`、`demo`、`qrcode`、`code-tree`、`npm-to`、`image-card`、`link-card`），以及受工作区沙箱保护的 Emacs 活文档组件（`include`、`code-ref`、`symbol`、`project-tree`、`git-log`、`git-diff`）和受信任门禁控制的 `run` 运行块。支持用 `etaf-md-define-node` 自定义节点类型，详见[扩展语法](docs/extensions.zh-CN.md)。
 - **增量实时编辑与极简全局命令面**：全局 `M-x` 仅暴露两个入口命令——`M-x etaf-md-open`（单窗全宽阅读，按 `q` 原地切回源码）与 `M-x etaf-md-preview`（源码右侧非破坏性实时对照分屏，自带滚动跟随）。编辑改动按 16 ms 帧节拍合并，仅对受影响的块切片增量解析与重绘，其余块的组件实例与交互状态完好保留。
-- **媒体播放、页内灯箱与大纲导航**：本地图片与异步缓存的远程 HTTP(S) 图片（`etaf-md-remote-images`）、按 `RET` 开启页内灯箱看图（同时支持图片与 Mermaid 图表）、内嵌视频组件就地播放（`ffmpeg`）、右侧独立 `*ETAF Outline*` 大纲窗（`C-c t`）、标题跳转（`n`/`p`、`C-c j`）、跳回源码（`e`/`o`）、链接与符号浮卡预览（`K`）、全局遮罩显隐（`S`）、配色轮换（`t`）、版心宽度调节（`[`/`]`）与页内可搜索帮助面板（`?`）。
+- **媒体播放、页内灯箱与大纲导航**：本地图片与异步缓存的远程 HTTP(S) 图片（`etaf-md-remote-images`）、按 `RET` 开启页内灯箱看图（同时支持图片与 Mermaid 图表）、内嵌视频组件就地播放（`ffmpeg`）、缓冲区内可拖拽调节宽度的 ETAF 目录侧栏（`T`，默认在左侧，可通过 `etaf-md-toc-side` 与 `etaf-md-toc-width` 配置）、标题跳转（`n`/`p`、`j`）、跳回源码（`e`/`o`）、居中浮层链接与符号速览（`K`）、全局遮罩显隐（`S`）、配色轮换（`t`）、版心宽度调节（`[`/`]`）与页内可搜索帮助面板（`?`）；按键均通过 `etaf-md-keys` 可自定义且仅使用单键（绝不占用 `C-c` / `C-t` 前缀），同时每个预览操作均为限定在预览缓冲区生效的交互命令。
 
 ## 运行环境
 
@@ -83,8 +83,8 @@ M-x etaf-md-preview      # 在源码右侧开关双栏实时对照预览
 | 按键 | 作用 |
 | --- | --- |
 | `n` / `p` | 跳到下一个 / 上一个标题（跳转前压栈 mark） |
-| `C-c j` | 补全选择标题跳转 |
-| `C-c t` | 开关右侧独立 `*ETAF Outline*` 大纲窗 |
+| `j` | 补全选择标题跳转 |
+| `T` | 开关缓冲区内可调宽 ETAF 目录侧栏（`etaf-md-toc-side`，默认在左侧） |
 | `e` / `o` | 从预览当前位置反向跳回源文档对应行 |
 | `v` | 在单窗全宽阅读与「左源码 + 右预览」双栏对照间切换 |
 | `f` | 开关与源窗口按比例同步的滚动跟随 |
@@ -93,7 +93,7 @@ M-x etaf-md-preview      # 在源码右侧开关双栏实时对照预览
 | `t` | 轮换配色（`dark` / `light` / `sepia` / `auto`） |
 | `[` / `]` | 收窄 / 加宽最大阅读宽度 |
 | `K` / `S` | 就地预览光标处链接或 Emacs 符号 / 全局显隐遮罩 |
-| `?` / `C-c h` | 在页内打开可搜索的帮助面板 |
+| `?` | 在页内打开可搜索的帮助面板 |
 | `q` | 关闭预览（单窗切回原缓冲区；分屏仅回收预览窗格） |
 | `C-s`、`C-v`、`M-v`、滚轮 | Emacs 原生增量搜索与平滑滚动 |
 

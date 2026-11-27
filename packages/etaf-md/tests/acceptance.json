@@ -628,7 +628,7 @@
     {
       "name": "etaf-md-tests-toc-panel-link-preview-and-media-lightbox",
       "file": "tests/etaf-md-tests.el",
-      "purpose": "Independent Emacs side-window outline (`etaf-md-toggle-toc'), in-place link/symbol preview (`etaf-md-preview-link') and in-buffer media lightbox (`etaf-md-media-lightbox') open and dismiss cleanly."
+      "purpose": "In-buffer resizable ETAF TOC (`etaf-md-toggle-toc', left default and right option, distinct per-item click jumps and `n'/`p' navigation), floating `K' peek dialog toggle (`etaf-md-preview-link') and in-buffer media lightbox (`etaf-md-media-lightbox') open and dismiss cleanly."
     },
     {
       "name": "etaf-md-tests-hover-discipline-across-themes-and-widgets",
@@ -648,7 +648,7 @@
     {
       "name": "etaf-md-tests-command-surface-and-toggle-split",
       "file": "tests/etaf-md-tests.el",
-      "purpose": "Global M-x surface exposes strictly `etaf-md-open' and `etaf-md-preview' (zero minor modes and zero leaked preview-only interactive commands), preview keys (`t', `v', `q') dispatch cleanly, and `etaf-md-toggle-split' switches single/split cleanly."
+      "purpose": "Two-tier M-x surface keeps strictly `etaf-md-open' and `etaf-md-preview' globally visible, scopes interactive preview commands to preview buffers, uses customizable single-key defaults with zero prefix keys in `etaf-md-keys', and switches single/split cleanly."
     },
     {
       "name": "etaf-md-tests-footnotes-keep-compact-gap-after-body",

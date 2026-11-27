@@ -82,11 +82,11 @@ basename never overwrite or reuse each other's preview."
 (declare-function etaf-md-assets-open-symbol "etaf-md-assets" (session name))
 (declare-function etaf-md--pulse-line "etaf-md-assets" (pos))
 
-(defconst etaf-md--keys
+(defcustom etaf-md-keys
   '(("n" etaf-md-next-heading "下一个标题")
     ("p" etaf-md-previous-heading "上一个标题")
-    ("C-c j" etaf-md-goto-heading "选择标题")
-    ("C-c t" etaf-md-toggle-toc "开关目录侧窗")
+    ("j" etaf-md-goto-heading "选择标题")
+    ("T" etaf-md-toggle-toc "开关目录侧窗")
     ("S" etaf-md-toggle-spoilers "显示/隐藏所有遮罩")
     ("K" etaf-md-preview-link "预览光标处链接或符号")
     ("e" etaf-md-goto-source "跳回源文档行")
@@ -98,12 +98,16 @@ basename never overwrite or reuse each other's preview."
     ("t" etaf-md-cycle-theme "切换主题")
     ("[" etaf-md-narrower "缩窄阅读栏")
     ("]" etaf-md-wider "加宽阅读栏")
-    ("C-c h" etaf-help "查看快捷键")
     ("q" etaf-md-close "关闭预览"))
-  "Root keys of a preview opened by `etaf-md-open'.
-The page is a rendering, so the markdown is edited in its own buffer and these
-keys only move around the view.  Native scrolling, isearch and link activation
-stay available as they are.")
+  "Key bindings active inside a preview opened by `etaf-md-open'.
+Each entry is `(KEY COMMAND LABEL)' where KEY is a `kbd' string.  Defaults use
+single keys only so user prefix maps (`C-c', `C-t', `C-x', etc.) are never
+shadowed; `?` opens the built-in ETAF key help.  Customize or set to nil to
+rely solely on `M-x' / `M-X' interactive commands or your own bindings."
+  :type '(repeat (list (string :tag "Key")
+                       (function :tag "Command")
+                       (string :tag "Label")))
+  :group 'etaf-md)
 
 (defun etaf-md--republish-appearance (&rest _)
   "Republish every preview that follows the Emacs theme.
@@ -128,31 +132,52 @@ two are both light."
     (when (buffer-live-p buf)
       (with-current-buffer buf
         (let ((state (etaf-app-state)))
-          (and (listp state) (etaf-ref-p (plist-get state :document)) t))))))
+          (and (listp state)
+               (etaf-ref-p (plist-get state :document))
+               t))))))
+
+(defun etaf-md--preview-command-p (_symbol buffer)
+  "Completion predicate limiting preview commands to active preview buffers."
+  (etaf-md--preview-buffer-p buffer))
+
+(defun etaf-md--follow-command-p (_symbol buffer)
+  "Enable `etaf-md-follow-scroll' in preview or linked source buffers."
+  (and (buffer-live-p buffer)
+       (with-current-buffer buffer
+         (and (etaf-md--follow-scroll-session) t))))
 
 (defun etaf-md--current-session ()
   "Return the preview session of the current buffer."
-  (or (etaf-app-state)
-      (user-error "Not an ETAF markdown preview buffer")))
+  (let ((state (etaf-app-state)))
+    (if (and (listp state)
+             (etaf-ref-p (plist-get state :document)))
+        state
+      (user-error "Not an ETAF markdown preview buffer"))))
 
 ;;; ---------------------------------------------------------------------------
-;;; Preview navigation and display actions (buffer-local keys, non-interactive)
+;;; Preview navigation and display commands (buffer-scoped interactive)
 ;;; ---------------------------------------------------------------------------
 
 (defun etaf-md-next-heading ()
   "Move to the next outline heading of the current preview."
+  (declare (completion etaf-md--preview-command-p))
+  (interactive)
   (let ((session (etaf-md--current-session)))
     (unless (etaf-md--adjacent-heading session 1)
       (message "No further heading"))))
 
 (defun etaf-md-previous-heading ()
   "Move to the previous outline heading of the current preview."
+  (declare (completion etaf-md--preview-command-p))
+  (interactive)
   (let ((session (etaf-md--current-session)))
     (unless (etaf-md--adjacent-heading session -1)
       (message "No earlier heading"))))
 
 (defun etaf-md-goto-heading ()
   "Choose an outline heading of the current preview and move to it."
+  (declare (completion etaf-md--preview-command-p))
+  (interactive)
   (let* ((session (etaf-md--current-session))
          (outline (etaf-md-outline session))
          (candidates
@@ -170,6 +195,8 @@ two are both light."
 
 (defun etaf-md-reload ()
   "Re-read and repaint the current preview."
+  (declare (completion etaf-md--preview-command-p))
+  (interactive)
   (let ((session (etaf-md--current-session)))
     (etaf-md-refresh session)
     (message "Reloaded %s" (etaf-md--read session :title))))
@@ -753,6 +780,8 @@ Selects the source window when already visible; otherwise switches to the
 source buffer in the current window without creating an unexpected split.
 Returns the target buffer position, or signals `user-error' when the preview
 has no backing source."
+  (declare (completion etaf-md--preview-command-p))
+  (interactive)
   (let* ((session (etaf-md--current-session))
          (preview-buf (current-buffer))
          (pos (point))
@@ -959,6 +988,8 @@ single refit pass, avoiding a redundant full re-render on every drag settle."
 
 (defun etaf-md-wider ()
   "Widen the current preview's reading column."
+  (declare (completion etaf-md--preview-command-p))
+  (interactive)
   (let* ((session (etaf-md--current-session))
          (cap (etaf-md--adjust-width-preserving-view session 4)))
     (message "Reading width: %d (max %d)"
@@ -966,180 +997,49 @@ single refit pass, avoiding a redundant full re-render on every drag settle."
 
 (defun etaf-md-narrower ()
   "Narrow the current preview's reading column."
+  (declare (completion etaf-md--preview-command-p))
+  (interactive)
   (let* ((session (etaf-md--current-session))
          (cap (etaf-md--adjust-width-preserving-view session -4)))
     (message "Reading width: %d (max %d)"
              (etaf-md--effective-width session) cap)))
 
-(defun etaf-md--outline-buffer-name (session)
-  "Return the side-window outline buffer name for SESSION."
-  (let ((count (length (etaf-md-outline session))))
-    (if (> count 0)
-        (format "*ETAF Outline* (%d sections)" count)
-      "*ETAF Outline*")))
-
-(defun etaf-md--outline-close (session)
-  "Close and clean up SESSION's independent Emacs side-window outline."
-  (when session
-    (when (etaf-md--ref session :toc-open)
-      (etaf-md--write session :toc-open nil))
-    (when-let* ((buf (plist-get session :toc-buffer)))
-      (plist-put session :toc-buffer nil)
-      (when (buffer-live-p buf)
-        (when-let* ((win (get-buffer-window buf t)))
-          (when (and (window-live-p win) (not (one-window-p t)))
-            (ignore-errors (delete-window win))))
-        (when-let* ((rt (etaf-runtime-for-buffer buf)))
-          (ignore-errors (etaf-unmount rt)))
-        (ignore-errors (kill-buffer buf))))))
-
-(etaf-define-component etaf-md--outline-app (&key session)
-  "Independent side-window outline panel synced with SESSION."
-  :setup
-  (etaf-theme-provide
-   (etaf-computed
-    (lambda ()
-      (etaf-md-theme-tokens (etaf-md--read session :theme)
-                            (etaf-md--session-palette session)))))
-  :render
-  (let* ((env (etaf-md--env session))
-         (outline (etaf-md-outline session))
-         (active (or (etaf-md--read session :toc-active) 0))
-         (bg (etaf-md--env-color env :bg))
-         (ink (etaf-md--env-color env :ink))
-         (muted (etaf-md--env-color env :muted))
-         (border (etaf-md--env-color env :border))
-         (accent (etaf-md--env-color env :accent))
-         (accent-soft (etaf-md--env-color env :accent-soft))
-         (hover (when (if (plist-member env :link-hover) (plist-get env :link-hover) t)
-                  (etaf-md--env-color env :panel2)))
-         (min-lv (if outline (apply #'min (mapcar #'car outline)) 1)))
-    (etaf-node
-     'column
-     (list :width '(vw 100)
-           :background-color bg
-           :color ink
-           :padding '((lh 1) (ch 2))
-           :item-gap '(lh 0)
-           :aria-label "大纲目录")
-     (append
-      (list
-       (etaf-node
-        'flex
-        (list :width 'stretch :align-items 'center
-              :padding-bottom '(lh 1)
-              :border-bottom (list '(px 1) 'solid border))
-        (list
-         (etaf-node 'text (list :font-weight 'bold :color ink)
-                    (list "大纲目录"))
-         (etaf-node 'box (list :flex-basis '(ch 0) :flex-grow 1) nil)
-         (etaf-node 'text
-                    (append
-                     (list :color muted :role 'button :tab-index 0 :pointer 'hand
-                           :help-echo "关闭大纲侧窗（C-c t 或 q）"
-                           :on-press (lambda () (etaf-md--outline-close session)))
-                     (when hover (list :hover-style (list :background-color hover))))
-                    (list "C-c t 关闭"))))
-       (etaf-node 'box (list :width 'stretch :height '(lh 1)) nil))
-      (if (null outline)
-          (list (etaf-node 'text (list :color muted) (list "（文档暂无标题）")))
-        (cl-loop for entry in outline
-                 for idx from 0
-                 for lv = (nth 0 entry)
-                 for text = (nth 1 entry)
-                 for is-active = (eql idx active)
-                 for indent = (* 2 (max 0 (- lv min-lv)))
-                 for target-idx = idx
-                 collect
-                 (etaf-node
-                  'box
-                  (append
-                   (list :width 'stretch
-                         :padding (list '(lh 0) '(ch 1) '(lh 0) (list 'ch (1+ indent)))
-                         :wrap-mode 'word)
-                   (when is-active
-                     (list :background-color accent-soft
-                           :border-left (list '(px 2) 'solid accent))))
-                  (list
-                   (etaf-node
-                    'text
-                    (append
-                     (list :color (cond (is-active ink)
-                                        ((= lv min-lv) ink)
-                                        (t muted))
-                           :font-weight (when (or is-active (= lv min-lv)) 'bold)
-                           :role 'link :tab-index 0
-                           :pointer (unless is-active 'hand)
-                           :aria-selected (when is-active t)
-                           :help-echo (format "跳转到 %s" text)
-                           :on-press (lambda ()
-                                       (etaf-md-locate session target-idx)))
-                     (when (and hover (not is-active))
-                       (list :hover-style (list :background-color hover))))
-                    (list text))))))))))
-
-(defun etaf-md--outline-open (session)
-  "Open SESSION's independent Emacs side-window outline on the right."
-  (let* ((preview-win (selected-window))
-         (preview-buf (window-buffer preview-win))
-         (existing (plist-get session :toc-buffer))
-         (buf (if (buffer-live-p existing)
-                  existing
-                (let ((b (save-window-excursion
-                           (etaf-app-open
-                            (generate-new-buffer-name
-                             (etaf-md--outline-buffer-name session))
-                            (etaf-view (etaf-md--outline-app :session session))
-                            :state session
-                            :mode-line t
-                            :background (lambda () (etaf-md--page-background session))
-                            :on-close (lambda ()
-                                        (when (etaf-md--ref session :toc-open)
-                                          (etaf-md--write session :toc-open nil))
-                                        (plist-put session :toc-buffer nil))))))
-                  (with-current-buffer b
-                    (let ((map (if (current-local-map)
-                                   (copy-keymap (current-local-map))
-                                 (make-sparse-keymap))))
-                      (define-key map (kbd "q")
-                                  (lambda () (interactive)
-                                    (etaf-md--outline-close session)))
-                      (define-key map (kbd "C-c t")
-                                  (lambda () (interactive)
-                                    (etaf-md--outline-close session)))
-                      (use-local-map map)))
-                  (plist-put session :toc-buffer b)
-                  b))))
-    (etaf-md--write session :toc-open t)
-    (when (and (window-live-p preview-win) (buffer-live-p preview-buf))
-      (set-window-buffer preview-win preview-buf))
-    (display-buffer-in-side-window
-     buf '((side . right) (slot . 0) (window-width . 32)
-           (preserve-size . (t . nil))))
-    (when (window-live-p preview-win)
-      (select-window preview-win))
-    (when-let* ((rt (etaf-runtime-for-buffer buf)))
-      (etaf-runtime-flush rt))
-    buf))
+(defun etaf-md--reading-heading-index (session)
+  "Return the index of SESSION's heading at or before point, or 0."
+  (let* ((buf (plist-get session :buffer))
+         (pt (if (buffer-live-p buf) (with-current-buffer buf (point)) 1))
+         (found 0))
+    (dolist (cell (etaf-md--heading-positions session))
+      (when (<= (cdr cell) pt)
+        (setq found (car cell))))
+    found))
 
 (defun etaf-md-toggle-toc (&optional arg)
-  "Toggle the side-window TOC outline for the current preview.
-With prefix ARG (or interactive prefix argument), open when positive and close
-otherwise.  Return new state."
+  "Toggle the in-buffer resizable TOC sidebar for the current preview.
+The sidebar sits inside the preview buffer on `etaf-md-toc-side' (default
+`left') with an `etaf-pane-resizer' divider.  With prefix ARG, open when
+positive and close otherwise.  Return the new boolean state."
+  (declare (completion etaf-md--preview-command-p))
+  (interactive "P")
   (let* ((session (etaf-md--current-session))
          (effective (or arg current-prefix-arg))
          (next (if effective (> (prefix-numeric-value effective) 0)
                  (not (etaf-md--read session :toc-open)))))
-    (if next
-        (etaf-md--outline-open session)
-      (etaf-md--outline-close session))
-    (message "大纲侧窗：%s" (if next "已打开" "已关闭"))
+    (when next
+      (etaf-md--write session :toc-active (etaf-md--reading-heading-index session)))
+    (etaf-md--write session :toc-open (and next t))
+    (when-let* ((buf (plist-get session :buffer))
+                (rt (and (buffer-live-p buf) (etaf-runtime-for-buffer buf))))
+      (etaf-runtime-flush rt))
+    (message "目录侧栏：%s" (if next "已打开" "已关闭"))
     (and next t)))
 
 (defun etaf-md-toggle-spoilers (&optional arg)
   "Reveal or hide all `!!spoiler!!' spans in the current preview.
 With prefix ARG (or interactive prefix argument), reveal when positive and
 hide otherwise.  Return new state."
+  (declare (completion etaf-md--preview-command-p))
+  (interactive "P")
   (let* ((session (etaf-md--current-session))
          (effective (or arg current-prefix-arg))
          (next (if effective (> (prefix-numeric-value effective) 0)
@@ -1160,6 +1060,8 @@ hide otherwise.  Return new state."
   "Preview the link, wiki-link, anchor or Emacs symbol at point in-place.
 Calling again while the preview card is open dismisses it if point has no
 previewable target.  Returns the preview plist or nil."
+  (declare (completion etaf-md--preview-command-p))
+  (interactive)
   (let* ((session (etaf-md--current-session))
          (help (etaf-md--help-at-point))
          (preview nil))
@@ -1236,17 +1138,32 @@ previewable target.  Returns the preview plist or nil."
                       :kind "外部链接"
                       :body (format "点击「打开」将在系统浏览器中访问 %s" help)
                       :on-open (lambda () (etaf-md--open-url session help)))))))))
-    (if preview
-        (progn
-          (etaf-md--write session :link-preview preview)
-          preview)
-      (if (etaf-md--read session :link-preview)
-          (progn
-            (etaf-md--write session :link-preview nil)
-            (message "已关闭链接预览")
-            nil)
+    (let ((current (etaf-md--read session :link-preview)))
+      (cond
+       ((and preview current (equal (plist-get current :key) help))
+        (etaf-md--write session :link-preview nil)
+        (when-let* ((buf (plist-get session :buffer))
+                    (rt (and (buffer-live-p buf) (etaf-runtime-for-buffer buf))))
+          (etaf-runtime-flush rt))
+        (message "已关闭链接预览")
+        nil)
+       (preview
+        (let ((tagged (plist-put (copy-sequence preview) :key help)))
+          (etaf-md--write session :link-preview tagged)
+          (when-let* ((buf (plist-get session :buffer))
+                      (rt (and (buffer-live-p buf) (etaf-runtime-for-buffer buf))))
+            (etaf-runtime-flush rt))
+          tagged))
+       (current
+        (etaf-md--write session :link-preview nil)
+        (when-let* ((buf (plist-get session :buffer))
+                    (rt (and (buffer-live-p buf) (etaf-runtime-for-buffer buf))))
+          (etaf-runtime-flush rt))
+        (message "已关闭链接预览")
+        nil)
+       (t
         (message "光标处没有可预览的链接、双链或符号")
-        nil))))
+        nil)))))
 
 (defun etaf-md--cleanup-source-kill-hook (session)
   "Remove the preview teardown hook from SESSION's source buffer, if live."
@@ -1262,6 +1179,8 @@ removes only that split window so unrelated panes stay intact.  When opened in
 a single window via `etaf-md-open', restores the originating buffer in the same
 window without deleting it.  Signals `user-error' when the current buffer is
 not a preview."
+  (declare (completion etaf-md--preview-command-p))
+  (interactive)
   (let* ((session (etaf-md--current-session))
          (preview-buf (current-buffer))
          (window (or (get-buffer-window preview-buf t) (selected-window)))
@@ -1281,7 +1200,6 @@ not a preview."
                               source-buf))))
     (etaf-md--cleanup-source-kill-hook session)
     (etaf-md--cancel-asset-timer session)
-    (etaf-md--outline-close session)
     (etaf-app-close)
     (cond
      ((and (or split-p source-split-p)
@@ -1299,6 +1217,8 @@ From a single-window preview, splits the source buffer on the left synced to
 the current line with follow-scroll enabled.  When the source is already shown
 beside the preview, collapses back to a full-width reading window.  Returns
 non-nil when side-by-side split is active."
+  (declare (completion etaf-md--preview-command-p))
+  (interactive)
   (let* ((session (etaf-md--current-session))
          (preview-buf (current-buffer))
          (preview-win (selected-window))
@@ -1345,15 +1265,19 @@ non-nil when side-by-side split is active."
 
 (defun etaf-md--effective-width (session)
   "Return the reading width the window actually gives SESSION.
-The session's `:width' is the maximum measure; a narrower window fills the
-available columns instead, so this reports what is on screen outside the
-column's side gutters."
+The session's `:width' is the maximum measure; a narrower window or an open
+side-by-side TOC sidebar narrows the available columns accordingly."
   (let* ((buffer (plist-get session :buffer))
          (window (and (buffer-live-p buffer) (get-buffer-window buffer t)))
          (cap (etaf-md--read session :width)))
     (if (window-live-p window)
-        (min cap (max 24 (- (window-body-width window)
-                            (* 2 etaf-md--measure-gutter))))
+        (let* ((raw-cols (window-body-width window))
+               (toc-cols (when (and (etaf-md--read session :toc-open)
+                                    (etaf-md--toc-side-by-side-p raw-cols))
+                           (etaf-md--clamp-toc-width
+                            (etaf-md--read session :toc-width) raw-cols)))
+               (pane-cols (if toc-cols (max 24 (- raw-cols toc-cols 1)) raw-cols)))
+          (min cap (max 24 (- pane-cols (* 2 etaf-md--measure-gutter)))))
       cap)))
 
 ;;; ---------------------------------------------------------------------------
@@ -1553,7 +1477,10 @@ A session created from text has no file, so it never follows anything."
   "Return the preview session the current buffer scrolls for, or nil.
 Run from the markdown buffer, this is the preview following its file; run from
 the preview, it is the preview itself."
-  (or (etaf-app-state)
+  (or (let ((state (etaf-app-state)))
+        (and (listp state)
+             (etaf-ref-p (plist-get state :document))
+             state))
       (and buffer-file-name
            (gethash (etaf-md--canonical-file buffer-file-name)
                     etaf-md--follow-sessions))))
@@ -1566,6 +1493,8 @@ the preview itself stays free.  Run it from the markdown buffer or from its
 preview.  With prefix ARG (or interactive prefix argument), turn the follow on
 when positive and off otherwise.  Return the new state.  Signal `user-error'
 when no preview shows the current buffer."
+  (declare (completion etaf-md--follow-command-p))
+  (interactive "P")
   (let ((session (or (etaf-md--follow-scroll-session)
                      (user-error "No preview shows the current buffer")))
         (effective (or arg current-prefix-arg)))
@@ -1659,77 +1588,95 @@ intact."
                  (match (etaf-md--block-entry-at session offset)))
             (cond
              ((eq match 'top)
-              (let ((top (with-current-buffer buffer (point-min))))
-                (set-window-start window top nil)
-                (set-window-point window top)
-                (force-window-update window)
-                top))
+              (if-let* ((rt (and (etaf-md--read session :toc-open)
+                                 (etaf-runtime-for-buffer buffer)))
+                        ((etaf-runtime-mounted-p rt))
+                        ((etaf-runtime-host-props-for rt 'etaf-md-article-pane)))
+                  (progn
+                    (ignore-errors (etaf-scroll-to rt 'etaf-md-article-pane 0))
+                    (etaf-runtime-flush rt)
+                    (with-current-buffer buffer (point-min)))
+                (let ((top (with-current-buffer buffer (point-min))))
+                  (set-window-start window top nil)
+                  (set-window-point window top)
+                  (force-window-update window)
+                  top)))
              ((consp match)
               (let* ((entry (car match))
                      (ref (plist-get entry :ref))
                      (block (plist-get entry :block))
                      (runtime (etaf-runtime-for-buffer buffer))
-                     (bounds (and runtime ref (etaf-host-ref-bounds runtime ref)))
-                     (position (or (car-safe bounds)
-                                   (and runtime ref (etaf-host-ref-position runtime ref)))))
-                (when position
-                  (let* ((src-beg (plist-get block :begin))
-                         (src-end (plist-get block :end))
-                         (extra-lines
-                          (if (and (consp bounds)
-                                   (integerp src-beg) (integerp src-end)
-                                   (> offset src-beg) (< offset src-end))
-                              (let* ((pmin (with-current-buffer source (point-min)))
-                                     (pmax (with-current-buffer source (point-max)))
-                                     (sb (max pmin (min pmax (+ pmin src-beg))))
-                                     (se (max sb (min pmax (+ pmin src-end))))
-                                     (sp (max sb (min se start)))
-                                     (src-frac
-                                      (with-current-buffer source
-                                        (save-excursion
-                                          (let* ((se-trim (progn
-                                                            (goto-char se)
-                                                            (skip-chars-backward " \t\r\n" sb)
-                                                            (max sb (point))))
-                                                 (sb-bol (progn (goto-char sb)
-                                                                (line-beginning-position)))
-                                                 (sp-bol (progn (goto-char sp)
-                                                                (line-beginning-position)))
-                                                 (se-bol (progn (goto-char se-trim)
-                                                                (line-beginning-position)))
-                                                 (total (count-lines sb-bol se-bol))
-                                                 (off (count-lines sb-bol sp-bol)))
-                                            (if (<= total 0)
-                                                0.0
-                                              (min 1.0 (/ (float off) (float total))))))))
-                                     (prev-steps
-                                      (with-current-buffer buffer
-                                        (save-excursion
-                                          (let* ((pb (car bounds))
-                                                 (pe (etaf-md--block-content-end
-                                                      buffer pb (cdr bounds)))
-                                                 (pb-bol (progn (goto-char pb)
-                                                                (line-beginning-position)))
-                                                 (pe-bol (progn (goto-char pe)
-                                                                (line-beginning-position))))
-                                            (count-lines pb-bol pe-bol))))))
-                                (if (> prev-steps 0)
-                                    (min prev-steps (round (* src-frac prev-steps)))
-                                  0))
-                            0))
-                         (row-start
-                          (with-current-buffer buffer
-                            (save-excursion
-                              (goto-char position)
-                              (when (> extra-lines 0)
-                                (forward-line extra-lines))
-                              (line-beginning-position)))))
-                    (set-window-start window row-start nil)
-                    ;; Keep window-point at the synced row and force a window
-                    ;; update so GUI redisplay repaints the unselected preview.
-                    (set-window-point window row-start)
-                    (force-window-update window)
-                    row-start)))))))))))
+                     (in-scroller (and runtime ref
+                                       (etaf-runtime-mounted-p runtime)
+                                       (etaf-runtime-host-props-for runtime ref)
+                                       (etaf-md--scrollable-ancestor-p runtime ref))))
+                (if in-scroller
+                    (progn
+                      (etaf-scroll-into-view runtime ref 'start)
+                      (etaf-runtime-flush runtime)
+                      (or (car-safe (etaf-host-ref-bounds runtime ref))
+                          (etaf-host-ref-position runtime ref)))
+                  (let* ((bounds (and runtime ref (etaf-host-ref-bounds runtime ref)))
+                         (position (or (car-safe bounds)
+                                       (and runtime ref (etaf-host-ref-position runtime ref)))))
+                    (when position
+                      (let* ((src-beg (plist-get block :begin))
+                             (src-end (plist-get block :end))
+                             (extra-lines
+                              (if (and (consp bounds)
+                                       (integerp src-beg) (integerp src-end)
+                                       (> offset src-beg) (< offset src-end))
+                                  (let* ((pmin (with-current-buffer source (point-min)))
+                                         (pmax (with-current-buffer source (point-max)))
+                                         (sb (max pmin (min pmax (+ pmin src-beg))))
+                                         (se (max sb (min pmax (+ pmin src-end))))
+                                         (sp (max sb (min se start)))
+                                         (src-frac
+                                          (with-current-buffer source
+                                            (save-excursion
+                                              (let* ((se-trim (progn
+                                                                (goto-char se)
+                                                                (skip-chars-backward " \t\r\n" sb)
+                                                                (max sb (point))))
+                                                     (sb-bol (progn (goto-char sb)
+                                                                    (line-beginning-position)))
+                                                     (sp-bol (progn (goto-char sp)
+                                                                    (line-beginning-position)))
+                                                     (se-bol (progn (goto-char se-trim)
+                                                                    (line-beginning-position)))
+                                                     (total (count-lines sb-bol se-bol))
+                                                     (off (count-lines sb-bol sp-bol)))
+                                                (if (<= total 0)
+                                                    0.0
+                                                  (min 1.0 (/ (float off) (float total))))))))
+                                         (prev-steps
+                                          (with-current-buffer buffer
+                                            (save-excursion
+                                              (let* ((pb (car bounds))
+                                                     (pe (etaf-md--block-content-end
+                                                          buffer pb (cdr bounds)))
+                                                     (pb-bol (progn (goto-char pb)
+                                                                    (line-beginning-position)))
+                                                     (pe-bol (progn (goto-char pe)
+                                                                    (line-beginning-position))))
+                                                (count-lines pb-bol pe-bol))))))
+                                    (if (> prev-steps 0)
+                                        (min prev-steps (round (* src-frac prev-steps)))
+                                      0))
+                                0))
+                             (row-start
+                              (with-current-buffer buffer
+                                (save-excursion
+                                  (goto-char position)
+                                  (when (> extra-lines 0)
+                                    (forward-line extra-lines))
+                                  (line-beginning-position)))))
+                        (set-window-start window row-start nil)
+                        ;; Keep window-point at the synced row and force a window
+                        ;; update so GUI redisplay repaints the unselected preview.
+                        (set-window-point window row-start)
+                        (force-window-update window)
+                        row-start)))))))))))))
 
 (defun etaf-md--block-entry-at (session offset)
   "Return `(ENTRY . t)' at 0-based source OFFSET, `top' before block 0, or nil."
@@ -2077,7 +2024,7 @@ the initial split width."
   (let ((buffer
          (etaf-app-open
           name
-          (etaf-view (etaf-md-app :session session :keys etaf-md--keys))
+          (etaf-view (etaf-md-app :session session :keys etaf-md-keys))
           :state session
           :mode-line t
           :on-fit (lambda (window)
@@ -2085,7 +2032,6 @@ the initial split width."
           :background (lambda () (etaf-md--page-background session))
           :on-close (lambda ()
                       (etaf-md--cleanup-source-kill-hook session)
-                      (etaf-md--outline-close session)
                       (etaf-md--follow-unregister (plist-get session :file))
                       (plist-put session :resize-anchor nil)
                       (plist-put session :buffer nil)))))
@@ -2095,7 +2041,6 @@ the initial split width."
     (add-hook 'kill-buffer-hook
               (lambda ()
                 (etaf-md--cleanup-source-kill-hook session)
-                (etaf-md--outline-close session)
                 (etaf-md--follow-unregister (plist-get session :file)))
               t t)
     (with-current-buffer buffer

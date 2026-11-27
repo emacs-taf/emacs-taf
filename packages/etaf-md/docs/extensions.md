@@ -1126,7 +1126,7 @@ Component: `etaf-underline-field`.
 | `run` | Emacs-native living docs (L2 explicit action) | Trust-gated actions (`etaf-md-allow-actions`) | Implemented |
 | Inline semantics: `!!spoiler!!`, `[+note]`, `[[wiki]]`, `%%comment%%`, `:color[...]`, `:sym[...]` | Inline extensions | `etaf-ui-markdown` | Implemented |
 | Code fence upgrades: `:collapsed-lines[=N]`, `/word/`, `[!code word:...]`, `:whitespace`, `:indent-guides` | Code blocks | `etaf-ui-markdown` | Implemented |
-| Interactive GFM task checkboxes, `C-c t` independent Emacs side-window outline, `S` global spoilers, `K` link/symbol preview, media lightbox | Reader shell | `etaf-md-app` / `etaf-media-viewer` | Implemented |
+| Interactive GFM task checkboxes, `T` in-buffer resizable TOC sidebar, `S` global spoilers, `K` floating link/symbol peek dialog, media lightbox | Reader shell | `etaf-md-app` / `etaf-media-viewer` | Implemented |
 
 ## 7. The interaction contract
 

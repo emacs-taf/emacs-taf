@@ -153,9 +153,11 @@
 ;; line and keeps point in the source buffer; invoking it again (or pressing
 ;; `q' in the preview) closes the preview and removes only the split window it
 ;; created.  When invoked inside a preview buffer with no FILE, delegates to
-;; `etaf-md-toggle-split'.  This and `etaf-md-open' are the only global `M-x'
-;; interactive commands; all preview-buffer actions below are bound to keys in
-;; the preview buffer and remain callable from Lisp without polluting `M-x'.
+;; `etaf-md-toggle-split'.  This and `etaf-md-open' are the only global
+;; autoloaded `M-x' commands; all preview-buffer actions below are interactive
+;; commands scoped to preview buffers via `completion-predicate' (and bound to
+;; keys in the preview buffer) so they work via `M-x' / `M-X' inside previews
+;; without cluttering unrelated buffers.
 ;;
 ;; Function: etaf-md-close ()
 ;; Unmount the current preview buffer, kill it and restore its window cleanly.
@@ -346,9 +348,23 @@
 ;; embedded QuickJS native module (`etaf-md-typeset-native').
 ;;
 ;; Function: etaf-md-toggle-toc (&optional arg)
-;; Toggle the independent right side-window outline (`*ETAF Outline*') for the
-;; current preview (`C-c t`).  With prefix ARG, open when positive and close
-;; otherwise.  Returns the new state.
+;; Toggle the in-buffer resizable TOC sidebar for the current preview (`T').
+;; Renders inside the preview buffer on `etaf-md-toc-side' (default `left')
+;; with an `etaf-pane-resizer' divider and independent scrolling.  With prefix
+;; ARG, open when positive and close otherwise.  Returns the new state.
+;;
+;; Variable: etaf-md-toc-side (default `left')
+;; Side of the preview buffer where the in-buffer TOC sidebar appears: `left'
+;; (default) or `right'.
+;;
+;; Variable: etaf-md-toc-width (default 28)
+;; Default width of the in-buffer TOC sidebar in character cells (clamped
+;; between 18 and 52 while reserving at least 42 columns for the reading pane).
+;;
+;; Variable: etaf-md-keys
+;; Customizable list of `(KEY COMMAND LABEL)' entries active in a preview
+;; buffer.  Defaults use single keys only so user prefix maps (`C-c', `C-t',
+;; `C-x', etc.) are never shadowed.
 ;;
 ;; Function: etaf-md-toggle-spoilers (&optional arg)
 ;; Reveal or hide all `!!spoiler!!' spans in the current preview (`S`).
@@ -357,8 +373,9 @@
 ;;
 ;; Function: etaf-md-preview-link ()
 ;; Inspect the link, wiki-link, in-document anchor or Emacs symbol at point
-;; inside a dismissible in-buffer preview card (`K`).  Returns the preview
-;; plist or nil.
+;; inside a floating viewport-centered dialog (`K').  Pressing `K' again on
+;; the same target or pressing `Esc' dismisses it.  Returns the preview plist
+;; or nil.
 ;;
 ;; Variable: etaf-md-allow-local-read (default t)
 ;; Whether read-only workspace widgets (`include', `code-ref', `project-tree',

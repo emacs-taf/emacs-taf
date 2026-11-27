@@ -27,6 +27,17 @@
 (require 'etaf-md-theme)
 (require 'etaf-md-env)
 
+(defvar etaf-md-toc-side)
+(defvar etaf-md--toc-width-min)
+(defvar etaf-md--toc-width-max)
+(defvar etaf-md--toc-min-article)
+(declare-function etaf-md-outline "etaf-md-model" (session))
+(declare-function etaf-md-locate "etaf-md-model" (session index))
+(declare-function etaf-md--toc-side-by-side-p "etaf-md-model" (raw-cols))
+(declare-function etaf-md--clamp-toc-width "etaf-md-model" (width &optional available))
+(declare-function etaf-md--set-toc-width "etaf-md-model" (session width))
+(declare-function etaf-md-toggle-toc "etaf-md-app" (&optional arg))
+
 (defconst etaf-md--alert-labels
   '((note . "笔记") (tip . "提示") (important . "重要")
     (warning . "警告") (caution . "小心"))
@@ -894,13 +905,8 @@ is padding, so it survives that case, and it also keeps a table's right
 border off the window's last column, where the renderer would extend its
 paint into the sub-cell remainder.")
 
-(defun etaf-md--page-widths (session width)
-  "Return (MEASURE . FIGURE) columns for SESSION's page, capped at WIDTH.
-MEASURE is the reading column: the session's cap, or the window when it is
-narrower.  FIGURE is the whole width the page may give a drawing or wide table,
-which is the canvas viewport minus side gutters: reading `etaf-canvas-columns'
-makes embedded views (such as `etaf-web') and live window resizes reflow
-reactively."
+(defun etaf-md--raw-viewport-columns (session)
+  "Return SESSION's current canvas/window width in columns, or nil."
   (let* ((buffer (plist-get session :buffer))
          (window (and (buffer-live-p buffer) (get-buffer-window buffer t)))
          (canvas-cols (ignore-errors
@@ -909,13 +915,29 @@ reactively."
                                             (etaf-runtime-for-buffer buffer))))
                                (cols (and rt (etaf-runtime-mounted-p rt)
                                           (etaf-canvas-columns rt))))
-                          (and (integerp cols) (> cols 0) cols))))
-         (raw-cols (or canvas-cols
-                       (and (window-live-p window) (window-body-width window))
-                       (etaf-md--read session :viewport-width)))
+                          (and (integerp cols) (> cols 0) cols)))))
+    (or canvas-cols
+        (and (window-live-p window) (window-body-width window))
+        (etaf-md--read session :viewport-width))))
+
+(defun etaf-md--page-widths (session width)
+  "Return (MEASURE . FIGURE) columns for SESSION's page, capped at WIDTH.
+MEASURE is the reading column: the session's cap, or the available article
+pane when narrower.  FIGURE is the whole width the page may give a drawing or
+wide table, minus side gutters and any open side-by-side TOC sidebar."
+  (let* ((raw-cols (etaf-md--raw-viewport-columns session))
+         (toc-open (etaf-md--read session :toc-open))
+         (toc-cols (when (and toc-open (etaf-md--toc-side-by-side-p raw-cols))
+                     (etaf-md--clamp-toc-width
+                      (etaf-md--read session :toc-width) raw-cols)))
+         (pane-cols (if (and (integerp raw-cols) (> raw-cols 0))
+                        (if toc-cols
+                            (max 24 (- raw-cols toc-cols 1))
+                          raw-cols)
+                      nil))
          (gutter etaf-md--measure-gutter)
-         (available (if (and (integerp raw-cols) (> raw-cols 0))
-                        (max 24 (- raw-cols (* 2 gutter)))
+         (available (if (and (integerp pane-cols) (> pane-cols 0))
+                        (max 24 (- pane-cols (* 2 gutter)))
                       width)))
     (cons (min width available) available)))
 
@@ -1019,56 +1041,172 @@ inside the page gutters when the window narrows, without clipping."
         node))))
 
 (defun etaf-md--link-preview-card (session preview env)
-  "Return the dismissible in-buffer link/symbol PREVIEW card for SESSION."
+  "Return the floating `etaf-dialog' peek view for active PREVIEW in SESSION."
   (let* ((title (or (plist-get preview :title) "预览"))
          (kind (plist-get preview :kind))
          (body (or (plist-get preview :body) ""))
          (open-fn (plist-get preview :on-open))
+         (muted (etaf-md--env-color env :muted))
+         (close-fn (lambda () (etaf-md--write session :link-preview nil))))
+    (etaf-node
+     'etaf-dialog
+     (list :open t
+           :title (if kind (format "%s · %s" title kind) title)
+           :width '(ch 60)
+           :compact t
+           :close-label "关闭"
+           :on-close close-fn
+           :keys (list (list "K" close-fn "关闭链接预览")))
+     (delq nil
+           (list
+            (etaf-node 'box (list :width 'stretch :max-height '(lh 8)
+                                  :overflow 'scroll :wrap-mode 'word)
+                       (list (etaf-node 'text (list :color muted) (list body))))
+            (when (functionp open-fn)
+              (etaf-node 'flex (list :width 'stretch :padding-top '(lh 1))
+                         (list
+                          (etaf-node 'etaf-button
+                                     (list :label "打开目标 →"
+                                           :variant 'primary
+                                           :on-press
+                                           (lambda ()
+                                             (etaf-md--write session :link-preview nil)
+                                             (funcall open-fn)))
+                                     nil)))))))))
+
+(defun etaf-md--toc-sidebar-view (session env toc-cols narrow-p)
+  "Return the in-buffer TOC sidebar View for SESSION in ENV.
+TOC-COLS is the sidebar width in columns when side-by-side.  When NARROW-P is
+non-nil, stretches full width and auto-closes after jumping to a heading."
+  (let* ((outline (etaf-md-outline session))
+         (active (or (etaf-md--read session :toc-active) 0))
          (panel (etaf-md--env-color env :panel))
+         (ink (etaf-md--env-color env :ink))
+         (muted (etaf-md--env-color env :muted))
+         (faint (or (etaf-md--palette-value (plist-get env :palette) :faint) muted))
          (border (etaf-md--env-color env :border))
          (accent (etaf-md--env-color env :accent))
-         (muted (etaf-md--env-color env :muted))
+         (accent-soft (etaf-md--env-color env :accent-soft))
          (hover (when (if (plist-member env :link-hover) (plist-get env :link-hover) t)
-                  (etaf-md--env-color env :accent-soft))))
+                  (etaf-md--env-color env :panel2)))
+         (min-lv (if outline (apply #'min (mapcar #'car outline)) 1))
+         (count (length outline)))
     (etaf-node
      'column
-     (list :key 'etaf-md-link-preview-card
-           :width 'stretch :item-gap '(lh 0)
-           :background-color panel
-           :border-top (list '(px 1) 'solid border)
-           :border-right (list '(px 1) 'solid border)
-           :border-bottom (list '(px 1) 'solid border)
-           :border-left (list '(px 3) 'solid accent)
-           :padding '((lh 1) (ch 2))
-           :margin-bottom '(lh 1))
+     (append
+      (list :height 'stretch
+            :overflow 'hidden
+            :box-sizing 'border-box
+            :background-color panel
+            :color ink
+            :item-gap '(lh 0)
+            :aria-label "文档目录")
+      (if narrow-p
+          (list :width 'stretch :flex-grow 1 :flex-basis '(px 0) :min-width '(px 0))
+        (list :width (list 'ch toc-cols) :flex-shrink 0)))
      (list
       (etaf-node
-       'flex (list :width 'stretch :align-items 'center :column-gap '(ch 1))
+       'flex
+       (list :width 'stretch :align-items 'center
+             :padding '((lh 0) (ch 2))
+             :border-bottom (list '(px 1) 'solid border))
        (delq nil
              (list
-              (etaf-node 'text (list :font-weight 'bold :color accent) (list title))
-              (when kind (etaf-node 'etaf-badge (list :text kind :variant 'info) nil))
-              (etaf-node 'box (list :flex-basis '(ch 0) :flex-grow 1) nil)
-              (when (functionp open-fn)
-                (etaf-node 'text
-                           (append
-                            (list :color accent :font-weight 'bold
-                                  :role 'button :tab-index 0 :pointer 'hand
-                                  :help-echo "打开此目标"
-                                  :on-press (lambda ()
-                                              (etaf-md--write session :link-preview nil)
-                                              (funcall open-fn)))
-                            (when hover (list :hover-style (list :background-color hover))))
-                           (list " 打开 → ")))
+              (etaf-node 'text (list :font-weight 'bold :color ink) (list "目录"))
+              (when (> count 0)
+                (etaf-node 'text (list :color faint) (list (format " · %d" count))))
+              (etaf-node 'box (list :flex-basis '(ch 0) :flex-grow 1 :min-width '(ch 1)) nil)
               (etaf-node 'text
                          (append
                           (list :color muted :role 'button :tab-index 0 :pointer 'hand
-                                :help-echo "关闭预览"
-                                :on-press (lambda () (etaf-md--write session :link-preview nil)))
+                                :help-echo "关闭目录（T）"
+                                :on-press (lambda () (etaf-md-toggle-toc -1)))
                           (when hover (list :hover-style (list :background-color hover))))
-                         (list " × ")))))
-      (etaf-node 'box (list :width 'stretch :margin-top '(lh 0) :wrap-mode 'word)
-                 (list (etaf-node 'text (list :color muted) (list body))))))))
+                         (list (if narrow-p "返回正文" "×"))))))
+      (etaf-node
+       'column
+       (list :ref 'etaf-md-toc-pane
+             :width 'stretch
+             :flex-grow 1 :flex-basis '(px 0) :min-height '(lh 0)
+             :overflow 'scroll
+             :box-sizing 'border-box
+             :padding '((lh 1) (ch 0))
+             :item-gap '(lh 0)
+             :on-direction
+             (lambda (direction)
+               (pcase direction
+                 ('down
+                  (when-let* ((rt (etaf-runtime-for-buffer (current-buffer))))
+                    (ignore-errors (etaf-scroll-by rt 'etaf-md-toc-pane 1)))
+                  'handled)
+                 ('up
+                  (when-let* ((rt (etaf-runtime-for-buffer (current-buffer))))
+                    (ignore-errors (etaf-scroll-by rt 'etaf-md-toc-pane -1)))
+                  'handled)
+                 (_ 'release))))
+       (if (null outline)
+           (list (etaf-node 'box (list :width 'stretch :padding '((lh 0) (ch 2)))
+                            (list (etaf-node 'text (list :color muted)
+                                             (list "（文档暂无标题）")))))
+         (cl-loop for entry in outline
+                  for idx from 0
+                  for lv = (nth 0 entry)
+                  for text = (nth 1 entry)
+                  for is-active = (eql idx active)
+                  for indent = (* 2 (min 3 (max 0 (- lv min-lv))))
+                  collect
+                  (let ((target-idx idx))
+                    (etaf-node
+                     'box
+                     (append
+                      (when is-active (list :ref 'etaf-md-toc-active-row))
+                      (list :width 'stretch
+                            :box-sizing 'border-box
+                            :padding (list '(lh 0) '(ch 1) '(lh 0) (list 'ch (+ 2 indent)))
+                            :border-left (list '(px 2) 'solid (if is-active accent panel))
+                            :wrap-mode 'word
+                            :color (cond (is-active accent)
+                                         ((= lv min-lv) ink)
+                                         (t muted))
+                            :font-weight (when (or is-active (= lv min-lv)) 'bold)
+                            :role 'link :tab-index 0
+                            :pointer (unless is-active 'hand)
+                            :aria-selected (when is-active t)
+                            :help-echo (format "跳转到 %s" text)
+                            :on-press
+                            (lambda ()
+                              (when narrow-p
+                                (etaf-md--write session :toc-open nil)
+                                (when-let* ((buf (plist-get session :buffer))
+                                            (rt (and (buffer-live-p buf)
+                                                     (etaf-runtime-for-buffer buf))))
+                                  (etaf-runtime-flush rt)))
+                              (etaf-md-locate session target-idx)))
+                      (when is-active (list :background-color accent-soft))
+                      (when (and hover (not is-active))
+                        (list :hover-style (list :background-color hover))))
+                     (list (etaf-node 'text nil (list text))))))))))))
+
+(defun etaf-md--toc-resizer-view (session env toc-cols raw-cols side cell-width)
+  "Return the draggable `etaf-pane-resizer' for SESSION's in-buffer TOC."
+  (let* ((cell (max 1 (or cell-width 8)))
+         (min-cols etaf-md--toc-width-min)
+         (max-cols (max min-cols
+                        (min etaf-md--toc-width-max
+                             (- raw-cols etaf-md--toc-min-article 1)))))
+    (etaf-node 'etaf-pane-resizer
+               (list :ref 'etaf-md-toc-resizer
+                     :size (* cell toc-cols)
+                     :side (if (eq side 'right) 'left 'right)
+                     :min (* cell min-cols)
+                     :max (* cell max-cols)
+                     :line (etaf-md--env-color env :border)
+                     :background (etaf-md--env-color env :bg)
+                     :on-change (lambda (pixels)
+                                  (etaf-md--set-toc-width
+                                   session
+                                   (round (/ (float pixels) cell)))))
+               nil)))
 
 (defun etaf-md--lightbox-view (session lightbox)
   "Return `etaf-media-viewer' overlay View for active LIGHTBOX in SESSION."
@@ -1175,9 +1313,7 @@ unrelated block edits never create spurious damage outside the edited block."
                        (list :key 'etaf-md-leading-blanks :width 'stretch
                              :height (list 'lh leading))
                        nil))))
-         (chrome-views (append (when preview
-                                 (list (etaf-md--link-preview-card session preview env)))
-                               (when hero-box (list hero-box))
+         (chrome-views (append (when hero-box (list hero-box))
                                (when leading-box (list leading-box))))
          (fn-view (etaf-md--memoized-footnotes session footnotes env))
          (body-children (etaf-md--group-body-views items block-views width cell-width))
@@ -1195,37 +1331,133 @@ unrelated block edits never create spurious damage outside the edited block."
            (when fn-view
              (list (etaf-md--measured-view width cell-width
                                            fn-view
-                                           'etaf-md-footnotes))))))
-    (etaf-node 'column
-               (append (list :width '(vw 100) :cross-align 'center
-                             :aria-label "Markdown 预览"
-                             :help "上下方向键按行滚动；TAB 切换链接与控件，RET 激活；C-c t 开关目录，S 开关遮罩，K 预览光标处链接。"
-                             :on-direction
-                             (lambda (direction)
-                               (pcase direction
-                                 ('down
-                                  (when-let* ((rt (etaf-runtime-for-buffer (current-buffer))))
-                                    (etaf-scroll-viewport rt 1))
-                                  'handled)
-                                 ('up
-                                  (when-let* ((rt (etaf-runtime-for-buffer (current-buffer))))
-                                    (etaf-scroll-viewport rt -1))
-                                  'handled)
-                                 (_ 'release))))
-                       (when background
-                         (list :background-color background)))
-               (delq nil
-                     (list
-                      (etaf-node 'column
-                                 (list :width 'stretch
-                                       :cross-align 'center
-                                       :padding (list (list 'lh 1)
-                                                      (list 'ch etaf-md--measure-gutter))
-                                       :item-gap '(lh 0)
-                                       :color (etaf-md--env-color env :ink))
-                                 page-children)
-                      (when lightbox
-                        (etaf-md--lightbox-view session lightbox)))))))
+                                           'etaf-md-footnotes)))))
+         (toc-open (etaf-md--read session :toc-open))
+         (overlays (delq nil
+                         (list (when preview
+                                 (etaf-md--link-preview-card session preview env))
+                               (when lightbox
+                                 (etaf-md--lightbox-view session lightbox)))))
+         (reading-column
+          (etaf-node 'column
+                     (list :width 'stretch
+                           :cross-align 'center
+                           :padding (list (list 'lh 1)
+                                          (list 'ch etaf-md--measure-gutter))
+                           :item-gap '(lh 0)
+                           :color (etaf-md--env-color env :ink))
+                     page-children))
+         (help-text "上下方向键按行滚动；TAB 切换链接与控件，RET 激活；T 开关目录，S 开关遮罩，K 预览光标处链接，? 查看快捷键。"))
+    (if (not toc-open)
+        (etaf-node 'column
+                   (append (list :width '(vw 100) :cross-align 'center
+                                 :aria-label "Markdown 预览"
+                                 :help help-text
+                                 :on-direction
+                                 (lambda (direction)
+                                   (pcase direction
+                                     ('down
+                                      (when-let* ((rt (etaf-runtime-for-buffer (current-buffer))))
+                                        (etaf-scroll-viewport rt 1))
+                                      'handled)
+                                     ('up
+                                      (when-let* ((rt (etaf-runtime-for-buffer (current-buffer))))
+                                        (etaf-scroll-viewport rt -1))
+                                      'handled)
+                                     (_ 'release))))
+                           (when background
+                             (list :background-color background)))
+                   (cons reading-column overlays))
+      (let* ((viewport (ignore-errors (etaf-viewport)))
+             (raw-cols (or (etaf-md--raw-viewport-columns session)
+                           (and (consp viewport) (integerp (car viewport))
+                                (> (car viewport) 0) (car viewport))
+                           100))
+             (buf (plist-get session :buffer))
+             (win (and (buffer-live-p buf) (get-buffer-window buf t)))
+             (vp-rows (or (and (consp viewport) (integerp (cdr viewport))
+                               (> (cdr viewport) 0) (cdr viewport))
+                          (and (window-live-p win) (window-body-height win))))
+             ;; Reserve one row on live windows to avoid bottom-edge chrome clip.
+             (shell-h (list 'lh (if (and (integerp vp-rows) (> vp-rows 0))
+                                    (max 12 (1- vp-rows))
+                                  36)))
+             (side-by-side (etaf-md--toc-side-by-side-p raw-cols))
+             (side (if (eq etaf-md-toc-side 'right) 'right 'left))
+             (body-shell
+              (if (not side-by-side)
+                  (etaf-node 'flex
+                             (list :flex-direction 'row :align-items 'stretch
+                                   :width 'stretch :height 'stretch
+                                   :flex-grow 1 :flex-basis '(px 0)
+                                   :min-height '(lh 0) :overflow 'hidden)
+                             (list (etaf-md--toc-sidebar-view session env raw-cols t)))
+                (let* ((toc-cols (etaf-md--clamp-toc-width
+                                  (etaf-md--read session :toc-width) raw-cols))
+                       (article-cols (max 24 (- raw-cols toc-cols 1)))
+                       (toc-pane (etaf-md--toc-sidebar-view session env toc-cols nil))
+                       (resizer (etaf-md--toc-resizer-view
+                                 session env toc-cols raw-cols side cell-width))
+                       (article-pane
+                        (etaf-node 'column
+                                   (append
+                                    (list :ref 'etaf-md-article-pane
+                                          :width (list 'ch article-cols)
+                                          :height 'stretch
+                                          :flex-grow 1 :flex-basis '(px 0)
+                                          :min-width '(px 0)
+                                          :overflow 'scroll
+                                          :cross-align 'center
+                                          :on-direction
+                                          (lambda (direction)
+                                            (pcase direction
+                                              ('down
+                                               (when-let* ((rt (etaf-runtime-for-buffer (current-buffer))))
+                                                 (ignore-errors (etaf-scroll-by rt 'etaf-md-article-pane 1)))
+                                               'handled)
+                                              ('up
+                                               (when-let* ((rt (etaf-runtime-for-buffer (current-buffer))))
+                                                 (ignore-errors (etaf-scroll-by rt 'etaf-md-article-pane -1)))
+                                               'handled)
+                                              (_ 'release))))
+                                    (when background
+                                      (list :background-color background)))
+                                   (list reading-column))))
+                  (etaf-node 'flex
+                             (list :ref 'etaf-md-toc-shell
+                                   :flex-direction 'row :align-items 'stretch
+                                   :gap '((lh 0) (ch 0))
+                                   :width 'stretch :height 'stretch
+                                   :flex-grow 1 :flex-basis '(px 0)
+                                   :min-height '(lh 0) :overflow 'hidden)
+                             (if (eq side 'right)
+                                 (list article-pane resizer toc-pane)
+                               (list toc-pane resizer article-pane)))))))
+        (etaf-node 'column
+                   (append (list :width '(vw 100) :height shell-h
+                                 :aria-label "Markdown 预览"
+                                 :help help-text
+                                 :on-direction
+                                 (lambda (direction)
+                                   (pcase direction
+                                     ('down
+                                      (when-let* ((rt (etaf-runtime-for-buffer (current-buffer))))
+                                        (ignore-errors
+                                          (if side-by-side
+                                              (etaf-scroll-by rt 'etaf-md-article-pane 1)
+                                            (etaf-scroll-by rt 'etaf-md-toc-pane 1))))
+                                      'handled)
+                                     ('up
+                                      (when-let* ((rt (etaf-runtime-for-buffer (current-buffer))))
+                                        (ignore-errors
+                                          (if side-by-side
+                                              (etaf-scroll-by rt 'etaf-md-article-pane -1)
+                                            (etaf-scroll-by rt 'etaf-md-toc-pane -1))))
+                                      'handled)
+                                     (_ 'release))))
+                           (when background
+                             (list :background-color background)))
+                   (cons body-shell overlays))))))
 
 (provide 'etaf-md-views)
 ;;; etaf-md-views.el ends here

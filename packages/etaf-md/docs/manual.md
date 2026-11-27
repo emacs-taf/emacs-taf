@@ -4,13 +4,13 @@ This manual covers the workflows a reader performs. The root entry's Commentary 
 
 ## Keys
 
-Run `M-x etaf-md-open` from any Markdown buffer to read it full-width in the current window (with `C-u`, or from another buffer, it prompts for a file). Run `M-x etaf-md-preview` in a Markdown source buffer to toggle a side-by-side live preview on the right. Only these two commands appear in global `M-x`; all actions below are bound directly to keys inside the preview buffer.
+Run `M-x etaf-md-open` from any Markdown buffer to read it full-width in the current window (with `C-u`, or from another buffer, it prompts for a file). Run `M-x etaf-md-preview` in a Markdown source buffer to toggle a side-by-side live preview on the right. Only these two entry commands are globally autoloaded in `M-x`; all actions below are interactive commands scoped to preview buffers via `completion-predicate` and bound directly to keys inside the preview buffer.
 
 | Key | Action |
 | --- | --- |
 | `n` / `p` | Move to the next / previous heading of the document (pushes mark) |
-| `C-c j` | Choose a heading from a completion list (pushes mark) |
-| `C-c t` | Toggle the independent `*ETAF Outline*` right side window |
+| `j` | Choose a heading from a completion list (pushes mark) |
+| `T` | Toggle the in-buffer resizable ETAF TOC sidebar (`etaf-md-toc-side`, default `left`; drag divider to resize) |
 | `e` / `o` | Jump from preview point back to the matching line in the source buffer |
 | `v` | Toggle side-by-side source + live preview split from the preview |
 | `f` | Toggle proportional scroll-follow with the source window |
@@ -19,10 +19,12 @@ Run `M-x etaf-md-open` from any Markdown buffer to read it full-width in the cur
 | `t` | Cycle the palette (dark, light, sepia, auto) |
 | `[` / `]` | Narrow / widen the maximum reading measure by four columns |
 | `K` / `S` | Preview link or symbol at point / reveal or hide all spoilers |
-| `?`, `C-c h` | Search the current key bindings in an in-buffer help modal |
+| `?` | Search the current key bindings in an in-buffer help modal |
 | `q` | Close the preview (restores originating buffer, or closes live split) |
 | `↑` / `↓` | Scroll the reading viewport line by line (1 line per keypress) |
 | `C-s`, `C-v`, `M-v`, wheel | Native isearch and scrolling |
+
+Defaults use single keys only so user prefix bindings (`C-c`, `C-t`, `C-x`, etc.) are never shadowed. Customize `etaf-md-keys` to adjust or remove bindings, or invoke any preview action directly via `M-x` / `M-X` inside the preview buffer.
 
 The buffer is an ordinary Emacs buffer, so isearch, `occur`, window splitting, `C-x C-s`-style buffer handling and `imenu` all keep working. `M-x imenu` lists the document outline. Help stays in the preview window and follows its theme. `/` searches; Escape first leaves search editing, then closes help. Clicking outside the panel also closes it and restores the reading focus.
 

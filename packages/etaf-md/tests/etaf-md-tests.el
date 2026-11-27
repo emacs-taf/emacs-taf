@@ -1305,7 +1305,7 @@ relative default when given a prefix argument (`C-u')."
           (with-current-buffer buffer
             (let ((windows (window-list))
                   (before (etaf-md-state session)))
-              (dolist (key '("?" "C-c h"))
+              (dolist (key '("?"))
                 (execute-kbd-macro (kbd key))
                 (let* ((data (etaf-help-data runtime))
                        (entries (apply #'append (mapcar (lambda (group) (plist-get group :entries))
@@ -3386,54 +3386,94 @@ proportionally below the unsized width."
         (with-current-buffer buf (etaf-md-close))))))
 
 (ert-deftest etaf-md-tests-toc-panel-link-preview-and-media-lightbox ()
-  "Independent side-window outline (`etaf-md-toggle-toc'), in-place link/symbol preview and media lightbox open and dismiss cleanly."
+  "In-buffer resizable TOC (`etaf-md-toggle-toc'), floating `K' peek dialog and media lightbox work cleanly."
   (let* ((img (etaf-md-tests--fixture "wide-400x100.png"))
-         (doc (format "# Main\n\nInspect :sym[etaf-md-open] and jump to [Target](#target).\n\n![Banner](%s)\n\n## Target\n\nReached target.\n"
-                      img))
+         (filler (mapconcat (lambda (i) (format "Paragraph filler line %d with enough text to scroll.\n" i))
+                            (number-sequence 1 18) "\n"))
+         (doc (format (concat "# Main\n\nInspect :sym[etaf-md-open] and jump to [Target](#target).\n\n"
+                              "![Banner](%s)\n\n"
+                              "## Alpha\n\n%s\n## Beta\n\n%s\n## Target\n\nReached target.\n")
+                      img filler filler))
          (etaf-md-media-lightbox t)
+         (etaf-md-toc-side 'left)
+         (etaf-md-toc-width 28)
          (session (etaf-md-create :text doc :theme 'dark))
          (buf (etaf-md-open session)))
     (unwind-protect
         (with-current-buffer buf
-          ;; 1. Toggle independent Emacs side-window outline on and off.
-          (should (eq t (etaf-md-toggle-toc)))
-          (let ((outline-buf (cl-find-if (lambda (b)
-                                           (string-prefix-p "*ETAF Outline*" (buffer-name b)))
-                                         (buffer-list))))
-            (should (buffer-live-p outline-buf))
-            (should (get-buffer-window outline-buf t))
-            (let ((otxt (with-current-buffer outline-buf
-                          (buffer-substring-no-properties (point-min) (point-max)))))
-              (should (string-match-p "大纲目录" otxt))
-              (should (string-match-p "Target" otxt)))
-            ;; Preview buffer itself stays clean (no injected TOC text inside body).
-            (should-not (string-match-p "大纲目录"
-                                        (buffer-substring-no-properties (point-min) (point-max)))))
-          (should-not (etaf-md-toggle-toc))
-          (should-not (cl-find-if (lambda (b)
-                                    (string-prefix-p "*ETAF Outline*" (buffer-name b)))
-                                  (buffer-list)))
-          ;; 2. Preview Emacs symbol at point with `etaf-md-preview-link'.
-          (goto-char (point-min))
-          (should (search-forward "etaf-md-open" nil t))
-          (goto-char (match-beginning 0))
-          (let ((info (etaf-md-preview-link)))
-            (should info)
-            (should (equal (plist-get info :title) "ƒ etaf-md-open")))
-          (etaf-runtime-flush (etaf-runtime-for-buffer buf))
-          (should (string-match-p "交互命令"
-                                  (buffer-substring-no-properties (point-min) (point-max))))
-          ;; 3. Activate local image -> opens in-buffer media lightbox, close via `q'.
-          (goto-char (point-min))
-          (should (search-forward "▀" nil t))
-          (goto-char (match-beginning 0))
-          (call-interactively (key-binding (kbd "RET")))
-          (etaf-runtime-flush (etaf-runtime-for-buffer buf))
-          (should (string-match-p "Banner"
-                                  (buffer-substring-no-properties (point-min) (point-max))))
-          (execute-kbd-macro (kbd "q"))
-          (etaf-runtime-flush (etaf-runtime-for-buffer buf))
-          (should (buffer-live-p buf)))
+          (let ((rt (etaf-runtime-for-buffer buf))
+                (win-count (length (window-list))))
+            ;; 1. Toggle in-buffer resizable TOC on (default left, single window).
+            (should (eq t (etaf-md-toggle-toc)))
+            (should (= win-count (length (window-list))))
+            (should-not (cl-find-if (lambda (b)
+                                      (string-prefix-p "*ETAF Outline*" (buffer-name b)))
+                                    (buffer-list)))
+            (should (etaf-runtime-host-props-for rt 'etaf-md-toc-pane))
+            (should (etaf-runtime-host-props-for rt 'etaf-md-toc-resizer))
+            (should (etaf-runtime-host-props-for rt 'etaf-md-article-pane))
+            (let ((txt (buffer-substring-no-properties (point-min) (point-max))))
+              (should (string-match-p "目录" txt))
+              (should (string-match-p "Alpha" txt))
+              (should (string-match-p "Target" txt)))
+            ;; Clicking distinct TOC items jumps to distinct scroll positions (no loop capture bug).
+            (let ((click-toc (lambda (label)
+                               (goto-char (point-min))
+                               (should (search-forward label nil t))
+                               (goto-char (match-beginning 0))
+                               (let ((on-press (plist-get (etaf-runtime-host-props-for
+                                                           rt (etaf-host-ref-at rt (point)))
+                                                          :on-press)))
+                                 (if (functionp on-press)
+                                     (funcall on-press)
+                                   (etaf-activate rt)))
+                               (etaf-runtime-flush rt)
+                               (etaf-scroll-offset rt 'etaf-md-article-pane))))
+              (let ((off-beta (funcall click-toc "Beta"))
+                    (off-target (funcall click-toc "Target"))
+                    (off-alpha (funcall click-toc "Alpha")))
+                (should (> off-target off-beta))
+                (should (> off-beta off-alpha))))
+            ;; `n'/`p' heading navigation keeps working with TOC open.
+            (let ((before (etaf-scroll-offset rt 'etaf-md-article-pane)))
+              (etaf-md-next-heading)
+              (should (> (etaf-scroll-offset rt 'etaf-md-article-pane) before))
+              (etaf-md-previous-heading)
+              (should (= (etaf-scroll-offset rt 'etaf-md-article-pane) before)))
+            ;; Right-side placement also mounts cleanly inside the same window.
+            (let ((etaf-md-toc-side 'right))
+              (etaf-md-toggle-toc)
+              (should (eq t (etaf-md-toggle-toc)))
+              (should (= win-count (length (window-list))))
+              (should (etaf-runtime-host-props-for rt 'etaf-md-toc-pane)))
+            ;; Close TOC cleanly.
+            (should-not (etaf-md-toggle-toc))
+            (should-not (etaf-runtime-host-props-for rt 'etaf-md-toc-pane))
+            ;; 2. Preview Emacs symbol at point with floating `K' dialog; 2nd `K' dismisses.
+            (goto-char (point-min))
+            (should (search-forward "etaf-md-open" nil t))
+            (goto-char (match-beginning 0))
+            (let ((info (etaf-md-preview-link)))
+              (should info)
+              (should (equal (plist-get info :title) "ƒ etaf-md-open")))
+            (etaf-runtime-flush rt)
+            (should (string-match-p "交互命令"
+                                    (buffer-substring-no-properties (point-min) (point-max))))
+            (should-not (etaf-md-preview-link))
+            (etaf-runtime-flush rt)
+            (should-not (string-match-p "交互命令"
+                                        (buffer-substring-no-properties (point-min) (point-max))))
+            ;; 3. Activate local image -> opens in-buffer media lightbox, close via `q'.
+            (goto-char (point-min))
+            (should (search-forward "▀" nil t))
+            (goto-char (match-beginning 0))
+            (call-interactively (key-binding (kbd "RET")))
+            (etaf-runtime-flush rt)
+            (should (string-match-p "Banner"
+                                    (buffer-substring-no-properties (point-min) (point-max))))
+            (execute-kbd-macro (kbd "q"))
+            (etaf-runtime-flush rt)
+            (should (buffer-live-p buf))))
       (when (buffer-live-p buf)
         (with-current-buffer buf (etaf-md-close))))))
 
@@ -3611,33 +3651,42 @@ centered layouts."
         (should (string-match-p "pnpm add vue && pnpm build" plain))))))
 
 (ert-deftest etaf-md-tests-command-surface-and-toggle-split ()
-  "Global M-x surface exposes strictly `etaf-md-open' and `etaf-md-preview' (zero minor modes, zero leaked preview-local interactive commands), preview keys still dispatch cleanly, and `etaf-md-toggle-split' switches single/split cleanly."
+  "Two-tier M-x surface keeps strictly `etaf-md-open' and `etaf-md-preview' globally visible, scopes preview commands to preview buffers, uses single-key defaults with zero prefix keys in `etaf-md-keys', and toggles split cleanly."
   (let* ((file (make-temp-file "etaf-md-cmd-" nil ".md"))
          (source nil)
          (preview nil)
-         (interactive-cmds nil))
+         (global-cmds nil))
     (unwind-protect
         (progn
           (with-temp-file file (insert "# Single Window\n\nBody paragraph.\n"))
-          ;; 1. Across all of Emacs, strictly `etaf-md-open' and `etaf-md-preview'
-          ;;    are interactive `etaf-md-*' commands (zero minor modes, zero leaks).
-          (mapatoms (lambda (sym)
-                      (when (and (string-prefix-p "etaf-md-" (symbol-name sym))
-                                 (not (string-prefix-p "etaf-md-tests-" (symbol-name sym)))
-                                 (fboundp sym)
-                                 (commandp sym))
-                        (push sym interactive-cmds))))
-          (should (equal (sort interactive-cmds
+          ;; 1. Outside preview buffers, strictly `etaf-md-open' and `etaf-md-preview'
+          ;;    pass `command-completion-default-include-p' (zero global M-x clutter).
+          (with-temp-buffer
+            (mapatoms (lambda (sym)
+                        (when (and (string-prefix-p "etaf-md-" (symbol-name sym))
+                                   (not (string-prefix-p "etaf-md-tests-" (symbol-name sym)))
+                                   (fboundp sym)
+                                   (commandp sym)
+                                   (command-completion-default-include-p sym (current-buffer)))
+                          (push sym global-cmds)))))
+          (should (equal (sort global-cmds
                                (lambda (a b) (string< (symbol-name a) (symbol-name b))))
                          '(etaf-md-open etaf-md-preview)))
-          ;; 2. Open single-window from source, verify preview keys (`t', `v', `q')
-          ;;    dispatch cleanly even though those functions are non-interactive.
+          ;; Default `etaf-md-keys' uses single keys only (zero C-c / C-t / C-x prefix keys).
+          (dolist (binding etaf-md-keys)
+            (should-not (string-match-p "\\`C-" (car binding))))
+          ;; 2. Inside a preview buffer, preview actions are interactive M-x commands
+          ;;    AND their single-key bindings dispatch cleanly.
           (setq source (find-file-noselect file))
           (delete-other-windows)
           (switch-to-buffer source)
           (setq preview (etaf-md-open file))
           (should (= 1 (length (window-list))))
           (with-current-buffer preview
+            (dolist (cmd '(etaf-md-toggle-toc etaf-md-goto-heading etaf-md-preview-link
+                           etaf-md-toggle-split etaf-md-cycle-theme etaf-md-close))
+              (should (commandp cmd))
+              (should (command-completion-default-include-p cmd preview)))
             (let ((before (plist-get (etaf-md-state (etaf-app-state)) :theme)))
               (call-interactively (key-binding (kbd "t")))
               (let ((after (plist-get (etaf-md-state (etaf-app-state)) :theme)))

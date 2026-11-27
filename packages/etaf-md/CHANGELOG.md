@@ -6,10 +6,15 @@ All notable user-visible changes to `etaf-md` are documented in this file.
 
 ### Changed
 
+- Replaced the external `*ETAF Outline*` side window with an in-buffer resizable ETAF TOC sidebar (`T` / `M-x etaf-md-toggle-toc`, configurable via `etaf-md-toc-side` defaulting to `'left` and `etaf-md-toc-width` defaulting to `28`), with a sticky header, draggable `etaf-pane-resizer`, independent scrolling, and automatic full-width narrow fallback (`< 61` columns).
+- Upgraded `etaf-md-preview-link` (`K`) to a viewport-centered floating `etaf-dialog` with scrollable body and second-press toggle dismissal, visible from any scroll position.
+- Adopted a two-tier interactive command surface and customizable single-key defaults (`etaf-md-keys`): globally autoloaded `M-x` still exposes strictly `etaf-md-open` and `etaf-md-preview`, while all preview actions are now buffer-scoped interactive commands (`completion-predicate`) bound to single keys with zero `C-c` / `C-t` / `C-x` prefix shadowing.
+
 - The official ETAF package archive now ships `examples/`, `docs/`, `scripts/`, `tests/`, `benchmarks/`, `Makefile`, and `native/` sources (still excluding `native/build/` and compiled binaries) so archive installations include all example documents, documentation, and local source-build files.
 
 ### Fixed
 
+- Clicking any heading in the TOC sidebar now jumps to that exact heading instead of always capturing the final heading index in the `cl-loop`.
 - Up and down arrow keys now scroll the Markdown reading viewport smoothly one line at a time instead of jumping between focusable controls, and unfocused code-tree blocks let page scrolling glide past them.
 
 ## [0.3.0] - 2026-11-25
