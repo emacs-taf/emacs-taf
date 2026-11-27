@@ -22,6 +22,10 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y emacs-nox
+          if [ -d packages/etaf-posframe ]; then
+            mkdir -p "$HOME/.emacs.d/elpa"
+            git clone --depth=1 https://github.com/tumashu/posframe.git "$HOME/.emacs.d/elpa/posframe-ci"
+          fi
       - name: Policy regression tests (workspace)
         run: |
           if [ -f workspace.json ]; then
