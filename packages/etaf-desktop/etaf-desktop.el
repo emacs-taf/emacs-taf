@@ -2,7 +2,7 @@
 
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 ;; Author: ETAF contributors
-;; Version: 0.1.10
+;; Version: 0.1.11
 ;; Package-Requires: ((emacs "29.1") (etaf "0.2.1") (etaf-ui "0.1.0"))
 ;; Keywords: ui, desktop, tools
 ;; URL: https://github.com/emacs-taf/etaf-desktop
