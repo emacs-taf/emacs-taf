@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- `etaf-ui-qr-login` now renders half-block codes from `etaf-ui-qr-paint` as a crisp square vector SVG image sized to fit the live viewport on graphical displays with SVG support, preventing East Asian ambiguous block-glyph widths, horizontal font gaps and tall-code clipping on Windows and Linux Chinese locales while preserving half-block text rendering in terminals and builds without SVG.
 - `etaf-ui-markdown--definition-marker` guards against `nil` lines at the end of nested or trailing definition lists so Sphinx/Python documentation parses without signaling `(wrong-type-argument stringp nil)`.
 - `etaf-ui-markdown-highlight--buffer` accepts derived and `major-mode-remap-alist`-remapped major modes instead of requiring exact `major-mode` symbol equality.
 

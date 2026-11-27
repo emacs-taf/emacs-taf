@@ -794,6 +794,11 @@
       "purpose": "The sign-in panel follows caller-owned visibility, code and status, blocks the covered page, and reports close from Escape and its cancel button."
     },
     {
+      "name": "etaf-ui-qr-login-renders-square-svg-fitting-compact-graphical-viewport",
+      "file": "tests/etaf-ui-advanced-tests.el",
+      "purpose": "A 49x49 QR sign-in panel on a graphical display with SVG renders a crisp square SVG image and keeps title, status, hint and cancel visible inside a 33-row window."
+    },
+    {
       "name": "etaf-ui-composition-components-render-public-contracts",
       "file": "tests/etaf-ui-modern-tests.el",
       "purpose": "Tag, Kbd, Steps and List compose through public props and caller-owned selection callbacks."

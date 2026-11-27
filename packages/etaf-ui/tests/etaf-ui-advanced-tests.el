@@ -112,7 +112,9 @@
               (etaf-focus runtime 'entry)
               (etaf-activate runtime)
               (should (string-match-p "扫码登录" (buffer-string)))
-              (should (string-match-p "█" (buffer-string)))
+              (if (and (display-graphic-p) (image-type-available-p 'svg))
+                  (should (text-property-not-all (point-min) (point-max) 'display nil))
+                (should (string-match-p "█" (buffer-string))))
               (should (string-match-p "等待扫码…" (buffer-string)))
               (should (string-match-p "请用手机客户端扫码" (buffer-string)))
               (should-not (etaf-host-ref-position runtime 'background))
@@ -138,5 +140,56 @@
         (should-error (etaf-mount (current-buffer)
                                   (etaf-node 'etaf-ui-qr-login props nil))
                       :type 'etaf-component-call-error)))))
+
+(ert-deftest etaf-ui-qr-login-renders-square-svg-fitting-compact-graphical-viewport ()
+  "On graphical displays with SVG, a large 49x49 QR renders as crisp SVG inside a 33-row window."
+  (let* ((size 49)
+         (rows (cl-loop for r below size
+                        collect (apply #'string
+                                       (cl-loop for c below size
+                                                collect (if (or (= r 0) (= r (1- size))
+                                                                (= c 0) (= c (1- size))
+                                                                (= 0 (% (+ r c) 3)))
+                                                            ?1 ?0)))))
+         (code (etaf-ui-qr-paint rows))
+         (svg-data nil))
+    (cl-letf (((symbol-function 'display-graphic-p) (lambda (&optional _frame) t))
+              ((symbol-function 'image-type-available-p)
+               (lambda (type) (eq type 'svg)))
+              ((symbol-function 'image-type)
+               (lambda (_data &optional type _data-p) (or type 'svg)))
+              ((symbol-function 'image-size)
+               (lambda (spec &rest _)
+                 (cons (or (plist-get (cdr spec) :width) 1)
+                       (or (plist-get (cdr spec) :height) 1)))))
+      (with-temp-buffer
+        (unwind-protect
+            (progn
+              (etaf-mount
+               (current-buffer)
+               (etaf-view
+                (column :width '(ch 120) :height '(lh 33)
+                  (etaf-ui-qr-login :open t :code code :status "等待扫码…"
+                                    :on-close #'ignore))))
+              (let ((text (buffer-substring-no-properties (point-min) (point-max))))
+                (should (string-match-p "扫码登录" text))
+                (should (string-match-p "等待扫码…" text))
+                (should (string-match-p "请用手机客户端扫码" text))
+                (should (string-match-p "取消" text)))
+              (let ((pos (point-min))
+                    (end (point-max)))
+                (while (and (null svg-data) (< pos end))
+                  (let* ((disp (get-text-property pos 'display))
+                         (img (cond ((eq (car-safe disp) 'image) disp)
+                                    ((consp (car-safe disp)) (assq 'image disp)))))
+                    (when (and img (eq (plist-get (cdr img) :type) 'svg))
+                      (setq svg-data (plist-get (cdr img) :data))))
+                  (setq pos (next-single-property-change pos 'display nil end))))
+              (should (stringp svg-data))
+              (should (string-match-p "shape-rendering='crispEdges'" svg-data))
+              (should (string-match-p "fill='#FFFFFF'" svg-data))
+              (should (string-match-p "fill='#000000'" svg-data)))
+          (when-let* ((runtime (etaf-runtime-for-buffer (current-buffer))))
+            (etaf-unmount runtime)))))))
 
 ;;; etaf-ui-advanced-tests.el ends here

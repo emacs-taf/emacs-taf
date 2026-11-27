@@ -2,7 +2,7 @@
 
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 ;; Author: ETAF contributors
-;; Version: 0.3.8
+;; Version: 0.3.9
 ;; Keywords: ui, convenience
 ;; Package-Requires: ((emacs "29.1") (etaf "0.3.8"))
 ;; URL: https://github.com/emacs-taf/etaf-ui
@@ -1581,10 +1581,14 @@
 ;; :on-close — Required function (), even while closed. Caller updates visibility.
 ;;
 ;; Compose a modal Dialog with the painted code and a status line for a
-;; caller-owned sign-in cycle.  The code sizes the panel, the page underneath
-;; keeps its content and only dims, and Escape, the header close control and
-;; the footer cancel button request ON-CLOSE.  The component sends no request
-;; and asks for no credentials; mount it as the application shell's last child.
+;; caller-owned sign-in cycle.  On graphical displays with SVG support, a
+;; half-block code from `etaf-ui-qr-paint' renders as a crisp square vector SVG
+;; image sized to fit the live viewport so East Asian ambiguous block widths and
+;; font line spacing never distort scannability; terminals and builds without
+;; SVG keep half-block text rendering.  The page underneath keeps its content
+;; and only dims, and Escape, the header close control and the footer cancel
+;; button request ON-CLOSE.  The component sends no request and asks for no
+;; credentials; mount it as the application shell's last child.
 ;;
 ;; Component: etaf-tabs (&key items active on-change variant framed)
 ;; Parameters:

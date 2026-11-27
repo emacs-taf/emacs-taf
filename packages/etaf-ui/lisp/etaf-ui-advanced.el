@@ -12,7 +12,10 @@
 (require 'etaf-ui-input)
 (require 'etaf-ui-navigation)
 (require 'etaf-ui-surface)
+(require 'etaf-ui-svg)
 (require 'etaf-ui-table)
+
+(declare-function image-type-available-p "image" (type))
 
 (etaf-define-component etaf-date-picker
     (&key (value etaf-ui--unsupplied) (label "Date") (placeholder "YYYY-MM-DD")
@@ -285,13 +288,139 @@ The caller owns the rows and nothing here reads a file or the network."
                                'face etaf-ui--qr-face))
                  lines "\n"))))
 
+(defun etaf-ui--qr-code-matrix (code)
+  "Decode half-block QR string CODE into a normalized dark-module matrix plist.
+Return nil when CODE contains non-QR characters or has no dark modules.  Each
+line is read by character index rather than `string-width', so East Asian
+ambiguous-width block glyphs never distort column geometry."
+  (let* ((lines (split-string code "\n"))
+         (rows-list nil)
+         (valid t)
+         (min-r nil)
+         (max-r 0)
+         (min-c nil)
+         (max-c 0)
+         (r 0))
+    (while (and valid lines)
+      (let* ((line (pop lines))
+             (len (length line))
+             (upper (make-bool-vector len nil))
+             (lower (make-bool-vector len nil))
+             (c 0))
+        (while (and valid (< c len))
+          (let ((ch (aref line c)))
+            (cond
+             ((eq ch ?█)
+              (aset upper c t)
+              (aset lower c t))
+             ((eq ch ?▀)
+              (aset upper c t))
+             ((eq ch ?▄)
+              (aset lower c t))
+             ((eq ch ?\s) nil)
+             (t (setq valid nil))))
+          (when valid
+            (when (aref upper c)
+              (setq min-r (if min-r (min min-r r) r)
+                    max-r (max max-r r)
+                    min-c (if min-c (min min-c c) c)
+                    max-c (max max-c c)))
+            (when (aref lower c)
+              (setq min-r (if min-r (min min-r (1+ r)) (1+ r))
+                    max-r (max max-r (1+ r))
+                    min-c (if min-c (min min-c c) c)
+                    max-c (max max-c c))))
+          (setq c (1+ c)))
+        (push upper rows-list)
+        (push lower rows-list)
+        (setq r (+ r 2))))
+    (when (and valid min-r)
+      (list :min-r min-r :max-r max-r
+            :min-c min-c :max-c max-c
+            :rows (vconcat (nreverse rows-list))))))
+
+(defun etaf-ui--qr-svg-image (code)
+  "Convert half-block QR string CODE into a square SVG image plist, or nil.
+Returns `(:image DESCRIPTOR :columns COLS :rows ROWS)' on graphical displays
+with SVG support so the code renders with exact 1:1 module geometry, crisp
+edges and viewport-bounded height regardless of locale `char-width' or font
+line spacing."
+  (when (and (display-graphic-p)
+             (fboundp 'image-type-available-p)
+             (image-type-available-p 'svg))
+    (when-let* ((matrix (etaf-ui--qr-code-matrix code)))
+      (let* ((min-r (plist-get matrix :min-r))
+             (max-r (plist-get matrix :max-r))
+             (min-c (plist-get matrix :min-c))
+             (max-c (plist-get matrix :max-c))
+             (rows-vec (plist-get matrix :rows))
+             (box-h (1+ (- max-r min-r)))
+             (box-w (1+ (- max-c min-c)))
+             (core (max box-h box-w))
+             (quiet 4)
+             (total (+ core (* 2 quiet)))
+             (cell (etaf-ui--canvas-cell))
+             (cw (max 1 (car cell)))
+             (lh (max 1 (cdr cell)))
+             (runtime (etaf-current-runtime))
+             (window-vp (and runtime (etaf-runtime-window-viewport runtime)))
+             (canvas-vp (and runtime (etaf-runtime-viewport runtime)))
+             (vp-w-px (or (car window-vp) (car canvas-vp) (* 100 cw)))
+             (vp-rows (or (cdr window-vp) (cdr canvas-vp) 36))
+             ;; Reserve room for dialog chrome (header, status, hint, gaps,
+             ;; footer and modal viewport margin) so nothing clips on standard
+             ;; 30-35 row windows.
+             (max-img-rows (max 6 (min 16 (- vp-rows 14))))
+             (max-img-cols (max 12 (min 42 (- (floor vp-w-px cw) 14))))
+             (max-side-px (min 296 (* max-img-rows lh) (* max-img-cols cw)))
+             (side-px (max 120 max-side-px))
+             (img-rows (max 6 (min max-img-rows (max 1 (round (/ (float side-px) lh))))))
+             (height-px (* img-rows lh))
+             (img-cols (max 8 (min max-img-cols (max 1 (round (/ (float height-px) cw))))))
+             (width-px (* img-cols cw))
+             (min-box (min width-px height-px))
+             (mod-px (if (>= min-box total)
+                         (floor min-box total)
+                       (/ (float min-box) total)))
+             (ox (if (integerp mod-px)
+                     (/ (- width-px (* box-w mod-px)) 2)
+                   (/ (- width-px (* box-w mod-px)) 2.0)))
+             (oy (if (integerp mod-px)
+                     (/ (- height-px (* box-h mod-px)) 2)
+                   (/ (- height-px (* box-h mod-px)) 2.0)))
+             (segs nil))
+        (cl-loop
+         for row-idx from min-r to max-r
+         for vec = (aref rows-vec row-idx)
+         for y = (+ oy (* (- row-idx min-r) mod-px))
+         do
+         (let ((c min-c))
+           (while (<= c max-c)
+             (if (not (and (< c (length vec)) (aref vec c)))
+                 (setq c (1+ c))
+               (let ((start c))
+                 (while (and (<= c max-c) (< c (length vec)) (aref vec c))
+                   (setq c (1+ c)))
+                 (let ((x (+ ox (* (- start min-c) mod-px)))
+                       (w (* (- c start) mod-px)))
+                   (push (format "M%s %sh%sv%sh-%sz" x y w mod-px w) segs)))))))
+        (let* ((body (format "<rect width='%d' height='%d' fill='#FFFFFF'/><path fill='#000000' shape-rendering='crispEdges' d='%s'/>"
+                             width-px height-px
+                             (mapconcat #'identity (nreverse segs) "")))
+               (img (etaf-ui-svg-image body width-px height-px
+                                       (list 0 0 width-px height-px))))
+          (list :image img :columns img-cols :rows img-rows))))))
+
 (etaf-define-component etaf-ui-qr-login
     (&key open code status (hint "请用手机客户端扫码，并在手机上确认登录。") on-close)
   "Show a scanned-code sign-in panel over the calling application.
 The panel composes `etaf-dialog', so the page underneath keeps its content
-and only dims, and the panel centers in the application's root canvas.  Mount
-it as the last child of the application shell.  The caller owns the request
-cycle and the account state; this component sends no request and asks for no
+and only dims, and the panel centers in the application's root canvas.  On
+graphical displays with SVG support, a half-block code from `etaf-ui-qr-paint'
+renders as a crisp square SVG image sized to fit the live viewport; text
+terminals and builds without SVG keep the half-block text rendering.  Mount it
+as the last child of the application shell.  The caller owns the request cycle
+and the account state; this component sends no request and asks for no
 credentials."
   :validate
   (progn
@@ -320,12 +449,18 @@ credentials."
                         (not (string-empty-p status-value))
                         status-value))
            (hint (and hint (not (string-empty-p hint)) hint))
-           (lines (and code (split-string code "\n")))
-           (columns (if lines (apply #'max (mapcar #'string-width lines)) 0))
-           (wrap (max 1 (+ columns 4)))
+           (svg-qr (and code (etaf-ui--qr-svg-image code)))
+           (lines (and code (not svg-qr) (split-string code "\n")))
+           (columns (cond (svg-qr (plist-get svg-qr :columns))
+                          (lines (apply #'max (mapcar #'string-width lines)))
+                          (t 0)))
+           (code-rows (cond (svg-qr (plist-get svg-qr :rows))
+                            (lines (length lines))
+                            (t 0)))
+           (wrap (max 36 (+ columns 4)))
            (parts (append (when status
                             (list (max 1 (ceiling (string-width status) wrap))))
-                          (when code (list (length lines)))
+                          (when code (list code-rows))
                           (when hint
                             (list (max 1 (ceiling (string-width hint) wrap))))))
            ;; The dialog's own default caps a modal at 80% of the window, which
@@ -342,11 +477,20 @@ credentials."
                (list (etaf-node 'etaf-label
                                 (list :text status :variant 'muted) nil)))
              (when code
-               (list (etaf-node 'box
-                                (list :class "etaf-qr-code"
-                                      :color "#000000"
-                                      :background-color "#FFFFFF")
-                                (list (etaf-node 'text nil (list code))))))
+               (list (if svg-qr
+                         (etaf-node 'box
+                                    (list :class "etaf-qr-code"
+                                          :background-color "#FFFFFF")
+                                    (list (etaf-node 'image
+                                                     (list :src (plist-get svg-qr :image)
+                                                           :columns (plist-get svg-qr :columns)
+                                                           :rows (plist-get svg-qr :rows))
+                                                     nil)))
+                       (etaf-node 'box
+                                  (list :class "etaf-qr-code"
+                                        :color "#000000"
+                                        :background-color "#FFFFFF")
+                                  (list (etaf-node 'text nil (list code)))))))
              (when hint
                (list (etaf-node 'etaf-label
                                 (list :text hint :variant 'muted
