@@ -8,7 +8,7 @@
 2. **附着属性**：`#+attr_etaf: :key val` 可附着在 `#+begin_src`、Org 表格、引用块或容器上方；优先级为行内参数 > `#+attr_etaf:` > 其他 `#+attr_*:`。
 3. **子块标记**：使用 `#+<marker>:` 切分多面板容器（如 `tabs` 内的 `#+tab:`、`diff` 内的 `#+before:` / `#+after:`、`pros-cons` 内的 `#+pro:` / `#+con:`）。
 4. **动态块**：`#+BEGIN: clocktable` / `columnview` 直接渲染内部生成的 Org 表格；`org-query`、`clock-summary` 等活视图同时支持 `#+begin_` 与 `#+BEGIN:` 写法。
-5. **行内链接微组件与语法糖**：`[[kbd:C-c t]]`、`[[badge:success:就绪]]`、`[[sym:etaf-org-open]]`、`[[color:#0969da]]`、`[[spoiler:隐藏]]`、`[[icon:star]]`、`[[abbr:ETAF]]`、`[[roam:id]]`、`[[denote:id]]`，以及 `==高亮==` 与 `!!剧透!!`。
+5. **行内链接微组件与语法糖**：`[[kbd:T]]`、`[[badge:success:就绪]]`、`[[sym:etaf-org-open]]`、`[[color:#0969da]]`、`[[spoiler:隐藏]]`、`[[icon:star]]`、`[[abbr:ETAF]]`、`[[roam:id]]`、`[[denote:id]]`，以及 `==高亮==` 与 `!!剧透!!`。
 
 ## 内置组件清单
 

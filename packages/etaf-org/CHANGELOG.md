@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Replaced the external `*ETAF Org Outline*` side window with an in-buffer resizable ETAF TOC sidebar (`T` / `M-x etaf-org-toggle-toc`, configurable via `etaf-org-toc-side` defaulting to `'left` and `etaf-org-toc-width` defaulting to `28`), with a sticky header, draggable `etaf-pane-resizer`, independent scrolling, and narrow-window fallback.
+- Upgraded `etaf-org-preview-link` (`K`) to a viewport-centered floating `etaf-dialog` with scrollable body, second-press toggle dismissal, and full `[[sym:...]]` symbol peek support.
+- Adopted a two-tier interactive command surface and customizable single-key defaults (`etaf-org-keys`): globally autoloaded `M-x` exposes strictly `etaf-org-open` and `etaf-org-preview`, while all preview actions are buffer-scoped interactive commands (`completion-predicate`) bound to single keys (`T`, `/`, `H`, `j`, etc.) with zero `C-c` / `C-t` / `C-x` prefix shadowing.
+
+### Fixed
+
+- Fixed TOC click handlers always jumping to the last heading due to shared `cl-loop` variable capture.
+- Fixed collapsible `file-tree` directory toggles failing to fold/unfold because `etaf-org-block-state` compared compound keys with `eq` instead of `equal`.
+
 ## 0.4.0
 
 ### Changed

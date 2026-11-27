@@ -34,7 +34,7 @@ Code for Python.
 
 4. **Dynamic blocks (`#+BEGIN: <name> :key val ... #+END:`)**: native `clocktable` and `columnview` render their inner Org blocks; registered widgets such as `org-query` or `clock-summary` work in either `#+begin_` or `#+BEGIN:` syntax.
 
-5. **Inline link micro-widgets**: `[[kbd:C-c t]]`, `[[badge:success:Ready]]`, `[[sym:etaf-org-open]]`, `[[color:#0969da]]`, `[[spoiler:hidden]]`, `[[icon:star]]`, `[[abbr:ETAF]]`, `[[roam:note]]`, `[[denote:20261123]]`, plus `==mark==` and `!!spoiler!!`.
+5. **Inline link micro-widgets**: `[[kbd:T]]`, `[[badge:success:Ready]]`, `[[sym:etaf-org-open]]`, `[[color:#0969da]]`, `[[spoiler:hidden]]`, `[[icon:star]]`, `[[abbr:ETAF]]`, `[[roam:note]]`, `[[denote:20261123]]`, plus `==mark==` and `!!spoiler!!`.
 
 ## Built-in widget catalog
 

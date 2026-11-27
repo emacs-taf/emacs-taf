@@ -6,7 +6,7 @@
 
 - `M-x etaf-org-open`：主阅读入口。在 `.org` 缓冲区无前缀参数调用时零弹窗在当前窗口全宽直开，并自动定位到对应源码行；加 `C-u` 或在非 Org 缓冲区调用时才弹文件选择。阅读结束后按 `q`（`etaf-org-close`）原地切回原缓冲区，不误删用户窗口。重复打开同一真实路径文件会复用已有预览，不同目录同名文件自动消歧。
 - `M-x etaf-org-preview`：在 `.org` 源码右侧非破坏性开关实时对照预览，保持光标留在源码中并开启比例跟随滚动；再次调用（或在预览中按 `q`）时仅回收其拆出的分屏窗口，不破坏其他窗格。在预览缓冲区内直接调用时等价于切换分屏（`etaf-org-toggle-split`）。
-- 与 `etaf-md` 保持严格一致：全局 `M-x` 公共命令只保留 `etaf-org-open` 与 `etaf-org-preview` 两个入口；所有预览内操作通过预览缓冲区的快捷键触发且保持为非交互 Elisp 函数，不污染 `M-x`。可选编写辅助函数 `etaf-org-edit-mode`（柔和着色、CAPF 补全与块配对高亮）及 `etaf-org-insert-block` 可在 `org-mode-hook` 或自定义按键中按需挂接。
+- 与 `etaf-md` 保持严格一致：全局自动加载的 `M-x` 公共入口仅保留 `etaf-org-open` 与 `etaf-org-preview` 两个命令；下表所有预览内操作均为限定在预览缓冲区内补全的交互命令（通过 `completion-predicate` 隔离，在预览中既可按单键也可通过 `M-x` / `M-X` 调用），按键集中在自定义变量 `etaf-org-keys` 中且仅使用单键（绝不占用 `C-c`、`C-t`、`C-x` 等用户前缀键）。可选编写辅助函数 `etaf-org-edit-mode`（柔和着色、CAPF 补全与块配对高亮）及 `etaf-org-insert-block` 保持为非交互 Elisp 函数，可在 `org-mode-hook` 或自定义按键中按需挂接。
 
 ## 阅读快捷键
 
@@ -14,22 +14,22 @@
 | --- | --- | --- |
 | `v` | `etaf-org-toggle-split` | 一键切换「单窗全宽阅读 ↔ 左源码右预览」 |
 | `e` / `o` | `etaf-org-goto-source` | 跳回对应 Org 源码精确行并脉冲高亮（单窗时原地切回源码） |
-| `n` / `C-c n` | `etaf-org-next-heading` | 下一个可见标题 |
-| `p` / `C-c p` | `etaf-org-previous-heading` | 上一个可见标题 |
-| `C-c j` | `etaf-org-goto-heading` | 补全跳转到任意标题 |
-| `RET` / `C-c C-o` | `etaf-org-open-link` | 激活光标处链接、脚注、按钮或图片 |
-| `K` | `etaf-org-preview-link` | 打开或关闭光标处链接/脚注/引用/目标的页内速览卡 |
+| `n` | `etaf-org-next-heading` | 下一个可见标题 |
+| `p` | `etaf-org-previous-heading` | 上一个可见标题 |
+| `j` | `etaf-org-goto-heading` | 补全跳转到任意标题 |
+| `RET` | `etaf-org-open-link` | 激活光标处链接、脚注、按钮或图片 |
+| `K` | `etaf-org-preview-link` | 打开或关闭光标处链接/脚注/引用/符号的居中速览浮层 |
 | `f` | `etaf-org-follow-scroll` | 切换源码到预览的比例跟随滚动 |
-| `C-c t` | `etaf-org-toggle-toc` | 开关独立右侧边大纲窗口（`*ETAF Org Outline*`） |
-| `C-c /` | `etaf-org-filter` | 按 TODO、`:tag:`、`#A` 或关键词实时筛选章节 |
+| `T` | `etaf-org-toggle-toc` | 开关缓冲区内可拖拽调宽的 ETAF 目录侧栏（默认左侧，由 `etaf-org-toc-side` / `etaf-org-toc-width` 配置） |
+| `/` | `etaf-org-filter` | 按 TODO、`:tag:`、`#A` 或关键词实时筛选章节 |
 | `z` / `Z` | `etaf-org-cycle-fold` / `etaf-org-cycle-global-fold` | 折叠/展开当前节或全文 |
 | `S` | `etaf-org-toggle-spoilers` | 全局显示/隐藏剧透遮罩 |
-| `C-c v` | `etaf-org-toggle-hidden` | 切换显示注释、属性抽屉、LOGBOOK 与元数据 |
+| `H` | `etaf-org-toggle-hidden` | 切换显示注释、属性抽屉、LOGBOOK 与元数据 |
 | `t` | `etaf-org-cycle-theme` | 循环切换 `dark` → `light` → `sepia` → `auto` |
 | `[` / `]` | `etaf-org-narrower` / `etaf-org-wider` | 缩窄/加宽最大阅读栏宽 |
 | `g` / `r` | `etaf-org-reload` | 重新读取并重绘文档 |
-| `C-c h` / `?` | `etaf-help` | 查看快捷键帮助 |
-| `q` | `etaf-org-close` | 卸载并关闭预览（自动回收独立大纲窗与分屏） |
+| `?` | `etaf-help` | 在页内打开可搜索快捷键帮助 |
+| `q` | `etaf-org-close` | 卸载并关闭预览（单窗切回原缓冲区，分屏自动回收） |
 
 ## 方言控制（`etaf-org-flavor`）
 

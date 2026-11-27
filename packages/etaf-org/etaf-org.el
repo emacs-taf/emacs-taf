@@ -52,9 +52,11 @@
 ;; keeps point in the source buffer; invoking it again (or pressing `q' in the
 ;; preview) closes the preview and removes only the split window it created.
 ;; When invoked inside a preview buffer with no FILE, delegates to
-;; `etaf-org-toggle-split'.  This and `etaf-org-open' are the only global `M-x'
-;; interactive commands; all preview-buffer actions below are bound to keys in
-;; the preview buffer and remain callable from Lisp without polluting `M-x'.
+;; `etaf-org-toggle-split'.  This and `etaf-org-open' are the only globally
+;; autoloaded `M-x' commands; all preview-buffer actions below are interactive
+;; commands scoped to preview buffers via `completion-predicate' (and bound to
+;; single-key defaults in `etaf-org-keys') so they work via `M-x' / `M-X'
+;; inside previews without cluttering unrelated buffers.
 ;;
 ;; Function: etaf-org-close ()
 ;; Unmount the current preview buffer, close any attached outline side window,
@@ -167,15 +169,32 @@
 ;; Works from either the preview buffer or its source Org buffer.
 ;;
 ;; Function: etaf-org-toggle-toc (&optional arg)
-;; Toggle the independent Emacs right side-window outline `*ETAF Org Outline*'.
-;; Returns non-nil when the side window is open and nil when closed.
+;; Toggle the in-buffer resizable TOC sidebar (`T') inside the current preview.
+;; Renders on `etaf-org-toc-side' (default `left') with an `etaf-pane-resizer'
+;; divider and independent scrolling.  Returns non-nil when open and nil when
+;; closed.
+;;
+;; Variable: etaf-org-toc-side (default `left')
+;; Side of the preview buffer where the in-buffer TOC sidebar appears: `left'
+;; (default) or `right'.
+;;
+;; Variable: etaf-org-toc-width (default 28)
+;; Default width of the in-buffer TOC sidebar in character cells (clamped
+;; between 18 and 52 while reserving at least 42 columns for the reading pane).
+;;
+;; Variable: etaf-org-keys
+;; Customizable list of `(KEY COMMAND LABEL)' entries active in a preview
+;; buffer.  Defaults use single keys only so user prefix maps (`C-c', `C-t',
+;; `C-x', etc.) are never shadowed.
 ;;
 ;; Function: etaf-org-preview-link (&optional session)
-;; Show or dismiss the in-buffer peek card for the link, footnote, citation or
-;; target at point.
+;; Show or dismiss the floating viewport-centered peek dialog (`K') for the
+;; link, footnote, citation or target at point.  Pressing `K' again on the
+;; same target or pressing `Esc' dismisses it.
 ;;
 ;; Function: etaf-org-filter (&optional query session)
-;; Interactively filter visible sections by TODO, tags, priority or keywords.
+;; Interactively filter visible sections (`/') by TODO, tags, priority or
+;; keywords.
 ;;
 ;; Function: etaf-org-cycle-fold (&optional session)
 ;; Cycle fold state of the current section (`folded' -> `children' -> `open').
@@ -187,7 +206,7 @@
 ;; Toggle global visibility of `!!spoiler!!' and `[[spoiler:...]]' masks.
 ;;
 ;; Function: etaf-org-toggle-hidden ()
-;; Toggle visibility of comments, properties, drawers and metadata (`C-c v').
+;; Toggle visibility of comments, properties, drawers and metadata (`H').
 ;;
 ;; Function: etaf-org-reload ()
 ;; Re-read and repaint the current preview buffer (`g' / `r').

@@ -12,7 +12,7 @@
 #+ABBR: ETAF Emacs Text Application Framework
 #+BIBLIOGRAPHY: references.bib
 
-这是一份覆盖 =etaf-org= {{{version}}} *原生 Org 语法* 与 *书刊活文档组件* 的分类总览文档。阅读时可按 [[kbd:v]] 切换单窗全宽与左右对照分屏，按 [[kbd:C-c t]] 开关独立右侧大纲窗，按 [[kbd:t]] 切换深色 / 浅色 / 护眼 / 跟随主题，按 [[kbd:e]] 或 [[kbd:o]] 跳回对应 Org 源码行。
+这是一份覆盖 =etaf-org= {{{version}}} *原生 Org 语法* 与 *书刊活文档组件* 的分类总览文档。阅读时可按 [[kbd:v]] 切换单窗全宽与左右对照分屏，按 [[kbd:T]] 开关页内可拖拽调宽的目录侧栏，按 [[kbd:t]] 切换深色 / 浅色 / 护眼 / 跟随主题，按 [[kbd:e]] 或 [[kbd:o]] 跳回对应 Org 源码行。
 
 * 一、原生 Org 标题、任务、计划与抽屉 :native:
 :PROPERTIES:
@@ -46,7 +46,7 @@ CLOCK: [2026-11-21 Sat 14:00]--[2026-11-21 Sat 15:30] =>  1:30
 - [ ] 在多主题与窄窗下检查完整展厅渲染效果
 
 :NOTES:
-这是一个自定义未知抽屉（=:NOTES:=）。默认收起为一个可点击芯片，点击该芯片即可局部展开，或按 =C-c v= 全局切换显隐。
+这是一个自定义未知抽屉（=:NOTES:=）。默认收起为一个可点击芯片，点击该芯片即可局部展开，或按 =H= 全局切换显隐。
 :END:
 
 ** NEXT [#B] 正在推进的逾期示例任务 :frontend:
@@ -199,7 +199,7 @@ CLOCK: [2026-11-18 Wed 16:00]--[2026-11-18 Wed 17:45] =>  1:45
 #+end_export
 
 #+begin_comment
-这是注释块内容，默认隐藏；按 C-c v 可查看。
+这是注释块内容，默认隐藏；按 H 可查看。
 #+end_comment
 
 #+begin_quote
@@ -276,7 +276,7 @@ flowchart LR
 
 本节展示精炼保留的 9 种 Org 自定义链接微组件与 2 种行内语法糖（在 =:flavor standard= 或 =#+OPTIONS: etaf:nil= 下自动关闭）：
 
-- 按键徽章：按 [[kbd:v]] 切换分屏对照，按 [[kbd:C-c t]] 开关独立右侧大纲窗，按 [[kbd:M-x etaf-org-preview]] 开启实时对照
+- 按键徽章：按 [[kbd:v]] 切换分屏对照，按 [[kbd:T]] 开关页内可调宽目录侧栏，按 [[kbd:M-x etaf-org-preview]] 开启实时对照
 - 状态徽章：[[badge:primary:v0.4.0]] [[badge:success:全部通过]] [[badge:warning:实验中]] [[badge:danger:破坏性变更]] [[badge:important:核心]] [[badge:neutral:只读]]
 - 符号速览（点击或按 =K= 查看文档）：[[sym:etaf-org-open]] 与 [[sym:etaf-org-define-node]]
 - 色块预览：主色 [[color:#0969da]]、成功色 [[color:#1a7f37]]、紫强调 [[color:#8250df]]
@@ -400,7 +400,7 @@ flowchart LR
 [22:30:04] INFO  ETAF 渲染完成（零 I/O）
 #+end_log
 
-#+begin_statusbar :mode "ORG" :keys "n/p 标题 · v 分屏 · C-c t 大纲 · e/o 源码" :note "UTF-8 · 0 degraded"
+#+begin_statusbar :mode "ORG" :keys "n/p 标题 · v 分屏 · T 目录 · e/o 源码" :note "UTF-8 · 0 degraded"
 #+end_statusbar
 
 * 六、L0 集合、交互与展示组件 :l0_collections:
@@ -605,8 +605,8 @@ make -C packages/etaf-org check
 - v : 一键切换「单窗全宽阅读 ↔ 左源码右预览」
 - e / o : 跳回 Org 源码对应行（单窗时原地切换）
 - g / r : 重载并重新渲染当前文档
-- C-c t : 开关独立右侧大纲窗（*ETAF Org Outline*）
-- C-c / : 实时按 TODO / 标签 / 关键词筛选章节
+- T : 开关页内可拖拽调宽目录侧栏
+- / : 实时按 TODO / 标签 / 关键词筛选章节
 - K : 速览光标处链接、脚注、参考文献或符号
 - f : 切换比例跟随滚动
 - t : 循环切换 dark / light / sepia / auto 主题

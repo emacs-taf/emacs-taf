@@ -35,7 +35,7 @@ Level 4 (views & reactive session model)
 Level 5 (live editing, application shell, authoring mode)
   etaf-org-live       16 ms coalescing, `input-pending-p' yield, O(Δ) body splice, filenotify
   etaf-org-app        `etaf-org-open', `etaf-org-preview', `etaf-org-toggle-split',
-                      independent `*ETAF Org Outline*' side window and keymap
+                      in-buffer resizable ETAF TOC sidebar and `etaf-org-keys' keymap
   etaf-org-edit       Optional non-destructive `etaf-org-edit-mode' & `etaf-org-insert-block' (Lisp helpers)
 ```
 
@@ -45,7 +45,7 @@ Level 5 (live editing, application shell, authoring mode)
 2. **Per-block reactive slots & O(Δ) live editing**: Every published block owns a stable slot `(:key :cell :state :override :section)`. Local widget interactions (tabs, sorting, code fold, drawer toggle) write only `:state`. Typing in a linked Org source buffer coalesces on a 16 ms frame timer (yielding up to 60 ms while `input-pending-p`). Edits confined to one section's body without structural changes splice-parse only that section (`etaf-org--parse-body-slice`) and update the single changed `:cell` ref; structural edits fall back to keyed document publish, keeping unchanged block and section instances intact.
 3. **Typography, integer spacing & 4-tier hover discipline**: All prose, chips, tags, tables, drawers, footnotes, code cards, outline items, and widgets render at standard `1.0x` body metrics with integer `(lh N)` vertical padding (preventing blank-line SVG cursor boxes); only document title (`2.2x`) and H1–H4 (`2.0/1.5/1.25/1.1x`) scale. All interactive controls use leaf-only `:hover-style` (`etaf-org--leaf-button`), suppressing hover and hand pointer on selected or disabled leaves and never painting hover fills over static text, code lines, table cells, or multi-styled containers.
 4. **Workspace sandbox**: Every L1 path resolves via `file-truename` and is checked with `file-in-directory-p` against the canonical VCS/document root. All L2 actions (`run`, Babel) require explicit user activation and honor `etaf-org-allow-actions` / `etaf-org-allow-babel`.
-5. **Clean `M-x` surface & independent side-window outline**: Strictly `etaf-org-open` and `etaf-org-preview` are interactive `M-x` commands (matching `etaf-md`); all preview actions and optional authoring helpers remain non-interactive Lisp functions bound via buffer-local keys or hooks, and `*ETAF Org Outline*` runs in an independent right-side Emacs window rather than occupying document body columns.
+5. **Two-tier `M-x` surface & in-buffer resizable TOC**: Strictly `etaf-org-open` and `etaf-org-preview` are globally autoloaded `M-x` commands (matching `etaf-md`); preview-buffer actions are interactive commands scoped to preview buffers via `completion-predicate` with customizable single-key defaults (`etaf-org-keys`, never shadowing `C-c`/`C-t` prefixes), and the TOC renders inside the preview buffer via ETAF flex panes with a draggable `etaf-pane-resizer` (`etaf-org-toc-side`, default `left`).
 
 ## Measured performance baseline
 

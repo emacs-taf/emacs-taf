@@ -6,7 +6,7 @@
 #+OPTIONS: toc:nil num:nil ^:{}
 #+FILETAGS: :etaf:org:showcase:
 
-这是一份展示 =etaf-org= 书刊排版与活文档组件的展厅文档：按 [[kbd:v]] 切换单窗全宽与左右对照分屏，按 [[kbd:C-c t]] 开关独立右侧大纲窗，按 [[kbd:t]] 切换主题，按 [[kbd:e]] 跳回对应源码行。
+这是一份展示 =etaf-org= 书刊排版与活文档组件的展厅文档：按 [[kbd:v]] 切换单窗全宽与左右对照分屏，按 [[kbd:T]] 开关页内可拖拽调宽的目录侧栏，按 [[kbd:t]] 切换主题，按 [[kbd:e]] 跳回对应源码行。
 
 状态：[[badge:success:就绪]]  强调色 [[color:#0969da]]  符号 [[sym:etaf-org-open]]  图标 [[icon:check]] 通过。
 
@@ -172,7 +172,7 @@
 全局公共命令与 =etaf-md= 严格对齐，仅保留 =etaf-org-open= 单窗直开与 =etaf-org-preview= 实时对照分屏。
 #+end_event
 #+begin_event :title "书刊组件对齐与视觉重构" :time "Phase 2" :status info
-精简冗余组件，独立右侧大纲窗与四级叶级 Hover 全量对齐 =etaf-md=。
+精简冗余组件，页内可调宽目录侧栏与四级叶级 Hover 全量对齐 =etaf-md=。
 #+end_event
 #+begin_event :title "真机多主题与窄窗验收" :time "Phase 3" :status success
 覆盖 68 列窄窗自动退化、三主题对比度与并发公式渲染互斥锁。
@@ -214,8 +214,8 @@ Mermaid 与 MathJax 矢量绘制由 =etaf-md-typeset-native= 预编译模块提�
 - v : 一键切换单窗全宽阅读与左右对照分屏
 - e / o : 跳回 Org 源码对应行（单窗时原地切换）
 - g / r : 重新解析并刷新当前预览
-- C-c t : 开关独立右侧大纲窗口
-- C-c / : 按 TODO、标签或关键词筛选章节
+- T : 开关页内可调宽目录侧栏
+- / : 按 TODO、标签或关键词筛选章节
 #+end_keymap
 
 #+begin_columns :columns 2 :gap "2ch"
@@ -270,9 +270,9 @@ CLOCK: [2026-11-21 Sat 14:00]--[2026-11-21 Sat 15:30] =>  1:30
 
 - [X] 实现 =etaf-org-open= 单窗零弹窗直开与源码行定位
 - [X] 实现 =etaf-org-preview= 非破坏右侧分屏与干净回收
-- [ ] 在多主题与窄窗下完成真机 GUI 逐屏验收
+- [X] 在多主题与窄窗下完成真机 GUI 逐屏验收
 
-** NEXT [#B] 验证独立右侧大纲窗与 O(Δ) 局部刷新 :perf:
+** NEXT [#B] 验证页内目录侧栏与 O(Δ) 局部刷新 :perf:
 SCHEDULED: <2026-11-23 Mon>
 :LOGBOOK:
 CLOCK: [2026-11-22 Sun 10:00]--[2026-11-22 Sun 11:15] =>  1:15

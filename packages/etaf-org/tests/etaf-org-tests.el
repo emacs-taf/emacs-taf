@@ -1335,23 +1335,28 @@
 ;;; Command surface, window behavior, outline side-window, hover & visual contracts
 
 (ert-deftest etaf-org-tests-command-surface-and-mx-predicates ()
-  "Global M-x surface exposes strictly `etaf-org-open' and `etaf-org-preview' (matching `etaf-md'), and preview keys dispatch cleanly."
+  "Two-tier M-x surface keeps strictly `etaf-org-open' and `etaf-org-preview' globally visible, scopes preview commands to preview buffers, uses single-key defaults with zero prefix keys in `etaf-org-keys', and dispatches cleanly."
   (should-not (fboundp 'etaf-org-live-mode))
   (should-not (commandp 'etaf-org-view))
-  ;; Across all of Emacs, strictly `etaf-org-open' and `etaf-org-preview' are
-  ;; interactive `etaf-org-*' commands (zero minor modes, zero leaked locals).
-  (let ((interactive-cmds nil))
-    (mapatoms (lambda (sym)
-                (when (and (string-prefix-p "etaf-org-" (symbol-name sym))
-                           (not (string-prefix-p "etaf-org-tests-" (symbol-name sym)))
-                           (fboundp sym)
-                           (commandp sym))
-                  (push sym interactive-cmds))))
-    (should (equal (sort interactive-cmds
+  ;; Outside preview buffers, strictly `etaf-org-open' and `etaf-org-preview'
+  ;; pass `command-completion-default-include-p' (zero global M-x clutter).
+  (let ((global-cmds nil))
+    (with-temp-buffer
+      (mapatoms (lambda (sym)
+                  (when (and (string-prefix-p "etaf-org-" (symbol-name sym))
+                             (not (string-prefix-p "etaf-org-tests-" (symbol-name sym)))
+                             (fboundp sym)
+                             (commandp sym)
+                             (command-completion-default-include-p sym (current-buffer)))
+                    (push sym global-cmds)))))
+    (should (equal (sort global-cmds
                          (lambda (a b) (string< (symbol-name a) (symbol-name b))))
                    '(etaf-org-open etaf-org-preview))))
-  ;; Verify preview-buffer keys (`t', `v', `q') still dispatch interactively
-  ;; even though their target functions are non-interactive Lisp functions.
+  ;; Default `etaf-org-keys' uses single keys only (zero C-c / C-t / C-x prefixes).
+  (dolist (binding etaf-org-keys)
+    (should-not (string-match-p "\\`C-" (car binding))))
+  ;; Inside a preview buffer, preview actions are interactive M-x commands
+  ;; AND their single-key bindings dispatch cleanly.
   (let* ((file (make-temp-file "org-mx-" nil ".org" "* 标题\n正文\n"))
          (src nil)
          (prv nil))
@@ -1363,6 +1368,11 @@
           (setq prv (etaf-org-open file))
           (should (= 1 (length (window-list))))
           (with-current-buffer prv
+            (dolist (cmd '(etaf-org-toggle-toc etaf-org-goto-heading etaf-org-preview-link
+                           etaf-org-filter etaf-org-toggle-hidden etaf-org-toggle-split
+                           etaf-org-cycle-theme etaf-org-close))
+              (should (commandp cmd))
+              (should (command-completion-default-include-p cmd prv)))
             (call-interactively (key-binding (kbd "t")))
             (should (memq (plist-get (etaf-org-state (etaf-app-state)) :theme-mode)
                           '(dark light sepia auto)))
@@ -1418,35 +1428,107 @@
       (when (buffer-live-p src) (kill-buffer src))
       (delete-file file))))
 
-(ert-deftest etaf-org-tests-independent-outline-side-window ()
-  "etaf-org-toggle-toc opens and cleanly tears down an independent right side window."
-  (let* ((file (make-temp-file "org-outline-" nil ".org"
-                               "* 概览\n首段。\n\n* 目标章节\n次段。\n"))
+(ert-deftest etaf-org-tests-in-buffer-toc-peek-and-widget-fixes ()
+  "In-buffer resizable TOC (left/right, distinct click jumps, `n'/`p'), floating `K' peek toggle, clean property drawer collapse without ghost text, and collapsible `file-tree' directories all work."
+  (let* ((filler (mapconcat (lambda (i) (format "填充段落第 %d 行，用于产生足够滚动高度。\n" i))
+                            (number-sequence 1 16) "\n"))
+         (doc (concat
+               "* 概览章节\n"
+               ":PROPERTIES:\n:CUSTOM_ID: sec-overview\n:OWNER: ETAF\n:EFFORT: 2:00\n:END:\n"
+               ":LOGBOOK:\nCLOCK: [2026-11-21 Sat 14:00]--[2026-11-21 Sat 15:30] =>  1:30\n:END:\n\n"
+               "查看符号 [[sym:etaf-org-open][etaf-org-open]]。\n\n"
+               "#+begin_file-tree :title \"项目树\" :collapsible t\n"
+               "- packages/\n  - etaf-org.el\n  - readme.md\n"
+               "#+end_file-tree\n\n"
+               filler "\n"
+               "* 第二章节\n" filler "\n"
+               "* 目标章节\n已抵达目标章节。\n"))
+         (file (make-temp-file "org-outline-" nil ".org" doc))
+         (etaf-org-toc-side 'left)
+         (etaf-org-toc-width 28)
          (prv nil))
     (unwind-protect
         (progn
           (delete-other-windows)
           (setq prv (etaf-org-open file))
           (with-current-buffer prv
-            (should (eq t (etaf-org-toggle-toc)))
-            (let* ((obuf (cl-find-if (lambda (b)
-                                       (string-prefix-p "*ETAF Org Outline*"
-                                                        (buffer-name b)))
-                                     (buffer-list)))
-                   (owin (and obuf (get-buffer-window obuf t))))
-              (should (buffer-live-p obuf))
-              (should owin)
-              (should (eq 'right (window-parameter owin 'window-side)))
-              (let ((otxt (with-current-buffer obuf (etaf-org-tests--text))))
-                (should (string-match-p "大纲目录" otxt))
-                (should (string-match-p "目标章节" otxt)))
-              ;; Preview body does NOT contain an injected in-document TOC rail.
-              (should-not (string-match-p "大纲目录" (etaf-org-tests--text))))
-            (should-not (etaf-org-toggle-toc))
-            (should-not (cl-find-if (lambda (b)
-                                      (string-prefix-p "*ETAF Org Outline*"
-                                                       (buffer-name b)))
-                                    (buffer-list)))))
+            (let ((rt (etaf-runtime-for-buffer prv)))
+              ;; 1. Drawer toggle (`属性 3') collapses without leaving ghost `记录' chip.
+              (goto-char (point-min))
+              (should (search-forward "属性 3" nil t))
+              (goto-char (match-beginning 0))
+              (etaf-activate rt)
+              (etaf-runtime-flush rt)
+              (let ((txt (etaf-org-tests--text)))
+                (should (string-match-p "OWNER" txt))
+                ;; Exactly one `记录' badge (the live one, no ghost duplicate).
+                (let ((count 0) (pos 0))
+                  (while (setq pos (string-match "记录" txt pos))
+                    (setq count (1+ count) pos (+ pos 2)))
+                  (should (= count 1))))
+              ;; 2. Collapsible `file-tree' directory toggles cleanly (equal plist keys).
+              (goto-char (point-min))
+              (should (search-forward "packages/" nil t))
+              (goto-char (match-beginning 0))
+              (etaf-activate rt)
+              (etaf-runtime-flush rt)
+              (should-not (string-match-p "etaf-org\\.el" (etaf-org-tests--text)))
+              (goto-char (point-min))
+              (should (search-forward "packages/" nil t))
+              (goto-char (match-beginning 0))
+              (etaf-activate rt)
+              (etaf-runtime-flush rt)
+              (should (string-match-p "etaf-org\\.el" (etaf-org-tests--text)))
+              ;; 3. In-buffer resizable TOC opens in the single preview window (left default).
+              (should (eq t (etaf-org-toggle-toc)))
+              (should (= 1 (length (window-list))))
+              (should-not (cl-find-if (lambda (b)
+                                        (string-prefix-p "*ETAF Org Outline*" (buffer-name b)))
+                                      (buffer-list)))
+              (should (etaf-runtime-host-props-for rt 'etaf-org-toc-pane))
+              (should (etaf-runtime-host-props-for rt 'etaf-org-toc-resizer))
+              (should (etaf-runtime-host-props-for rt 'etaf-org-article-pane))
+              ;; Clicking distinct TOC items jumps to distinct scroll positions.
+              (let ((click-toc (lambda (label)
+                                 (goto-char (point-min))
+                                 (should (search-forward label nil t))
+                                 (goto-char (match-beginning 0))
+                                 (let ((on-press (plist-get (etaf-runtime-host-props-for
+                                                             rt (etaf-host-ref-at rt (point)))
+                                                            :on-press)))
+                                   (if (functionp on-press)
+                                       (funcall on-press)
+                                     (etaf-activate rt)))
+                                 (etaf-runtime-flush rt)
+                                 (etaf-scroll-offset rt 'etaf-org-article-pane))))
+                (let ((off-2 (funcall click-toc "第二章节"))
+                      (off-3 (funcall click-toc "目标章节"))
+                      (off-1 (funcall click-toc "概览章节")))
+                  (should (> off-3 off-2))
+                  (should (> off-2 off-1))))
+              ;; `n'/`p' heading navigation keeps working while TOC is open.
+              (let ((before (etaf-scroll-offset rt 'etaf-org-article-pane)))
+                (etaf-org-next-heading)
+                (should (> (etaf-scroll-offset rt 'etaf-org-article-pane) before))
+                (etaf-org-previous-heading)
+                (should (= (etaf-scroll-offset rt 'etaf-org-article-pane) before)))
+              ;; Right-side TOC mounts cleanly in the same single window.
+              (let ((etaf-org-toc-side 'right))
+                (etaf-org-toggle-toc)
+                (should (eq t (etaf-org-toggle-toc)))
+                (should (= 1 (length (window-list))))
+                (should (etaf-runtime-host-props-for rt 'etaf-org-toc-pane)))
+              ;; Close TOC cleanly.
+              (should-not (etaf-org-toggle-toc))
+              (should-not (etaf-runtime-host-props-for rt 'etaf-org-toc-pane))
+              ;; 4. Floating `K' peek dialog opens on symbol and dismisses on 2nd `K'.
+              (goto-char (point-min))
+              (should (search-forward "etaf-org-open" nil t))
+              (goto-char (match-beginning 0))
+              (etaf-org-preview-link)
+              (should (string-match-p "关闭" (etaf-org-tests--text)))
+              (etaf-org-preview-link)
+              (should-not (string-match-p "关闭" (etaf-org-tests--text))))))
       (when (buffer-live-p prv)
         (with-current-buffer prv (ignore-errors (etaf-org-close))))
       (delete-file file))))

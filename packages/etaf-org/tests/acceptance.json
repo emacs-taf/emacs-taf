@@ -408,7 +408,7 @@
     {
       "name": "etaf-org-tests-command-surface-and-mx-predicates",
       "file": "tests/etaf-org-tests.el",
-      "purpose": "Global M-x surface exposes strictly etaf-org-open and etaf-org-preview (matching etaf-md), etaf-org-view is non-interactive, and preview keybindings dispatch cleanly."
+      "purpose": "Two-tier M-x surface keeps strictly etaf-org-open and etaf-org-preview globally visible, scopes preview commands to preview buffers, uses customizable single-key defaults with zero prefix keys in etaf-org-keys, and dispatches cleanly."
     },
     {
       "name": "etaf-org-tests-open-single-window-and-split-toggle",
@@ -416,9 +416,9 @@
       "purpose": "etaf-org-open opens full-width without splitting, v toggles side-by-side split, e/o jumps in place, and q restores origin buffer."
     },
     {
-      "name": "etaf-org-tests-independent-outline-side-window",
+      "name": "etaf-org-tests-in-buffer-toc-peek-and-widget-fixes",
       "file": "tests/etaf-org-tests.el",
-      "purpose": "etaf-org-toggle-toc displays and cleanly tears down an independent right-side *ETAF Org Outline* Emacs window."
+      "purpose": "In-buffer resizable ETAF TOC (left default and right option, distinct per-item click jumps and n/p navigation), floating K peek dialog toggle, clean property drawer collapse without ghost text, and collapsible file-tree directory toggle all work cleanly."
     },
     {
       "name": "etaf-org-tests-four-tier-hover-discipline",

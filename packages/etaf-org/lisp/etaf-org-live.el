@@ -284,16 +284,23 @@ When FORCE is non-nil, syncs even before `:follow-scroll' is consulted."
                             (if (and swin (eq (window-buffer swin) src))
                                 (window-point swin)
                               (point)))))
-               (target-pos (etaf-org--position-for-source-line session src-line)))
-          (when target-pos
-            (let ((bol (with-current-buffer prv
-                         (save-excursion
-                           (goto-char target-pos)
-                           (line-beginning-position)))))
-              (set-window-point pwin bol)
-              (with-selected-window pwin
-                (goto-char bol)
-                (recenter 2)))))))))
+               (rt (etaf-runtime-for-buffer prv))
+               (target-ref (and (etaf-org--read session :toc-open)
+                                rt (etaf-runtime-mounted-p rt)
+                                (etaf-org--ref-for-source-line session src-line))))
+          (if (and target-ref (etaf-org--scrollable-ancestor-p rt target-ref))
+              (progn
+                (etaf-scroll-into-view rt target-ref 'start)
+                (etaf-runtime-flush rt))
+            (when-let* ((target-pos (etaf-org--position-for-source-line session src-line)))
+              (let ((bol (with-current-buffer prv
+                           (save-excursion
+                             (goto-char target-pos)
+                             (line-beginning-position)))))
+                (set-window-point pwin bol)
+                (with-selected-window pwin
+                  (goto-char bol)
+                  (recenter 2))))))))))
 
 (defun etaf-org--follow-scroll-hook (&rest _)
   "Post-command / window-scroll hook syncing source scroll to preview."

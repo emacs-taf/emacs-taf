@@ -6,7 +6,7 @@
 
 - `M-x etaf-org-open` is the primary reading entry. Called from an Org buffer without a prefix argument, it opens full-width in the current window with zero prompt and syncs point to the corresponding source line; pass `C-u` or invoke from a non-Org buffer to pick a file. Pressing `q` (`etaf-org-close`) switches back to the origin buffer in place without deleting your window. Re-invoking it on the same canonical file reuses the existing buffer, and files sharing a basename disambiguate automatically.
 - `M-x etaf-org-preview` toggles a live side-by-side preview in a non-destructive right split beside the Org source buffer, keeps point in the source buffer, and turns on proportional follow-scroll; invoking it again (or pressing `q` in the preview) closes the preview and deletes only the split window it created. Invoked inside a preview buffer with no file argument, it delegates to `etaf-org-toggle-split`.
-- Strictly `etaf-org-open` and `etaf-org-preview` are interactive `M-x` commands (matching `etaf-md`). All preview-buffer actions below are bound locally to keys in the preview buffer and remain callable from Lisp without polluting `M-x`. Optional authoring helpers (`etaf-org-edit-mode` for soft font-lock, CAPF completion, and block-pair matching, plus `etaf-org-insert-block`) are non-interactive Lisp functions suitable for `org-mode-hook` or custom keybindings.
+- Strictly `etaf-org-open` and `etaf-org-preview` are globally autoloaded `M-x` commands (matching `etaf-md`). All preview-buffer actions below are interactive commands scoped to preview buffers via `completion-predicate` (callable via `M-x` / `M-X` inside previews as well as single keys) with customizable bindings in `etaf-org-keys` that never shadow user prefix keys (`C-c`, `C-t`, `C-x`, etc.). Optional authoring helpers (`etaf-org-edit-mode` for soft font-lock, CAPF completion, and block-pair matching, plus `etaf-org-insert-block`) remain non-interactive Lisp functions suitable for `org-mode-hook` or custom keybindings.
 
 ## Reading keybindings
 
@@ -14,22 +14,22 @@
 | --- | --- | --- |
 | `v` | `etaf-org-toggle-split` | Toggle single-window full-width reading ↔ left-source / right-preview split |
 | `e` / `o` | `etaf-org-goto-source` | Jump to exact Org source line and highlight it (in place when single-window) |
-| `n` / `C-c n` | `etaf-org-next-heading` | Move to next visible headline |
-| `p` / `C-c p` | `etaf-org-previous-heading` | Move to previous visible headline |
-| `C-c j` | `etaf-org-goto-heading` | Jump to a headline via completion |
-| `RET` / `C-c C-o` | `etaf-org-open-link` | Activate link, footnote, control, or image |
-| `K` | `etaf-org-preview-link` | Open/close in-buffer peek card for link, footnote, citation, or target |
+| `n` | `etaf-org-next-heading` | Move to next visible headline |
+| `p` | `etaf-org-previous-heading` | Move to previous visible headline |
+| `j` | `etaf-org-goto-heading` | Jump to a headline via completion |
+| `RET` | `etaf-org-open-link` | Activate link, footnote, control, or image |
+| `K` | `etaf-org-preview-link` | Toggle floating peek dialog for link, footnote, citation, or symbol |
 | `f` | `etaf-org-follow-scroll` | Toggle proportional source-to-preview scroll sync |
-| `C-c t` | `etaf-org-toggle-toc` | Toggle independent right-side `*ETAF Org Outline*` window |
-| `C-c /` | `etaf-org-filter` | Filter sections live by TODO, `:tag:`, `#A`, or text |
+| `T` | `etaf-org-toggle-toc` | Toggle in-buffer resizable ETAF TOC sidebar (`etaf-org-toc-side`, default `left`) |
+| `/` | `etaf-org-filter` | Filter sections live by TODO, `:tag:`, `#A`, or text |
 | `z` / `Z` | `etaf-org-cycle-fold` / `etaf-org-cycle-global-fold` | Fold/unfold current section or whole document |
 | `S` | `etaf-org-toggle-spoilers` | Reveal or mask all spoilers |
-| `C-c v` | `etaf-org-toggle-hidden` | Toggle comments, property drawers, logbooks, and metadata |
+| `H` | `etaf-org-toggle-hidden` | Toggle comments, property drawers, logbooks, and metadata |
 | `t` | `etaf-org-cycle-theme` | Cycle `dark` → `light` → `sepia` → `auto` |
 | `[` / `]` | `etaf-org-narrower` / `etaf-org-wider` | Adjust maximum reading measure |
 | `g` / `r` | `etaf-org-reload` | Reload and repaint from source |
-| `C-c h` / `?` | `etaf-help` | Show keybinding help |
-| `q` | `etaf-org-close` | Unmount, close outline/split if owned, and restore origin buffer |
+| `?` | `etaf-help` | Show searchable in-buffer keybinding help |
+| `q` | `etaf-org-close` | Unmount, close split if owned, and restore origin buffer |
 
 ## Dialects (`etaf-org-flavor`)
 

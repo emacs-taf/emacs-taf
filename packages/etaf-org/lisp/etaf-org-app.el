@@ -8,13 +8,14 @@
 ;; geometry, reading actions, full-width reading (`etaf-org-open'),
 ;; non-destructive live side-by-side preview (`etaf-org-preview'),
 ;; single-window <-> split toggle (`v'), reverse source navigation (`e' / `o'),
-;; follow-scroll (`f'), independent Emacs right side-window outline (`C-c t'),
-;; in-buffer peek (`K'), live section filter (`C-c /'), section folding
-;; (`z' / `Z'), and spoiler reveal (`S').
+;; follow-scroll (`f'), in-buffer resizable TOC sidebar (`T'),
+;; floating peek dialog (`K'), live section filter (`/'), section folding
+;; (`z' / `Z'), hidden drawers/comments toggle (`H'), and spoiler reveal (`S').
 ;;
-;; Only `etaf-org-open' and `etaf-org-preview' are interactive `M-x' commands;
-;; all preview-buffer actions are non-interactive Lisp functions bound via
-;; `etaf-org--keys' so `M-x' stays completely clean (matching `etaf-md').
+;; Only `etaf-org-open' and `etaf-org-preview' are globally autoloaded `M-x'
+;; commands; all preview-buffer actions are interactive commands scoped to
+;; preview buffers via Emacs 29+ `(declare (completion ...))' and bound to
+;; single-key defaults in customizable `etaf-org-keys' (zero prefix keys).
 
 ;;; Code:
 
@@ -30,32 +31,36 @@
 (defconst etaf-org--org-file-regexp "\\.org\\'"
   "Filename regexp matching Org-mode documents.")
 
-(defconst etaf-org--keys
+(defcustom etaf-org-keys
   '(("n" etaf-org-next-heading "下一个标题")
     ("p" etaf-org-previous-heading "上一个标题")
-    ("C-c n" etaf-org-next-heading "下一个标题")
-    ("C-c p" etaf-org-previous-heading "上一个标题")
-    ("C-c j" etaf-org-goto-heading "选择标题")
-    ("C-c C-o" etaf-org-open-link "打开光标处链接")
+    ("j" etaf-org-goto-heading "选择标题")
+    ("T" etaf-org-toggle-toc "开关目录侧栏")
     ("K" etaf-org-preview-link "速览光标处链接/脚注/引用")
     ("e" etaf-org-goto-source "跳回 Org 源码行")
     ("o" etaf-org-goto-source "跳回 Org 源码行")
     ("v" etaf-org-toggle-split "开关双栏对照编辑")
     ("f" etaf-org-follow-scroll "开关滚动跟随")
-    ("C-c t" etaf-org-toggle-toc "开关目录侧窗")
-    ("C-c /" etaf-org-filter "按条件筛选章节")
+    ("/" etaf-org-filter "按条件筛选章节")
     ("z" etaf-org-cycle-fold "折叠/展开当前节")
     ("Z" etaf-org-cycle-global-fold "全局折叠/展开")
     ("S" etaf-org-toggle-spoilers "显示/隐藏剧透内容")
-    ("C-c v" etaf-org-toggle-hidden "显示/隐藏注释与属性")
-    ("t" etaf-org-cycle-theme "切换主题（dark/light/sepia/auto）")
+    ("H" etaf-org-toggle-hidden "显示/隐藏注释与属性")
+    ("t" etaf-org-cycle-theme "切换主题")
     ("[" etaf-org-narrower "缩窄阅读栏")
     ("]" etaf-org-wider "加宽阅读栏")
     ("g" etaf-org-reload "重新加载文档")
     ("r" etaf-org-reload "重新加载文档")
-    ("C-c h" etaf-help "查看快捷键")
     ("q" etaf-org-close "关闭预览"))
-  "Root keys of a preview opened by `etaf-org-open' or `etaf-org-preview'.")
+  "Key bindings active inside a preview opened by `etaf-org-open'.
+Each entry is `(KEY COMMAND LABEL)' where KEY is a `kbd' string.  Defaults use
+single keys only so user prefix maps (`C-c', `C-t', `C-x', etc.) are never
+shadowed; `?' opens the built-in ETAF key help.  Customize or set to nil to
+rely solely on `M-x' / `M-X' interactive commands or your own bindings."
+  :type '(repeat (list (string :tag "Key")
+                       (function :tag "Command")
+                       (string :tag "Label")))
+  :group 'etaf-org)
 
 (defun etaf-org--republish-appearance (&rest _)
   "Republish every `etaf-org' preview following Emacs appearance (`auto')."
@@ -80,8 +85,17 @@
         (let ((state (etaf-app-state)))
           (and (listp state)
                (etaf-ref-p (plist-get state :document))
-               (not (plist-get state :outline-buffer-p))
                t))))))
+
+(defun etaf-org--preview-command-p (_symbol buffer)
+  "Completion predicate limiting preview commands to active preview buffers."
+  (etaf-org--preview-buffer-p buffer))
+
+(defun etaf-org--follow-command-p (_symbol buffer)
+  "Completion predicate enabling `etaf-org-follow-scroll' in preview or source."
+  (and (buffer-live-p buffer)
+       (with-current-buffer buffer
+         (and (etaf-org--follow-scroll-session) t))))
 
 (defun etaf-org--current-session ()
   "Return the preview session of the current buffer."
@@ -102,7 +116,6 @@
            (lambda (buf)
              (when-let* ((st (and (buffer-live-p buf) (etaf-app-state buf)))
                          ((listp st))
-                         ((not (plist-get st :outline-buffer-p)))
                          (bf (plist-get st :file)))
                (equal (etaf-org--canonical-file bf) target)))
            (buffer-list))))))
@@ -167,199 +180,52 @@
                            (find-file-noselect file)))))))
 
 ;;; ---------------------------------------------------------------------------
-;;; Independent Emacs Right Side-Window Outline (`*ETAF Org Outline*')
+;;; In-buffer resizable TOC sidebar (`T')
 ;;; ---------------------------------------------------------------------------
 
-(defun etaf-org--outline-buffer-name (_session)
-  "Return the side-window outline buffer name for SESSION."
-  "*ETAF Org Outline*")
-
-(defun etaf-org--outline-close (session)
-  "Close and clean up SESSION's independent Emacs side-window outline."
-  (when session
-    (when (etaf-org--ref session :toc-open)
-      (etaf-org--write session :toc-open nil))
-    (when-let* ((buf (plist-get session :toc-buffer)))
-      (plist-put session :toc-buffer nil)
-      (when (buffer-live-p buf)
-        (when-let* ((win (get-buffer-window buf t)))
-          (when (and (window-live-p win) (not (one-window-p t)))
-            (ignore-errors (delete-window win))))
-        (when-let* ((rt (etaf-runtime-for-buffer buf)))
-          (ignore-errors (etaf-unmount rt)))
-        (ignore-errors (kill-buffer buf))))))
-
-(etaf-define-component etaf-org--outline-app (&key session)
-  "Independent side-window outline panel synced with SESSION."
-  :bindings ((tokens (etaf-computed
-                      (lambda ()
-                        (etaf-org-theme-tokens
-                         (etaf-org--session-palette session)))
-                      :name 'etaf-org-outline-tokens)))
-  :setup
-  (etaf-theme-provide tokens)
-  :render
-  (let* ((env (etaf-org--env session))
-         (outline (etaf-org-outline session))
-         (active-id (or (etaf-org--read session :active-section)
-                        (nth 2 (car outline))))
-         (bg (etaf-org--env-color env :bg))
-         (ink (etaf-org--env-color env :ink))
-         (muted (etaf-org--env-color env :muted))
-         (border (etaf-org--env-color env :border))
-         (accent (etaf-org--env-color env :accent))
-         (accent-soft (etaf-org--env-color env :accent-soft))
-         (hover (etaf-org--hover-fill env 'soft))
-         (min-lv (if outline (apply #'min (mapcar #'car outline)) 1)))
-    (etaf-node
-     'column
-     (list :width '(vw 100)
-           :background-color bg
-           :color ink
-           :padding '((lh 1) (ch 2))
-           :item-gap '(lh 0)
-           :aria-label "大纲目录")
-     (append
-      (list
-       (etaf-node
-        'flex
-        (list :width 'stretch :align-items 'center
-              :padding-bottom '(lh 1)
-              :border-bottom (list '(px 1) 'solid border))
-        (list
-         (etaf-node 'text (list :font-weight 'bold :color ink)
-                    (list "大纲目录"))
-         (etaf-node 'box (list :flex-basis '(ch 0) :flex-grow 1) nil)
-         (etaf-node 'text
-                    (append
-                     (list :color muted :role 'button :tab-index 0
-                           :pointer 'hand
-                           :help-echo "关闭大纲侧窗（C-c t 或 q）"
-                           :on-press (lambda ()
-                                       (etaf-org--outline-close session)))
-                     (when hover
-                       (list :hover-style (list :background-color hover))))
-                    (list "C-c t 关闭"))))
-       (etaf-node 'box (list :width 'stretch :height '(lh 1)) nil))
-      (if (null outline)
-          (list (etaf-node 'text (list :color muted) (list "（文档暂无标题）")))
-        (cl-loop for entry in outline
-                 for idx from 0
-                 for lv = (nth 0 entry)
-                 for text = (nth 1 entry)
-                 for id = (nth 2 entry)
-                 for is-active = (equal id active-id)
-                 for indent = (* 2 (max 0 (- lv min-lv)))
-                 for target-idx = idx
-                 collect
-                 (etaf-node
-                  'box
-                  (append
-                   (list :width 'stretch
-                         :padding (list '(lh 0) '(ch 1) '(lh 0) (list 'ch (1+ indent)))
-                         :wrap-mode 'word)
-                   (when is-active
-                     (list :background-color accent-soft
-                           :border-left (list '(px 2) 'solid accent))))
-                  (list
-                   (etaf-node
-                    'text
-                    (append
-                     (list :color (cond (is-active ink)
-                                        ((= lv min-lv) ink)
-                                        (t muted))
-                           :font-weight (when (or is-active (= lv min-lv)) 'bold)
-                           :role 'link :tab-index 0
-                           :pointer (unless is-active 'hand)
-                           :aria-selected (when is-active t)
-                           :help-echo (format "跳转到 %s" text)
-                           :on-press (lambda ()
-                                       (etaf-org-locate session target-idx)))
-                     (when (and hover (not is-active))
-                       (list :hover-style (list :background-color hover))))
-                    (list text))))))))))
-
-(defun etaf-org--outline-open (session)
-  "Open SESSION's independent Emacs side-window outline on the right."
-  (etaf-org--sync-active-section session t)
-  (let* ((preview-win (selected-window))
-         (preview-buf (window-buffer preview-win))
-         (existing (plist-get session :toc-buffer))
-         (buf (if (buffer-live-p existing)
-                  existing
-                (let* ((base (etaf-org--outline-buffer-name session))
-                       (name (if (get-buffer base)
-                                 (generate-new-buffer-name base)
-                               base))
-                       (b (save-window-excursion
-                            (etaf-app-open
-                             name
-                             (etaf-view (etaf-org--outline-app :session session))
-                             :state (list :outline-buffer-p t :session session)
-                             :mode-line t
-                             :background (lambda ()
-                                           (etaf-org--page-background session))
-                             :on-close (lambda ()
-                                         (when (etaf-org--ref session :toc-open)
-                                           (etaf-org--write session :toc-open nil))
-                                         (plist-put session :toc-buffer nil))))))
-                  (with-current-buffer b
-                    (let ((map (if (current-local-map)
-                                   (copy-keymap (current-local-map))
-                                 (make-sparse-keymap))))
-                      (define-key map (kbd "q")
-                                  (lambda () (interactive)
-                                    (etaf-org--outline-close session)))
-                      (define-key map (kbd "C-c t")
-                                  (lambda () (interactive)
-                                    (etaf-org--outline-close session)))
-                      (use-local-map map)))
-                  (plist-put session :toc-buffer b)
-                  b))))
-    (etaf-org--write session :toc-open t)
-    (when (and (window-live-p preview-win) (buffer-live-p preview-buf))
-      (set-window-buffer preview-win preview-buf))
-    (display-buffer-in-side-window
-     buf '((side . right) (slot . 0) (window-width . 32)
-           (preserve-size . (t . nil))))
-    (when (window-live-p preview-win)
-      (select-window preview-win))
-    (when-let* ((rt (etaf-runtime-for-buffer buf)))
-      (etaf-runtime-flush rt))
-    buf))
-
 (defun etaf-org-toggle-toc (&optional arg)
-  "Toggle the independent right side-window outline `*ETAF Org Outline*'.
-With ARG, open when positive and close otherwise.  Return non-nil when
-the side window is open and nil when closed."
+  "Toggle the in-buffer resizable TOC sidebar for the current preview (`T').
+The sidebar sits inside the preview buffer on `etaf-org-toc-side' (default
+`left') with an `etaf-pane-resizer' divider.  With prefix ARG, open when
+positive and close otherwise.  Return the new boolean state."
+  (declare (completion etaf-org--preview-command-p))
+  (interactive "P")
   (let* ((session (etaf-org--current-session))
-         (next (if arg
-                   (> (prefix-numeric-value arg) 0)
+         (effective (or arg current-prefix-arg))
+         (next (if effective
+                   (> (prefix-numeric-value effective) 0)
                  (not (etaf-org--read session :toc-open)))))
-    (if next
-        (etaf-org--outline-open session)
-      (etaf-org--outline-close session))
-    (message "大纲侧窗：%s" (if next "已打开" "已关闭"))
+    (when next
+      (etaf-org--sync-active-section session t))
+    (etaf-org--write session :toc-open (and next t))
+    (etaf-org--flush session)
+    (message "目录侧栏：%s" (if next "已打开" "已关闭"))
     (and next t)))
 
 ;;; ---------------------------------------------------------------------------
-;;; Preview navigation and display actions (buffer-local keys, non-interactive)
+;;; Preview navigation and display commands (buffer-scoped interactive)
 ;;; ---------------------------------------------------------------------------
 
 (defun etaf-org-next-heading (&optional session)
   "Move point to the next headline of SESSION or current preview."
+  (declare (completion etaf-org--preview-command-p))
+  (interactive)
   (let ((session (or session (etaf-org--current-session))))
     (unless (etaf-org--adjacent-heading session 1)
       (message "No further heading"))))
 
 (defun etaf-org-previous-heading (&optional session)
   "Move point to the previous headline of SESSION or current preview."
+  (declare (completion etaf-org--preview-command-p))
+  (interactive)
   (let ((session (or session (etaf-org--current-session))))
     (unless (etaf-org--adjacent-heading session -1)
       (message "No earlier heading"))))
 
 (defun etaf-org-goto-heading ()
   "Choose a headline of the current preview and move to it."
+  (declare (completion etaf-org--preview-command-p))
+  (interactive)
   (let* ((session (etaf-org--current-session))
          (outline (etaf-org-outline session))
          (candidates
@@ -376,13 +242,17 @@ the side window is open and nil when closed."
 
 (defun etaf-org-open-link ()
   "Activate the link or control at point."
+  (declare (completion etaf-org--preview-command-p))
+  (interactive)
   (let ((runtime (etaf-runtime-for-buffer (current-buffer))))
     (if runtime
         (etaf-activate runtime)
       (user-error "This buffer has no preview runtime"))))
 
 (defun etaf-org-preview-link (&optional session)
-  "Open or dismiss the in-buffer peek card (`K') at point in SESSION."
+  "Open or dismiss the floating peek dialog (`K') at point in SESSION."
+  (declare (completion etaf-org--preview-command-p))
+  (interactive)
   (let ((session (or session (etaf-org--current-session))))
     (etaf-org--peek-at-point session)
     (etaf-org--flush session)))
@@ -417,6 +287,8 @@ matching one-shot cleanup timer so TTY and GUI frames behave consistently."
   "Jump from preview point to the matching line in the Org source (`e'/`o').
 Selects the source window when already visible; otherwise switches to the
 source buffer in the current window without creating an unexpected split."
+  (declare (completion etaf-org--preview-command-p))
+  (interactive)
   (let* ((session (or session (etaf-org--current-session)))
          (line (etaf-org--source-line-at-point session))
          (src (etaf-org--source-buffer-for session)))
@@ -438,20 +310,25 @@ source buffer in the current window without creating an unexpected split."
 Works from either the preview buffer or its source Org buffer.  With
 ARG, turn follow on when positive and off otherwise (programmatic callers may
 also pass a session plist).  Return the new boolean state."
+  (declare (completion etaf-org--follow-command-p))
+  (interactive "P")
   (let* ((session-arg (and (listp arg) (etaf-ref-p (plist-get arg :document)) arg))
+         (effective (unless session-arg (or arg current-prefix-arg)))
          (session (or session-arg
                       (etaf-org--follow-scroll-session)
                       (user-error "当前缓冲区没有关联的 Org 预览")))
-         (next (if (and arg (not session-arg))
-                   (> (prefix-numeric-value arg) 0)
+         (next (if effective
+                   (> (prefix-numeric-value effective) 0)
                  (not (plist-get session :follow-scroll)))))
     (etaf-org--set-follow-scroll session next)
     (message "跟随滚动：%s" (if next "开启" "关闭"))
     next))
 
 (defun etaf-org-filter (&optional query session)
-  "Filter visible sections (`C-c /') by TODO, :tag:, #A, or text.
+  "Filter visible sections (`/') by TODO, :tag:, #A, or text.
 When QUERY is nil, prompt in the minibuffer; pass an empty string to clear."
+  (declare (completion etaf-org--preview-command-p))
+  (interactive)
   (let* ((session (or session (etaf-org--current-session)))
          (query (if (null query)
                     (read-string "筛选章节（如 TODO :work: #A 关键词，留空清除）："
@@ -465,6 +342,8 @@ When QUERY is nil, prompt in the minibuffer; pass an empty string to clear."
 
 (defun etaf-org-cycle-fold (&optional session)
   "Cycle fold state (`folded' -> `children' -> `open') of current section."
+  (declare (completion etaf-org--preview-command-p))
+  (interactive)
   (let* ((session (or session (etaf-org--current-session)))
          (id (or (etaf-org--reading-section session)
                  (nth 2 (car (etaf-org-outline session))))))
@@ -476,6 +355,8 @@ When QUERY is nil, prompt in the minibuffer; pass an empty string to clear."
 
 (defun etaf-org-cycle-global-fold (&optional session)
   "Cycle global fold state between `overview' and `content' (`Z')."
+  (declare (completion etaf-org--preview-command-p))
+  (interactive)
   (let* ((session (or session (etaf-org--current-session)))
          (next (etaf-org--cycle-global session)))
     (etaf-org--flush session)
@@ -483,6 +364,8 @@ When QUERY is nil, prompt in the minibuffer; pass an empty string to clear."
 
 (defun etaf-org-toggle-spoilers (&optional session)
   "Toggle global visibility of `!!spoiler!!' and `[[spoiler:...]]' masks (`S')."
+  (declare (completion etaf-org--preview-command-p))
+  (interactive)
   (let* ((session (or session (etaf-org--current-session)))
          (next (not (etaf-org--read session :spoilers-revealed))))
     (etaf-org--write session :spoilers-revealed next)
@@ -491,7 +374,9 @@ When QUERY is nil, prompt in the minibuffer; pass an empty string to clear."
     next))
 
 (defun etaf-org-toggle-hidden ()
-  "Show or hide comments, properties, drawers and metadata (`C-c v')."
+  "Show or hide comments, properties, drawers and metadata (`H')."
+  (declare (completion etaf-org--preview-command-p))
+  (interactive)
   (let* ((session (etaf-org--current-session))
          (hidden (etaf-org--read session :hidden)))
     (etaf-org-show-hidden session (not hidden))
@@ -499,18 +384,24 @@ When QUERY is nil, prompt in the minibuffer; pass an empty string to clear."
 
 (defun etaf-org-wider ()
   "Widen the reading measure by four columns (`]')."
+  (declare (completion etaf-org--preview-command-p))
+  (interactive)
   (let* ((session (etaf-org--current-session))
          (width (etaf-org-adjust-width session 4)))
     (message "阅读栏：最多 %d 列" width)))
 
 (defun etaf-org-narrower ()
   "Narrow the reading measure by four columns (`[')."
+  (declare (completion etaf-org--preview-command-p))
+  (interactive)
   (let* ((session (etaf-org--current-session))
          (width (etaf-org-adjust-width session -4)))
     (message "阅读栏：最多 %d 列" width)))
 
 (defun etaf-org-reload ()
   "Re-read and repaint the current preview (`g' / `r')."
+  (declare (completion etaf-org--preview-command-p))
+  (interactive)
   (let ((session (etaf-org--current-session)))
     (etaf-org-refresh session)
     (etaf-org--flush session)
@@ -528,11 +419,13 @@ When QUERY is nil, prompt in the minibuffer; pass an empty string to clear."
       (remove-hook 'kill-buffer-hook #'etaf-org--preview-source-killed t))))
 
 (defun etaf-org-close ()
-  "Unmount preview, close its outline side window and restore windows cleanly.
+  "Unmount preview and restore windows cleanly.
 When opened in a split created by `etaf-org-preview' or `etaf-org-toggle-split',
 removes only that split window so unrelated panes stay intact.  When opened in
 a single window via `etaf-org-open', restores the originating buffer in place
 without deleting the window."
+  (declare (completion etaf-org--preview-command-p))
+  (interactive)
   (let* ((session (etaf-org--current-session))
          (preview-buf (current-buffer))
          (window (or (get-buffer-window preview-buf t) (selected-window)))
@@ -552,7 +445,6 @@ without deleting the window."
                               source-buf))))
     (etaf-org--cleanup-source-kill-hook session)
     (etaf-org--set-follow-scroll session nil)
-    (etaf-org--outline-close session)
     (etaf-app-close)
     (cond
      ((and (or split-p source-split-p)
@@ -570,6 +462,8 @@ From a single-window preview, splits the source buffer on the left synced to
 the current line with follow-scroll enabled.  When the source is already shown
 beside the preview, collapses back to a full-width reading window.  Returns
 non-nil when side-by-side split is active."
+  (declare (completion etaf-org--preview-command-p))
+  (interactive)
   (let* ((session (etaf-org--current-session))
          (preview-win (selected-window))
          (source-buf (etaf-org--source-buffer-for session)))
@@ -739,7 +633,6 @@ Org document in any ETAF layout via `etaf-mount'."
   "Mount SESSION into application buffer NAME (linked to SOURCE-BUFFER)."
   (let* ((cleanup (lambda ()
                     (etaf-org--cleanup-source-kill-hook session)
-                    (etaf-org--outline-close session)
                     (etaf-org--set-follow-scroll session nil)
                     (etaf-org--live-unregister session)
                     (etaf-org--follow-unregister (plist-get session :file))
@@ -748,7 +641,7 @@ Org document in any ETAF layout via `etaf-mount'."
           (etaf-app-open
            name
            (etaf-view (etaf-org-app :session session
-                                    :keys etaf-org--keys))
+                                    :keys etaf-org-keys))
            :state session
            :mode-line t
            :background (lambda () (etaf-org--page-background session))
