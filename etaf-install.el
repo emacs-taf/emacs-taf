@@ -213,30 +213,95 @@ so the ETAF manager and later upgrades through `M-x list-packages` resolve them.
 (defvar etaf-install-community-cache nil
   "Community packages read from the archive manifest, or nil when unread.")
 
-(defun etaf-install--community ()
-  "Return the community records cached by an interactive run, or nil.
+(defvar etaf-install--manifest-cache nil
+  "Parsed `manifest.json' hash table cached from the archive, or nil.")
 
-  Reading them costs a request to the archive, so it happens only when the user
-  runs the installer, never on a package.el installation path: a gate or a
-  batch installation must not wait on the network."
+(defvar etaf-install--manifest-source nil
+  "Archive URL or directory from which `etaf-install--manifest-cache' came.")
+
+(defun etaf-install--archive-base ()
+  "Return the active ETAF archive base URL or directory with trailing slash."
+  (file-name-as-directory
+   (or (cdr (assoc "etaf" package-archives))
+       etaf-install-archive-url)))
+
+(defun etaf-install--read-manifest-from-base (base)
+  "Read and parse `manifest.json' from local directory or HTTPS URL BASE."
+  (condition-case nil
+      (cond
+       ((and (file-name-absolute-p base) (file-directory-p base))
+        (let ((file (expand-file-name "manifest.json" base)))
+          (when (file-readable-p file)
+            (with-temp-buffer
+              (insert-file-contents file)
+              (json-parse-buffer :object-type 'hash-table
+                                 :array-type 'list
+                                 :null-object nil)))))
+       ((string-prefix-p "https://" base)
+        (let ((buffer (url-retrieve-synchronously
+                       (concat base "manifest.json")
+                       t t 3)))
+          (prog1 (when buffer
+                   (with-current-buffer buffer
+                     (goto-char (point-min))
+                     (when (search-forward "\n\n" nil t)
+                       (json-parse-buffer :object-type 'hash-table
+                                          :array-type 'list
+                                          :null-object nil))))
+            (when (buffer-live-p buffer) (kill-buffer buffer))))))
+    (error nil)))
+
+(defun etaf-install--manifest (&optional force)
+  "Return the cached archive `manifest.json' hash table, or nil.
+Local directory archives are read on demand without network access.
+HTTPS archives are only fetched when FORCE is non-nil or during an
+interactive call, so enabling the installer or non-interactive checks
+never touch the network."
+  (let* ((base (etaf-install--archive-base))
+         (local-p (and (file-name-absolute-p base) (file-directory-p base))))
+    (when (or force (not (equal etaf-install--manifest-source base)))
+      (when (or force local-p (called-interactively-p 'any))
+        (let ((parsed (etaf-install--read-manifest-from-base base)))
+          (when (hash-table-p parsed)
+            (setq etaf-install--manifest-cache parsed
+                  etaf-install--manifest-source base
+                  etaf-install-community-cache (gethash "community" parsed))))))
+    (when (equal etaf-install--manifest-source base)
+      etaf-install--manifest-cache)))
+
+(defun etaf-install--community ()
+  "Return the community records cached from the archive manifest, or nil."
   (or etaf-install-community-cache
-      (setq etaf-install-community-cache
-            (when (called-interactively-p 'any)
-              (condition-case nil
-                  (let ((buffer (url-retrieve-synchronously
-                                 (concat (or (cdr (assoc "etaf" package-archives))
-                                             etaf-install-archive-url)
-                                         "manifest.json")
-                                 t t 3)))
-                    (prog1 (when buffer
-                             (with-current-buffer buffer
-                               (goto-char (point-min))
-                               (when (search-forward "\n\n" nil t)
-                                 (gethash "community"
-                                          (json-parse-buffer :object-type 'hash-table
-                                                             :null-object nil)))))
-                      (when (buffer-live-p buffer) (kill-buffer buffer))))
-                (error nil))))))
+      (when-let* ((manifest (etaf-install--manifest)))
+        (setq etaf-install-community-cache (gethash "community" manifest)))))
+
+(defun etaf-install--catalog-entry-to-target (name record)
+  "Convert manifest catalog NAME and RECORD hash table into a target tuple."
+  (let* ((pkg (intern name))
+         (label (or (gethash "label" record) name))
+         (group-name (or (gethash "group" record) "application"))
+         (group (or (intern-soft group-name) 'application))
+         (open-name (or (gethash "open" record) ""))
+         (open-sym (and (stringp open-name)
+                        (not (string-empty-p open-name))
+                        (intern open-name)))
+         (caps (mapcar #'intern
+                       (cl-remove-if-not
+                        (lambda (c) (and (stringp c) (not (string-empty-p c))))
+                        (gethash "capabilities" record)))))
+    (append (list pkg label group open-sym) caps)))
+
+(defun etaf-install--catalog-targets ()
+  "Return dynamic first-party targets from `manifest.json' `catalog', or nil."
+  (let* ((manifest (etaf-install--manifest))
+         (catalog (and (hash-table-p manifest) (gethash "catalog" manifest)))
+         (entries nil))
+    (when (hash-table-p catalog)
+      (maphash (lambda (name record)
+                 (when (hash-table-p record)
+                   (push (etaf-install--catalog-entry-to-target name record) entries)))
+               catalog))
+    entries))
 
 (defun etaf-install--archive-targets ()
   "Return community packages this table does not curate.
@@ -245,29 +310,56 @@ so the ETAF manager and later upgrades through `M-x list-packages` resolve them.
   the label the archive states. The open command and the capability checks
   belong to whoever wrote such a package, so its row carries neither."
   (let ((records (etaf-install--community))
+        (dynamic-catalog (etaf-install--catalog-targets))
         extra)
     (when (hash-table-p records)
       (maphash (lambda (name record)
-                 (when (and (not (assq (intern name) etaf-install--targets))
-                            (assq (intern name) package-archive-contents))
-                   (push (list (intern name)
-                               (or (gethash "label" record) name)
-                               (or (intern-soft (or (gethash "group" record) "application"))
-                                   'application)
-                               (intern-soft (or (gethash "open" record) "")))
-                         extra)))
+                 (let ((sym (intern name)))
+                   (when (and (not (assq sym etaf-install--targets))
+                              (not (assq sym dynamic-catalog))
+                              (assq sym package-archive-contents))
+                     (push (list sym
+                                 (or (gethash "label" record) name)
+                                 (or (intern-soft (or (gethash "group" record) "application"))
+                                     'application)
+                                 (intern-soft (or (gethash "open" record) "")))
+                           extra))))
                records))
     (nreverse extra)))
 
 (defun etaf-install--available-targets ()
-  "Return the curated targets followed by the archive's other packages."
-  (append etaf-install--targets
-          (and (boundp 'package-archive-contents)
-               (etaf-install--archive-targets))))
+  "Return curated targets merged with manifest catalog and community targets.
+Built-in `etaf-install--targets' keeps offline menus working and preserves
+curated order; `manifest.json' `catalog' overrides labels/capabilities and
+adds newly published first-party packages without upgrading `etaf-install'."
+  (let* ((dynamic (etaf-install--catalog-targets))
+         (by-name (make-hash-table :test #'eq))
+         (result nil))
+    (dolist (entry dynamic)
+      (puthash (car entry) entry by-name))
+    (dolist (curated etaf-install--targets)
+      (let* ((sym (car curated))
+             (override (gethash sym by-name)))
+        (push (or override curated) result)
+        (remhash sym by-name)))
+    (let (added)
+      (maphash (lambda (_sym entry) (push entry added)) by-name)
+      (setq result (nreverse result))
+      (when added
+        (setq result (append result
+                             (sort added (lambda (a b)
+                                           (string< (symbol-name (car a))
+                                                    (symbol-name (car b)))))))))
+    (append result
+            (and (boundp 'package-archive-contents)
+                 (etaf-install--archive-targets)))))
 
 (defun etaf-install--target (package)
   "Return the supported target description for PACKAGE."
   (or (assq package (etaf-install--available-targets))
+      (progn
+        (etaf-install--manifest t)
+        (assq package (etaf-install--available-targets)))
       (user-error "Unsupported target %s; run M-x etaf-install to choose one" package)))
 
 (defconst etaf-install--group-labels
@@ -505,24 +597,50 @@ Return a list of command strings (usually 1 string combining OS packages)."
      (t (format "%sInstall %s with your system package manager.%s"
                 prefix label (if purpose (concat " " purpose) ""))))))
 
+(defun etaf-install--target-system-tools (package)
+  "Return manual system CLI and managed-engine plist for PACKAGE.
+Reads dynamic `manifest.json' `catalog' metadata when available and
+falls back to the built-in `etaf-install--system-tools' table offline."
+  (let* ((manifest (etaf-install--manifest))
+         (catalog (and (hash-table-p manifest) (gethash "catalog" manifest)))
+         (record (and (hash-table-p catalog) (gethash (symbol-name package) catalog)))
+         (st (and (hash-table-p record) (gethash "system_tools" record))))
+    (if (hash-table-p st)
+        (let (plist)
+          (when-let* ((req (gethash "required" st)))
+            (setq plist (plist-put plist :required (mapcar #'intern req))))
+          (when-let* ((opt (gethash "optional" st)))
+            (setq plist (plist-put plist :optional (mapcar #'intern opt))))
+          (when-let* ((engs (gethash "managed_engines" st)))
+            (setq plist (plist-put plist :managed-engines
+                                   (mapcar (lambda (pair)
+                                             (list (car pair) (intern (cadr pair))))
+                                           engs))))
+          plist)
+      (cdr (assq package etaf-install--system-tools)))))
+
 (defun etaf-install--label-to-cli-tool (label)
   "Map a doctor fact LABEL string to a tool key in `etaf-install--cli-catalog'."
   (let ((low (downcase (or label ""))))
-    (cond
-     ((or (string-prefix-p "node" low) (equal low "node.js")) 'node)
-     ((or (string-prefix-p "python" low) (equal low "python3")) 'python3)
-     ((equal low "mpv") 'mpv)
-     ((member low '("ffmpeg" "ffprobe" "ffplay")) 'ffmpeg)
-     ((string-prefix-p "rsvg-convert" low) 'rsvg-convert)
-     ((equal low "telega-server") 'telega-server)
-     ((equal low "qrencode") 'qrencode)
-     ((equal low "git") 'git)
-     ((or (equal low "rg") (string-prefix-p "ripgrep" low)) 'rg)
-     ((or (equal low "dot") (string-prefix-p "graphviz" low)) 'dot)
-     ((string-prefix-p "plantuml" low) 'plantuml)
-     ((equal low "curl") 'curl)
-     ((equal low "yt-dlp") 'yt-dlp)
-     (t nil))))
+    (or (cl-loop for (key . spec) in etaf-install--cli-catalog
+                 for name = (downcase (or (plist-get spec :name) ""))
+                 for disp = (downcase (or (plist-get spec :label) ""))
+                 for bins = (mapcar #'downcase (plist-get spec :binaries))
+                 when (or (equal low name)
+                          (equal low disp)
+                          (member low bins)
+                          (and (not (string-empty-p name))
+                               (string-prefix-p (concat name " ") low))
+                          (and (not (string-empty-p disp))
+                               (string-prefix-p disp low)))
+                 return key)
+        (cond
+         ((string-prefix-p "node" low) 'node)
+         ((string-prefix-p "python" low) 'python3)
+         ((equal low "ffplay") 'ffmpeg)
+         ((string-prefix-p "ripgrep" low) 'rg)
+         ((string-prefix-p "graphviz" low) 'dot)
+         (t nil)))))
 
 (defun etaf-install--enrich-fact (fact)
   "Append a platform-specific install command to unavailable FACT when helpful."
@@ -539,7 +657,7 @@ Return a list of command strings (usually 1 string combining OS packages)."
 
 (defun etaf-install--system-cli-summary (package)
   "Return manual system CLI summary plist for PACKAGE, or nil if none."
-  (let* ((entry (cdr (assq package etaf-install--system-tools)))
+  (let* ((entry (etaf-install--target-system-tools package))
          (req-tools (plist-get entry :required))
          (opt-tools (plist-get entry :optional)))
     (when (or req-tools opt-tools)
@@ -578,7 +696,7 @@ Return a list of command strings (usually 1 string combining OS packages)."
 
 (defun etaf-install--missing-managed-engine (package missing-facts)
   "Return (LABEL COMMAND) for the first missing managed engine of PACKAGE."
-  (let ((engines (plist-get (cdr (assq package etaf-install--system-tools))
+  (let ((engines (plist-get (etaf-install--target-system-tools package)
                             :managed-engines)))
     (cl-find-if
      (lambda (eng)
@@ -820,7 +938,7 @@ Return a list of command strings (usually 1 string combining OS packages)."
                                                   (plist-get facts :optional)))))
       ;; Before PACKAGE is installed, synthesize manual System CLI and managed
       ;; engine facts from the declarative catalog so users see prerequisites upfront.
-      (when-let* ((entry (cdr (assq package etaf-install--system-tools))))
+      (when-let* ((entry (etaf-install--target-system-tools package)))
         (dolist (tool (plist-get entry :required))
           (let ((spec (cdr (assq tool etaf-install--cli-catalog))))
             (setq required
@@ -887,6 +1005,7 @@ Return a list of command strings (usually 1 string combining OS packages)."
 PACKAGES may include the installer itself; only supported targets contribute
 extra archives.  Refresh stays scoped so unrelated sources are untouched."
   (etaf-install--archive)
+  (etaf-install--manifest t)
   (dolist (package packages)
     (when (assq package (etaf-install--available-targets))
       (etaf-install--register-target-archives package)))

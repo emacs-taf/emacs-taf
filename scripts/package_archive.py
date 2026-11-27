@@ -224,6 +224,29 @@ def verify(directory, allow_missing=False):
                                                      for key in ("group", "label", "open"))
                                              for value in community.values())):
         raise ValueError("Community origins must name served packages with an https URL and a license")
+    catalog = manifest.get("catalog")
+    if catalog is not None:
+        valid_groups = {"framework", "extension", "application", "game"}
+        if not isinstance(catalog, dict) or not set(catalog) <= seen:
+            raise ValueError("Manifest catalog must be a map naming served packages")
+        for key, record in catalog.items():
+            if (not isinstance(record, dict)
+                    or record.get("group") not in valid_groups
+                    or not isinstance(record.get("label"), str)
+                    or not isinstance(record.get("open", ""), str)
+                    or not isinstance(record.get("capabilities", []), list)
+                    or not all(isinstance(c, str) for c in record.get("capabilities", []))):
+                raise ValueError(f"Invalid manifest catalog entry for {key}")
+            st = record.get("system_tools")
+            if st is not None:
+                if (not isinstance(st, dict)
+                        or not all(isinstance(st.get(k, []), list) and all(isinstance(v, str) for v in st.get(k, []))
+                                   for k in ("required", "optional"))
+                        or not isinstance(st.get("managed_engines", []), list)
+                        or not all(isinstance(pair, list) and len(pair) == 2
+                                   and all(isinstance(v, str) for v in pair)
+                                   for pair in st.get("managed_engines", []))):
+                    raise ValueError(f"Invalid manifest catalog system_tools for {key}")
     updated = manifest.get("updated")
     if updated is not None and (not isinstance(updated, dict) or set(updated) != seen
                                 or not all(isinstance(value, str) and STAMP.fullmatch(value)

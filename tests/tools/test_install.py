@@ -1309,6 +1309,63 @@ class InstallTests(unittest.TestCase):
              expected actual))))
 """)
 
+    def test_dynamic_manifest_catalog_discovers_new_target_and_system_tools(self):
+        # Publish a brand-new package NOT hardcoded in etaf-install--targets or
+        # etaf-install--system-tools, declaring it only in manifest.json catalog.
+        new_src = self.sources / "etaf-dynamic"
+        new_src.mkdir()
+        (new_src / "etaf-dynamic.el").write_text(
+            ";;; -*- lexical-binding: t; -*-\n"
+            ";;; etaf-dynamic.el --- Dynamic catalog target\n\n"
+            ";; Version: 0.1.0\n"
+            ";; Package-Requires: ((emacs \"29.1\"))\n\n"
+            ";;; Code:\n"
+            "(defun etaf-dynamic-open () (interactive) 'opened)\n"
+            "(provide 'etaf-dynamic)\n",
+            encoding="utf-8",
+        )
+        self.build()
+        manifest_path = self.archive / "manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["catalog"] = {
+            "etaf-dynamic": {
+                "group": "application",
+                "label": "Dynamic app from manifest",
+                "open": "etaf-dynamic-open",
+                "capabilities": [],
+                "system_tools": {
+                    "required": ["ffmpeg"],
+                    "optional": ["rg"],
+                },
+            }
+        }
+        manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+        verify = subprocess.run(
+            [sys.executable, str(ROOT / "scripts/package_archive.py"), "verify",
+             "--directory", str(self.archive)],
+            capture_output=True, text=True, timeout=20,
+        )
+        self.assertEqual(0, verify.returncode, verify.stdout + verify.stderr)
+        self.run_lisp("""
+(when (assq 'etaf-dynamic etaf-install--targets)
+  (error "etaf-dynamic must not be hardcoded in etaf-install--targets"))
+(let ((target (etaf-install--target 'etaf-dynamic)))
+  (unless (equal (nth 1 target) "Dynamic app from manifest")
+    (error "Wrong dynamic label: %S" target))
+  (unless (eq (nth 2 target) 'application)
+    (error "Wrong dynamic group: %S" target))
+  (unless (eq (nth 3 target) 'etaf-dynamic-open)
+    (error "Wrong dynamic open command: %S" target)))
+(let ((cli (etaf-install--system-cli-summary 'etaf-dynamic)))
+  (unless (assq 'ffmpeg (plist-get cli :required))
+    (error "Missing dynamic required CLI ffmpeg: %S" cli))
+  (unless (assq 'rg (plist-get cli :optional))
+    (error "Missing dynamic optional CLI rg: %S" cli)))
+(etaf-install 'etaf-dynamic t)
+(unless (package-installed-p 'etaf-dynamic)
+  (error "etaf-dynamic failed to install via dynamic catalog"))
+""")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -521,24 +521,29 @@ def tar_icon_link(item, prefix=""):
             f'title="Download {name} {version}">{TAR_ICON}<span>tar</span></a>')
 
 
-def groups(packages, community={}):
+def groups(packages, community={}, catalog={}):
     """Split packages into the published roles, keeping any unknown name visible.
 
     A package another author publishes through this archive is never filed
     under our own applications: the section states who maintains it.
+    First-party packages read their group from `manifest['catalog']` when
+    present, falling back to the curated `GROUPS` table for older archives.
     """
     placed, result = set(), []
     def declared_group(item):
-        # Only a package the archive redistributes for another author has a
-        # declared group; ours are grouped by the sections alone, or every
-        # package would match the default.
         record = community.get(item["name"])
-        return None if record is None else record.get("group", "application")
+        if record is not None:
+            return record.get("group", "application")
+        cat = catalog.get(item["name"])
+        if cat is not None:
+            return cat.get("group")
+        return None
 
     for label, members in GROUPS:
         key = label.lower().rstrip("s")
         selected = [item for item in packages
-                    if item["name"] in members or declared_group(item) == key]
+                    if (declared_group(item) == key)
+                    or (declared_group(item) is None and item["name"] in members)]
         placed.update(item["name"] for item in selected)
         if selected:
             result.append((label, selected))
@@ -548,7 +553,7 @@ def groups(packages, community={}):
     return result
 
 
-def unplaced(packages, community={}):
+def unplaced(packages, community={}, catalog={}):
     """Name the packages no section claims.
 
     The page files them under Other so a reader sees the omission; the
@@ -557,7 +562,9 @@ def unplaced(packages, community={}):
     """
     claimed = set().union(*(members for _, members in GROUPS))
     return sorted(item["name"] for item in packages
-                  if item["name"] not in claimed and item["name"] not in community)
+                  if item["name"] not in claimed
+                  and item["name"] not in community
+                  and not (catalog.get(item["name"]) or {}).get("group"))
 
 
 def inspect_archive(path):
@@ -631,11 +638,12 @@ def archive_pages(package_dir):
     packages = sorted(manifest["packages"], key=lambda item: item["name"])
     names = {item["name"] for item in packages}
     community = manifest.get("community", {})
+    catalog = manifest.get("catalog", {})
     dates = [day for day in (stamp_date(value) for value in updated.values()) if day]
     newest = max(dates) if dates else None
     rows_by_name = {item["name"]: item for item in packages}
     sections = []
-    for label, selected in groups(packages, community):
+    for label, selected in groups(packages, community, catalog):
         rows = []
         for item in selected:
             name = html.escape(item["name"])
@@ -722,7 +730,7 @@ versioned file never changes bytes.</p>
         package_page(item, sources, updated, rows_by_name, used_by,
                      package_dir / item["name"], community.get(item["name"]))
     return {"packages": len(packages), "updated": str(newest) if newest else None,
-            "unplaced": unplaced(packages, community)}
+            "unplaced": unplaced(packages, community, catalog)}
 
 
 def package_page(item, sources, updated, rows_by_name, used_by, directory, origin=None):

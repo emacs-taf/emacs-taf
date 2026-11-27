@@ -392,7 +392,9 @@ class PackageReleaseStageTests(unittest.TestCase):
         manifest = json.loads((self.output / "manifest.json").read_text())
         self.assertEqual({path.name for path in self.output.iterdir()},
                          {"manifest.json", "archive-contents", *(item["file"] for item in manifest["packages"])})
-        self.assertEqual(set(manifest), {"schema", "workspace", "sources", "packages", "updated"})
+        self.assertEqual(set(manifest), {"schema", "workspace", "sources", "packages", "updated", "catalog"})
+        self.assertEqual(manifest["catalog"]["etaf-ui"]["group"], "framework")
+        self.assertEqual(manifest["catalog"]["etaf-ui"]["open"], "etaf-ui-gallery-open")
         self.assertEqual(set(manifest["updated"]), {item["name"] for item in manifest["packages"]})
         self.assertEqual((self.output / "archive-contents").read_bytes(), (self.archive / "archive-contents").read_bytes())
         for package in manifest["packages"]:

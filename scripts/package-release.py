@@ -278,6 +278,120 @@ def community_module():
     return module
 
 
+def _parse_installer_catalog(installer_path):
+    """Extract curated targets and system-tools defaults from etaf-install.el."""
+    if not installer_path.is_file():
+        return {}, {}
+    text = installer_path.read_text(encoding="utf-8", errors="replace")
+    targets = {}
+    t_match = re.search(r"^\(defconst etaf-install--targets\s+'?\((.*?)\)\s+\"", text, re.M | re.S)
+    if t_match:
+        body = re.sub(r";[^\n]*", "", t_match.group(1))
+        for m in re.finditer(r'\(([a-z][a-z0-9-]*)\s+"([^"]*)"\s+([a-z-]+)\s+([a-z0-9-]+)([^)]*)\)', body):
+            name, label, group, open_sym, rest = m.groups()
+            caps = [tok for tok in rest.split() if tok]
+            targets[name] = {
+                "group": group,
+                "label": label,
+                "open": "" if open_sym == "nil" else open_sym,
+                "capabilities": caps,
+            }
+    sys_tools = {}
+    s_match = re.search(r"^\(defconst etaf-install--system-tools\s+'?\((.*?)\)\s+\"", text, re.M | re.S)
+    if s_match:
+        body = re.sub(r";[^\n]*", "", s_match.group(1))
+        # Tokenize simple nested S-expressions inside the alist.
+        tokens = re.findall(r'"(?:\\.|[^"\\])*"|\(|\)|[^\s()]+', body)
+        idx = 0
+
+        def parse_sexp():
+            nonlocal idx
+            tok = tokens[idx]
+            idx += 1
+            if tok == "(":
+                items = []
+                while idx < len(tokens) and tokens[idx] != ")":
+                    items.append(parse_sexp())
+                if idx < len(tokens):
+                    idx += 1
+                return items
+            if tok.startswith('"') and tok.endswith('"'):
+                return tok[1:-1].replace('\\"', '"')
+            return tok
+
+        while idx < len(tokens):
+            if tokens[idx] != "(":
+                idx += 1
+                continue
+            entry = parse_sexp()
+            if not entry or not isinstance(entry[0], str):
+                continue
+            pkg = entry[0]
+            spec = {}
+            pos = 1
+            while pos + 1 < len(entry):
+                key, val = entry[pos], entry[pos + 1]
+                pos += 2
+                if key == ":required" and isinstance(val, list):
+                    spec["required"] = [str(v) for v in val]
+                elif key == ":optional" and isinstance(val, list):
+                    spec["optional"] = [str(v) for v in val]
+                elif key == ":managed-engines" and isinstance(val, list):
+                    spec["managed_engines"] = [
+                        [str(pair[0]), str(pair[1])] for pair in val
+                        if isinstance(pair, list) and len(pair) == 2
+                    ]
+            if spec:
+                sys_tools[pkg] = spec
+    return targets, sys_tools
+
+
+def build_archive_catalog(root, selection, checkpoint, manifest_packages, community_names):
+    """Build manifest['catalog'] for every first-party package in the archive.
+
+    Combines workspace.json roles, release-dependencies.json overrides (when
+    supplied), etaf-install.el curated defaults and package header summaries so
+    installers and archive pages can discover targets dynamically from one
+    authoritative manifest.
+    """
+    valid_groups = {"framework", "extension", "application", "game"}
+    inst_targets, inst_tools = _parse_installer_catalog(root / "etaf-install.el")
+    pkg_opts = selection.get("packages") or {}
+    catalog = {}
+    for item in manifest_packages:
+        name = item["name"]
+        if name in community_names:
+            continue
+        opts = pkg_opts.get(name) or {}
+        curated = inst_targets.get(name) or {}
+        role = (checkpoint.get(name) or {}).get("role")
+        group = opts.get("group") or curated.get("group") or (
+            role if role in valid_groups else ("framework" if name == "etaf-install" else "application")
+        )
+        label = opts.get("label") or curated.get("label") or item.get("summary") or name
+        open_cmd = opts["open"] if "open" in opts else curated.get("open", "")
+        caps = opts["capabilities"] if "capabilities" in opts else list(curated.get("capabilities", []))
+        record = {
+            "group": group,
+            "label": str(label),
+            "open": str(open_cmd or ""),
+            "capabilities": [str(c) for c in caps],
+        }
+        tools = opts.get("system_tools") if "system_tools" in opts else inst_tools.get(name)
+        if isinstance(tools, dict) and tools:
+            clean_tools = {}
+            if tools.get("required"):
+                clean_tools["required"] = [str(t) for t in tools["required"]]
+            if tools.get("optional"):
+                clean_tools["optional"] = [str(t) for t in tools["optional"]]
+            if tools.get("managed_engines"):
+                clean_tools["managed_engines"] = [[str(a), str(b)] for a, b in tools["managed_engines"]]
+            if clean_tools:
+                record["system_tools"] = clean_tools
+        catalog[name] = record
+    return catalog
+
+
 def community_packages():
     """Return the packages other authors publish through this archive.
 
@@ -397,8 +511,12 @@ def build(directory):
                                             "label": record.get("label", name),
                                             "open": record.get("open", "")}
                                      for name, record in community_pins.items()}
+        catalog = build_archive_catalog(root, selection, checkpoint, manifest["packages"], set(community_pins))
+        if catalog:
+            manifest["catalog"] = catalog
         manifest["workspace"] = revision
         (stage / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+        package_archive.verify(stage)
         stage.rename(directory)
     print(f"Built {len(manifest['packages'])} packages from sealed workspace {revision[:12]}\narchive={directory}")
 
@@ -813,6 +931,8 @@ def stage(directory, output):
         public["updated"] = manifest["updated"]
     if manifest.get("community"):
         public["community"] = manifest["community"]
+    if manifest.get("catalog"):
+        public["catalog"] = manifest["catalog"]
     for package in manifest["packages"]:
         public["packages"].append({key: package[key] for key in
                                   ("name", "version", "requirements", "summary", "file", "sha256")})
