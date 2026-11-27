@@ -278,8 +278,19 @@ def community_module():
     return module
 
 
+def installer_catalog_path(root):
+    """Locate the file defining `etaf-install--targets' and `--system-tools'."""
+    for rel in ("packages/etaf-install/lisp/etaf-install-catalog.el",
+                "packages/etaf-install/etaf-install.el",
+                "etaf-install.el"):
+        candidate = root / rel
+        if candidate.is_file():
+            return candidate
+    return root / "etaf-install.el"
+
+
 def _parse_installer_catalog(installer_path):
-    """Extract curated targets and system-tools defaults from etaf-install.el."""
+    """Extract curated targets and system-tools defaults from etaf-install."""
     if not installer_path.is_file():
         return {}, {}
     text = installer_path.read_text(encoding="utf-8", errors="replace")
@@ -355,7 +366,7 @@ def build_archive_catalog(root, selection, checkpoint, manifest_packages, commun
     authoritative manifest.
     """
     valid_groups = {"framework", "extension", "application", "game"}
-    inst_targets, inst_tools = _parse_installer_catalog(root / "etaf-install.el")
+    inst_targets, inst_tools = _parse_installer_catalog(installer_catalog_path(root))
     pkg_opts = selection.get("packages") or {}
     catalog = {}
     for item in manifest_packages:
@@ -426,7 +437,13 @@ def build(directory):
         checkpoint = checkpoint_sources(json.loads((root / "workspace.json").read_text()))
         if selection.get("schema") != 1:
             raise ValueError("Unsupported release selection schema")
-        sources, resources, provenance = {"etaf-install": root}, {}, {"etaf-install": revision}
+        installer_sub = subtree_of("etaf-install")
+        if installer_sub:
+            export(ROOT, revision, work / "etaf-install", subtree=installer_sub)
+            sources = {"etaf-install": work / "etaf-install"}
+        else:
+            sources = {"etaf-install": root}
+        resources, provenance = {}, {"etaf-install": revision}
         checkouts = {"etaf-install": ROOT}
         for name, options in selection["packages"].items():
             if name not in checkpoint:

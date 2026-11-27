@@ -123,10 +123,11 @@ The manifest also records the checkout revision. Rewriting that sealed commit â€
 including a message edit â€” gives it a new identity, so rebuild and rerun
 `release-check` before publishing an amended commit.
 
-`etaf-install` packages the root README, LICENSE and CHANGELOG. A release that
-changes only one of those root files still changes the
-`etaf-install-<version>.tar` bytes; bump `etaf-install`'s `Version` or leave
-those files unchanged when publishing another package at the same version. The
+`etaf-install` lives in its own package directory (`packages/etaf-install/`) with
+its own `README`, `LICENSE`, `CHANGELOG`, and `lisp/` modules. Changes to the
+workspace root `README.md` or `CHANGELOG.md` do not alter
+`etaf-install-<version>.tar` bytes; bump `packages/etaf-install/etaf-install.el`'s
+`Version` only when files shipped inside `packages/etaf-install/` change. The
 publisher refuses a changed versioned tarball.
 
 `release-check` runs each supported target through `etaf-install`, the documented
@@ -297,7 +298,7 @@ Adding a package to the archive is a fixed sequence; do not invent another route
 
 1. Keep the package under `packages/<name>` and register it in `workspace.json` (`python3 scripts/add-package.py NAME --url URL`).
 2. Declare `Version` and every Emacs dependency in `Package-Requires`; classify non-Lisp files using the 4-tier table: put pure-source backends and runtime data in `release-dependencies.json` `resources`, and for C dynamic modules publish via `/native/` and include only `native/manifest.json` in `resources` (never `Makefile`, `native/vendor/` or compiled binaries). The entry must also resolve its own `lisp/` while the byte compiler runs: prefer `byte-compile-current-file`, then `load-file-name`, then `buffer-file-name`. An archive install otherwise reports `Cannot open load file` for the modules.
-3. Implement `<package>-doctor` returning `(LABEL AVAILABLE REMEDY)` facts, and mark blocking versus degraded capabilities; register any manual external OS CLI tools in `etaf-install.el`'s `etaf-install--cli-catalog` and `etaf-install--system-tools` (never prebuilt native modules, bundled `backends/`, or managed game engines; list managed engines under `:managed-engines`). An application also presents itself through `<package>-open`: the install gate requires that name before it accepts the target, and the menu's Open action runs it.
+3. Implement `<package>-doctor` returning `(LABEL AVAILABLE REMEDY)` facts, and mark blocking versus degraded capabilities; register any manual external OS CLI tools in `packages/etaf-install/lisp/etaf-install-catalog.el`'s `etaf-install--cli-catalog` and `etaf-install--system-tools` (never prebuilt native modules, bundled `backends/`, or managed game engines; list managed engines under `:managed-engines`). An application also presents itself through `<package>-open`: the install gate requires that name before it accepts the target, and the menu's Open action runs it.
 4. Add the target to `etaf-install--targets` with its group and open command so the menu shows its status before installation. A target the menu does not list is not installable at all: `etaf-install` answers `Unsupported target`. Add the same package to the application or game list in `scripts/install-smoke.el`, or give a framework its own functional check there, so the release gate reopens and diagnoses the installed package.
 5. Place the package in the archive page's section list, `GROUPS` in `etaf-manual/site/scripts/archive_pages.py`. The page writer reports every package no section places and the publisher refuses to deploy such a page, so an unplaced package stops the release instead of reaching readers as a nameless `Other` entry.
 6. Run the package's `make check`, `make structure-check`, `make installer-compile` and `tests/tools/test_install.py`, then the dev-lane install on Emacs 29.1, 30.2 and 31.1 (29.1 lives on `lightos`, see the host notes).

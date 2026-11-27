@@ -46,7 +46,8 @@ clean:
 RELEASE_DIR ?= /tmp/etaf-release
 .PHONY: installer-compile release-build release-drift release-check release-check-full release-publish release-tool-tests
 installer-compile:
-	python3 scripts/elisp.py run --emacs "$(EMACS)" -L . -e '(require (quote bytecomp)) (let ((byte-compile-error-on-warn t)) (dolist (file (quote ("etaf-install.el" "scripts/install-smoke.el"))) (unless (byte-compile-file file) (error "Compilation failed: %s" file))))'
+	$(MAKE) -C packages/etaf-install compile EMACS="$(EMACS)"
+	python3 scripts/elisp.py run --emacs "$(EMACS)" -L packages/etaf-install -L packages/etaf-install/lisp -e '(require (quote bytecomp)) (let ((byte-compile-error-on-warn t)) (unless (byte-compile-file "scripts/install-smoke.el") (error "Compilation failed: scripts/install-smoke.el")))'
 release-build:
 	python3 scripts/package-release.py build --directory "$(RELEASE_DIR)"
 release-drift:

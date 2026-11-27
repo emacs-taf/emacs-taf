@@ -121,7 +121,7 @@ def main():
     print('    (runtime backends belong in backends/, offline manuals in docs/, showcase screenshots/videos in media/;')
     print('     tests/, benchmarks/, scripts/, media/, Makefile and native/vendor never ship;')
     print('     add examples/ only when public commands load pure-code examples at runtime)')
-    print(f'  etaf-install.el -- add target, plus manual OS tools (if any) in etaf-install--system-tools')
+    print(f'  packages/etaf-install/lisp/etaf-install-catalog.el -- add offline fallback target and manual OS tools (if any) in etaf-install--system-tools')
     print(f'  its Package-Requires -- which providers it declares')
     print('Then run: make structure-check && make -C packages/' + args.name + ' check')
 

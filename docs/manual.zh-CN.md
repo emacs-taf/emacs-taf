@@ -123,7 +123,7 @@ jjosh git push --remote origin --bookmark main
 | L0 标准 ELPA 依赖 | `etaf`、`etaf-db`、`telega`、`posframe` | 写进 `Package-Requires`；跨源依赖同时写进 `release-dependencies.json` 的 `external` 与 `etaf-install--targets` 能力标签（`gnu`/`nongnu`/`melpa`） | 否（进 `Depends on`） |
 | L1 随包源码组件、离线文档与运行资源 | `backends/` 运行时脚本（`weread`、`netease`）、`docs/` 扁平纯 Markdown 手册、`dictionaries/`、`book/`、引擎安装脚本、以及公开命令调用的纯代码 `examples/` | 严格按统一目录归类放入应用仓并在 `release-dependencies.json` 的 `resources` 声明（`scripts/add-package.py` 与 `scripts/check-repository.py` 的 `suggest_release_resources` 可自动给出推荐清单），随 `.tar` 原子发布、解包即用且 `README` → `docs/` 离线零死链；宣传截图与演示视频统一放 `media/`（绝不放 `examples/` 或 `docs/`）；`scripts/check-repository.py` 硬门禁拒绝把 `tests/`、`benchmarks/`、`scripts/`（纯开发脚本）、`media/`、`Makefile`、`design/`、`site/`、含宣传媒体的 `examples/`、`native/vendor/` 或平台二进制塞进 `.tar` | 否 |
 | L2 预编译原生模块与受管引擎 | `etaf-md` 与 `etaf-org` 共用的 QuickJS（`etaf-md-typeset-native`）、`etaf` `libmpv`、`ekp` C 模块；Godot / OpenSpiel | C 模块由 `scripts/native-release.py` 或 CI（`.github/workflows/native-modules.yml`）按 `(OS, Arch)` 预编译并发布到 `https://etaf.top/native/`，`.tar` 内只随 `resources` 携带 `native/manifest.json`，用户 `M-x etaf-install` 自动下载校验并热加载至 `~/.cache/emacs-taf/native/`；游戏引擎在 `etaf-install--system-tools` 的 `:managed-engines` 登记并通过 `M-x etaf-gamekit-install-*` 安装 | 否（进 `Runtime`） |
-| L3 / L4 外部系统 CLI | `ffmpeg`、`mpv`、`node`、`python3`、`rsvg-convert`、`telega-server`、`qrencode`、`git`、`rg`、`dot`、`plantuml`、`curl` | 不打包、不代跑 `sudo`/`brew`/`apt`；登记在 `etaf-install.el` 的 `etaf-install--cli-catalog` 与 `etaf-install--system-tools`（区分 `:required` 与 `:optional`），并实现 `<包>-doctor`；交互安装缺必需项自动弹出 `*ETAF Installation*` 给合并安装命令 | **是（仅此一类）** |
+| L3 / L4 外部系统 CLI | `ffmpeg`、`mpv`、`node`、`python3`、`rsvg-convert`、`telega-server`、`qrencode`、`git`、`rg`、`dot`、`plantuml`、`curl` | 不打包、不代跑 `sudo`/`brew`/`apt`；登记在 `packages/etaf-install/lisp/etaf-install-catalog.el` 的 `etaf-install--cli-catalog` 与 `etaf-install--system-tools`（区分 `:required` 与 `:optional`），并实现 `<包>-doctor`；交互安装缺必需项自动弹出 `*ETAF Installation*` 给合并安装命令 | **是（仅此一类）** |
 
 组件源码必须放在应用仓库内，不放别的仓库或技能目录，这样一次版本提升就同时发布 Lisp 与组件。
 
@@ -162,7 +162,7 @@ make release-publish RELEASE_DIR=/tmp/release-next
 
 1. 包放在 `packages/<名字>` 下，并登记进 `workspace.json`（`python3 scripts/add-package.py NAME --url URL`）。
 2. 声明 `Version` 与全部 Emacs 依赖；按四层表区分资源：纯源码后端与运行数据放进仓库并在 `release-dependencies.json` 的 `resources` 列出；若有 C 动态模块，则先按上节发布到 `/native/` 且 `resources` 只列 `native/manifest.json`（绝不把 `Makefile`、`native/vendor/` 或二进制塞进 `.tar`）。
-3. 实现 `<包>-doctor`，返回 `(LABEL AVAILABLE REMEDY)`，标清阻塞与降级；若有需用户手工安装的外部 OS CLI，在 `etaf-install.el` 的 `etaf-install--cli-catalog` 和 `etaf-install--system-tools` 登记（不含自动原生模块、随包 `backends/` 与受管引擎；受管引擎填 `:managed-engines`）。
+3. 实现 `<包>-doctor`，返回 `(LABEL AVAILABLE REMEDY)`，标清阻塞与降级；若有需用户手工安装的外部 OS CLI，在 `packages/etaf-install/lisp/etaf-install-catalog.el` 的 `etaf-install--cli-catalog` 和 `etaf-install--system-tools` 登记（不含自动原生模块、随包 `backends/` 与受管引擎；受管引擎填 `:managed-engines`）。
 4. 把目标加进 `etaf-install--targets`（含分组、`<包>-open` 与跨源能力标签）及 `etaf-manual/site/scripts/archive_pages.py` 的 `GROUPS`，并在 `scripts/install-smoke.el` 补上验收条目。
 5. 跑该包的 `make check`、`make structure-check`、`make installer-compile` 和 `tests/tools/test_install.py`，再用 dev 道验证安装。
 6. 用 jjosh 封口提交到 `main`，通过 `pi-skill etaf-archive-release release <包> --yes`（或手动 `publish-packages.py` + `make release-build/check/publish`）投影推送、跑门禁并发布，随后回读 `https://etaf.top/packages/manifest.json` 与该包详情页。

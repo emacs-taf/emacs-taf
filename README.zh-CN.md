@@ -55,6 +55,7 @@ make -C packages/etaf-ui check
 | [etaf-posframe](https://github.com/emacs-taf/etaf-posframe) | 任意 ETAF View 的浮动子框面板 | etaf |
 | [etaf-ext](https://github.com/emacs-taf/etaf-ext) | 通用扩展引擎、生命周期管理与宿主钩子 | etaf、etaf-ui、etaf-posframe |
 | [etaf-db](https://github.com/emacs-taf/etaf-db) | ETAF 数据库后端；目前支持 SQLite | etaf |
+| [etaf-install](https://github.com/emacs-taf/emacs-taf) | 官方 `package.el` 安装入口、能力诊断、预编译原生模块下载与包管理界面（`packages/etaf-install`） | 无 |
 | [etaf-manual](https://github.com/emacs-taf/etaf-manual) | 核心包的《ETAF 参考手册》，中英双语，对照公共接口检查；发布于 <https://etaf.top> | etaf、etaf-ui；门禁还读取 ecss、ekp、ebox 和 etaf-db |
 
 ### 扩展

@@ -1,0 +1,31 @@
+{
+  "schema": 1,
+  "load_path": [
+    ".",
+    "lisp",
+    "tests"
+  ],
+  "support": [],
+  "cases": [
+    {
+      "name": "etaf-install-test-public-commands-are-interactive",
+      "file": "tests/etaf-install-tests.el",
+      "purpose": "Verify every documented user entry point is bound and interactive."
+    },
+    {
+      "name": "etaf-install-test-doctor-reports-required-and-optional-facts",
+      "file": "tests/etaf-install-tests.el",
+      "purpose": "Verify etaf-install-doctor returns structured required and optional capability facts offline."
+    },
+    {
+      "name": "etaf-install-test-status-returns-catalog-rows",
+      "file": "tests/etaf-install-tests.el",
+      "purpose": "Verify etaf-install-status returns structured catalog metadata for targets."
+    },
+    {
+      "name": "etaf-install-test-manifest-catalog-discovery",
+      "file": "tests/etaf-install-tests.el",
+      "purpose": "Verify etaf-install dynamically discovers new targets and system_tools from manifest.json."
+    }
+  ]
+}

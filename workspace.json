@@ -67,6 +67,11 @@
       "branch": "main",
       "role": "extension"
     },
+    "etaf-install": {
+      "url": "https://github.com/emacs-taf/emacs-taf.git",
+      "branch": "main",
+      "role": "framework"
+    },
     "etaf-manual": {
       "url": "https://github.com/emacs-taf/etaf-manual.git",
       "branch": "main",

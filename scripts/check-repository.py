@@ -492,13 +492,21 @@ def install_selection_errors(root):
     target must be reachable from that menu.  The two lists drifted once, so a
     target was offered while the archive had no file for it.
     """
-    installer = root / 'etaf-install.el'
+    installer = next(
+        (root / rel for rel in (
+            'packages/etaf-install/lisp/etaf-install-catalog.el',
+            'packages/etaf-install/etaf-install.el',
+            'etaf-install.el',
+        ) if (root / rel).is_file()),
+        None,
+    )
     selection_path = root / 'release-dependencies.json'
-    if not installer.is_file() or not selection_path.is_file():
+    if installer is None or not selection_path.is_file():
         return []
+    label = installer.relative_to(root).as_posix()
     match = INSTALLER_TARGETS.search(installer.read_text(encoding='utf-8'))
     if not match:
-        return ['etaf-install.el: cannot read etaf-install--targets; update the consistency check']
+        return [f'{label}: cannot read etaf-install--targets; update the consistency check']
     targets = set(INSTALLER_ENTRY.findall(match.group(1))) - {'etaf-install'}
     try:
         selection = json.loads(selection_path.read_text(encoding='utf-8'))
@@ -508,9 +516,9 @@ def install_selection_errors(root):
         return [f'release-dependencies.json: {error}']
     errors = []
     for name in sorted(targets - packages):
-        errors.append(f'etaf-install.el: target {name} is not in release-dependencies packages')
+        errors.append(f'{label}: target {name} is not in release-dependencies packages')
     for name in sorted(targets - gated):
-        errors.append(f'etaf-install.el: target {name} is not in release-dependencies targets')
+        errors.append(f'{label}: target {name} is not in release-dependencies targets')
     for name in sorted(gated - targets):
         errors.append(f'release-dependencies.json: target {name} is not an installer target')
     return errors

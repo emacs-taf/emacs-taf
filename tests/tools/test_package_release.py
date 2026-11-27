@@ -102,7 +102,7 @@ class PackageReleaseVerificationTests(unittest.TestCase):
             [sys.executable, str(ROOT / "scripts/package_archive.py"), "build",
              "--directory", str(self.archive), "--package", f"ekp={self.source}",
              "--resource", "ekp=native/manifest.json",
-             "--package", f"etaf-install={ROOT}"], capture_output=True, text=True, timeout=20)
+             "--package", f"etaf-install={ROOT / 'packages/etaf-install'}"], capture_output=True, text=True, timeout=20)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def verify(self, *extra, success=True):
@@ -334,19 +334,21 @@ class PackageReleaseStageTests(unittest.TestCase):
         (self.root / "scripts").mkdir(parents=True)
         for name in ("package-release.py", "package_archive.py", "install-smoke.el"):
             shutil.copyfile(ROOT / "scripts" / name, self.root / "scripts" / name)
-        shutil.copyfile(ROOT / "etaf-install.el", self.root / "etaf-install.el")
+        shutil.copytree(ROOT / "packages/etaf-install", self.root / "packages/etaf-install",
+                        ignore=shutil.ignore_patterns("*.elc"))
         targets = ("etaf-ui", "etaf", "etaf-manual", "ekp", "etaf-db")
-        (self.root / ".gitignore").write_text("__pycache__/\n" + "".join(f"{name}/\n" for name in targets))
-        repositories = {}
+        (self.root / ".gitignore").write_text("__pycache__/\n")
+        packages = {}
         for name in targets:
-            source = self.root / name
-            source.mkdir()
+            source = self.root / "packages" / name
+            source.mkdir(parents=True, exist_ok=True)
             (source / f"{name}.el").write_text(
                 f';;; -*- lexical-binding: t; -*-\n;;; {name}.el --- Fixture\n'
                 f';; Version: 1.0.0\n;; Package-Requires: ((emacs "29.1"))\n(provide \'{name})\n')
-            subprocess.run(["git", "init", "-q", str(source)], check=True)
-            repositories[name] = {"revision": self.commit(source)}
-        (self.root / "workspace.json").write_text(json.dumps({"repositories": repositories}))
+            packages[name] = {"url": f"https://github.com/emacs-taf/{name}.git", "branch": "main"}
+        packages["etaf-install"] = {"url": "https://github.com/emacs-taf/emacs-taf.git", "branch": "main", "role": "framework"}
+        (self.root / "README.md").write_text("# Workspace root README\n")
+        (self.root / "workspace.json").write_text(json.dumps({"schema": 2, "packages": packages}))
         (self.root / "release-dependencies.json").write_text(json.dumps(
             {"schema": 1, "packages": {name: {} for name in targets}}))
         subprocess.run(["git", "init", "-q", str(self.root)], check=True)
@@ -399,6 +401,21 @@ class PackageReleaseStageTests(unittest.TestCase):
         self.assertEqual((self.output / "archive-contents").read_bytes(), (self.archive / "archive-contents").read_bytes())
         for package in manifest["packages"]:
             self.assertEqual(self.digest(self.output / package["file"]), package["sha256"])
+
+    def test_root_readme_changes_do_not_alter_etaf_install_tarball_bytes(self):
+        first_manifest = json.loads((self.archive / "manifest.json").read_text())
+        first_inst = next(p for p in first_manifest["packages"] if p["name"] == "etaf-install")
+        with tarfile.open(self.archive / first_inst["file"]) as tar:
+            members = tar.getnames()
+        self.assertTrue(any(m.endswith("/lisp/etaf-install-catalog.el") for m in members), members)
+        (self.root / "README.md").write_text("# Updated workspace root README\n")
+        self.commit(self.root)
+        second = self.base / "archive-after-root-readme-edit"
+        self.command("build", "--directory", str(second))
+        second_manifest = json.loads((second / "manifest.json").read_text())
+        second_inst = next(p for p in second_manifest["packages"] if p["name"] == "etaf-install")
+        self.assertEqual(first_inst["sha256"], second_inst["sha256"])
+        self.assertEqual(first_manifest["updated"]["etaf-install"], second_manifest["updated"]["etaf-install"])
 
     def test_partial_duplicate_failed_and_mixed_runtime_evidence_is_rejected(self):
         original = json.loads(json.dumps(self.report))

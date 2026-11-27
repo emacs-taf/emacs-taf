@@ -80,6 +80,7 @@ Framework packages and workspace tooling developed in this checkout:
 | [etaf-posframe](https://github.com/emacs-taf/etaf-posframe) | Floating child-frame panels for any ETAF View | etaf |
 | [etaf-ext](https://github.com/emacs-taf/etaf-ext) | Universal extension engine, lifecycle manager and host hooks for ETAF apps | etaf, etaf-ui, etaf-posframe |
 | [etaf-db](https://github.com/emacs-taf/etaf-db) | Database backends for ETAF; currently SQLite | etaf |
+| [etaf-install](https://github.com/emacs-taf/emacs-taf) | Official `package.el` installer, capability doctor, native module downloader and package manager (`packages/etaf-install`) | None |
 | [etaf-manual](https://github.com/emacs-taf/etaf-manual) | The ETAF Reference Manual for the core packages, in English and Chinese, checked against their public interfaces; published at <https://etaf.top> | etaf, etaf-ui; its gate reads ecss, ekp, ebox and etaf-db |
 
 ### Extensions
