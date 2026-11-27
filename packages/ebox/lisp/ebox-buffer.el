@@ -43,6 +43,8 @@
 (defvar ebox--batch-depth 0
   "Nesting depth of active update batches.")
 
+(defvar ebox--pointer-hover-node)
+
 (defvar ebox--flushing nil
   "Non-nil while a flush is writing a buffer.")
 
@@ -163,14 +165,16 @@ different from 1."
 
 (defun ebox--canvas-background (mount)
   "Return (BG . DIMMED) for MOUNT's buffer canvas background.
-For full-viewport trees, Emacs exposes at most a sub-line pixel sliver
-below the final row, so matching the final row's composited dominant
-surface keeps bottom bars, split panes and dimmed modal backdrops seamless.
-For shorter trees, empty rows below the tree belong to the root surface
-itself (dimmed when a full-canvas `:backdrop-filter' overlay is active)."
+For viewport-exact trees with an explicit root surface (or an active modal
+backdrop), Emacs exposes at most a sub-line pixel sliver below the final row,
+so matching the final row's non-hover dominant surface keeps bottom bars,
+split panes and dimmed backdrops seamless.  For transparent-root trees
+inheriting the Emacs theme or scrollable trees taller than the viewport, the
+canvas keeps only its root or dimmed surface so painting or hovering the last
+row never repaints every transparent row in the buffer."
   (let* ((root (ebox-mount-root mount))
          (vh (ebox-mount-vh mount))
-         (full-p (and (integerp vh) (> vh 0) (>= (ebox-node-h root) vh)))
+         (exact-p (and (integerp vh) (> vh 0) (= (ebox-node-h root) vh)))
          (factor (ebox--root-backdrop-brightness root))
          (dimmed (/= factor 1.0))
          (root-bg (ebox--root-surface-bg root))
@@ -182,7 +186,15 @@ itself (dimmed when a full-canvas `:backdrop-filter' overlay is active)."
           (and dimmed
                (when-let* ((base (ebox--backdrop-filter-default :background)))
                  (ebox--backdrop-filter-color base factor))))
-         (bg (if full-p
+         (last-hovered-p
+          (and (boundp 'ebox--pointer-hover-node)
+               (ebox-node-p ebox--pointer-hover-node)
+               (eq (ebox-node-root ebox--pointer-hover-node) root)
+               (let ((rline (ebox-node-root-line ebox--pointer-hover-node)))
+                 (and (integerp rline)
+                      (>= (+ rline (ebox-node-h ebox--pointer-hover-node))
+                          (ebox-node-h root))))))
+         (bg (if (and exact-p (or root-bg dimmed) (not last-hovered-p))
                  (or (ebox--last-line-dominant-bg) dimmed-root dimmed-default)
                (or dimmed-root dimmed-default))))
     (cons (and (stringp bg) bg) dimmed)))

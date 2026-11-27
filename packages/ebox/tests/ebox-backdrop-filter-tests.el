@@ -527,6 +527,25 @@
                        '((:background "#FFFFFF") default)))
         (should-not (cdr (assq 'fringe face-remapping-alist)))))))
 
+(ert-deftest ebox-transparent-root-last-row-bg-never-remaps-canvas ()
+  "A transparent-root scrollable tree never remaps `default' from its last row."
+  (let ((last-row (ebox-build '(box :width (ch 12) "Last"))))
+    (ebox-test-with-mounted
+        (buffer root (list 'column :width '(ch 12)
+                           '(box :width (ch 12) "Row 1")
+                           '(box :width (ch 12) "Row 2")
+                           '(box :width (ch 12) "Row 3")
+                           '(box :width (ch 12) "Row 4")
+                           '(box :width (ch 12) "Row 5")
+                           last-row))
+      (ebox-mount-set-viewport buffer (* 12 (frame-char-width)) 4)
+      (with-current-buffer buffer
+        (should-not (assq 'default face-remapping-alist))
+        ;; Painting a background on the final row (e.g. hover or selection)
+        ;; must never remap `default' and tint every transparent row above it.
+        (ebox-node-put last-row :background-color "#3e484e")
+        (should-not (assq 'default face-remapping-alist))))))
+
 (ert-deftest ebox-backdrop-filter-dims-named-emacs-faces ()
   "Named Emacs faces dim uniformly behind a backdrop instead of staying bright."
   (let* ((ebox-viewport-width (* 12 (frame-char-width)))

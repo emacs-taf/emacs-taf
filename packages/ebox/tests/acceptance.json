@@ -575,6 +575,11 @@
       "purpose": "A full-canvas backdrop dims buffer default and fringe backgrounds without double-dimming across animation ticks and restores them cleanly on removal."
     },
     {
+      "name": "ebox-transparent-root-last-row-bg-never-remaps-canvas",
+      "file": "tests/ebox-backdrop-filter-tests.el",
+      "purpose": "A transparent-root or scrollable tree never remaps the buffer's default face background from its final row, preventing hover or tinted final rows from tinting every transparent row above them."
+    },
+    {
       "name": "ebox-backdrop-filter-dims-named-emacs-faces",
       "file": "tests/ebox-backdrop-filter-tests.el",
       "purpose": "Named Emacs faces such as syntax-highlighted text dim uniformly behind a backdrop instead of leaving bright lines."

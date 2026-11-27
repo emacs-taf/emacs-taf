@@ -2048,16 +2048,16 @@ NODE is restyled through its own computed paint, so a hovered control keeps
 its border radius and its padding coverage.  A detached previous target
 cannot repaint and keeps no allocated paint."
   (unless (eq node ebox--pointer-hover-node)
-    (ebox--mutation
-      (let ((old ebox--pointer-hover-node))
+    (let ((old ebox--pointer-hover-node))
+      (setq ebox--pointer-hover-node (and (ebox-node-p node) node)
+            ebox--pointer-hover-buffer (and (ebox-node-p node) (current-buffer)))
+      (ebox--mutation
         (when (and (ebox-node-p old) (ebox--node-live-p old ebox--buffer-mount))
           (setf (ebox-node-hover old) nil)
           (ebox--mark old ebox--d-style))
         (when (and (ebox-node-p node) (ebox--node-live-p node ebox--buffer-mount))
           (setf (ebox-node-hover node) t)
-          (ebox--mark node ebox--d-style))))
-    (setq ebox--pointer-hover-node (and (ebox-node-p node) node)
-          ebox--pointer-hover-buffer (and (ebox-node-p node) (current-buffer)))))
+          (ebox--mark node ebox--d-style))))))
 
 (defun ebox--pointer-hover-owner (point)
   "Return the owner of the hover face painted at POINT, respecting nil blockers."
