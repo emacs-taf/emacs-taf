@@ -2,6 +2,13 @@
 
 All notable changes to `etaf-ext` are documented in this file. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## Unreleased
+
+### Fixed
+
+- Removed redundant `;;;###autoload` cookies from `lisp/*.el` submodules so flattened builds (`straight.el` / Doom) route `etaf-ext-mode` and interactive commands through the `etaf-ext` root entry instead of bypassing `etaf-ext-keys` and `etaf-ext-ui`.
+- Hardened the autoloaded `lisp/` `load-path` guard to verify that `etaf-ext.el(c)` sits beside `lisp/`, preventing `package-quickstart` from matching unrelated user `lisp/` directories.
+
 ## [0.1.1] - 2026-11-26
 
 ### Changed

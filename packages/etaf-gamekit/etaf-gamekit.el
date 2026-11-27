@@ -169,14 +169,20 @@
 ;;; Code:
 (require 'etaf)
 (defconst etaf-gamekit--directory
-  (file-name-directory
-   (or (and load-file-name
-            (not (string-suffix-p ".eln" load-file-name))
-            (file-directory-p (expand-file-name "lisp" (file-name-directory load-file-name)))
-            load-file-name)
-       (bound-and-true-p byte-compile-current-file)
-       (locate-library "etaf-gamekit")
-       buffer-file-name)))
+  (or (catch 'found
+        (dolist (file (list (bound-and-true-p byte-compile-current-file)
+                            (and load-file-name
+                                 (not (string-suffix-p ".eln" load-file-name))
+                                 load-file-name)
+                            (locate-library "etaf-gamekit")
+                            buffer-file-name))
+          (when (stringp file)
+            (let ((dir (file-name-directory file)))
+              (when (and dir
+                         (or (file-exists-p (expand-file-name "etaf-gamekit.el" dir))
+                             (file-exists-p (expand-file-name "etaf-gamekit.elc" dir))))
+                (throw 'found dir))))))
+      default-directory))
 (defgroup etaf-gamekit nil "Build games with ETAF presentation." :group 'games)
 (defcustom etaf-gamekit-godot-program
   (expand-file-name
@@ -200,17 +206,28 @@
 ;; on `load-path' while the byte compiler runs, not only when this entry loads.
 ;;;###autoload
 (eval-and-compile
-  (add-to-list 'load-path
-               (expand-file-name "lisp"
-                                 (file-name-directory
-                                  (or (and load-file-name
-                                           (not (string-suffix-p ".eln" load-file-name))
-                                           (file-directory-p (expand-file-name "lisp" (file-name-directory load-file-name)))
-                                           load-file-name)
-                                      (bound-and-true-p byte-compile-current-file)
-                                      (locate-library "etaf-gamekit")
-                                      buffer-file-name)))))
-(let ((load-path (cons (expand-file-name "lisp" etaf-gamekit--directory) load-path)))
+  (let ((lisp-dir
+         (catch 'found
+           (dolist (file (list (bound-and-true-p byte-compile-current-file)
+                               (and load-file-name
+                                    (not (string-suffix-p ".eln" load-file-name))
+                                    load-file-name)
+                               (locate-library "etaf-gamekit")
+                               buffer-file-name))
+             (when (stringp file)
+               (let* ((dir (file-name-directory file))
+                      (sub (and dir (expand-file-name "lisp" dir))))
+                 (when (and sub
+                            (file-directory-p sub)
+                            (or (file-exists-p (expand-file-name "etaf-gamekit.el" dir))
+                                (file-exists-p (expand-file-name "etaf-gamekit.elc" dir))))
+                   (throw 'found sub))))))))
+    (when lisp-dir
+      (add-to-list 'load-path lisp-dir))))
+(let* ((lisp-dir (expand-file-name "lisp" etaf-gamekit--directory))
+       (load-path (if (file-directory-p lisp-dir)
+                      (cons lisp-dir load-path)
+                    load-path)))
   (require 'etaf-gamekit-session)
   (require 'etaf-gamekit-backends)
   (require 'etaf-gamekit-engines)

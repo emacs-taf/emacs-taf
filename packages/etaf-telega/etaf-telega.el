@@ -408,16 +408,24 @@
 
 ;;;###autoload
 (eval-and-compile
-  (add-to-list 'load-path
-               (expand-file-name "lisp"
-                                 (file-name-directory
-                                  (or (and load-file-name
-                                           (not (string-suffix-p ".eln" load-file-name))
-                                           (file-directory-p (expand-file-name "lisp" (file-name-directory load-file-name)))
-                                           load-file-name)
-                                      (bound-and-true-p byte-compile-current-file)
-                                      (locate-library "etaf-telega")
-                                      buffer-file-name)))))
+  (let ((lisp-dir
+         (catch 'found
+           (dolist (file (list (bound-and-true-p byte-compile-current-file)
+                               (and load-file-name
+                                    (not (string-suffix-p ".eln" load-file-name))
+                                    load-file-name)
+                               (locate-library "etaf-telega")
+                               buffer-file-name))
+             (when (stringp file)
+               (let* ((dir (file-name-directory file))
+                      (sub (and dir (expand-file-name "lisp" dir))))
+                 (when (and sub
+                            (file-directory-p sub)
+                            (or (file-exists-p (expand-file-name "etaf-telega.el" dir))
+                                (file-exists-p (expand-file-name "etaf-telega.elc" dir))))
+                   (throw 'found sub))))))))
+    (when lisp-dir
+      (add-to-list 'load-path lisp-dir))))
 (require 'etaf-telega-account)
 (require 'etaf-telega-app)
 (require 'etaf-telega-backend)

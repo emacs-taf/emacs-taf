@@ -1250,7 +1250,6 @@ When RUNTIME is nil, reconciles all live mounted Runtimes.  Does nothing when
 
 (add-hook 'etaf-ext-change-functions #'etaf-ext--on-registry-change)
 
-;;;###autoload
 (define-minor-mode etaf-ext-mode
   "Global minor mode enabling the universal ETAF extension engine."
   :global t

@@ -1330,7 +1330,6 @@ Elevated write permissions use a subtle warm dot rather than a neon box."
 
 ;;;; Public Entry Commands
 
-;;;###autoload
 (defun etaf-ext-manage (&optional target-runtime)
   "Open the interactive ETAF Extension Manager as a full buffer.
 When TARGET-RUNTIME is nil, targets the current buffer's mounted Runtime so
@@ -1375,7 +1374,6 @@ per-page Pure Mode, attach/detach and per-app policies apply to that page."
                  (etaf-posframe-live-p panel))
         (ignore-errors (etaf-posframe-hide panel))))))
 
-;;;###autoload
 (defun etaf-ext-manage-popup (&optional target-runtime)
   "Toggle the interactive ETAF Extension Manager in a centered floating posframe.
 Falls back to `etaf-ext-manage' on non-graphic displays or when `etaf-posframe'

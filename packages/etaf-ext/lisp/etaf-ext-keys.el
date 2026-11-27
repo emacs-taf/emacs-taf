@@ -806,7 +806,6 @@ ROWS is a list of `(KEY-STR ICON TONE LABEL META ON-PRESS)'."
        (when (eql etaf-ext--dispatch-gen gen)
          (etaf-ext--dispatch-hide))))))
 
-;;;###autoload
 (defun etaf-ext-dispatch (&optional runtime)
   "Open the unified two-step ETAF extension key dispatcher for RUNTIME.
 Pressing an extension prefix letter executes immediately when the extension has
@@ -894,7 +893,6 @@ or `P' to toggle Pure Mode."
 
 ;;;; Unified Fuzzy Command Palette (`etaf-ext-command-palette')
 
-;;;###autoload
 (defun etaf-ext-command-palette (&optional runtime)
   "Search and execute any available ETAF extension command for RUNTIME."
   (interactive)

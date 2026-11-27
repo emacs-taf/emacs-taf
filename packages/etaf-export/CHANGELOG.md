@@ -2,6 +2,12 @@
 
 All notable changes to `etaf-export` are documented in this file.
 
+## Unreleased
+
+### Fixed
+
+- Aligned `Package-Requires` to `(etaf "0.3.10")` and `(etaf-ui "0.3.6")` to match `etaf-ext`'s actual `etaf-runtime-list` requirement, and hardened the autoloaded `lisp/` `load-path` guard against unrelated `lisp/` directories during `package-quickstart`.
+
 ## [0.2.1] - 2026-11-26
 
 ### Changed

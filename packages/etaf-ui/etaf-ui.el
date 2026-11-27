@@ -2116,21 +2116,43 @@
 
 ;;;###autoload
 (eval-and-compile
-  (defconst etaf-ui--root
-    (file-name-directory
-     (or (and load-file-name
-              ;; A native-compiled file lives in `eln-cache', where no
-              ;; sibling `lisp' directory exists.
-              (not (string-suffix-p ".eln" load-file-name))
-              (file-directory-p (expand-file-name "lisp" (file-name-directory load-file-name)))
-              load-file-name)
-         (bound-and-true-p byte-compile-current-file)
-         (locate-library "etaf-ui")
-         buffer-file-name))
-    "Directory of this package entry, resolved when it is loaded.
+  (let ((lisp-dir
+         (catch 'found
+           (dolist (file (list (bound-and-true-p byte-compile-current-file)
+                               (and load-file-name
+                                    (not (string-suffix-p ".eln" load-file-name))
+                                    load-file-name)
+                               (locate-library "etaf-ui")
+                               buffer-file-name))
+             (when (stringp file)
+               (let* ((dir (file-name-directory file))
+                      (sub (and dir (expand-file-name "lisp" dir))))
+                 (when (and sub
+                            (file-directory-p sub)
+                            (or (file-exists-p (expand-file-name "etaf-ui.el" dir))
+                                (file-exists-p (expand-file-name "etaf-ui.elc" dir))))
+                   (throw 'found sub))))))))
+    (when lisp-dir
+      (add-to-list 'load-path lisp-dir))))
+
+(defconst etaf-ui--root
+  (or (catch 'found
+        (dolist (file (list (bound-and-true-p byte-compile-current-file)
+                            (and load-file-name
+                                 (not (string-suffix-p ".eln" load-file-name))
+                                 load-file-name)
+                            (locate-library "etaf-ui")
+                            buffer-file-name))
+          (when (stringp file)
+            (let ((dir (file-name-directory file)))
+              (when (and dir
+                         (or (file-exists-p (expand-file-name "etaf-ui.el" dir))
+                             (file-exists-p (expand-file-name "etaf-ui.elc" dir))))
+                (throw 'found dir))))))
+      default-directory)
+  "Directory of this package entry, resolved when it is loaded.
 Native-compiled entries live in `eln-cache', so their location says
 nothing about where the package directory is.")
-  (add-to-list 'load-path (expand-file-name "lisp" etaf-ui--root)))
 
 (require 'etaf-ui-basic)
 (require 'etaf-ui-drop)

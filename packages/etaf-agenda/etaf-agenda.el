@@ -110,16 +110,24 @@
 ;;; Code:
 
 (eval-and-compile
-  (let ((directory (file-name-directory
-                    (or (and load-file-name
-                             (not (string-suffix-p ".eln" load-file-name))
-                             (file-directory-p
-                              (expand-file-name "lisp" (file-name-directory load-file-name)))
-                             load-file-name)
-                        (bound-and-true-p byte-compile-current-file)
-                        (locate-library "etaf-agenda")
-                        buffer-file-name))))
-    (add-to-list 'load-path (expand-file-name "lisp" directory))))
+  (let ((lisp-dir
+         (catch 'found
+           (dolist (file (list (bound-and-true-p byte-compile-current-file)
+                               (and load-file-name
+                                    (not (string-suffix-p ".eln" load-file-name))
+                                    load-file-name)
+                               (locate-library "etaf-agenda")
+                               buffer-file-name))
+             (when (stringp file)
+               (let* ((dir (file-name-directory file))
+                      (sub (and dir (expand-file-name "lisp" dir))))
+                 (when (and sub
+                            (file-directory-p sub)
+                            (or (file-exists-p (expand-file-name "etaf-agenda.el" dir))
+                                (file-exists-p (expand-file-name "etaf-agenda.elc" dir))))
+                   (throw 'found sub))))))))
+    (when lisp-dir
+      (add-to-list 'load-path lisp-dir))))
 
 (require 'etaf-agenda-theme)
 (require 'etaf-agenda-layout)

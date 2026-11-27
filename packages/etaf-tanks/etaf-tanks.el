@@ -157,27 +157,48 @@ The shape matches `etaf-install-doctor': :required and :optional lists of
                     "Install it once with: M-x etaf-gamekit-install-godot"))
         :optional nil))
 (defconst etaf-tanks--directory
-  (file-name-directory
-   (or (and load-file-name
-            (not (string-suffix-p ".eln" load-file-name))
-            (file-directory-p (expand-file-name "lisp" (file-name-directory load-file-name)))
-            load-file-name)
-       (bound-and-true-p byte-compile-current-file)
-       (locate-library "etaf-tanks")
-       buffer-file-name)))
+  (or (catch 'found
+        (dolist (file (list (bound-and-true-p byte-compile-current-file)
+                            (and load-file-name
+                                 (not (string-suffix-p ".eln" load-file-name))
+                                 load-file-name)
+                            (locate-library "etaf-tanks")
+                            buffer-file-name))
+          (when (stringp file)
+            (let ((dir (file-name-directory file)))
+              (when (and dir
+                         (or (file-exists-p (expand-file-name "etaf-tanks.el" dir))
+                             (file-exists-p (expand-file-name "etaf-tanks.elc" dir))))
+                (throw 'found dir))))))
+      default-directory))
 ;; Installed archives compile each module separately, so `lisp' must be on
 ;; `load-path' while the byte compiler runs, not only when this entry loads.
 ;; `byte-compile-current-file` names the file being compiled; `load-file-name`
 ;; can still name the script that started the installation.
 ;;;###autoload
 (eval-and-compile
-  (add-to-list 'load-path
-               (expand-file-name "lisp"
-                                 (file-name-directory
-                                  (or (bound-and-true-p byte-compile-current-file)
-                                      load-file-name
-                                      buffer-file-name)))))
-(let ((load-path (cons (expand-file-name "lisp" etaf-tanks--directory) load-path)))
+  (let ((lisp-dir
+         (catch 'found
+           (dolist (file (list (bound-and-true-p byte-compile-current-file)
+                               (and load-file-name
+                                    (not (string-suffix-p ".eln" load-file-name))
+                                    load-file-name)
+                               (locate-library "etaf-tanks")
+                               buffer-file-name))
+             (when (stringp file)
+               (let* ((dir (file-name-directory file))
+                      (sub (and dir (expand-file-name "lisp" dir))))
+                 (when (and sub
+                            (file-directory-p sub)
+                            (or (file-exists-p (expand-file-name "etaf-tanks.el" dir))
+                                (file-exists-p (expand-file-name "etaf-tanks.elc" dir))))
+                   (throw 'found sub))))))))
+    (when lisp-dir
+      (add-to-list 'load-path lisp-dir))))
+(let* ((lisp-dir (expand-file-name "lisp" etaf-tanks--directory))
+       (load-path (if (file-directory-p lisp-dir)
+                      (cons lisp-dir load-path)
+                    load-path)))
   (require 'etaf-tanks-theme)
   (require 'etaf-tanks-maps)
   (require 'etaf-tanks-model)

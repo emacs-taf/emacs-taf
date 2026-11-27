@@ -109,16 +109,24 @@ The shape matches `etaf-install-doctor': :required and :optional lists of
 ;; `load-path' while the byte compiler runs, not only when this entry loads.
 ;;;###autoload
 (eval-and-compile
-  (add-to-list 'load-path
-               (expand-file-name "lisp"
-                                 (file-name-directory
-                                  (or (and load-file-name
-                                           (not (string-suffix-p ".eln" load-file-name))
-                                           (file-directory-p (expand-file-name "lisp" (file-name-directory load-file-name)))
-                                           load-file-name)
-                                      (bound-and-true-p byte-compile-current-file)
-                                      (locate-library "etaf-xiangqi")
-                                      buffer-file-name)))))
+  (let ((lisp-dir
+         (catch 'found
+           (dolist (file (list (bound-and-true-p byte-compile-current-file)
+                               (and load-file-name
+                                    (not (string-suffix-p ".eln" load-file-name))
+                                    load-file-name)
+                               (locate-library "etaf-xiangqi")
+                               buffer-file-name))
+             (when (stringp file)
+               (let* ((dir (file-name-directory file))
+                      (sub (and dir (expand-file-name "lisp" dir))))
+                 (when (and sub
+                            (file-directory-p sub)
+                            (or (file-exists-p (expand-file-name "etaf-xiangqi.el" dir))
+                                (file-exists-p (expand-file-name "etaf-xiangqi.elc" dir))))
+                   (throw 'found sub))))))))
+    (when lisp-dir
+      (add-to-list 'load-path lisp-dir))))
 (let ((load-path (cons (expand-file-name "lisp" etaf-xiangqi--directory) load-path)))
   (require 'etaf-xiangqi-theme)
   (require 'etaf-xiangqi-model)

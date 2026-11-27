@@ -127,19 +127,24 @@ A positive whole number of minutes, 25 by default."
 
 ;;;###autoload
 (eval-and-compile
-  ;; A checkout is added to `load-path' by its root only.  The implementation
-  ;; lives in lisp/, so find it beside the entry; `load-file-name' points into
-  ;; the native-compilation cache once the package is compiled there, which has
-  ;; no lisp/ directory, so the first candidate that does wins.
-  (let ((root (cl-loop for file in (list load-file-name
-                                         (bound-and-true-p byte-compile-current-file)
-                                         (locate-library "etaf-pomodoro")
-                                         buffer-file-name)
-                       for dir = (and file (file-name-directory file))
-                       when (and dir (file-directory-p (expand-file-name "lisp" dir)))
-                       return dir)))
-    (when root
-      (add-to-list 'load-path (expand-file-name "lisp" root)))))
+  (let ((lisp-dir
+         (catch 'found
+           (dolist (file (list (bound-and-true-p byte-compile-current-file)
+                               (and load-file-name
+                                    (not (string-suffix-p ".eln" load-file-name))
+                                    load-file-name)
+                               (locate-library "etaf-pomodoro")
+                               buffer-file-name))
+             (when (stringp file)
+               (let* ((dir (file-name-directory file))
+                      (sub (and dir (expand-file-name "lisp" dir))))
+                 (when (and sub
+                            (file-directory-p sub)
+                            (or (file-exists-p (expand-file-name "etaf-pomodoro.el" dir))
+                                (file-exists-p (expand-file-name "etaf-pomodoro.elc" dir))))
+                   (throw 'found sub))))))))
+    (when lisp-dir
+      (add-to-list 'load-path lisp-dir))))
 
 (require 'etaf-pomodoro-theme)
 (require 'etaf-pomodoro-session)

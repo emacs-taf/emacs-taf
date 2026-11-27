@@ -3,7 +3,7 @@
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 ;; Author: ETAF contributors
 ;; Version: 0.2.2
-;; Package-Requires: ((emacs "29.1") (etaf "0.3.6") (etaf-ui "0.3.4") (etaf-ext "0.1.0"))
+;; Package-Requires: ((emacs "29.1") (etaf "0.3.10") (etaf-ui "0.3.6") (etaf-ext "0.1.0"))
 ;; Keywords: convenience, docs, extensions, ui
 ;; URL: https://github.com/emacs-taf/etaf-export
 
@@ -87,16 +87,23 @@
 
 ;;;###autoload
 (eval-and-compile
-  (let* ((entry (or (and load-file-name
-                         (not (string-suffix-p ".eln" load-file-name))
-                         (file-directory-p
-                          (expand-file-name "lisp" (file-name-directory load-file-name)))
-                         load-file-name)
-                    (bound-and-true-p byte-compile-current-file)
-                    (locate-library "etaf-export")
-                    buffer-file-name))
-         (lisp-dir (and entry (expand-file-name "lisp" (file-name-directory entry)))))
-    (when (and lisp-dir (file-directory-p lisp-dir))
+  (let ((lisp-dir
+         (catch 'found
+           (dolist (file (list (bound-and-true-p byte-compile-current-file)
+                               (and load-file-name
+                                    (not (string-suffix-p ".eln" load-file-name))
+                                    load-file-name)
+                               (locate-library "etaf-export")
+                               buffer-file-name))
+             (when (stringp file)
+               (let* ((dir (file-name-directory file))
+                      (sub (and dir (expand-file-name "lisp" dir))))
+                 (when (and sub
+                            (file-directory-p sub)
+                            (or (file-exists-p (expand-file-name "etaf-export.el" dir))
+                                (file-exists-p (expand-file-name "etaf-export.elc" dir))))
+                   (throw 'found sub))))))))
+    (when lisp-dir
       (add-to-list 'load-path lisp-dir))))
 
 (require 'cl-lib)
