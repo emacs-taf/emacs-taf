@@ -14,6 +14,7 @@ All notable user-visible changes to `etaf-md` are documented in this file.
 
 ### Fixed
 
+- Assigned each TOC row a static immutable host ref and separated outline-click from preview-driven sync so clicking a visible heading in a scrolled `*ETAF Outline*` never snaps back to an off-screen previously active item, clamped outline `window-point` on scroll, and matched active heading by line end across centered headings.
 - Guarded the autoloaded `lisp/` `load-path` setup against missing `lisp/` directories and `nil` path candidates during eager macro-expansion, flattened builds (`straight.el` / Doom / MELPA), and `package-quickstart`.
 - Clicking any heading in the TOC sidebar now jumps to that exact heading instead of always capturing the final heading index in the `cl-loop`.
 - Up and down arrow keys now scroll the Markdown reading viewport smoothly one line at a time instead of jumping between focusable controls, and unfocused code-tree blocks let page scrolling glide past them.

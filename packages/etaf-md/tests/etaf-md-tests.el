@@ -3421,7 +3421,9 @@ proportionally below the unsized width."
                   (should (string-match-p "目录" txt))
                   (should (string-match-p "Alpha" txt))
                   (should (string-match-p "Target" txt))))
-              ;; Clicking distinct TOC items jumps preview point to distinct positions.
+              ;; Clicking distinct TOC items jumps preview point to distinct positions
+              ;; via real `etaf-activate' (inside `etaf-batch') without jumping the
+              ;; outline's scrolled viewport back to an earlier off-screen active item.
               (let ((click-toc
                      (lambda (label)
                        (with-current-buffer obuf
@@ -3429,18 +3431,32 @@ proportionally below the unsized width."
                            (goto-char (point-min))
                            (should (search-forward label nil t))
                            (goto-char (match-beginning 0))
-                           (let ((on-press (plist-get (etaf-runtime-host-props-for
-                                                       ort (etaf-host-ref-at ort (point)))
-                                                      :on-press)))
-                             (if (functionp on-press)
-                                 (funcall on-press)
-                               (etaf-activate ort)))))
+                           (etaf-activate ort)
+                           (etaf-runtime-flush ort)))
                        (with-current-buffer buf (point)))))
                 (let ((pos-beta (funcall click-toc "Beta"))
                       (pos-target (funcall click-toc "Target"))
                       (pos-alpha (funcall click-toc "Alpha")))
                   (should (> pos-target pos-beta))
-                  (should (> pos-beta pos-alpha)))))
+                  (should (> pos-beta pos-alpha))))
+              ;; Regression: when active row is at top and outline scrolls down so row 0
+              ;; is off-screen, clicking a lower row keeps `window-start' pinned instead
+              ;; of snapping back to row 0.
+              (etaf-md-locate session 0)
+              (with-current-buffer obuf
+                (let ((ort (etaf-runtime-for-buffer obuf)))
+                  (goto-char (point-min))
+                  (should (search-forward "Beta" nil t))
+                  (let ((scrolled-start (line-beginning-position)))
+                    (set-window-start owin scrolled-start t)
+                    (set-window-point owin scrolled-start)
+                    (goto-char (point-min))
+                    (should (search-forward "Target" nil t))
+                    (goto-char (match-beginning 0))
+                    (etaf-activate ort)
+                    (etaf-runtime-flush ort)
+                    (should (= (window-start owin) scrolled-start)))))
+              (etaf-md-locate session 0))
             ;; `n'/`p' heading navigation keeps working with side window open.
             (let ((before (point)))
               (etaf-md-next-heading)

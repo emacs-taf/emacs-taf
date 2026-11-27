@@ -1007,12 +1007,14 @@ single refit pass, avoiding a redundant full re-render on every drag settle."
              (etaf-md--effective-width session) cap)))
 
 (defun etaf-md--reading-heading-index (session)
-  "Return the index of SESSION's heading at or before point, or 0."
+  "Return the index of SESSION's heading at or before point's line, or 0."
   (let* ((buf (plist-get session :buffer))
-         (pt (if (buffer-live-p buf) (with-current-buffer buf (point)) 1))
+         (eol (if (buffer-live-p buf)
+                  (with-current-buffer buf (line-end-position))
+                1))
          (found 0))
     (dolist (cell (etaf-md--heading-positions session))
-      (when (<= (cdr cell) pt)
+      (when (<= (cdr cell) eol)
         (setq found (car cell))))
     found))
 
@@ -1022,7 +1024,7 @@ single refit pass, avoiding a redundant full re-render on every drag settle."
     (let ((idx (etaf-md--reading-heading-index session)))
       (unless (eql idx (etaf-md--read session :toc-active))
         (etaf-md--write session :toc-active idx)
-        (etaf-md--sync-outline-scroll session)))))
+        (etaf-md--sync-outline-viewport session idx nil)))))
 
 (defun etaf-md--outline-buffer-name (session)
   "Return the side-window outline buffer name for SESSION."
@@ -1140,8 +1142,9 @@ active Emacs theme background stays intact."
                    (etaf-node
                     'box
                     (append
-                     (when is-active (list :ref 'etaf-md-toc-active-row))
-                     (list :width 'stretch
+                     (list :key target-idx
+                           :ref (etaf-md--toc-row-ref target-idx)
+                           :width 'stretch
                            :box-sizing 'border-box
                            :padding (list '(lh 0) '(ch 1) '(lh 0) (list 'ch (+ 2 indent)))
                            :border-left (list '(px 2) 'solid
@@ -1155,11 +1158,24 @@ active Emacs theme background stays intact."
                            :pointer (unless is-active 'hand)
                            :aria-selected (when is-active t)
                            :help-echo (format "跳转到 %s" text)
-                           :on-press (lambda () (etaf-md-locate session target-idx)))
+                           :on-press (lambda ()
+                                       (let ((etaf-md--locating-from-outline t))
+                                         (etaf-md-locate session target-idx))))
                      (when is-active (list :background-color accent-soft))
                      (when (and hover (not is-active))
                        (list :hover-style (list :background-color hover))))
                     (list (etaf-node 'text nil (list text)))))))))))
+
+(defun etaf-md--outline-clamp-point (win new-start)
+  "Keep WIN's `window-point' inside its scrolled viewport from NEW-START.
+Prevents wheel or pixel-scroll drivers from leaving an off-screen point that
+would snap the outline back on the next hover or reactive repaint."
+  (when (and (window-live-p win)
+             (eq (window-buffer win) (current-buffer)))
+    (let ((pt (window-point win))
+          (end (window-end win nil)))
+      (when (or (< pt new-start) (and end (> end new-start) (> pt end)))
+        (set-window-point win new-start)))))
 
 (defun etaf-md--outline-open (session)
   "Open SESSION's independent TOC side window on `etaf-md-toc-side'."
@@ -1172,12 +1188,13 @@ active Emacs theme background stays intact."
          (alist `((side . ,side) (slot . 0) (window-width . ,width)
                   (preserve-size . (t . nil))))
          (existing (plist-get session :toc-buffer))
+         (active-idx (etaf-md--reading-heading-index session))
          (toc-keys (list (list "q" (lambda () (interactive) (etaf-md--outline-close session)) "关闭目录侧窗")
                          (list "T" #'etaf-md-toggle-toc "开关目录侧窗")
                          (list "n" #'etaf-md-next-heading "下一个标题")
                          (list "p" #'etaf-md-previous-heading "上一个标题")
                          (list "t" #'etaf-md-cycle-theme "切换配色"))))
-    (etaf-md--write session :toc-active (etaf-md--reading-heading-index session))
+    (etaf-md--write session :toc-active active-idx)
     (etaf-md--write session :toc-open t)
     (let ((buf (if (buffer-live-p existing)
                    (progn
@@ -1200,14 +1217,16 @@ active Emacs theme background stays intact."
                    (with-current-buffer b
                      (setq-local cursor-in-non-selected-windows nil)
                      (setq-local left-fringe-width 0)
-                     (setq-local right-fringe-width 0))
+                     (setq-local right-fringe-width 0)
+                     (add-hook 'window-scroll-functions
+                               #'etaf-md--outline-clamp-point nil t))
                    (plist-put session :toc-buffer b)
                    b))))
       (when-let* ((owin (get-buffer-window buf t)))
         (set-window-fringes owin 0 0))
       (when (window-live-p preview-win)
         (select-window preview-win))
-      (etaf-md--sync-outline-scroll session)
+      (etaf-md--sync-outline-viewport session active-idx nil)
       buf)))
 
 (defun etaf-md-toggle-toc (&optional arg)

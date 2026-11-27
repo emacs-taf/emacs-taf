@@ -1986,17 +1986,69 @@ collapsed blocks; falls back to line-order scanning when no runtime is attached.
                      '(scroll auto)))
              lineage)))
 
-(defun etaf-md--sync-outline-scroll (session)
-  "Flush SESSION's open outline buffer and keep the active row visible."
+(defvar etaf-md--locating-from-outline nil
+  "Non-nil while navigating from a click or activation inside `*ETAF Outline*'.")
+
+(defun etaf-md--toc-row-ref (index)
+  "Return the static host ref symbol for TOC row INDEX."
+  (when (integerp index)
+    (intern (format "etaf-md-toc-row-%d" index))))
+
+(defun etaf-md--apply-outline-viewport (session index keep-viewport saved-line)
+  "Position SESSION's outline window for heading INDEX.
+When KEEP-VIEWPORT is non-nil (user clicked inside the outline itself), keep
+`window-start' pinned to 1-based line SAVED-LINE and only update `window-point'
+onto the clicked row so the sidebar never jumps.  Otherwise (preview-driven
+navigation), keep `window-start' untouched when INDEX is already visible and
+only recenter when INDEX lies outside the outline viewport."
+  (when-let* ((obuf (plist-get session :toc-buffer))
+              ((buffer-live-p obuf))
+              (ort (etaf-runtime-for-buffer obuf))
+              ((etaf-runtime-mounted-p ort))
+              (owin (get-buffer-window obuf t))
+              ((window-live-p owin))
+              (ref (etaf-md--toc-row-ref index))
+              (pos (etaf-host-ref-position ort ref)))
+    (with-current-buffer obuf
+      (cond
+       (keep-viewport
+        (set-window-point owin pos)
+        (when (and (integerp saved-line) (> saved-line 0))
+          (let ((start-pos (save-excursion
+                             (goto-char (point-min))
+                             (forward-line (1- saved-line))
+                             (point))))
+            (set-window-start owin start-pos t))))
+       ((pos-visible-in-window-p pos owin)
+        (set-window-point owin pos))
+       (t
+        (set-window-point owin pos)
+        (with-selected-window owin
+          (goto-char pos)
+          (recenter)))))))
+
+(defun etaf-md--sync-outline-viewport (session index &optional keep-viewport)
+  "Sync SESSION's open outline buffer to heading INDEX.
+Uses INDEX's static host ref so it is never stale inside an `etaf-batch', and
+re-applies viewport pinning on `etaf-next-tick' after reactive paint settles."
   (when-let* ((obuf (plist-get session :toc-buffer))
               ((buffer-live-p obuf))
               (ort (etaf-runtime-for-buffer obuf))
               ((etaf-runtime-mounted-p ort)))
-    (etaf-runtime-flush ort)
-    (when-let* ((pos (etaf-host-ref-position ort 'etaf-md-toc-active-row))
-                (owin (get-buffer-window obuf t)))
-      (with-current-buffer obuf
-        (set-window-point owin pos)))))
+    (let* ((owin (get-buffer-window obuf t))
+           (saved-line (and (window-live-p owin)
+                            (with-current-buffer obuf
+                              (line-number-at-pos (window-start owin))))))
+      ;; Move window-point immediately onto the target row (already visible on
+      ;; outline clicks) so Ebox's flush never tracks a stale off-screen point.
+      (etaf-md--apply-outline-viewport session index keep-viewport saved-line)
+      (etaf-runtime-flush ort)
+      (etaf-md--apply-outline-viewport session index keep-viewport saved-line)
+      (etaf-next-tick
+       (lambda ()
+         (when (eql index (etaf-md--read session :toc-active))
+           (etaf-md--apply-outline-viewport
+            session index keep-viewport saved-line)))))))
 
 (defun etaf-md-locate (session index)
   "Move point to SESSION's outline heading INDEX and bring it into view.
@@ -2009,13 +2061,14 @@ or nil when the heading is not mounted or visible."
          (entry (and (integerp index) (>= index 0) (nth index outline)))
          (runtime (and (buffer-live-p buffer) (etaf-runtime-for-buffer buffer)))
          (ref (and entry (etaf-md--heading-ref (nth 2 entry))))
+         (keep-outline-vp etaf-md--locating-from-outline)
          (in-scroller nil))
     (when (and entry (buffer-live-p buffer))
       (plist-put session :resize-anchor nil)
       (plist-put session :locate-gen (1+ (or (plist-get session :locate-gen) 0)))
       (when (etaf-md--ref session :toc-active)
         (etaf-md--write session :toc-active index)
-        (etaf-md--sync-outline-scroll session))
+        (etaf-md--sync-outline-viewport session index keep-outline-vp))
       (when (and runtime (etaf-runtime-mounted-p runtime)
                  ref (etaf-runtime-host-props-for runtime ref))
         (setq in-scroller (etaf-md--scrollable-ancestor-p runtime ref))
