@@ -941,7 +941,6 @@ those edges.  Save the previous value once and restore it in
 
 (defun etaf-video-player--toggle-theme ()
   "Switch the player between the dark and light palette."
-  (interactive)
   (let* ((player (etaf-video-player--current))
          (next (if (eq etaf-video-player-theme-mode 'dark) 'light 'dark)))
     (setq etaf-video-player-theme-mode next)
@@ -1314,7 +1313,6 @@ outside a player buffer."
 
 (defun etaf-video-player--forward-command ()
   "Seek five seconds forward."
-  (interactive)
   (etaf-video-player-seek
    (+ (plist-get (etaf-video-player-state) :position) 5)))
 
@@ -1327,7 +1325,6 @@ outside a player buffer."
 
 (defun etaf-video-player--backward-command ()
   "Seek five seconds backward."
-  (interactive)
   (etaf-video-player-seek
    (- (plist-get (etaf-video-player-state) :position) 5)))
 
@@ -1348,7 +1345,6 @@ outside a player buffer."
 
 (defun etaf-video-player--speed-up-command ()
   "Raise the playback rate to the next supported value."
-  (interactive)
   (let* ((player (etaf-video-player--current))
          (speed (etaf-video-player--player-speed player))
          (next (or (cl-find-if (lambda (candidate) (> candidate speed))
@@ -1358,7 +1354,6 @@ outside a player buffer."
 
 (defun etaf-video-player--speed-down-command ()
   "Lower the playback rate to the next supported value."
-  (interactive)
   (let* ((player (etaf-video-player--current))
          (speed (etaf-video-player--player-speed player))
          (next (or (car (last (cl-remove-if (lambda (candidate) (>= candidate speed))
@@ -1368,7 +1363,6 @@ outside a player buffer."
 
 (defun etaf-video-player--volume-up-command ()
   "Raise the audio volume by one step, capped at 100."
-  (interactive)
   (let* ((player (etaf-video-player--current))
          (volume (min 100 (+ (etaf-video-player--player-volume player)
                              etaf-video-player--volume-step))))
@@ -1376,7 +1370,6 @@ outside a player buffer."
 
 (defun etaf-video-player--volume-down-command ()
   "Lower the audio volume by one step, capped at 0."
-  (interactive)
   (let* ((player (etaf-video-player--current))
          (volume (max 0 (- (etaf-video-player--player-volume player)
                            etaf-video-player--volume-step))))
@@ -1384,7 +1377,6 @@ outside a player buffer."
 
 (defun etaf-video-player--toggle-audio-command ()
   "Toggle the current player's audio sidecar."
-  (interactive)
   (let ((player (etaf-video-player--current)))
     (etaf-video-player-set-audio (not (etaf-video-player--player-audio player)))))
 
@@ -1469,7 +1461,6 @@ player or for the built-in demo, which has no frame to capture."
   "Toggle subtitles for the current player.
 With a track loaded the key hides and shows it; without one it loads the
 track beside the video, or asks for a subtitle file when none exists."
-  (interactive)
   (let* ((player (etaf-video-player--current))
          (file (etaf-video-player--player-subtitle-file player)))
     (cond
@@ -1491,7 +1482,6 @@ track beside the video, or asks for a subtitle file when none exists."
 
 (defun etaf-video-player--preset-command ()
   "Apply the grid preset named by the key that invoked this command."
-  (interactive)
   (let* ((player (etaf-video-player--current))
          (key last-command-event)
          (columns (cdr (assq key etaf-video-player-grid-presets))))

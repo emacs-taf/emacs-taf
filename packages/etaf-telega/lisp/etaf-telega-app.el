@@ -1043,7 +1043,6 @@ and `etaf-telega-chat-native-keys' call it with their command."
 
 (defun etaf-telega--open-content ()
   "Open the content of Telega's message at point like clicking it."
-  (interactive)
   (telega-msg-open-content (telega-msg-at (point)) t))
 
 (defconst etaf-telega--viewable-kinds '(photo video animation sticker voice audio)
@@ -1203,7 +1202,8 @@ history and closes the search."
     (define-key map (kbd "C-c C-d") #'etaf-telega-clear-draft)
     (define-key map (kbd "C-c C-a") #'etaf-telega-attach)
     (define-key map (kbd "C-c C-u") #'etaf-telega-cancel-upload)
-    (define-key map (kbd "RET") #'etaf-telega--compose-return)
+    (define-key map (kbd "RET")
+      (lambda () (interactive) (etaf-telega--compose-return)))
     (define-key map (kbd "C-n") #'etaf-telega-popover-next)
     (define-key map (kbd "C-p") #'etaf-telega-popover-previous)
     (define-key map (kbd "C-c C-j") #'etaf-telega-popover-select)
@@ -1588,7 +1588,6 @@ QUERY is an emoji or keyword; an empty one asks for trending stickers."
 
 (defun etaf-telega--compose-return ()
   "Select the popover's item, or submit the composer."
-  (interactive)
   (if (etaf-telega-model-popover (etaf-telega--model))
       (etaf-telega-popover-select)
     (etaf-text-input-end)))

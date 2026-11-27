@@ -172,7 +172,6 @@ links in the reading column resolves cleanly to the link run."
 When point rests on leading or trailing padding of a centered heading link
 (where the inner link run's keymap does not paint padding cells), resolves to
 that line's link run instead of failing with `No Ebox RET command at position'."
-  (interactive)
   (let* ((session (etaf-web--current-session))
          (buf (plist-get session :buffer))
          (rt (and (buffer-live-p buf) (etaf-runtime-for-buffer buf)))
@@ -219,12 +218,10 @@ that line's link run instead of failing with `No Ebox RET command at position'."
 
 (defun etaf-web-scroll-page-down ()
   "Scroll the page down by one screen."
-  (interactive)
   (etaf-web--scroll-page 1))
 
 (defun etaf-web-scroll-page-up ()
   "Scroll the page up by one screen."
-  (interactive)
   (etaf-web--scroll-page -1))
 
 (defun etaf-web--sync-history-refs (session)
@@ -857,7 +854,6 @@ Keys are `:url', `:title', `:phase' (`loading', `ready' or `error'), `:stage',
 
 (defun etaf-web--next-heading ()
   "Move point to the next outline heading in the current ETAF Web page."
-  (interactive)
   (let* ((session (etaf-web--current-session))
          (items (etaf-web--heading-positions session))
          (here (point))
@@ -868,7 +864,6 @@ Keys are `:url', `:title', `:phase' (`loading', `ready' or `error'), `:stage',
 
 (defun etaf-web--previous-heading ()
   "Move point to the previous outline heading in the current ETAF Web page."
-  (interactive)
   (let* ((session (etaf-web--current-session))
          (items (nreverse (etaf-web--heading-positions session)))
          (here (point))
@@ -879,7 +874,6 @@ Keys are `:url', `:title', `:phase' (`loading', `ready' or `error'), `:stage',
 
 (defun etaf-web--goto-heading ()
   "Choose an outline heading in the current ETAF Web page and jump to it."
-  (interactive)
   (let* ((session (etaf-web--current-session))
          (items (etaf-web--heading-positions session)))
     (unless items
@@ -893,7 +887,6 @@ Keys are `:url', `:title', `:phase' (`loading', `ready' or `error'), `:stage',
 
 (defun etaf-web--cycle-theme ()
   "Cycle the browser shell and embedded page between palettes."
-  (interactive)
   (let* ((session (etaf-web--current-session))
          (order '(auto dark light sepia))
          (cur (etaf-value (plist-get session :theme-mode)))
@@ -905,14 +898,12 @@ Keys are `:url', `:title', `:phase' (`loading', `ready' or `error'), `:stage',
 
 (defun etaf-web--wider ()
   "Widen the embedded reading column by 4 character cells."
-  (interactive)
   (let ((session (etaf-web--current-session)))
     (when-let* ((md (etaf-value (plist-get session :md-session))))
       (message "Reading width: %d" (etaf-md-adjust-width md 4)))))
 
 (defun etaf-web--narrower ()
   "Narrow the embedded reading column by 4 character cells."
-  (interactive)
   (let ((session (etaf-web--current-session)))
     (when-let* ((md (etaf-value (plist-get session :md-session))))
       (message "Reading width: %d" (etaf-md-adjust-width md -4)))))

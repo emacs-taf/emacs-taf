@@ -94,44 +94,36 @@ control first and otherwise opens the selected article.")
 
 (defun etaf-rss--next-row ()
   "Select the next article."
-  (interactive)
   (etaf-rss-move-selection (etaf-rss--current-model) 1))
 
 (defun etaf-rss--previous-row ()
   "Select the previous article."
-  (interactive)
   (etaf-rss-move-selection (etaf-rss--current-model) -1))
 
 (defun etaf-rss--next-unread ()
   "Select the next unread article."
-  (interactive)
   (etaf-rss-next-unread (etaf-rss--current-model) 1))
 
 (defun etaf-rss--previous-unread ()
   "Select the previous unread article."
-  (interactive)
   (etaf-rss-next-unread (etaf-rss--current-model) -1))
 
 (defun etaf-rss--first-row ()
   "Select the first article."
-  (interactive)
   (etaf-rss-select-first (etaf-rss--current-model)))
 
 (defun etaf-rss--last-row ()
   "Select the last article."
-  (interactive)
   (etaf-rss-select-last (etaf-rss--current-model)))
 
 (defun etaf-rss--next-page ()
   "Select one page further down the article list."
-  (interactive)
   (etaf-rss-move-selection (etaf-rss--current-model)
                            (max 1 (etaf-rss--read (etaf-rss--current-model)
                                                   :page-size))))
 
 (defun etaf-rss--previous-page ()
   "Select one page further up the article list."
-  (interactive)
   (etaf-rss-move-selection (etaf-rss--current-model)
                            (- (max 1 (etaf-rss--read (etaf-rss--current-model)
                                                      :page-size)))))
@@ -145,7 +137,6 @@ article instead."
 
 (defun etaf-rss--scroll-page-down ()
   "Scroll the article one page, or page the list when it owns the pane."
-  (interactive)
   (let ((model (etaf-rss--current-model)))
     (if (etaf-rss--list-focused-p model)
         (etaf-rss--next-page)
@@ -154,7 +145,6 @@ article instead."
 
 (defun etaf-rss--scroll-page-up ()
   "Scroll the article one page up, or page the list when it owns the pane."
-  (interactive)
   (let ((model (etaf-rss--current-model)))
     (if (etaf-rss--list-focused-p model)
         (etaf-rss--previous-page)
@@ -165,33 +155,28 @@ article instead."
   "Open the selected article in the reading pane.
 A focused control or the pressable Host at point takes RET before this root
 key."
-  (interactive)
   (etaf-rss-activate-selection (etaf-rss--current-model)))
 
 (defun etaf-rss--open-in-browser ()
   "Open the selected article in the browser."
-  (interactive)
   (condition-case error
       (etaf-rss-open-article (etaf-rss--current-model))
     (etaf-rss-error (message "%s" (error-message-string error)))))
 
 (defun etaf-rss--toggle-star ()
   "Toggle the star of the selected article."
-  (interactive)
   (condition-case error
       (etaf-rss-toggle-star (etaf-rss--current-model))
     (etaf-rss-error (message "%s" (error-message-string error)))))
 
 (defun etaf-rss--toggle-read ()
   "Toggle the read state of the selected article."
-  (interactive)
   (condition-case error
       (etaf-rss-toggle-read (etaf-rss--current-model))
     (etaf-rss-error (message "%s" (error-message-string error)))))
 
 (defun etaf-rss--mark-all-read ()
   "Mark every article of the current scope read, after a confirmation."
-  (interactive)
   (let* ((model (etaf-rss--current-model))
          (count (etaf-rss--read model :list-total))
          (label (etaf-rss--read model :scope-label)))
@@ -202,14 +187,12 @@ key."
 
 (defun etaf-rss--mark-above-read ()
   "Mark the selected article and everything above it read."
-  (interactive)
   (condition-case error
       (etaf-rss-mark-above-read (etaf-rss--current-model))
     (etaf-rss-error (message "%s" (error-message-string error)))))
 
 (defun etaf-rss--prompt-add-feed ()
   "Subscribe to a feed the user types."
-  (interactive)
   (let* ((model (etaf-rss--current-model))
          (url (read-string "订阅地址（RSS/Atom/JSON 或站点首页）：")))
     (when (and url (not (string-empty-p (string-trim url))))
@@ -220,7 +203,6 @@ key."
 
 (defun etaf-rss--prompt-remove-feed ()
   "Unsubscribe the feed of the current scope, after a confirmation."
-  (interactive)
   (let* ((model (etaf-rss--current-model))
          (feed (and (eq (plist-get (etaf-rss--read model :scope) :kind) :feed)
                     (etaf-rss--feed model
@@ -236,7 +218,6 @@ key."
 
 (defun etaf-rss--import-opml ()
   "Import subscriptions from an OPML file."
-  (interactive)
   (let* ((model (etaf-rss--current-model))
          (path (read-file-name "导入 OPML：")))
     (when (and path (not (string-empty-p path)) (file-readable-p path))
@@ -246,7 +227,6 @@ key."
 
 (defun etaf-rss--export-opml ()
   "Export subscriptions to an OPML file."
-  (interactive)
   (let* ((model (etaf-rss--current-model))
          (path (read-file-name "导出 OPML 到：" nil nil nil "etaf-rss.opml")))
     (when (and path (not (string-empty-p path)))
@@ -256,7 +236,6 @@ key."
 
 (defun etaf-rss--search ()
   "Search the stored articles for a keyword."
-  (interactive)
   (let* ((model (etaf-rss--current-model))
          (keyword (read-string "搜索文章（标题、摘要或正文）：")))
     (if (or (null keyword) (string-empty-p (string-trim keyword)))
@@ -267,32 +246,26 @@ key."
 
 (defun etaf-rss--all ()
   "Show every stored article."
-  (interactive)
   (etaf-rss-locate (etaf-rss--current-model) :all))
 
 (defun etaf-rss--unread ()
   "Show the unread articles."
-  (interactive)
   (etaf-rss-locate (etaf-rss--current-model) :unread))
 
 (defun etaf-rss--starred ()
   "Show the starred articles."
-  (interactive)
   (etaf-rss-locate (etaf-rss--current-model) :starred))
 
 (defun etaf-rss--toggle-pane ()
   "Switch between the article list and the reading pane."
-  (interactive)
   (etaf-rss-toggle-pane (etaf-rss--current-model)))
 
 (defun etaf-rss--refresh ()
   "Reload the sidebar and list, then re-fetch the current scope's feeds."
-  (interactive)
   (etaf-rss-refresh (etaf-rss--current-model)))
 
 (defun etaf-rss--refresh-all ()
   "Re-fetch every subscribed feed."
-  (interactive)
   (let ((model (etaf-rss--current-model)))
     (etaf-rss-refresh-feeds model (list :kind :all))
     (etaf-rss--note model "正在刷新全部订阅…")))
@@ -308,17 +281,14 @@ pointer's gesture."
 
 (defun etaf-rss--wheel-up ()
   "Scroll the article up from a wheel turn over the reader's chrome."
-  (interactive)
   (etaf-rss--wheel-command -1))
 
 (defun etaf-rss--wheel-down ()
   "Scroll the article down from a wheel turn over the reader's chrome."
-  (interactive)
   (etaf-rss--wheel-command 1))
 
 (defun etaf-rss--cycle-theme ()
   "Switch the reader to the other palette."
-  (interactive)
   (let ((model (etaf-rss--current-model)))
     (etaf-rss-cycle-theme model)
     (etaf-rss--repaint-palette model)))

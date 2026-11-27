@@ -166,7 +166,6 @@ RET, and the reader's RET dispatches between a selection and activation.")
 
 (defun etaf-reader-return-command ()
   "Confirm the current selection, or activate the focused control."
-  (interactive)
   (etaf-reader--call
    (lambda ()
      (let ((session (etaf-reader--current)))
@@ -191,7 +190,6 @@ RET, and the reader's RET dispatches between a selection and activation.")
 
 (defun etaf-reader-next-page-command ()
   "Turn to the next page (page mode) or scroll (scroll mode)."
-  (interactive)
   (etaf-reader--call
    (lambda ()
      (let ((session (etaf-reader--current)))
@@ -205,7 +203,6 @@ RET, and the reader's RET dispatches between a selection and activation.")
 
 (defun etaf-reader-previous-page-command ()
   "Turn to the previous page (page mode) or scroll back (scroll mode)."
-  (interactive)
   (etaf-reader--call
    (lambda ()
      (let ((session (etaf-reader--current)))
@@ -242,7 +239,6 @@ selection, a focused control releases the arrows to focus movement."
 
 (defun etaf-reader-forward-line-command ()
   "Move down one line, or extend the keyboard selection."
-  (interactive)
   (etaf-reader--call
    (lambda ()
      (let ((session (etaf-reader--current)))
@@ -252,7 +248,6 @@ selection, a focused control releases the arrows to focus movement."
 
 (defun etaf-reader-backward-line-command ()
   "Move up one line, or extend the keyboard selection."
-  (interactive)
   (etaf-reader--call
    (lambda ()
      (let ((session (etaf-reader--current)))
@@ -262,7 +257,6 @@ selection, a focused control releases the arrows to focus movement."
 
 (defun etaf-reader-forward-char-command ()
   "Move right one character, or go to the next chapter."
-  (interactive)
   (etaf-reader--call
    (lambda ()
      (let ((session (etaf-reader--current)))
@@ -272,7 +266,6 @@ selection, a focused control releases the arrows to focus movement."
 
 (defun etaf-reader-backward-char-command ()
   "Move left one character, or go to the previous chapter."
-  (interactive)
   (etaf-reader--call
    (lambda ()
      (let ((session (etaf-reader--current)))
@@ -282,19 +275,16 @@ selection, a focused control releases the arrows to focus movement."
 
 (defun etaf-reader-chapter-forward-command ()
   "Open the next chapter."
-  (interactive)
   (etaf-reader--call
    (lambda () (etaf-reader-next-chapter (etaf-reader--current)))))
 
 (defun etaf-reader-chapter-backward-command ()
   "Open the previous chapter."
-  (interactive)
   (etaf-reader--call
    (lambda () (etaf-reader-previous-chapter (etaf-reader--current)))))
 
 (defun etaf-reader-toggle-selection-command ()
   "Start or clear the keyboard selection."
-  (interactive)
   (etaf-reader--call
    (lambda ()
      (let ((session (etaf-reader--current)))
@@ -306,7 +296,6 @@ selection, a focused control releases the arrows to focus movement."
 
 (defun etaf-reader-confirm-selection-command ()
   "Open the annotation toolbar for the current selection."
-  (interactive)
   (etaf-reader--call
    (lambda ()
      (let ((session (etaf-reader--current)))
@@ -316,7 +305,6 @@ selection, a focused control releases the arrows to focus movement."
 
 (defun etaf-reader-cancel-selection-command ()
   "Clear the selection, cursor and toolbar."
-  (interactive)
   (etaf-reader--call
    (lambda ()
      (let ((session (etaf-reader--current)))
@@ -326,7 +314,6 @@ selection, a focused control releases the arrows to focus movement."
 
 (defun etaf-reader-search-command ()
   "Search the current book."
-  (interactive)
   (etaf-reader--call
    (lambda ()
      (let* ((session (etaf-reader--current))
@@ -341,18 +328,15 @@ selection, a focused control releases the arrows to focus movement."
 
 (defun etaf-reader-search-next-command ()
   "Jump to the next search match."
-  (interactive)
   (etaf-reader--call (lambda () (etaf-reader-search-next (etaf-reader--current)))))
 
 (defun etaf-reader-search-previous-command ()
   "Jump to the previous search match."
-  (interactive)
   (etaf-reader--call
    (lambda () (etaf-reader-search-next (etaf-reader--current) t))))
 
 (defun etaf-reader-toc-command ()
   "Toggle the table of contents pane."
-  (interactive)
   (etaf-reader--call
    (lambda ()
      (let ((session (etaf-reader--current)))
@@ -360,7 +344,6 @@ selection, a focused control releases the arrows to focus movement."
 
 (defun etaf-reader-notes-command ()
   "Toggle the notes pane."
-  (interactive)
   (etaf-reader--call
    (lambda ()
      (let ((session (etaf-reader--current)))
@@ -368,32 +351,26 @@ selection, a focused control releases the arrows to focus movement."
 
 (defun etaf-reader-bookmarks-command ()
   "Open the bookmark list."
-  (interactive)
   (etaf-reader--call (lambda () (etaf-reader-show-pane (etaf-reader--current) 'bookmarks))))
 
 (defun etaf-reader-search-results-command ()
   "Open the current search result list."
-  (interactive)
   (etaf-reader--call (lambda () (etaf-reader-show-pane (etaf-reader--current) 'search))))
 
 (defun etaf-reader-settings-command ()
   "Open reading preferences."
-  (interactive)
   (etaf-reader--call (lambda () (etaf-reader-show-pane (etaf-reader--current) 'settings))))
 
 (defun etaf-reader-jump-back-command ()
   "Return to the position before a navigation jump."
-  (interactive)
   (etaf-reader--call (lambda () (etaf-reader-jump-back (etaf-reader--current)))))
 
 (defun etaf-reader-bookmark-command ()
   "Bookmark the top line of the current page."
-  (interactive)
   (etaf-reader--call (lambda () (etaf-reader-add-bookmark (etaf-reader--current)))))
 
 (defun etaf-reader-goto-percent-command ()
   "Jump to a percent of the book."
-  (interactive)
   (etaf-reader--call
    (lambda ()
      (let* ((session (etaf-reader--current))
@@ -403,7 +380,6 @@ selection, a focused control releases the arrows to focus movement."
 
 (defun etaf-reader-toggle-mode-command ()
   "Toggle page turning and scrolling."
-  (interactive)
   (etaf-reader--call
    (lambda ()
      (let* ((session (etaf-reader--current))
@@ -420,19 +396,16 @@ selection, a focused control releases the arrows to focus movement."
 
 (defun etaf-reader-wider-command ()
   "Widen the reading column."
-  (interactive)
   (etaf-reader--call
    (lambda () (etaf-reader--adjust-columns (etaf-reader--current) 4))))
 
 (defun etaf-reader-narrower-command ()
   "Narrow the reading column."
-  (interactive)
   (etaf-reader--call
    (lambda () (etaf-reader--adjust-columns (etaf-reader--current) -4))))
 
 (defun etaf-reader-toggle-theme-command ()
   "Switch to the next palette."
-  (interactive)
   (etaf-reader--call
    (lambda ()
      (let* ((session (etaf-reader--current))
@@ -451,29 +424,24 @@ selection, a focused control releases the arrows to focus movement."
 
 (defun etaf-reader-shelf-down-command ()
   "Move the shelf cursor one shelf down."
-  (interactive)
   (etaf-reader--call (lambda () (etaf-reader--shelf-move-command 0 1))))
 
 (defun etaf-reader-shelf-up-command ()
   "Move the shelf cursor one shelf up."
-  (interactive)
   (etaf-reader--call (lambda () (etaf-reader--shelf-move-command 0 -1))))
 
 (defun etaf-reader-shelf-left-command ()
   "Move the shelf cursor one book left."
-  (interactive)
   (etaf-reader--call (lambda () (etaf-reader--shelf-move-command -1 0))))
 
 (defun etaf-reader-shelf-right-command ()
   "Move the shelf cursor one book right."
-  (interactive)
   (etaf-reader--call (lambda () (etaf-reader--shelf-move-command 1 0))))
 
 (defun etaf-reader-toggle-detail-command ()
   "Show or hide the shelf's detail panel, or the reading sidebar.
 The shelf has a detail panel; the reader has a chapter sidebar. Both answer
 to the same key so one binding covers whichever view is open."
-  (interactive)
   (etaf-reader--call
    (lambda ()
      (let ((session (etaf-reader--current)))
@@ -483,12 +451,10 @@ to the same key so one binding covers whichever view is open."
 
 (defun etaf-reader-shelf-command ()
   "Return to the shelf."
-  (interactive)
   (etaf-reader--call (lambda () (etaf-reader-show-shelf (etaf-reader--current)))))
 
 (defun etaf-reader-scan-command ()
   "Rescan the library directories."
-  (interactive)
   (etaf-reader--call
    (lambda ()
      (etaf-reader-message (etaf-reader--current) "正在扫描书库…")
@@ -496,7 +462,6 @@ to the same key so one binding covers whichever view is open."
 
 (defun etaf-reader-export-command ()
   "Export the current book's annotations as Markdown."
-  (interactive)
   (etaf-reader--call
    (lambda ()
      (let* ((session (etaf-reader--current))
@@ -516,12 +481,10 @@ to the same key so one binding covers whichever view is open."
 
 (defun etaf-reader-wheel-down-command ()
   "Scroll the reader downwards."
-  (interactive)
   (etaf-reader--wheel 3))
 
 (defun etaf-reader-wheel-up-command ()
   "Scroll the reader upwards."
-  (interactive)
   (etaf-reader--wheel -3))
 
 ;;; ---------------------------------------------------------------------------

@@ -30,7 +30,6 @@
 
 (defun etaf-compiler-clear-cache ()
   "Clear all process-local compiled View materializations."
-  (interactive)
   (clrhash etaf-compiler--static-cache)
   (clrhash etaf-compiler--site-token-cache))
 

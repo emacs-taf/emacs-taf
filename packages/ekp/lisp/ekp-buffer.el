@@ -1085,31 +1085,23 @@ owned by the separate `ekp-no-break' text property.")
     (message "EKP: %s on %d characters; current buffer session only"
              label (- end beg))))
 
-;;;###autoload
 (defun ekp-normal-break-region (beg end &optional announce)
   "Mark BEG through END as ordinary break policy; ANNOUNCE reports it."
-  (interactive (ekp-buffer--interactive-protection-args))
   (ekp-buffer--set-break-policy
    beg end 'normal "Marked normal break policy" announce))
 
-;;;###autoload
 (defun ekp-enable-hyphenation-region (beg end &optional announce)
   "Enable discretionary hyphenation in BEG through END; ANNOUNCE reports it."
-  (interactive (ekp-buffer--interactive-protection-args))
   (ekp-buffer--set-break-policy
    beg end 'hyphenate "Enabled hyphenation" announce))
 
-;;;###autoload
 (defun ekp-disable-hyphenation-region (beg end &optional announce)
   "Disable discretionary hyphenation in BEG through END; ANNOUNCE reports it."
-  (interactive (ekp-buffer--interactive-protection-args))
   (ekp-buffer--set-break-policy
    beg end 'no-hyphen "Disabled hyphenation" announce))
 
-;;;###autoload
 (defun ekp-clear-break-policy-region (beg end &optional announce)
   "Clear `ekp-break-policy' from BEG through END; ANNOUNCE reports it."
-  (interactive (ekp-buffer--interactive-protection-args))
   (ekp-buffer--set-break-policy
    beg end nil "Cleared break policy" announce))
 
@@ -2408,10 +2400,22 @@ unchanged; region text properties are paragraph policy too."
     ["Justify Buffer" ekp-justify-buffer t]
     ["Unjustify Buffer" ekp-unjustify-buffer t]
     "--"
-    ["Mark Region Normal Break" ekp-normal-break-region (use-region-p)]
-    ["Enable Region Hyphenation" ekp-enable-hyphenation-region (use-region-p)]
-    ["Disable Region Hyphenation" ekp-disable-hyphenation-region (use-region-p)]
-    ["Clear Region Break Policy" ekp-clear-break-policy-region (use-region-p)]
+    ["Mark Region Normal Break"
+     (lambda () (interactive)
+       (apply #'ekp-normal-break-region (ekp-buffer--interactive-protection-args)))
+     (use-region-p)]
+    ["Enable Region Hyphenation"
+     (lambda () (interactive)
+       (apply #'ekp-enable-hyphenation-region (ekp-buffer--interactive-protection-args)))
+     (use-region-p)]
+    ["Disable Region Hyphenation"
+     (lambda () (interactive)
+       (apply #'ekp-disable-hyphenation-region (ekp-buffer--interactive-protection-args)))
+     (use-region-p)]
+    ["Clear Region Break Policy"
+     (lambda () (interactive)
+       (apply #'ekp-clear-break-policy-region (ekp-buffer--interactive-protection-args)))
+     (use-region-p)]
     "--"
     ["Mark Region No-Break" ekp-no-break-region (use-region-p)]
     ["Clear No-Break Region" ekp-allow-break-region (use-region-p)]

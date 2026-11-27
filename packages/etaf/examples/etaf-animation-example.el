@@ -751,20 +751,18 @@
            'notepad
            :on-change (lambda (text)
                         (setf (etaf-value etaf-animation-example-draft) text))
-           :keymap (let ((map (make-sparse-keymap)))
-                     (define-key map (kbd "C-c C-c")
-                                 #'etaf-animation-example--finish-edit)
-                     (define-key map (kbd "ESC")
-                                 #'etaf-animation-example--finish-edit)
-                     (define-key map (kbd "TAB")
-                                 #'etaf-animation-example--finish-edit)
+           :keymap (let ((map (make-sparse-keymap))
+                         (finish (lambda () (interactive)
+                                   (etaf-animation-example--finish-edit))))
+                     (define-key map (kbd "C-c C-c") finish)
+                     (define-key map (kbd "ESC") finish)
+                     (define-key map (kbd "TAB") finish)
                      map)
            :on-leave #'etaf-animation-example--finish-edit)))
   nil)
 
 (defun etaf-animation-example--finish-edit ()
   "End the pad's native input session when one is active."
-  (interactive)
   (when-let* ((session (etaf-value etaf-animation-example-session)))
     (unwind-protect
         (etaf-input-end session)

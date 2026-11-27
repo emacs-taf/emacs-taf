@@ -113,7 +113,6 @@ neither consume nor replace this position.")
 
 (defun etaf-screensaver--wake ()
   "Dismiss the presentation without replaying the wake event."
-  (interactive)
   (etaf-screensaver-stop))
 
 (defun etaf-screensaver--window-changed ()
@@ -403,9 +402,10 @@ This is a visual screensaver, not an operating-system security lock."
             (etaf-screensaver--session-publish session)
             (message nil)
             (etaf-screensaver--canvas-face owner)
-            (let ((map (make-sparse-keymap)))
-              (define-key map [t] #'etaf-screensaver--wake)
-              (define-key map [mouse-movement] #'etaf-screensaver--wake)
+            (let ((map (make-sparse-keymap))
+                  (wake (lambda () (interactive) (etaf-screensaver--wake))))
+              (define-key map [t] wake)
+              (define-key map [mouse-movement] wake)
               (setf (etaf-screensaver--presentation-exit-map owner)
                     (set-transient-map map (lambda () (eq owner etaf-screensaver--active)))))
             (setq track-mouse t)

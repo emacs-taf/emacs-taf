@@ -37,7 +37,6 @@
 
 (defun etaf-youtube-focus-search ()
   "Begin editing the search field of the current session."
-  (interactive)
   (let* ((model (etaf-youtube--current-model))
          (buffer (plist-get model :buffer))
          (runtime (and buffer (get-buffer buffer)
@@ -48,7 +47,6 @@
 
 (defun etaf-youtube-activate-command ()
   "Activate the focused interactive control, or open the selected list item."
-  (interactive)
   (let* ((model (etaf-youtube--current-model))
          (buffer (plist-get model :buffer))
          (runtime (and buffer (buffer-live-p buffer)
@@ -60,57 +58,46 @@
 
 (defun etaf-youtube-select-next-command ()
   "Select the next item in the current feed list."
-  (interactive)
   (etaf-youtube-select (etaf-youtube--current-model) 1))
 
 (defun etaf-youtube-select-prev-command ()
   "Select the previous item in the current feed list."
-  (interactive)
   (etaf-youtube-select (etaf-youtube--current-model) -1))
 
 (defun etaf-youtube-nav-1-command ()
   "Open the Home feed."
-  (interactive)
   (etaf-youtube-locate (etaf-youtube--current-model) 'home))
 
 (defun etaf-youtube-nav-2-command ()
   "Open the Shorts feed."
-  (interactive)
   (etaf-youtube-locate (etaf-youtube--current-model) 'shorts))
 
 (defun etaf-youtube-nav-3-command ()
   "Open the Subscriptions feed."
-  (interactive)
   (etaf-youtube-locate (etaf-youtube--current-model) 'subscriptions))
 
 (defun etaf-youtube-nav-4-command ()
   "Open the Live feed."
-  (interactive)
   (etaf-youtube-locate (etaf-youtube--current-model) 'live))
 
 (defun etaf-youtube-nav-5-command ()
   "Open the Watch History feed."
-  (interactive)
   (etaf-youtube-locate (etaf-youtube--current-model) 'history))
 
 (defun etaf-youtube-nav-6-command ()
   "Open the Playlists feed."
-  (interactive)
   (etaf-youtube-locate (etaf-youtube--current-model) 'playlists))
 
 (defun etaf-youtube-nav-7-command ()
   "Open the Watch Later feed."
-  (interactive)
   (etaf-youtube-locate (etaf-youtube--current-model) 'watch-later))
 
 (defun etaf-youtube-nav-8-command ()
   "Open the Liked Videos feed."
-  (interactive)
   (etaf-youtube-locate (etaf-youtube--current-model) 'liked))
 
 (defun etaf-youtube-return-to-watch-command ()
   "Return to the active watch video, if one is loaded."
-  (interactive)
   (let* ((model (etaf-youtube--current-model))
          (video (etaf-youtube--read model :video))
          (media (etaf-youtube--read model :media))
@@ -125,7 +112,6 @@
 
 (defun etaf-youtube-open-author-channel-command ()
   "Open the current video author's channel page."
-  (interactive)
   (let* ((model (etaf-youtube--current-model))
          (video (etaf-youtube--read model :video))
          (cid (and video (etaf-youtube--nonempty-string (plist-get video :channel_id)))))
@@ -139,27 +125,22 @@
 
 (defun etaf-youtube-toggle-playback-command ()
   "Toggle playback of the current session."
-  (interactive)
   (etaf-youtube-toggle-playback (etaf-youtube--current-model)))
 
 (defun etaf-youtube-seek-forward-command ()
   "Seek five seconds forward."
-  (interactive)
   (etaf-youtube-seek-by (etaf-youtube--current-model) 5))
 
 (defun etaf-youtube-seek-backward-command ()
   "Seek five seconds backward."
-  (interactive)
   (etaf-youtube-seek-by (etaf-youtube--current-model) -5))
 
 (defun etaf-youtube-seek-forward-10-command ()
   "Seek ten seconds forward."
-  (interactive)
   (etaf-youtube-seek-by (etaf-youtube--current-model) 10))
 
 (defun etaf-youtube-seek-back-10-command ()
   "Seek ten seconds backward."
-  (interactive)
   (etaf-youtube-seek-by (etaf-youtube--current-model) -10))
 
 (defun etaf-youtube--seek-percent (pct)
@@ -170,98 +151,83 @@
     (when (> dur 0)
       (etaf-youtube-seek model (* dur (/ (float pct) 100.0))))))
 
-(defun etaf-youtube-seek-percent-0-command () "Jump to 0%." (interactive) (etaf-youtube--seek-percent 0))
-(defun etaf-youtube-seek-percent-1-command () "Jump to 10%." (interactive) (etaf-youtube--seek-percent 10))
-(defun etaf-youtube-seek-percent-2-command () "Jump to 20%." (interactive) (etaf-youtube--seek-percent 20))
-(defun etaf-youtube-seek-percent-3-command () "Jump to 30%." (interactive) (etaf-youtube--seek-percent 30))
-(defun etaf-youtube-seek-percent-4-command () "Jump to 40%." (interactive) (etaf-youtube--seek-percent 40))
-(defun etaf-youtube-seek-percent-5-command () "Jump to 50%." (interactive) (etaf-youtube--seek-percent 50))
-(defun etaf-youtube-seek-percent-6-command () "Jump to 60%." (interactive) (etaf-youtube--seek-percent 60))
-(defun etaf-youtube-seek-percent-7-command () "Jump to 70%." (interactive) (etaf-youtube--seek-percent 70))
-(defun etaf-youtube-seek-percent-8-command () "Jump to 80%." (interactive) (etaf-youtube--seek-percent 80))
-(defun etaf-youtube-seek-percent-9-command () "Jump to 90%." (interactive) (etaf-youtube--seek-percent 90))
+(defun etaf-youtube-seek-percent-0-command () "Jump to 0%." (etaf-youtube--seek-percent 0))
+(defun etaf-youtube-seek-percent-1-command () "Jump to 10%." (etaf-youtube--seek-percent 10))
+(defun etaf-youtube-seek-percent-2-command () "Jump to 20%." (etaf-youtube--seek-percent 20))
+(defun etaf-youtube-seek-percent-3-command () "Jump to 30%." (etaf-youtube--seek-percent 30))
+(defun etaf-youtube-seek-percent-4-command () "Jump to 40%." (etaf-youtube--seek-percent 40))
+(defun etaf-youtube-seek-percent-5-command () "Jump to 50%." (etaf-youtube--seek-percent 50))
+(defun etaf-youtube-seek-percent-6-command () "Jump to 60%." (etaf-youtube--seek-percent 60))
+(defun etaf-youtube-seek-percent-7-command () "Jump to 70%." (etaf-youtube--seek-percent 70))
+(defun etaf-youtube-seek-percent-8-command () "Jump to 80%." (etaf-youtube--seek-percent 80))
+(defun etaf-youtube-seek-percent-9-command () "Jump to 90%." (etaf-youtube--seek-percent 90))
 
 (defun etaf-youtube-step-forward-command ()
   "Step one frame forward when the player is mounted."
-  (interactive)
   (let ((model (etaf-youtube--current-model)))
     (ignore-errors (etaf-video-step (etaf-youtube--active-handle model)))))
 
 (defun etaf-youtube-step-back-command ()
   "Step one frame backward when the player is mounted."
-  (interactive)
   (let ((model (etaf-youtube--current-model)))
     (ignore-errors (etaf-video-step-back (etaf-youtube--active-handle model)))))
 
 (defun etaf-youtube-speed-up-command ()
   "Increase playback speed by one preset step."
-  (interactive)
   (etaf-youtube--step-speed (etaf-youtube--current-model) 1))
 
 (defun etaf-youtube-speed-down-command ()
   "Decrease playback speed by one preset step."
-  (interactive)
   (etaf-youtube--step-speed (etaf-youtube--current-model) -1))
 
 (defun etaf-youtube-volume-up-command ()
   "Raise the volume by five."
-  (interactive)
   (let ((model (etaf-youtube--current-model)))
     (etaf-youtube-set-volume model (+ (or (plist-get (etaf-youtube-state model) :volume) 100) 5))))
 
 (defun etaf-youtube-volume-down-command ()
   "Lower the volume by five."
-  (interactive)
   (let ((model (etaf-youtube--current-model)))
     (etaf-youtube-set-volume model (- (or (plist-get (etaf-youtube-state model) :volume) 100) 5))))
 
 (defun etaf-youtube-mute-command ()
   "Toggle mute on the current session."
-  (interactive)
   (etaf-youtube-toggle-mute (etaf-youtube--current-model)))
 
 (defun etaf-youtube-quality-dialog-command ()
   "Toggle the Watch quality and engine selection dialog."
-  (interactive)
   (let ((model (etaf-youtube--current-model)))
     (etaf-youtube--write model :quality-menu
                          (not (etaf-youtube--read model :quality-menu)))))
 
 (defun etaf-youtube-cycle-captions-command ()
   "Cycle through available subtitle tracks and off."
-  (interactive)
   (etaf-youtube--cycle-captions (etaf-youtube--current-model)))
 
 (defun etaf-youtube-toggle-drawer-command ()
   "Toggle the narrow/theater workbench drawer."
-  (interactive)
   (let ((model (etaf-youtube--current-model)))
     (etaf-youtube--write model :watch-drawer
                          (not (etaf-youtube--read model :watch-drawer)))))
 
 (defun etaf-youtube-toggle-audio-only-command ()
   "Toggle zero-CPU background audio-only mode."
-  (interactive)
   (etaf-youtube--toggle-audio-only (etaf-youtube--current-model)))
 
 (defun etaf-youtube-next-video-command ()
   "Play the next video in the queue."
-  (interactive)
   (etaf-youtube--step-queue (etaf-youtube--current-model) 1))
 
 (defun etaf-youtube-prev-video-command ()
   "Play the previous video in the queue."
-  (interactive)
   (etaf-youtube--step-queue (etaf-youtube--current-model) -1))
 
 (defun etaf-youtube-toggle-auto-next-command ()
   "Toggle automatic playback of the next queued/related video."
-  (interactive)
   (etaf-youtube--toggle-auto-next (etaf-youtube--current-model)))
 
 (defun etaf-youtube-next-chapter-command ()
   "Jump to the next video chapter."
-  (interactive)
   (let* ((model (etaf-youtube--current-model))
          (chapters (etaf-youtube--read model :chapters))
          (pos (or (plist-get model :live-position) 0))
@@ -274,7 +240,6 @@
 
 (defun etaf-youtube-prev-chapter-command ()
   "Jump to the previous video chapter."
-  (interactive)
   (let* ((model (etaf-youtube--current-model))
          (chapters (reverse (etaf-youtube--read model :chapters)))
          (pos (or (plist-get model :live-position) 0))
@@ -287,27 +252,22 @@
 
 (defun etaf-youtube-sidebar-command ()
   "Fold or unfold the sidebar."
-  (interactive)
   (etaf-youtube-toggle-sidebar (etaf-youtube--current-model)))
 
 (defun etaf-youtube-theater-command ()
   "Toggle theater mode."
-  (interactive)
   (etaf-youtube-toggle-theater (etaf-youtube--current-model)))
 
 (defun etaf-youtube-fullscreen-command ()
   "Toggle in-window pure cinema fullscreen in Watch View."
-  (interactive)
   (etaf-youtube-toggle-fullscreen (etaf-youtube--current-model) 'window))
 
 (defun etaf-youtube-frame-fullscreen-command ()
   "Toggle dedicated OS/frame fullscreen in Watch View."
-  (interactive)
   (etaf-youtube-toggle-fullscreen (etaf-youtube--current-model) 'frame))
 
 (defun etaf-youtube-escape-command ()
   "Dismiss topmost Watch overlay or exit fullscreen first, otherwise go back."
-  (interactive)
   (let ((model (etaf-youtube--current-model)))
     (cond
      ((etaf-youtube--read model :quality-menu)
@@ -320,19 +280,16 @@
 
 (defun etaf-youtube-theme-command ()
   "Switch the appearance."
-  (interactive)
   (etaf-youtube-cycle-theme (etaf-youtube--current-model))
   (when (etaf-pip-active-p etaf-youtube--pip-id)
     (etaf-pip-refresh-chrome etaf-youtube--pip-id)))
 
 (defun etaf-youtube-refresh-command ()
   "Reload the current view."
-  (interactive)
   (etaf-youtube-refresh (etaf-youtube--current-model)))
 
 (defun etaf-youtube-back-command ()
   "Return to the previous view."
-  (interactive)
   (etaf-youtube-back (etaf-youtube--current-model)))
 
 ;;; ---------------------------------------------------------------------------
@@ -341,7 +298,6 @@
 
 (defun etaf-youtube-open-external ()
   "Launch external `mpv' at the exact current second with audio, headers and proxy."
-  (interactive)
   (let* ((model (etaf-youtube--current-model))
          (src (etaf-youtube-media-src model))
          (mpv (executable-find "mpv")))
@@ -378,7 +334,6 @@
 
 (defun etaf-youtube-open-in-browser ()
   "Open the current YouTube video in the default system web browser."
-  (interactive)
   (let* ((model (etaf-youtube--current-model))
          (video (etaf-youtube--read model :video))
          (id (or (plist-get video :id)
@@ -400,7 +355,6 @@
 
 (defun etaf-youtube-copy-org-link ()
   "Copy a clickable Org timestamp link for the current video to the kill ring."
-  (interactive)
   (let* ((model (etaf-youtube--current-model))
          (video (etaf-youtube--read model :video))
          (id (or (plist-get video :id)
@@ -475,7 +429,6 @@
 
 (defun etaf-youtube-toggle-pip-command ()
   "Toggle an adaptive floating Picture-in-Picture window for the current video."
-  (interactive)
   (let ((model (etaf-youtube--current-model)))
     (if (etaf-pip-active-p etaf-youtube--pip-id)
         (progn
@@ -541,17 +494,14 @@
 
 (defun etaf-youtube-focus-sidebar-command ()
   "Move focus to the navigation sidebar."
-  (interactive)
   (etaf-youtube--focus-region etaf-youtube-region-sidebar "侧栏"))
 
 (defun etaf-youtube-focus-content-command ()
   "Move focus to the content area."
-  (interactive)
   (etaf-youtube--focus-region etaf-youtube-region-content "内容区"))
 
 (defun etaf-youtube-focus-comments-command ()
   "Move focus to the comment section of the watch page."
-  (interactive)
   (etaf-youtube--focus-region etaf-youtube-region-comments "评论区"))
 
 ;;; ---------------------------------------------------------------------------

@@ -1590,7 +1590,9 @@ Telega's commands resolve their target through `telega-chat-at' and
                        (or (etaf-telega-backend-telega--raw backend chat-id message-id)
                            (user-error "这条消息尚未载入")))))
     (setq etaf-telega-backend-telega--target (cons chat message))
-    (call-interactively command)))
+    (if (commandp command)
+        (call-interactively command)
+      (funcall command))))
 
 (defun etaf-telega-backend-telega--message-changed (event)
   "Report the message changed by update EVENT to backends viewing its chat."

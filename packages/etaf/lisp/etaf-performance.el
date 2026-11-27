@@ -590,6 +590,7 @@ overwrite an existing file."
 (define-derived-mode etaf-performance-panel-mode
   tabulated-list-mode "ETAF-Performance"
   "Display ETAF operations and their flat provider reports."
+  :interactive nil
   (setq tabulated-list-format
         [("ID" 9 t) ("Type" 10 t) ("Operation / Stage" 26 t)
          ("Category" 12 t) ("Provider" 12 t) ("Sequence" 9 t)

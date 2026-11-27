@@ -394,16 +394,32 @@ to that node, even when point rests on a clickable descendant."
                                   '(down-mouse-1 mouse-1 drag-mouse-1))))
   "Primary-button events an activatable or draggable owner claims.")
 
+(defun ebox--make-internal-command (name fn)
+  "Return an uninterned interactive command symbol named NAME wrapping FN.
+Uninterned symbols preserve `this-command', `last-command' and keymap identity
+without appearing in `M-x' completion."
+  (let ((sym (make-symbol name)))
+    (fset sym fn)
+    sym))
+
 (defun ebox--press-command (press)
   "Track primary-button PRESS on an activatable owner."
-  (interactive (list last-input-event))
   (ebox--track-press press))
+
+(defconst ebox--press-command-cmd
+  (ebox--make-internal-command
+   "ebox--press-command"
+   (lambda (press) (interactive (list last-input-event))
+     (ebox--press-command press)))
+  "Internal uninterned command for `ebox--press-command'.")
 
 (defconst ebox--press-claim-keymap
   (let ((map (make-sparse-keymap)))
     (dolist (event ebox--claimed-mouse-events)
       (define-key map (vector event)
-                  (if (memq 'down (event-modifiers event)) #'ebox--press-command #'ignore)))
+                  (if (memq 'down (event-modifiers event))
+                      ebox--press-command-cmd
+                    #'ignore)))
     map)
   "Shared parent claiming the primary-button sequence for press-only keymaps.
 Presses neither start region selection nor reach global commands.")
@@ -1467,6 +1483,13 @@ plain buffer reaches only through `local-function-key-map' (as DEL)."
       (let ((translated (lookup-key local-function-key-map keys)))
         (and (arrayp translated) (key-binding translated t)))))
 
+(defvar ebox--input-run-cmd)
+(defvar ebox--input-put-preedit-cmd)
+(defvar ebox--input-clear-preedit-cmd)
+(defvar ebox--input-next-row-cmd)
+(defvar ebox--input-previous-row-cmd)
+(defvar ebox--input-track-pointer-cmd)
+
 (defun ebox--input-pre-command ()
   "Route the coming keyboard command to the current buffer's input session."
   (when-let* ((session (ebox--input-current)))
@@ -1479,7 +1502,7 @@ plain buffer reaches only through `local-function-key-map' (as DEL)."
           (when (and (eq (posn-window start) (selected-window))
                      (null (posn-area start)) (integerp (posn-point start))
                      (ebox--input-inside-p session (posn-point start)))
-            (setq this-command #'ebox--input-track-pointer))))
+            (setq this-command ebox--input-track-pointer-cmd))))
       (when (or (integerp event) (and event (symbolp event)))
         (let* ((keys (this-command-keys-vector))
                (keymap (ebox--input-session-keymap session))
@@ -1493,24 +1516,23 @@ plain buffer reaches only through `local-function-key-map' (as DEL)."
               (cond
                ((memq command '(ns-put-working-text ns-insert-working-text))
                 (setf (ebox--input-session-turn session) t)
-                (setq this-command #'ebox--input-put-preedit))
+                (setq this-command ebox--input-put-preedit-cmd))
                ((memq command '(ns-unput-working-text ns-delete-working-text))
                 (setf (ebox--input-session-turn session) t)
-                (setq this-command #'ebox--input-clear-preedit))
+                (setq this-command ebox--input-clear-preedit-cmd))
                ((memq command '(next-line previous-line))
                 (setf (ebox--input-session-turn session) t)
                 (setq this-command (if (eq command 'next-line)
-                                       #'ebox--input-next-row
-                                     #'ebox--input-previous-row)))
+                                       ebox--input-next-row-cmd
+                                     ebox--input-previous-row-cmd)))
                ((and command (commandp command)
                      (not (ebox--input-passthrough-p command)))
                 (setf (ebox--input-session-turn session) t
                       (ebox--input-session-command session) command)
-                (setq this-command #'ebox--input-run))))))))))
+                (setq this-command ebox--input-run-cmd))))))))))
 
 (defun ebox--input-run ()
   "Run the current input session's command in its editing buffer."
-  (interactive)
   (let* ((session (ebox--input-current))
          (command (and session (ebox--input-session-command session)))
          (keys (this-command-keys-vector))
@@ -1527,23 +1549,28 @@ plain buffer reaches only through `local-function-key-map' (as DEL)."
         (when (and deactivate-mark mark-active) (deactivate-mark)))
       (setq this-command final))))
 
+(defconst ebox--input-run-cmd
+  (ebox--make-internal-command
+   "ebox--input-run"
+   (lambda () (interactive) (ebox--input-run)))
+  "Internal uninterned command for `ebox--input-run'.")
+
 (defun ebox--input-put-preedit ()
   "Show the input method's working text at the session caret."
-  (interactive)
   (when-let* ((session (ebox--input-current)))
     (setf (ebox--input-session-preedit session)
           (and (boundp 'ns-working-text) (stringp ns-working-text)
                (substring-no-properties ns-working-text)))
     (ebox--mutation (ebox--input-show session))))
 
+(defconst ebox--input-put-preedit-cmd
+  (ebox--make-internal-command
+   "ebox--input-put-preedit"
+   (lambda () (interactive) (ebox--input-put-preedit)))
+  "Internal uninterned command for `ebox--input-put-preedit'.")
+
 (defvar ebox--input-special-saved nil
   "Input-method special-event bindings displaced while sessions are active.")
-
-(defconst ebox--input-special-events
-  '((ns-put-working-text . ebox--input-special-put)
-    (ns-unput-working-text . ebox--input-special-unput))
-  "Input-method working-text special events and their session handlers.
-Emacs runs these outside the command loop, so command hooks never see them.")
 
 (defun ebox--input-special-session ()
   "Return the input session of the selected window's buffer, or nil."
@@ -1555,9 +1582,20 @@ Emacs runs these outside the command loop, so command hooks never see them.")
   (let ((command (cdr (assq event ebox--input-special-saved))))
     (when (commandp command) (call-interactively command))))
 
+(defun ebox--input-clear-preedit ()
+  "Remove the input method's working text from the session."
+  (when-let* ((session (ebox--input-current)))
+    (setf (ebox--input-session-preedit session) nil)
+    (ebox--mutation (ebox--input-show session))))
+
+(defconst ebox--input-clear-preedit-cmd
+  (ebox--make-internal-command
+   "ebox--input-clear-preedit"
+   (lambda () (interactive) (ebox--input-clear-preedit)))
+  "Internal uninterned command for `ebox--input-clear-preedit'.")
+
 (defun ebox--input-special-put ()
   "Show input-method working text in the selected session, else natively."
-  (interactive)
   (if (ebox--input-special-session)
       (with-current-buffer (window-buffer (selected-window))
         (ebox--input-put-preedit))
@@ -1565,11 +1603,28 @@ Emacs runs these outside the command loop, so command hooks never see them.")
 
 (defun ebox--input-special-unput ()
   "Clear input-method working text in the selected session, else natively."
-  (interactive)
   (if (ebox--input-special-session)
       (with-current-buffer (window-buffer (selected-window))
         (ebox--input-clear-preedit))
     (ebox--input-special-fallback 'ns-unput-working-text)))
+
+(defconst ebox--input-special-put-cmd
+  (ebox--make-internal-command
+   "ebox--input-special-put"
+   (lambda () (interactive) (ebox--input-special-put)))
+  "Internal uninterned command for `ebox--input-special-put'.")
+
+(defconst ebox--input-special-unput-cmd
+  (ebox--make-internal-command
+   "ebox--input-special-unput"
+   (lambda () (interactive) (ebox--input-special-unput)))
+  "Internal uninterned command for `ebox--input-special-unput'.")
+
+(defconst ebox--input-special-events
+  (list (cons 'ns-put-working-text ebox--input-special-put-cmd)
+        (cons 'ns-unput-working-text ebox--input-special-unput-cmd))
+  "Input-method working-text special events and their session handlers.
+Emacs runs these outside the command loop, so command hooks never see them.")
 
 (defun ebox--input-special-install ()
   "Route input-method special events through sessions while any is active."
@@ -1588,13 +1643,6 @@ Emacs runs these outside the command loop, so command hooks never see them.")
         (define-key special-event-map (vector (car entry)) (cdr entry))))
     (setq ebox--input-special-saved nil)))
 
-(defun ebox--input-clear-preedit ()
-  "Remove the input method's working text from the session."
-  (interactive)
-  (when-let* ((session (ebox--input-current)))
-    (setf (ebox--input-session-preedit session) nil)
-    (ebox--mutation (ebox--input-show session))))
-
 (defun ebox--input-move-row (delta)
   "Move the current session's caret DELTA painted rows, keeping its column."
   (when-let* ((session (ebox--input-current)))
@@ -1603,7 +1651,8 @@ Emacs runs these outside the command loop, so command hooks never see them.")
            (pos (and rows (ebox--input-position-of rows caret)))
            (bol (and pos (save-excursion (goto-char pos) (line-beginning-position))))
            (index (and bol (cl-position bol rows :key (lambda (row) (aref row 0)))))
-           (x (if (and (memq last-command '(ebox--input-next-row ebox--input-previous-row))
+           (x (if (and (memq last-command (list ebox--input-next-row-cmd
+                                                ebox--input-previous-row-cmd))
                        (ebox--input-session-goal-x session))
                   (ebox--input-session-goal-x session)
                 (and bol (ebox--line-width (buffer-substring bol pos)))))
@@ -1621,13 +1670,23 @@ Emacs runs these outside the command loop, so command hooks never see them.")
 
 (defun ebox--input-next-row ()
   "Move the session caret to the next painted row."
-  (interactive)
   (ebox--input-move-row 1))
 
 (defun ebox--input-previous-row ()
   "Move the session caret to the previous painted row."
-  (interactive)
   (ebox--input-move-row -1))
+
+(defconst ebox--input-next-row-cmd
+  (ebox--make-internal-command
+   "ebox--input-next-row"
+   (lambda () (interactive) (ebox--input-next-row)))
+  "Internal uninterned command for `ebox--input-next-row'.")
+
+(defconst ebox--input-previous-row-cmd
+  (ebox--make-internal-command
+   "ebox--input-previous-row"
+   (lambda () (interactive) (ebox--input-previous-row)))
+  "Internal uninterned command for `ebox--input-previous-row'.")
 
 (defun ebox--input-sync (session)
   "Publish SESSION's edited value and show its caret."
@@ -1696,7 +1755,6 @@ included, or the value's painted rows when no owner frames it."
 (defun ebox--input-track-pointer (event)
   "Place the input caret at primary press EVENT and select while dragging.
 A double press selects the word at the caret and a triple press the value."
-  (interactive "e")
   (when-let* ((session (ebox--input-current)))
     (let* ((from (posn-point (event-start event)))
            (count (cond ((memq 'triple (event-modifiers event)) 3)
@@ -1718,6 +1776,12 @@ A double press selects the word at the caret and a triple press the value."
       (pcase count
         (2 (ebox--input-select-unit session 'word))
         (3 (ebox--input-select-unit session 'all))))))
+
+(defconst ebox--input-track-pointer-cmd
+  (ebox--make-internal-command
+   "ebox--input-track-pointer"
+   (lambda (event) (interactive "e") (ebox--input-track-pointer event)))
+  "Internal uninterned command for `ebox--input-track-pointer'.")
 
 (defun ebox--input-pointer (session event)
   "Place SESSION's caret and region from mouse EVENT, or leave the field."
@@ -1754,7 +1818,7 @@ A double press selects the word at the caret and a triple press the value."
        ((ebox--input-session-turn session)
         (setf (ebox--input-session-held session) t)
         (ebox--input-sync session))
-       ((eq this-command #'ebox--input-track-pointer))
+       ((eq this-command ebox--input-track-pointer-cmd))
        ((and (consp event)
              (memq (event-basic-type event) '(mouse-1 mouse-2 mouse-3))
              (cl-intersection '(click drag) (event-modifiers event)))
@@ -2186,7 +2250,6 @@ The event window decides: motion inside this mounted buffer paints the pointed
 node, and motion anywhere else releases the feedback.  A painted help-echo
 probe reports entry, and the pointer guard refreshes or releases the paint
 while it is active."
-  (interactive "e")
   (clear-this-command-keys)
   (let* ((position (event-end event))
          (window (and (consp position) (posn-window position)))
@@ -2493,7 +2556,10 @@ and drag gestures.")
       (define-key map (kbd key) (lambda () (interactive) (ebox-focus-edge nil))))
     (dolist (key '("<end>" "M->"))
       (define-key map (kbd key) (lambda () (interactive) (ebox-focus-edge t))))
-    (define-key map [mouse-movement] #'ebox--hover-event)
+    (define-key map [mouse-movement]
+      (ebox--make-internal-command
+       "ebox--hover-event"
+       (lambda (event) (interactive "e") (ebox--hover-event event))))
     ;; Painted cells are not a text selection unless `ebox-allow-text-selection'
     ;; is non-nil: otherwise a press or drag only moves point without a region.
     (dolist (event '(down-mouse-1 drag-mouse-1))

@@ -239,7 +239,6 @@ reads a name with completion.  A symbol without an entry signals a
 
 (defun etaf-manual-reader-index ()
   "Choose a chapter, section, definition entry or index term and jump to it."
-  (interactive)
   (let* ((session (etaf-manual-reader--current))
          (targets (etaf-manual-reader-jump-targets session))
          (choice (completing-read "跳转: " (mapcar #'car targets) nil t))
@@ -276,7 +275,6 @@ reads a name with completion.  A symbol without an entry signals a
 
 (defun etaf-manual-reader-search-command (&optional query)
   "Search the manual for QUERY and move to the first matching section."
-  (interactive)
   (let ((session (etaf-manual-reader--current)))
     (condition-case error
         (let* ((previous (plist-get (etaf-manual-reader--read session :search) :query))
@@ -297,10 +295,9 @@ reads a name with completion.  A symbol without an entry signals a
 
 (defun etaf-manual-reader-search-next-command ()
   "Move to the next search result, asking for a query when none is active."
-  (interactive)
   (let ((session (etaf-manual-reader--current)))
     (if (null (plist-get (etaf-manual-reader--read session :search) :matches))
-        (call-interactively #'etaf-manual-reader-search-command)
+        (etaf-manual-reader-search-command)
       (condition-case error
           (progn
             (etaf-manual-reader-search-next session)
@@ -311,10 +308,9 @@ reads a name with completion.  A symbol without an entry signals a
 
 (defun etaf-manual-reader-search-previous-command ()
   "Move to the previous search result."
-  (interactive)
   (let ((session (etaf-manual-reader--current)))
     (if (null (plist-get (etaf-manual-reader--read session :search) :matches))
-        (call-interactively #'etaf-manual-reader-search-command)
+        (etaf-manual-reader-search-command)
       (condition-case error
           (progn
             (etaf-manual-reader-search-previous session)
@@ -327,7 +323,6 @@ reads a name with completion.  A symbol without an entry signals a
 
 (defun etaf-manual-reader-edit-example-command ()
   "Edit the example at the reading position; C-c C-c reruns it."
-  (interactive)
   (let* ((session (etaf-manual-reader--current))
          (example (etaf-manual-reader--example-at session)))
     (if (null example)
@@ -343,7 +338,6 @@ reads a name with completion.  A symbol without an entry signals a
 
 (defun etaf-manual-reader-copy-code-command ()
   "Copy the code at the reading position to the kill ring."
-  (interactive)
   (let* ((session (etaf-manual-reader--current))
          (code (etaf-manual-reader--code-at session)))
     (if (and (stringp code) (not (string-empty-p code)))
@@ -352,7 +346,7 @@ reads a name with completion.  A symbol without an entry signals a
           (etaf-manual-reader-message session "已复制代码"))
       (etaf-manual-reader-message session "本节没有可复制的代码"))))
 
-;;;; Interactive commands
+;;;; Reader actions
 
 (defun etaf-manual-reader--report (error)
   "Report ERROR in the reader status area."
@@ -361,7 +355,6 @@ reads a name with completion.  A symbol without an entry signals a
 
 (defun etaf-manual-reader-next-command ()
   "Move to the next section."
-  (interactive)
   (let ((session (etaf-manual-reader--current)))
     (condition-case error
         (progn (etaf-manual-reader-next session)
@@ -370,7 +363,6 @@ reads a name with completion.  A symbol without an entry signals a
 
 (defun etaf-manual-reader-previous-command ()
   "Move to the previous section."
-  (interactive)
   (let ((session (etaf-manual-reader--current)))
     (condition-case error
         (progn (etaf-manual-reader-previous session)
@@ -379,7 +371,6 @@ reads a name with completion.  A symbol without an entry signals a
 
 (defun etaf-manual-reader-up-command ()
   "Move one level up in the outline."
-  (interactive)
   (let ((session (etaf-manual-reader--current)))
     (condition-case error
         (progn (etaf-manual-reader-up session)
@@ -388,7 +379,6 @@ reads a name with completion.  A symbol without an entry signals a
 
 (defun etaf-manual-reader-back-command ()
   "Return to the previous reading position."
-  (interactive)
   (let ((session (etaf-manual-reader--current)))
     (condition-case error
         (progn (etaf-manual-reader-back session)
@@ -397,7 +387,6 @@ reads a name with completion.  A symbol without an entry signals a
 
 (defun etaf-manual-reader-forward-command ()
   "Move to the next reading position."
-  (interactive)
   (let ((session (etaf-manual-reader--current)))
     (condition-case error
         (progn (etaf-manual-reader-forward session)
@@ -406,7 +395,6 @@ reads a name with completion.  A symbol without an entry signals a
 
 (defun etaf-manual-reader-next-chapter-command ()
   "Move to the next chapter."
-  (interactive)
   (let ((session (etaf-manual-reader--current)))
     (condition-case error
         (progn (etaf-manual-reader-next-chapter session)
@@ -415,7 +403,6 @@ reads a name with completion.  A symbol without an entry signals a
 
 (defun etaf-manual-reader-previous-chapter-command ()
   "Move to the previous chapter."
-  (interactive)
   (let ((session (etaf-manual-reader--current)))
     (condition-case error
         (progn (etaf-manual-reader-previous-chapter session)
@@ -424,7 +411,6 @@ reads a name with completion.  A symbol without an entry signals a
 
 (defun etaf-manual-reader-switch-language-command ()
   "Switch the reader between Chinese and English."
-  (interactive)
   (let* ((session (etaf-manual-reader--current))
          (language (etaf-manual-reader--read session :language)))
     (etaf-manual-reader--switch-language
@@ -433,7 +419,6 @@ reads a name with completion.  A symbol without an entry signals a
 
 (defun etaf-manual-reader-toggle-theme-command ()
   "Switch the reader between the light and dark palettes."
-  (interactive)
   (let* ((session (etaf-manual-reader--current))
          (theme (etaf-manual-reader-toggle-theme session)))
     (message "外观：%s" (or (cdr (assq theme etaf-manual-reader--theme-modes))
@@ -475,7 +460,10 @@ as a direction key there, and a Host binding would be a render error."
 (defvar etaf-manual-reader-mode-map
   (let ((map (make-sparse-keymap)))
     (dolist (entry etaf-manual-reader--bindings)
-      (define-key map (kbd (car entry)) (nth 1 entry)))
+      (let ((fn (nth 1 entry)))
+        (define-key map (kbd (car entry))
+                    (if (commandp fn) fn
+                      (lambda () (interactive) (funcall fn))))))
     map)
   "Keymap of a buffer opened by `etaf-manual-open'.
 The mounted page Host also carries the same table as `:keys', so the keys
@@ -485,7 +473,8 @@ the ETAF key help, and the framework keeps `TAB', `RET', the arrows,
 
 (define-derived-mode etaf-manual-reader-mode special-mode "ETAF手册"
   "Major mode of an ETAF manual reader buffer.
-\\{etaf-manual-reader-mode-map}")
+\\{etaf-manual-reader-mode-map}"
+  :interactive nil)
 
 (provide 'etaf-manual-reader)
 ;;; etaf-manual-reader.el ends here

@@ -119,6 +119,7 @@ file styles are snapshots consumed by the ordinary local scope pipeline."
 ;;;###autoload
 (define-derived-mode ebox-dsl-mode emacs-lisp-mode "EboxDSL"
   "Major mode for Ebox DSL files."
+  :interactive nil
   (setq-local header-line-format ebox-file--header)
   (setq-local truncate-lines nil)
   (setq-local bidi-display-reordering nil)

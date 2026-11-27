@@ -172,12 +172,10 @@ which is why the same field serves both places."
 
 (defun etaf-weread--next-item ()
   "Move the book selection down."
-  (interactive)
   (etaf-weread-move-selection (etaf-weread--current-model) 1))
 
 (defun etaf-weread--previous-item ()
   "Move the book selection up."
-  (interactive)
   (etaf-weread-move-selection (etaf-weread--current-model) -1))
 
 (defun etaf-weread--pane-hit-p (xy columns _rows layout pane)
@@ -209,26 +207,22 @@ COLUMNS describes the event window; LAYOUT and PANE describe the reader."
               (etaf-weread-scroll-pane model delta)
             (etaf-weread-move-selection model delta)))))))
 
-(defun etaf-weread--wheel-up (event)
+(defun etaf-weread--wheel-up (&optional event)
   "Scroll the side pane or select the previous book at EVENT."
-  (interactive "e")
-  (etaf-weread--wheel event -1))
+  (etaf-weread--wheel (or event last-input-event) -1))
 
-(defun etaf-weread--wheel-down (event)
+(defun etaf-weread--wheel-down (&optional event)
   "Scroll the side pane or select the next book at EVENT."
-  (interactive "e")
-  (etaf-weread--wheel event 1))
+  (etaf-weread--wheel (or event last-input-event) 1))
 
 (defun etaf-weread--first-item ()
   "Select the first book of the list."
-  (interactive)
   (let* ((model (etaf-weread--current-model))
          (state (etaf-weread-state model)))
     (etaf-weread-move-selection model (- (plist-get state :selection)))))
 
 (defun etaf-weread--last-item ()
   "Select the last book of the list."
-  (interactive)
   (let* ((model (etaf-weread--current-model))
          (state (etaf-weread-state model)))
     (etaf-weread-move-selection model (- (1- (or (plist-get state :rows-total) 1))
@@ -236,14 +230,12 @@ COLUMNS describes the event window; LAYOUT and PANE describe the reader."
 
 (defun etaf-weread--next-page ()
   "Select one page further down the book list."
-  (interactive)
   (let* ((model (etaf-weread--current-model))
          (state (etaf-weread-state model)))
     (etaf-weread-move-selection model (or (plist-get state :page-size) 10))))
 
 (defun etaf-weread--previous-page ()
   "Select one page further up the book list."
-  (interactive)
   (let* ((model (etaf-weread--current-model))
          (state (etaf-weread-state model)))
     (etaf-weread-move-selection model (- (or (plist-get state :page-size) 10)))))
@@ -252,7 +244,6 @@ COLUMNS describes the event window; LAYOUT and PANE describe the reader."
   "Open the selected book's detail or highlights.
 A focused control or the pressable Host at point takes RET before this root
 key, so this only runs where moving the selection left point."
-  (interactive)
   (etaf-weread-activate-selection (etaf-weread--current-model)))
 
 (defun etaf-weread--scroll-pane-down ()
@@ -260,19 +251,16 @@ key, so this only runs where moving the selection left point."
 The wheel scrolls the pane under the pointer; these keys give the same
 ability to a keyboard, which otherwise cannot move a long table of contents
 or highlight list."
-  (interactive)
   (let ((model (etaf-weread--current-model)))
     (etaf-weread-scroll-pane model (max 1 (etaf-weread--read model :pane-rows)))))
 
 (defun etaf-weread--scroll-pane-up ()
   "Scroll the side pane one page up."
-  (interactive)
   (let ((model (etaf-weread--current-model)))
     (etaf-weread-scroll-pane model (- (max 1 (etaf-weread--read model :pane-rows))))))
 
 (defun etaf-weread--toggle-pane ()
   "Switch between the book list, the book card and the highlights."
-  (interactive)
   (let* ((model (etaf-weread--current-model))
          (pane (etaf-weread--read model :pane)))
     (if (eq pane 'list)
@@ -283,81 +271,68 @@ or highlight list."
 
 (defun etaf-weread--detail-pane ()
   "Show the book detail pane."
-  (interactive)
   (etaf-weread-show-pane (etaf-weread--current-model) 'detail))
 
 (defun etaf-weread--notes-pane ()
   "Show the highlights pane of the selected book."
-  (interactive)
   (let ((model (etaf-weread--current-model)))
     (etaf-weread-show-book model (etaf-weread--selected-row model) 'notes)))
 
 (defun etaf-weread--open-book ()
   "Open the selected book in the browser's WeChat Reading reader."
-  (interactive)
   (condition-case error
       (etaf-weread-open-book (etaf-weread--current-model))
     (etaf-weread-error (message "%s" (error-message-string error)))))
 
 (defun etaf-weread--export-notes ()
   "Export the selected book's highlights and thoughts as Markdown."
-  (interactive)
   (condition-case error
       (etaf-weread-export-notes (etaf-weread--current-model))
     (etaf-weread-error (message "%s" (error-message-string error)))))
 
 (defun etaf-weread--shelf ()
   "Show the whole shelf."
-  (interactive)
   (etaf-weread-locate (etaf-weread--current-model) :shelf))
 
 (defun etaf-weread--reading ()
   "Show the books currently being read."
-  (interactive)
   (etaf-weread-locate (etaf-weread--current-model) :reading))
 
 (defun etaf-weread--finished ()
   "Show the finished books."
-  (interactive)
   (etaf-weread-locate (etaf-weread--current-model) :finished))
 
 (defun etaf-weread--notebook ()
   "Show the books with highlights and thoughts."
-  (interactive)
   (etaf-weread-locate (etaf-weread--current-model) :notebook))
 
 (defun etaf-weread--index-section ()
   "Show the local SQLite index of highlights."
-  (interactive)
   (etaf-weread-locate (etaf-weread--current-model) :index))
 
 (defun etaf-weread--build-index (&optional refresh)
   "Index the notebook's highlights into the local SQLite index.
 With prefix argument REFRESH, re-fetch books that are already indexed."
-  (interactive "P")
-  (etaf-weread-index-notebook (etaf-weread--current-model) refresh))
+  (etaf-weread-index-notebook (etaf-weread--current-model)
+                              (or refresh current-prefix-arg)))
 
 (defun etaf-weread--stats ()
   "Show the reading statistics."
-  (interactive)
   (etaf-weread-locate (etaf-weread--current-model) :stats))
 
 (defun etaf-weread--search ()
   "Search the WeChat Reading store."
-  (interactive)
   (etaf-weread--search-text (etaf-weread--current-model)
                             (read-string "搜索书名或作者：")))
 
 (defun etaf-weread--refresh ()
   "Reload the current list, account and statistics."
-  (interactive)
   (etaf-weread-refresh (etaf-weread--current-model)))
 
 (defun etaf-weread--cycle-theme ()
   "Switch the reader to the next palette.
 The reader's mode cell is its one appearance state, and every View reads it
 while rendering, so the reader and a panel framing it repaint together."
-  (interactive)
   (etaf-weread-cycle-theme (etaf-weread--current-model)))
 
 

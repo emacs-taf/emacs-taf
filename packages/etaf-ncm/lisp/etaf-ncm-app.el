@@ -163,12 +163,10 @@ in one continuous movement."
 
 (defun etaf-ncm--next-item ()
   "Move the library selection down."
-  (interactive)
   (etaf-ncm-move-selection (etaf-ncm--current-model) 1))
 
 (defun etaf-ncm--previous-item ()
   "Move the library selection up."
-  (interactive)
   (etaf-ncm-move-selection (etaf-ncm--current-model) -1))
 
 (defun etaf-ncm--queue-hit-p (xy columns rows layout pane aside)
@@ -223,13 +221,11 @@ a page move."
 
 (defun etaf-ncm--first-item ()
   "Select the first row of the library."
-  (interactive)
   (etaf-ncm-move-selection (etaf-ncm--current-model)
                            (- (plist-get (etaf-ncm-state (etaf-ncm--current-model)) :selection))))
 
 (defun etaf-ncm--last-item ()
   "Select the last row of the library."
-  (interactive)
   (let* ((app (etaf-ncm--current-model))
          (state (etaf-ncm-state app)))
     (etaf-ncm-move-selection app (- (1- (or (plist-get state :rows-total) 1))
@@ -237,41 +233,34 @@ a page move."
 
 (defun etaf-ncm--next-page ()
   "Select one page further down the library."
-  (interactive)
   (let* ((app (etaf-ncm--current-model))
          (state (etaf-ncm-state app)))
     (etaf-ncm-move-selection app (or (plist-get state :page-size) 10))))
 
 (defun etaf-ncm--previous-page ()
   "Select one page further up the library."
-  (interactive)
   (let* ((app (etaf-ncm--current-model))
          (state (etaf-ncm-state app)))
     (etaf-ncm-move-selection app (- (or (plist-get state :page-size) 10)))))
 
 (defun etaf-ncm--activate ()
   "Play or open the selected library row."
-  (interactive)
   (etaf-ncm-activate-selection (etaf-ncm--current-model)))
 
 (defun etaf-ncm--toggle-playback ()
   "Pause or resume the current song."
-  (interactive)
   (etaf-ncm-toggle-playback (etaf-ncm--current-model)))
 
 (defun etaf-ncm--next-track ()
   "Play the next track in the queue."
-  (interactive)
   (etaf-ncm-next-track (etaf-ncm--current-model)))
 
 (defun etaf-ncm--previous-track ()
   "Play the previous track in the queue."
-  (interactive)
   (etaf-ncm-previous-track (etaf-ncm--current-model)))
 
 (defun etaf-ncm--add-to-queue ()
   "Append the selected song to the queue."
-  (interactive)
   (let ((model (etaf-ncm--current-model)))
     (condition-case error
         (etaf-ncm-add-to-queue model (etaf-ncm--selected-row model))
@@ -279,14 +268,12 @@ a page move."
 
 (defun etaf-ncm--download ()
   "Download the selected library row into the local library."
-  (interactive)
   (etaf-ncm-download-selection (etaf-ncm--current-model)))
 
 (defun etaf-ncm-open-cover ()
   "Open the current track's album art in the system image viewer.
 A terminal cannot show the original pixels inside the buffer, so this opens
 the cached artwork at full size."
-  (interactive)
   (let* ((model (etaf-ncm--current-model))
          (file (etaf-ncm--read model :cover-file)))
     (unless (and (stringp file) (file-readable-p file))
@@ -295,7 +282,6 @@ the cached artwork at full size."
 
 (defun etaf-ncm--search ()
   "Ask for a keyword and search it."
-  (interactive)
   (etaf-ncm--search-text (etaf-ncm--current-model)
                          (read-string "搜索歌曲、歌手、歌单或专辑：")))
 
@@ -332,7 +318,6 @@ its account and libraries."
 
 (defun etaf-ncm--refresh ()
   "Reload the library, playback status, queue and account."
-  (interactive)
   (etaf-ncm-refresh (etaf-ncm--current-model)))
 
 (defun etaf-ncm--sync-now-art (app cover columns rows panel metrics mode)
@@ -457,14 +442,12 @@ the page keeps rendering."
 
 (defun etaf-ncm--open-now ()
   "Show the full-page view of the playing song."
-  (interactive)
   (etaf-ncm--write (etaf-ncm--current-model) :screen 'now))
 
 (defun etaf-ncm--toggle-now ()
   "Open the playing page, or leave it when it is already open.
 The same key does both, so a small window that hides the back control still
 has a way out."
-  (interactive)
   (let ((model (etaf-ncm--current-model)))
     (if (eq (etaf-ncm--read model :screen) 'now)
         (etaf-ncm--write model :screen 'library)
@@ -472,7 +455,6 @@ has a way out."
 
 (defun etaf-ncm--toggle-now-mode ()
   "Switch the full-page view between the one-picture and the split design."
-  (interactive)
   (let* ((model (etaf-ncm--current-model))
          (mode (etaf-ncm--read model :now-mode)))
     ;; From `auto', the first press shows the other design than the one on
@@ -486,70 +468,59 @@ has a way out."
 (defun etaf-ncm--back ()
   "Leave the full-page view and return to the player.
 In the player itself this does nothing, so Esc stays free for the other panes."
-  (interactive)
   (let ((model (etaf-ncm--current-model)))
     (when (eq (etaf-ncm--read model :screen) 'now)
       (etaf-ncm--write model :screen 'library))))
 
 (defun etaf-ncm--toggle-aside ()
   "Switch the side panel between the lyrics and the queue."
-  (interactive)
   (etaf-ncm-toggle-aside (etaf-ncm--current-model)))
 
 (defun etaf-ncm--toggle-pane ()
   "Show the library list or the lyrics and queue panel.
 In a wide layout, which shows both, this keeps the library list focused."
-  (interactive)
   (let* ((model (etaf-ncm--current-model))
          (showing (eq (etaf-ncm--read model :pane) 'aside)))
     (etaf-ncm-show-pane model (if showing 'list 'aside))))
 
 (defun etaf-ncm--toggle-repeat ()
   "Turn list repeat (列表循环) on or off."
-  (interactive)
   (let* ((model (etaf-ncm--current-model))
          (on (not (plist-get (etaf-ncm--view-status model) :repeat))))
     (etaf-ncm-set-repeat model on)))
 
 (defun etaf-ncm--toggle-shuffle ()
   "Turn shuffle mode on or off."
-  (interactive)
   (let* ((model (etaf-ncm--current-model))
          (on (not (plist-get (etaf-ncm--view-status model) :shuffle))))
     (etaf-ncm-set-shuffle model on)))
 
 (defun etaf-ncm--like ()
   "Add the current song to the liked songs."
-  (interactive)
   (etaf-ncm-like (etaf-ncm--current-model)))
 
 (defun etaf-ncm--unlike ()
   "Remove the current song from the liked songs."
-  (interactive)
   (etaf-ncm-like (etaf-ncm--current-model) t))
 
 (defun etaf-ncm--volume-up ()
   "Raise the volume by ten."
-  (interactive)
   (let* ((model (etaf-ncm--current-model))
          (volume (or (etaf-ncm--flag-value model :volume) 0)))
     (etaf-ncm-set-volume model (min 100 (+ volume 10)))))
 
 (defun etaf-ncm--volume-down ()
   "Lower the volume by ten."
-  (interactive)
   (let* ((model (etaf-ncm--current-model))
          (volume (or (etaf-ncm--flag-value model :volume) 0)))
     (etaf-ncm-set-volume model (max 0 (- volume 10)))))
 
 (defun etaf-ncm--seek-back ()
   "Seek ten seconds backwards."
-  (interactive)
   (etaf-ncm-seek (etaf-ncm--current-model) -10))
 
 (defun etaf-ncm--seek-forward ()
   "Seek ten seconds forwards."
-  (interactive)
   (etaf-ncm-seek (etaf-ncm--current-model) 10))
 
 (defun etaf-ncm--toggle-theme ()
@@ -557,7 +528,6 @@ In a wide layout, which shows both, this keeps the library list focused."
 The mode cell is the player's one appearance state: `T' writes the same cell
 `etaf-ncm--theme-mode' that a panel's title bar writes, so whichever one
 switches, the player and the panel around it repaint together."
-  (interactive)
   (let* ((model (etaf-ncm--current-model))
          (mode (if (eq (etaf-ncm--effective-mode) 'dark) 'light 'dark)))
     (setq etaf-ncm-theme-mode mode)
@@ -568,11 +538,11 @@ switches, the player and the panel around it repaint together."
                                            "深色"
                                          "浅色")))))
 
-(defun etaf-ncm--locate-index (index)
+(defun etaf-ncm--locate-index (&optional index)
   "Show the sidebar library at 1-based position INDEX."
-  (interactive "p")
-  (let ((entry (nth (1- index) (apply #'append (mapcar #'cdr etaf-ncm-sections))))
-        (model (etaf-ncm--current-model)))
+  (let* ((index (or index (prefix-numeric-value current-prefix-arg)))
+         (entry (nth (1- index) (apply #'append (mapcar #'cdr etaf-ncm-sections))))
+         (model (etaf-ncm--current-model)))
     (if entry
         (etaf-ncm-locate model (car entry))
       (etaf-ncm--write model :message (format "没有第 %s 个音乐库" index)))))
@@ -583,7 +553,9 @@ Binding the session lets an embedded player share the buffer-free commands."
   (lambda ()
     (interactive)
     (let ((etaf-ncm--model session))
-      (call-interactively command))))
+      (if (commandp command)
+          (call-interactively command)
+        (funcall command)))))
 
 (defun etaf-ncm--keys (session)
   "Return the player-wide `:keys' of SESSION's root.
