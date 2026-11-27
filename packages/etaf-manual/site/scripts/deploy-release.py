@@ -41,6 +41,14 @@ NATIVE_REQUIRED_ARTIFACT_KEYS = {"package", "module", "version", "platform", "pa
 NATIVE_OPTIONAL_ARTIFACT_KEYS = {"role", "owner_module", "runtime_name", "note", "built_at"}
 NATIVE_MODULE_KEYS = {"package", "current_version", "description", "used_by", "versions"}
 NATIVE_VERSION_KEYS = {"status", "summary", "min_package_version", "max_package_version", "released"}
+MEDIA_TOP_KEYS = {"schema", "assets"}
+MEDIA_REQUIRED_ASSET_KEYS = {"namespace", "path", "sha256", "size"}
+MEDIA_OPTIONAL_ASSET_KEYS = {"content_type", "width", "height", "note"}
+MEDIA_SEGMENT = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*\Z")
+MEDIA_EXTS = frozenset({
+    ".webp", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".avif",
+    ".mp4", ".webm", ".mov", ".pdf",
+})
 SITE_PAGES = ("index.html", "zh-cn/index.html", "introduction/index.html",
               "zh-cn/introduction/index.html", "symbol-index/index.html", "zh-cn/symbol-index/index.html")
 
@@ -139,7 +147,7 @@ def packages(directory, *, historical=False, partial=False):
                                and pages <= names
                                and (partial or required <= present)):
         raise ValueError("A new package payload may contain only its indexed files")
-    if set(manifest) - {"schema", "packages", "workspace", "sources", "updated", "community"}:
+    if set(manifest) - {"schema", "packages", "workspace", "sources", "updated", "community", "catalog"}:
         raise ValueError("Package manifest contains non-public fields")
     for item in manifest["packages"]:
         if set(item) != {"name", "version", "requirements", "summary", "file", "sha256"}:
@@ -333,10 +341,98 @@ def preserve_native(previous, candidate, mode):
     return shipped
 
 
+def media_assets(directory, *, partial=False):
+    """Validate public media/ manifest and asset allowlist."""
+    if directory.is_symlink() or not directory.is_dir():
+        raise ValueError("Invalid public media directory")
+    manifest_path = directory / "manifest.json"
+    if manifest_path.is_symlink() or not manifest_path.is_file():
+        raise ValueError("Media directory is missing manifest.json")
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if manifest.get("schema") != 1 or not isinstance(manifest.get("assets"), list):
+        raise ValueError("Expected a schema 1 media manifest")
+    if set(manifest) - MEDIA_TOP_KEYS:
+        raise ValueError("Media manifest contains non-public fields")
+    indexed = {}
+    for item in manifest["assets"]:
+        if (not isinstance(item, dict)
+                or not MEDIA_REQUIRED_ASSET_KEYS.issubset(item)
+                or set(item) - (MEDIA_REQUIRED_ASSET_KEYS | MEDIA_OPTIONAL_ASSET_KEYS)
+                or not NAME.fullmatch(str(item["namespace"]))
+                or not SHA256.fullmatch(str(item["sha256"]))
+                or not isinstance(item["size"], int) or isinstance(item["size"], bool) or item["size"] <= 0):
+            raise ValueError(f"Invalid media asset record: {item!r}")
+        rel = PurePosixPath(str(item["path"]))
+        if (rel.is_absolute() or len(rel.parts) not in (2, 3)
+                or rel.parts[0] != item["namespace"]
+                or any(not MEDIA_SEGMENT.fullmatch(part) for part in rel.parts)
+                or rel.suffix.lower() not in MEDIA_EXTS
+                or rel.as_posix() in indexed):
+            raise ValueError(f"Invalid or duplicate media asset path: {item['path']}")
+        indexed[rel.as_posix()] = item
+        target = directory.joinpath(*rel.parts)
+        if partial and not target.exists():
+            continue
+        if target.is_symlink() or not target.is_file():
+            raise ValueError(f"Missing or invalid media asset: {rel.as_posix()}")
+        if target.stat().st_size != item["size"] or digest(target) != item["sha256"]:
+            raise ValueError(f"Media asset checksum mismatch: {rel.as_posix()}")
+    present = set()
+    for path in directory.rglob("*"):
+        if path.is_symlink():
+            raise ValueError(f"Non-public media symlink: {path.relative_to(directory)}")
+        if path.is_file():
+            rel = path.relative_to(directory).as_posix()
+            if rel != "manifest.json":
+                present.add(rel)
+    if not (present <= set(indexed)) or (not partial and set(indexed) != present):
+        raise ValueError("A media payload may contain only its indexed assets")
+    return manifest
+
+
+def preserve_media(previous, candidate, mode):
+    """Carry hosted media assets across site/package/native deploys, or merge a media payload."""
+    old = previous / "media" if previous else None
+    new = candidate / "media"
+    if mode != "media":
+        if new.exists():
+            raise ValueError(f"{mode.capitalize()} payloads must not replace media/")
+        if old and old.exists():
+            media_assets(old)
+            shutil.copytree(old, new)
+        return set()
+    incoming = media_assets(new, partial=True)
+    merged = {item["path"]: dict(item) for item in incoming["assets"]}
+    shipped = {"media/manifest.json"}
+    for item in incoming["assets"]:
+        if (new / item["path"]).is_file():
+            shipped.add("media/" + item["path"])
+    if old and old.exists():
+        prior = media_assets(old)
+        for item in prior["assets"]:
+            rel = item["path"]
+            old_file = old / rel
+            new_file = new / rel
+            if rel in merged:
+                if not new_file.exists():
+                    if merged[rel]["sha256"] != item["sha256"] or merged[rel]["size"] != item["size"]:
+                        raise ValueError(f"Media payload omitted changed asset bytes: {rel}")
+                    new_file.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copyfile(old_file, new_file)
+            else:
+                merged[rel] = dict(item)
+                new_file.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(old_file, new_file)
+    final_manifest = {"schema": 1, "assets": sorted(merged.values(), key=lambda entry: entry["path"])}
+    (new / "manifest.json").write_text(json.dumps(final_manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    media_assets(new)
+    return shipped
+
+
 def preserve_packages(previous, candidate, mode):
     old = previous / "packages" if previous else None
     new = candidate / "packages"
-    if mode in ("site", "native"):
+    if mode in ("site", "native", "media"):
         if new.exists():
             raise ValueError(f"{mode.capitalize()}-only payloads must not replace packages")
         if old and old.exists():
@@ -395,6 +491,9 @@ def verify_http(release, url, stamp, complete=()):
     if (release / "native").is_dir():
         paths.extend(path.relative_to(release)
                      for path in sorted((release / "native").rglob("*")) if path.is_file())
+    if (release / "media").is_dir():
+        paths.extend(path.relative_to(release)
+                     for path in sorted((release / "media").rglob("*")) if path.is_file())
     for path in paths:
         route = "/" + path.as_posix()
         if path.name == "index.html":
@@ -445,14 +544,14 @@ def deploy(args):
             candidate = Path(work) / "site"
             candidate.mkdir()
             extract(args.archive, candidate)
-            if args.mode in ("packages", "native"):
+            if args.mode in ("packages", "native", "media"):
                 expected_dir = args.mode
                 if {path.name for path in candidate.iterdir()} != {expected_dir}:
                     raise ValueError(f"{expected_dir.capitalize()}-only payload must contain only {expected_dir}/")
                 if not previous or not (previous / "index.html").is_file():
                     raise ValueError(f"{expected_dir.capitalize()}-only publication requires an existing site")
                 for path in previous.iterdir():
-                    if path.name in ("packages", "native"):
+                    if path.name in ("packages", "native", "media"):
                         continue
                     if path.is_symlink() or any(child.is_symlink() for child in path.rglob("*")):
                         raise ValueError("Existing site contains a symlink")
@@ -464,6 +563,7 @@ def deploy(args):
                 raise ValueError("Site payload is missing an English/Chinese entry or reference page")
             shipped = preserve_packages(previous, candidate, args.mode)
             shipped |= preserve_native(previous, candidate, args.mode)
+            shipped |= preserve_media(previous, candidate, args.mode)
             # mkdtemp is private, but its moved child must be readable by Caddy.
             for path in [candidate, *candidate.rglob("*")]:
                 path.chmod(0o755 if path.is_dir() else 0o644)
@@ -506,7 +606,7 @@ def main():
     parser.add_argument("--base", type=Path, default=Path("/srv/etaf.top"))
     parser.add_argument("--archive", type=Path, required=True)
     parser.add_argument("--release", required=True)
-    parser.add_argument("--mode", choices=("site", "packages", "combined", "native"), required=True)
+    parser.add_argument("--mode", choices=("site", "packages", "combined", "native", "media"), required=True)
     parser.add_argument("--keep", type=int, default=5)
     parser.add_argument("--verify-url", default="https://etaf.top")
     args = parser.parse_args()

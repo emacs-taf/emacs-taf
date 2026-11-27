@@ -59,8 +59,9 @@ def served_dates(page):
 def expected(package_dir_manifest):
     packages = sorted(package_dir_manifest["packages"], key=lambda item: item["name"])
     community = package_dir_manifest.get("community", {})
+    catalog = package_dir_manifest.get("catalog", {})
     sections = {}
-    for label, items in archive_pages.groups(packages, community):
+    for label, items in archive_pages.groups(packages, community, catalog):
         sections[label.lower()] = [item["name"] for item in items]
     return packages, sections
 
@@ -146,15 +147,40 @@ def check_native(base):
     return not problems
 
 
+def check_media(base):
+    """Verify the served /media/manifest.json is valid and non-empty."""
+    manifest = json.loads(fetch(base.rstrip("/") + "/manifest.json"))
+    assets = manifest.get("assets", [])
+    problems = []
+    if manifest.get("schema") != 1 or not isinstance(assets, list):
+        problems.append("invalid schema 1 media manifest")
+    seen = set()
+    for item in assets:
+        path = item.get("path")
+        if not path or path in seen:
+            problems.append(f"invalid or duplicate media path: {path!r}")
+        else:
+            seen.add(path)
+    print(f"media={base}\nassets={len(assets)}")
+    for problem in problems:
+        print(problem)
+    print("ok=yes" if not problems else "ok=no")
+    return not problems
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--archive", default="https://etaf.top/packages/")
     parser.add_argument("--native", nargs="?", const="https://etaf.top/native/",
                         help="Check a hosted native binary index (defaults to https://etaf.top/native/)")
+    parser.add_argument("--media", nargs="?", const="https://etaf.top/media/",
+                        help="Check a hosted media manifest (defaults to https://etaf.top/media/)")
     arguments = parser.parse_args()
     try:
         if arguments.native:
             return 0 if check_native(arguments.native) else 1
+        if arguments.media:
+            return 0 if check_media(arguments.media) else 1
         return 0 if check(arguments.archive) else 1
     except (URLError, OSError, ValueError, KeyError) as error:
         print(f"error=check\nhint={error}")

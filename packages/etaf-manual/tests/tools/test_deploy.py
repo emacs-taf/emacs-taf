@@ -328,6 +328,54 @@ class DeploymentTests(unittest.TestCase):
         self.assertIn("Immutable native artifact differs", result.stderr)
         self.assertEqual((self.base / "current").readlink(), previous)
 
+    def media_payload(self, assets):
+        """Build a media-only payload from {relpath: (namespace, bytes)}."""
+        import hashlib
+        self.sequence += 1
+        output = self.work / f"media-payload-{self.sequence}.tgz"
+        records = []
+        with tarfile.open(output, "w:gz") as archive:
+            for rel, (namespace, data) in sorted(assets.items()):
+                records.append({
+                    "namespace": namespace,
+                    "path": rel,
+                    "sha256": hashlib.sha256(data).hexdigest(),
+                    "size": len(data),
+                })
+                member = tarfile.TarInfo("media/" + rel)
+                member.size = len(data)
+                archive.addfile(member, io.BytesIO(data))
+            manifest_bytes = (json.dumps({"schema": 1, "assets": records}, indent=2) + "\n").encode()
+            member = tarfile.TarInfo("media/manifest.json")
+            member.size = len(manifest_bytes)
+            archive.addfile(member, io.BytesIO(manifest_bytes))
+        return output
+
+    def test_media_assets_publish_merge_update_and_preserve(self):
+        self.deploy(self.payload(page="site one", packages=self.package()), "combined")
+        shot_a = "etaf-bili/etaf-bili-wide.webp"
+        shot_b = "site/shots/etaf-ncm.webp"
+        self.deploy(self.media_payload({
+            shot_a: ("etaf-bili", b"webp-v1"),
+        }), "media")
+        self.assertEqual((self.base / "current/media" / shot_a).read_bytes(), b"webp-v1")
+
+        # Incremental upload merges new asset and allows updating an existing screenshot.
+        self.deploy(self.media_payload({
+            shot_a: ("etaf-bili", b"webp-v2"),
+            shot_b: ("site", b"site-shot-bytes"),
+        }), "media")
+        self.assertEqual((self.base / "current/media" / shot_a).read_bytes(), b"webp-v2")
+        self.assertEqual((self.base / "current/media" / shot_b).read_bytes(), b"site-shot-bytes")
+
+        # Subsequent site and package deploys preserve media/ intact.
+        self.deploy(self.payload(page="site two"), "site")
+        self.deploy(self.payload(packages=self.package("1.1.0")), "packages")
+        self.assertEqual((self.base / "current/media" / shot_a).read_bytes(), b"webp-v2")
+        self.assertEqual((self.base / "current/media" / shot_b).read_bytes(), b"site-shot-bytes")
+        manifest = json.loads((self.base / "current/media/manifest.json").read_text())
+        self.assertEqual([a["path"] for a in manifest["assets"]], [shot_a, shot_b])
+
     def test_native_metadata_enrichment_and_version_archiving_preserve_binaries(self):
         self.deploy(self.payload(page="site one", packages=self.package()), "combined")
         v1_rel = "etaf/1/etaf-video-mpv-v1-darwin-arm64.dylib"

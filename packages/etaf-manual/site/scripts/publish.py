@@ -133,6 +133,20 @@ def published_native_digests(url="https://etaf.top/native/manifest.json", timeou
     return {item["path"]: item["sha256"] for item in manifest.get("artifacts", ())}
 
 
+def published_media_digests(url="https://etaf.top/media/manifest.json", timeout=30):
+    """Return {relpath: sha256} for hosted media assets, or {} when unreadable."""
+    from urllib.request import ProxyHandler, build_opener
+    try:
+        opener = build_opener(ProxyHandler({}))
+        with opener.open(url, timeout=timeout) as response:
+            manifest = json.loads(response.read())
+    except Exception:
+        return {}
+    if not isinstance(manifest, dict):
+        return {}
+    return {item["path"]: item["sha256"] for item in manifest.get("assets", ())}
+
+
 def already_served(directory, served):
     """Return the relative POSIX paths in DIRECTORY whose bytes SERVED already carries."""
     reused = set()
@@ -161,8 +175,11 @@ def publish(args):
     native_input = args.native_only
     native_pages_only = args.native_pages_only
     native_mode = bool(native_input or native_pages_only)
+    media_input = args.media_only
+    media_mode = bool(media_input)
     archive_input = package_input or pages_input
     mode = ("native" if native_mode else
+            "media" if media_mode else
             "packages" if pages_input or args.packages_only else
             "combined" if args.packages else "site")
     keep = int(os.environ.get("ETAF_TOP_KEEP", "5"))
@@ -217,6 +234,14 @@ def publish(args):
             native_report = archive_pages.native_pages(work / "native", manifest=page_manifest)
             print(f"Native index page for {native_report['modules']} module(s), "
                   f"{native_report['artifacts']} artifact(s)")
+        elif media_input:
+            import importlib.util
+            deploy_spec = importlib.util.spec_from_file_location("deploy_release", SITE / "scripts/deploy-release.py")
+            deploy_mod = importlib.util.module_from_spec(deploy_spec)
+            sys.path.insert(0, str(TOOLS))
+            deploy_spec.loader.exec_module(deploy_mod)
+            deploy_mod.media_assets(media_input.resolve())
+            shutil.copytree(media_input.resolve(), work / "media")
         elif package_input:
             # This command rejects partial/stale evidence and developer archives,
             # then copies an explicit public allowlist. Logs stay on this host.
@@ -225,17 +250,19 @@ def publish(args):
                             "--output", str(work / "packages")], check=True, timeout=120)
         elif pages_input:
             pages_source(work / "packages", pages_input.resolve())
-        if not args.no_build and not (args.packages_only or pages_input or native_mode):
+        if not args.no_build and not (args.packages_only or pages_input or native_mode or media_mode):
             subprocess.run(["npm", "run", "build"], cwd=SITE, check=True, timeout=600)
         if args.build_only:
             print(f"Built {SITE / 'dist'}")
             return
-        if mode not in ("packages", "native") and not (SITE / "dist/index.html").is_file():
+        if mode not in ("packages", "native", "media") and not (SITE / "dist/index.html").is_file():
             raise ValueError("Site build is missing; run without --no-build")
-        if mode not in ("packages", "native") and (SITE / "dist/packages").exists():
+        if mode not in ("packages", "native", "media") and (SITE / "dist/packages").exists():
             raise ValueError("dist/packages is reserved; supply a validated --packages release instead")
-        if mode not in ("packages", "native") and (SITE / "dist/native").exists():
+        if mode not in ("packages", "native", "media") and (SITE / "dist/native").exists():
             raise ValueError("dist/native is reserved; supply a validated --native-only directory instead")
+        if mode not in ("packages", "native", "media") and (SITE / "dist/media").exists():
+            raise ValueError("dist/media is reserved; supply a validated --media-only directory instead")
         if archive_input:
             report = archive_pages.archive_pages(work / "packages")
             if report["unplaced"]:
@@ -245,7 +272,7 @@ def publish(args):
                   f"{report['updated'] or 'not recorded'}")
         payload = work / "payload.tgz"
         with tarfile.open(payload, "w:gz") as archive:
-            if mode not in ("packages", "native"):
+            if mode not in ("packages", "native", "media"):
                 add_tree(archive, SITE / "dist")
             if archive_input:
                 served = published_digests()
@@ -268,6 +295,20 @@ def publish(args):
                         archive.add(path, arcname="native/" + rel, recursive=False)
                 if reused:
                     print(f"Reusing {len(reused)} native artifact(s) already served")
+            if media_mode:
+                served = published_media_digests()
+                reused = already_served(work / "media", served)
+                sent = 0
+                for path in sorted((work / "media").rglob("*")):
+                    if path.is_symlink():
+                        raise ValueError(f"Publication input cannot be a symlink: {path}")
+                    if path.is_file():
+                        rel = path.relative_to(work / "media").as_posix()
+                        if rel in reused:
+                            continue
+                        archive.add(path, arcname="media/" + rel, recursive=False)
+                        sent += 1
+                print(f"Sending {sent} media file(s); {len(reused)} already served")
         stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:8]
         staging = remote("mktemp -d /tmp/etaf-top.XXXXXXXX", capture_output=True, text=True).stdout.strip()
         if not re.fullmatch(r"/tmp/etaf-top\.[A-Za-z0-9]+", staging):
@@ -308,6 +349,14 @@ def publish(args):
                 print(checked.stdout.strip())
                 if checked.returncode:
                     raise ValueError(f"Published native page does not match manifest:\n{checked.stdout}")
+            if media_mode:
+                checked = subprocess.run(
+                    [sys.executable, str(SITE / "scripts/check-archive.py"),
+                     "--media", "https://etaf.top/media/"],
+                    capture_output=True, text=True, timeout=120)
+                print(checked.stdout.strip())
+                if checked.returncode:
+                    raise ValueError(f"Published media manifest check failed:\n{checked.stdout}")
             print(f"Published https://etaf.top ({mode}, release {stamp}); current read back")
         finally:
             try:
@@ -330,10 +379,12 @@ def main():
                           help="Publish verified prebuilt native modules under native/ without changing site or packages")
     packages.add_argument("--native-pages-only", action="store_true",
                           help="Enrich published native/manifest.json metadata and regenerate native/index.html without re-uploading binaries")
+    packages.add_argument("--media-only", type=Path,
+                          help="Publish verified showcase media under media/ without changing site, packages or native")
     args = parser.parse_args()
     if args.build_only and (args.packages or args.packages_only or args.pages_only
-                            or args.native_only or args.native_pages_only):
-        parser.error("--build-only cannot publish packages, archive pages or native artifacts")
+                            or args.native_only or args.native_pages_only or args.media_only):
+        parser.error("--build-only cannot publish packages, archive pages, native artifacts or media")
     publish(args)
 
 
