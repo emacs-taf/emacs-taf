@@ -539,7 +539,17 @@ as Telega's own attachment commands; the draft still becomes the caption."
       (etaf-telega-test--keys "C-c C-k")
       (etaf-telega-test--keys "i C-c C-e")
       (should (string-search "👍" (etaf-telega-test--text)))
-      (etaf-telega-test--keys "RET")
+      ;; Clicking the first popover item via mouse-1 inserts that exact item (not the last one).
+      (save-excursion
+        (goto-char (point-min))
+        (should (search-forward "👍" nil t))
+        (goto-char (match-beginning 0))
+        (let* ((pos (point))
+               (km (get-text-property pos 'keymap))
+               (cmd (and (keymapp km) (lookup-key km [mouse-1])))
+               (last-input-event (list 'mouse-1 (list (selected-window) pos '(0 . 0) 0))))
+          (should (functionp cmd))
+          (call-interactively cmd)))
       (should (string-search "👍" (etaf-telega-test--info :draft)))
       (etaf-telega-test--keys "C-c C-k")
       (etaf-telega-open-stickers "")

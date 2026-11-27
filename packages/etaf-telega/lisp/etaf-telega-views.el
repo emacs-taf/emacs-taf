@@ -261,18 +261,19 @@ Each chip clears or toggles its option."
           (cl-loop for item in (plist-get popover :items)
                    for i from 0
                    collect
-                   (etaf-node
-                    'flex (list :flex-direction 'row :align-items 'center
-                                :column-gap '(ch 1) :width 'stretch
-                                :background-color (when (= i index)
-                                                    (etaf-telega-color :selected))
-                                :role 'button :tab-index 0
-                                :aria-label (plist-get item :label)
-                                :hover-style
-                                (list :background-color (etaf-telega-color :selected))
-                                :on-press (lambda ()
-                                            (etaf-telega--popover-choose item)))
-                    (list (etaf-node 'text nil (list (plist-get item :label))))))))))))
+                   (let ((entry item))
+                     (etaf-node
+                      'flex (list :flex-direction 'row :align-items 'center
+                                  :column-gap '(ch 1) :width 'stretch
+                                  :background-color (when (= i index)
+                                                      (etaf-telega-color :selected))
+                                  :role 'button :tab-index 0
+                                  :aria-label (plist-get entry :label)
+                                  :hover-style
+                                  (list :background-color (etaf-telega-color :selected))
+                                  :on-press (lambda ()
+                                              (etaf-telega--popover-choose entry)))
+                      (list (etaf-node 'text nil (list (plist-get entry :label)))))))))))))
 
 (defun etaf-telega--group-digits (count)
   "Return natural number COUNT with thousands separated by commas."
