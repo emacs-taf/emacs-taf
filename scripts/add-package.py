@@ -19,12 +19,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def change_graph():
+def change_graph(dry_run=False):
     """Return the jjosh binary; this checkout is not readable by plain jj."""
+    from shutil import which
     for name in ('jjosh', 'jj'):
-        from shutil import which
         if which(name):
             return name
+    if dry_run:
+        return 'jjosh'
     raise SystemExit('add-package: jjosh is not on PATH')
 
 
@@ -88,7 +90,7 @@ def main():
     if target.exists():
         raise SystemExit(f'add-package: {target} already exists')
 
-    binary = change_graph()
+    binary = change_graph(dry_run=args.dry_run)
     require_clean(binary, args.dry_run)
 
     bookmark = f'{args.branch}#{args.name}@origin'

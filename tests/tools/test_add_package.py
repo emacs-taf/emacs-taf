@@ -77,6 +77,16 @@ class RegistryTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('register etaf-probe-ext in workspace.json as extension', result.stdout)
 
+    def test_dry_run_plans_without_jjosh_on_path(self):
+        result = subprocess.run(
+            [sys.executable, str(ROOT / 'scripts/add-package.py'),
+             'etaf-probe-nojj', '--url', 'https://example.invalid/etaf-probe-nojj.git',
+             '--dry-run'],
+            capture_output=True, text=True, timeout=60, cwd=ROOT,
+            env={'PATH': ''})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('would run: jjosh project add etaf-probe-nojj', result.stdout)
+
 
 if __name__ == '__main__':
     unittest.main()
