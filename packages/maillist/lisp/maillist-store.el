@@ -795,8 +795,8 @@ was marked read so later syncs can detect newly arrived replies."
   "Cache MESSAGES as thread ID in STORE, replacing stale rows in one transaction.
 An empty MESSAGES list writes nothing, so a failed fetch never replaces a
 cached body with nothing."
-  (when-let* ((controller (and store (maillist-store-message-controller store)))
-              (_ (consp messages)))
+  (when-let* ((controller (and store (consp messages)
+                               (maillist-store-message-controller store))))
     (let* ((maillist-store-file (maillist--store-file store))
            (new-keys (mapcar (lambda (m) (maillist--row-key id (plist-get m :id)))
                              messages))

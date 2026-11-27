@@ -789,10 +789,10 @@ Return the new boolean state (non-nil means quotes are collapsed)."
       (when (eq (etaf-value (plist-get session :scope)) 'starred)
         (plist-put session :sticky-row id))
       (maillist--replace-row session id (list :starred starred) t)
-      (when-let* ((open (etaf-value (plist-get session :open)))
-                  (_ (equal (plist-get open :id) id)))
-        (etaf-set-value (plist-get session :open)
-                        (plist-put (copy-sequence open) :starred starred)))
+      (when-let* ((open (etaf-value (plist-get session :open))))
+        (when (equal (plist-get open :id) id)
+          (etaf-set-value (plist-get session :open)
+                          (plist-put (copy-sequence open) :starred starred))))
       (maillist--persist-mark session id)
       (maillist--apply-view session)
       starred)))
@@ -1120,16 +1120,17 @@ ON-DONE with non-nil on success without touching the open reader."
            (plist-put session :user-loading nil)))
        (cond
         (on-done
-         (if-let* ((_ (maillist--alive-p session))
-                   (thread (plist-get result :ok))
-                   (messages (plist-get thread :messages))
-                   (_ (maillist--thread-matches-subject-p messages subject id)))
-             (progn
-               (puthash id (float-time) (plist-get session :thread-fetched-at))
-               (maillist--cache-thread session id messages)
-               (maillist--update-row-from-thread session id thread)
-               (funcall on-done t))
-           (funcall on-done nil)))
+         (let* ((thread (and (maillist--alive-p session)
+                             (plist-get result :ok)))
+                (messages (plist-get thread :messages)))
+           (if (and messages
+                    (maillist--thread-matches-subject-p messages subject id))
+               (progn
+                 (puthash id (float-time) (plist-get session :thread-fetched-at))
+                 (maillist--cache-thread session id messages)
+                 (maillist--update-row-from-thread session id thread)
+                 (funcall on-done t))
+             (funcall on-done nil))))
         ((maillist--current-p session token)
          (if-let* ((error (plist-get result :error)))
              (maillist--load-newest-fallback session row token error)
@@ -1193,18 +1194,20 @@ transferred.  Falls back to HTTP when NNTP has no overview for ROW or fails."
                  (plist-put session :user-loading nil)))
              (cond
               (on-done
-               (if-let* ((_ (maillist--alive-p session))
-                         (fetched (plist-get res :ok))
-                         (merged (maillist--merge-messages cached fetched)))
-                   (progn
-                     (puthash id (float-time) (plist-get session :thread-fetched-at))
-                     (maillist--cache-thread session id merged)
-                     (maillist--update-row-from-thread
-                      session id
-                      (list :messages merged
-                            :participants (maillist--unique-participants merged)))
-                     (funcall on-done t))
-                 (funcall on-done nil)))
+               (let* ((fetched (and (maillist--alive-p session)
+                                    (plist-get res :ok)))
+                      (merged (and fetched
+                                   (maillist--merge-messages cached fetched))))
+                 (if merged
+                     (progn
+                       (puthash id (float-time) (plist-get session :thread-fetched-at))
+                       (maillist--cache-thread session id merged)
+                       (maillist--update-row-from-thread
+                        session id
+                        (list :messages merged
+                              :participants (maillist--unique-participants merged)))
+                       (funcall on-done t))
+                   (funcall on-done nil))))
               ((maillist--current-p session token)
                (let ((fetched (plist-get res :ok)))
                  (if (and (null (plist-get res :error)) fetched)
