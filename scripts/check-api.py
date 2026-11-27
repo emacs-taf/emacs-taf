@@ -114,6 +114,139 @@ def struct_symbols(source):
     return result
 
 
+def _sexp_tokens(source):
+    """Yield Elisp structural tokens (parens, strings, atoms) without comments."""
+    i, n = 0, len(source)
+    while i < n:
+        c = source[i]
+        if c in ' \t\r\n':
+            i += 1
+        elif c == ';':
+            end = source.find('\n', i)
+            i = n if end < 0 else end + 1
+        elif c == '"':
+            start = i
+            i += 1
+            while i < n:
+                if source[i] == '\\':
+                    i += 2
+                elif source[i] == '"':
+                    i += 1
+                    break
+                else:
+                    i += 1
+            yield ('str', source[start:i])
+        elif c == '?' and (i == 0 or source[i - 1] in ' \t\r\n([\'`,'):
+            start = i
+            i += 2
+            if i <= n and source[i - 1] == '\\':
+                if i < n and source[i] in 'xuU':
+                    while i < n and source[i] not in ' \t\r\n()[]\'"`;':
+                        i += 1
+                else:
+                    i += 1
+            yield ('atom', source[start:i])
+        elif c in '()':
+            yield (c, c)
+            i += 1
+        elif c in "[]'`,@#":
+            yield ('punct', c)
+            i += 1
+        else:
+            start = i
+            while i < n and source[i] not in ' \t\r\n()[]\'`,;"':
+                i += 1
+            if i == start:
+                i += 1
+            else:
+                yield ('atom', source[start:i])
+
+
+def interactive_definitions(source):
+    """Return sorted list of (KIND, NAME) for top-level interactive commands/modes."""
+    toks = list(_sexp_tokens(source))
+    i, n = 0, len(toks)
+    results = []
+
+    def skip_form(idx):
+        if idx >= n:
+            return n
+        k, _ = toks[idx]
+        if k == 'punct':
+            return skip_form(idx + 1)
+        if k == '(':
+            depth = 1
+            idx += 1
+            while idx < n and depth > 0:
+                if toks[idx][0] == '(':
+                    depth += 1
+                elif toks[idx][0] == ')':
+                    depth -= 1
+                idx += 1
+            return idx
+        return idx + 1
+
+    while i < n:
+        if toks[i][0] == '(':
+            form_end = skip_form(i)
+            if i + 2 < form_end and toks[i + 1][0] == 'atom' and toks[i + 2][0] == 'atom':
+                head = toks[i + 1][1]
+                name = toks[i + 2][1]
+                if head in ('defun', 'cl-defun'):
+                    # Skip arglist, optional docstring, and optional (declare ...) forms.
+                    pos = skip_form(i + 3)
+                    while pos < form_end - 1:
+                        if toks[pos][0] == 'str':
+                            pos += 1
+                        elif (toks[pos][0] == '(' and pos + 1 < form_end - 1
+                              and toks[pos + 1] == ('atom', 'declare')):
+                            pos = skip_form(pos)
+                        else:
+                            break
+                    if (pos + 1 < form_end - 1 and toks[pos][0] == '('
+                            and toks[pos + 1] == ('atom', 'interactive')):
+                        results.append((head, name))
+                elif head in ('define-derived-mode', 'define-minor-mode',
+                              'define-globalized-minor-mode', 'define-generic-mode'):
+                    # Interactive unless top-level keyword pair `:interactive nil' is present.
+                    non_interactive = False
+                    pos = i + 3
+                    while pos < form_end - 1:
+                        if toks[pos] == ('atom', ':interactive'):
+                            if pos + 1 < form_end - 1 and toks[pos + 1] == ('atom', 'nil'):
+                                non_interactive = True
+                                break
+                            pos += 2
+                        else:
+                            pos = skip_form(pos)
+                    if not non_interactive:
+                        results.append((head, name))
+            i = form_end
+        else:
+            i += 1
+    return results
+
+
+def check_interactive_leaks(files, api_records, entry_name, *, check_undeclared=True):
+    """Return errors for private (`--') or undeclared interactive commands/modes."""
+    errors = []
+    declared_functions = {sym for sym, kinds in api_records.items() if 'function' in kinds}
+    for path in files:
+        for kind, name in interactive_definitions(path.read_text()):
+            if '--' in name:
+                errors.append(
+                    f'{path}: private interactive {kind} {name} leaks into M-x '
+                    f'(make it non-interactive / pass :interactive nil, and wrap keymap '
+                    f'bindings in anonymous lambdas or uninterned make-symbol commands)'
+                )
+            elif check_undeclared and name not in declared_functions:
+                errors.append(
+                    f'{path}: undeclared interactive {kind} {name} leaks into M-x '
+                    f'(either declare it as Function in {entry_name} Commentary or make it non-interactive)'
+                )
+    return errors
+
+
 def package(root):
     entries = list(root.glob('*.el'))
     if len(entries) != 1: raise ValueError(f'{root}: expected one root entry')
@@ -125,6 +258,8 @@ def package(root):
     diagnostic_files = [p for d in ('scripts', 'benchmarks', 'examples')
                         for p in (root/d).rglob('*.el')
                         if not any(p.is_relative_to(example) for example in example_roots)]
+    example_files = [p for p in (root/'examples').rglob('*.el')
+                     if not any(p.is_relative_to(example) for example in example_roots)]
     defined = set(); features = set()
     for p in files + diagnostic_files:
         text = p.read_text()
@@ -135,6 +270,8 @@ def package(root):
         defined.update(struct_symbols(text))
         features.update(re.findall(r"\(provide\s+'([^\s()]+)", text))
     api, errors = declarations(entry)
+    errors.extend(check_interactive_leaks(files, api, entry.name, check_undeclared=True))
+    errors.extend(check_interactive_leaks(example_files, api, entry.name, check_undeclared=False))
     return {'root':root, 'entry':entry, 'files':files, 'defined':defined, 'features':features,
             'api':api, 'errors':errors, 'examples':examples}
 
@@ -277,6 +414,37 @@ def main():
                 pending.append(dependency)
         selected = {name}
     errors = check(packages, selected, registry)
+    if args.workspace:
+        # Also audit every package directory under workspace (including apps not
+        # in api-workspace.json) plus root etaf-install.el for M-x leaks.
+        for pkg_dir in sorted(workspace.iterdir()):
+            if not pkg_dir.is_dir() or pkg_dir.name.startswith('.') or pkg_dir.name in packages:
+                continue
+            entries = list(pkg_dir.glob('*.el'))
+            if len(entries) != 1:
+                continue
+            entry = entries[0]
+            pkg_api, pkg_errs = declarations(entry)
+            errors.extend(pkg_errs)
+            pkg_files = [entry] + sorted((pkg_dir / 'lisp').glob('*.el'))
+            ex_roots = [p for p in (pkg_dir / 'examples').glob('*')
+                        if p.is_dir() and (p / (p.name + '.el')).is_file()]
+            ex_files = [p for p in (pkg_dir / 'examples').rglob('*.el')
+                        if not any(p.is_relative_to(r) for r in ex_roots)]
+            errors.extend(check_interactive_leaks(pkg_files, pkg_api, entry.name, check_undeclared=True))
+            errors.extend(check_interactive_leaks(ex_files, pkg_api, entry.name, check_undeclared=False))
+            for ex_root in ex_roots:
+                ex_entry = ex_root / (ex_root.name + '.el')
+                ex_api, ex_errs = declarations(ex_entry)
+                errors.extend(ex_errs)
+                ex_pkg_files = [ex_entry] + sorted((ex_root / 'lisp').glob('*.el'))
+                errors.extend(check_interactive_leaks(ex_pkg_files, ex_api, ex_entry.name, check_undeclared=True))
+        installer = workspace.parent / 'etaf-install.el'
+        if installer.is_file():
+            inst_api, inst_errors = declarations(installer)
+            errors.extend(inst_errors)
+            errors.extend(check_interactive_leaks([installer], inst_api, installer.name, check_undeclared=True))
+    errors = sorted(set(errors))
     if errors:
         print('\n'.join(errors), file=sys.stderr)
         return 1

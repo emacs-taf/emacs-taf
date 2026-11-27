@@ -197,3 +197,59 @@ class DeclarationCommandTests(unittest.TestCase):
                 result = run(source.replace(removed, ''))
                 self.assertNotEqual(0, result.returncode)
                 self.assertIn('unavailable after loading', result.stdout + result.stderr)
+
+    @unittest.skipUnless(shutil.which('emacs'), 'batch Emacs is unavailable')
+    def test_private_and_undeclared_interactive_commands_are_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            entry = Path(directory)/'sample.el'
+            base = (";;; Commentary:\n"
+                    ";; Function: sample-open ()\n;; Open sample.\n"
+                    ";;; Code:\n"
+                    "(defun sample-open () (interactive) t)\n")
+            def run_el(extra):
+                entry.write_text(base + extra + "(provide 'sample)\n")
+                return subprocess.run(
+                    ['emacs', '-Q', '--batch', '-l', str(ROOT/'scripts/check-api.el')],
+                    cwd=directory, capture_output=True, text=True)
+            def run_py(extra):
+                entry.write_text(base + extra + "(provide 'sample)\n")
+                return subprocess.run(
+                    ['python3', str(ROOT/'scripts/check-api.py'), '--root', directory],
+                    capture_output=True, text=True)
+            clean_extra = (
+                "(defun sample--step () t)\n"
+                "(define-derived-mode sample--mode special-mode \"S\" \"Doc.\" :interactive nil)\n"
+                "(defconst sample--step-cmd\n"
+                "  (let ((s (make-symbol \"sample--step\")))\n"
+                "    (fset s (lambda () (interactive) (sample--step))) s))\n"
+            )
+            r_el = run_el(clean_extra)
+            self.assertEqual(0, r_el.returncode, r_el.stdout + r_el.stderr)
+            r_py = run_py(clean_extra)
+            self.assertEqual(0, r_py.returncode, r_py.stdout + r_py.stderr)
+
+            # Private `--' interactive defun fails both check-api.el and check-api.py
+            priv_defun = "(defun sample--leak () (interactive) t)\n"
+            self.assertNotEqual(0, run_el(priv_defun).returncode)
+            self.assertIn('Private interactive command(s) leak into M-x: sample--leak',
+                          run_el(priv_defun).stdout + run_el(priv_defun).stderr)
+            self.assertNotEqual(0, run_py(priv_defun).returncode)
+            self.assertIn('private interactive defun sample--leak leaks into M-x',
+                          run_py(priv_defun).stderr)
+
+            # Private `--' mode without :interactive nil fails both gates
+            priv_mode = "(define-derived-mode sample--mode special-mode \"S\" \"Doc.\")\n"
+            self.assertNotEqual(0, run_el(priv_mode).returncode)
+            self.assertIn('sample--mode', run_el(priv_mode).stdout + run_el(priv_mode).stderr)
+            self.assertNotEqual(0, run_py(priv_mode).returncode)
+            self.assertIn('private interactive define-derived-mode sample--mode',
+                          run_py(priv_mode).stderr)
+
+            # Undeclared single-dash interactive command fails both gates
+            undec = "(defun sample-secret-cmd () (interactive) t)\n"
+            self.assertNotEqual(0, run_el(undec).returncode)
+            self.assertIn('Undeclared interactive command(s) leak into M-x: sample-secret-cmd',
+                          run_el(undec).stdout + run_el(undec).stderr)
+            self.assertNotEqual(0, run_py(undec).returncode)
+            self.assertIn('undeclared interactive defun sample-secret-cmd',
+                          run_py(undec).stderr)

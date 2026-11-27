@@ -331,11 +331,22 @@ def check(root, files=None, notices=None):
         if makefile.exists() and not re.search(r'^check\s*:[^\n]*\bapi-check\b', makefile.read_text(encoding='utf-8'), re.M):
             fail('Makefile', 'check must include fresh entry API validation')
         api_tool = root / 'scripts/check-api.py'
+        if not api_tool.exists():
+            api_tool = Path(__file__).resolve().with_name('check-api.py')
         if api_tool.exists() and len(root_lisp) == 1:
             spec = importlib.util.spec_from_file_location('api_policy', api_tool)
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
-            errors.extend(module.declarations(root / root_lisp[0])[1])
+            entry_path = root / root_lisp[0]
+            api_records, decl_errors = module.declarations(entry_path)
+            errors.extend(decl_errors)
+            pkg_files = [entry_path] + sorted((root / 'lisp').glob('*.el'))
+            ex_roots = [p for p in (root / 'examples').glob('*')
+                        if p.is_dir() and (p / (p.name + '.el')).is_file()]
+            ex_files = [p for p in (root / 'examples').rglob('*.el')
+                        if not any(p.is_relative_to(r) for r in ex_roots)]
+            errors.extend(module.check_interactive_leaks(pkg_files, api_records, entry_path.name, check_undeclared=True))
+            errors.extend(module.check_interactive_leaks(ex_files, api_records, entry_path.name, check_undeclared=False))
         manifest_path = root / 'tests/acceptance.json'
         if not manifest_path.is_file():
             fail('tests/acceptance.json', 'missing public acceptance inventory')
