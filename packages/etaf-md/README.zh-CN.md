@@ -6,19 +6,19 @@ ETAF Markdown Preview 把本地 Markdown 文档渲染为 Emacs 原生的现代�
 
 单窗全宽阅读视图（`M-x etaf-md-open`），呈现标题层级、提示块、完整网格表格、高亮代码块以及原生渲染的 Mermaid 图表与 MathJax 公式：
 
-![单窗全宽阅读视图](media/etaf-md-preview-wide.png)
+![单窗全宽阅读视图](https://etaf.top/media/etaf-md/etaf-md-preview-wide.webp)
 
 双栏实时对照编辑（`M-x etaf-md-preview` 或预览内按 `v`），支持 O(Δ) 块级增量重绘、按比例同步滚动跟随与源码反向定位：
 
-![双栏实时对照预览](media/etaf-md-live-split.png)
+![双栏实时对照预览](https://etaf.top/media/etaf-md/etaf-md-live-split.webp)
 
 丰富的 `:::name {attrs}` 文档容器与 Emacs 原生活文档组件（`stats`、`timeline`、`tabs`、`diff`、`code-ref`、`symbol`、`git-log` 等）：
 
-![容器与活文档组件](media/etaf-md-widgets.png)
+![容器与活文档组件](https://etaf.top/media/etaf-md/etaf-md-widgets.webp)
 
 支持 `dark`、`light`、`sepia` 三套独立配色及跟随 Emacs 主题的 `auto` 模式（按 `t` 轮换），表格、容器、图表与公式在各套配色下均清晰可读：
 
-![亮色主题阅读视图](media/etaf-md-light.png)
+![亮色主题阅读视图](https://etaf.top/media/etaf-md/etaf-md-light.webp)
 
 ## 核心能力
 

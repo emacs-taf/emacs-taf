@@ -11,9 +11,9 @@ computer's search; this application owns the board, both palettes, selection,
 the move list, the opponent settings and the launcher. It never re-implements a
 move.
 
-![The board in the paper light theme](media/screenshot-light.png)
+![The board in the paper light theme](https://etaf.top/media/etaf-xiangqi/screenshot-light.webp)
 
-![The same match in the night dark theme](media/screenshot-dark.png)
+![The same match in the night dark theme](https://etaf.top/media/etaf-xiangqi/screenshot-dark.webp)
 
 ## Capabilities
 

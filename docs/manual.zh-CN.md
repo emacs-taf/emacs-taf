@@ -121,7 +121,7 @@ jjosh git push --remote origin --bookmark main
 | 层次 | 例子 | 落点与发布方式 | 是否进 `System CLI` 列 |
 | --- | --- | --- | --- |
 | L0 标准 ELPA 依赖 | `etaf`、`etaf-db`、`telega`、`posframe` | 写进 `Package-Requires`；跨源依赖同时写进 `release-dependencies.json` 的 `external` 与 `etaf-install--targets` 能力标签（`gnu`/`nongnu`/`melpa`） | 否（进 `Depends on`） |
-| L1 随包源码组件、离线文档与运行资源 | `backends/` 运行时脚本（`weread`、`netease`）、`docs/` 扁平纯 Markdown 手册、`dictionaries/`、`book/`、引擎安装脚本、以及公开命令调用的纯代码 `examples/` | 严格按统一目录归类放入应用仓并在 `release-dependencies.json` 的 `resources` 声明（`scripts/add-package.py` 与 `scripts/check-repository.py` 的 `suggest_release_resources` 可自动给出推荐清单），随 `.tar` 原子发布、解包即用且 `README` → `docs/` 离线零死链；宣传截图与演示视频统一放 `media/`（绝不放 `examples/` 或 `docs/`）；`scripts/check-repository.py` 硬门禁拒绝把 `tests/`、`benchmarks/`、`scripts/`（纯开发脚本）、`media/`、`Makefile`、`design/`、`site/`、含宣传媒体的 `examples/`、`native/vendor/` 或平台二进制塞进 `.tar` | 否 |
+| L1 随包源码组件、离线文档与运行资源 | 纯源码运行时后端（`backends/`：`weread`、`netease`）、`docs/` 扁平纯 Markdown 手册、`dictionaries/`、`book/`、引擎安装脚本、以及公开命令调用的纯代码 `examples/` | 严格按统一目录归类放入应用仓并在 `release-dependencies.json` 的 `resources` 声明（`scripts/add-package.py` 与 `scripts/check-repository.py` 的 `suggest_release_resources` 可自动给出推荐清单），随 `.tar` 原子发布、解包即用且 `README` → `docs/` 离线零死链；所有展示截图、官网图片与演示视频统一用 `scripts/media-publish.py` 托管到 `https://etaf.top/media/` 并在文档中写链接（绝不提交进 Git）；`scripts/check-repository.py` 硬门禁拒绝所有 `tests/fixtures/`（单文件 ≤ 100 KB）之外的图片/视频，也拒绝把 `tests/`、`benchmarks/`、`scripts/`、`media/`、`Makefile`、`design/`、`site/`、`native/vendor/` 或平台二进制塞进 `.tar` | 否 |
 | L2 预编译原生模块与受管引擎 | `etaf-md` 与 `etaf-org` 共用的 QuickJS（`etaf-md-typeset-native`）、`etaf` `libmpv`、`ekp` C 模块；Godot / OpenSpiel | C 模块由 `scripts/native-release.py` 或 CI（`.github/workflows/native-modules.yml`）按 `(OS, Arch)` 预编译并发布到 `https://etaf.top/native/`，`.tar` 内只随 `resources` 携带 `native/manifest.json`，用户 `M-x etaf-install` 自动下载校验并热加载至 `~/.cache/emacs-taf/native/`；游戏引擎在 `etaf-install--system-tools` 的 `:managed-engines` 登记并通过 `M-x etaf-gamekit-install-*` 安装 | 否（进 `Runtime`） |
 | L3 / L4 外部系统 CLI | `ffmpeg`、`mpv`、`node`、`python3`、`rsvg-convert`、`telega-server`、`qrencode`、`git`、`rg`、`dot`、`plantuml`、`curl` | 不打包、不代跑 `sudo`/`brew`/`apt`；登记在 `packages/etaf-install/lisp/etaf-install-catalog.el` 的 `etaf-install--cli-catalog` 与 `etaf-install--system-tools`（区分 `:required` 与 `:optional`），并实现 `<包>-doctor`；交互安装缺必需项自动弹出 `*ETAF Installation*` 给合并安装命令 | **是（仅此一类）** |
 
@@ -141,6 +141,17 @@ python3 scripts/native-release.py verify --all --stage /tmp/native-stage
 python3 packages/etaf-manual/site/scripts/publish.py --native-only /tmp/native-stage
 # 仅刷新已托管清单的模块/版本元数据并重新生成 /native/index.html（不重复上传二进制）：
 python3 packages/etaf-manual/site/scripts/publish.py --native-pages-only
+```
+
+### 发布展示多媒体（`/media/`）
+
+所有 README 截图、官网配图与演示视频统一托管在 `https://etaf.top/media/`，不进 Git 仓库（Git 内仅允许 `tests/fixtures/` 存放 ≤ 100 KB 的离线单元测试输入）：
+
+```sh
+# 自动转 WebP、生成 SHA-256 清单、原子部署并回读验真：
+python3 scripts/media-publish.py publish --item etaf-md:/path/to/shot.png
+# 保留原格式（如 OpenGraph PNG 或 MP4）：
+python3 scripts/media-publish.py publish --item site:/path/to/manual.png:og/manual.png
 ```
 
 开发与发布分开，既快又不会发布旧字节：

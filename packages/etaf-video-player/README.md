@@ -14,11 +14,11 @@ one use one player.
 
 The player at a wide frame:
 
-![The player at a wide frame](media/etaf-video-player-wide.png)
+![The player at a wide frame](https://etaf.top/media/etaf-video-player/etaf-video-player-wide.webp)
 
 The same layout in the light appearance:
 
-![The player in the light appearance](media/etaf-video-player-light.png)
+![The player in the light appearance](https://etaf.top/media/etaf-video-player/etaf-video-player-light.webp)
 
 ## Capabilities
 

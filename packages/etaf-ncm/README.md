@@ -8,38 +8,38 @@ the `netease-music` backend.
 
 The player at a wide frame:
 
-![The player at a wide frame](media/etaf-ncm-wide.png)
+![The player at a wide frame](https://etaf.top/media/etaf-ncm/etaf-ncm-wide.webp)
 
 At a medium frame the sidebar becomes an icon rail and the side pane turns
 into tabs:
 
-![The player at a medium frame](media/etaf-ncm-medium.png)
+![The player at a medium frame](https://etaf.top/media/etaf-ncm/etaf-ncm-medium.webp)
 
 At a narrow frame the libraries become a chip strip and the panes stack under
 tabs:
 
-![The player at a narrow frame](media/etaf-ncm-narrow.png)
+![The player at a narrow frame](https://etaf.top/media/etaf-ncm/etaf-ncm-narrow.webp)
 
 A frame too small for that chrome becomes a card: the cover, the track, one
 pane, its switch and the transport, with one clear row between the bands.
 
-![The player as a card](media/etaf-ncm-card.png)
+![The player as a card](https://etaf.top/media/etaf-ncm/etaf-ncm-card.webp)
 
 At the smallest size the card becomes a tile that keeps only the track, the
 lyric and the transport:
 
-![The player as a tile](media/etaf-ncm-tile.png)
+![The player as a tile](https://etaf.top/media/etaf-ncm/etaf-ncm-tile.webp)
 
 `o` opens the playing page: the whole cover as one picture with a sharp copy
 over it, and the track, the centred lyric, the spectrum and the transport.  A
 wide window splits it in half; `m` cycles the designs:
 
-![The playing page, split](media/etaf-ncm-now-split.png)
+![The playing page, split](https://etaf.top/media/etaf-ncm/etaf-ncm-now-split.webp)
 
 `m` switches to the poster: the picture across the whole page with the text on
 a block floating over it.
 
-![The playing page, poster](media/etaf-ncm-now-poster.png)
+![The playing page, poster](https://etaf.top/media/etaf-ncm/etaf-ncm-now-poster.webp)
 
 ## Capabilities
 

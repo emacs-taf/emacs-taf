@@ -1,7 +1,8 @@
 // Content of the landing page in both languages.  src/components/Landing.astro
 // renders it; src/pages/index.astro and src/pages/zh-cn/index.astro choose
-// the language.  Screenshots live in public/shots/ and share one capture
-// frame (3100x1980), so the page can give every tile the same ratio.
+// the language.  Screenshots are hosted on https://etaf.top/media/site/shots/
+// (published via scripts/media-publish.py) and share one capture frame
+// (3100x1980), so the page can give every tile the same ratio.
 
 const github = 'https://github.com/emacs-taf';
 const repo = (name) => `${github}/${name}`;
@@ -68,7 +69,7 @@ const shots = (list, zh) => list.map((row) => {
   width,
   height,
   href: repo(name),
-  image: `/shots/${name}.webp`,
+  image: `https://etaf.top/media/site/shots/${name}.webp`,
   caption: zh ? zhCaption : en,
   alt: zh ? zhAlt : enAlt,
   };

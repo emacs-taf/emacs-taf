@@ -187,7 +187,7 @@ Flavored Markdown says so itself; a session's `:flavor' argument still wins."
 With a decoder the press must not leave the card for an external player, and
 the repaint swaps the poster for the native canvas."
   (skip-unless (executable-find "ffmpeg"))
-  (let* ((video (expand-file-name "../media/demo.mp4"
+  (let* ((video (expand-file-name "../tests/fixtures/clip.mp4"
                                   etaf-md-tests--directory))
          (session (etaf-md-create :text (format "![Movie](%s)" video)))
          (real (symbol-function 'call-process))
@@ -240,7 +240,7 @@ The card renders once with whatever decoder the environment provides and
 again with ffmpeg hidden; the second render must use its own poster probe
 instead of the cached playback metadata."
   (skip-unless (memq system-type '(darwin gnu/linux)))
-  (let* ((video (expand-file-name "../media/demo.mp4"
+  (let* ((video (expand-file-name "../tests/fixtures/clip.mp4"
                                   etaf-md-tests--directory))
          (session (etaf-md-create :text (format "![Movie](%s)" video)))
          (real-process (symbol-function 'call-process))

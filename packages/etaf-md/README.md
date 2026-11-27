@@ -6,19 +6,19 @@ ETAF Markdown Preview renders a local Markdown document as a modern reading view
 
 Wide single-window reading view (`M-x etaf-md-open`) with headings, callouts, full-grid tables, highlighted code blocks, and crisp native Mermaid & MathJax SVGs:
 
-![Wide reading view](media/etaf-md-preview-wide.png)
+![Wide reading view](https://etaf.top/media/etaf-md/etaf-md-preview-wide.webp)
 
 Side-by-side live editing (`M-x etaf-md-preview` or `v`) with O(Δ) block-level repainting, proportional scroll-follow and jump-to-source:
 
-![Side-by-side live preview](media/etaf-md-live-split.png)
+![Side-by-side live preview](https://etaf.top/media/etaf-md/etaf-md-live-split.webp)
 
 Documentation containers (`:::name {attrs}`) and Emacs-native living-document widgets (`stats`, `timeline`, `tabs`, `diff`, `code-ref`, `symbol`, `git-log`):
 
-![Containers and living-document widgets](media/etaf-md-widgets.png)
+![Containers and living-document widgets](https://etaf.top/media/etaf-md/etaf-md-widgets.webp)
 
 Light, dark, sepia and face-derived `auto` palettes (`t` to cycle), keeping every table, container, Mermaid diagram and formula crisp across themes:
 
-![Light theme reading view](media/etaf-md-light.png)
+![Light theme reading view](https://etaf.top/media/etaf-md/etaf-md-light.webp)
 
 ## Capabilities
 

@@ -14,7 +14,7 @@ reply routing, while preserving your Emacs theme and mode-line.
 [User Manual](docs/manual.md) ·
 [Changelog](CHANGELOG.md)
 
-![Live emacs-devel in maillist: date-grouped threads, unread/star marks, nested quotes, rectangular search bar, action toast and native mode-line](media/maillist-wide.png)
+![Live emacs-devel in maillist: date-grouped threads, unread/star marks, nested quotes, rectangular search bar, action toast and native mode-line](https://etaf.top/media/maillist/maillist-wide.webp)
 
 ## Why maillist?
 
@@ -44,7 +44,7 @@ semantic red/green highlighting, per-message focus (`[` / `]`), signature
 dimming, extracted clickable links, raw RFC 5322 viewing (`v`) and one-key
 `t.mbox.gz` copying (`m`):
 
-![Reading a live src/xdisp.c patch on emacs-bugs with unified diff highlighting and focused follow-up reply](media/maillist-diff.png)
+![Reading a live src/xdisp.c patch on emacs-bugs with unified diff highlighting and focused follow-up reply](https://etaf.top/media/maillist/maillist-diff.webp)
 
 ### Automatic Debbugs routing and RFC 5322 threading
 
@@ -53,7 +53,7 @@ targets the focused message in `message-mode`, preserves canonical
 `In-Reply-To` and ancestor-chain `References`, and inside `emacs-bugs`
 automatically addresses `<bug>@debbugs.gnu.org` instead of filing a new bug:
 
-![Replying to bug#82298 in message-mode with automatic 82298@debbugs.gnu.org routing and full References chain](media/maillist-debbugs-reply.png)
+![Replying to bug#82298 in message-mode with automatic 82298@debbugs.gnu.org routing and full References chain](https://etaf.top/media/maillist/maillist-debbugs-reply.webp)
 
 ### Side-by-side split workflow (`C-x 3`)
 
@@ -62,7 +62,7 @@ Below `maillist-narrow-width` (for example in a `C-x 3` split beside code),
 a `← 列表` (`u`) back bar and full-width search box, and refits smoothly back
 to two columns on `C-x 1`:
 
-![Coding alongside maillist in a C-x 3 split with automatic single-column narrow reader layout](media/maillist-split-narrow.png)
+![Coding alongside maillist in a C-x 3 split with automatic single-column narrow reader layout](https://etaf.top/media/maillist/maillist-split-narrow.webp)
 
 ### Live Emacs theme adaptation
 
@@ -70,7 +70,7 @@ All surfaces, borders, quote bars, diff tints and selection states are derived
 from the active Emacs theme — switching between dark and light themes (such as
 `modus-operandi`) repaints the entire interface immediately:
 
-![Live emacs-devel rendered in the modus-operandi light theme](media/maillist-light.png)
+![Live emacs-devel rendered in the modus-operandi light theme](https://etaf.top/media/maillist/maillist-light.webp)
 
 ### Searchable in-buffer keyboard help (`?`)
 
@@ -78,7 +78,7 @@ Press `?` anywhere inside `*maillist*` to open the centered, read-only
 two-column keyboard reference (with `/` live filtering across commands and
 notes) alongside `M-g` region jumps (`f` search, `t` list, `v` reader):
 
-![Centered two-column keyboard help dialog opened with ?](media/maillist-help.png)
+![Centered two-column keyboard help dialog opened with ?](https://etaf.top/media/maillist/maillist-help.webp)
 
 ## Capabilities
 

@@ -13,9 +13,9 @@ battle panel, the editor, the settings and the launcher. It is an independent
 [GameKit](https://github.com/emacs-taf/etaf-gamekit) application. All
 artwork and stages are original.
 
-![The stage select in the light palette](media/screenshot-light.png)
+![The stage select in the light palette](https://etaf.top/media/etaf-tanks/screenshot-light.webp)
 
-![A battle in the dark palette](media/screenshot-dark.png)
+![A battle in the dark palette](https://etaf.top/media/etaf-tanks/screenshot-dark.webp)
 
 ## Capabilities
 

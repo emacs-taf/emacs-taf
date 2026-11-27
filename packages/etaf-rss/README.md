@@ -16,16 +16,16 @@ interface.
 
 The reader at a wide frame:
 
-![The reader at a wide frame](media/etaf-rss-wide.png)
+![The reader at a wide frame](https://etaf.top/media/etaf-rss/etaf-rss-wide.webp)
 
 At a medium frame the subscription sidebar narrows and one content pane is
 shown at a time:
 
-![The reader at a medium frame](media/etaf-rss-medium.png)
+![The reader at a medium frame](https://etaf.top/media/etaf-rss/etaf-rss-medium.webp)
 
 At a narrow frame the scopes move into a header strip:
 
-![The reader at a narrow frame](media/etaf-rss-narrow.png)
+![The reader at a narrow frame](https://etaf.top/media/etaf-rss/etaf-rss-narrow.webp)
 
 ## Capabilities
 

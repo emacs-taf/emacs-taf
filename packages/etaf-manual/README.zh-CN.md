@@ -29,9 +29,9 @@ Emacs 29.1 或更高版本、ETAF 0.2.2 和 etaf-ui 0.1.3。门禁还会读取 e
 
 `M-x etaf-manual-open` 在独立缓冲区中打开手册，界面本身由 ETAF 构建：左侧是三级目录栏，右侧是正文，含定义条目卡片与可运行示例；顶栏显示当前位置并提供语言切换，底栏显示键位提示；外观默认跟随 Emacs 主题（随），`t` 在亮、暗之间切换；面板标题栏给出 `亮`、`随`、`暗` 三档，写的是同一格状态。每一行都保持标准行高，滚动时版面不会跳动；窗口变窄时目录栏折叠为整屏目录。
 
-![宽窗口下的阅读器：目录栏、正文与键位提示](media/etaf-manual-reader-wide.png)
+![宽窗口下的阅读器：目录栏、正文与键位提示](https://etaf.top/media/etaf-manual/etaf-manual-reader-wide.webp)
 
-![窄窗口下的阅读器：目录栏折叠为整屏目录开关](media/etaf-manual-reader-narrow.png)
+![窄窗口下的阅读器：目录栏折叠为整屏目录开关](https://etaf.top/media/etaf-manual/etaf-manual-reader-narrow.webp)
 
 - `n` / `p` 上下节，`u` 升一级，`l` / `r` 在阅读历史中前后移动。
 - `[` / `]` 切换章节，`i` 打开术语与定义条目索引，`g` 切换中英文，`t` 切换深浅色，`q` 退出。

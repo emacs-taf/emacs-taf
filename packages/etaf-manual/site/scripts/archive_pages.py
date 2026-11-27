@@ -403,14 +403,14 @@ def page(title, body, downloads="downloads.json", *, canonical, description,
 <meta property="og:title" content="{title}">
 <meta property="og:description" content="{description}">
 <meta property="og:url" content="{canonical}">
-<meta property="og:image" content="https://etaf.top/og/archive.png">
+<meta property="og:image" content="https://etaf.top/media/site/og/archive.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="ETAF package archive">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="{title}">
 <meta name="twitter:description" content="{description}">
-<meta name="twitter:image" content="https://etaf.top/og/archive.png">
+<meta name="twitter:image" content="https://etaf.top/media/site/og/archive.png">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <style>{style}</style>
 <script>{THEME_SCRIPT}</script>

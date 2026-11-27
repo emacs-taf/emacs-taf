@@ -333,7 +333,7 @@ find /srv/import -type f \( -iname '*.jpg' -o -iname '*.heic' \) -print0 \
 
 缩略图生成用的是 `ImageMagick`，一张大约 40 毫秒，三万张要二十分钟。这一段我放到后台跑，前台该干什么干什么。
 
-![相册应用的目录视图，按年月分组](../media/etaf-md-preview-media.png "相册首页，2025 年 3 月")
+![相册应用的目录视图，按年月分组](../tests/fixtures/preview-media.png "相册首页，2025 年 3 月")
 
 ## 十六、音乐库
 
@@ -676,7 +676,7 @@ HTML 块在预览里通常原样保留，不做解析。这里放一段说明，
 
 链接三种写法：行内 [示例站](https://example.com "标题文本")、引用 [同前][proxy-ref]、裸链接 https://example.com/notes/reverse-proxy 直接写。
 
-图片也可以用引用式：![机位](../media/etaf-md-preview-wide.png)。
+图片也可以用引用式：![机位](../tests/fixtures/preview-wide.png)。
 
 一个很长的行内代码：`restic -r /mnt/backup/restic forget --keep-daily 7 --keep-weekly 4 --keep-monthly 6 --prune`，它应该整体不换行或者按需要折行。
 

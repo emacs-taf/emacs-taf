@@ -2,7 +2,7 @@
 
 `etaf-org` renders native Org-mode documents as modern interactive reading views inside Emacs using [ETAF](https://github.com/emacs-taf/etaf) and [Ebox](https://github.com/emacs-taf/ebox), and extends Org through a unified node registry, style-rule engine, Org-native container syntax, workspace live views, and an O(Δ) live-editing preview shell.
 
-![ETAF Org at a wide frame](media/etaf-org-wide.png)
+![ETAF Org at a wide frame](https://etaf.top/media/etaf-org/etaf-org-wide.webp)
 
 ## Capabilities
 

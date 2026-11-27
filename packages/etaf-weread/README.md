@@ -8,17 +8,17 @@ ETAF DB.
 
 The reader at a wide frame:
 
-![The reader at a wide frame](media/etaf-weread-wide.png)
+![The reader at a wide frame](https://etaf.top/media/etaf-weread/etaf-weread-wide.webp)
 
 At a medium frame the sidebar becomes an icon rail and the side pane turns
 into tabs:
 
-![The reader at a medium frame](media/etaf-weread-medium.png)
+![The reader at a medium frame](https://etaf.top/media/etaf-weread/etaf-weread-medium.webp)
 
 At a narrow frame the sections become a chip strip and the panes stack under
 tabs:
 
-![The reader at a narrow frame](media/etaf-weread-narrow.png)
+![The reader at a narrow frame](https://etaf.top/media/etaf-weread/etaf-weread-narrow.webp)
 
 ## Capabilities
 

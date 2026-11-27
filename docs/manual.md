@@ -253,7 +253,7 @@ Classify every asset and dependency using this 4-tier table before packaging or 
 | Tier | Examples | Packaging & hosting | Shown in `System CLI` column |
 | --- | --- | --- | --- |
 | L0 Standard ELPA packages | `etaf`, `etaf-db`, `telega`, `posframe` | Declare in `Package-Requires`; list off-archive deps in `release-dependencies.json` `external` and target archive capabilities (`gnu`/`nongnu`/`melpa`) in `etaf-install--targets`; `package.el` installs and compiles them with signature checks intact | No (shown in `Depends on`) |
-| L1 Bundled source components, offline docs & runtime data | Runtime backends in `backends/` (`weread`, `netease`), flat pure-Markdown manuals in `docs/`, `dictionaries/`, `book/`, engine setup scripts, and pure-code `examples/` invoked by public commands | Place files in their designated directory and list them in `release-dependencies.json` `resources` (`scripts/add-package.py` and `check-repository.py`'s `suggest_release_resources` compute the exact list automatically) so tarballs work offline with zero broken README-to-`docs/` links; showcase screenshots and videos belong in `media/` (never `examples/` or `docs/`); `scripts/check-repository.py` hard-blocks `tests/`, `benchmarks/`, `scripts/` (dev-only), `media/`, `Makefile`, `design/`, `site/`, screenshot-bearing `examples/`, `native/vendor/` and compiled binaries from ELPA tarballs | No |
+| L1 Bundled source components, offline docs & runtime data | Runtime backends in `backends/` (`weread`, `netease`), flat pure-Markdown manuals in `docs/`, `dictionaries/`, `book/`, engine setup scripts, and pure-code `examples/` invoked by public commands | Place files in their designated directory and list them in `release-dependencies.json` `resources` (`scripts/add-package.py` and `check-repository.py`'s `suggest_release_resources` compute the exact list automatically) so tarballs work offline with zero broken README-to-`docs/` links; publish all showcase screenshots, website graphics and demo videos to `https://etaf.top/media/` via `scripts/media-publish.py` and link by URL (never commit them to Git); `scripts/check-repository.py` rejects all images and videos outside `tests/fixtures/` (capped at 100 KB for offline tests) and hard-blocks `tests/`, `benchmarks/`, `scripts/` (dev-only), `media/`, `Makefile`, `design/`, `site/`, `native/vendor/` and compiled binaries from ELPA tarballs | No |
 | L2 Prebuilt native dynamic modules & managed game engines | `etaf-md` & `etaf-org` QuickJS (`etaf-md-typeset-native`), `etaf` `libmpv`, `ekp` C module; Godot / OpenSpiel | Keep C sources under `native/` for checkout builds; prebuild per `(OS, Arch)` via `scripts/native-release.py` or `.github/workflows/native-modules.yml` and host on `https://etaf.top/native/`; ship only `native/manifest.json` in `resources` so `M-x etaf-install` downloads, SHA-256 verifies and loads binaries into `~/.cache/emacs-taf/native/`; register managed game engines under `:managed-engines` in `etaf-install--system-tools` for `M-x etaf-gamekit-install-*` | No (shown in `Runtime`) |
 | L3 / L4 External OS CLI tools | `ffmpeg`, `mpv`, `node`, `python3`, `rsvg-convert`, `telega-server`, `qrencode`, `git`, `rg`, `dot`, `plantuml`, `curl` | Never bundle and never run `sudo`/`brew`/`apt`; register tool package names in `etaf-install--cli-catalog`, declare `:required` / `:optional` per target in `etaf-install--system-tools`, and match `<package>-doctor`; missing required tools auto-open `*ETAF Installation*` with one combined copyable command | **Yes (this tier only)** |
 
@@ -277,6 +277,17 @@ python3 scripts/native-release.py verify --all --stage /tmp/native-stage
 python3 packages/etaf-manual/site/scripts/publish.py --native-only /tmp/native-stage
 # Or refresh hosted manifest metadata and regenerate /native/index.html without re-uploading binaries:
 python3 packages/etaf-manual/site/scripts/publish.py --native-pages-only
+```
+
+### Publish showcase media (`/media/`)
+
+All README screenshots, website showcase images and demo videos are hosted on `https://etaf.top/media/` instead of being committed to Git (Git allows only compact ≤ 100 KB offline test inputs inside `tests/fixtures/`):
+
+```sh
+# Convert PNG/JPEG to WebP, write SHA-256 manifest, deploy atomically and verify over HTTPS:
+python3 scripts/media-publish.py publish --item etaf-md:/path/to/shot.png
+# Preserve format when required (e.g. OpenGraph PNG or MP4):
+python3 scripts/media-publish.py publish --item site:/path/to/manual.png:og/manual.png
 ```
 
 Two lanes keep development fast without risking a stale archive:

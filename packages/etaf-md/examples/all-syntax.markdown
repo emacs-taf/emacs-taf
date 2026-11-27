@@ -106,7 +106,7 @@ Setext 二级标题
 
 本地图片渲染成卡片，按 `RET` 用系统程序打开：
 
-![示例图片](../media/etaf-md-preview-wide.png "预览器截图")
+![示例图片](../tests/fixtures/preview-wide.png "预览器截图")
 
 远程图片画出占位卡片，激活后在浏览器里打开：
 
@@ -118,7 +118,7 @@ Setext 二级标题
 
 引用式图片：![引用式图片][shot]
 
-[shot]: ../media/etaf-md-preview-media.png "引用式定义"
+[shot]: ../tests/fixtures/preview-media.png "引用式定义"
 
 ## 列表
 
@@ -920,11 +920,11 @@ text-align end：盒子里的字靠右。
 
 :::columns {columns=2}
 :::col
-:::image-card {src="../media/etaf-md-preview-wide.png" title="网格里的第一张" width="38"}
+:::image-card {src="../tests/fixtures/preview-wide.png" title="网格里的第一张" width="38"}
 :::
 :::
 :::col
-:::image-card {src="../media/etaf-md-preview-media.png" title="网格里的第二张" width="38"}
+:::image-card {src="../tests/fixtures/preview-media.png" title="网格里的第二张" width="38"}
 :::
 :::
 :::
@@ -2107,16 +2107,16 @@ npm ci
 
 **例子**
 
-:::image-card {src="../media/etaf-md-preview-wide.png" title="完整的预览" description="图片在上，标题和说明在下；整张卡片都能点。" href="https://etaf.top/"}
+:::image-card {src="../tests/fixtures/preview-wide.png" title="完整的预览" description="图片在上，标题和说明在下；整张卡片都能点。" href="https://etaf.top/"}
 :::
 
-:::image-card {src="../media/etaf-md-preview-media.png" title="只有标题" width="40"}
+:::image-card {src="../tests/fixtures/preview-media.png" title="只有标题" width="40"}
 :::
 
 :::image-card {src="../tests/fixtures/wide-400x100.png" width="52"}
 :::
 
-:::image-card {src="../media/etaf-md-preview-media.png" title="媒体页" description="点击打开 ETAF" href="https://etaf.top/" width=30}
+:::image-card {src="../tests/fixtures/preview-media.png" title="媒体页" description="点击打开 ETAF" href="https://etaf.top/" width=30}
 :::
 
 
@@ -2203,11 +2203,11 @@ npm ci
 
 :::swiper
 @slide {title="宽图"}
-![预览](../media/etaf-md-preview-wide.png)
+![预览](../tests/fixtures/preview-wide.png)
 @slide {title="第二张"}
 第二页是文字，轮播不只能放图片。
 @slide {title="第三张"}
-![另一张](../media/etaf-md-preview-media.png)
+![另一张](../tests/fixtures/preview-media.png)
 :::
 
 :::swiper

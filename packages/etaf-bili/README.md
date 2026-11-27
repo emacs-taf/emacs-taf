@@ -2,9 +2,9 @@
 
 Browse and watch Bilibili inside Emacs: a responsive cover-card gallery paired with a dedicated Watch View supporting WBI-signed DASH streams, multi-part episodes, CC/AI subtitles with searchable transcript jump, danmaku, hot comments with timestamp jumps, local and cloud resume, background audio-only mode, Picture-in-Picture and external `mpv` handoff. Built with [ETAF](https://github.com/emacs-taf/etaf), `etaf-ui` and `etaf-db`.
 
-![Cover gallery in the dark theme](media/etaf-bili-wide.png)
+![Cover gallery in the dark theme](https://etaf.top/media/etaf-bili/etaf-bili-wide.webp)
 
-[Light theme](media/etaf-bili-light.png)
+[Light theme](https://etaf.top/media/etaf-bili/etaf-bili-light.webp)
 
 ## What it does
 

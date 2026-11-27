@@ -8,7 +8,7 @@ presentation shell.
 
 The demo desktop at a wide frame:
 
-![The demo desktop at a wide frame](media/etaf-desktop-wide.png)
+![The demo desktop at a wide frame](https://etaf.top/media/etaf-desktop/etaf-desktop-wide.webp)
 
 ## Minimal example
 

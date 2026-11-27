@@ -259,7 +259,7 @@ flowchart LR
 
 #+CAPTION: 本地图片（按 RET 或点击开启 etaf-media-viewer 页内灯箱）
 #+ATTR_ORG: :width 460 :alt Wi-Fi 延迟测量图
-[[file:../media/wifi-latency.png]]
+[[file:../tests/fixtures/wifi-latency.png]]
 
 #+INCLUDE: "etaf-org-demo.el" src elisp :lines "1-12"
 
@@ -568,7 +568,7 @@ make -C packages/etaf-org check
 #+end_col
 #+end_columns
 
-#+begin_image-card :src "../media/wifi-latency.png" :title "Wi-Fi 延迟图卡" :description "image-card 支持图文混排与点击页内灯箱查看原图"
+#+begin_image-card :src "../tests/fixtures/wifi-latency.png" :title "Wi-Fi 延迟图卡" :description "image-card 支持图文混排与点击页内灯箱查看原图"
 #+end_image-card
 
 #+begin_qrcode :text "https://etaf.top" :title "扫码访问 etaf.top"

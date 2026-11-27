@@ -73,10 +73,15 @@ import sys
 
 workspace, target = (Path(argument) for argument in sys.argv[1:3])
 selection = json.loads((workspace / "release-dependencies.json").read_text())["packages"]
-sources = {name: workspace / name for name in selection}
-# The installer is not one of the registry's targets: the release builds it from
-# the workspace root, and a trial needs it to reach the manager.
-sources["etaf-install"] = workspace
+packages_root = workspace / "packages" if (workspace / "packages").is_dir() else workspace
+sources = {name: packages_root / name for name in selection}
+# The installer lives under packages/etaf-install (or the workspace root in
+# older checkouts); a trial needs it to reach the manager.
+sources["etaf-install"] = (
+    (packages_root / "etaf-install")
+    if (packages_root / "etaf-install").is_dir()
+    else workspace
+)
 command = [sys.executable, str(workspace / "scripts/package_archive.py"),
            "build", "--directory", str(target)]
 for name, source in sources.items():
