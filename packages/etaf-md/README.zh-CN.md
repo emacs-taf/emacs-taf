@@ -34,7 +34,7 @@ ETAF Markdown Preview 把本地 Markdown 文档渲染为 Emacs 原生的现代�
 | 依赖 | 用途 | 检查方式 |
 | --- | --- | --- |
 | Emacs 29.1 或更新版本 | 运行 ETAF 与 Ebox | `emacs --version` |
-| ETAF（`>= 0.3.6`）、ETAF UI（`>= 0.3.4`）、Ebox 与 ECSS | 渲染与共享组件目录 | 通过 `etaf-install` 自动安装 |
+| ETAF（`>= 0.3.11`）、ETAF UI（`>= 0.3.13`）、Ebox 与 ECSS | 渲染与共享组件目录 | 通过 `etaf-install` 自动安装 |
 | 预编译原生模块（可选，推荐） | 无需本地编译器，通过 `M-x etaf-install-native` 一键下载并校验至 `~/.cache/emacs-taf/native/`，启用零浏览器高速 Mermaid 与公式渲染 | `M-x etaf-install-doctor` |
 | ffmpeg（可选） | 视频就地播放与终端图片转换 | `ffmpeg -version` |
 | qrencode（可选） | 渲染 `qrcode` 二维码块 | `qrencode -V` |

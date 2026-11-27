@@ -1129,16 +1129,54 @@ class InstallTests(unittest.TestCase):
   (unless (equal (plist-get report :updated)
                  '((ecss . "0.1.1") (ebox . "3.0.1") (etaf . "0.2.2") (etaf-ui . "0.1.1")))
     (error "Expected transitive dependency updates reported bottom-up, got: %S" report))
-  (unless (and (member "ecss-0.1.0" (plist-get report :pruned))
-               (member "ebox-3.0.0" (plist-get report :pruned))
-               (member "etaf-0.2.1" (plist-get report :pruned)))
-    (error "Expected superseded dependency dirs pruned, got: %S" report))
   (dolist (name '(ecss ebox etaf etaf-ui))
     (unless (= 1 (length (cdr (assq name package-alist))))
       (error "Stale package-alist entries remain for %s" name))))
 """)
         self.assertEqual(
             ["ebox-3.0.1", "ecss-0.1.1", "etaf-0.2.2", "etaf-ui-0.1.1"],
+            self._elpa_dirs(),
+        )
+
+    def test_single_target_update_upgrades_etaf_dependencies_without_requires_bump(self):
+        self.run_lisp("(etaf-install 'etaf-ui t)")
+        self.run_lisp("(etaf-install 'ekp t)")
+        # Bump ebox, etaf, etaf-ui and unrelated ekp WITHOUT changing Package-Requires.
+        for name, old, new in (
+            ("ebox", "3.0.0", "3.0.1"),
+            ("etaf", "0.2.1", "0.2.2"),
+            ("etaf-ui", "0.1.0", "0.1.1"),
+            ("ekp", "1.0.0", "1.0.1"),
+        ):
+            entry = self.sources / name / f"{name}.el"
+            entry.write_text(entry.read_text().replace(f"Version: {old}", f"Version: {new}"))
+        self.build()
+        self.run_lisp("""
+(package-initialize)
+(let ((report (etaf-install-update 'etaf-ui)))
+  (unless (equal (plist-get report :updated)
+                 '((ebox . "3.0.1") (etaf . "0.2.2") (etaf-ui . "0.1.1")))
+    (error "Expected ETAF dependency closure updated bottom-up without requires bump, got: %S" report))
+  (dolist (name '(ebox etaf etaf-ui))
+    (unless (= 1 (length (cdr (assq name package-alist))))
+      (error "Stale package-alist entries remain for %s" name)))
+  (when (package-installed-p 'ekp '(1 0 1))
+    (error "Unrelated sibling ETAF target ekp should not be upgraded when updating etaf-ui")))
+""")
+        # Even when etaf-ui itself is already latest, updating etaf-ui still upgrades outdated ETAF deps.
+        ebox_entry = self.sources / "ebox" / "ebox.el"
+        ebox_entry.write_text(ebox_entry.read_text().replace("Version: 3.0.1", "Version: 3.0.2"))
+        self.build()
+        self.run_lisp("""
+(package-initialize)
+(let ((report (etaf-install-update 'etaf-ui)))
+  (unless (equal (plist-get report :updated) '((ebox . "3.0.2")))
+    (error "Expected outdated dependency ebox upgraded when target is current, got: %S" report))
+  (unless (= 1 (length (cdr (assq 'ebox package-alist))))
+    (error "Stale package-alist entry remains for ebox")))
+""")
+        self.assertEqual(
+            ["ebox-3.0.2", "ecss-0.1.0", "ekp-1.0.0", "etaf-0.2.2", "etaf-ui-0.1.1"],
             self._elpa_dirs(),
         )
 

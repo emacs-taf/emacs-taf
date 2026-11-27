@@ -15,7 +15,7 @@
 ## Requirements
 
 - Emacs 29.1 or newer.
-- [ETAF](https://github.com/emacs-taf/etaf) 0.3.10, `etaf-ui` 0.3.6+, `ebox`, and `ecss`.
+- [ETAF](https://github.com/emacs-taf/etaf) 0.3.11+, `etaf-ui` 0.3.11+, `ebox`, and `ecss`.
 - Prebuilt QuickJS native module (`typeset-native`, downloaded and SHA-256 verified automatically by `M-x etaf-install` or `M-x etaf-install-native` into `~/.cache/emacs-taf/native/`) for Mermaid and MathJax SVGs.
 - Optional external CLI tools (inspect via `(etaf-org-doctor)`): `ffmpeg` (inline video), `qrencode`, `git` / `jj`, `rg`, `dot`, `plantuml`.
 

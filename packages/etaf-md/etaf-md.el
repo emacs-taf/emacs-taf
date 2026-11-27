@@ -3,7 +3,7 @@
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 ;; Author: ETAF contributors
 ;; Version: 0.3.12
-;; Package-Requires: ((emacs "29.1") (etaf "0.3.10") (etaf-ui "0.3.6"))
+;; Package-Requires: ((emacs "29.1") (etaf "0.3.11") (etaf-ui "0.3.13"))
 ;; Keywords: hypermedia, docs
 ;; URL: https://github.com/emacs-taf/etaf-md
 

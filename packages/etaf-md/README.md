@@ -34,7 +34,7 @@ Light, dark, sepia and face-derived `auto` palettes (`t` to cycle), keeping ever
 | Requirement | Why | Check |
 | --- | --- | --- |
 | Emacs 29.1 or newer | the ETAF runtime and Ebox | `emacs --version` |
-| ETAF (`>= 0.3.6`), ETAF UI (`>= 0.3.4`), Ebox and ECSS | rendering and the component catalog | installed automatically via `etaf-install` |
+| ETAF (`>= 0.3.11`), ETAF UI (`>= 0.3.13`), Ebox and ECSS | rendering and the component catalog | installed automatically via `etaf-install` |
 | Prebuilt native module (optional, recommended) | fast zero-browser Mermaid and math SVGs without a local compiler (downloaded & SHA-256 verified into `~/.cache/emacs-taf/native/` via `M-x etaf-install-native`) | `M-x etaf-install-doctor` |
 | ffmpeg (optional) | inline video playback and terminal image conversion | `ffmpeg -version` |
 | qrencode (optional) | renders `qrcode` blocks | `qrencode -V` |

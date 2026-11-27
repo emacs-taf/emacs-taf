@@ -64,14 +64,17 @@
 ;; package.el; it is the supported lifecycle entry for ETAF targets.
 ;;
 ;; Function: etaf-install-update (&optional package)
-;; Refresh the ETAF and standard archives and upgrade PACKAGE, or every
-;; installed target plus the installer, in bottom-up dependency order.
-;; Removes superseded older package directories left by dependency upgrades
-;; (respecting `package-retention-policy' and `package-load-list').  When
-;; `etaf-install-auto-native' is non-nil, also fetch any newly required or
-;; updated prebuilt native modules declared by upgraded packages.  Return a
-;; plist with :updated, :pruned, :failed, :native-installed, :native-failed
-;; and :restart.  Restart Emacs when an update replaces loaded Lisp.
+;; Refresh the ETAF and standard archives and upgrade PACKAGE together with its
+;; installed ETAF dependency closure, or every installed target plus the
+;; installer when PACKAGE is nil, in bottom-up dependency order.  Unrelated
+;; targets and non-ETAF third-party packages are not upgraded unless required
+;; by `Package-Requires'.  Removes superseded older package directories left by
+;; dependency upgrades (respecting `package-retention-policy' and
+;; `package-load-list').  When `etaf-install-auto-native' is non-nil, also
+;; fetch any newly required or updated prebuilt native modules declared by
+;; upgraded packages.  Return a plist with :updated, :pruned, :failed,
+;; :native-installed, :native-failed and :restart.  Restart Emacs when an
+;; update replaces loaded Lisp.
 ;;
 ;; Function: etaf-install-remove (package &optional no-confirm)
 ;; Remove PACKAGE's package files and its `package-selected-packages' entry.
@@ -1205,6 +1208,29 @@ INSTALLED-ONLY checks offline reopening without computing an upgrade plan."
                   (push dep pending))))))))
     (nreverse result)))
 
+(defun etaf-install--etaf-dependency-closure (package)
+  "Return PACKAGE plus its installed ETAF dependency closure as symbols.
+Walks requirements from both installed and archive descriptors so updating
+PACKAGE also upgrades any outdated ETAF dependencies it relies on, without
+touching unrelated ETAF targets or non-ETAF third-party packages."
+  (let ((etaf-names (mapcar #'car (etaf-install--available-targets)))
+        (seen (list package))
+        (result (list package))
+        (pending (list package)))
+    (while pending
+      (let ((name (pop pending)))
+        (dolist (desc (delq nil
+                            (list (etaf-install--newest-installed-desc name)
+                                  (cadr (assq name package-archive-contents)))))
+          (dolist (req (package-desc-reqs desc))
+            (let ((dep (car req)))
+              (unless (or (eq dep 'emacs) (memq dep seen))
+                (push dep seen)
+                (when (and (memq dep etaf-names) (package-installed-p dep))
+                  (push dep result)
+                  (push dep pending))))))))
+    (nreverse result)))
+
 (defun etaf-install--native-packages-for-target (package)
   "Return installed packages in PACKAGE's closure declaring native manifests."
   (let ((closure (if (package-installed-p package)
@@ -1860,17 +1886,21 @@ Each plist has :package, :label, :group, :installed, :available,
 
 ;;;###autoload
 (defun etaf-install-update (&optional package)
-  "Update PACKAGE, or every installed target and the installer.
+  "Update PACKAGE with its installed ETAF dependencies, or every installed target.
 Refresh the ETAF archive and the standard archives installed targets need,
-upgrade installed ETAF packages in bottom-up dependency order, remove
-superseded older versions (respecting `package-retention-policy' and
-`package-load-list'), and return a plist with `:updated', `:pruned',
-`:failed', `:native-installed', `:native-failed' and `:restart'.  Restart
-Emacs when a loaded package changes; package.el remains the package manager."
+upgrade installed ETAF packages in bottom-up dependency order (expanding
+PACKAGE to its installed ETAF dependency closure without upgrading unrelated
+targets or third-party packages), remove superseded older versions (respecting
+`package-retention-policy' and `package-load-list'), and return a plist with
+`:updated', `:pruned', `:failed', `:native-installed', `:native-failed' and
+`:restart'.  Restart Emacs when a loaded package changes; package.el remains
+the package manager."
   (interactive (list (unless current-prefix-arg
                        (etaf-install--read-installed-target "Update: "))))
   (unless package--initialized (package-initialize))
-  (let* ((targets (if package (list package) (etaf-install--installed-targets)))
+  (let* ((targets (if package
+                      (etaf-install--etaf-dependency-closure package)
+                    (etaf-install--installed-targets)))
          (all (delete-dups
                (if package
                    (copy-sequence targets)
@@ -1882,6 +1912,8 @@ Emacs when a loaded package changes; package.el remains the package manager."
         (etaf-install--refresh-archives all)
       (error (push (cons 'archives (error-message-string error)) failed)))
     (unless failed
+      (when package
+        (setq all (delete-dups (etaf-install--etaf-dependency-closure package))))
       (let* ((ordered (etaf-install--sort-by-dependencies all))
              (before (apply #'append (mapcar #'cdr package-alist))))
         (dolist (name ordered)
