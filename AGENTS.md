@@ -39,7 +39,7 @@ under `packages/`, each of which publishes as its own repository.
 | `dictionaries/`, `book/` | Domain runtime data dictionaries and reference-book chapters | Yes (`resources`, required whenever present) |
 | `native/` | Native C/C++/Rust sources, bridges, or `native/manifest.json` pointing at `https://etaf.top/native/` | `native/manifest.json` when `native/vendor/` exists; otherwise lightweight runtime `native/` (never `vendor/`, `build/`, or binaries) |
 | `examples/` | Pure runnable code or text samples (no `.png`/`.jpg`/`.mp4` media; standalone example apps use `examples/<app>/<app>.el`) | Optional (`resources` only when public commands load it at runtime) |
-| `media/` | README showcase screenshots (`.png`, `.jpg`, `.webp`) and demo videos (`.mp4`, `.mov`) | **Never** (dev/repo display only) |
+| `media/` | Compact README showcase screenshots (prefer `.webp`, ≤ 500 KB recommended, hard cap 1200 KB) and tiny sample clips (≤ 256 KB); host demo videos and heavy media externally | **Never** (dev/repo display only) |
 | `scripts/` | Build, release, GUI probe, and maintenance scripts; never referenced by runtime Lisp (`<pkg>.el` or `lisp/*.el`) | **Never** |
 | `tests/`, `benchmarks/`, `design/`, `site/`, `Makefile`, `AGENTS.md` | Acceptance tests (`tests/acceptance.json`, `tests/fixtures/`, `tests/tools/`), performance harnesses, SVG design mockups, static website builds, build rules, agent rules | **Never** |
 
@@ -54,7 +54,7 @@ under `packages/`, each of which publishes as its own repository.
 - Create directories only when they contain maintained files. Use lowercase kebab-case
   directory names. Preserve upstream resource names and license notices.
 - Follow `.editorconfig` for whitespace and encoding; preserve upstream resources.
-- Keep generated files, caches, local reports and recordings out of version control.
+- Keep generated files, caches, local reports and recordings out of version control. Never commit demo videos (> 256 KB), large binary archives (> 512 KB), oversized images (> 1200 KB; prefer `.webp` ≤ 500 KB), or non-vendor files over 2 MB to Git (`scripts/check-repository.py` rejects them); host demo videos and heavy media externally (such as `https://etaf.top/media/`, object storage, or video platforms) and link them from READMEs.
 - Do not add compatibility paths, obsolete implementation plans, audit reports,
   milestone inventories, historical placeholder documents or per-task notes.
   Git history holds removed material. Delete obsolete code and its callers together.

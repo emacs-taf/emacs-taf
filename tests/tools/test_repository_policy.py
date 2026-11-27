@@ -539,5 +539,41 @@ class PolicyTests(unittest.TestCase):
         self.assertEqual([], POLICY.check(self.root, notices=notices))
         self.assertTrue(any('package-extra-option' in n for n in notices))
 
+    def test_large_media_videos_and_blobs_are_blocked_from_git(self):
+        # Compact sample clip and compact screenshot pass cleanly.
+        (self.root / 'media').mkdir(exist_ok=True)
+        (self.root / 'media/sample.mp4').write_bytes(b'\0' * (32 * 1024))
+        (self.root / 'media/shot.webp').write_bytes(b'\0' * (120 * 1024))
+        notices = []
+        self.assertEqual([], POLICY.check(self.root, notices=notices))
+        self.assertFalse(any('large image' in n for n in notices))
+
+        # Image between 500 KB and 1200 KB passes with an advisory notice.
+        (self.root / 'media/medium.png').write_bytes(b'\0' * (600 * 1024))
+        notices = []
+        self.assertEqual([], POLICY.check(self.root, notices=notices))
+        self.assertTrue(any('media/medium.png: large image' in n for n in notices))
+        (self.root / 'media/medium.png').unlink()
+
+        # Oversized video (> 256 KB), image (> 1200 KB), archive (> 512 KB), and
+        # non-vendor file (> 2 MB) are hard-rejected.
+        (self.root / 'media/recording.mp4').write_bytes(b'\0' * (300 * 1024))
+        (self.root / 'media/huge.png').write_bytes(b'\0' * (1300 * 1024))
+        (self.root / 'tests/fixtures').mkdir(parents=True, exist_ok=True)
+        (self.root / 'tests/fixtures/bundle.zip').write_bytes(b'\0' * (600 * 1024))
+        (self.root / 'tests/fixtures/huge.dat').write_bytes(b'\0' * (2100 * 1024))
+        errors = self.errors()
+        self.assertIn('media/recording.mp4: video/animation exceeds 256 KB', errors)
+        self.assertIn('media/huge.png: image exceeds 1200 KB', errors)
+        self.assertIn('tests/fixtures/bundle.zip: binary media/archive exceeds 512 KB', errors)
+        self.assertIn('tests/fixtures/huge.dat: tracked file exceeds 2 MB', errors)
+
+        # Upstream vendored source under native/vendor/ is exempt from the 2 MB general cap.
+        for bad in ('media/recording.mp4', 'media/huge.png', 'tests/fixtures/bundle.zip', 'tests/fixtures/huge.dat'):
+            (self.root / bad).unlink()
+        (self.root / 'native/vendor/lib').mkdir(parents=True, exist_ok=True)
+        (self.root / 'native/vendor/lib/upstream.c').write_bytes(b'a' * (2100 * 1024))
+        self.assertEqual('', self.errors())
+
 
 if __name__ == '__main__':unittest.main()

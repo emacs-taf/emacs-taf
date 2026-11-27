@@ -13,7 +13,7 @@ import sys
 import tempfile
 from urllib.parse import unquote
 
-POLICY_VERSION = 14
+POLICY_VERSION = 15
 DOC_NAMES = {'README.md', 'README.zh-CN.md', 'CHANGELOG.md', 'CHANGELOG.zh-CN.md',
              'AGENTS.md', 'docs/manual.md', 'docs/manual.zh-CN.md',
              'docs/architecture.md', 'docs/architecture.zh-CN.md',
@@ -303,6 +303,31 @@ def check(root, files=None, notices=None):
             fail(f, 'documentation must be flat and use the fixed document names')
         if parts[0] in ('examples', 'docs') and PurePosixPath(f).suffix.lower() in MEDIA_EXTENSIONS:
             fail(f, 'showcase images and videos belong in media/ (or tests/fixtures/ for test inputs)')
+        file_path = root / f
+        if file_path.is_file():
+            file_size = file_path.stat().st_size
+            suffix = PurePosixPath(f).suffix.lower()
+            if suffix in VIDEO_EXTENSIONS and file_size > MAX_TRACKED_VIDEO_BYTES:
+                fail(f,
+                     f'video/animation exceeds {MAX_TRACKED_VIDEO_BYTES // 1024} KB ({file_size // 1024} KB); '
+                     'host videos externally (e.g. https://etaf.top/media/ or video platforms) and link from README instead of committing to Git')
+            elif suffix in IMAGE_EXTENSIONS:
+                if file_size > MAX_TRACKED_IMAGE_BYTES:
+                    fail(f,
+                         f'image exceeds {MAX_TRACKED_IMAGE_BYTES // 1024} KB ({file_size // 1024} KB); '
+                         'compress to WebP or host externally on https://etaf.top/media/ instead of committing large images to Git')
+                elif notices is not None and file_size > LARGE_IMAGE_NOTICE_BYTES:
+                    notices.append(
+                        f'{f}: large image ({file_size // 1024} KB); '
+                        'prefer WebP or external hosting (https://etaf.top/media/) to keep the repository lean')
+            elif suffix in BINARY_BLOB_EXTENSIONS and file_size > MAX_TRACKED_BLOB_BYTES:
+                fail(f,
+                     f'binary media/archive exceeds {MAX_TRACKED_BLOB_BYTES // 1024} KB ({file_size // 1024} KB); '
+                     'host large binaries externally instead of committing to Git')
+            elif not f.startswith('native/vendor/') and file_size > MAX_TRACKED_FILE_BYTES:
+                fail(f,
+                     f'tracked file exceeds {MAX_TRACKED_FILE_BYTES // (1024 * 1024)} MB ({file_size // 1024} KB); '
+                     'host large assets externally instead of committing to Git')
         if not workspace and f.endswith('.el') and ('/' not in f or parts[0] == 'lisp'):
             el_text = (root / f).read_text(encoding='utf-8', errors='replace')
             el_code = ELISP_COMMENT_OR_STRING.sub(
@@ -508,9 +533,22 @@ DEV_ONLY_RESOURCE_ROOTS = frozenset({
     '.github', '.gitea', '.githooks',
 })
 DEV_ONLY_RESOURCE_FILES = frozenset({'Makefile', 'AGENTS.md'})
-MEDIA_EXTENSIONS = frozenset({
-    '.png', '.jpg', '.jpeg', '.gif', '.webp', '.mp4', '.mov', '.avi', '.mkv',
+VIDEO_EXTENSIONS = frozenset({
+    '.mp4', '.mov', '.webm', '.mkv', '.avi', '.m4v', '.gif',
 })
+IMAGE_EXTENSIONS = frozenset({
+    '.png', '.jpg', '.jpeg', '.webp', '.bmp', '.tiff', '.tif',
+})
+BINARY_BLOB_EXTENSIONS = frozenset({
+    '.wav', '.mp3', '.flac', '.ogg', '.m4a',
+    '.zip', '.tar', '.gz', '.tgz', '.xz', '.7z', '.dmg', '.pkg',
+})
+MEDIA_EXTENSIONS = IMAGE_EXTENSIONS | VIDEO_EXTENSIONS
+MAX_TRACKED_VIDEO_BYTES = 256 * 1024
+MAX_TRACKED_IMAGE_BYTES = 1200 * 1024
+LARGE_IMAGE_NOTICE_BYTES = 500 * 1024
+MAX_TRACKED_BLOB_BYTES = 512 * 1024
+MAX_TRACKED_FILE_BYTES = 2 * 1024 * 1024
 REQUIRED_RUNTIME_DIRS = ('docs', 'backends', 'dictionaries', 'book')
 ELISP_COMMENT_OR_STRING = re.compile(r'"(?:\\.|[^"\\])*"|;[^\n]*')
 RUNTIME_DEV_REF = re.compile(r'"((?:scripts|tests|benchmarks|media|design)/[^"\s\\]+)"')
