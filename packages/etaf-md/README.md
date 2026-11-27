@@ -27,7 +27,7 @@ Light, dark, sepia and face-derived `auto` palettes (`t` to cycle), keeping ever
 - **Native zero-browser Mermaid & MathJax**: with the optional prebuilt QuickJS dynamic module (`M-x etaf-install-native`, architecture inspired by [LuciusChen/pele.el](https://github.com/LuciusChen/pele.el)), `mermaid` fences render via vendored [Obsidian Pele](https://github.com/obsidianmd/pele) with native CoreText / Pango label measurement and `$$` display formulas render via vendored [MathJax](https://github.com/mathjax/MathJax-src) TeX-to-SVG inside a sandboxed background thread — zero Chromium, zero Node.js, zero local compiler required, crisp standalone SVGs cached on disk, and stale-while-revalidate during live edits.
 - **Extensible `:::` documentation containers & living docs**: over 35 built-in containers (`card`, `columns`, `box`, `steps`, `timeline`, `stats`, `field`, `file-tree`, `chat`, `tabs`, `code-tabs`, `accordion`, `details`, `table`, `window`, `panel`, `tab-panel`, `form`, `chart`, `progress`, `keymap`, `breadcrumb`, `diff`, `pros-cons`, `demo`, `qrcode`, `code-tree`, `npm-to`, `image-card`, `link-card`) plus sandboxed workspace living-document widgets (`include`, `code-ref`, `symbol`, `project-tree`, `git-log`, `git-diff`) and trust-gated Runbook `run` blocks. Add custom node types with `etaf-md-define-node`; see [the extension syntax](docs/extensions.md).
 - **Incremental live editing & minimal command surface**: global `M-x` exposes strictly two commands — `M-x etaf-md-open` (full-width single-window reader, `q` restores the source buffer) and `M-x etaf-md-preview` (non-destructive right-split live preview with proportional scroll-follow). Edits coalesce onto a 16 ms frame tick and splice-repaint only the changed block slice while preserving every other block's interactive state.
-- **Media, lightbox & navigation**: local images and async-cached remote HTTP(S) images (`etaf-md-remote-images`), in-buffer media lightbox (`RET` on images and Mermaid diagrams), inline video playback via ETAF's video Component (`ffmpeg`), independent configurable TOC side window (`T`, `*ETAF Outline*`, configurable via `etaf-md-toc-side` defaulting to `left` and `etaf-md-toc-width`), outline jumps (`n`/`p`, `j`), reverse jump to source (`e`/`o`), floating link/symbol peek dialog (`K`), spoiler toggle (`S`), theme cycle (`t`), measure bounds (`[`/`]`) and in-buffer searchable help (`?`). All bindings are customizable via `etaf-md-keys` (single keys only, never shadowing `C-c` / `C-t` prefixes) and every preview action is also a buffer-scoped interactive command.
+- **Media, lightbox & navigation**: local images and async-cached remote HTTP(S) images (`etaf-md-remote-images`), in-buffer media lightbox (`RET` on images and Mermaid diagrams), inline video playback via ETAF's video Component (`ffmpeg`), independent configurable TOC side window (`T`, `*ETAF Outline*`, configurable via `etaf-md-toc-side` defaulting to `left` and `etaf-md-toc-width`), outline jumps (`n`/`p`, `j`), reverse jump to source (`e`/`o`), floating link/symbol peek dialog (`K`), spoiler toggle (`S`), theme cycle (`t`), measure bounds (`[`/`]`) and in-buffer searchable help (`?`). Every preview action is also a preview-scoped `M-x` command; see [Usage](#usage) for customizing keys.
 
 ## Prerequisites
 
@@ -80,22 +80,40 @@ M-x etaf-md-preview      # toggle side-by-side live preview beside source buffer
 
 Open any local `.md` file and run `M-x etaf-md-open` or `M-x etaf-md-preview` right away (in a source checkout, `examples/all-syntax.markdown`, `examples/widgets-showcase.markdown` and `examples/sample.markdown` provide full feature and benchmark pages; ELPA packages intentionally omit `Makefile` and `examples/` to stay compact).
 
-| Key | Action |
-| --- | --- |
-| `n` / `p` | next / previous heading (pushes mark) |
-| `j` | jump to heading with completion |
-| `T` | toggle the independent TOC side window (`etaf-md-toc-side`, default left) |
-| `e` / `o` | jump back to the matching line in the source buffer |
-| `v` | toggle side-by-side source + live preview split |
-| `f` | toggle proportional scroll-follow with the source window |
-| `RET` or mouse-1 | activate link, toggle checkbox, open image/diagram lightbox, or play/pause video |
-| `g` / `r` | re-read and repaint the document |
-| `t` | cycle theme (`dark` / `light` / `sepia` / `auto`) |
-| `[` / `]` | narrow / widen the reading measure |
-| `K` / `S` | preview link or symbol at point / reveal or hide all spoilers |
-| `?` | searchable in-buffer help modal |
-| `q` | close the preview (restore previous buffer, or close live split) |
-| `C-s`, `C-v`, `M-v`, wheel | native isearch and scrolling |
+| Key | Command | Action |
+| --- | --- | --- |
+| `n` / `p` | `etaf-md-next-heading` / `etaf-md-previous-heading` | next / previous heading (pushes mark) |
+| `j` | `etaf-md-goto-heading` | jump to heading with completion |
+| `T` | `etaf-md-toggle-toc` | toggle the independent TOC side window (`etaf-md-toc-side`, default `left`) |
+| `e` / `o` | `etaf-md-goto-source` | jump back to the matching line in the source buffer |
+| `v` | `etaf-md-toggle-split` | toggle side-by-side source + live preview split |
+| `f` | `etaf-md-follow-scroll` | toggle proportional scroll-follow with the source window |
+| `RET` or mouse-1 | *(in-buffer host action)* | activate link, toggle checkbox, open image/diagram lightbox, or play/pause video |
+| `g` / `r` | `etaf-md-reload` | re-read and repaint the document |
+| `t` | `etaf-md-cycle-theme` | cycle theme (`dark` / `light` / `sepia` / `auto`) |
+| `[` / `]` | `etaf-md-narrower` / `etaf-md-wider` | narrow / widen the reading measure |
+| `K` / `S` | `etaf-md-preview-link` / `etaf-md-toggle-spoilers` | preview link or symbol at point / reveal or hide all spoilers |
+| `?` | *(ETAF help)* | searchable in-buffer help modal |
+| `q` | `etaf-md-close` | close the preview (restore previous buffer, or close live split) |
+| `C-s`, `C-v`, `M-v`, wheel | *(native Emacs)* | native isearch and scrolling |
+
+### Customizing keys
+
+Preview bindings are defined in the customizable variable `etaf-md-keys` rather than a traditional major-mode keymap (defaults use single keys only so user prefix maps such as `C-c` / `C-t` / `C-x` are never shadowed, and every command above is also callable via `M-x` / `M-X` inside a preview buffer). Each entry has the form `(KEY COMMAND LABEL)`.
+
+Run `M-x customize-variable RET etaf-md-keys`, or edit `etaf-md-keys` in your init file (changes apply to newly opened previews):
+
+```elisp
+(with-eval-after-load 'etaf-md
+  ;; Rebind `e' to `C-c e' and unbind `o':
+  (setq etaf-md-keys
+        (cons '("C-c e" etaf-md-goto-source "Jump to source")
+              (assoc-delete-all "o"
+                                (assoc-delete-all "e" (copy-sequence etaf-md-keys))))))
+
+;; Or disable all single-key bindings (useful for Evil / Meow users):
+;; (setq etaf-md-keys nil)
+```
 
 ## Development
 

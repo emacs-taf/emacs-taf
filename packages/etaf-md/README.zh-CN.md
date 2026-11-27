@@ -27,7 +27,7 @@ ETAF Markdown Preview 把本地 Markdown 文档渲染为 Emacs 原生的现代�
 - **零浏览器原生 Mermaid 与 MathJax 渲染**：通过 `M-x etaf-install-native` 一键下载校验预编译 QuickJS 原生动态模块（架构借鉴 [LuciusChen/pele.el](https://github.com/LuciusChen/pele.el)，全程无需本机编译器）后，`mermaid` 代码块经由内嵌 [Obsidian Pele](https://github.com/obsidianmd/pele) + CoreText / Pango 原生文本测量直接渲染为清晰矢量 SVG，`$$` 块级公式经由内嵌 [MathJax](https://github.com/mathjax/MathJax-src) TeX-to-SVG 在独立后台线程中渲染——无需 Chromium、无需 Node.js、零子进程开销，结果落盘缓存；实时编辑期间保留上一帧有效图片不闪烁。
 - **可扩展 `:::` 文档容器与活文档工作台**：内置 35+ 种文档构件（`card`、`columns`、`box`、`steps`、`timeline`、`stats`、`field`、`file-tree`、`chat`、`tabs`、`code-tabs`、`accordion`、`details`、`table`、`window`、`panel`、`tab-panel`、`form`、`chart`、`progress`、`keymap`、`breadcrumb`、`diff`、`pros-cons`、`demo`、`qrcode`、`code-tree`、`npm-to`、`image-card`、`link-card`），以及受工作区沙箱保护的 Emacs 活文档组件（`include`、`code-ref`、`symbol`、`project-tree`、`git-log`、`git-diff`）和受信任门禁控制的 `run` 运行块。支持用 `etaf-md-define-node` 自定义节点类型，详见[扩展语法](docs/extensions.zh-CN.md)。
 - **增量实时编辑与极简全局命令面**：全局 `M-x` 仅暴露两个入口命令——`M-x etaf-md-open`（单窗全宽阅读，按 `q` 原地切回源码）与 `M-x etaf-md-preview`（源码右侧非破坏性实时对照分屏，自带滚动跟随）。编辑改动按 16 ms 帧节拍合并，仅对受影响的块切片增量解析与重绘，其余块的组件实例与交互状态完好保留。
-- **媒体播放、页内灯箱与大纲导航**：本地图片与异步缓存的远程 HTTP(S) 图片（`etaf-md-remote-images`）、按 `RET` 开启页内灯箱看图（同时支持图片与 Mermaid 图表）、内嵌视频组件就地播放（`ffmpeg`）、独立目录侧窗（`T`，`*ETAF Outline*`，默认位于左侧，可通过 `etaf-md-toc-side` 与 `etaf-md-toc-width` 配置，独立行高滚动零抖动）、标题跳转（`n`/`p`、`j`）、跳回源码（`e`/`o`）、居中浮层链接与符号速览（`K`）、全局遮罩显隐（`S`）、配色轮换（`t`）、版心宽度调节（`[`/`]`）与页内可搜索帮助面板（`?`）；按键均通过 `etaf-md-keys` 可自定义且仅使用单键（绝不占用 `C-c` / `C-t` 前缀），同时每个预览操作均为限定在预览缓冲区生效的交互命令。
+- **媒体播放、页内灯箱与大纲导航**：本地图片与异步缓存的远程 HTTP(S) 图片（`etaf-md-remote-images`）、按 `RET` 开启页内灯箱看图（同时支持图片与 Mermaid 图表）、内嵌视频组件就地播放（`ffmpeg`）、独立目录侧窗（`T`，`*ETAF Outline*`，默认位于左侧，可通过 `etaf-md-toc-side` 与 `etaf-md-toc-width` 配置，独立行高滚动零抖动）、标题跳转（`n`/`p`、`j`）、跳回源码（`e`/`o`）、居中浮层链接与符号速览（`K`）、全局遮罩显隐（`S`）、配色轮换（`t`）、版心宽度调节（`[`/`]`）与页内可搜索帮助面板（`?`）；每个预览操作同时是限定在预览缓冲区生效的 `M-x` 交互命令，自定义改键见[使用方式](#使用方式)。
 
 ## 运行环境
 
@@ -80,22 +80,40 @@ M-x etaf-md-preview      # 在源码右侧开关双栏实时对照预览
 
 安装完成后直接对任意本地 `.md` 文件运行 `M-x etaf-md-open` 或 `M-x etaf-md-preview` 即可体验（ELPA 归档包刻意省略了开发用的 `Makefile` 与 `examples/` 以保持精简；源码检出仓库中保留了 `examples/all-syntax.markdown`、`examples/widgets-showcase.markdown` 与 `examples/sample.markdown` 供开发与性能回归使用）。
 
-| 按键 | 作用 |
-| --- | --- |
-| `n` / `p` | 跳到下一个 / 上一个标题（跳转前压栈 mark） |
-| `j` | 补全选择标题跳转 |
-| `T` | 开关独立目录侧窗（`*ETAF Outline*`，默认在左侧，由 `etaf-md-toc-side` 配置） |
-| `e` / `o` | 从预览当前位置反向跳回源文档对应行 |
-| `v` | 在单窗全宽阅读与「左源码 + 右预览」双栏对照间切换 |
-| `f` | 开关与源窗口按比例同步的滚动跟随 |
-| `RET` 或鼠标左键 | 打开链接、切换任务复选框、在页内灯箱查看大图/图表，或就地播放/暂停视频 |
-| `g` / `r` | 重新读取文件并重绘 |
-| `t` | 轮换配色（`dark` / `light` / `sepia` / `auto`） |
-| `[` / `]` | 收窄 / 加宽最大阅读宽度 |
-| `K` / `S` | 就地预览光标处链接或 Emacs 符号 / 全局显隐遮罩 |
-| `?` | 在页内打开可搜索的帮助面板 |
-| `q` | 关闭预览（单窗切回原缓冲区；分屏仅回收预览窗格） |
-| `C-s`、`C-v`、`M-v`、滚轮 | Emacs 原生增量搜索与平滑滚动 |
+| 按键 | 命令 | 作用 |
+| --- | --- | --- |
+| `n` / `p` | `etaf-md-next-heading` / `etaf-md-previous-heading` | 跳到下一个 / 上一个标题（跳转前压栈 mark） |
+| `j` | `etaf-md-goto-heading` | 补全选择标题跳转 |
+| `T` | `etaf-md-toggle-toc` | 开关独立目录侧窗（`*ETAF Outline*`，默认在左侧，由 `etaf-md-toc-side` 配置） |
+| `e` / `o` | `etaf-md-goto-source` | 从预览当前位置反向跳回源文档对应行 |
+| `v` | `etaf-md-toggle-split` | 在单窗全宽阅读与「左源码 + 右预览」双栏对照间切换 |
+| `f` | `etaf-md-follow-scroll` | 开关与源窗口按比例同步的滚动跟随 |
+| `RET` 或鼠标左键 | *（页内控件激活）* | 打开链接、切换任务复选框、在页内灯箱查看大图/图表，或就地播放/暂停视频 |
+| `g` / `r` | `etaf-md-reload` | 重新读取文件并重绘 |
+| `t` | `etaf-md-cycle-theme` | 轮换配色（`dark` / `light` / `sepia` / `auto`） |
+| `[` / `]` | `etaf-md-narrower` / `etaf-md-wider` | 收窄 / 加宽最大阅读宽度 |
+| `K` / `S` | `etaf-md-preview-link` / `etaf-md-toggle-spoilers` | 就地预览光标处链接或 Emacs 符号 / 全局显隐遮罩 |
+| `?` | *（ETAF 帮助）* | 在页内打开可搜索的帮助面板 |
+| `q` | `etaf-md-close` | 关闭预览（单窗切回原缓冲区；分屏仅回收预览窗格） |
+| `C-s`、`C-v`、`M-v`、滚轮 | *（Emacs 原生）* | Emacs 原生增量搜索与平滑滚动 |
+
+### 自定义按键
+
+预览缓冲区的按键由可定制变量 `etaf-md-keys` 统一管理（不使用传统的 major-mode keymap，默认全部采用单键以免覆盖用户的 `C-c` / `C-t` / `C-x` 前缀，且上表每个命令在预览缓冲区内都可直接通过 `M-x` / `M-X` 调用）。每条记录格式为 `(KEY COMMAND LABEL)`。
+
+可直接运行 `M-x customize-variable RET etaf-md-keys`，或在配置里修改（对之后新打开的预览生效）：
+
+```elisp
+(with-eval-after-load 'etaf-md
+  ;; 把 `e' 改绑到 `C-c e'，并取消 `o' 的默认绑定：
+  (setq etaf-md-keys
+        (cons '("C-c e" etaf-md-goto-source "跳回源文档行")
+              (assoc-delete-all "o"
+                                (assoc-delete-all "e" (copy-sequence etaf-md-keys))))))
+
+;; 或清空全部单键默认绑定（适合 Evil / Meow 用户改走自己的键位或 M-x）：
+;; (setq etaf-md-keys nil)
+```
 
 ## 开发与校验
 

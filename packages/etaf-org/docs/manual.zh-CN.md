@@ -31,6 +31,45 @@
 | `?` | `etaf-help` | 在页内打开可搜索快捷键帮助 |
 | `q` | `etaf-org-close` | 卸载并关闭预览（单窗切回原缓冲区，分屏自动回收） |
 
+预览快捷键统一定义在可定制变量 `etaf-org-keys` 中（不使用传统 major-mode keymap，每项格式为 `(KEY COMMAND LABEL)`）。可直接运行 `M-x customize-variable RET etaf-org-keys`，或在配置里改写（对新打开的预览生效）：
+
+```elisp
+(with-eval-after-load 'etaf-org
+  ;; 把 `e' 改绑到 `C-c e'，并移除 `o'：
+  (setq etaf-org-keys
+        (cons '("C-c e" etaf-org-goto-source "跳回 Org 源码行")
+              (assoc-delete-all "o"
+                                (assoc-delete-all "e" (copy-sequence etaf-org-keys))))))
+
+;; 清空全部默认单键绑定：
+;; (setq etaf-org-keys nil)
+```
+
+## 定制选项
+
+全部 18 项 `defcustom` 覆盖按键、配色、版心与目录侧窗、媒体与原生排版、工作区信任门禁与磁盘缓存：
+
+| 设置 | 默认值 | 作用 |
+| --- | --- | --- |
+| `etaf-org-keys` | 单键 alist | 预览缓冲区按键列表，每项格式 `(KEY COMMAND LABEL)`；设为 `nil` 可清空默认单键绑定。 |
+| `etaf-org-theme` | `auto` | 初始配色（`auto`、`dark`、`light`、`sepia`）；`auto` 从 Emacs 主题推色且不画页面底色。 |
+| `etaf-org-flavor` | `etaf` | `etaf-org-create` 未传 `:flavor` 时的默认方言（`etaf`、`standard` 或特性 plist）。 |
+| `etaf-org-width-min` | `40` | 最窄阅读宽度（字符格）。 |
+| `etaf-org-width-max` | `96` | 最宽阅读宽度（字符格）；更宽窗口居中显示。 |
+| `etaf-org-toc-side` | `left` | 独立 `*ETAF Org Outline*` 目录侧窗停靠边（`left` 或 `right`）。 |
+| `etaf-org-toc-width` | `28` | 独立目录侧窗列宽（范围 `18..52`）。 |
+| `etaf-org-image-max-height` | `24` | 图片卡片最大高度（文本行数）。 |
+| `etaf-org-media-lightbox` | `auto` | 本地图片激活后是否开启页内灯箱（`auto` 图形端启用、`t` 总是启用、`nil` 交给系统打开）。 |
+| `etaf-org-typeset` | `t` | 通过预编译 QuickJS 原生模块（`M-x etaf-install-native`）把公式与 `mermaid` 块渲染为 SVG。 |
+| `etaf-org-node-directory` | `~/.emacs.d/etaf-org/nodes` | 存放用户自定义节点 `.el` 定义文件的目录。 |
+| `etaf-org-allow-local-read` | `t` | 是否允许只读 L1 工作区特性（`#+INCLUDE:`、`code-ref`、`org-query`、`git-log` 等）在项目根内读盘。 |
+| `etaf-org-allow-actions` | `ask` | 可执行 `run` 块策略：`ask` 执行前确认、`t` 直接运行、`nil` 禁用。 |
+| `etaf-org-allow-babel` | `nil` | `#+begin_src` 块的 `[运行]` Babel 按钮策略：`nil` 禁用、`ask` 执行前确认、`t` 直接运行。 |
+| `etaf-org-interactive-checkbox` | `t` | 点击复选框同步切换源码 `[ ]` / `[X]` 并更新外层 `[n/m]` / `[p%]` 计数。 |
+| `etaf-org-interactive-todo` | `nil` | 非 nil 时点击标题 TODO 标签循环切换源码关键字。 |
+| `etaf-org-remote-images` | `t` | 在挂载预览中异步拉取并缓存远程 HTTP(S) 图片。 |
+| `etaf-org-cache-max-bytes` | 100 MiB | 图表、公式与远程图片磁盘缓存软上限（空闲 LRU 淘汰）。 |
+
 ## 方言控制（`etaf-org-flavor`）
 
 - `etaf`（默认）：完整原生 Org 语法 + Org 原生扩展容器 + `#+attr_etaf:` + 行内链接微组件 + `==高亮==` / `!!剧透!!`。

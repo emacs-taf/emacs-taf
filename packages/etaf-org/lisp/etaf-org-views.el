@@ -2716,7 +2716,7 @@ Supports multi-paragraph footnote bodies and clickable `↩' return links."
                             (list (etaf-org--footnotes-view document env))))))
          (overlays (delq nil (list (etaf-org--peek-card-view env)
                                    (etaf-org--lightbox-view env))))
-         (help-text "上下方向键按行滚动；TAB 切换控件，RET 激活；T 开关目录侧窗，/ 筛选，z/Z 折叠，H 隐含内容，K 速览，? 快捷键。"))
+         (help-text "上下方向键按行滚动；TAB 切换控件，RET 激活；T 开关目录侧窗，/ 筛选，z/Z 折叠，H 隐含内容，K 速览，? 快捷键；改键请定制 etaf-org-keys。"))
     (etaf-node 'column
                (append (list :width '(vw 100) :cross-align 'center
                              :aria-label "Org 预览"

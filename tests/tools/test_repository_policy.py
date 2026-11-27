@@ -500,5 +500,44 @@ class PolicyTests(unittest.TestCase):
                    '(provide \'package-runtime)\n')
         self.assertEqual('', self.errors())
 
+    def test_custom_keys_variable_must_appear_in_readme_usage_and_manual(self):
+        self.write('package.el',
+                   ";;; Commentary:\n"
+                   ";; Function: package-open ()\n"
+                   ";; Open package.\n"
+                   ";; Variable: package-keys\n"
+                   ";; Key bindings.\n"
+                   ";; Variable: package-extra-option\n"
+                   ";; Extra option.\n"
+                   ";;; Code:\n"
+                   "(defcustom package-keys nil \"Keys.\" :type 'sexp)\n"
+                   "(defcustom package-extra-option t \"Extra.\" :type 'boolean)\n"
+                   "(defun package-open () t)\n"
+                   "(provide 'package)\n")
+        # Mentioning package-keys only under Capabilities fails.
+        self.write('README.md',
+                   '# Package\n\n## Capabilities\n\nCustomizable via `package-keys`.\n\n'
+                   '## Usage\n\nRun `M-x package-open`.\n')
+        self.write('README.zh-CN.md',
+                   '# 包\n\n## 核心能力\n\n可通过 `package-keys` 定制。\n\n'
+                   '## 使用方式\n\n运行 `M-x package-open`。\n')
+        self.write('docs/manual.md', '# Manual\n\n## Keys\n\nPress `q`.\n')
+        errors = self.errors()
+        self.assertIn('README.md: customizable key variable `package-keys` must be documented inside the Usage / Quick start section', errors)
+        self.assertIn('README.zh-CN.md: customizable key variable `package-keys` must be documented inside the Usage / Quick start section', errors)
+        self.assertIn('docs/manual.md: customizable key variable `package-keys` is missing from user manual', errors)
+
+        # Documenting package-keys inside Usage / 使用方式 and docs/manual.md passes,
+        # while an undocumented non-key defcustom surfaces as a notice.
+        self.write('README.md',
+                   '# Package\n\n## Usage\n\nCustomize `package-keys`.\n')
+        self.write('README.zh-CN.md',
+                   '# 包\n\n## 使用方式\n\n通过 `package-keys` 定制。\n')
+        self.write('docs/manual.md',
+                   '# Manual\n\n## Keys\n\nCustomize `package-keys`.\n')
+        notices = []
+        self.assertEqual([], POLICY.check(self.root, notices=notices))
+        self.assertTrue(any('package-extra-option' in n for n in notices))
+
 
 if __name__ == '__main__':unittest.main()

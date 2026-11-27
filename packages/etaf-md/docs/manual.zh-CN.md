@@ -6,24 +6,36 @@
 
 在任意 Markdown 缓冲区里运行 `M-x etaf-md-open`，直接在当前窗口全宽打开阅读视图（免弹窗、不分屏；加前缀 `C-u` 或在其他缓冲区里运行则弹出文件选择）。需要边写边看时，在源文档里运行 `M-x etaf-md-preview` 开关右侧实时对照分屏，或在预览内按 `v` 就地切换。全局自动加载的 `M-x` 入口仅保留这两个命令；下表所有操作均是绑定到预览缓冲区的交互命令（通过 `completion-predicate` 限定在预览缓冲区内补全，同时支持快捷键与 `M-x` / `M-X` 调用，按 `?` 随时搜索）。
 
-| 按键 | 作用 |
-| --- | --- |
-| `n` / `p` | 跳到文档的下一个 / 上一个标题（跳转前自动压栈 mark） |
-| `j` | 从补全列表里选一个标题（跳转前自动压栈 mark） |
-| `T` | 开关独立 `*ETAF Outline*` 目录侧窗（默认左侧，由 `etaf-md-toc-side` / `etaf-md-toc-width` 配置） |
-| `e` / `o` | 从预览当前位置反向跳回源文档对应行 |
-| `v` | 在单窗全宽阅读与「左源码 + 右预览」双栏对照间切换 |
-| `f` | 开关按比例同步的源窗口滚动跟随 |
-| `RET`、鼠标左键 | 激活光标下的链接或图片；播放、暂停视频 |
-| `g` / `r` | 重新读取文件并重画 |
-| `t` | 轮换配色（暗色、亮色、sepia、随主题 `auto`） |
-| `[` / `]` | 把最大阅读宽度收窄 / 加宽四列 |
-| `K` / `S` | 就地预览光标处链接或符号 / 全局显隐遮罩 |
-| `?` | 在页面内的帮助面板里查当前按键 |
-| `q` | 关闭预览（单窗切回原缓冲区；分屏仅回收预览窗格） |
-| `C-s`、`C-v`、`M-v`、滚轮 | 原生的增量搜索与滚动 |
+| 按键 | 命令 | 作用 |
+| --- | --- | --- |
+| `n` / `p` | `etaf-md-next-heading` / `etaf-md-previous-heading` | 跳到文档的下一个 / 上一个标题（跳转前自动压栈 mark） |
+| `j` | `etaf-md-goto-heading` | 从补全列表里选一个标题（跳转前自动压栈 mark） |
+| `T` | `etaf-md-toggle-toc` | 开关独立 `*ETAF Outline*` 目录侧窗（默认左侧，由 `etaf-md-toc-side` / `etaf-md-toc-width` 配置） |
+| `e` / `o` | `etaf-md-goto-source` | 从预览当前位置反向跳回源文档对应行 |
+| `v` | `etaf-md-toggle-split` | 在单窗全宽阅读与「左源码 + 右预览」双栏对照间切换 |
+| `f` | `etaf-md-follow-scroll` | 开关按比例同步的源窗口滚动跟随 |
+| `RET`、鼠标左键 | *（页内控件激活）* | 激活光标下的链接或图片；播放、暂停视频 |
+| `g` / `r` | `etaf-md-reload` | 重新读取文件并重画 |
+| `t` | `etaf-md-cycle-theme` | 轮换配色（暗色、亮色、sepia、随主题 `auto`） |
+| `[` / `]` | `etaf-md-narrower` / `etaf-md-wider` | 把最大阅读宽度收窄 / 加宽四列 |
+| `K` / `S` | `etaf-md-preview-link` / `etaf-md-toggle-spoilers` | 就地预览光标处链接或符号 / 全局显隐遮罩 |
+| `?` | *（ETAF 帮助）* | 在页面内的帮助面板里查当前按键 |
+| `q` | `etaf-md-close` | 关闭预览（单窗切回原缓冲区；分屏仅回收预览窗格） |
+| `C-s`、`C-v`、`M-v`、滚轮 | *（Emacs 原生）* | 原生的增量搜索与滚动 |
 
-默认全部使用单键，绝不覆盖用户的 `C-c`、`C-t`、`C-x` 等全局前缀键。可通过自定义变量 `etaf-md-keys` 调整或清空按键，或在预览缓冲区内直接通过 `M-x` / `M-X` 调用任意预览交互命令。
+默认全部使用单键，绝不覆盖用户的 `C-c`、`C-t`、`C-x` 等全局前缀键。预览按键统一配置在可定制变量 `etaf-md-keys` 中（不使用传统 major-mode keymap，每项格式为 `(KEY COMMAND LABEL)`），可直接 `M-x customize-variable RET etaf-md-keys` 或在配置里改写（对新打开的预览生效），也可在预览缓冲区内直接通过 `M-x` / `M-X` 调用上表任意命令：
+
+```elisp
+(with-eval-after-load 'etaf-md
+  ;; 把 `e' 改绑到 `C-c e'，并移除 `o'：
+  (setq etaf-md-keys
+        (cons '("C-c e" etaf-md-goto-source "跳回源文档行")
+              (assoc-delete-all "o"
+                                (assoc-delete-all "e" (copy-sequence etaf-md-keys))))))
+
+;; 清空全部默认单键绑定：
+;; (setq etaf-md-keys nil)
+```
 
 这个 buffer 就是普通的 Emacs buffer，所以 isearch、`occur`、分窗、`C-x C-s` 这类 buffer 操作和 `imenu` 都照常可用。`M-x imenu` 列出文档目录。帮助留在预览窗口里，跟着预览的配色走。`/` 搜索；按 Escape 先退出搜索编辑，再关掉帮助。点面板外面也能关掉它，并把阅读焦点还回去。
 
@@ -65,10 +77,11 @@
 
 ## 定制
 
-十四项设置覆盖外观、独立目录侧窗位置与宽度、工作区安全门禁与磁盘缓存；其余版面细节都由文档和 frame 决定。
+十五项设置覆盖按键、外观、独立目录侧窗位置与宽度、工作区安全门禁与磁盘缓存；其余版面细节都由文档和 frame 决定。
 
 | 设置 | 默认值 | 作用 |
 | --- | --- | --- |
+| `etaf-md-keys` | 单键 alist | 预览缓冲区按键列表，每项格式 `(KEY COMMAND LABEL)`；设为 `nil` 可清空默认单键绑定。 |
 | `etaf-md-theme` | `auto` | 初始配色；`auto` 从 Emacs 主题的 face 推颜色，不画页面背景。 |
 | `etaf-md-flavor` | `nil`（`etaf`） | `etaf-md-create` 没收到 `:flavor` 时用的方言（`etaf`、`gfm`、`commonmark` 或特性 plist）。 |
 | `etaf-md-width-min` | `40` | 最窄的阅读宽度，单位是字符格。 |

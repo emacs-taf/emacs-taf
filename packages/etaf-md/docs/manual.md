@@ -6,25 +6,37 @@ This manual covers the workflows a reader performs. The root entry's Commentary 
 
 Run `M-x etaf-md-open` from any Markdown buffer to read it full-width in the current window (with `C-u`, or from another buffer, it prompts for a file). Run `M-x etaf-md-preview` in a Markdown source buffer to toggle a side-by-side live preview on the right. Only these two entry commands are globally autoloaded in `M-x`; all actions below are interactive commands scoped to preview buffers via `completion-predicate` and bound directly to keys inside the preview buffer.
 
-| Key | Action |
-| --- | --- |
-| `n` / `p` | Move to the next / previous heading of the document (pushes mark) |
-| `j` | Choose a heading from a completion list (pushes mark) |
-| `T` | Toggle the independent `*ETAF Outline*` side window (`etaf-md-toc-side`, default `left`, width `etaf-md-toc-width`) |
-| `e` / `o` | Jump from preview point back to the matching line in the source buffer |
-| `v` | Toggle side-by-side source + live preview split from the preview |
-| `f` | Toggle proportional scroll-follow with the source window |
-| `RET`, mouse-1 | Activate the link or image under point; play or pause a video |
-| `g` / `r` | Re-read the file and repaint |
-| `t` | Cycle the palette (dark, light, sepia, auto) |
-| `[` / `]` | Narrow / widen the maximum reading measure by four columns |
-| `K` / `S` | Preview link or symbol at point / reveal or hide all spoilers |
-| `?` | Search the current key bindings in an in-buffer help modal |
-| `q` | Close the preview (restores originating buffer, or closes live split) |
-| `↑` / `↓` | Scroll the reading viewport line by line (1 line per keypress) |
-| `C-s`, `C-v`, `M-v`, wheel | Native isearch and scrolling |
+| Key | Command | Action |
+| --- | --- | --- |
+| `n` / `p` | `etaf-md-next-heading` / `etaf-md-previous-heading` | Move to the next / previous heading of the document (pushes mark) |
+| `j` | `etaf-md-goto-heading` | Choose a heading from a completion list (pushes mark) |
+| `T` | `etaf-md-toggle-toc` | Toggle the independent `*ETAF Outline*` side window (`etaf-md-toc-side`, default `left`, width `etaf-md-toc-width`) |
+| `e` / `o` | `etaf-md-goto-source` | Jump from preview point back to the matching line in the source buffer |
+| `v` | `etaf-md-toggle-split` | Toggle side-by-side source + live preview split from the preview |
+| `f` | `etaf-md-follow-scroll` | Toggle proportional scroll-follow with the source window |
+| `RET`, mouse-1 | *(in-buffer host action)* | Activate the link or image under point; play or pause a video |
+| `g` / `r` | `etaf-md-reload` | Re-read the file and repaint |
+| `t` | `etaf-md-cycle-theme` | Cycle the palette (dark, light, sepia, auto) |
+| `[` / `]` | `etaf-md-narrower` / `etaf-md-wider` | Narrow / widen the maximum reading measure by four columns |
+| `K` / `S` | `etaf-md-preview-link` / `etaf-md-toggle-spoilers` | Preview link or symbol at point / reveal or hide all spoilers |
+| `?` | *(ETAF help)* | Search the current key bindings in an in-buffer help modal |
+| `q` | `etaf-md-close` | Close the preview (restores originating buffer, or closes live split) |
+| `↑` / `↓` | *(viewport scroll)* | Scroll the reading viewport line by line (1 line per keypress) |
+| `C-s`, `C-v`, `M-v`, wheel | *(native Emacs)* | Native isearch and scrolling |
 
-Defaults use single keys only so user prefix bindings (`C-c`, `C-t`, `C-x`, etc.) are never shadowed. Customize `etaf-md-keys` to adjust or remove bindings, or invoke any preview action directly via `M-x` / `M-X` inside the preview buffer.
+Defaults use single keys only so user prefix bindings (`C-c`, `C-t`, `C-x`, etc.) are never shadowed. Preview keys live in `etaf-md-keys` (each entry is `(KEY COMMAND LABEL)`), rather than a major-mode keymap; customize it with `M-x customize-variable RET etaf-md-keys` or in Elisp (takes effect on newly opened previews), or invoke any command above via `M-x` / `M-X` inside the preview buffer:
+
+```elisp
+(with-eval-after-load 'etaf-md
+  ;; Rebind `e' to `C-c e' and remove `o':
+  (setq etaf-md-keys
+        (cons '("C-c e" etaf-md-goto-source "Jump to source")
+              (assoc-delete-all "o"
+                                (assoc-delete-all "e" (copy-sequence etaf-md-keys))))))
+
+;; Set to nil to disable all default single-key bindings:
+;; (setq etaf-md-keys nil)
+```
 
 The buffer is an ordinary Emacs buffer, so isearch, `occur`, window splitting, `C-x C-s`-style buffer handling and `imenu` all keep working. `M-x imenu` lists the document outline. Help stays in the preview window and follows its theme. `/` searches; Escape first leaves search editing, then closes help. Clicking outside the panel also closes it and restores the reading focus.
 
@@ -66,10 +78,11 @@ An opened preview follows its source buffer (matching canonical paths and symlin
 
 ## Customization
 
-Fourteen options cover personalization, side-window TOC placement, workspace trust gates and caching; every other appearance decision follows the document and the frame.
+Fifteen options cover keybindings, personalization, side-window TOC placement, workspace trust gates and caching; every other appearance decision follows the document and the frame.
 
 | Option | Default | Effect |
 | --- | --- | --- |
+| `etaf-md-keys` | single-key alist | Preview buffer key bindings as `(KEY COMMAND LABEL)` entries; set to `nil` to disable default single-key bindings. |
 | `etaf-md-theme` | `auto` | Initial palette; `auto` derives the colors from the Emacs theme's faces and paints no page background. |
 | `etaf-md-flavor` | `nil` (`etaf`) | Default Markdown dialect when `etaf-md-create` gets no `:flavor` (`etaf`, `gfm`, `commonmark` or a feature plist). |
 | `etaf-md-width-min` | `40` | Narrowest reading measure, in character cells. |

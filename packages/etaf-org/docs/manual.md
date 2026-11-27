@@ -31,6 +31,45 @@
 | `?` | `etaf-help` | Show searchable in-buffer keybinding help |
 | `q` | `etaf-org-close` | Unmount, close split if owned, and restore origin buffer |
 
+Preview bindings live in the customizable variable `etaf-org-keys` (each entry is `(KEY COMMAND LABEL)`) instead of a traditional major-mode keymap. Run `M-x customize-variable RET etaf-org-keys`, or edit `etaf-org-keys` in Elisp (takes effect on newly opened previews):
+
+```elisp
+(with-eval-after-load 'etaf-org
+  ;; Rebind `e' to `C-c e' and remove `o':
+  (setq etaf-org-keys
+        (cons '("C-c e" etaf-org-goto-source "Jump to source")
+              (assoc-delete-all "o"
+                                (assoc-delete-all "e" (copy-sequence etaf-org-keys))))))
+
+;; Set to nil to disable all default single-key bindings:
+;; (setq etaf-org-keys nil)
+```
+
+## Customization
+
+Eighteen options cover keybindings, themes, layout, dialects, native typesetting, media, workspace trust gates and caching:
+
+| Option | Default | Effect |
+| --- | --- | --- |
+| `etaf-org-keys` | single-key alist | Preview buffer key bindings as `(KEY COMMAND LABEL)` entries; set to `nil` to disable default single-key bindings. |
+| `etaf-org-theme` | `auto` | Initial palette (`auto`, `dark`, `light`, `sepia`); `auto` derives colors from frame faces without painting a page background. |
+| `etaf-org-flavor` | `etaf` | Default Org dialect (`etaf`, `standard`, or a feature plist) when `etaf-org-create` receives no `:flavor`. |
+| `etaf-org-width-min` | `40` | Narrowest reading measure, in character cells. |
+| `etaf-org-width-max` | `96` | Widest reading measure, in character cells; wider windows center the column. |
+| `etaf-org-toc-side` | `left` | Side of the frame where `*ETAF Org Outline*` opens (`left` or `right`). |
+| `etaf-org-toc-width` | `28` | Width of the independent TOC side window in character cells (clamped `18..52`). |
+| `etaf-org-image-max-height` | `24` | Maximum image card height in text lines. |
+| `etaf-org-media-lightbox` | `auto` | Open local images inside the in-buffer media lightbox (`auto` on graphical frames, `t` always, `nil` external opener). |
+| `etaf-org-typeset` | `t` | Render display math and `mermaid` blocks as SVGs via the prebuilt QuickJS native module (`M-x etaf-install-native`). |
+| `etaf-org-node-directory` | `~/.emacs.d/etaf-org/nodes` | Directory holding custom `.el` node definitions loaded after built-in nodes. |
+| `etaf-org-allow-local-read` | `t` | Permit read-only L1 workspace features (`#+INCLUDE:`, `code-ref`, `org-query`, `git-log`, etc.) inside the project root. |
+| `etaf-org-allow-actions` | `ask` | Policy for executable `run` widget cards: `ask` prompts before running, `t` runs directly, `nil` disables execution. |
+| `etaf-org-allow-babel` | `nil` | Control `[运行]` Babel execution triggers on `#+begin_src` blocks (`nil` disabled, `ask` prompts, `t` runs directly). |
+| `etaf-org-interactive-checkbox` | `t` | Clicking a task checkbox toggles `[ ]` / `[X]` in source and updates enclosing `[n/m]` / `[p%]` cookies. |
+| `etaf-org-interactive-todo` | `nil` | When non-nil, clicking a headline TODO chip cycles its keyword in source. |
+| `etaf-org-remote-images` | `t` | Asynchronously fetch and cache remote HTTP(S) images in mounted previews. |
+| `etaf-org-cache-max-bytes` | 100 MiB | Soft disk size ceiling for cached diagrams, formulas and remote images (lazy LRU eviction). |
+
 ## Dialects (`etaf-org-flavor`)
 
 - `etaf` (default): full native Org plus Org-native extension blocks, `#+attr_etaf:`, inline link micro-widgets, `==mark==`, and `!!spoiler!!`.

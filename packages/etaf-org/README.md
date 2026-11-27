@@ -9,7 +9,7 @@
 - **Complete native Org rendering.** Headlines with accumulating `#+TODO:` sequences, priorities, inherited tags, statistics cookies, `COMMENT` / `:ARCHIVE:`, real overdue calculation, planning lines, property drawers, `LOGBOOK` clock/state summaries, nested and description lists, clickable checkboxes, three-line booktabs tables (alignment/width cookies, whole-table centering, sorting, table copy, zebra, row/column/cell highlights), syntax-highlighted source blocks (line numbers, `[!code ...]` markers, word highlight, folding, copy, paired `#+RESULTS:`), quotes with formatted attributions, indented verses with inline markup, strict `$...$` math vs currency disambiguation, multi-paragraph footnotes with `↩` return links, `#+TOC:`, `#+SETUPFILE:`, `#+INCLUDE:`, `#+BIBLIOGRAPHY:` / `org-cite` / `#+PRINT_BIBLIOGRAPHY:`, entities, timestamps/ranges, targets, and links.
 - **Unified node & style-rule engine.** Every core Org construct (`headline`, `src`, `table`, `quote`, `drawer`, `planning`, `math`) and every extended container lives in `etaf-org-node-definitions`. Style rules (`etaf-org-set-attr`) and view overrides (`etaf-org-set-view`) apply uniformly; user nodes load automatically from `etaf-org-node-directory`.
 - **Focused editorial & Org living-document vocabulary.** Write containers as standard Org `#+begin_<name> :key val ... #+end_<name>`, affiliated `#+attr_etaf:`, `#+<marker>:` child markers, `#+BEGIN:` dynamic blocks, and inline link micro-widgets (`[[kbd:...]]`, `[[badge:...]]`, `[[sym:...]]`, `[[color:...]]`, `[[spoiler:...]]`, `[[icon:...]]`, `[[abbr:...]]`, `[[roam:...]]`, `[[denote:...]]`). Includes curated L0 layout/collection/visualization/comparison widgets, bounded workspace L1 views (`include`, `code-ref`, `symbol`, `project-tree`, `git-log`, `git-diff` supporting Git and Jujutsu), Org-exclusive live views (`org-query`, `kanban`, `clock-summary`, `transclude`, `backlinks`), and explicit confirmation-gated L2 actions (`run`, opt-in Babel). Switch to pure Org at any time with `:flavor 'standard` or `#+OPTIONS: etaf:nil`.
-- **Clean single-window reading & O(Δ) live editing.** `M-x etaf-org-open` opens full-width in the current window with zero prompt on `.org` buffers and syncs to the source line; `M-x etaf-org-preview` toggles a non-destructive right split with proportional follow-scroll (`f`) and cleans up only its own window; `v` toggles single-window ↔ side-by-side split; `e` / `o` jumps back to source; `T` toggles an independent configurable TOC side window (`*ETAF Org Outline*`, `etaf-org-toc-side` defaulting to `left`, `etaf-org-toc-width` defaulting to `28`); `/` filters sections live; `K` toggles a floating peek dialog; `z`/`Z` folds sections; `S` toggles spoilers; `H` toggles hidden metadata; `t` cycles themes; all preview actions are buffer-scoped interactive commands with customizable single-key defaults (`etaf-org-keys`, zero prefix keys); and `etaf-org-edit-mode` provides optional Lisp-enabled authoring help.
+- **Clean single-window reading & O(Δ) live editing.** `M-x etaf-org-open` opens full-width in the current window with zero prompt on `.org` buffers and syncs to the source line; `M-x etaf-org-preview` toggles a non-destructive right split with proportional follow-scroll (`f`) and cleans up only its own window; `v` toggles single-window ↔ side-by-side split; `e` / `o` jumps back to source; `T` toggles an independent configurable TOC side window (`*ETAF Org Outline*`, `etaf-org-toc-side` defaulting to `left`, `etaf-org-toc-width` defaulting to `28`); `/` filters sections live; `K` toggles a floating peek dialog; `z`/`Z` folds sections; `S` toggles spoilers; `H` toggles hidden metadata; `t` cycles themes; every preview action is also a preview-scoped `M-x` command (see [Quick start](#quick-start) to customize keys); and `etaf-org-edit-mode` provides optional Lisp-enabled authoring help.
 - **Native zero-browser Mermaid & MathJax rendering.** Display formulas (`$$...$$`, `\[...\]`, `\begin{align}...\end{align}`) and `mermaid` blocks render asynchronously inside a sandboxed QuickJS native module (vendored Obsidian Pele + MathJax TeX-to-SVG, auto-installed via `M-x etaf-install` / `M-x etaf-install-native`, zero browser or Node.js required) into a bounded LRU disk cache tinted to the active palette (`auto`, `dark`, `light`, `sepia`). Pluggable `etaf-org-src-renderers` plus optional `svg`, `dot`, `plantuml`, and `qrencode` support.
 
 ## Requirements
@@ -47,6 +47,26 @@ make compile
 - `M-x etaf-org-open`: open a full-width reading view in the current window (zero prompt when visiting a `.org` buffer; pass `C-u` to pick another file).
 - `M-x etaf-org-preview`: toggle a non-destructive right-hand live split beside the current `.org` source buffer with proportional follow-scroll (or toggle split when invoked inside a preview buffer).
 - Optional Lisp hook: `(add-hook 'org-mode-hook #'etaf-org-edit-mode)` enables soft highlighting, CAPF completion, and block-pair matching in Org source buffers without adding extra global `M-x` commands.
+
+### Keybindings and customizing keys
+
+Inside a preview buffer, press `?` to browse all active single-key shortcuts (`n`/`p` headings, `j` jump, `T` TOC side window, `e`/`o` goto source, `v` toggle split, `f` follow scroll, `/` filter, `z`/`Z` fold, `K` peek, `S` spoilers, `H` hidden metadata, `t` theme, `[`/`]` measure, `g`/`r` reload, `q` close). See [docs/manual.md](docs/manual.md#reading-keybindings) for the full command table.
+
+Preview bindings are defined in the customizable variable `etaf-org-keys` rather than a traditional major-mode keymap (defaults use single keys only so `C-c` / `C-t` / `C-x` prefixes are never shadowed, and every action is also callable via `M-x` / `M-X` inside a preview buffer). Each entry has the form `(KEY COMMAND LABEL)`.
+
+Run `M-x customize-variable RET etaf-org-keys`, or edit `etaf-org-keys` in your init file (changes apply to newly opened previews):
+
+```elisp
+(with-eval-after-load 'etaf-org
+  ;; Rebind `e' to `C-c e' and unbind `o':
+  (setq etaf-org-keys
+        (cons '("C-c e" etaf-org-goto-source "Jump to source")
+              (assoc-delete-all "o"
+                                (assoc-delete-all "e" (copy-sequence etaf-org-keys))))))
+
+;; Or disable all default single-key bindings (useful for Evil / Meow users):
+;; (setq etaf-org-keys nil)
+```
 
 Headless embedding example:
 

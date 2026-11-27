@@ -1359,7 +1359,7 @@ unrelated block edits never create spurious damage outside the edited block."
                            :item-gap '(lh 0)
                            :color (etaf-md--env-color env :ink))
                      page-children))
-         (help-text "上下方向键按行滚动；TAB 切换链接与控件，RET 激活；T 开关目录侧窗，S 开关遮罩，K 预览光标处链接，? 查看快捷键。"))
+         (help-text "上下方向键按行滚动；TAB 切换链接与控件，RET 激活；T 开关目录侧窗，S 开关遮罩，K 预览光标处链接，? 查看快捷键；改键请定制 etaf-md-keys。"))
     (etaf-node 'column
                (append (list :width '(vw 100) :cross-align 'center
                              :aria-label "Markdown 预览"

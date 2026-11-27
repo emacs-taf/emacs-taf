@@ -44,6 +44,57 @@ CANVAS_CELL = re.compile(r'frame-char-(?:width|height)')
 METRIC_FALLBACK = re.compile(r'etaf-display-metrics|:(?:char-width|line-height)')
 # A line that states its number is the frame's own geometry says so.
 FRAME_METRIC_NOTE = '; frame metric'
+DEFCUSTOM_RE = re.compile(r'^\(defcustom\s+([A-Za-z0-9_-]+)\b', re.M)
+USAGE_HEADING_RE = re.compile(
+    r'^(?:usage|quick\s*start|keys|keybindings?|使用方式|快速开始|使用|快捷键|入口与按键)\b',
+    re.I,
+)
+
+
+def _extract_usage_sections(text):
+    """Return concatenated text of level-2 Usage/Quick-start/Keys sections."""
+    lines = text.splitlines()
+    in_fence = None
+    in_usage = False
+    collected = []
+    for line in lines:
+        fence = re.match(r'^(`{3,}|~{3,})', line)
+        if fence:
+            marker = fence.group(1)[0]
+            if in_fence is None:
+                in_fence = marker
+            elif in_fence == marker:
+                in_fence = None
+            if in_usage:
+                collected.append(line)
+            continue
+        if in_fence is None:
+            heading = re.match(r'^##\s+(.+?)\s*$', line)
+            if heading:
+                in_usage = bool(USAGE_HEADING_RE.match(heading.group(1)))
+        if in_usage:
+            collected.append(line)
+    return '\n'.join(collected)
+
+
+def _mentions_symbol(text, symbol):
+    return bool(re.search(rf'(?<![A-Za-z0-9_-]){re.escape(symbol)}(?![A-Za-z0-9_-])', text))
+
+
+def _public_defcustoms(root, files):
+    found = []
+    seen = set()
+    for f in sorted(files):
+        if not f.endswith('.el') or ('/' in f and not f.startswith('lisp/')):
+            continue
+        text = (root / f).read_text(encoding='utf-8', errors='replace')
+        for match in DEFCUSTOM_RE.finditer(text):
+            sym = match.group(1)
+            if '--' in sym or sym in seen:
+                continue
+            seen.add(sym)
+            found.append(sym)
+    return found
 
 
 def provider_directory(root):
@@ -327,6 +378,32 @@ def check(root, files=None, notices=None):
             if not (root/directory).is_dir():fail('Makefile', f'missing scanned directory: {directory}')
         for pattern in re.findall(r'\$\(wildcard ((?:examples|tests|scripts|benchmarks)/[^)]+)\)', text):
             if not list(root.glob(pattern)):fail('Makefile', f'empty source discovery: {pattern}')
+    if not workspace:
+        customs = _public_defcustoms(root, files)
+        key_customs = [c for c in customs if c.endswith('-keys')]
+        for var in key_customs:
+            for readme_name in ('README.md', 'README.zh-CN.md'):
+                if readme_name not in files:
+                    continue
+                usage_text = _extract_usage_sections(
+                    (root / readme_name).read_text(encoding='utf-8', errors='replace'))
+                if not _mentions_symbol(usage_text, var):
+                    fail(readme_name,
+                         f'customizable key variable `{var}` must be documented inside the '
+                         'Usage / Quick start section (not only under Capabilities)')
+            for manual_name in ('docs/manual.md', 'docs/manual.zh-CN.md'):
+                if manual_name not in files:
+                    continue
+                manual_text = (root / manual_name).read_text(encoding='utf-8', errors='replace')
+                if not _mentions_symbol(manual_text, var):
+                    fail(manual_name,
+                         f'customizable key variable `{var}` is missing from user manual')
+        if notices is not None and 'docs/manual.md' in files and customs:
+            manual_text = (root / 'docs/manual.md').read_text(encoding='utf-8', errors='replace')
+            missing = [c for c in customs if not c.endswith('-keys') and not _mentions_symbol(manual_text, c)]
+            if missing:
+                preview = ', '.join(missing[:6]) + (' ...' if len(missing) > 6 else '')
+                notices.append(f'docs/manual.md: {len(missing)} defcustom option(s) undocumented: {preview}')
     if not workspace:
         if makefile.exists() and not re.search(r'^check\s*:[^\n]*\bapi-check\b', makefile.read_text(encoding='utf-8'), re.M):
             fail('Makefile', 'check must include fresh entry API validation')
