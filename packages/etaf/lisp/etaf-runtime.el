@@ -125,36 +125,57 @@ capture the environment they must run in later.")
 (defvar-local etaf--cursor-hidden nil
   "Whether the input modality, not the application, hid this buffer's cursor.")
 
-(defun etaf--cursor-pointer-command-p ()
-  "Whether the running command came from a pointer event."
-  (let ((event last-command-event))
-    (and (consp event)
-         (symbolp (car event))
-         (string-prefix-p "mouse" (symbol-name (car event))))))
+(defun etaf--cursor-passive-pointer-p ()
+  "Whether `last-command-event' is passive pointer motion or wheel scroll."
+  (let* ((event last-command-event)
+         (head (and (consp event) (car event))))
+    (and (symbolp head)
+         (or (eq head 'mouse-movement)
+             (memq (event-basic-type head)
+                   '(wheel-up wheel-down wheel-left wheel-right
+                     mouse-4 mouse-5 mouse-6 mouse-7))))))
 
-(defvar etaf-cursor-follows-input-modality t
-  "Whether a mounted canvas hides its cursor after a pointer press.
-A painted page follows the input modality: a press leaves the cursor as a
-stray block, so it hides until the next keyboard command.  An application that
-edits text in place sets this to nil, because a press there really does place
-a caret the user needs to see.")
+(defun etaf--cursor-pointer-command-p ()
+  "Whether the running command came from a pointer button press or click."
+  (let* ((event last-command-event)
+         (head (and (consp event) (car event))))
+    (and (symbolp head)
+         (not (etaf--cursor-passive-pointer-p))
+         (string-match-p "mouse-[123]\\'" (symbol-name head)))))
+
+(defvar etaf-cursor-follows-input-modality nil
+  "Whether a mounted canvas hides its cursor after a pointer click.
+Nil by default so a mounted buffer behaves like an ordinary Emacs buffer:
+clicking places point and keeps the user's native blinking cursor visible.
+Set to non-nil (globally or buffer-locally) to hide the cursor after a pointer
+click until the next keyboard command; applications that want no cursor at all
+should pass `:cursor nil' to `etaf-app-open' or set `cursor-type' nil.")
+
+(defun etaf--cursor-restore ()
+  "Restore the native cursor hidden by `etaf--cursor-input-modality'."
+  (when etaf--cursor-hidden
+    (setq etaf--cursor-hidden nil)
+    (if (and etaf--mount-cursor (car etaf--mount-cursor))
+        (setq-local cursor-type (cdr etaf--mount-cursor))
+      (kill-local-variable 'cursor-type))))
 
 (defun etaf--cursor-input-modality ()
   "Follow the input modality with the native cursor of a mounted View.
-A pointer press hides it, because the block it leaves behind is not a focus
-cue; the next keyboard command shows it again, because that is where arrows
-and Tab put the user. This only touches a cursor it hid itself, so a text
-input keeps its own caret and an application keeps the cursor it chose."
-  (when etaf-cursor-follows-input-modality
-    (if (etaf--cursor-pointer-command-p)
-        (unless etaf--cursor-hidden
-          (setq etaf--cursor-hidden t)
-          (setq-local cursor-type nil))
-      (when etaf--cursor-hidden
-        (setq etaf--cursor-hidden nil)
-        (if (and etaf--mount-cursor (car etaf--mount-cursor))
-            (setq-local cursor-type (cdr etaf--mount-cursor))
-          (kill-local-variable 'cursor-type))))))
+When `etaf-cursor-follows-input-modality' is non-nil, a pointer click hides
+the native cursor until the next keyboard command, while passive pointer
+motion and wheel events leave cursor visibility unchanged.  When nil (the
+default), the native cursor stays visible across pointer events, restoring any
+cursor previously hidden by modality tracking."
+  (cond
+   ((not etaf-cursor-follows-input-modality)
+    (etaf--cursor-restore))
+   ((etaf--cursor-passive-pointer-p) nil)
+   ((etaf--cursor-pointer-command-p)
+    (unless etaf--cursor-hidden
+      (setq etaf--cursor-hidden t)
+      (setq-local cursor-type nil)))
+   (t
+    (etaf--cursor-restore))))
 
 (defvar etaf--runtimes (make-hash-table :test #'eq :weakness 'key)
   "Mounted Runtime of each buffer.")
@@ -2471,12 +2492,9 @@ provide `:viewport-width' in pixels, `:viewport-height' in lines, `:observer'
       (puthash buffer runtime etaf--runtimes)
       (with-current-buffer buffer
         (add-hook 'kill-buffer-hook #'etaf--runtime-buffer-killed nil t)
-        ;; A mounted View paints its own focus, yet the native cursor is how a
-        ;; keyboard user sees which element the arrows reached. It therefore
-        ;; follows the input modality: a pointer press leaves it as a stray
-        ;; block wherever point landed, so it hides then, and the next keyboard
-        ;; command brings it back. A text input installs its own caret while it
-        ;; edits; the caller's cursor state returns on unmount.
+        ;; Capture the buffer's native cursor so optional input-modality hiding
+        ;; (`etaf-cursor-follows-input-modality', nil by default) and unmount
+        ;; always restore the caller's exact cursor state.
         (unless etaf--mount-cursor
           (setq etaf--mount-cursor
                 (cons (local-variable-p 'cursor-type) cursor-type)))

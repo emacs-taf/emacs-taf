@@ -17,6 +17,7 @@
 
 ### Changed
 
+- `etaf-cursor-follows-input-modality` now defaults to `nil` so mounted Views preserve Emacs's native blinking cursor across pointer clicks, pointer motion and wheel scrolls instead of setting `cursor-type` to `nil` on mouse events. Set it to non-nil (globally or buffer-locally) to opt into hiding the cursor on pointer clicks until the next keyboard command, or pass `:cursor nil` to `etaf-app-open` for applications that want no cursor.
 - Reissued: the source had moved ahead of this version without a release, so the published file no longer matched it.  Changed since 0.3.5 was cut: `CHANGELOG.md`, `etaf.el`, `etaf-animation-example.el`, `etaf-help.el` and 3 more.
 
 

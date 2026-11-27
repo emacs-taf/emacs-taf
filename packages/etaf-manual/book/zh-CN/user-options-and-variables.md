@@ -9,6 +9,7 @@
 | 变量 | 用途 |
 | --- | --- |
 | [`ebox-image-converters`](images.md#variable-ebox-image-converters) | 有序的 （NAME . FUNCTION） 图像转换器列表，只在准备阶段调用。 |
+| [`ebox-image-kitty-protocol`](images.md#variable-ebox-image-kitty-protocol) | 控制文本 frame 上 Kitty 终端图形协议的使用策略。 |
 
 ## 视口
 
@@ -46,7 +47,7 @@
 | 变量 | 用途 |
 | --- | --- |
 | [`ebox-input-edit-commands`](text-input.md#variable-ebox-input-edit-commands) | 会话 `:keymap` 绑定它们时编辑会话值的命令。 |
-| [`etaf-cursor-follows-input-modality`](text-input.md#variable-etaf-cursor-follows-input-modality) | 已挂载画布是否在指针按压后隐藏光标。 |
+| [`etaf-cursor-follows-input-modality`](text-input.md#variable-etaf-cursor-follows-input-modality) | 已挂载画布是否在指针点击后隐藏光标；默认为 nil。 |
 | [`ebox-allow-text-selection`](text-input.md#variable-ebox-allow-text-selection) | 已挂载画布是否允许 Emacs 原生 mark 与指针文本选择。 |
 
 ## 动画

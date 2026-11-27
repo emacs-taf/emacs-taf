@@ -10,12 +10,12 @@ The manual documents the version combination in the table below. Except for EKP 
 | --- | --- | --- |
 | `ecss` | 0.1.4 | Emacs 28.1 |
 | `ekp` | 1.0.7 | Emacs 29.1 |
-| `ebox` | 3.1.13 | Emacs 29.1, `ecss 0.1.4` |
-| `etaf` | 0.3.17 | Emacs 29.1, `ebox 3.1.13`, `ecss 0.1.4` |
-| `etaf-ui` | 0.3.12 | Emacs 29.1, `etaf 0.3.17`, `ebox 3.1.13` |
+| `ebox` | 3.1.14 | Emacs 29.1, `ecss 0.1.4` |
+| `etaf` | 0.3.17 | Emacs 29.1, `ebox 3.1.14`, `ecss 0.1.4` |
+| `etaf-ui` | 0.3.13 | Emacs 29.1, `etaf 0.3.17`, `ebox 3.1.14` |
 | `etaf-db` | 0.1.3 | Emacs 29.1, `etaf 0.3.17` |
-| `etaf-posframe` | 0.3.4 | Emacs 29.1, `etaf 0.3.17`, `etaf-ui 0.3.12`, Posframe 0.9.0 |
-| `etaf-manual` | 0.1.24 | Emacs 29.1, `etaf 0.3.17`, `etaf-ui 0.3.12` |
+| `etaf-posframe` | 0.3.4 | Emacs 29.1, `etaf 0.3.17`, `etaf-ui 0.3.13`, Posframe 0.9.0 |
+| `etaf-manual` | 0.1.25 | Emacs 29.1, `etaf 0.3.17`, `etaf-ui 0.3.13` |
 
 The third column is the combination this edition documents.  Each package's `Package-Requires` header states the minimum it installs with, which can be lower.
 

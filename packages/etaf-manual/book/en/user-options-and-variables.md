@@ -9,6 +9,7 @@ Every documented variable, grouped by the chapter that defines it. Each row link
 | Variable | Purpose |
 | --- | --- |
 | [`ebox-image-converters`](images.md#variable-ebox-image-converters) | Ordered (NAME . FUNCTION) image converters, called only by preparation. |
+| [`ebox-image-kitty-protocol`](images.md#variable-ebox-image-kitty-protocol) | Control Kitty terminal graphics protocol use on text frames. |
 
 ## Viewport
 
@@ -46,7 +47,7 @@ Every documented variable, grouped by the chapter that defines it. Each row link
 | Variable | Purpose |
 | --- | --- |
 | [`ebox-input-edit-commands`](text-input.md#variable-ebox-input-edit-commands) | Commands that edit the session value when a session `:keymap` binds them. |
-| [`etaf-cursor-follows-input-modality`](text-input.md#variable-etaf-cursor-follows-input-modality) | Whether a mounted canvas hides its cursor after a pointer press. |
+| [`etaf-cursor-follows-input-modality`](text-input.md#variable-etaf-cursor-follows-input-modality) | Whether a mounted canvas hides its cursor after a pointer click; nil by default. |
 | [`ebox-allow-text-selection`](text-input.md#variable-ebox-allow-text-selection) | Whether a mounted canvas allows native Emacs mark and pointer text selection. |
 
 ## Animation

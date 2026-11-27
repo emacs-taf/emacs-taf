@@ -208,9 +208,9 @@ Return the node SESSION edits.
 
 #### Variable: etaf-cursor-follows-input-modality
 
-Whether a mounted canvas hides its cursor after a pointer press.
+Whether a mounted canvas hides its cursor after a pointer click.
 
-**Semantics.** A painted page follows the input modality: a press leaves the cursor as a stray block, so it hides until the next keyboard command. An application that edits text in place sets this to nil, because a press there really does place a caret the user needs to see.
+**Semantics.** Nil by default so a mounted buffer keeps Emacs's native blinking cursor visible wherever point lands after a click or keyboard motion. Setting it to non-nil (globally or buffer-locally) opts into hiding the cursor after a pointer click until the next keyboard command; applications that want no cursor at all pass `:cursor nil` to `etaf-app-open`.
 
 **Returns.** Not applicable; the variable is a boolean.
 

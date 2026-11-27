@@ -98,6 +98,90 @@ Release cached preparations and paint composites without changing live images.
 
 **See also.** `ebox-image-converters`.
 
+## Kitty terminal graphics
+
+<!-- index: Kitty graphics; terminal image; Unicode placeholder; live video stream -->
+
+On compliant 24-bit text terminals (`Kitty` 0.28+, `Ghostty`, `Ghostel` and `iTerm2` 3.6+), Ebox can render static images and stream live frames using Kitty graphics protocol virtual placements (`U=1`) and Unicode placeholder cells (`U+10EEEE` with row/column diacritics).
+
+#### Variable: ebox-image-kitty-protocol
+
+Control Kitty terminal graphics protocol use on text frames.
+
+**Semantics.** Defaults to `auto`, which probes the terminal once and enables Unicode placeholder graphics on compliant 24-bit terminals. Setting it to `t` enables transmission on any 24-bit text terminal acknowledging the Kitty query; `nil` disables the protocol so text frames fall back to `ebox-image-converters` or placeholders.
+
+**Returns.** Not applicable; the variable holds `auto`, `t` or `nil`.
+
+**See also.** `ebox-image-kitty-available-p`, `ebox-image-prepare`.
+
+#### Function: ebox-image-kitty-available-p (&optional frame)
+
+Return a capability plist when FRAME supports Kitty Unicode placeholder graphics, or nil otherwise.
+
+**Arguments.** FRAME is a live frame and defaults to `(selected-frame)`.
+
+**Semantics.** Returns nil in batch sessions, on graphical frames, when `ebox-image-kitty-protocol` is nil, or when FRAME lacks 24-bit color or Kitty Unicode placeholder support. Otherwise returns a fresh plist with `:cell-width`, `:cell-height` and `:local`.
+
+**Returns.** Capability plist or nil.
+
+**See also.** `ebox-image-kitty-protocol`, `ebox-image-kitty-stream-create`.
+
+#### Function: ebox-image-kitty-stream-create (columns rows &optional frame)
+
+Create a Kitty virtual placement stream for COLUMNS by ROWS cells on FRAME.
+
+**Arguments.** COLUMNS and ROWS are positive integers within the Kitty diacritic table limit; FRAME defaults to `(selected-frame)`.
+
+**Semantics.** Allocates a terminal image ID and builds its reusable Unicode placeholder grid when FRAME supports Kitty graphics, returning an opaque stream handle or nil when unavailable.
+
+**Returns.** Stream handle or nil.
+
+**Errors.** Non-positive dimensions or grids exceeding the diacritic limit signal an error.
+
+**See also.** `ebox-image-kitty-stream-grid`, `ebox-image-kitty-stream-present`, `ebox-image-kitty-stream-destroy`.
+
+#### Function: ebox-image-kitty-stream-grid (stream)
+
+Return an owned Unicode placeholder grid string for Kitty STREAM.
+
+**Arguments.** STREAM is a handle returned by `ebox-image-kitty-stream-create`.
+
+**Semantics.** Returns a fresh copy of STREAM's placeholder grid string suitable for insertion into a canvas buffer once before pushing frames in place.
+
+**Returns.** Propertized string.
+
+**Errors.** Invalid STREAM signals an error.
+
+**See also.** `ebox-image-kitty-stream-create`, `ebox-image-kitty-stream-present`.
+
+#### Function: ebox-image-kitty-stream-present (stream bytes width height &optional format)
+
+Present one unibyte frame of BYTES into Kitty STREAM in place without modifying buffers.
+
+**Arguments.** STREAM is a live stream handle; BYTES is a unibyte string of pixel data (WIDTH by HEIGHT); FORMAT is `rgb24` (default), `rgba32` or `png`.
+
+**Semantics.** Transmits the frame via auto-deleted temp file on local terminals or chunked direct transfer over remote links so the terminal updates already-displayed placeholder cells in place.
+
+**Returns.** Non-nil when transmitted, or nil when STREAM was destroyed or its terminal closed.
+
+**Errors.** Invalid STREAM, multibyte BYTES, non-positive dimensions, unsupported FORMAT or mismatched byte length signal an error.
+
+**See also.** `ebox-image-kitty-stream-create`, `ebox-image-kitty-stream-destroy`.
+
+#### Function: ebox-image-kitty-stream-destroy (stream)
+
+Destroy Kitty STREAM and release its image data on its terminal.
+
+**Arguments.** STREAM is a handle returned by `ebox-image-kitty-stream-create`.
+
+**Semantics.** Sends a quiet delete command for STREAM's image ID once and marks STREAM destroyed; repeated calls are safe no-ops.
+
+**Returns.** Nil.
+
+**Errors.** Invalid STREAM signals an error.
+
+**See also.** `ebox-image-kitty-stream-create`.
+
 ## The one-glyph line
 
 <!-- index: image invariant; one glyph per line; image node -->

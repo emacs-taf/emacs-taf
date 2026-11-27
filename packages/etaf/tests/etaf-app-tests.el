@@ -192,4 +192,61 @@ the window scrolls as a whole and slides every pane at once."
       (set-window-configuration config)
       (when (buffer-live-p buffer) (kill-buffer buffer)))))
 
+(ert-deftest etaf-mount-keeps-native-cursor-visible-across-pointer-events ()
+  "A mounted canvas keeps the native cursor visible after pointer clicks by default.
+Opting into `etaf-cursor-follows-input-modality' hides the cursor on pointer
+clicks (ignoring passive motion), restores it on keyboard commands, and
+restores immediately when modality tracking is disabled."
+  (let ((buffer (get-buffer-create " *etaf-cursor-visibility-test*"))
+        (config (current-window-configuration)))
+    (unwind-protect
+        (progn
+          (set-window-buffer (selected-window) buffer)
+          (with-current-buffer buffer
+            (setq-local cursor-type 'bar)
+            (etaf-mount buffer (etaf-view (column (text "alpha beta gamma")))
+                        '(:viewport-width 400 :viewport-height 5))
+            ;; Default: `etaf-cursor-follows-input-modality' is nil.
+            (should-not etaf-cursor-follows-input-modality)
+            ;; Pointer click and pointer motion must leave the native cursor intact.
+            (let ((posn (list (selected-window) 5 '(40 . 0) 0)))
+              (let ((last-command-event (list 'down-mouse-1 posn)))
+                (run-hooks 'pre-command-hook))
+              (let ((last-command-event (list 'mouse-1 posn)))
+                (run-hooks 'pre-command-hook))
+              (should (eq cursor-type 'bar))
+              (let ((last-command-event (list 'mouse-movement posn)))
+                (run-hooks 'pre-command-hook))
+              (should (eq cursor-type 'bar)))
+            ;; Opt-in modality hides on mouse-1 click, ignores mouse-movement,
+            ;; restores on keyboard input, and restores when turned back off.
+            (setq-local etaf-cursor-follows-input-modality t)
+            (let ((posn (list (selected-window) 5 '(40 . 0) 0)))
+              (let ((last-command-event (list 'mouse-movement posn)))
+                (run-hooks 'pre-command-hook))
+              (should (eq cursor-type 'bar))
+              (let ((last-command-event (list 'mouse-1 posn)))
+                (run-hooks 'pre-command-hook))
+              (should-not cursor-type)
+              (let ((last-command-event (list 'mouse-movement posn)))
+                (run-hooks 'pre-command-hook))
+              (should-not cursor-type)
+              (let ((last-command-event ?n))
+                (run-hooks 'pre-command-hook))
+              (should (eq cursor-type 'bar))
+              ;; Disabling modality while hidden restores the cursor on next hook.
+              (let ((last-command-event (list 'mouse-1 posn)))
+                (run-hooks 'pre-command-hook))
+              (should-not cursor-type)
+              (setq-local etaf-cursor-follows-input-modality nil)
+              (let ((last-command-event (list 'mouse-1 posn)))
+                (run-hooks 'pre-command-hook))
+              (should (eq cursor-type 'bar)))
+            (etaf-unmount (etaf-runtime-for-buffer buffer))
+            (should (eq cursor-type 'bar))))
+      (when-let* ((rt (etaf-runtime-for-buffer buffer)))
+        (ignore-errors (etaf-unmount rt)))
+      (set-window-configuration config)
+      (when (buffer-live-p buffer) (kill-buffer buffer)))))
+
 ;;; etaf-app-tests.el ends here

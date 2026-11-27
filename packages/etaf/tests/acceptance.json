@@ -1402,6 +1402,11 @@
       "name": "etaf-viewport-refit-batches-reactive-update-into-one-flush",
       "file": "tests/etaf-viewport-tests.el",
       "purpose": "Refitting a mounted Runtime with viewport-reactive Components batches reactive patches and Ebox relayout into a single flush and delivers settled geometry to `etaf-on-updated'."
+    },
+    {
+      "name": "etaf-mount-keeps-native-cursor-visible-across-pointer-events",
+      "file": "tests/etaf-app-tests.el",
+      "purpose": "A mounted canvas keeps Emacs's native cursor visible across pointer clicks and motion by default (`etaf-cursor-follows-input-modality' nil), while opt-in modality hides only on pointer clicks and restores cleanly on keyboard input or disable."
     }
   ]
 }

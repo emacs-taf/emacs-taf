@@ -1213,11 +1213,12 @@
 ;;
 ;; Variable: etaf-cursor-follows-input-modality
 ;;;###autoload (autoload 'etaf-cursor-follows-input-modality "etaf" nil nil)
-;; Whether a mounted canvas hides its cursor after a pointer press.
-;; The default follows the input modality: a press hides the cursor and the
-;; next keyboard command shows it.  An application that edits text in place
-;; sets this to nil with `setq-local', because a press there places a caret the
-;; user needs to see.
+;; Whether a mounted canvas hides its cursor after a pointer click.
+;; Nil by default so a mounted buffer keeps Emacs's native blinking cursor
+;; visible wherever point is placed by clicks or keyboard motion.  Set to
+;; non-nil (globally or via `setq-local') to opt into hiding the cursor after
+;; a pointer click until the next keyboard command; applications that want no
+;; cursor at all should pass `:cursor nil' to `etaf-app-open'.
 ;;
 ;; Function: etaf-projection (runtime entries &optional source)
 ;;;###autoload (autoload 'etaf-projection "etaf" nil nil)
@@ -1297,11 +1298,11 @@
 ;; Function: etaf-mount (buffer-or-name view &optional options)
 ;;;###autoload (autoload 'etaf-mount "etaf" nil nil)
 ;; Mount normalized VIEW into BUFFER-OR-NAME and return its buffer.
-;; The mounted buffer follows the input modality with the native cursor: a
-;; pointer press hides the block it would leave wherever point landed, and the
-;; next keyboard command restores it, because arrows and Tab are where keyboard
-;; users read their position. A text input sets its own `cursor-type' while it
-;; edits, and the caller's cursor state returns on unmount.
+;; The mounted buffer preserves Emacs's native cursor across pointer clicks
+;; and keyboard motion by default (`etaf-cursor-follows-input-modality' is nil,
+;; or set to non-nil to hide the cursor on pointer clicks until the next
+;; keyboard command).  A text input sets its own `cursor-type' while it edits,
+;; and the caller's cursor state returns on unmount.
 ;; OPTIONS may provide `:viewport-width', `:viewport-height', `:observer' and
 ;; `:text-selection' (t to enable native Emacs mark and pointer selection); it
 ;; is forwarded to `etaf-runtime-mount' when the Runtime is loaded.

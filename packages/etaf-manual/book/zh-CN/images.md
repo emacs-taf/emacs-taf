@@ -98,6 +98,90 @@
 
 **参见。** `ebox-image-converters`。
 
+## Kitty 终端图形协议
+
+<!-- index: Kitty 图形; 终端图像; Unicode 占位符; 实时视频流 -->
+
+在支持 24 位真彩与 Kitty Unicode 占位符的终端（`Kitty` 0.28+、`Ghostty`、`Ghostel` 与 `iTerm2` 3.6+）中，Ebox 可通过 Kitty 虚拟放置（`U=1`）与 Unicode 占位单元格（`U+10EEEE` 加行列变音符）渲染静态图片并推送实时视频帧。
+
+#### Variable: ebox-image-kitty-protocol
+
+控制文本 frame 上 Kitty 终端图形协议的使用策略。
+
+**语义。** 默认为 `auto`，首次探测终端并在兼容的 24 位终端上启用 Unicode 占位符图形。设为 `t` 时对任何应答 Kitty 查询的 24 位文本终端启用；设为 `nil` 则禁用该协议，回退到 `ebox-image-converters` 或占位点阵。
+
+**返回。** 不适用；变量取值为 `auto`、`t` 或 `nil`。
+
+**参见。** `ebox-image-kitty-available-p`、`ebox-image-prepare`。
+
+#### Function: ebox-image-kitty-available-p (&optional frame)
+
+在 FRAME 支持 Kitty Unicode 占位符图形时返回能力 plist，否则返回 nil。
+
+**参数。** FRAME 为存活 frame，默认取 `(selected-frame)`。
+
+**语义。** 在批处理模式、图形 frame、`ebox-image-kitty-protocol` 为 nil 或终端不支持 24 位色与 Unicode 占位符时返回 nil；否则返回含 `:cell-width`、`:cell-height` 与 `:local` 的新 plist。
+
+**返回。** 能力 plist 或 nil。
+
+**参见。** `ebox-image-kitty-protocol`、`ebox-image-kitty-stream-create`。
+
+#### Function: ebox-image-kitty-stream-create (columns rows &optional frame)
+
+在 FRAME 上为 COLUMNS 列 × ROWS 行的区域创建 Kitty 虚拟放置流。
+
+**参数。** COLUMNS 与 ROWS 为不超过 Kitty 变音符表上限的正整数；FRAME 默认取 `(selected-frame)`。
+
+**语义。** 当 FRAME 支持 Kitty 图形时分配终端图像 ID 并构建可复用的 Unicode 占位栅格，返回不透明流句柄；不可用时返回 nil。
+
+**返回。** 流句柄或 nil。
+
+**错误。** 尺寸非正或超过变音符上限时报错。
+
+**参见。** `ebox-image-kitty-stream-grid`、`ebox-image-kitty-stream-present`、`ebox-image-kitty-stream-destroy`。
+
+#### Function: ebox-image-kitty-stream-grid (stream)
+
+返回 Kitty STREAM 对应的独立 Unicode 占位栅格字符串。
+
+**参数。** STREAM 是 `ebox-image-kitty-stream-create` 返回的句柄。
+
+**语义。** 返回 STREAM 占位栅格的新副本，供调用方一次性写入画布缓冲区，随后原地推送视频帧。
+
+**返回。** 带文本属性的字符串。
+
+**错误。** STREAM 非法时报错。
+
+**参见。** `ebox-image-kitty-stream-create`、`ebox-image-kitty-stream-present`。
+
+#### Function: ebox-image-kitty-stream-present (stream bytes width height &optional format)
+
+把一帧单字节像素 BYTES 就地推送到 Kitty STREAM，不修改缓冲区。
+
+**参数。** STREAM 为存活流句柄；BYTES 为单字节像素字符串（尺寸 WIDTH × HEIGHT）；FORMAT 为 `rgb24`（默认）、`rgba32` 或 `png`。
+
+**语义。** 本地终端经自动删除临时文件传输，远程连接经分块直传，终端直接刷新已显示的占位单元格内容。
+
+**返回。** 发送成功返回非 nil；STREAM 已销毁或终端关闭时返回 nil。
+
+**错误。** STREAM 非法、BYTES 非单字节、尺寸非正、FORMAT 不支持或字节长度不匹配时报错。
+
+**参见。** `ebox-image-kitty-stream-create`、`ebox-image-kitty-stream-destroy`。
+
+#### Function: ebox-image-kitty-stream-destroy (stream)
+
+销毁 Kitty STREAM 并释放终端上的图像数据。
+
+**参数。** STREAM 是 `ebox-image-kitty-stream-create` 返回的句柄。
+
+**语义。** 向终端发送一次静默删除指令并标记 STREAM 已销毁；重复调用安全无副作用。
+
+**返回。** nil。
+
+**错误。** STREAM 非法时报错。
+
+**参见。** `ebox-image-kitty-stream-create`。
+
 ## 一行一个字形
 
 <!-- index: 图像不变式; 一行一个字形; 图像节点 -->
