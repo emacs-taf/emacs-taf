@@ -6,7 +6,7 @@ All notable user-visible changes to `etaf-md` are documented in this file.
 
 ### Changed
 
-- Replaced the external `*ETAF Outline*` side window with an in-buffer resizable ETAF TOC sidebar (`T` / `M-x etaf-md-toggle-toc`, configurable via `etaf-md-toc-side` defaulting to `'left` and `etaf-md-toc-width` defaulting to `28`), with a sticky header, draggable `etaf-pane-resizer`, independent scrolling, and automatic full-width narrow fallback (`< 61` columns).
+- Redesigned the independent `*ETAF Outline*` TOC side window (`T` / `M-x etaf-md-toggle-toc`, configurable via `etaf-md-toc-side` defaulting to `'left` and `etaf-md-toc-width` defaulting to `28`) so variable-height headings and media in the preview buffer never stretch or jitter TOC rows during scrolling, while preserving pure native whole-buffer scrolling, active-heading highlighting, and automatic teardown on close.
 - Upgraded `etaf-md-preview-link` (`K`) to a viewport-centered floating `etaf-dialog` with scrollable body and second-press toggle dismissal, visible from any scroll position.
 - Adopted a two-tier interactive command surface and customizable single-key defaults (`etaf-md-keys`): globally autoloaded `M-x` still exposes strictly `etaf-md-open` and `etaf-md-preview`, while all preview actions are now buffer-scoped interactive commands (`completion-predicate`) bound to single keys with zero `C-c` / `C-t` / `C-x` prefix shadowing.
 

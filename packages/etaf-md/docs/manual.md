@@ -10,7 +10,7 @@ Run `M-x etaf-md-open` from any Markdown buffer to read it full-width in the cur
 | --- | --- |
 | `n` / `p` | Move to the next / previous heading of the document (pushes mark) |
 | `j` | Choose a heading from a completion list (pushes mark) |
-| `T` | Toggle the in-buffer resizable ETAF TOC sidebar (`etaf-md-toc-side`, default `left`; drag divider to resize) |
+| `T` | Toggle the independent `*ETAF Outline*` side window (`etaf-md-toc-side`, default `left`, width `etaf-md-toc-width`) |
 | `e` / `o` | Jump from preview point back to the matching line in the source buffer |
 | `v` | Toggle side-by-side source + live preview split from the preview |
 | `f` | Toggle proportional scroll-follow with the source window |
@@ -66,7 +66,7 @@ An opened preview follows its source buffer (matching canonical paths and symlin
 
 ## Customization
 
-Twelve options cover personalization, workspace trust gates and caching; every other appearance decision follows the document and the frame.
+Fourteen options cover personalization, side-window TOC placement, workspace trust gates and caching; every other appearance decision follows the document and the frame.
 
 | Option | Default | Effect |
 | --- | --- | --- |
@@ -74,6 +74,8 @@ Twelve options cover personalization, workspace trust gates and caching; every o
 | `etaf-md-flavor` | `nil` (`etaf`) | Default Markdown dialect when `etaf-md-create` gets no `:flavor` (`etaf`, `gfm`, `commonmark` or a feature plist). |
 | `etaf-md-width-min` | `40` | Narrowest reading measure, in character cells. |
 | `etaf-md-width-max` | `96` | Widest reading measure; a wider window keeps it and centers the column. |
+| `etaf-md-toc-side` | `left` | Side of the frame where the independent `*ETAF Outline*` side window opens (`left` or `right`). |
+| `etaf-md-toc-width` | `28` | Width of the independent `*ETAF Outline*` side window in character cells (clamped `18..52`). |
 | `etaf-md-typeset` | `t` | Draw `mermaid` diagrams and `$$` display formulas as SVGs via the prebuilt QuickJS native module (`M-x etaf-install-native`, inspired by [LuciusChen/pele.el](https://github.com/LuciusChen/pele.el)). |
 | `etaf-md-node-directory` | `~/.emacs.d/etaf-md-nodes` | Directory whose `.el` files define custom `:::` node types. |
 | `etaf-md-allow-local-read` | `t` | Allow read-only workspace living-doc widgets (`include`, `code-ref`, `project-tree`, `git-log`, `git-diff`) to read inside the workspace root. |

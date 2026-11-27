@@ -348,18 +348,19 @@
 ;; embedded QuickJS native module (`etaf-md-typeset-native').
 ;;
 ;; Function: etaf-md-toggle-toc (&optional arg)
-;; Toggle the in-buffer resizable TOC sidebar for the current preview (`T').
-;; Renders inside the preview buffer on `etaf-md-toc-side' (default `left')
-;; with an `etaf-pane-resizer' divider and independent scrolling.  With prefix
-;; ARG, open when positive and close otherwise.  Returns the new state.
+;; Toggle the independent `*ETAF Outline*' side window for the current
+;; preview (`T').  Opens on `etaf-md-toc-side' (default `left') with width
+;; `etaf-md-toc-width' so heading font-size changes in the preview never cause
+;; outline row jitter.  With prefix ARG, open when positive and close
+;; otherwise.  Returns non-nil when open and nil when closed.
 ;;
 ;; Variable: etaf-md-toc-side (default `left')
-;; Side of the preview buffer where the in-buffer TOC sidebar appears: `left'
+;; Side of the frame where the `*ETAF Outline*' TOC side window opens: `left'
 ;; (default) or `right'.
 ;;
 ;; Variable: etaf-md-toc-width (default 28)
-;; Default width of the in-buffer TOC sidebar in character cells (clamped
-;; between 18 and 52 while reserving at least 42 columns for the reading pane).
+;; Default width of the `*ETAF Outline*' TOC side window in character cells
+;; (clamped between 18 and 52 when opened).
 ;;
 ;; Variable: etaf-md-keys
 ;; Customizable list of `(KEY COMMAND LABEL)' entries active in a preview

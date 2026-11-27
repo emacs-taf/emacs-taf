@@ -964,12 +964,14 @@ single refit pass, avoiding a redundant full re-render on every drag settle."
         (unless (equal cols (etaf-md--read session :viewport-width))
           (etaf-md--write session :viewport-width cols)))
       (when mounted
-        (let ((anchor (plist-get session :resize-anchor)))
+        (let ((anchor (plist-get session :resize-anchor))
+              (gen (plist-get session :locate-gen)))
           (plist-put session :resize-anchor nil)
           (when (or width-changed anchor)
             (etaf-next-tick
              (lambda ()
-               (when (and (buffer-live-p buf) (window-live-p window)
+               (when (and (eql gen (plist-get session :locate-gen))
+                          (buffer-live-p buf) (window-live-p window)
                           (eq (window-buffer window) buf))
                  (etaf-md--realign-after-resize session buf window anchor))))))))))
 
@@ -1014,25 +1016,222 @@ single refit pass, avoiding a redundant full re-render on every drag settle."
         (setq found (car cell))))
     found))
 
+(defun etaf-md--sync-active-heading (session)
+  "Sync SESSION's `:toc-active' ref to point when the TOC side window is open."
+  (when (and session (etaf-md--read session :toc-open))
+    (let ((idx (etaf-md--reading-heading-index session)))
+      (unless (eql idx (etaf-md--read session :toc-active))
+        (etaf-md--write session :toc-active idx)
+        (etaf-md--sync-outline-scroll session)))))
+
+(defun etaf-md--outline-buffer-name (session)
+  "Return the side-window outline buffer name for SESSION."
+  (let ((count (length (etaf-md-outline session))))
+    (if (> count 0)
+        (format "*ETAF Outline* (%d)" count)
+      "*ETAF Outline*")))
+
+(defun etaf-md--outline-background (session)
+  "Return the canvas background color for SESSION's outline side window.
+Uses `:panel' for fixed palettes (`dark', `light', `sepia') so the sidebar
+keeps a calm distinct tint from top to bottom, and nil for `auto' so the
+active Emacs theme background stays intact."
+  (when (eq (etaf-md--read session :theme-source) 'palette)
+    (etaf-md--palette-value (etaf-md--session-palette session) :panel)))
+
+(defun etaf-md--outline-close (session)
+  "Close and clean up SESSION's independent TOC side window."
+  (when session
+    (let* ((preview-buf (plist-get session :buffer))
+           (preview-win (and (buffer-live-p preview-buf)
+                             (get-buffer-window preview-buf t)))
+           (buf (plist-get session :toc-buffer))
+           (win (and (buffer-live-p buf) (get-buffer-window buf t)))
+           (was-selected (and (window-live-p win) (eq win (selected-window)))))
+      (when (etaf-md--ref session :toc-open)
+        (etaf-md--write session :toc-open nil))
+      (plist-put session :toc-buffer nil)
+      (when (buffer-live-p buf)
+        (when (and (window-live-p win) (not (one-window-p t)))
+          (ignore-errors (delete-window win)))
+        (when-let* ((rt (etaf-runtime-for-buffer buf)))
+          (ignore-errors (etaf-unmount rt)))
+        (ignore-errors (kill-buffer buf)))
+      (when (and was-selected (window-live-p preview-win))
+        (select-window preview-win)))))
+
+(etaf-define-component etaf-md--outline-app (&key session)
+  "Independent side-window TOC panel synced reactively with SESSION."
+  :setup
+  (etaf-theme-provide
+   (etaf-computed
+    (lambda ()
+      (etaf-md-theme-tokens (etaf-md--read session :theme)
+                            (etaf-md--session-palette session)))))
+  :render
+  (let* ((env (etaf-md--env session))
+         (outline (etaf-md-outline session))
+         (active (or (etaf-md--read session :toc-active) 0))
+         (ink (etaf-md--env-color env :ink))
+         (muted (etaf-md--env-color env :muted))
+         (faint (or (etaf-md--palette-value (plist-get env :palette) :faint) muted))
+         (border (etaf-md--env-color env :border))
+         (accent (etaf-md--env-color env :accent))
+         (accent-soft (etaf-md--env-color env :accent-soft))
+         (hover (when (if (plist-member env :link-hover) (plist-get env :link-hover) t)
+                  (etaf-md--env-color env :panel2)))
+         (min-lv (if outline (apply #'min (mapcar #'car outline)) 1))
+         (count (length outline))
+         (bg (etaf-md--outline-background session))
+         (rest-border (or bg (etaf-md--env-color env :bg))))
+    (etaf-node
+     'column
+     (append
+      (list :width '(vw 100)
+            :color ink
+            :item-gap '(lh 0)
+            :aria-label "文档目录"
+            :on-direction
+            (lambda (direction)
+              (pcase direction
+                ('down
+                 (when-let* ((rt (etaf-runtime-for-buffer (current-buffer))))
+                   (etaf-scroll-viewport rt 1))
+                 'handled)
+                ('up
+                 (when-let* ((rt (etaf-runtime-for-buffer (current-buffer))))
+                   (etaf-scroll-viewport rt -1))
+                 'handled)
+                (_ 'release))))
+      (when bg (list :background-color bg)))
+     (append
+      (list
+       (etaf-node
+        'flex
+        (list :width 'stretch :align-items 'center
+              :padding '((lh 0) (ch 2))
+              :border-bottom (list '(px 1) 'solid border))
+        (delq nil
+              (list
+               (etaf-node 'text (list :font-weight 'bold :color ink) (list "目录"))
+               (when (> count 0)
+                 (etaf-node 'text (list :color faint) (list (format " · %d" count))))
+               (etaf-node 'box (list :flex-basis '(ch 0) :flex-grow 1 :min-width '(ch 1)) nil)
+               (etaf-node 'text
+                          (append
+                           (list :color muted :role 'button :tab-index 0 :pointer 'hand
+                                 :help-echo "关闭目录侧窗（T 或 q）"
+                                 :on-press (lambda () (etaf-md--outline-close session)))
+                           (when hover (list :hover-style (list :background-color hover))))
+                          (list "×")))))
+       (etaf-node 'box (list :width 'stretch :height '(lh 1)) nil))
+      (if (null outline)
+          (list (etaf-node 'box (list :width 'stretch :padding '((lh 0) (ch 2)))
+                           (list (etaf-node 'text (list :color muted)
+                                            (list "（文档暂无标题）")))))
+        (cl-loop for entry in outline
+                 for idx from 0
+                 for lv = (nth 0 entry)
+                 for text = (nth 1 entry)
+                 for is-active = (eql idx active)
+                 for indent = (* 2 (min 3 (max 0 (- lv min-lv))))
+                 collect
+                 (let ((target-idx idx))
+                   (etaf-node
+                    'box
+                    (append
+                     (when is-active (list :ref 'etaf-md-toc-active-row))
+                     (list :width 'stretch
+                           :box-sizing 'border-box
+                           :padding (list '(lh 0) '(ch 1) '(lh 0) (list 'ch (+ 2 indent)))
+                           :border-left (list '(px 2) 'solid
+                                              (if is-active accent rest-border))
+                           :wrap-mode 'word
+                           :color (cond (is-active accent)
+                                        ((= lv min-lv) ink)
+                                        (t muted))
+                           :font-weight (when (or is-active (= lv min-lv)) 'bold)
+                           :role 'link :tab-index 0
+                           :pointer (unless is-active 'hand)
+                           :aria-selected (when is-active t)
+                           :help-echo (format "跳转到 %s" text)
+                           :on-press (lambda () (etaf-md-locate session target-idx)))
+                     (when is-active (list :background-color accent-soft))
+                     (when (and hover (not is-active))
+                       (list :hover-style (list :background-color hover))))
+                    (list (etaf-node 'text nil (list text)))))))))))
+
+(defun etaf-md--outline-open (session)
+  "Open SESSION's independent TOC side window on `etaf-md-toc-side'."
+  (let* ((preview-buf (plist-get session :buffer))
+         (preview-win (or (and (buffer-live-p preview-buf)
+                               (get-buffer-window preview-buf t))
+                          (selected-window)))
+         (side (if (eq etaf-md-toc-side 'right) 'right 'left))
+         (width (etaf-md--clamp-toc-width etaf-md-toc-width))
+         (alist `((side . ,side) (slot . 0) (window-width . ,width)
+                  (preserve-size . (t . nil))))
+         (existing (plist-get session :toc-buffer))
+         (toc-keys (list (list "q" (lambda () (interactive) (etaf-md--outline-close session)) "关闭目录侧窗")
+                         (list "T" #'etaf-md-toggle-toc "开关目录侧窗")
+                         (list "n" #'etaf-md-next-heading "下一个标题")
+                         (list "p" #'etaf-md-previous-heading "上一个标题")
+                         (list "t" #'etaf-md-cycle-theme "切换配色"))))
+    (etaf-md--write session :toc-active (etaf-md--reading-heading-index session))
+    (etaf-md--write session :toc-open t)
+    (let ((buf (if (buffer-live-p existing)
+                   (progn
+                     (display-buffer-in-side-window existing alist)
+                     existing)
+                 (let ((b (etaf-app-open
+                           (generate-new-buffer-name
+                            (etaf-md--outline-buffer-name session))
+                           (etaf-view (etaf-md--outline-app :session session
+                                                            :keys toc-keys))
+                           :state session
+                           :mode-line t
+                           :display (lambda (obuf)
+                                      (display-buffer-in-side-window obuf alist))
+                           :background (lambda () (etaf-md--outline-background session))
+                           :on-close (lambda ()
+                                       (when (etaf-md--ref session :toc-open)
+                                         (etaf-md--write session :toc-open nil))
+                                       (plist-put session :toc-buffer nil)))))
+                   (with-current-buffer b
+                     (setq-local cursor-in-non-selected-windows nil)
+                     (setq-local left-fringe-width 0)
+                     (setq-local right-fringe-width 0))
+                   (plist-put session :toc-buffer b)
+                   b))))
+      (when-let* ((owin (get-buffer-window buf t)))
+        (set-window-fringes owin 0 0))
+      (when (window-live-p preview-win)
+        (select-window preview-win))
+      (etaf-md--sync-outline-scroll session)
+      buf)))
+
 (defun etaf-md-toggle-toc (&optional arg)
-  "Toggle the in-buffer resizable TOC sidebar for the current preview.
-The sidebar sits inside the preview buffer on `etaf-md-toc-side' (default
-`left') with an `etaf-pane-resizer' divider.  With prefix ARG, open when
-positive and close otherwise.  Return the new boolean state."
+  "Toggle the independent `*ETAF Outline*' side window for the current preview.
+Opens on `etaf-md-toc-side' (default `left') with width `etaf-md-toc-width'.
+With prefix ARG, open when positive and close otherwise.  Returns non-nil when
+open and nil when closed."
   (declare (completion etaf-md--preview-command-p))
   (interactive "P")
   (let* ((session (etaf-md--current-session))
          (effective (or arg current-prefix-arg))
+         (open-p (and (etaf-md--read session :toc-open)
+                      (buffer-live-p (plist-get session :toc-buffer))
+                      (get-buffer-window (plist-get session :toc-buffer) t)))
          (next (if effective (> (prefix-numeric-value effective) 0)
-                 (not (etaf-md--read session :toc-open)))))
-    (when next
-      (etaf-md--write session :toc-active (etaf-md--reading-heading-index session)))
-    (etaf-md--write session :toc-open (and next t))
-    (when-let* ((buf (plist-get session :buffer))
-                (rt (and (buffer-live-p buf) (etaf-runtime-for-buffer buf))))
-      (etaf-runtime-flush rt))
-    (message "目录侧栏：%s" (if next "已打开" "已关闭"))
-    (and next t)))
+                 (not open-p))))
+    (if next
+        (progn
+          (etaf-md--outline-open session)
+          (message "目录侧窗：已打开")
+          t)
+      (etaf-md--outline-close session)
+      (message "目录侧窗：已关闭")
+      nil)))
 
 (defun etaf-md-toggle-spoilers (&optional arg)
   "Reveal or hide all `!!spoiler!!' spans in the current preview.
@@ -1198,6 +1397,7 @@ not a preview."
                          (and (buffer-live-p source-buf)
                               (not (eq source-buf preview-buf))
                               source-buf))))
+    (etaf-md--outline-close session)
     (etaf-md--cleanup-source-kill-hook session)
     (etaf-md--cancel-asset-timer session)
     (etaf-app-close)
@@ -1265,19 +1465,14 @@ non-nil when side-by-side split is active."
 
 (defun etaf-md--effective-width (session)
   "Return the reading width the window actually gives SESSION.
-The session's `:width' is the maximum measure; a narrower window or an open
-side-by-side TOC sidebar narrows the available columns accordingly."
+The session's `:width' is the maximum measure; a narrower window fills the
+available columns minus side gutters instead."
   (let* ((buffer (plist-get session :buffer))
          (window (and (buffer-live-p buffer) (get-buffer-window buffer t)))
          (cap (etaf-md--read session :width)))
     (if (window-live-p window)
-        (let* ((raw-cols (window-body-width window))
-               (toc-cols (when (and (etaf-md--read session :toc-open)
-                                    (etaf-md--toc-side-by-side-p raw-cols))
-                           (etaf-md--clamp-toc-width
-                            (etaf-md--read session :toc-width) raw-cols)))
-               (pane-cols (if toc-cols (max 24 (- raw-cols toc-cols 1)) raw-cols)))
-          (min cap (max 24 (- pane-cols (* 2 etaf-md--measure-gutter)))))
+        (min cap (max 24 (- (window-body-width window)
+                            (* 2 etaf-md--measure-gutter))))
       cap)))
 
 ;;; ---------------------------------------------------------------------------
@@ -1588,95 +1783,77 @@ intact."
                  (match (etaf-md--block-entry-at session offset)))
             (cond
              ((eq match 'top)
-              (if-let* ((rt (and (etaf-md--read session :toc-open)
-                                 (etaf-runtime-for-buffer buffer)))
-                        ((etaf-runtime-mounted-p rt))
-                        ((etaf-runtime-host-props-for rt 'etaf-md-article-pane)))
-                  (progn
-                    (ignore-errors (etaf-scroll-to rt 'etaf-md-article-pane 0))
-                    (etaf-runtime-flush rt)
-                    (with-current-buffer buffer (point-min)))
-                (let ((top (with-current-buffer buffer (point-min))))
-                  (set-window-start window top nil)
-                  (set-window-point window top)
-                  (force-window-update window)
-                  top)))
+              (let ((top (with-current-buffer buffer (point-min))))
+                (set-window-start window top nil)
+                (set-window-point window top)
+                (force-window-update window)
+                top))
              ((consp match)
               (let* ((entry (car match))
                      (ref (plist-get entry :ref))
                      (block (plist-get entry :block))
                      (runtime (etaf-runtime-for-buffer buffer))
-                     (in-scroller (and runtime ref
-                                       (etaf-runtime-mounted-p runtime)
-                                       (etaf-runtime-host-props-for runtime ref)
-                                       (etaf-md--scrollable-ancestor-p runtime ref))))
-                (if in-scroller
-                    (progn
-                      (etaf-scroll-into-view runtime ref 'start)
-                      (etaf-runtime-flush runtime)
-                      (or (car-safe (etaf-host-ref-bounds runtime ref))
-                          (etaf-host-ref-position runtime ref)))
-                  (let* ((bounds (and runtime ref (etaf-host-ref-bounds runtime ref)))
-                         (position (or (car-safe bounds)
-                                       (and runtime ref (etaf-host-ref-position runtime ref)))))
-                    (when position
-                      (let* ((src-beg (plist-get block :begin))
-                             (src-end (plist-get block :end))
-                             (extra-lines
-                              (if (and (consp bounds)
-                                       (integerp src-beg) (integerp src-end)
-                                       (> offset src-beg) (< offset src-end))
-                                  (let* ((pmin (with-current-buffer source (point-min)))
-                                         (pmax (with-current-buffer source (point-max)))
-                                         (sb (max pmin (min pmax (+ pmin src-beg))))
-                                         (se (max sb (min pmax (+ pmin src-end))))
-                                         (sp (max sb (min se start)))
-                                         (src-frac
-                                          (with-current-buffer source
-                                            (save-excursion
-                                              (let* ((se-trim (progn
-                                                                (goto-char se)
-                                                                (skip-chars-backward " \t\r\n" sb)
-                                                                (max sb (point))))
-                                                     (sb-bol (progn (goto-char sb)
-                                                                    (line-beginning-position)))
-                                                     (sp-bol (progn (goto-char sp)
-                                                                    (line-beginning-position)))
-                                                     (se-bol (progn (goto-char se-trim)
-                                                                    (line-beginning-position)))
-                                                     (total (count-lines sb-bol se-bol))
-                                                     (off (count-lines sb-bol sp-bol)))
-                                                (if (<= total 0)
-                                                    0.0
-                                                  (min 1.0 (/ (float off) (float total))))))))
-                                         (prev-steps
-                                          (with-current-buffer buffer
-                                            (save-excursion
-                                              (let* ((pb (car bounds))
-                                                     (pe (etaf-md--block-content-end
-                                                          buffer pb (cdr bounds)))
-                                                     (pb-bol (progn (goto-char pb)
-                                                                    (line-beginning-position)))
-                                                     (pe-bol (progn (goto-char pe)
-                                                                    (line-beginning-position))))
-                                                (count-lines pb-bol pe-bol))))))
-                                    (if (> prev-steps 0)
-                                        (min prev-steps (round (* src-frac prev-steps)))
-                                      0))
-                                0))
-                             (row-start
-                              (with-current-buffer buffer
-                                (save-excursion
-                                  (goto-char position)
-                                  (when (> extra-lines 0)
-                                    (forward-line extra-lines))
-                                  (line-beginning-position)))))
-                        (set-window-start window row-start nil)
-                        ;; Keep window-point at the synced row and force a window
-                        ;; update so GUI redisplay repaints the unselected preview.
-                        (set-window-point window row-start)
-                        (force-window-update window)
-                        row-start)))))))))))))
+                     (bounds (and runtime ref (etaf-host-ref-bounds runtime ref)))
+                     (position (or (car-safe bounds)
+                                   (and runtime ref (etaf-host-ref-position runtime ref)))))
+                (when position
+                  (let* ((src-beg (plist-get block :begin))
+                         (src-end (plist-get block :end))
+                         (extra-lines
+                          (if (and (consp bounds)
+                                   (integerp src-beg) (integerp src-end)
+                                   (> offset src-beg) (< offset src-end))
+                              (let* ((pmin (with-current-buffer source (point-min)))
+                                     (pmax (with-current-buffer source (point-max)))
+                                     (sb (max pmin (min pmax (+ pmin src-beg))))
+                                     (se (max sb (min pmax (+ pmin src-end))))
+                                     (sp (max sb (min se start)))
+                                     (src-frac
+                                      (with-current-buffer source
+                                        (save-excursion
+                                          (let* ((se-trim (progn
+                                                            (goto-char se)
+                                                            (skip-chars-backward " \t\r\n" sb)
+                                                            (max sb (point))))
+                                                 (sb-bol (progn (goto-char sb)
+                                                                (line-beginning-position)))
+                                                 (sp-bol (progn (goto-char sp)
+                                                                (line-beginning-position)))
+                                                 (se-bol (progn (goto-char se-trim)
+                                                                (line-beginning-position)))
+                                                 (total (count-lines sb-bol se-bol))
+                                                 (off (count-lines sb-bol sp-bol)))
+                                            (if (<= total 0)
+                                                0.0
+                                              (min 1.0 (/ (float off) (float total))))))))
+                                     (prev-steps
+                                      (with-current-buffer buffer
+                                        (save-excursion
+                                          (let* ((pb (car bounds))
+                                                 (pe (etaf-md--block-content-end
+                                                      buffer pb (cdr bounds)))
+                                                 (pb-bol (progn (goto-char pb)
+                                                                (line-beginning-position)))
+                                                 (pe-bol (progn (goto-char pe)
+                                                                (line-beginning-position))))
+                                            (count-lines pb-bol pe-bol))))))
+                                (if (> prev-steps 0)
+                                    (min prev-steps (round (* src-frac prev-steps)))
+                                  0))
+                            0))
+                         (row-start
+                          (with-current-buffer buffer
+                            (save-excursion
+                              (goto-char position)
+                              (when (> extra-lines 0)
+                                (forward-line extra-lines))
+                              (line-beginning-position)))))
+                    (set-window-start window row-start nil)
+                    ;; Keep window-point at the synced row and force a window
+                    ;; update so GUI redisplay repaints the unselected preview.
+                    (set-window-point window row-start)
+                    (force-window-update window)
+                    row-start)))))))))))
 
 (defun etaf-md--block-entry-at (session offset)
   "Return `(ENTRY . t)' at 0-based source OFFSET, `top' before block 0, or nil."
@@ -1804,14 +1981,16 @@ editing inside an existing block wakes only that block's Component."
                   (prev-vw (plist-get preview :last-canvas-width)))
              (plist-put preview :last-canvas-width vw)
              (when (and prev-vw vw (not (equal vw prev-vw)))
-               (etaf-next-tick
-                (lambda ()
-                  (when-let* ((pbuf (plist-get preview :buffer))
-                              ((buffer-live-p pbuf))
-                              (win (get-buffer-window pbuf t)))
-                    (let ((anchor (plist-get preview :resize-anchor)))
-                      (plist-put preview :resize-anchor nil)
-                      (etaf-md--realign-after-resize preview pbuf win anchor)))))))))
+               (let ((gen (plist-get preview :locate-gen)))
+                 (etaf-next-tick
+                  (lambda ()
+                    (when (eql gen (plist-get preview :locate-gen))
+                      (when-let* ((pbuf (plist-get preview :buffer))
+                                  ((buffer-live-p pbuf))
+                                  (win (get-buffer-window pbuf t)))
+                        (let ((anchor (plist-get preview :resize-anchor)))
+                          (plist-put preview :resize-anchor nil)
+                          (etaf-md--realign-after-resize preview pbuf win anchor)))))))))))
        :name 'etaf-md-viewport-realign))
     ;; One appearance state: `auto' resolves to the frame's faces, a named
     ;; mode paints its fixed page, and a panel's title-bar switch writes the
@@ -2031,6 +2210,7 @@ the initial split width."
                     (etaf-md--on-fit session window))
           :background (lambda () (etaf-md--page-background session))
           :on-close (lambda ()
+                      (etaf-md--outline-close session)
                       (etaf-md--cleanup-source-kill-hook session)
                       (etaf-md--follow-unregister (plist-get session :file))
                       (plist-put session :resize-anchor nil)
@@ -2038,12 +2218,16 @@ the initial split width."
     (plist-put session :buffer buffer)
     (etaf-md--follow-register session)
     (etaf-md--schedule-async-assets session nil)
-    (add-hook 'kill-buffer-hook
-              (lambda ()
-                (etaf-md--cleanup-source-kill-hook session)
-                (etaf-md--follow-unregister (plist-get session :file)))
-              t t)
     (with-current-buffer buffer
+      (add-hook 'kill-buffer-hook
+                (lambda ()
+                  (etaf-md--outline-close session)
+                  (etaf-md--cleanup-source-kill-hook session)
+                  (etaf-md--follow-unregister (plist-get session :file)))
+                t t)
+      (add-hook 'post-command-hook
+                (lambda () (etaf-md--sync-active-heading session))
+                nil t)
       ;; Snapshot the pre-resize block anchor on the first size-change event
       ;; before Ebox's debounced refit re-wraps the buffer; `:on-fit' restores
       ;; it (or re-syncs to source when follow-scroll is active) once settled.

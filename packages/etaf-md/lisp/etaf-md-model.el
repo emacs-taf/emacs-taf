@@ -50,54 +50,29 @@ cells a paragraph of Chinese holds more than fifty characters per line."
   :group 'etaf-md)
 
 (defcustom etaf-md-toc-side 'left
-  "Side of the preview buffer where the in-buffer TOC sidebar appears.
+  "Side of the frame where the `*ETAF Outline*' TOC side window opens.
 Set to `left' (the default) or `right'."
   :type '(choice (const :tag "Left" left)
                  (const :tag "Right" right))
   :group 'etaf-md)
 
 (defcustom etaf-md-toc-width 28
-  "Default width of the in-buffer TOC sidebar, in character cells.
-Dragged widths stay clamped between 18 and 52 columns while keeping at least
-42 columns for the reading pane."
+  "Width of the `*ETAF Outline*' TOC side window, in character cells.
+Clamped between 18 and 52 columns when opened; resize the window anytime
+with standard Emacs window controls or mouse drag on the divider."
   :type 'integer
   :group 'etaf-md)
 
 (defconst etaf-md--toc-width-min 18
-  "Narrowest width of the in-buffer TOC sidebar, in character cells.")
+  "Narrowest width of the TOC side window, in character cells.")
 
 (defconst etaf-md--toc-width-max 52
-  "Widest width of the in-buffer TOC sidebar, in character cells.")
+  "Widest width of the TOC side window, in character cells.")
 
-(defconst etaf-md--toc-min-article 42
-  "Minimum columns kept for the reading pane beside an open TOC sidebar.")
-
-(defun etaf-md--toc-side-by-side-p (raw-cols)
-  "Return non-nil when RAW-COLS can display the TOC beside the reading pane."
-  (and (integerp raw-cols)
-       (>= raw-cols (+ etaf-md--toc-width-min etaf-md--toc-min-article 1))))
-
-(defun etaf-md--clamp-toc-width (width &optional available)
-  "Clamp TOC WIDTH to valid sidebar columns, respecting AVAILABLE viewport."
-  (let* ((base (if (integerp width) width etaf-md-toc-width))
-         (cap (if (and (integerp available) (> available 0))
-                  (min etaf-md--toc-width-max
-                       (max etaf-md--toc-width-min
-                            (- available etaf-md--toc-min-article 1)))
-                etaf-md--toc-width-max)))
-    (max etaf-md--toc-width-min (min cap base))))
-
-(defun etaf-md--set-toc-width (session width)
-  "Update SESSION's in-buffer TOC sidebar width to WIDTH (clamped)."
-  (let* ((buf (plist-get session :buffer))
-         (rt (and (buffer-live-p buf) (etaf-runtime-for-buffer buf)))
-         (avail (or (and rt (etaf-runtime-mounted-p rt)
-                         (ignore-errors (etaf-canvas-columns rt)))
-                    (etaf-md--read session :viewport-width)))
-         (clamped (etaf-md--clamp-toc-width width avail)))
-    (unless (equal clamped (etaf-md--read session :toc-width))
-      (etaf-md--write session :toc-width clamped))
-    clamped))
+(defun etaf-md--clamp-toc-width (width)
+  "Clamp TOC side-window WIDTH to valid sidebar columns."
+  (let ((base (if (integerp width) width etaf-md-toc-width)))
+    (max etaf-md--toc-width-min (min etaf-md--toc-width-max base))))
 
 (defcustom etaf-md-flavor nil
   "Default Markdown dialect of `etaf-md-create'.
@@ -1273,8 +1248,7 @@ while keeping heading links active and body links underlined."
                         :reveal-spoilers (etaf-ref nil :name 'etaf-md-reveal-spoilers)
                         :toc-open (etaf-ref nil :name 'etaf-md-toc-open)
                         :toc-active (etaf-ref 0 :name 'etaf-md-toc-active)
-                        :toc-width (etaf-ref (etaf-md--clamp-toc-width etaf-md-toc-width)
-                                             :name 'etaf-md-toc-width)
+                        :toc-buffer nil
                         :lightbox (etaf-ref nil :name 'etaf-md-lightbox)
                         :link-preview (etaf-ref nil :name 'etaf-md-link-preview)
                         :typeset-pending nil
@@ -2012,12 +1986,24 @@ collapsed blocks; falls back to line-order scanning when no runtime is attached.
                      '(scroll auto)))
              lineage)))
 
+(defun etaf-md--sync-outline-scroll (session)
+  "Flush SESSION's open outline buffer and keep the active row visible."
+  (when-let* ((obuf (plist-get session :toc-buffer))
+              ((buffer-live-p obuf))
+              (ort (etaf-runtime-for-buffer obuf))
+              ((etaf-runtime-mounted-p ort)))
+    (etaf-runtime-flush ort)
+    (when-let* ((pos (etaf-host-ref-position ort 'etaf-md-toc-active-row))
+                (owin (get-buffer-window obuf t)))
+      (with-current-buffer obuf
+        (set-window-point owin pos)))))
+
 (defun etaf-md-locate (session index)
   "Move point to SESSION's outline heading INDEX and bring it into view.
-When SESSION is mounted inside a scrolling Host (including when the in-buffer
-TOC sidebar is open), scrolls that viewport so the heading sits at its top
-without recentering the outer Emacs window; otherwise recenters the window to
-row 0.  Return the position, or nil when the heading is not mounted or visible."
+When SESSION is embedded inside a scrolling Host viewport, scrolls that
+viewport so the heading sits at its top without recentering the outer Emacs
+window; otherwise recenters the preview window to row 0.  Return the position,
+or nil when the heading is not mounted or visible."
   (let* ((buffer (plist-get session :buffer))
          (outline (etaf-md-outline session))
          (entry (and (integerp index) (>= index 0) (nth index outline)))
@@ -2025,62 +2011,46 @@ row 0.  Return the position, or nil when the heading is not mounted or visible."
          (ref (and entry (etaf-md--heading-ref (nth 2 entry))))
          (in-scroller nil))
     (when (and entry (buffer-live-p buffer))
+      (plist-put session :resize-anchor nil)
+      (plist-put session :locate-gen (1+ (or (plist-get session :locate-gen) 0)))
       (when (etaf-md--ref session :toc-active)
-        (etaf-md--write session :toc-active index))
+        (etaf-md--write session :toc-active index)
+        (etaf-md--sync-outline-scroll session))
       (when (and runtime (etaf-runtime-mounted-p runtime)
                  ref (etaf-runtime-host-props-for runtime ref))
         (setq in-scroller (etaf-md--scrollable-ancestor-p runtime ref))
         (when in-scroller
           (etaf-scroll-into-view runtime ref 'start)
-          (etaf-runtime-flush runtime)
-          (ignore-errors
-            (when (etaf-runtime-host-props-for runtime 'etaf-md-toc-active-row)
-              (etaf-scroll-into-view runtime 'etaf-md-toc-active-row)))))
+          (etaf-runtime-flush runtime)))
       (let ((position (cdr (assq index (etaf-md--heading-positions session)))))
         (when position
-          (with-selected-window (or (get-buffer-window buffer t) (selected-window))
+          (let ((win (get-buffer-window buffer t)))
             (with-current-buffer buffer
               (push-mark (point) t)
               (goto-char position)
-              (unless in-scroller
-                (when (eq (window-buffer (selected-window)) buffer)
-                  (recenter 0)))))
+              (when (window-live-p win)
+                (set-window-point win position)
+                (unless in-scroller
+                  (with-selected-window win
+                    (goto-char position)
+                    (recenter 0))))))
           position)))))
 
 (defun etaf-md--adjacent-heading (session direction)
   "Move point to the next outline heading in DIRECTION.
-DIRECTION is 1 for forward and -1 for backward.  Handles headings scrolled
-outside an in-buffer `:overflow scroll' pane as well as native buffer flow.
-Return the position moved to, or nil when there is no heading left."
+DIRECTION is 1 for forward and -1 for backward.  Return the position moved to,
+or nil when there is no heading left."
   (let* ((positions (etaf-md--heading-positions session))
-         (outline (etaf-md-outline session))
-         (count (length outline))
          (buffer (plist-get session :buffer))
          (point-now (if (buffer-live-p buffer)
                         (with-current-buffer buffer (point))
                       0))
-         (toc-open (etaf-md--read session :toc-open))
          (target
-          (if (and toc-open (> count 0))
-              ;; Inside an `:overflow scroll' pane, headings scrolled above the
-              ;; viewport all clamp to the scroller's top position.  Anchor to
-              ;; `:toc-active' unless point moved strictly past a lower visible
-              ;; heading inside the pane.
-              (let* ((top-pos (if positions (cdr (car positions)) 0))
-                     (lower-before
-                      (cl-remove-if-not
-                       (lambda (c) (and (> (cdr c) top-pos) (<= (cdr c) point-now)))
-                       positions))
-                     (cur (if lower-before
-                              (car (car (last lower-before)))
-                            (or (etaf-md--read session :toc-active) 0)))
-                     (next (+ cur direction)))
-                (and (>= next 0) (< next count) next))
-            (if (> direction 0)
-                (car (cl-find-if (lambda (cell) (> (cdr cell) point-now)) positions))
-              (car (car (last (cl-remove-if-not
-                               (lambda (cell) (< (cdr cell) point-now))
-                               positions))))))))
+          (if (> direction 0)
+              (car (cl-find-if (lambda (cell) (> (cdr cell) point-now)) positions))
+            (car (car (last (cl-remove-if-not
+                             (lambda (cell) (< (cdr cell) point-now))
+                             positions)))))))
     (when target
       (etaf-md-locate session target))))
 

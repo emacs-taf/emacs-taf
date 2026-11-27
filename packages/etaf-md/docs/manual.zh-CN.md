@@ -10,7 +10,7 @@
 | --- | --- |
 | `n` / `p` | 跳到文档的下一个 / 上一个标题（跳转前自动压栈 mark） |
 | `j` | 从补全列表里选一个标题（跳转前自动压栈 mark） |
-| `T` | 开关缓冲区内可拖拽调宽的 ETAF 目录侧栏（默认左侧，由 `etaf-md-toc-side` / `etaf-md-toc-width` 配置） |
+| `T` | 开关独立 `*ETAF Outline*` 目录侧窗（默认左侧，由 `etaf-md-toc-side` / `etaf-md-toc-width` 配置） |
 | `e` / `o` | 从预览当前位置反向跳回源文档对应行 |
 | `v` | 在单窗全宽阅读与「左源码 + 右预览」双栏对照间切换 |
 | `f` | 开关按比例同步的源窗口滚动跟随 |
@@ -65,7 +65,7 @@
 
 ## 定制
 
-十二项设置覆盖外观、工作区安全门禁与磁盘缓存；其余版面细节都由文档和 frame 决定。
+十四项设置覆盖外观、独立目录侧窗位置与宽度、工作区安全门禁与磁盘缓存；其余版面细节都由文档和 frame 决定。
 
 | 设置 | 默认值 | 作用 |
 | --- | --- | --- |
@@ -73,6 +73,8 @@
 | `etaf-md-flavor` | `nil`（`etaf`） | `etaf-md-create` 没收到 `:flavor` 时用的方言（`etaf`、`gfm`、`commonmark` 或特性 plist）。 |
 | `etaf-md-width-min` | `40` | 最窄的阅读宽度，单位是字符格。 |
 | `etaf-md-width-max` | `96` | 最宽的阅读宽度；窗口更宽时保持这个值并把这一列居中。 |
+| `etaf-md-toc-side` | `left` | 独立 `*ETAF Outline*` 目录侧窗的停靠边（`left` 或 `right`）。 |
+| `etaf-md-toc-width` | `28` | 独立 `*ETAF Outline*` 目录侧窗的字符列宽（范围 `18..52`）。 |
 | `etaf-md-typeset` | `t` | 通过预编译 QuickJS 原生模块（`M-x etaf-install-native`，借鉴 [LuciusChen/pele.el](https://github.com/LuciusChen/pele.el)），将 `mermaid` 围栏与 `$$` 显示公式渲染为 SVG 图片。 |
 | `etaf-md-node-directory` | `~/.emacs.d/etaf-md-nodes` | 存放自定义 `:::` 容器节点 `.el` 定义文件的目录。 |
 | `etaf-md-allow-local-read` | `t` | 是否允许只读活文档组件（`include`、`code-ref`、`project-tree`、`git-log`、`git-diff`）在工作区根内读盘。 |
