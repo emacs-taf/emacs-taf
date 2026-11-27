@@ -4426,3 +4426,94 @@ activating a table image opens the multi-image lightbox gallery."
       (when (buffer-live-p preview)
         (with-current-buffer preview (ignore-errors (etaf-md-close))))
       (delete-directory dir t))))
+
+(ert-deftest etaf-md-tests-goto-source-disambiguates-duplicate-text ()
+  "`etaf-md-goto-source' jumps to the exact occurrence for duplicate text.
+Covers identical table columns (`| test | test |' and `:::table'), multi-row
+repeated cells, inline-formatted same-line duplicates (`**test** **test**',
+`` `test` `test` '', `[test](url/test) [test](url/test)'), soft-wrapped lines,
+long self-overlapping repeated phrases, and code-block duplicates at start,
+middle, end and `C-s' cursor positions."
+  (let* ((file (make-temp-file "etaf-md-goto-dup-" nil ".md"))
+         source preview)
+    (unwind-protect
+        (progn
+          (with-temp-file file
+            (insert
+             "| test | test |\n"
+             "|---|---|\n"
+             "| ![图1](img1.png) | ![图2](img2.png) |\n\n"
+             "test test\n\n"
+             "**test** **test**\n\n"
+             "`test` `test`\n\n"
+             "test  test\n\n"
+             "[test](https://a.example/test) [test](https://b.example/test)\n\n"
+             "test\ntest\n\n"
+             "test foo bar test foo bar test foo bar test foo bar test foo bar test foo bar test foo bar\n\n"
+             "test foo test foo test\n\n"
+             "| head-1 | head-2 |\n"
+             "|---|---|\n"
+             "| alpha test gamma test | beta test delta test |\n"
+             "| test | test |\n\n"
+             ":::table\n"
+             "| test | test |\n"
+             "|---|---|\n"
+             "| a | b |\n"
+             ":::\n\n"
+             "```js\n"
+             "const x = test + test;\n"
+             "```\n"))
+          (setq source (find-file-noselect file))
+          (setq preview (with-current-buffer source (etaf-md-open file)))
+          (let ((expected
+                 '(;; Pipe table header `| test | test |'
+                   (1 . 2) (1 . 9)
+                   ;; Plain `test test'
+                   (5 . 0) (5 . 5)
+                   ;; Inline bold `**test** **test**'
+                   (7 . 2) (7 . 11)
+                   ;; Inline code `` `test` `test` ''
+                   (9 . 1) (9 . 8)
+                   ;; Double-space `test  test'
+                   (11 . 0) (11 . 6)
+                   ;; Links whose URLs also contain `/test'
+                   (13 . 1) (13 . 32)
+                   ;; Soft newline `test\ntest' rendered on one line
+                   (15 . 0) (16 . 0)
+                   ;; Long wrapped line with 7 self-overlapping repeats
+                   (18 . 0) (18 . 13) (18 . 26) (18 . 39) (18 . 52) (18 . 65) (18 . 78)
+                   ;; 3 same-line repeats
+                   (20 . 0) (20 . 9) (20 . 18)
+                   ;; Multi-row table with 2 repeats per cell + repeated body row
+                   (24 . 8) (24 . 19) (24 . 31) (24 . 42)
+                   (25 . 2) (25 . 9)
+                   ;; `:::table' container header
+                   (28 . 2) (28 . 9)
+                   ;; Code block same-line duplicates
+                   (34 . 10) (34 . 17)))
+                (hits nil))
+            (with-current-buffer preview
+              (goto-char (point-min))
+              (while (search-forward "test" nil t)
+                (push (cons (match-beginning 0) (match-end 0)) hits)))
+            (setq hits (nreverse hits))
+            (should (= (length hits) (length expected)))
+            (cl-loop
+             for (pbeg . pend) in hits
+             for (exp-line . exp-col) in expected
+             do
+             (dolist (off '(0 2 4))
+               (with-current-buffer preview
+                 (goto-char (+ pbeg off))
+                 (let ((isearch-string (when (= off 4) "test"))
+                       (isearch-case-fold-search nil))
+                   (let ((pos (etaf-md-goto-source)))
+                     (should (eq (current-buffer) source))
+                     (should (= (point) pos))
+                     (should (= (line-number-at-pos pos) exp-line))
+                     (should (= (- pos (line-beginning-position))
+                                (+ exp-col off))))))))))
+      (when (buffer-live-p preview)
+        (with-current-buffer preview (ignore-errors (etaf-md-close))))
+      (when (buffer-live-p source) (kill-buffer source))
+      (delete-file file))))

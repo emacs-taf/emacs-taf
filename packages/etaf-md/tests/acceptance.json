@@ -714,6 +714,11 @@
       "name": "etaf-md-tests-table-renders-images-and-opens-lightbox",
       "file": "tests/etaf-md-tests.el",
       "purpose": "Markdown pipe tables and `:::table' containers render local Markdown images, empty-alt images and inline HTML `<img>' tags as fitted rasters inside intact column borders, fall back to labeled chips for missing files, follow `:on-link' on linked images and open the multi-image lightbox gallery on activation."
+    },
+    {
+      "name": "etaf-md-tests-goto-source-disambiguates-duplicate-text",
+      "file": "tests/etaf-md-tests.el",
+      "purpose": "`etaf-md-goto-source' resolves every duplicate occurrence to its exact source line and column across pipe-table and `:::table' columns, multi-row cells, inline bold/code/link spans (ignoring URL text), soft line breaks, long self-overlapping repeated lines and code blocks."
     }
   ]
 }

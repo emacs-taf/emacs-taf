@@ -204,16 +204,163 @@ two are both light."
 (defconst etaf-md--preview-border-re "[│┃▎▌┌┐└┘├┤┬┴┼─]"
   "Regexp matching decorative box/table border characters in preview lines.")
 
+(defconst etaf-md--preview-vborder-re "[│┃]"
+  "Regexp matching vertical column dividers in rendered table rows.")
+
 (defconst etaf-md--preview-chrome-prefix-re
   "\\`[›⌄▸▾▶▼•◦▪☐☑✓✕✗●○◉★☆↩⧉]+[ \t]*"
   "Regexp matching rendered UI prefixes that do not appear verbatim in source.")
 
-(defun etaf-md--preview-clean-segment (line col)
-  "Extract the cleaned preview text segment around COL in LINE.
-Returns `(TEXT . OFFSET)' where OFFSET is the 0-based cursor position inside
-TEXT, or nil when LINE carries only borders or whitespace."
+(defconst etaf-md--source-projection-max-chars 65536
+  "Maximum source block length projected into visible text for cursor mapping.")
+
+(defun etaf-md--block-table-like-p (block)
+  "Return non-nil when parsed BLOCK is a table or contains one."
+  (when (listp block)
+    (let ((type (plist-get block :type)))
+      (or (eq type 'table)
+          (and (eq type 'container)
+               (or (equal (plist-get block :name) "table")
+                   (cl-some #'etaf-md--block-table-like-p
+                            (plist-get block :children))))))))
+
+(defun etaf-md--normalize-ws-with-map (str)
+  "Collapse whitespace runs in STR to single spaces and trim ends.
+Returns `(NORM . MAP)' where MAP is a vector mapping each 0-based index of NORM
+to its 0-based index in STR."
+  (let ((len (length str))
+        (i 0)
+        (chars nil)
+        (indices nil)
+        (pending-space nil))
+    (while (< i len)
+      (let ((ch (aref str i)))
+        (if (memq ch '(?\s ?\t ?\r ?\n))
+            (when (and chars (null pending-space))
+              (setq pending-space i))
+          (when pending-space
+            (push ?\s chars)
+            (push pending-space indices)
+            (setq pending-space nil))
+          (push ch chars)
+          (push i indices)))
+      (setq i (1+ i)))
+    (cons (apply #'string (nreverse chars))
+          (vconcat (nreverse indices)))))
+
+(defun etaf-md--map-offset-to-norm (map-vec raw-off)
+  "Map 0-based RAW-OFF in the unnormalized string onto normalized MAP-VEC."
+  (let ((n (length map-vec))
+        (i 0))
+    (while (and (< i n) (< (aref map-vec i) raw-off))
+      (setq i (1+ i)))
+    i))
+
+(defun etaf-md--preview-line-cells (line)
+  "Return list of `(BEG . END)' cell spans when LINE has >= 2 table columns.
+Ignores blank outer margins outside the first and last vertical divider while
+preserving empty interior cells so column indices stay exact."
+  (let ((len (length line))
+        (pos 0)
+        (borders nil))
+    (while (and (< pos len)
+                (string-match etaf-md--preview-vborder-re line pos))
+      (push (match-beginning 0) borders)
+      (setq pos (match-end 0)))
+    (when borders
+      (setq borders (nreverse borders))
+      (let ((spans nil)
+            (prev 0))
+        (dolist (b borders)
+          (push (cons prev b) spans)
+          (setq prev (1+ b)))
+        (push (cons prev len) spans)
+        (setq spans (nreverse spans))
+        ;; Drop blank outer margin before the leftmost divider.
+        (when (and spans
+                   (string-blank-p (substring line (caar spans) (cdar spans))))
+          (setq spans (cdr spans)))
+        ;; Drop blank outer margin after the rightmost divider.
+        (when spans
+          (let ((last-span (car (last spans))))
+            (when (string-blank-p (substring line (car last-span) (cdr last-span)))
+              (setq spans (butlast spans)))))
+        (when (>= (length spans) 2)
+          spans)))))
+
+(defun etaf-md--cell-index-for-col (cells col)
+  "Return the 0-based index in CELLS containing COL, or nil."
+  (when cells
+    (let ((idx 0)
+          (found nil))
+      (dolist (span cells)
+        (when (and (null found) (<= (car span) col) (<= col (cdr span)))
+          (setq found idx))
+        (setq idx (1+ idx)))
+      found)))
+
+(defun etaf-md--clean-piece-with-span (line beg end rel)
+  "Trim whitespace and UI chrome from LINE[BEG..END), tracking REL.
+Returns plist `(:text :offset :beg :end)' or nil when empty."
+  (let ((sb beg)
+        (se end)
+        (off rel))
+    (while (and (< sb se) (memq (aref line sb) '(?\s ?\t)))
+      (setq sb (1+ sb)
+            off (max 0 (1- off))))
+    (while (and (> se sb) (memq (aref line (1- se)) '(?\s ?\t)))
+      (setq se (1- se)
+            off (min (- se sb) off)))
+    (when (< sb se)
+      (let ((seg (substring line sb se)))
+        (when (string-match etaf-md--preview-chrome-prefix-re seg)
+          (let ((n (match-end 0)))
+            (setq sb (+ sb n)
+                  seg (substring seg n)
+                  off (max 0 (- off n)))))
+        (when (string-match "[ \t]*↩[ \t]*\\'" seg)
+          (let ((keep (match-beginning 0)))
+            (setq se (+ sb keep)
+                  seg (substring seg 0 keep)
+                  off (min keep off))))
+        (unless (string-empty-p seg)
+          (list :text seg
+                :offset (max 0 (min (length seg) off))
+                :beg sb
+                :end se))))))
+
+(defun etaf-md--preview-segment-at (line col &optional table-like-p)
+  "Extract cleaned segment metadata around COL in LINE.
+Returns a plist with `:text', `:offset', `:beg', `:end', `:hfrac',
+`:cursor-cell-col', `:seg-cell-col' and `:cells'."
   (let* ((len (length line))
          (c (max 0 (min len col)))
+         (cells (and table-like-p (etaf-md--preview-line-cells line)))
+         (cursor-cell-col (etaf-md--cell-index-for-col cells c))
+         (hfrac
+          (cond
+           (cells
+            (let* ((lo (caar cells))
+                   (hi (cdr (car (last cells))))
+                   (span (max 1 (- hi lo))))
+              (max 0.0 (min 1.0 (/ (float (- c lo)) (float span))))))
+           ((> len 0)
+            (let ((lo 0)
+                  (hi len))
+              (while (and (< lo hi)
+                          (or (memq (aref line lo) '(?\s ?\t))
+                              (string-match-p etaf-md--preview-border-re
+                                              (substring line lo (1+ lo)))))
+                (setq lo (1+ lo)))
+              (while (and (> hi lo)
+                          (or (memq (aref line (1- hi)) '(?\s ?\t))
+                              (string-match-p etaf-md--preview-border-re
+                                              (substring line (1- hi) hi))))
+                (setq hi (1- hi)))
+              (if (> hi lo)
+                  (max 0.0 (min 1.0 (/ (float (- c lo)) (float (- hi lo)))))
+                0.0)))
+           (t 0.0)))
          (beg c)
          (end c))
     ;; Isolate the cell/pane around C bounded by box-drawing borders so table
@@ -227,7 +374,9 @@ TEXT, or nil when LINE carries only borders or whitespace."
                                      (substring line end (1+ end)))))
       (setq end (1+ end)))
     (let* ((raw (substring line beg end))
-           (rel (- c beg)))
+           (rel (- c beg))
+           (piece-beg beg)
+           (piece-end end))
       ;; If cursor sits on a border or in outer centering margin spaces, scan
       ;; right (then left) for the first non-blank text segment on the line.
       (when (string-blank-p raw)
@@ -244,7 +393,8 @@ TEXT, or nil when LINE carries only borders or whitespace."
                   (setq scan (1+ scan)))
                 (let ((piece (substring line s-beg scan)))
                   (unless (string-blank-p piece)
-                    (setq raw piece rel 0 found t))))))
+                    (setq raw piece piece-beg s-beg piece-end scan
+                          rel 0 found t))))))
           (unless found
             (let ((lscan beg))
               (while (and (> lscan 0) (null found))
@@ -258,70 +408,226 @@ TEXT, or nil when LINE carries only borders or whitespace."
                       (setq lscan (1- lscan)))
                     (let ((piece (substring line lscan s-end)))
                       (unless (string-blank-p piece)
-                        (setq raw piece rel (length piece) found t))))))))))
-      (unless (string-blank-p raw)
-        ;; Trim leading/trailing whitespace and UI chrome while preserving rel.
-        (let ((seg raw)
-              (off rel))
-          (when (string-match "\\`[ \t]+" seg)
-            (let ((n (match-end 0)))
-              (setq seg (substring seg n)
-                    off (max 0 (- off n)))))
-          (when (string-match "[ \t]+\\'" seg)
-            (setq seg (substring seg 0 (match-beginning 0))
-                  off (min (length seg) off)))
-          (when (string-match etaf-md--preview-chrome-prefix-re seg)
-            (let ((n (match-end 0)))
-              (setq seg (substring seg n)
-                    off (max 0 (- off n)))))
-          (when (string-match "[ \t]*↩[ \t]*\\'" seg)
-            (setq seg (substring seg 0 (match-beginning 0))
-                  off (min (length seg) off)))
-          (unless (string-empty-p seg)
-            (cons seg (max 0 (min (length seg) off)))))))))
+                        (setq raw piece piece-beg lscan piece-end s-end
+                              rel (length piece) found t))))))))))
+      (let* ((cleaned (unless (string-blank-p raw)
+                        (etaf-md--clean-piece-with-span line piece-beg piece-end rel)))
+             (seg-cell-col (and cleaned cells
+                                (etaf-md--cell-index-for-col
+                                 cells (plist-get cleaned :beg)))))
+        (list :text (and cleaned (plist-get cleaned :text))
+              :offset (and cleaned (plist-get cleaned :offset))
+              :beg (and cleaned (plist-get cleaned :beg))
+              :end (and cleaned (plist-get cleaned :end))
+              :hfrac hfrac
+              :cursor-cell-col cursor-cell-col
+              :seg-cell-col seg-cell-col
+              :cells cells)))))
 
-(defun etaf-md--push-anchor-candidate (candidates seen kind value offset &optional extra)
-  "Push candidate `(KIND VALUE OFFSET . EXTRA)' onto CANDIDATES if unseen."
+(defun etaf-md--preview-clean-segment (line col)
+  "Extract the cleaned preview text segment around COL in LINE.
+Returns `(TEXT . OFFSET)' where OFFSET is the 0-based cursor position inside
+TEXT, or nil when LINE carries only borders or whitespace."
+  (let ((info (etaf-md--preview-segment-at line col nil)))
+    (when (plist-get info :text)
+      (cons (plist-get info :text) (plist-get info :offset)))))
+
+(defun etaf-md--preview-line-pieces (line)
+  "Return cleaned non-blank `(TEXT BEG END)' pieces of LINE split at borders."
+  (let ((len (length line))
+        (pos 0)
+        (pieces nil))
+    (while (< pos len)
+      (if (string-match-p etaf-md--preview-border-re (substring line pos (1+ pos)))
+          (setq pos (1+ pos))
+        (let ((beg pos))
+          (while (and (< pos len)
+                      (not (string-match-p etaf-md--preview-border-re
+                                           (substring line pos (1+ pos)))))
+            (setq pos (1+ pos)))
+          (when-let* ((cleaned (etaf-md--clean-piece-with-span line beg pos 0)))
+            (push cleaned pieces)))))
+    (nreverse pieces)))
+
+(defun etaf-md--preview-block-context (preview-buf pbeg pend pos table-like-p)
+  "Build preview block text context and cursor offsets around POS in [PBEG, PEND].
+Returns a plist carrying `:seg-info', `:p-text', `:p-pos', `:p-frac',
+`:seg-p-base', `:seg-norm', `:seg-norm-map', `:seg-norm-rel', `:table-col',
+`:cursor-table-col', `:col-text', `:col-pos', `:col-frac', `:seg-col-base',
+`:line', `:col' and `:hfrac'."
+  (with-current-buffer preview-buf
+    (save-excursion
+      (let* ((lo (max (point-min) (min (point-max) pbeg)))
+             (content-end (etaf-md--block-content-end preview-buf lo pend))
+             (cur-pos (max (point-min) (min (point-max) pos)))
+             (cur-lbeg (progn (goto-char cur-pos) (line-beginning-position)))
+             (cur-lend (line-end-position))
+             (cur-line (buffer-substring-no-properties cur-lbeg cur-lend))
+             (cur-col (- cur-pos cur-lbeg))
+             (seg-info (etaf-md--preview-segment-at cur-line cur-col table-like-p))
+             (seg-beg (plist-get seg-info :beg))
+             (seg-end (plist-get seg-info :end))
+             (table-col (plist-get seg-info :seg-cell-col))
+             (p-parts nil)
+             (p-len 0)
+             (p-pos nil)
+             (seg-p-base nil)
+             (seg-norm nil)
+             (seg-norm-map nil)
+             (seg-norm-rel nil)
+             (col-parts nil)
+             (col-len 0)
+             (col-pos nil)
+             (seg-col-base nil)
+             (scan-beg (progn (goto-char lo) (line-beginning-position)))
+             (scan-end (progn (goto-char (max lo content-end)) (line-end-position))))
+        (goto-char scan-beg)
+        (while (<= (point) scan-end)
+          (let* ((lb (line-beginning-position))
+                 (le (line-end-position))
+                 (is-cur (= lb cur-lbeg))
+                 (ltxt (if is-cur cur-line (buffer-substring-no-properties lb le))))
+            (dolist (piece (etaf-md--preview-line-pieces ltxt))
+              (let* ((norm-pair (etaf-md--normalize-ws-with-map (plist-get piece :text)))
+                     (ntxt (car norm-pair))
+                     (nmap (cdr norm-pair)))
+                (unless (string-empty-p ntxt)
+                  (when (> p-len 0)
+                    (push " " p-parts)
+                    (setq p-len (1+ p-len)))
+                  (let ((base p-len))
+                    (when (and is-cur seg-beg
+                               (= (plist-get piece :beg) seg-beg)
+                               (= (plist-get piece :end) seg-end))
+                      (let ((nrel (etaf-md--map-offset-to-norm
+                                   nmap (plist-get seg-info :offset))))
+                        (setq seg-p-base base
+                              seg-norm ntxt
+                              seg-norm-map nmap
+                              seg-norm-rel nrel
+                              p-pos (+ base nrel))))
+                    (push ntxt p-parts)
+                    (setq p-len (+ p-len (length ntxt)))))))
+            (when (and is-cur (null p-pos))
+              (setq p-pos p-len))
+            (when table-col
+              (when-let* ((cells (etaf-md--preview-line-cells ltxt))
+                          ((< table-col (length cells)))
+                          (span (nth table-col cells))
+                          (cleaned (etaf-md--clean-piece-with-span
+                                    ltxt (car span) (cdr span) 0)))
+                (let* ((norm-pair (etaf-md--normalize-ws-with-map
+                                   (plist-get cleaned :text)))
+                       (ntxt (car norm-pair))
+                       (nmap (cdr norm-pair)))
+                  (unless (string-empty-p ntxt)
+                    (when (> col-len 0)
+                      (push " " col-parts)
+                      (setq col-len (1+ col-len)))
+                    (let ((cbase col-len))
+                      (when (and is-cur seg-beg
+                                 (= (plist-get cleaned :beg) seg-beg)
+                                 (= (plist-get cleaned :end) seg-end))
+                        (let ((nrel (or seg-norm-rel
+                                        (etaf-md--map-offset-to-norm
+                                         nmap (plist-get seg-info :offset)))))
+                          (setq seg-col-base cbase
+                                col-pos (+ cbase nrel))))
+                      (push ntxt col-parts)
+                      (setq col-len (+ col-len (length ntxt)))))))
+              (when (and is-cur (null col-pos))
+                (setq col-pos col-len)))
+            (if (or (>= le scan-end) (not (zerop (forward-line 1))))
+                (goto-char (1+ scan-end)))))
+        (let* ((p-text (apply #'concat (nreverse p-parts)))
+               (col-text (and table-col (apply #'concat (nreverse col-parts))))
+               (p-final-pos (or p-pos 0))
+               (col-final-pos (or col-pos 0)))
+          (list :seg-info seg-info
+                :line cur-line
+                :col cur-col
+                :hfrac (plist-get seg-info :hfrac)
+                :p-text p-text
+                :p-pos p-final-pos
+                :p-frac (if (> (length p-text) 0)
+                            (max 0.0 (min 1.0 (/ (float p-final-pos)
+                                                 (float (length p-text)))))
+                          0.0)
+                :seg-p-base seg-p-base
+                :seg-norm seg-norm
+                :seg-norm-map seg-norm-map
+                :seg-norm-rel seg-norm-rel
+                :table-col table-col
+                :cursor-table-col (plist-get seg-info :cursor-cell-col)
+                :col-text col-text
+                :col-pos col-final-pos
+                :col-frac (if (and col-text (> (length col-text) 0))
+                              (max 0.0 (min 1.0 (/ (float col-final-pos)
+                                                   (float (length col-text)))))
+                            0.0)
+                :seg-col-base seg-col-base))))))
+
+(defun etaf-md--push-anchor-candidate (candidates seen kind value offset
+                                                  &optional group p-start col-start)
+  "Push candidate `(KIND VALUE OFFSET GROUP P-START COL-START)' if unseen."
   (when (and (stringp value)
              (not (string-blank-p value))
              (or (eq kind :regex)
                  (>= (length value) 2)
                  (and (= (length value) 1)
                       (>= (char-width (aref value 0)) 2))))
-    (let ((key (list kind value offset)))
+    (let ((key (list kind value offset p-start)))
       (unless (gethash key seen)
         (puthash key t seen)
-        (push (if extra
-                  (list kind value offset extra)
-                (list kind value offset))
+        (push (list kind value offset (or group 0) p-start col-start)
               candidates))))
   candidates)
 
-(defun etaf-md--add-segment-windows (candidates seen seg rel)
-  "Add prioritized literal window candidates from SEG around REL."
+(defun etaf-md--add-segment-windows (candidates seen seg rel
+                                                &optional p-base col-base)
+  "Add prioritized literal window candidates from SEG around REL.
+P-BASE and COL-BASE anchor each slice's exact 0-based start offset inside the
+preview block and table column projections so duplicate occurrences stay
+unambiguous.  Slices touching REL are always ordered before space-detached ones."
   (let* ((len (length seg))
-         (add-slice
+         (detached nil)
+         (make-slice
           (lambda (s e target)
             (when (< s e)
-              (let* ((raw (substring seg s e))
-                     (off (- target s)))
-                (when (string-match "\\`[ \t]+" raw)
-                  (let ((n (match-end 0)))
-                    (setq raw (substring raw n)
-                          off (max 0 (- off n)))))
-                (when (string-match "[ \t]+\\'" raw)
-                  (setq raw (substring raw 0 (match-beginning 0))
-                        off (min (length raw) off)))
-                (setq candidates
-                      (etaf-md--push-anchor-candidate
-                       candidates seen :literal raw
-                       (max 0 (min (length raw) off)))))))))
-    (when (<= len 64)
+              (let ((ts s)
+                    (te e))
+                (while (and (< ts te) (memq (aref seg ts) '(?\s ?\t)))
+                  (setq ts (1+ ts)))
+                (while (and (> te ts) (memq (aref seg (1- te)) '(?\s ?\t)))
+                  (setq te (1- te)))
+                (when (< ts te)
+                  (let* ((raw (substring seg ts te))
+                         (off (max 0 (min (- te ts) (- target ts))))
+                         (ps (and p-base (+ p-base ts)))
+                         (cs (and col-base (+ col-base ts)))
+                         (touches (and (<= ts target) (<= target te))))
+                    (list raw off ps cs touches)))))))
+         (add-slice
+          (lambda (s e target)
+            (when-let* ((info (funcall make-slice s e target)))
+              (if (nth 4 info)
+                  (setq candidates
+                        (etaf-md--push-anchor-candidate
+                         candidates seen :literal
+                         (nth 0 info) (nth 1 info) 0 (nth 2 info) (nth 3 info)))
+                (push info detached))))))
+    (when (<= len 160)
       (setq candidates
-            (etaf-md--push-anchor-candidate candidates seen :literal seg rel)))
+            (etaf-md--push-anchor-candidate
+             candidates seen :literal seg rel 0 p-base col-base)))
     (funcall add-slice (max 0 (- rel 14)) (min len (+ rel 14)) rel)
-    (funcall add-slice (max 0 (- rel 14)) rel rel)
     (funcall add-slice rel (min len (+ rel 14)) rel)
+    (funcall add-slice (max 0 (- rel 14)) rel rel)
+    (dolist (info (nreverse detached))
+      (setq candidates
+            (etaf-md--push-anchor-candidate
+             candidates seen :literal
+             (nth 0 info) (nth 1 info) 0 (nth 2 info) (nth 3 info))))
     candidates))
 
 (defun etaf-md--token-spans (seg)
@@ -336,7 +642,7 @@ TEXT, or nil when LINE carries only borders or whitespace."
     (nreverse spans)))
 
 (defun etaf-md--preview-isearch-hit (line col)
-  "Return `(TEXT . OFFSET)' when `isearch-string' sits adjacent to COL in LINE."
+  "Return `(TEXT OFFSET LINE-START)' when `isearch-string' sits adjacent to COL."
   (when (and (boundp 'isearch-string)
              (stringp isearch-string)
              (> (length isearch-string) 0)
@@ -353,37 +659,69 @@ TEXT, or nil when LINE carries only borders or whitespace."
        ;; `C-s' leaves point immediately after the matched string.
        ((and (>= col n)
              (funcall eq-p (substring line (- col n) col)))
-        (cons (substring line (- col n) col) n))
+        (list (substring line (- col n) col) n (- col n)))
        ;; `C-r' leaves point immediately before the matched string.
        ((and (<= (+ col n) (length line))
              (funcall eq-p (substring line col (+ col n))))
-        (cons (substring line col (+ col n)) 0))))))
+        (list (substring line col (+ col n)) 0 col))))))
 
-(defun etaf-md--preview-anchor-candidates (preview-buf pos)
-  "Return ordered source-search anchor candidates around POS in PREVIEW-BUF."
+(defun etaf-md--preview-anchor-candidates (preview-buf pos &optional ctx)
+  "Return ordered source-search anchor candidates around POS in PREVIEW-BUF.
+When CTX (from `etaf-md--preview-block-context') is supplied, candidates carry
+their exact 0-based start offsets inside the preview block and table column
+projections for deterministic duplicate disambiguation."
   (with-current-buffer preview-buf
     (save-excursion
       (goto-char (max (point-min) (min (point-max) pos)))
-      (let* ((lbeg (line-beginning-position))
-             (lend (line-end-position))
-             (line (buffer-substring-no-properties lbeg lend))
-             (col (- (point) lbeg))
-             (cleaned (etaf-md--preview-clean-segment line col))
+      (let* ((line (or (and ctx (plist-get ctx :line))
+                       (buffer-substring-no-properties
+                        (line-beginning-position) (line-end-position))))
+             (col (or (and ctx (plist-get ctx :col))
+                      (- (point) (line-beginning-position))))
+             (seg-info (or (and ctx (plist-get ctx :seg-info))
+                           (etaf-md--preview-segment-at line col nil)))
+             (raw-seg (plist-get seg-info :text))
+             (raw-beg (plist-get seg-info :beg))
+             (raw-end (plist-get seg-info :end))
+             (norm-pair (when raw-seg
+                          (if (and ctx (plist-get ctx :seg-norm))
+                              (cons (plist-get ctx :seg-norm)
+                                    (plist-get ctx :seg-norm-map))
+                            (etaf-md--normalize-ws-with-map raw-seg))))
+             (seg (and norm-pair (car norm-pair)))
+             (seg-map (and norm-pair (cdr norm-pair)))
+             (rel (when seg
+                    (or (and ctx (plist-get ctx :seg-norm-rel))
+                        (etaf-md--map-offset-to-norm
+                         seg-map (plist-get seg-info :offset)))))
+             (p-base (and ctx (plist-get ctx :seg-p-base)))
+             (col-base (and ctx (plist-get ctx :seg-col-base)))
              (isearch-hit (etaf-md--preview-isearch-hit line col))
              (seen (make-hash-table :test #'equal))
              (candidates nil))
-        (when cleaned
-          (let* ((seg (car cleaned))
-                 (rel (cdr cleaned))
-                 (len (length seg)))
+        (when (and seg (not (string-empty-p seg)))
+          (let ((len (length seg)))
             ;; 1. Exact full segment & local windows around cursor.
-            (setq candidates (etaf-md--add-segment-windows candidates seen seg rel))
+            (setq candidates
+                  (etaf-md--add-segment-windows
+                   candidates seen seg rel p-base col-base))
             ;; 2. Active C-s / C-r match adjacent to point (handles inline
             ;;    markup such as **bold** or `code` breaking a longer window).
             (when isearch-hit
-              (setq candidates
-                    (etaf-md--push-anchor-candidate
-                     candidates seen :literal (car isearch-hit) (cdr isearch-hit))))
+              (let* ((itxt (car (etaf-md--normalize-ws-with-map (nth 0 isearch-hit))))
+                     (ioff (min (length itxt) (nth 1 isearch-hit)))
+                     (iline-start (nth 2 isearch-hit))
+                     (in-seg (and raw-beg raw-end
+                                  (<= raw-beg iline-start)
+                                  (< iline-start raw-end)))
+                     (nstart (and in-seg seg-map
+                                  (etaf-md--map-offset-to-norm
+                                   seg-map (- iline-start raw-beg))))
+                     (ips (and nstart p-base (+ p-base nstart)))
+                     (ics (and nstart col-base (+ col-base nstart))))
+                (setq candidates
+                      (etaf-md--push-anchor-candidate
+                       candidates seen :literal itxt ioff 0 ips ics))))
             ;; 3. Inline-markup-tolerant regex across up to 4 tokens near rel.
             (let* ((spans (etaf-md--token-spans seg))
                    (count (length spans)))
@@ -421,10 +759,13 @@ TEXT, or nil when LINE carries only borders or whitespace."
                           (etaf-md--add-segment-windows
                            candidates seen
                            (substring seg after-pos)
-                           (max 0 (- rel after-pos))))
+                           (max 0 (- rel after-pos))
+                           (and p-base (+ p-base after-pos))
+                           (and col-base (+ col-base after-pos))))
                   (setq candidates
                         (etaf-md--add-segment-windows
-                         candidates seen (substring seg 0 split-pos) rel)))))
+                         candidates seen (substring seg 0 split-pos) rel
+                         p-base col-base)))))
             (dolist (prefix-re '("\\`\\(?:\\[[0-9A-Za-z_-]+\\]\\|[0-9]+\\.\\)[ \t]+"
                                  "\\`[0-9]+[ \t]+"))
               (when (string-match prefix-re seg)
@@ -433,7 +774,10 @@ TEXT, or nil when LINE carries only borders or whitespace."
                        (srel (max 0 (- rel n))))
                   (unless (string-empty-p stripped)
                     (setq candidates
-                          (etaf-md--add-segment-windows candidates seen stripped srel))))))
+                          (etaf-md--add-segment-windows
+                           candidates seen stripped srel
+                           (and p-base (+ p-base n))
+                           (and col-base (+ col-base n))))))))
             ;; 5. Immediate token/word and short slices around cursor.
             (let ((word-re "[[:alnum:]_@/.:-]+\\|\\cC+"))
               (let ((pos-i 0)
@@ -446,43 +790,64 @@ TEXT, or nil when LINE carries only borders or whitespace."
                         (tw (match-string 0 seg)))
                     (cond
                      ((and (<= tb rel) (<= rel te))
-                      (setq spanning (cons tw (- rel tb))))
+                      (setq spanning (list tw (- rel tb) tb)))
                      ((< te rel)
-                      (setq left-tok (cons tw (length tw))))
+                      (setq left-tok (list tw (length tw) tb)))
                      ((and (> tb rel) (null right-tok))
-                      (setq right-tok (cons tw 0)))))
+                      (setq right-tok (list tw 0 tb)))))
                   (setq pos-i (match-end 0)))
-                (dolist (hit (list spanning left-tok right-tok))
+                (dolist (hit (list spanning right-tok left-tok))
                   (when hit
+                    (let ((tb (nth 2 hit)))
+                      (setq candidates
+                            (etaf-md--push-anchor-candidate
+                             candidates seen :literal (nth 0 hit) (nth 1 hit) 0
+                             (and p-base (+ p-base tb))
+                             (and col-base (+ col-base tb)))))))))
+            (dolist (w '(6 4 2))
+              (when (<= (+ rel w) len)
+                (let ((ts rel) (te (+ rel w)))
+                  (while (and (< ts te) (memq (aref seg ts) '(?\s ?\t))) (setq ts (1+ ts)))
+                  (while (and (> te ts) (memq (aref seg (1- te)) '(?\s ?\t))) (setq te (1- te)))
+                  (when (< ts te)
                     (setq candidates
                           (etaf-md--push-anchor-candidate
-                           candidates seen :literal (car hit) (cdr hit)))))))
-            (dolist (w '(6 4 2))
+                           candidates seen :literal (substring seg ts te) 0 0
+                           (and p-base (+ p-base ts))
+                           (and col-base (+ col-base ts)))))))
               (when (>= rel w)
-                (let ((sub (string-trim (substring seg (- rel w) rel))))
-                  (setq candidates
-                        (etaf-md--push-anchor-candidate
-                         candidates seen :literal sub (length sub)))))
-              (when (<= (+ rel w) len)
-                (let ((sub (string-trim (substring seg rel (+ rel w)))))
-                  (setq candidates
-                        (etaf-md--push-anchor-candidate
-                         candidates seen :literal sub 0)))))
+                (let ((ts (- rel w)) (te rel))
+                  (while (and (< ts te) (memq (aref seg ts) '(?\s ?\t))) (setq ts (1+ ts)))
+                  (while (and (> te ts) (memq (aref seg (1- te)) '(?\s ?\t))) (setq te (1- te)))
+                  (when (< ts te)
+                    (setq candidates
+                          (etaf-md--push-anchor-candidate
+                           candidates seen :literal (substring seg ts te) (- te ts) 0
+                           (and p-base (+ p-base ts))
+                           (and col-base (+ col-base ts))))))))
             ;; 6. Line-start and longest-token fallback (e.g. cursor at margin).
-            (let ((head (string-trim (substring seg 0 (min len 24)))))
-              (setq candidates
-                    (etaf-md--push-anchor-candidate candidates seen :literal head 0)))
+            (let ((te (min len 24)))
+              (while (and (> te 0) (memq (aref seg (1- te)) '(?\s ?\t)))
+                (setq te (1- te)))
+              (when (> te 0)
+                (setq candidates
+                      (etaf-md--push-anchor-candidate
+                       candidates seen :literal (substring seg 0 te) 0 0
+                       p-base col-base))))
             (let ((longest nil))
               (dolist (sp (etaf-md--token-spans seg))
-                (when (or (null longest) (> (length (nth 2 sp)) (length longest)))
-                  (setq longest (nth 2 sp))))
+                (when (or (null longest) (> (length (nth 2 sp)) (length (nth 2 longest))))
+                  (setq longest sp)))
               (when longest
                 (setq candidates
-                      (etaf-md--push-anchor-candidate candidates seen :literal longest 0))))))
-        (when (and (null cleaned) isearch-hit)
+                      (etaf-md--push-anchor-candidate
+                       candidates seen :literal (nth 2 longest) 0 0
+                       (and p-base (+ p-base (nth 0 longest)))
+                       (and col-base (+ col-base (nth 0 longest)))))))))
+        (when (and (or (null seg) (string-empty-p seg)) isearch-hit)
           (setq candidates
                 (etaf-md--push-anchor-candidate
-                 candidates seen :literal (car isearch-hit) (cdr isearch-hit))))
+                 candidates seen :literal (nth 0 isearch-hit) (nth 1 isearch-hit))))
         (nreverse candidates)))))
 
 (defun etaf-md--block-content-end (preview-buf pbeg pend)
@@ -597,8 +962,8 @@ Returns a plist with `:first-entry', `:first-bounds', `:last-entry',
   "Return a source location plist matching POS in PREVIEW-BUF, or nil.
 Resolves front matter, body blocks and footnotes in O(log N) bounds lookups,
 computes a 0-based line fraction without mid-line off-by-one drift, and extracts
-cursor text anchors so jumping after `C-s' / `C-r' or point motion lands on the
-exact source line and column."
+cursor text anchors together with block/column projection offsets so duplicate
+text on the same line or table row resolves deterministically."
   (when-let* ((runtime (and (buffer-live-p preview-buf)
                             (etaf-runtime-for-buffer preview-buf)))
               (entries (plist-get session :entries))
@@ -611,7 +976,6 @@ exact source line and column."
            (best-bounds (plist-get found :match-bounds))
            (prev-entry (plist-get found :prev))
            (prev-bounds (plist-get found :prev-bounds))
-           (candidates (etaf-md--preview-anchor-candidates preview-buf pos))
            (first-block (and first-entry (plist-get first-entry :block)))
            (first-src-beg (and first-block (plist-get first-block :begin)))
            (doc (etaf-md--read session :document))
@@ -620,24 +984,36 @@ exact source line and column."
        ;; Cursor in front matter / hero header before the first body block.
        ((and first-bounds (< pos (car first-bounds))
              (integerp first-src-beg) (> first-src-beg 0))
-        (list :begin 0
-              :end first-src-beg
-              :frac (etaf-md--preview-line-frac
-                     preview-buf
-                     (with-current-buffer preview-buf (point-min))
-                     (car first-bounds) pos)
-              :zone 'front-matter
-              :candidates candidates))
+        (let* ((pmin (with-current-buffer preview-buf (point-min)))
+               (ctx (etaf-md--preview-block-context
+                     preview-buf pmin (car first-bounds) pos nil))
+               (candidates (etaf-md--preview-anchor-candidates preview-buf pos ctx)))
+          (list :begin 0
+                :end first-src-beg
+                :frac (etaf-md--preview-line-frac
+                       preview-buf pmin (car first-bounds) pos)
+                :hfrac (plist-get ctx :hfrac)
+                :p-text (plist-get ctx :p-text)
+                :p-frac (plist-get ctx :p-frac)
+                :zone 'front-matter
+                :block-type 'front-matter
+                :candidates candidates)))
        ;; Cursor inside the footnotes section rendered after the last block.
        ((and last-bounds (> pos (cdr last-bounds)) has-footnotes)
-        (let* ((lb (plist-get last-entry :block))
+        (let* ((pmax (with-current-buffer preview-buf (point-max)))
+               (ctx (etaf-md--preview-block-context
+                     preview-buf (cdr last-bounds) pmax pos nil))
+               (candidates (etaf-md--preview-anchor-candidates preview-buf pos ctx))
+               (lb (plist-get last-entry :block))
                (lbeg (or (and lb (plist-get lb :begin)) 0))
                (lend (or (and lb (plist-get lb :end)) lbeg)))
           (list :begin 0
                 :end nil
                 :frac (etaf-md--preview-line-frac
-                       preview-buf (cdr last-bounds)
-                       (with-current-buffer preview-buf (point-max)) pos)
+                       preview-buf (cdr last-bounds) pmax pos)
+                :hfrac (plist-get ctx :hfrac)
+                :p-text (plist-get ctx :p-text)
+                :p-frac (plist-get ctx :p-frac)
                 :zone 'footnote
                 :fallback-begin lbeg
                 :fallback-end lend
@@ -650,15 +1026,34 @@ exact source line and column."
                (src-beg (and block (plist-get block :begin)))
                (src-end (and block (plist-get block :end))))
           (when (and (integerp src-beg) (integerp src-end))
-            (let ((frac (if (and best-bounds (> (cdr bounds) (car bounds))
-                                 (> src-end src-beg))
-                            (etaf-md--preview-line-frac
-                             preview-buf (car bounds) (cdr bounds) pos)
-                          0.0)))
+            (let* ((table-like (etaf-md--block-table-like-p block))
+                   (ctx (when (and bounds (> (cdr bounds) (car bounds)))
+                          (etaf-md--preview-block-context
+                           preview-buf (car bounds) (cdr bounds) pos table-like)))
+                   (candidates (etaf-md--preview-anchor-candidates preview-buf pos ctx))
+                   (frac (if (and best-bounds (> (cdr bounds) (car bounds))
+                                  (> src-end src-beg))
+                             (etaf-md--preview-line-frac
+                              preview-buf (car bounds) (cdr bounds) pos)
+                           0.0)))
               (list :begin src-beg
                     :end src-end
                     :frac frac
+                    :hfrac (or (and ctx (plist-get ctx :hfrac)) 0.0)
+                    :p-text (and ctx (plist-get ctx :p-text))
+                    :p-frac (or (and ctx (plist-get ctx :p-frac)) frac)
+                    :table-like table-like
+                    :table-col (and ctx (plist-get ctx :table-col))
+                    :cursor-table-col (and ctx (plist-get ctx :cursor-table-col))
+                    :col-text (and ctx (plist-get ctx :col-text))
+                    :col-frac (or (and ctx (plist-get ctx :col-frac)) frac)
+                    :prefer-left (and ctx
+                                      (let ((ih (etaf-md--preview-isearch-hit
+                                                 (plist-get ctx :line)
+                                                 (plist-get ctx :col))))
+                                        (and ih (> (nth 1 ih) 0))))
                     :zone 'block
+                    :block-type (plist-get block :type)
                     :candidates candidates)))))))))
 
 (defun etaf-md--source-buffer-for (session)
@@ -687,6 +1082,484 @@ exact source line and column."
             (setq stop t))))
         found))
      (t nil))))
+
+(defun etaf-md--src-find-closing-backticks (src pos end ticks)
+  "Find start index of a run of exactly TICKS backticks in SRC[POS..END)."
+  (let ((i pos)
+        (found nil))
+    (while (and (< i end) (null found))
+      (if (eq (aref src i) ?`)
+          (let ((start i))
+            (while (and (< i end) (eq (aref src i) ?`))
+              (setq i (1+ i)))
+            (when (= (- i start) ticks)
+              (setq found start)))
+        (setq i (1+ i))))
+    found))
+
+(defun etaf-md--src-find-matching-bracket (src pos end)
+  "Find the `]' matching `[' at POS inside SRC[POS..END), or nil."
+  (let ((i (1+ pos))
+        (depth 1)
+        (found nil))
+    (while (and (< i end) (null found))
+      (let ((ch (aref src i)))
+        (cond
+         ((and (eq ch ?\\) (< (1+ i) end))
+          (setq i (+ i 2)))
+         ((eq ch ?`)
+          (let ((s i))
+            (while (and (< i end) (eq (aref src i) ?`))
+              (setq i (1+ i)))
+            (let ((close (etaf-md--src-find-closing-backticks
+                          src i end (- i s))))
+              (when close
+                (setq i (+ close (- i s)))))))
+         ((eq ch ?\[)
+          (setq depth (1+ depth) i (1+ i)))
+         ((eq ch ?\])
+          (setq depth (1- depth))
+          (if (zerop depth)
+              (setq found i)
+            (setq i (1+ i))))
+         (t (setq i (1+ i))))))
+    found))
+
+(defun etaf-md--src-skip-link-dest (src pos end)
+  "If SRC at POS starts a Markdown `(...)' or `[...]' destination, return its end."
+  (when (< pos end)
+    (let ((ch (aref src pos)))
+      (cond
+       ((eq ch ?\()
+        (let ((i (1+ pos))
+              (depth 1)
+              (found nil))
+          (while (and (< i end) (null found))
+            (let ((c (aref src i)))
+              (cond
+               ((and (eq c ?\\) (< (1+ i) end))
+                (setq i (+ i 2)))
+               ((eq c ?\()
+                (setq depth (1+ depth) i (1+ i)))
+               ((eq c ?\))
+                (setq depth (1- depth))
+                (if (zerop depth)
+                    (setq found (1+ i))
+                  (setq i (1+ i))))
+               (t (setq i (1+ i))))))
+          found))
+       ((eq ch ?\[)
+        (when-let* ((rb (etaf-md--src-find-matching-bracket src pos end)))
+          (1+ rb)))))))
+
+(defun etaf-md--src-split-pipe-cells (src line-start line-end)
+  "Split a Markdown pipe-table row SRC[LINE-START..LINE-END) into cell spans.
+Respects escaped pipes and inline backtick code spans; trims empty outer spans
+before a leading `|' and after a trailing `|'.  Returns list of `(BEG . END)'."
+  (let ((i line-start)
+        (pipes nil))
+    (while (< i line-end)
+      (let ((ch (aref src i)))
+        (cond
+         ((and (eq ch ?\\) (< (1+ i) line-end))
+          (setq i (+ i 2)))
+         ((eq ch ?`)
+          (let ((s i))
+            (while (and (< i line-end) (eq (aref src i) ?`))
+              (setq i (1+ i)))
+            (let ((close (etaf-md--src-find-closing-backticks
+                          src i line-end (- i s))))
+              (when close
+                (setq i (+ close (- i s)))))))
+         ((eq ch ?|)
+          (push i pipes)
+          (setq i (1+ i)))
+         (t (setq i (1+ i))))))
+    (when pipes
+      (setq pipes (nreverse pipes))
+      (let ((spans nil)
+            (prev line-start))
+        (dolist (p pipes)
+          (push (cons prev p) spans)
+          (setq prev (1+ p)))
+        (push (cons prev line-end) spans)
+        (setq spans (nreverse spans))
+        (when (and spans
+                   (string-blank-p (substring src (caar spans) (cdar spans))))
+          (setq spans (cdr spans)))
+        (when spans
+          (let ((last-span (car (last spans))))
+            (when (string-blank-p (substring src (car last-span) (cdr last-span)))
+              (setq spans (butlast spans)))))
+        spans))))
+
+(defun etaf-md--src-pipe-separator-line-p (line)
+  "Return non-nil when LINE is a Markdown pipe-table delimiter row (`|---|---|')."
+  (and (string-match-p "-" line)
+       (string-match-p
+        "\\`[ \t]*|?[ \t]*:?\\(?:-\\{3,\\}\\|-\\{1,\\}:\\|:-\\{1,\\}\\)[ \t]*\\(?:|[ \t]*:?\\(?:-\\{3,\\}\\|-\\{1,\\}:\\|:-\\{1,\\}\\)[ \t]*\\)*|?[ \t]*\\'"
+        line)))
+
+(defun etaf-md--src-alnum-char-p (ch)
+  "Return non-nil when CH is an ASCII letter or digit."
+  (or (and (>= ch ?a) (<= ch ?z))
+      (and (>= ch ?A) (<= ch ?Z))
+      (and (>= ch ?0) (<= ch ?9))))
+
+(defun etaf-md--source-visible-projection (source-buf b e table-like-p block-type)
+  "Project SOURCE-BUF[B..E) into rendered visible text with exact source positions.
+Returns a plist `(:text STRING :pos VECTOR :col VECTOR)' where `:pos' maps each
+visible character back to its 1-based buffer position in SOURCE-BUF and `:col'
+records its 0-based pipe-table column index (or nil), or nil when too large."
+  (when (and (< b e) (<= (- e b) etaf-md--source-projection-max-chars))
+    (with-current-buffer source-buf
+      (let* ((src (buffer-substring-no-properties b e))
+             (len (length src))
+             (out-chars nil)
+             (out-pos nil)
+             (out-col nil)
+             (pending-space nil)
+             (pending-col nil))
+        (cl-labels
+            ((emit-space (idx col)
+               (when (and out-chars (null pending-space))
+                 (setq pending-space (+ b idx)
+                       pending-col col)))
+             (emit-char (ch idx col)
+               (when pending-space
+                 (push ?\s out-chars)
+                 (push pending-space out-pos)
+                 (push pending-col out-col)
+                 (setq pending-space nil pending-col nil))
+               (push ch out-chars)
+               (push (+ b idx) out-pos)
+               (push col out-col))
+             (emit-verbatim (beg end col)
+               (let ((k beg))
+                 (while (< k end)
+                   (let ((ch (aref src k)))
+                     (if (memq ch '(?\s ?\t ?\r ?\n))
+                         (emit-space k col)
+                       (emit-char ch k col)))
+                   (setq k (1+ k)))))
+             (scan-inline (beg end col)
+               (let ((i beg))
+                 (while (< i end)
+                   (let ((ch (aref src i)))
+                     (cond
+                      ;; Whitespace normalization.
+                      ((memq ch '(?\s ?\t ?\r ?\n))
+                       (emit-space i col)
+                       (setq i (1+ i)))
+                      ;; Backslash escape of ASCII punctuation.
+                      ((and (eq ch ?\\)
+                            (< (1+ i) end)
+                            (let ((nx (aref src (1+ i))))
+                              (and (>= nx ?!) (<= nx ?~)
+                                   (not (etaf-md--src-alnum-char-p nx)))))
+                       (emit-char (aref src (1+ i)) (1+ i) col)
+                       (setq i (+ i 2)))
+                      ;; Inline code span.
+                      ((eq ch ?`)
+                       (let ((s i))
+                         (while (and (< i end) (eq (aref src i) ?`))
+                           (setq i (1+ i)))
+                         (let* ((ticks (- i s))
+                                (close (etaf-md--src-find-closing-backticks
+                                        src i end ticks)))
+                           (if close
+                               (let ((cb i)
+                                     (ce close))
+                                 (when (and (>= (- ce cb) 2)
+                                            (eq (aref src cb) ?\s)
+                                            (eq (aref src (1- ce)) ?\s)
+                                            (not (string-blank-p (substring src cb ce))))
+                                   (setq cb (1+ cb) ce (1- ce)))
+                                 (emit-verbatim cb ce col)
+                                 (setq i (+ close ticks)))
+                             (emit-verbatim s i col)))))
+                      ;; Image `![alt](url)' or `![alt][ref]': keep alt, drop URL.
+                      ((and (eq ch ?!)
+                            (< (1+ i) end)
+                            (eq (aref src (1+ i)) ?\[)
+                            (let ((rb (etaf-md--src-find-matching-bracket
+                                       src (1+ i) end)))
+                              (when-let* ((rb)
+                                          (dend (etaf-md--src-skip-link-dest
+                                                 src (1+ rb) end)))
+                                (scan-inline (+ i 2) rb col)
+                                (setq i dend)
+                                t))))
+                      ;; Footnote reference `[^id]'.
+                      ((and (eq ch ?\[)
+                            (< (1+ i) end)
+                            (eq (aref src (1+ i)) ?^)
+                            (let ((rb (etaf-md--src-find-matching-bracket src i end)))
+                              (when (and rb
+                                         (not (and (< (1+ rb) end)
+                                                   (eq (aref src (1+ rb)) ?:)))
+                                         (not (string-match-p
+                                               "[ \t\r\n]"
+                                               (substring src (+ i 2) rb))))
+                                (setq i (1+ rb))
+                                t))))
+                      ;; Link `[label](url)' or `[label][ref]': keep label, drop URL.
+                      ((and (eq ch ?\[)
+                            (let ((rb (etaf-md--src-find-matching-bracket src i end)))
+                              (when-let* ((rb)
+                                          (dend (etaf-md--src-skip-link-dest
+                                                 src (1+ rb) end)))
+                                (scan-inline (1+ i) rb col)
+                                (setq i dend)
+                                t))))
+                      ;; Double inline delimiters: `**', `__', `~~', `=='.
+                      ((and (memq ch '(?* ?_ ?~ ?=))
+                            (< (1+ i) end)
+                            (eq (aref src (1+ i)) ch))
+                       (setq i (+ i 2)))
+                      ;; Single emphasis `*` (keep spaces-surrounded `*` like `2 * 3`).
+                      ((and (eq ch ?*)
+                            (not (and (> i beg)
+                                      (< (1+ i) end)
+                                      (memq (aref src (1- i)) '(?\s ?\t))
+                                      (memq (aref src (1+ i)) '(?\s ?\t)))))
+                       (setq i (1+ i)))
+                      ;; Single emphasis `_' (preserve snake_case between alnums).
+                      ((and (eq ch ?_)
+                            (not (and (> i beg)
+                                      (< (1+ i) end)
+                                      (etaf-md--src-alnum-char-p (aref src (1- i)))
+                                      (etaf-md--src-alnum-char-p (aref src (1+ i))))))
+                       (setq i (1+ i)))
+                      ;; Inline HTML tags `<tag ...>` / `</tag>`.
+                      ((and (eq ch ?<)
+                            (< (1+ i) end)
+                            (let ((nx (aref src (1+ i))))
+                              (or (eq nx ?/)
+                                  (and (>= nx ?a) (<= nx ?z))
+                                  (and (>= nx ?A) (<= nx ?Z))))
+                            (let ((gt (string-search ">" src (1+ i))))
+                              (when (and gt (< gt end))
+                                (let ((tag (downcase (substring src (1+ i) gt))))
+                                  (when (string-prefix-p "br" tag)
+                                    (emit-space i col)))
+                                (setq i (1+ gt))
+                                t))))
+                      ;; Ordinary visible character.
+                      (t
+                       (emit-char ch i col)
+                       (setq i (1+ i)))))))))
+          (let ((pos 0)
+                (line-idx 0))
+            (while (< pos len)
+              (let* ((nl (or (string-search "\n" src pos) len))
+                     (line (substring src pos nl))
+                     (next-pos (min len (1+ nl))))
+                (cond
+                 ((string-blank-p line)
+                  (emit-space pos nil))
+                 ((eq block-type 'code-block)
+                  (let ((is-open (and (zerop line-idx)
+                                      (string-match-p "\\`[ \t]*\\(?:```+\\|~~~+\\)" line)))
+                        (is-close (and (>= next-pos len)
+                                       (string-match-p "\\`[ \t]*\\(?:```+\\|~~~+\\)[ \t]*\\'" line))))
+                    (unless (or is-open is-close)
+                      (emit-verbatim pos nl nil)
+                      (emit-space nl nil))))
+                 ((eq block-type 'front-matter)
+                  (unless (string-match-p "\\`[ \t]*\\(?:---\\|\\.\\.\\.\\)[ \t]*\\'" line)
+                    (emit-verbatim pos nl nil)
+                    (emit-space nl nil)))
+                 ;; Bare closing container fence `:::'.
+                 ((string-match-p "\\`[ \t]*:::[ \t]*\\'" line)
+                  (emit-space pos nil))
+                 ;; Pipe-table delimiter row `|---|---|'.
+                 ((and table-like-p (etaf-md--src-pipe-separator-line-p line))
+                  (emit-space pos nil))
+                 ;; Pipe-table row `| cell0 | cell1 |'.
+                 ((and table-like-p
+                       (let ((cells (etaf-md--src-split-pipe-cells src pos nl)))
+                         (when (and cells (>= (length cells) 2))
+                           (let ((cidx 0))
+                             (dolist (span cells)
+                               (scan-inline (car span) (cdr span) cidx)
+                               (emit-space (cdr span) nil)
+                               (setq cidx (1+ cidx))))
+                           t))))
+                 ;; Ordinary Markdown line: strip block markers, then scan inline.
+                 (t
+                  (let ((ls pos))
+                    (while (and (< ls nl) (memq (aref src ls) '(?\s ?\t)))
+                      (setq ls (1+ ls)))
+                    ;; Strip blockquote prefixes.
+                    (while (and (< ls nl) (eq (aref src ls) ?>))
+                      (setq ls (1+ ls))
+                      (while (and (< ls nl) (memq (aref src ls) '(?\s ?\t)))
+                        (setq ls (1+ ls))))
+                    (let ((rest (substring src ls nl)))
+                      (cond
+                       ((string-match "\\`#\\{1,6\\}[ \t]+" rest)
+                        (setq ls (+ ls (match-end 0))))
+                       ((string-match
+                         "\\`\\(?:[-*+]\\|[0-9]+[.)]\\)[ \t]+\\(?:\\[[ xX]\\][ \t]+\\)?"
+                         rest)
+                        (setq ls (+ ls (match-end 0))))
+                       ((string-match "\\`:::[A-Za-z0-9_-]+[ \t]*" rest)
+                        (setq ls (+ ls (match-end 0))))
+                       ((string-match "\\`\\[\\^[^]\n]+\\]:[ \t]*" rest)
+                        (setq ls (+ ls (match-end 0))))))
+                    (scan-inline ls nl nil)
+                    (emit-space nl nil))))
+                (setq pos next-pos
+                      line-idx (1+ line-idx))))))
+        (list :text (apply #'string (nreverse out-chars))
+              :pos (vconcat (nreverse out-pos))
+              :col (vconcat (nreverse out-col)))))))
+
+(defun etaf-md--projection-for-column (proj col-idx)
+  "Extract a sub-projection from PROJ containing only table column COL-IDX."
+  (let* ((text (plist-get proj :text))
+         (pos-vec (plist-get proj :pos))
+         (col-vec (plist-get proj :col))
+         (n (length text))
+         (i 0)
+         (chars nil)
+         (positions nil)
+         (saw-gap nil))
+    (while (< i n)
+      (if (eql (aref col-vec i) col-idx)
+          (progn
+            (when (and saw-gap chars)
+              (push ?\s chars)
+              (push (aref pos-vec i) positions))
+            (setq saw-gap nil)
+            (push (aref text i) chars)
+            (push (aref pos-vec i) positions))
+        (when chars
+          (setq saw-gap t)))
+      (setq i (1+ i)))
+    (when chars
+      (list :text (apply #'string (nreverse chars))
+            :pos (vconcat (nreverse positions))))))
+
+(defun etaf-md--count-literal-occurrence (haystack needle start-pos)
+  "Return `(OCC . TOTAL)' of NEEDLE in HAYSTACK at START-POS.
+Counts all (including overlapping) occurrences in the same order as
+`etaf-md--find-all-matches-in-string' so repeated self-overlapping windows such
+as `foo bar test foo bar' never miss an occurrence."
+  (when (and (stringp haystack) (stringp needle) (> (length needle) 0)
+             (integerp start-pos))
+    (let ((re (regexp-quote needle))
+          (nlen (length needle))
+          (res nil))
+      (catch 'done
+        (dolist (fold '(nil t))
+          (let ((case-fold-search fold)
+                (pos 0)
+                (occ 0)
+                (total 0)
+                (matched nil))
+            (while (and (<= pos (length haystack))
+                        (string-match re haystack pos))
+              (let ((mb (match-beginning 0)))
+                (when (< mb start-pos)
+                  (setq occ (1+ occ)))
+                (when (and (<= mb start-pos) (< start-pos (+ mb nlen)))
+                  (setq matched t))
+                (setq total (1+ total)
+                      pos (1+ mb))))
+            (when (and (> total 0) (or matched fold))
+              (setq res (cons (min occ (1- total)) total))
+              (throw 'done res)))))
+      res)))
+
+(defun etaf-md--find-all-matches-in-string (haystack kind pattern group)
+  "Find all `(BEG . END)' matches of KIND/PATTERN/GROUP inside HAYSTACK."
+  (let ((re (if (eq kind :regex) pattern (regexp-quote pattern)))
+        (grp (or group 0))
+        (literal-p (eq kind :literal))
+        (matches nil))
+    (catch 'done
+      (dolist (fold '(nil t))
+        (let ((case-fold-search fold)
+              (pos 0)
+              (found nil))
+          (while (and (<= pos (length haystack))
+                      (string-match re haystack pos))
+            (let ((mb (match-beginning grp))
+                  (me (match-end grp))
+                  (m0b (match-beginning 0))
+                  (m0e (match-end 0)))
+              (when (and mb me)
+                (push (cons mb me) found))
+              (setq pos (if (or literal-p (= m0e m0b))
+                            (1+ m0b)
+                          m0e))))
+          (when found
+            (setq matches (nreverse found))
+            (throw 'done matches)))))
+    matches))
+
+(defun etaf-md--search-in-projection (proj cand p-start p-text p-frac
+                                           &optional prefer-left)
+  "Resolve CAND against visible projection PROJ using occurrence & 2D position.
+When PREFER-LEFT is non-nil (for example after `C-s'), landing on a skipped
+inline-markup boundary prefers the position immediately after the preceding
+visible character rather than after closing markup.
+Returns the exact 1-based source buffer position, or nil."
+  (when-let* ((text (and proj (plist-get proj :text)))
+              (pos-vec (and proj (plist-get proj :pos)))
+              ((> (length text) 0)))
+    (let* ((kind (nth 0 cand))
+           (pattern (nth 1 cand))
+           (offset (nth 2 cand))
+           (group (or (nth 3 cand) 0))
+           (matches (etaf-md--find-all-matches-in-string text kind pattern group)))
+      (when matches
+        (let* ((chosen
+                (cond
+                 ((= (length matches) 1)
+                  (car matches))
+                 ((and (eq kind :literal) p-start p-text
+                       (let ((ot (etaf-md--count-literal-occurrence
+                                  p-text pattern p-start)))
+                         (when (and ot (= (length matches) (cdr ot))
+                                    (< (car ot) (length matches)))
+                           (nth (car ot) matches)))))
+                 (t
+                  (let ((est-idx (round (* (or p-frac 0.0) (length text))))
+                        (best nil)
+                        (best-dist most-positive-fixnum))
+                    (dolist (m matches)
+                      (let* ((tgt (+ (car m) (min offset (- (cdr m) (car m)))))
+                             (dist (abs (- tgt est-idx))))
+                        (when (< dist best-dist)
+                          (setq best m best-dist dist))))
+                    best))))
+               (mb (car chosen))
+               (me (cdr chosen))
+               (mlen (- me mb))
+               (clamped (max 0 (min offset mlen)))
+               (idx (+ mb clamped)))
+          (cond
+           ((and (> mlen 0) (= clamped mlen))
+            (1+ (aref pos-vec (1- me))))
+           ((< idx (length pos-vec))
+            (let ((next-pos (aref pos-vec idx)))
+              (if (and (> idx 0)
+                       (let ((prev-pos (aref pos-vec (1- idx)))
+                             (prev-ch (aref text (1- idx)))
+                             (cur-ch (aref text idx)))
+                         (and (> next-pos (1+ prev-pos))
+                              (not (memq prev-ch '(?\s ?\t)))
+                              (or prefer-left
+                                  (memq cur-ch
+                                        '(?\s ?\t ?, ?. ?\; ?: ?! ?? ?\) ?\]
+                                              ?、 ?， ?。 ?； ?： ?！ ?？ ?） ?】))))))
+                  (1+ (aref pos-vec (1- idx)))
+                next-pos)))
+           (t
+            (1+ (aref pos-vec (1- (length pos-vec)))))))))))
 
 (defun etaf-md--search-nearest-in-range (cand b e est-pos &optional footnote-only-p)
   "Find the occurrence of CAND inside [B, E] closest to EST-POS, or nil."
@@ -723,18 +1596,52 @@ exact source line and column."
             (throw 'done best)))))
     best))
 
+(defun etaf-md--fallback-table-cell-pos (source-buf est-bol cursor-table-col b e)
+  "When CURSOR-TABLE-COL is non-nil, land on that pipe cell near EST-BOL."
+  (when (integerp cursor-table-col)
+    (with-current-buffer source-buf
+      (save-excursion
+        (goto-char est-bol)
+        ;; Skip a table delimiter row (`|---|---|') if vertical frac landed on it.
+        (let ((line (buffer-substring-no-properties
+                     (line-beginning-position) (line-end-position))))
+          (when (and (etaf-md--src-pipe-separator-line-p line)
+                     (< (line-end-position) e))
+            (forward-line 1)))
+        (let* ((lb (max b (line-beginning-position)))
+               (le (min e (line-end-position)))
+               (row (buffer-substring-no-properties lb le))
+               (cells (etaf-md--src-split-pipe-cells row 0 (length row))))
+          (when (and cells (< cursor-table-col (length cells)))
+            (let* ((span (nth cursor-table-col cells))
+                   (pos (+ lb (car span)))
+                   (end (+ lb (cdr span))))
+              (while (and (< pos end) (memq (char-after pos) '(?\s ?\t)))
+                (setq pos (1+ pos)))
+              pos)))))))
+
 (defun etaf-md--target-pos-in-source (source-buf loc)
   "Return the 1-based position in SOURCE-BUF corresponding to LOC.
-Prefers exact cursor text anchors inside the block's source range (disambiguated
-by proximity to the 0-based line estimate), falling back to the line estimate
-when point rests on non-textual decoration."
+Prefers visible-text source projection with column scoping and exact occurrence
+ordinal disambiguation (handling duplicate text in table columns, inline markup
+and long lines), falling back to 2D raw search and line/column estimate."
   (with-current-buffer source-buf
     (if (null loc)
         (point-min)
       (let* ((src-beg (plist-get loc :begin))
              (src-end (plist-get loc :end))
              (frac (or (plist-get loc :frac) 0.0))
+             (hfrac (or (plist-get loc :hfrac) 0.0))
              (zone (plist-get loc :zone))
+             (block-type (plist-get loc :block-type))
+             (table-like (plist-get loc :table-like))
+             (table-col (plist-get loc :table-col))
+             (cursor-table-col (plist-get loc :cursor-table-col))
+             (p-text (plist-get loc :p-text))
+             (p-frac (or (plist-get loc :p-frac) frac))
+             (col-text (plist-get loc :col-text))
+             (col-frac (or (plist-get loc :col-frac) frac))
+             (prefer-left (plist-get loc :prefer-left))
              (candidates (plist-get loc :candidates))
              (pmin (point-min))
              (pmax (point-max))
@@ -752,21 +1659,49 @@ when point rests on non-textual decoration."
              (end-bol (save-excursion (goto-char e-trim) (line-beginning-position)))
              (steps (count-lines start-bol end-bol))
              (step (min steps (max 0 (round (* frac steps)))))
-             (est-pos (save-excursion
+             (est-bol (save-excursion
                         (goto-char b)
                         (when (> step 0) (forward-line step))
-                        (line-beginning-position))))
+                        (line-beginning-position)))
+             (est-pos (save-excursion
+                        (goto-char est-bol)
+                        (let ((le (min e (line-end-position))))
+                          (+ est-bol (round (* hfrac (max 0 (- le est-bol))))))))
+             (proj (when (and candidates (memq zone '(block front-matter)))
+                     (etaf-md--source-visible-projection
+                      source-buf b e table-like block-type)))
+             (col-proj (when (and proj (integerp table-col))
+                         (etaf-md--projection-for-column proj table-col))))
         (or
          ;; For footnotes, prefer matches inside `[^label]:' definitions first.
          (when (eq zone 'footnote)
            (cl-loop for cand in candidates
                     thereis (etaf-md--search-nearest-in-range
                              cand b e est-pos t)))
-         ;; General search inside [b, e] closest to est-pos.
+         ;; For multi-column tables, resolve within the exact pipe column first
+         ;; so identical cells across columns (and wrapped multi-line cells)
+         ;; never jump to an earlier column.
+         (when col-proj
+           (cl-loop for cand in candidates
+                    thereis (etaf-md--search-in-projection
+                             col-proj cand (nth 5 cand) col-text col-frac
+                             prefer-left)))
+         ;; Visible-text block projection handles inline markup (`**test**',
+         ;; `` `test` ``, `[test](url)'), soft wraps and same-line duplicates
+         ;; deterministically by exact occurrence index and 2D position.
+         (when proj
+           (cl-loop for cand in candidates
+                    thereis (etaf-md--search-in-projection
+                             proj cand (nth 4 cand) p-text p-frac
+                             prefer-left)))
+         ;; Raw fallback inside [b, e] closest to 2D est-pos.
          (cl-loop for cand in candidates
                   thereis (etaf-md--search-nearest-in-range
                            cand b e est-pos nil))
          ;; Fallback when point is on a divider, image or blank margin.
+         (when (and table-like (integerp cursor-table-col))
+           (etaf-md--fallback-table-cell-pos
+            source-buf est-bol cursor-table-col b e))
          (if (and (eq zone 'footnote)
                   (integerp (plist-get loc :fallback-begin)))
              (save-excursion
