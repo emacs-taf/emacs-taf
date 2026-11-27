@@ -183,20 +183,9 @@ README 只负责入门和导航。完整用法及跨模块接口契约放入 `do
 
 ## 版本控制工作流
 
-每完成一个验证通过、能够独立说明和回退的修改点就及时提交；相关代码、测试与接口
-文档放在同一次提交。消息遵循 [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/)，
-使用具体标题、解释正文和 `Validation:` 验证结果。提交粒度参考
-[Git 官方工作流](https://git-scm.com/docs/gitworkflows)；标题最多 72 字符和验证字段是本项目附加要求。
-本地写操作使用 `jjosh`（不要在 `jjosh` 检出中混用普通 `jj`）。`jjosh` 不运行 Git 钩子，
-推送前用 `python3 scripts/check-commit-message.py <文件>` 检查提交信息，并用
-`make structure-check` 检查整棵树。
+将并发开发期与串行交付期拆开：日常开发多个包时直接在主工作副本 `default@` 修改，让本地 Emacs 随时实测最新代码，单个任务只跑目标包的 `make -C packages/<包> check`（改动共享底包时加跑 `make check-affected JOBS=4`）。需要提交单个包或整批收口时，串行执行一次 `make check-affected JOBS=4` 与 `make structure-check`，用 `python3 scripts/check-commit-message.py <文件>` 校验 [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) 消息（标题最多 72 字符且包含 `Validation:` 行），并用 `jjosh`（不要混用普通 `jj`）按路径原地切分提交，其他包的未完成改动继续留在 `@` 中互不干扰。
 
-每个包通过 `python3 scripts/publish-packages.py` 按目录投影发布到各自独立的远端
-（公开主仓 `origin` 位于 `github.com/emacs-taf`，以及维护者在 AGENTS.md 中记录的镜像远端）。
-构建发布归档前先运行 `jjosh git export`。检出本身（包括安装器和不属于任何包的共享工具）
-在每次交付后推到仓库级的私有 `aliyun` 远端。不强制覆盖历史，不隐式推送其他分支或标签，
-并报告每次推送结果。
-钩子检查目录与消息格式，修改范围、描述准确性和验证充分性仍需开发者负责。
+推送与归档发布是显式的批量收口动作，不必每个小改动单独执行。整批提交后向仓库级私有 `aliyun` 远端推一次根 `main`，构建归档前运行 `jjosh git export`，源码同步时用 `python3 scripts/publish-packages.py --package <包名>...` 只投影本批改动过的包（若立即发归档则交给归档发布一次性完成）。每当 `main` 前进后，务必把 `default@` 对齐回 `main`（空则 `jjosh new main`，有未完成 WIP 则 `jjosh rebase -s @ -d main`）。不强制覆盖历史，不隐式推送其他分支或标签。
 
 ## 持续约束
 

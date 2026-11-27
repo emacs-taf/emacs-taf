@@ -225,25 +225,9 @@ and [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), not a universal fi
 
 ## Version control workflow
 
-Commit each validated, complete modification promptly; keep related code, tests and
-contract documentation together. Use [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/)
-with a concrete title, explanatory body and `Validation:` results. Logical commit
-boundaries follow the [Git workflow guidance](https://git-scm.com/docs/gitworkflows).
-The 72-character title limit and validation field are project requirements.
-Make local writes with `jjosh` (never mix plain `jj` on a `jjosh` checkout). `jjosh`
-does not run Git hooks, so check each message with
-`python3 scripts/check-commit-message.py <file>` and the sealed tree with
-`make structure-check` before pushing.
+Separate concurrent development from serialized delivery so multiple packages can evolve in `default@` while local Emacs tests the latest code directly. During development, validate only the edited package (`make -C packages/<pkg> check`, plus `make check-affected JOBS=4` when editing a shared provider). When committing a finished package or batch, run one `make check-affected JOBS=4` + `make structure-check` pass, verify each [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) message (72-character title limit plus a `Validation:` line) with `python3 scripts/check-commit-message.py <file>`, and seal path-scoped commits in place from `@` with `jjosh` (never mix plain `jj` on a `jjosh` checkout) so unfinished work in other packages stays undisturbed in `@`.
 
-Every package publishes by projection to its own remotes (`origin` at
-`github.com/emacs-taf` plus any maintainer mirrors recorded in AGENTS.md) using
-`python3 scripts/publish-packages.py`. Run `jjosh git export` before building
-release archives. The checkout itself, including the installer and the shared
-tooling that no package carries, is pushed to its private repository-wide
-`aliyun` remote after each delivery. Do not force-push or implicitly publish other branches or tags.
-Report each delivery result.
-Hooks validate structure and message format; authors remain responsible for
-scope, accurate descriptions and validation.
+Push and release are explicit batch steps rather than per-task actions. Push the checkout root (`main`) once to its private `aliyun` remote after a batch of sealed commits, run `jjosh git export` before building archives, and project only changed packages to their independent remotes (`origin` at `github.com/emacs-taf` plus maintainer mirrors) via `python3 scripts/publish-packages.py --package <name>...` (or let a single batch archive release publish all drifted packages together). Keep `default@` aligned to `main` (`jjosh new main` or `jjosh rebase -s @ -d main`) whenever `main` advances. Do not force-push or implicitly publish other branches or tags.
 
 ## Enforcement
 
