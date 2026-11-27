@@ -862,30 +862,81 @@ Return the new theme mode symbol."
                      '(scroll auto)))
              lineage)))
 
-(defun etaf-org--sync-outline-scroll (session)
-  "Flush SESSION's open outline side window and keep its active row visible."
+(defvar etaf-org--locating-from-outline nil
+  "Non-nil while navigating from a click or activation inside `*ETAF Org Outline*'.")
+
+(defun etaf-org--toc-row-ref (id)
+  "Return the static host ref symbol for Org TOC row ID."
+  (when (and (stringp id) (not (string-empty-p id)))
+    (intern (concat "etaf-org-toc-row-" id))))
+
+(defun etaf-org--apply-outline-viewport (session id keep-viewport saved-line)
+  "Position SESSION's outline window for section ID.
+When KEEP-VIEWPORT is non-nil (user clicked inside the outline itself), keep
+`window-start' pinned to 1-based line SAVED-LINE and only update `window-point'
+onto the clicked row so the sidebar never jumps.  Otherwise (preview-driven
+navigation), keep `window-start' untouched when ID is already visible and only
+recenter when ID lies outside the outline viewport."
+  (when-let* ((obuf (plist-get session :toc-buffer))
+              ((buffer-live-p obuf))
+              (ort (etaf-runtime-for-buffer obuf))
+              ((etaf-runtime-mounted-p ort))
+              (owin (get-buffer-window obuf t))
+              ((window-live-p owin))
+              (ref (etaf-org--toc-row-ref id))
+              (pos (etaf-host-ref-position ort ref)))
+    (with-current-buffer obuf
+      (cond
+       (keep-viewport
+        (set-window-point owin pos)
+        (when (and (integerp saved-line) (> saved-line 0))
+          (let ((start-pos (save-excursion
+                             (goto-char (point-min))
+                             (forward-line (1- saved-line))
+                             (point))))
+            (set-window-start owin start-pos t))))
+       ((pos-visible-in-window-p pos owin)
+        (set-window-point owin pos))
+       (t
+        (set-window-point owin pos)
+        (with-selected-window owin
+          (goto-char pos)
+          (recenter)))))))
+
+(defun etaf-org--sync-outline-viewport (session id &optional keep-viewport)
+  "Sync SESSION's open outline buffer to section ID.
+Uses ID's static host ref so it is never stale inside an `etaf-batch', and
+re-applies viewport pinning on `etaf-next-tick' after reactive paint settles."
   (when-let* ((obuf (plist-get session :toc-buffer))
               ((buffer-live-p obuf))
               (ort (etaf-runtime-for-buffer obuf))
               ((etaf-runtime-mounted-p ort)))
-    (etaf-runtime-flush ort)
-    (when-let* ((pos (etaf-host-ref-position ort 'etaf-org-toc-active-row))
-                (owin (get-buffer-window obuf t)))
-      (with-current-buffer obuf
-        (set-window-point owin pos)))))
+    (let* ((owin (get-buffer-window obuf t))
+           (saved-line (and (window-live-p owin)
+                            (with-current-buffer obuf
+                              (line-number-at-pos (window-start owin))))))
+      (etaf-org--apply-outline-viewport session id keep-viewport saved-line)
+      (etaf-runtime-flush ort)
+      (etaf-org--apply-outline-viewport session id keep-viewport saved-line)
+      (etaf-next-tick
+       (lambda ()
+         (when (equal id (etaf-org--read session :active-section))
+           (etaf-org--apply-outline-viewport
+            session id keep-viewport saved-line)))))))
 
 (defun etaf-org--locate-id (session id)
   "Move point to SESSION's section ID (pushing mark) and bring it into view."
   (let* ((buffer (etaf-org--buffer session))
          (runtime (etaf-org--runtime session))
          (ref (etaf-org--section-ref id))
+         (keep-outline-vp etaf-org--locating-from-outline)
          (in-scroller nil))
     (when (buffer-live-p buffer)
       (plist-put session :resize-anchor-line nil)
       (plist-put session :locate-gen (1+ (or (plist-get session :locate-gen) 0)))
       (etaf-org--write session :active-section id)
       (when (etaf-org--read session :toc-open)
-        (etaf-org--sync-outline-scroll session))
+        (etaf-org--sync-outline-viewport session id keep-outline-vp))
       (when (and runtime (etaf-runtime-mounted-p runtime)
                  ref (etaf-runtime-host-props-for runtime ref))
         (setq in-scroller (etaf-org--scrollable-ancestor-p runtime ref))
@@ -916,7 +967,7 @@ Runs only when the outline side window is open unless FORCE is non-nil."
       (unless (equal id (etaf-org--read session :active-section))
         (etaf-org--write session :active-section id)
         (when (etaf-org--read session :toc-open)
-          (etaf-org--sync-outline-scroll session))))))
+          (etaf-org--sync-outline-viewport session id nil))))))
 
 (defun etaf-org--ancestor-path (session id)
   "Return the ids of ID's ancestors in SESSION, outermost first."
@@ -957,28 +1008,28 @@ Runs only when the outline side window is open unless FORCE is non-nil."
         (etaf-org--locate-id session id)))))
 
 (defun etaf-org--reading-section (session)
-  "Return the id of the section that contains point in SESSION, or nil."
+  "Return the id of the section that contains point's line in SESSION, or nil."
   (let* ((buffer (etaf-org--buffer session))
-         (point-now (if (buffer-live-p buffer)
-                        (with-current-buffer buffer (point))
-                      0))
+         (line-end (if (buffer-live-p buffer)
+                       (with-current-buffer buffer (line-end-position))
+                     0))
          (found nil))
     (dolist (cell (etaf-org--positions session))
-      (when (<= (cdr cell) point-now)
+      (when (<= (cdr cell) line-end)
         (setq found (car cell))))
     found))
 
 (defun etaf-org--adjacent-heading (session direction)
   "Move point to the next visible heading in DIRECTION."
   (let* ((buffer (etaf-org--buffer session))
-         (point-now (if (buffer-live-p buffer)
-                        (with-current-buffer buffer (point))
-                      0))
+         (line-end (if (buffer-live-p buffer)
+                       (with-current-buffer buffer (line-end-position))
+                     0))
          (positions (etaf-org--positions session))
          (current (and (< direction 0) (etaf-org--reading-section session)))
-         (reference (or (and current (cdr (assoc current positions))) point-now))
+         (reference (or (and current (cdr (assoc current positions))) line-end))
          (target (if (> direction 0)
-                     (cl-find-if (lambda (cell) (> (cdr cell) point-now)) positions)
+                     (cl-find-if (lambda (cell) (> (cdr cell) line-end)) positions)
                    (car (last (cl-remove-if-not
                                (lambda (cell) (< (cdr cell) reference))
                                positions))))))

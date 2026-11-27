@@ -296,12 +296,14 @@ active Emacs theme background stays intact."
                  for is-active = (equal id active-id)
                  for indent = (* 2 (min 3 (max 0 (- lv min-lv))))
                  collect
-                 (let ((target-idx idx))
+                 (let ((target-idx idx)
+                       (target-id id))
                    (etaf-node
                     'box
                     (append
-                     (when is-active (list :ref 'etaf-org-toc-active-row))
-                     (list :width 'stretch
+                     (list :key target-id
+                           :ref (etaf-org--toc-row-ref target-id)
+                           :width 'stretch
                            :box-sizing 'border-box
                            :padding (list '(lh 0) '(ch 1) '(lh 0) (list 'ch (+ 2 indent)))
                            :border-left (list '(px 2) 'solid
@@ -315,11 +317,24 @@ active Emacs theme background stays intact."
                            :pointer (unless is-active 'hand)
                            :aria-selected (when is-active t)
                            :help-echo (format "跳转到 %s" text)
-                           :on-press (lambda () (etaf-org-locate session target-idx)))
+                           :on-press (lambda ()
+                                       (let ((etaf-org--locating-from-outline t))
+                                         (etaf-org-locate session target-idx))))
                      (when is-active (list :background-color accent-soft))
                      (when (and hover (not is-active))
                        (list :hover-style (list :background-color hover))))
                     (list (etaf-node 'text nil (list text)))))))))))
+
+(defun etaf-org--outline-clamp-point (win new-start)
+  "Keep WIN's `window-point' inside its scrolled viewport from NEW-START.
+Prevents wheel or pixel-scroll drivers from leaving an off-screen point that
+would snap the outline back on the next hover or reactive repaint."
+  (when (and (window-live-p win)
+             (eq (window-buffer win) (current-buffer)))
+    (let ((pt (window-point win))
+          (end (window-end win nil)))
+      (when (or (< pt new-start) (and end (> end new-start) (> pt end)))
+        (set-window-point win new-start)))))
 
 (defun etaf-org--outline-open (session)
   "Open SESSION's independent TOC side window on `etaf-org-toc-side'."
@@ -339,7 +354,9 @@ active Emacs theme background stays intact."
                          (list "t" #'etaf-org-cycle-theme "切换主题"))))
     (etaf-org--sync-active-section session t)
     (etaf-org--write session :toc-open t)
-    (let ((buf (if (buffer-live-p existing)
+    (let ((active-id (or (etaf-org--read session :active-section)
+                         (nth 2 (car (etaf-org-outline session)))))
+          (buf (if (buffer-live-p existing)
                    (progn
                      (display-buffer-in-side-window existing alist)
                      existing)
@@ -360,14 +377,17 @@ active Emacs theme background stays intact."
                    (with-current-buffer b
                      (setq-local cursor-in-non-selected-windows nil)
                      (setq-local left-fringe-width 0)
-                     (setq-local right-fringe-width 0))
+                     (setq-local right-fringe-width 0)
+                     (add-hook 'window-scroll-functions
+                               #'etaf-org--outline-clamp-point nil t))
                    (plist-put session :toc-buffer b)
                    b))))
       (when-let* ((owin (get-buffer-window buf t)))
         (set-window-fringes owin 0 0))
       (when (window-live-p preview-win)
         (select-window preview-win))
-      (etaf-org--sync-outline-scroll session)
+      (when active-id
+        (etaf-org--sync-outline-viewport session active-id nil))
       buf)))
 
 (defun etaf-org-toggle-toc (&optional arg)

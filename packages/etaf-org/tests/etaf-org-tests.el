@@ -1497,7 +1497,9 @@
                     (should (string-match-p "目录" txt))
                     (should (string-match-p "第二章节" txt))
                     (should (string-match-p "目标章节" txt))))
-                ;; Clicking distinct TOC items jumps preview point to distinct positions.
+                ;; Clicking distinct TOC items jumps preview point to distinct positions
+                ;; via real `etaf-activate' (inside `etaf-batch') without jumping the
+                ;; outline's scrolled viewport back to an earlier off-screen active item.
                 (let ((click-toc
                        (lambda (label)
                          (with-current-buffer obuf
@@ -1505,18 +1507,31 @@
                              (goto-char (point-min))
                              (should (search-forward label nil t))
                              (goto-char (match-beginning 0))
-                             (let ((on-press (plist-get (etaf-runtime-host-props-for
-                                                         ort (etaf-host-ref-at ort (point)))
-                                                        :on-press)))
-                               (if (functionp on-press)
-                                   (funcall on-press)
-                                 (etaf-activate ort)))))
+                             (etaf-activate ort)
+                             (etaf-runtime-flush ort)))
                          (with-current-buffer prv (point)))))
                   (let ((pos-2 (funcall click-toc "第二章节"))
                         (pos-3 (funcall click-toc "目标章节"))
                         (pos-1 (funcall click-toc "概览章节")))
                     (should (> pos-3 pos-2))
-                    (should (> pos-2 pos-1)))))
+                    (should (> pos-2 pos-1))))
+                ;; Regression: scrolled outline with off-screen active row keeps
+                ;; `window-start' pinned when clicking a visible row below.
+                (etaf-org-locate (etaf-app-state) 0)
+                (with-current-buffer obuf
+                  (let ((ort (etaf-runtime-for-buffer obuf)))
+                    (goto-char (point-min))
+                    (should (search-forward "第二章节" nil t))
+                    (let ((scrolled-start (line-beginning-position)))
+                      (set-window-start owin scrolled-start t)
+                      (set-window-point owin scrolled-start)
+                      (goto-char (point-min))
+                      (should (search-forward "目标章节" nil t))
+                      (goto-char (match-beginning 0))
+                      (etaf-activate ort)
+                      (etaf-runtime-flush ort)
+                      (should (= (window-start owin) scrolled-start)))))
+                (etaf-org-locate (etaf-app-state) 0))
               ;; `n'/`p' heading navigation keeps working while side window is open.
               (let ((before (point)))
                 (etaf-org-next-heading)

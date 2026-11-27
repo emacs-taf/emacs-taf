@@ -10,6 +10,7 @@
 
 ### Fixed
 
+- Assigned each TOC row a static immutable host ref and separated outline-click from preview-driven sync so clicking a visible heading in a scrolled `*ETAF Org Outline*` never snaps back to an off-screen previously active item, clamped outline `window-point` on scroll, and matched active/adjacent headings by line end across centered headlines.
 - Fixed TOC click handlers always jumping to the last heading due to shared `cl-loop` variable capture.
 - Fixed collapsible `file-tree` directory toggles failing to fold/unfold because `etaf-org-block-state` compared compound keys with `eq` instead of `equal`.
 
