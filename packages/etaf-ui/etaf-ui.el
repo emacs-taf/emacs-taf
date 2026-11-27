@@ -1206,13 +1206,17 @@
 ;; :backdrop — Optional flag; default t. Dim/block the background; nil leaves outside-click policy to the caller.
 ;; :keys — Optional scoped ETAF key declarations; default nil. Entries (key callback label) follow the Host :keys contract.
 ;; :on-direction — Optional function (direction); default nil. Return handled/release according to the Host direction contract.
-;; :animated — Optional flag; default nil. Smoothly dim the modal backdrop on open via the shared animation clock.
+;; :animated — Optional flag; default t. Smoothly dim the modal backdrop on open via the shared animation clock.
 ;;
 ;; Show a controlled modal panel using the same floating surface as Popover.
 ;; TITLE defaults to Dialog and WIDTH to (ch 48).  HEIGHT optionally fixes the
 ;; panel to `(lh N)' rows, bounded by the visible window.  COMPACT removes
 ;; the body's vertical air so short forms stay dense.  The panel centers in
-;; the window that displays its buffer when that window is graphical.
+;; the window that displays its buffer when that window is graphical.  When
+;; `etaf-ui-modal-use-child-frame' is non-nil and `etaf-ui-modal-host-function'
+;; is installed (for example by `etaf-posframe'), centered modals project their
+;; content into a floating child frame over the dimmed parent canvas and fall
+;; back to in-buffer rendering on batch or non-graphical displays.
 ;; The header shows TITLE and a pointer-only x that requests ON-CLOSE; initial
 ;; focus still lands on the first body control.  Default content and footer
 ;; slots compose ordinary Components; a secondary CLOSE-LABEL button (default
@@ -1670,6 +1674,22 @@
 ;; PLACEMENT defaults to right, WIDTH to (ch 42), and MODAL to t. Width is
 ;; constrained to the root canvas. OPEN accepts a value/ref/computed; ON-CLOSE
 ;; must be a function. Focus, dismissal, return and disposal follow Dialog.
+;;
+;; Variable: etaf-ui-modal-host-function
+;; Optional child-frame modal host callback, default nil.  When non-nil and
+;; `etaf-ui-modal-use-child-frame' is enabled on a graphical display, centered
+;; `etaf-dialog' modals (including `etaf-key-help') pass a spec plist
+;; (:key :parent-buffer :parent-window :panel :title :width-px :height-rows
+;; :max-height-rows :help-p :theme :appearance :view :on-close) and expect a
+;; handle plist (:update :close :frame :runtime-fn) while keeping the dimmed
+;; animated backdrop scrim in the parent buffer.  `etaf-posframe' installs its
+;; host automatically when loaded.
+;;
+;; Variable: etaf-ui-modal-use-child-frame
+;; When non-nil (default nil), project centered `etaf-dialog' modals through
+;; `etaf-ui-modal-host-function' on graphical displays; nil keeps all modals
+;; rendered inside the parent buffer with single-pass centering and uniform
+;; backdrop dimming.
 ;;
 ;; Function: etaf-ui-dismiss-outside-press ()
 ;;;###autoload (autoload 'etaf-ui-dismiss-outside-press "etaf-ui")

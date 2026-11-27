@@ -78,6 +78,13 @@ Every documented variable, grouped by the chapter that defines it. Each row link
 | [`etaf-video-ffplay-program`](native-video.md#variable-etaf-video-ffplay-program) | Name or absolute path of the ffplay executable used for audio. |
 | [`etaf-video-ffprobe-program`](native-video.md#variable-etaf-video-ffprobe-program) | Name or absolute path of the ffprobe executable used for metadata. |
 
+## Overlays
+
+| Variable | Purpose |
+| --- | --- |
+| [`etaf-ui-modal-host-function`](ui-overlays.md#variable-etaf-ui-modal-host-function) | Optional child-frame modal host callback for centered `etaf-dialog` modals; `etaf-posframe` installs it automatically. |
+| [`etaf-ui-modal-use-child-frame`](ui-overlays.md#variable-etaf-ui-modal-use-child-frame) | Whether centered `etaf-dialog` modals project into a floating child frame on graphical displays; default nil (in-buffer rendering). |
+
 ## Icons
 
 | Variable | Purpose |

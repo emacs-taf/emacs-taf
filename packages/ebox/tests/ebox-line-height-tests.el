@@ -293,5 +293,65 @@ whatever the reader's default font."
     ;; A CSS pixel size is no longer a size; it fails the style check.
     (should-error (ebox-render '(column (row (text "D" :font-size 16)))))))
 
+(ert-deftest ebox-fallback-symbols-keep-row-pixel-width-across-colored-faces ()
+  "Fallback symbols painted in differently colored boxes keep exact row widths.
+Emacs caches discovered fallback fonts per realized face, so measuring two
+symbols under one shared font face and painting each with its own foreground
+and background can otherwise resolve a different fallback font at paint time
+and shift the right border on that row."
+  (skip-unless (display-graphic-p))
+  (ebox-clear-cache)
+  (let ((map (ebox-keymap-create :activate (lambda () t))))
+    (ebox-test-with-mounted
+        (buffer root
+                `(column :width (px 480) :border ((px 1) solid "#445566")
+                         (flex :width stretch :column-gap (px 12)
+                               (column :flex-grow 1 :flex-basis (px 0) :min-width (px 0)
+                                       :padding ((lh 1) (ch 1))
+                                       :background-color "#402c39"
+                                       :border ((px 1) solid "#9f3a4a")
+                                       (text :color "#fb7185" :font-weight bold
+                                             "✗ 顺序摆反：[×2 倍] → [+8 倍]")
+                                       (text :color "#e2e8f0" "基础 2 倍先乘 2 再加 8 = 12 倍"))
+                               (column :flex-grow 1 :flex-basis (px 0) :min-width (px 0)
+                                       :padding ((lh 1) (ch 1))
+                                       :background-color "#1f4038"
+                                       :border ((px 1) solid "#2f855a")
+                                       (text :color "#4ade80" :font-weight bold
+                                             "✓ 正确摆位：[+8 倍] → [×2 倍]")
+                                       (text :color "#e2e8f0" "基础 2 倍先加 8 再乘 2 = 20 倍")))
+                         (box :width stretch :padding ((lh 0) (ch 1))
+                              :background-color "#1f4038"
+                              :hover-style (:background-color "#2c5b4f")
+                              :keymap ,map
+                              (text :color "#4ade80" :font-weight bold "✓ 确认")))
+                :width 480 :height 8)
+      (let ((window (selected-window))
+            (shown (window-buffer (selected-window)))
+            (line (plist-get (ebox-display-metrics buffer) :line-height)))
+        (unwind-protect
+            (progn
+              (set-window-buffer window buffer)
+              (redisplay t)
+              (save-excursion
+                (goto-char (point-min))
+                (while (not (eobp))
+                  (let ((sz (window-text-pixel-size
+                             window (line-beginning-position)
+                             (line-end-position))))
+                    (should (= (car sz) 480))
+                    (should (= (cdr sz) line)))
+                  (forward-line 1))
+                (goto-char (point-min))
+                (should (search-forward "✓ 确认" nil t))
+                (let* ((pos (- (point) 4))
+                       (face-plists (ebox-test-face-plists (get-text-property pos 'face)))
+                       (hover-plists (ebox-test-face-plists (get-text-property pos 'mouse-face)))
+                       (face-fam (cl-some (lambda (p) (plist-get p :family)) face-plists))
+                       (hover-fam (cl-some (lambda (p) (plist-get p :family)) hover-plists)))
+                  (when face-fam
+                    (should (equal hover-fam face-fam))))))
+          (set-window-buffer window shown))))))
+
 (provide 'ebox-line-height-tests)
 ;;; ebox-line-height-tests.el ends here

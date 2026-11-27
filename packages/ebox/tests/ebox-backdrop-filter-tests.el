@@ -465,5 +465,202 @@
         (search-forward "界")
         (should (eq (get-text-property (1- (point)) 'pointer) 'hand))))))
 
+(ert-deftest ebox-backdrop-filter-dims-horizontal-border-decorations ()
+  "Horizontal overline and underline border colors dim uniformly with surfaces."
+  (let* ((ebox-viewport-width (* 12 (frame-char-width)))
+         (ebox-viewport-height 2)
+         (rendered
+          (ebox-render
+           '(column :width (% 100) :height (% 100)
+                    (box :width (% 100) :height (lh 2)
+                         :color "#FFFFFF" :background-color "#204060"
+                         :border ((px 1) solid "#80A0C0")
+                         "Bordered")
+                    (box :position absolute :layer root
+                         :left (px 0) :top (lh 0)
+                         :width (% 100) :height (% 100)
+                         :backdrop-filter (brightness 0.5))))))
+    (let* ((lines (split-string rendered "\n"))
+           (top-face (get-text-property 2 'face (nth 0 lines)))
+           (bot-face (get-text-property 2 'face (nth 1 lines)))
+           (overline (plist-get top-face :overline))
+           (underline (plist-get bot-face :underline))
+           (ul-color (if (stringp underline) underline (plist-get underline :color))))
+      (should (stringp overline))
+      (should (not (equal (upcase overline) "#80A0C0")))
+      (should (stringp ul-color))
+      (should (not (equal (upcase ul-color) "#80A0C0")))
+      (should (equal overline ul-color)))))
+
+(ert-deftest ebox-backdrop-filter-dims-canvas-background-and-restores ()
+  "A full-canvas backdrop dims buffer default/fringe faces without double-dimming."
+  (let ((veil (ebox-build '(box :position absolute :layer root
+                                :left (px 0) :top (lh 0)
+                                :width (% 100) :height (% 100)
+                                :backdrop-filter (brightness 0.5)))))
+    (ebox-test-with-mounted
+        (buffer root '(column :width (ch 12) :height (lh 3)
+                              :background-color "#FFFFFF"
+                              (box :color "#FFFFFF" "Row")))
+      (with-current-buffer buffer
+        (should (equal (cdr (assq 'default face-remapping-alist))
+                       '((:background "#FFFFFF") default)))
+        (should-not (assq 'fringe face-remapping-alist))
+        (ebox-node-insert root veil)
+        (let ((dim-bg (plist-get (car (cdr (assq 'default face-remapping-alist)))
+                                 :background))
+              (fringe-bg (plist-get (car (cdr (assq 'fringe face-remapping-alist)))
+                                    :background)))
+          (should (equal dim-bg "#800080008000"))
+          (should (equal fringe-bg "#800080008000")))
+        ;; Updating brightness must compute from the undimmed root background,
+        ;; never compounding the already-dimmed canvas remap.
+        (ebox-node-put veil :backdrop-filter '(brightness 0.5))
+        (should (equal (plist-get (get-text-property (point-min) 'face) :background)
+                       "#800080008000"))
+        (ebox-node-put veil :backdrop-filter '(brightness 0.75))
+        (should (equal (plist-get (car (cdr (assq 'default face-remapping-alist)))
+                                  :background)
+                       "#BFFFBFFFBFFF"))
+        (ebox-node-remove veil)
+        (should (equal (cdr (assq 'default face-remapping-alist))
+                       '((:background "#FFFFFF") default)))
+        (should-not (cdr (assq 'fringe face-remapping-alist)))))))
+
+(ert-deftest ebox-backdrop-filter-dims-named-emacs-faces ()
+  "Named Emacs faces dim uniformly behind a backdrop instead of staying bright."
+  (let* ((ebox-viewport-width (* 12 (frame-char-width)))
+         (ebox-viewport-height 1)
+         (face-sym 'ebox-test-named-backdrop-face))
+    (make-face face-sym)
+    (set-face-attribute face-sym nil :foreground "#FF8040" :background "#204060")
+    (let* ((rendered
+            (ebox-render
+             (list 'column :width '(% 100) :height '(% 100)
+                   (ebox-text-create (propertize "Code" 'face face-sym))
+                   '(box :position absolute :layer root
+                         :left (px 0) :top (lh 0)
+                         :width (% 100) :height (% 100)
+                         :backdrop-filter (brightness 0.5)))))
+           (face (get-text-property 0 'face rendered))
+           (head (car-safe face)))
+      (should (consp face))
+      (should (keywordp (car-safe head)))
+      (should (equal (plist-get head :foreground) "#800040402020"))
+      (should (equal (plist-get head :background) "#101020203030"))
+      (should (memq face-sym face)))))
+
+(ert-deftest ebox-overlay-placement-center-centers-horizontally-and-vertically ()
+  "An unanchored overlay with `:placement center' centers from its laid-out size."
+  (let ((card (ebox-build '(column :position absolute :layer root :placement center
+                                   :width (ch 10) :background-color "#202020"
+                                   (box "Line 1") (box "Line 2")))))
+    (ebox-test-with-mounted
+        (buffer root '(column :width (ch 30) :height (lh 12)
+                              :background-color "#000000"
+                              (box "Back")))
+      (ebox-node-insert root card)
+      (let* ((root-geo (ebox-node-geometry root))
+             (geo (ebox-node-geometry card))
+             (expected-x (floor (/ (- (plist-get root-geo :width)
+                                      (plist-get geo :width))
+                                   2)))
+             (expected-y (floor (/ (- 12 2) 2))))
+        (should (= (plist-get geo :x) expected-x))
+        (should (= (plist-get geo :y) expected-y))
+        ;; Growing card content re-centers vertically in the same flush.
+        (ebox-node-insert card (ebox-build '(box "Line 3")))
+        (ebox-node-insert card (ebox-build '(box "Line 4")))
+        (let ((geo2 (ebox-node-geometry card)))
+          (should (= (plist-get geo2 :height) 4))
+          (should (= (plist-get geo2 :y) (floor (/ (- 12 4) 2)))))))))
+
+(ert-deftest ebox-canvas-and-last-line-follow-backdrop-and-bottom-surface ()
+  "Canvas, fringe and last-line extension stay unified across bottom bars and modals."
+  (let ((buffer (get-buffer-create " *ebox-canvas-systemic*")))
+    (unwind-protect
+        (progn
+          ;; 1. Full-viewport layout wrapped in an unstyled root shell with a
+          ;;    distinct bottom surface and a modal `:backdrop-filter' overlay.
+          (let* ((root (ebox-mount
+                        buffer
+                        '(box :width (% 100) :height (% 100)
+                              (column :id "shell" :width (% 100) :height (% 100)
+                                      :background-color "#F2F3F7"
+                                      (box :width (% 100) :height (lh 3) "Body")
+                                      (box :id "footer" :width (% 100) :height (lh 1)
+                                           :background-color "#E0E4EE" "Footer")))
+                        :width (* 24 (frame-char-width)) :height 4))
+                 (footer (car (ebox-selector-query root "#footer")))
+                 (last-ov (lambda ()
+                            (with-current-buffer buffer
+                              (cl-find-if (lambda (ov)
+                                            (stringp (overlay-get ov 'after-string)))
+                                          (overlays-in (point-max) (point-max)))))))
+            ;; Undimmed: canvas and last-line virtual newline both match footer.
+            (with-current-buffer buffer
+              (let* ((def-bg (plist-get (car (cdr (assq 'default face-remapping-alist)))
+                                        :background))
+                     (ov (funcall last-ov))
+                     (ov-face (and ov (get-text-property 0 'face (overlay-get ov 'after-string)))))
+                (should (equal def-bg "#E0E4EE"))
+                (should ov)
+                (should (equal (overlay-get ov 'after-string) "\n"))
+                (should (eq t (plist-get ov-face :extend)))
+                (should (equal (plist-get ov-face :background) "#E0E4EE"))))
+            ;; Dimmed via full-canvas modal overlay over the wrapped root.
+            (let ((veil (ebox-build
+                         '(box :position absolute :layer root
+                               :left (px 0) :top (lh 0)
+                               :width (% 100) :height (% 100)
+                               :backdrop-filter (brightness 0.5)))))
+              (ebox-node-insert root veil)
+              (let ((dimmed-bg
+                     (with-current-buffer buffer
+                       (plist-get (car (cdr (assq 'default face-remapping-alist)))
+                                  :background))))
+                (should (stringp dimmed-bg))
+                (should-not (equal (upcase dimmed-bg) "#E0E4EE"))
+                (with-current-buffer buffer
+                  (let* ((fr-bg (plist-get (car (cdr (assq 'fringe face-remapping-alist)))
+                                           :background))
+                         (ov (funcall last-ov))
+                         (ov-face (and ov (get-text-property 0 'face
+                                                             (overlay-get ov 'after-string)))))
+                    (should (equal fr-bg dimmed-bg))
+                    (should (equal (plist-get ov-face :background) dimmed-bg))))
+                ;; Consecutive flush while modal stays open never double-dims.
+                (ebox-node-set-text (ebox-node-child footer 0) "Footer 2")
+                (with-current-buffer buffer
+                  (should (equal (plist-get (car (cdr (assq 'default face-remapping-alist)))
+                                            :background)
+                                 dimmed-bg))))
+              ;; Removing modal restores exact undimmed canvas and clears fringe remap.
+              (ebox-node-remove veil)
+              (with-current-buffer buffer
+                (should (equal (plist-get (car (cdr (assq 'default face-remapping-alist)))
+                                          :background)
+                               "#E0E4EE"))
+                (should-not (cdr (assq 'fringe face-remapping-alist)))))
+            ;; Unmount cleans up default remap, fringe remap and last-line overlay.
+            (ebox-unmount-buffer buffer)
+            (with-current-buffer buffer
+              (should-not (cdr (assq 'default face-remapping-alist)))
+              (should-not (cdr (assq 'fringe face-remapping-alist)))
+              (should-not (funcall last-ov))))
+          ;; 2. Short tree (< viewport height): bottom child must NOT tint empty page below.
+          (ebox-mount
+           buffer
+           '(column :background-color "#FFFFFF"
+                    (box :height (lh 1) "Intro")
+                    (box :height (lh 1) :background-color "#111111" "Code"))
+           :width (* 24 (frame-char-width)) :height 10)
+          (with-current-buffer buffer
+            (should (equal (plist-get (car (cdr (assq 'default face-remapping-alist)))
+                                      :background)
+                           "#FFFFFF")))
+          (ebox-unmount-buffer buffer))
+      (when (buffer-live-p buffer) (kill-buffer buffer)))))
+
 (provide 'ebox-backdrop-filter-tests)
 ;;; ebox-backdrop-filter-tests.el ends here

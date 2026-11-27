@@ -24,6 +24,10 @@
 | `:theme` | 模式、plist、ref | `auto` | 调色板 |
 | `:border` | 边框 plist | `nil` | 边框宽度与状态颜色 |
 | `:key` | 符号 | `nil` | 面板标识 |
+| `:scrollable` | `t`、`nil` | `t` | 是否允许面板缓冲区滚屏 |
+| `:on-escape` | 函数、`nil` | `nil` | 按 `ESC` 或 `C-g` 时以 `(PANEL)` 调用，替代默认隐藏 |
+| `:on-blur` | 函数、`nil` | `nil` | 焦点离开面板切往其他 frame 时以 `(PANEL)` 调用 |
+| `:on-move` | 函数、`nil` | `nil` | 拖动结束后以 `(X Y PANEL)` 回调的新位置通知 |
 
 每个选项在进入时就校验，所以错值在 frame 还不存在时就报出来，而不是建到一半才炸。下面几节给每组的取值与行为；后面 `etaf-posframe-show` 的条目只写函数契约，调色板见 `etaf-posframe-theme` 与各变量的条目。
 
@@ -203,6 +207,38 @@ frame 会收到渲染内容的高度，最多到 `:height` 预算，所以短的
 **语义。** PANEL 默认取当前 buffer 的面板。从外部改过大小的 frame 会成为面板宽度，View 因此重排、标题栏按新的列数重画；收高推迟到当前事件与渲染之后，所以从按钮、计时器或主题回调里调用都安全。宿主 frame 尺寸变化时面板本来也会自动收高，只有内容高度变了却没有 Runtime 更新时才需要手动调一次。收高带退避：一秒内收到二十次就停下，等两秒再试，所以跟它较劲的条件不会把 CPU 跑满。
 
 **返回。** PANEL 还活着时返回非 nil。
+
+#### Function: etaf-posframe-reshape (panel &rest options)
+
+原位更新活着的 PANEL，不销毁重开子 frame，也不卸载重挂 View。
+
+**参数。** OPTIONS 接受 `:width`、`:height`、`:at`、`:theme`、`:border`、`:fill-height` 与 `:focus-on-open`。
+
+**语义。** 校验传入选项并原位更新面板的宽度、行预算、边框或主题色板，按当前锚点或固定像素坐标平滑重排并重新落位，并按 `:focus-on-open` 决定聚焦或归还焦点。
+
+**返回。** PANEL 活着时返回 PANEL，否则返回 nil。
+
+#### Function: etaf-posframe-focus (panel)
+
+把输入焦点交给活着的 `:focusable` 面板 PANEL。
+
+**语义。** 选中 PANEL 的子 frame 并记住宿主 frame，以便隐藏或调用 `etaf-posframe-unfocus` 时把焦点准确归还给原来的编辑窗口。
+
+**返回。** 成功聚焦时返回 PANEL，否则返回 nil。
+
+#### Function: etaf-posframe-unfocus (panel)
+
+在不隐藏 PANEL 的前提下，把输入焦点从 PANEL 归还给记住的宿主 frame。
+
+**返回。** 成功归还焦点时返回非 nil，否则返回 nil。
+
+#### Function: etaf-posframe-drag (panel &optional on-done)
+
+用鼠标指针在父 frame 范围内实时拖动活着的 PANEL。
+
+**语义。** 不依赖 `:title` 标题栏，同样适用于无标题栏浮动面板。按下拖动期间实时跟随指针移动并夹紧在父 frame 之内；只有发生超过 3 像素的实际移动时才固定新坐标，并在传入 ON-DONE 时以 `(X Y PANEL)` 回调。
+
+**返回。** 实际发生移动时返回非 nil，否则返回 nil。
 
 ## 读取已打开的面板
 

@@ -1452,6 +1452,16 @@
       "name": "etaf-ui-accordion-compact-borders-visible-hover-and-empty-body",
       "file": "tests/etaf-ui-modern-tests.el",
       "purpose": "Accordion headers stay compact with primary ink, preserve border overline/underline under visible theme-derived hover in dark and light palettes, and omit hollow body boxes for empty content."
+    },
+    {
+      "name": "etaf-ui-dialog-projects-into-modal-host-with-dimmed-backdrop",
+      "file": "tests/etaf-ui-surface-tests.el",
+      "purpose": "Centered modal dialogs delegate card rendering to `etaf-ui-modal-host-function' on graphical displays when `etaf-ui-modal-use-child-frame' is enabled, keeping the uniformly dimmed backdrop scrim in the parent buffer."
+    },
+    {
+      "name": "etaf-ui-dialog-defaults-to-centered-in-buffer-with-uniform-backdrop",
+      "file": "tests/etaf-ui-surface-tests.el",
+      "purpose": "Centered modal dialogs default to in-buffer rendering with exact vertical centering, uniform dimmed canvas background and clean focus restoration."
     }
   ]
 }

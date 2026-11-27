@@ -788,8 +788,8 @@ Leave fractional and contextual lengths unresolved until used placement."
   (or (symbolp value) (stringp value)))
 
 (defun ebox-style--placement-p (value)
-  "Return non-nil when VALUE is a supported anchor placement."
-  (memq value '(bottom-start bottom-end top-start top-end)))
+  "Return non-nil when VALUE is a supported overlay placement."
+  (memq value '(bottom-start bottom-end top-start top-end center)))
 
 (defun ebox-style--font-family-p (value)
   "Return non-nil when VALUE is an Ebox font family."

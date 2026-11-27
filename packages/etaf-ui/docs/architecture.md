@@ -47,6 +47,8 @@ Type size comes from the user's Emacs.  Catalog components never set `:font-size
 
 Each composite is one Tab stop, entered at its selected item.  Arrows and `C-n`/`C-p`/`C-b`/`C-f` move inside it; `RET` activates the focused target. Dialogs, drawers, popovers and the media viewer are modal key scopes: Tab and arrows stay inside, Escape dismisses the innermost layer.  `?` opens read-only help listing the keys in scope.
 
+Centered dialogs (`etaf-dialog`, including `etaf-key-help`) render in-buffer by default (`etaf-ui-modal-use-child-frame` defaults to nil) using Ebox `:placement center` over a uniformly dimmed animated backdrop scrim, giving instant single-Runtime updates and identical cross-platform behavior without OS child-frame churn.  To preserve acyclic layering for users who opt into native child-frame modals, `etaf-ui` also exposes `etaf-ui-modal-host-function` (registered automatically by `etaf-posframe` when loaded); setting `etaf-ui-modal-use-child-frame` to non-nil projects centered dialogs into a floating child frame on graphical displays while keeping the dimmed parent backdrop, with batch and terminal displays always falling back to in-buffer rendering.
+
 Focus, hit testing and the keymap are owned by ETAF and Ebox.  A component requests focus and declares keys; it does not install a competing global map or scan the buffer for its own targets.
 
 ## 5. Data and asynchronous state

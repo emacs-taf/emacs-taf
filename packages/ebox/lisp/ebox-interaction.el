@@ -149,10 +149,11 @@ explicit nil or an inner node's help still blocks it."
 
 (defun ebox--fill-mouse-face (string value)
   "Put absent `mouse-face' runs in STRING with VALUE.
-Preserve border paint (`ebox-border' side rules, `:overline' top edges and
-`:underline' `:position' bottom edges) from each run's `face' so hovering never
-erases borders."
+Preserve any pinned fallback `:family' and border paint (`ebox-border' side
+rules, `:overline' top edges and `:underline' `:position' bottom edges) from
+each run's `face' so hovering never shifts glyphs or erases borders."
   (let ((pos 0) (len (length string))
+        (base-fam (and value (ebox--face-attribute value :family)))
         (base-ov-set (and value (plist-member (ebox--face-plist value) :overline))))
     (while (< pos len)
       (let* ((next (min (or (next-single-property-change pos 'mouse-face string len) len)
@@ -168,7 +169,8 @@ erases borders."
                     ;; Side border cells keep their own border paint on hover.
                     (or face value))
                    (t
-                    (let* ((ov (and face (ebox--face-attribute face :overline)))
+                    (let* ((fam (and face (ebox--face-attribute face :family)))
+                           (ov (and face (ebox--face-attribute face :overline)))
                            (border-ov (and ov (or (stringp ov) (not base-ov-set)) ov))
                            (ul (and face (ebox--face-attribute face :underline)))
                            (border-ul (and (consp ul) (plist-get ul :position) ul))
@@ -177,6 +179,11 @@ erases borders."
                         (setq res (ebox--merge-face-attr res :overline border-ov)))
                       (when border-ul
                         (setq res (ebox--merge-face-attr res :underline border-ul)))
+                      (when (and fam (not (equal fam base-fam)))
+                        (setq res (ebox--intern-face
+                                   (if (keywordp (car-safe res))
+                                       (list (ebox--family-face fam) res)
+                                     (cons (ebox--family-face fam) res)))))
                       res)))))
             (put-text-property pos next 'mouse-face hover string)))
         (setq pos next)))))

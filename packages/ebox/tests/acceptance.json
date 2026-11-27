@@ -565,6 +565,26 @@
       "purpose": "An overlay's own content stays crisp while only the pixels behind its blank cells are dimmed."
     },
     {
+      "name": "ebox-backdrop-filter-dims-horizontal-border-decorations",
+      "file": "tests/ebox-backdrop-filter-tests.el",
+      "purpose": "Horizontal overline and underline border colors dim uniformly with covered foregrounds and backgrounds instead of leaving bright horizontal bars across a modal backdrop."
+    },
+    {
+      "name": "ebox-backdrop-filter-dims-canvas-background-and-restores",
+      "file": "tests/ebox-backdrop-filter-tests.el",
+      "purpose": "A full-canvas backdrop dims buffer default and fringe backgrounds without double-dimming across animation ticks and restores them cleanly on removal."
+    },
+    {
+      "name": "ebox-backdrop-filter-dims-named-emacs-faces",
+      "file": "tests/ebox-backdrop-filter-tests.el",
+      "purpose": "Named Emacs faces such as syntax-highlighted text dim uniformly behind a backdrop instead of leaving bright lines."
+    },
+    {
+      "name": "ebox-overlay-placement-center-centers-horizontally-and-vertically",
+      "file": "tests/ebox-backdrop-filter-tests.el",
+      "purpose": "An unanchored overlay with `:placement center' centers horizontally and vertically from its laid-out size and re-centers on content height changes."
+    },
+    {
       "name": "ebox-backdrop-filter-keeps-covered-cells-out-of-flow-hit",
       "file": "tests/ebox-backdrop-filter-tests.el",
       "purpose": "A filtered overlay still owns the cells it covers, so covered nodes stay out of hit bounds."
@@ -995,6 +1015,11 @@
       "purpose": "A style size is a multiple of the default face height, so the same heading keeps its relative size on every platform and reader default font."
     },
     {
+      "name": "ebox-fallback-symbols-keep-row-pixel-width-across-colored-faces",
+      "file": "tests/ebox-line-height-tests.el",
+      "purpose": "Fallback symbols measured under a shared font face pin their resolved font family on both text face and hover mouse-face so differently colored boxes keep exact pixel-aligned right borders and row heights."
+    },
+    {
       "name": "ebox-text-scale-keeps-untouched-row-heights",
       "file": "tests/ebox-text-scale-tests.el",
       "purpose": "A text scale change raises every row, including rows the update did not rewrite."
@@ -1063,6 +1088,11 @@
       "name": "ebox-bordered-accordion-collapse-and-switch-stay-on-lines-strategy",
       "file": "tests/ebox-update-tests.el",
       "purpose": "Collapsing, expanding and switching sections inside a bordered stack stay on incremental `lines' publication with exact border property parity."
+    },
+    {
+      "name": "ebox-canvas-and-last-line-follow-backdrop-and-bottom-surface",
+      "file": "tests/ebox-backdrop-filter-tests.el",
+      "purpose": "Mounted buffer default background, fringe background and the final line's right-edge extension stay unified across bottom bars, wrapped roots and full-canvas `:backdrop-filter' modals without double-dimming or leaking short-tree child backgrounds."
     },
     {
       "name": "ebox-viewport-prepare-hook-batches-mutations-into-one-flush",

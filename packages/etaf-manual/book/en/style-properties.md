@@ -1003,11 +1003,11 @@ Makes an absolute box follow the node whose `:id` matches the value.
 
 | Value | Initial | Applies to | Inherited | Impact |
 | --- | --- | --- | --- | --- |
-| `bottom-start`, `bottom-end`, `top-start` or `top-end` | `bottom-start` | Every non-`text` node | No | Geometry |
+| `bottom-start`, `bottom-end`, `top-start`, `top-end` or `center` | `bottom-start` | Every non-`text` node | No | Geometry |
 
-Chooses which corner of the anchor target an overlay is placed against.
+Chooses which corner of the anchor target an overlay is placed against, or centers an unanchored overlay.
 
-**Semantics.** The name is the vertical side followed by the horizontal side. When the preferred vertical side would leave the host, the placement flips to the other side if that fits, and the result stays inside the host.
+**Semantics.** With an anchor, the name is the vertical side followed by the horizontal side; when the preferred vertical side would leave the host, placement flips to the other side if that fits, and the result stays inside the host. Without an anchor, `center` centers the overlay horizontally and vertically from its laid-out size within its host (or within the visible viewport band starting at `:top` on `:layer root`), clamped inside the host.
 
 ## Text alignment and wrap mode
 

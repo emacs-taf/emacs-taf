@@ -224,11 +224,16 @@ the display and its twin."
                  (fit (ebox--fit cluster (if face (ebox--merge-face face fontface)
                                            fontface))))
             (when fit
-              (let ((display (cdr fit)))
-                (when (eq display last)
-                  (setq display (ebox--display-twin display)))
-                (put-text-property start end 'display display string)
-                (setq last display)))))
+              (let ((display (cadr fit))
+                    (family (cddr fit)))
+                (when display
+                  (when (eq display last)
+                    (setq display (ebox--display-twin display)))
+                  (put-text-property start end 'display display string)
+                  (setq last display))
+                (when family
+                  (add-face-text-property
+                   start end (ebox--family-face family) nil string))))))
         (setq pos (max end (1+ pos)))))
     string))
 
@@ -1788,6 +1793,7 @@ That is the nearest non-inline parent, or the root for `:layer root'."
          (hgeo (ebox-node-layout host))
          (width (ebox-geo-bw hgeo))
          (height (ebox-geo-bh hgeo))
+         (placement (or (ebox--cv cs 'ebox/placement) 'bottom-start))
          (x (+ (ebox-geo-bl hgeo)
                (or (ebox--px (ebox--cv cs 'ebox/left) cs
                              (- width (ebox-geo-bl hgeo) (ebox-geo-br hgeo)))
@@ -1795,6 +1801,27 @@ That is the nearest non-inline parent, or the root for `:layer root'."
          (y (or (ebox--lines (ebox--cv cs 'ebox/top) cs height) 0))
          (anchor (ebox--cv cs 'ebox/anchor)))
     (cond
+     ((and (not anchor) (eq placement 'center))
+      ;; Center an unanchored overlay using its already laid-out size.
+      ;; Root-layer overlays center within the visible viewport band starting
+      ;; at `:top', so dialogs stay centered even in scrolled buffers.
+      (let* ((lw (ebox-node-w node))
+             (lh (ebox-node-h node))
+             (root-layer (eq (ebox--cv cs 'ebox/layer) 'root))
+             (avail-w (if root-layer width
+                        (- width (ebox-geo-bl hgeo) (ebox-geo-br hgeo))))
+             (ox (if root-layer
+                     (or (ebox--px (ebox--cv cs 'ebox/left) cs width) 0)
+                   x))
+             (vis-h (if (and root-layer ebox--vh (> ebox--vh 0))
+                        (min height ebox--vh)
+                      height))
+             (cx (+ (if root-layer 0 (ebox-geo-bl hgeo))
+                    ox
+                    (max 0 (floor (/ (- avail-w lw) 2)))))
+             (cy (+ y (max 0 (floor (/ (- vis-h lh) 2))))))
+        (cons (max 0 (min cx (max 0 (- width lw))))
+              (max 0 (min cy (max 0 (- height lh)))))))
      ((and (not anchor) (eq (ebox--cv cs 'ebox/layer) 'root))
       ;; A root-layer box covers the page: offsets start at the root's
       ;; border-box origin, which its percentages also measure.
@@ -2704,13 +2731,27 @@ own backgrounds take precedence, and its shared strings are not modified."
 (defvar ebox--backdrop-filter-faces (make-hash-table :test 'equal)
   "Dimmed faces keyed by (FACE FILTER).")
 
+(defvar-local ebox--canvas-remap-entry nil
+  "The `face-remapping-alist' spec entry owned by Ebox's canvas sync, or nil.
+Excluded when reading the underlying buffer default face so `:backdrop-filter'
+and canvas fallback calculations never double-dim Ebox's own painted canvas.")
+
+(defun ebox--base-default-remap (buffer)
+  "Return BUFFER's `default' face remapping excluding Ebox's own canvas cookie."
+  (let ((remap (cdr (assq 'default (buffer-local-value 'face-remapping-alist buffer))))
+        (owned (buffer-local-value 'ebox--canvas-remap-entry buffer)))
+    (if (and owned (memq owned remap))
+        (remq owned remap)
+      remap)))
+
 (defun ebox--backdrop-filter-default (attribute)
   "Return the frame default color for ATTRIBUTE, or nil when unspecified.
 Batch and terminal frames report `unspecified-fg' and `unspecified-bg', so
-these pixels keep their original colors there."
+these pixels keep their original colors there.  Excludes Ebox's own canvas
+remap cookie so repeated flushes over a dimmed backdrop never double-dim,
+while preserving any application-level `default' base remapping."
   (let* ((buffer (or ebox--measure-buffer (current-buffer)))
-         (remap (buffer-local-value 'face-remapping-alist buffer))
-         (value (or (ebox--face-attribute (cdr (assq 'default remap)) attribute)
+         (value (or (ebox--face-attribute (ebox--base-default-remap buffer) attribute)
                     (face-attribute 'default attribute ebox--measure-frame t))))
     (and (stringp value)
          (not (string-empty-p value))
@@ -2769,36 +2810,98 @@ Inherited image/icon faces can contain nested lists of face plists."
       plist))
    (t nil)))
 
+(defun ebox--backdrop-filter-deco (spec brightness)
+  "Return face decoration SPEC with any explicit color dimmed by BRIGHTNESS.
+Ebox paints horizontal borders via `:overline' and `:underline' (color strings
+or plists carrying `:color'); dimming them keeps horizontal and vertical box
+borders uniformly dark behind a modal backdrop."
+  (cond
+   ((stringp spec)
+    (or (ebox--backdrop-filter-color spec brightness) spec))
+   ((and (consp spec) (keywordp (car spec)))
+    (let ((color (plist-get spec :color)))
+      (if (stringp color)
+          (plist-put (copy-sequence spec) :color
+                     (or (ebox--backdrop-filter-color color brightness) color))
+        spec)))
+   (t spec)))
+
+(defun ebox--backdrop-filter-attr-any (face attr)
+  "Resolve ATTR across FACE, including named face symbols and mixed lists."
+  (cond
+   ((null face) nil)
+   ((symbolp face)
+    (when (facep face)
+      (let ((val (face-attribute face attr ebox--measure-frame t)))
+        (unless (eq val 'unspecified) val))))
+   ((keywordp (car-safe face))
+    (plist-get face attr))
+   ((consp face)
+    (let (val)
+      (while (and face (null val))
+        (setq val (ebox--backdrop-filter-attr-any (pop face) attr)))
+      val))
+   (t nil)))
+
 (defun ebox--backdrop-filter-face (face filter)
-  "Return FACE with foreground and background dimmed by FILTER.
-A face that is not an Ebox-composed plist, such as a symbol or a named face
-list, is returned unchanged.  Missing colors fall back to the frame default,
-so a face with no explicit color still dims on a graphical frame."
-  (if (not (ebox--backdrop-filter-plain-face-p face)) face
-    (let* ((brightness (cadr filter))
-           (foreground (or (ebox--face-attribute face :foreground)
-                           (ebox--backdrop-filter-default :foreground)))
-           (background (or (ebox--face-attribute face :background)
-                           (ebox--backdrop-filter-default :background)))
-           (key (list face filter foreground background))
-           (cached (gethash key ebox--backdrop-filter-faces)))
-      (or cached
-          (let* ((plist (ebox--backdrop-filter-plist face))
-                 (dimmed (or (and foreground
-                                  (ebox--backdrop-filter-color foreground brightness))
-                             foreground))
-                 (behind (or (and background
-                                  (ebox--backdrop-filter-color background brightness))
-                             background)))
-            (if (and (equal dimmed foreground) (equal behind background))
-                (setq plist face)
-              (when dimmed (setq plist (plist-put plist :foreground dimmed)))
-              (when behind (setq plist (plist-put plist :background behind))))
-            (when (> (hash-table-count ebox--backdrop-filter-faces)
-                     ebox--backdrop-filter-cache-limit)
-              (clrhash ebox--backdrop-filter-faces))
-            (puthash key plist ebox--backdrop-filter-faces)
-            plist)))))
+  "Return FACE with foreground, background and border lines dimmed by FILTER.
+Handles plain Ebox face plists, nested lists and named Emacs faces (such as
+syntax-highlighted code) so no undimmed stripes leak behind a modal backdrop.
+Missing colors fall back to the frame default, so a face with no explicit
+color still dims on a graphical frame."
+  (let* ((brightness (cadr filter))
+         (plain (ebox--backdrop-filter-plain-face-p face))
+         (foreground (or (if plain
+                             (ebox--face-attribute face :foreground)
+                           (ebox--backdrop-filter-attr-any face :foreground))
+                         (ebox--backdrop-filter-default :foreground)))
+         (background (or (if plain
+                             (ebox--face-attribute face :background)
+                           (ebox--backdrop-filter-attr-any face :background))
+                         (ebox--backdrop-filter-default :background)))
+         (key (list face filter foreground background))
+         (cached (gethash key ebox--backdrop-filter-faces)))
+    (or cached
+        (let* ((dimmed (or (and foreground
+                                (ebox--backdrop-filter-color foreground brightness))
+                           foreground))
+               (behind (or (and background
+                                (ebox--backdrop-filter-color background brightness))
+                           background))
+               (changed (not (and (equal dimmed foreground)
+                                  (equal behind background))))
+               (result
+                (if plain
+                    (let ((plist (ebox--backdrop-filter-plist face)))
+                      (dolist (attr '(:overline :underline :strike-through :box))
+                        (when (plist-member plist attr)
+                          (let* ((orig (plist-get plist attr))
+                                 (next (ebox--backdrop-filter-deco orig brightness)))
+                            (unless (equal next orig)
+                              (setq plist (plist-put plist attr next)
+                                    changed t)))))
+                      (if (not changed)
+                          face
+                        (when dimmed (setq plist (plist-put plist :foreground dimmed)))
+                        (when behind (setq plist (plist-put plist :background behind)))
+                        plist))
+                  (let ((over nil))
+                    (dolist (attr '(:overline :underline :strike-through :box))
+                      (let* ((orig (ebox--backdrop-filter-attr-any face attr))
+                             (next (and orig (ebox--backdrop-filter-deco orig brightness))))
+                        (when (and next (not (equal next orig)))
+                          (setq over (plist-put over attr next)
+                                changed t))))
+                    (if (not changed)
+                        face
+                      (when dimmed (setq over (plist-put over :foreground dimmed)))
+                      (when behind (setq over (plist-put over :background behind)))
+                      (cons over (if (consp face) face (list face))))))))
+          (when (> (hash-table-count ebox--backdrop-filter-faces)
+                   ebox--backdrop-filter-cache-limit)
+            (clrhash ebox--backdrop-filter-faces))
+          (puthash key result ebox--backdrop-filter-faces)
+          result))))
 
 (defun ebox--backdrop-filter-owned-string (string filter)
   "Dim the text and image runs of owned STRING by FILTER and return it.

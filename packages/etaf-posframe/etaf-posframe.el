@@ -98,10 +98,44 @@
 ;;   :key        Identity of the panel.  Showing a View with a key that is
 ;;               already live replaces that panel; different keys keep their
 ;;               own frame, Runtime and position.
+;;   :scrollable When non-nil (default), the panel buffer may scroll when its
+;;               content exceeds the window.  Nil locks the viewport at the top
+;;               and swallows wheel and scroll commands so fixed popovers never
+;;               scroll accidentally.
+;;   :on-escape  Optional function called with `(PANEL)' when `ESC' or `C-g'
+;;               runs inside the focused panel instead of hiding it.
+;;   :on-blur    Optional function called with `(PANEL)' when input focus
+;;               leaves the panel for another frame.
+;;   :on-move    Optional function called with `(X Y PANEL)' after the user
+;;               drags the panel to a new position.
 ;;
 ;; Signal `etaf-posframe-error' for an unknown option, an invalid anchor or a
 ;; display that cannot show child frames.  A failed show unmounts the View and
 ;; deletes the frame before the error is re-signaled.
+;;
+;; Function: etaf-posframe-reshape (panel &rest options)
+;;;###autoload (autoload 'etaf-posframe-reshape "etaf-posframe" nil nil)
+;; Update a live PANEL in place without recreating its frame or unmounting its
+;; View.  OPTIONS accepts `:width', `:height', `:at', `:theme', `:border',
+;; `:fill-height' and `:focus-on-open'.  Resizes, re-lays out and re-anchors
+;; the existing child frame smoothly around its anchor or pinned position.
+;; Return PANEL when live, or nil.
+;;
+;; Function: etaf-posframe-focus (panel)
+;;;###autoload (autoload 'etaf-posframe-focus "etaf-posframe" nil nil)
+;; Give input focus to a live focusable PANEL, remembering the parent frame so
+;; hiding or unfocusing returns focus cleanly.  Return PANEL when focused.
+;;
+;; Function: etaf-posframe-unfocus (panel)
+;;;###autoload (autoload 'etaf-posframe-unfocus "etaf-posframe" nil nil)
+;; Return input focus from a live PANEL back to its remembered host frame
+;; without hiding PANEL.  Return non-nil when focus was restored.
+;;
+;; Function: etaf-posframe-drag (panel &optional on-done)
+;;;###autoload (autoload 'etaf-posframe-drag "etaf-posframe" nil nil)
+;; Drag a live PANEL interactively with the mouse pointer, keeping it clamped
+;; inside its parent frame.  Works on headerless panels without `:title'.  Only
+;; a real drag pins the moved position and calls ON-DONE with `(X Y PANEL)'.
 ;;
 ;; Function: etaf-posframe-hide (&optional panel)
 ;;;###autoload (autoload 'etaf-posframe-hide "etaf-posframe" nil t)
@@ -421,6 +455,15 @@ replaces the tint entirely."
 (defvar etaf-posframe--panels nil
   "Live panels, most recent first.")
 
+(defconst etaf-posframe--park-buffer-name " *ETAF Panel Park*"
+  "Hidden live buffer displayed in parked graphical child frames.")
+
+(defvar etaf-posframe--frame-pool nil
+  "Parked graphical child frames awaiting reuse.
+Recycling graphical child frames avoids both repeated native window
+creation and macOS NS `NSTextInputContext' crashes when `delete-frame'
+runs `ns_free_frame_resources' on a child frame.")
+
 (defvar etaf-posframe--counter 0
   "Panel sequence number used for buffer names.")
 
@@ -429,6 +472,18 @@ replaces the tint entirely."
 
 (defvar etaf-posframe--dismissing nil
   "Non-nil while a dismissal pass runs, to avoid re-entrant hooks.")
+
+(defvar etaf-posframe--dragging nil
+  "Non-nil while `etaf-posframe-drag' actively tracks mouse movement.")
+
+(defvar etaf-posframe--positioning nil
+  "Non-nil while `etaf-posframe' itself moves a child frame.")
+
+(defvar etaf-posframe--stack-obstacles :auto
+  "Obstacle rects for `etaf-posframe--stacking-poshandler', or `:auto'.
+When `:auto', the poshandler reads live non-modal panels on the same parent
+frame, excluding the frame being placed.  During a multi-panel stack reflow,
+this binds to the already-placed rectangles in oldest-first order.")
 
 (defvar etaf-posframe--hover-panel nil
   "Panel whose surface the mouse pointer is on, or nil.")
@@ -479,22 +534,210 @@ covering panel cannot take the new panel with it."
         (etaf-posframe--anchor-buffer (etaf-posframe--panel-parent panel))
       buffer)))
 
+(defvar-local etaf-posframe--panel-keys-p nil
+  "Non-nil while `etaf-posframe-panel-keys' is active in this panel buffer.
+Ordinary focusable panels enable it so `q', `ESC' and `C-g' close them;
+modal child frames leave it nil so ETAF's modal scope owns Escape, search
+editing and native `C-g'.")
+
+(defvar etaf-posframe--fitting nil
+  "Non-nil while a panel fit pass is re-rendering its buffer.")
+
+(defun etaf-posframe--escape-command ()
+  "Handle `ESC' / `C-g' inside a focused panel.
+Calls the panel's `:on-escape' callback when configured, else hides it."
+  (when-let* ((panel (etaf-posframe--current-panel)))
+    (let ((cb (plist-get (etaf-posframe--panel-options panel) :on-escape)))
+      (if (functionp cb)
+          (condition-case err
+              (funcall cb panel)
+            (error (message "ETAF panel escape callback failed: %s"
+                            (error-message-string err))))
+        (etaf-posframe-hide panel)))))
+
 (defvar etaf-posframe-panel-keys
-  (let ((map (make-sparse-keymap)))
+  (let ((map (make-sparse-keymap))
+        (esc (lambda () (interactive) (etaf-posframe--escape-command))))
     (define-key map (kbd "q") #'etaf-posframe-hide)
-    (define-key map [escape] #'etaf-posframe-hide)
-    (define-key map (kbd "C-g") #'etaf-posframe-hide)
+    (define-key map [escape] esc)
+    (define-key map (kbd "C-g") esc)
     map)
   "Keys active while a focusable panel has focus.
-They close the panel without consulting the View.")
+`q' hides the panel; `ESC' and `C-g' delegate to `:on-escape' or hide it.")
 
 (add-to-list 'emulation-mode-map-alists
-             (list (cons 'etaf-posframe--panel etaf-posframe-panel-keys)))
+             (list (cons 'etaf-posframe--panel-keys-p etaf-posframe-panel-keys)))
 
 (cl-defstruct (etaf-posframe--panel (:constructor etaf-posframe--make-panel))
-  buffer frame parent parent-frame options timer restore-frame focused
-  fit-timer settled fit-window fit-count fit-muted-until close-callback size
-  position pin-applied)
+  buffer frame parent parent-frame parent-window parent-geometry
+  parent-window-edges options timer restore-frame restore-window
+  focused fit-timer settled fit-window fit-count fit-muted-until
+  close-callback size position pin-applied modal-p modal-window help-p
+  closed-p)
+
+(defun etaf-posframe--frame-active-p (frame)
+  "Return non-nil when FRAME is live and not parked in the reuse pool."
+  (and (frame-live-p frame)
+       (not (frame-parameter frame 'etaf-posframe-pooled))))
+
+(defun etaf-posframe--park-buffer ()
+  "Return the hidden live buffer kept in parked graphical child frames.
+Keeping a live buffer in a parked child frame guarantees its window's
+buffer pointer never becomes nil if AppKit queries the view."
+  (let ((buf (get-buffer-create etaf-posframe--park-buffer-name)))
+    (with-current-buffer buf
+      (setq-local mode-line-format nil
+                  header-line-format nil
+                  tab-line-format nil
+                  cursor-type nil
+                  cursor-in-non-selected-windows nil
+                  truncate-lines t))
+    buf))
+
+(defun etaf-posframe--park-frame (frame &optional parent-frame)
+  "Hide and park graphical child FRAME for reuse instead of deleting it.
+Return non-nil when FRAME was parked."
+  (when (and (frame-live-p frame)
+             (display-graphic-p frame)
+             (frame-parent frame))
+    (when (frame-visible-p frame)
+      (ignore-errors (make-frame-invisible frame)))
+    (let ((win (frame-root-window frame))
+          (park (etaf-posframe--park-buffer)))
+      (when (window-live-p win)
+        (ignore-errors (set-window-dedicated-p win nil))
+        (ignore-errors (set-window-buffer win park))
+        (ignore-errors (set-window-hscroll win 0))
+        (ignore-errors (set-window-start win (point-min) t))
+        (ignore-errors (set-window-point win (point-min)))))
+    (ignore-errors
+      (modify-frame-parameters
+       frame
+       `((posframe-buffer . nil)
+         (posframe-hidehandler . nil)
+         (posframe-parent-buffer . nil)
+         (no-accept-focus . t)
+         (etaf-posframe-pooled . t)
+         ,@(when (and (frame-live-p parent-frame)
+                      (not (eq (frame-parent frame) parent-frame)))
+             (list (cons 'parent-frame parent-frame))))))
+    (setq etaf-posframe--frame-pool
+          (cons frame
+                (cl-remove-if (lambda (f)
+                                (or (eq f frame)
+                                    (not (frame-live-p f))
+                                    (not (frame-parent f))))
+                              etaf-posframe--frame-pool)))
+    t))
+
+(defun etaf-posframe--acquire-pooled-frame (parent-frame)
+  "Pop and return a live parked graphical child frame for PARENT-FRAME."
+  (when (and (frame-live-p parent-frame) (display-graphic-p parent-frame))
+    (setq etaf-posframe--frame-pool
+          (cl-remove-if-not
+           (lambda (f)
+             (and (frame-live-p f)
+                  (display-graphic-p f)
+                  (frame-parent f)
+                  (frame-parameter f 'etaf-posframe-pooled)))
+           etaf-posframe--frame-pool))
+    (let ((match (cl-find-if
+                  (lambda (f)
+                    (and (eq (frame-parent f) parent-frame)
+                         (not (cl-some (lambda (p)
+                                         (eq (etaf-posframe--panel-frame p) f))
+                                       etaf-posframe--panels))))
+                  etaf-posframe--frame-pool)))
+      (when match
+        (setq etaf-posframe--frame-pool (delq match etaf-posframe--frame-pool))
+        (set-frame-parameter match 'etaf-posframe-pooled nil)
+        match))))
+
+(defun etaf-posframe--configure-pooled-frame (frame panel lines)
+  "Reconfigure parked graphical child FRAME in place for PANEL and LINES.
+Leaves FRAME invisible so callers can fit and place it without flashing."
+  (let* ((options (etaf-posframe--panel-options panel))
+         (buffer (etaf-posframe--panel-buffer panel))
+         (parent-frame (etaf-posframe--panel-parent-frame panel))
+         (parent-buffer (etaf-posframe--panel-parent panel))
+         (title (plist-get options :title))
+         (border (plist-get options :border))
+         (focusable (and (plist-get options :focusable) t))
+         (theme-ref (etaf-posframe--panel-theme panel))
+         (theme (and theme-ref (etaf-value theme-ref)))
+         (bg (or (plist-get theme :ui-panel-bg) "#FFFFFF"))
+         (fg (or (plist-get theme :ui-fg) "#000000"))
+         (border-width (or (plist-get border :width)
+                           etaf-posframe-border-width))
+         (border-color (or (plist-get border :color)
+                           (plist-get theme :ui-panel-border)))
+         (char-w (max 1 (frame-char-width parent-frame)))
+         (char-h (max 1 (frame-char-height parent-frame)))
+         (pixel-w (or (plist-get options :pixel-width)
+                      (* (or (plist-get options :width) 1) char-w)))
+         (pixel-h (* (max 1 (+ lines (if title 1 0))) char-h))
+         (win (frame-root-window frame)))
+    (when (frame-visible-p frame)
+      (ignore-errors (make-frame-invisible frame)))
+    (with-current-buffer buffer
+      (setq-local posframe--frame frame
+                  posframe--accept-focus focusable))
+    (modify-frame-parameters
+     frame
+     `((parent-frame . ,parent-frame)
+       (posframe-buffer . ,(cons (buffer-name buffer) buffer))
+       (posframe-hidehandler . nil)
+       (posframe-parent-buffer . ,(when (buffer-live-p parent-buffer)
+                                    (cons (buffer-name parent-buffer)
+                                          parent-buffer)))
+       (foreground-color . ,fg)
+       (background-color . ,bg)
+       (font . ,(face-attribute 'default :font parent-frame))
+       (no-accept-focus . ,(not focusable))
+       (left-fringe . 0)
+       (right-fringe . 0)
+       (border-width . 0)
+       (internal-border-width . ,border-width)
+       (child-frame-border-width . ,border-width)
+       (vertical-scroll-bars . nil)
+       (horizontal-scroll-bars . nil)
+       (menu-bar-lines . 0)
+       (tool-bar-lines . 0)
+       (tab-bar-lines . 0)
+       (line-spacing . 0)
+       (cursor-type . nil)
+       (unsplittable . t)
+       (no-other-frame . t)
+       (undecorated . t)
+       (no-special-glyphs . t)
+       (skip-taskbar . t)
+       (desktop-dont-save . t)
+       (minibuffer . ,(minibuffer-window parent-frame))
+       (top-visible . 24)
+       (snap-width . 12)
+       (drag-with-header-line . ,(and (etaf-posframe--draggable-p options) t))
+       (drag-internal-border . ,(not (null (plist-get options :resizable))))
+       (etaf-posframe-pooled . nil)))
+    (set-face-attribute 'default frame
+                        :background (or (plist-get theme :ui-panel-bg) bg)
+                        :foreground (or (plist-get theme :ui-panel-fg) fg))
+    (when border-color
+      (set-face-background
+       (if (facep 'child-frame-border) 'child-frame-border 'internal-border)
+       border-color frame))
+    (when (window-live-p win)
+      (set-window-dedicated-p win nil)
+      (set-window-parameter win 'mode-line-format 'none)
+      (set-window-parameter win 'header-line-format (if title nil 'none))
+      (set-window-buffer win buffer)
+      (set-window-dedicated-p win t)
+      (set-window-scroll-bars win 0 nil nil)
+      (set-window-hscroll win 0)
+      (set-window-start win (point-min) t)
+      (set-window-point win (point-min)))
+    (let ((frame-resize-pixelwise t))
+      (set-frame-size frame pixel-w pixel-h t))
+    frame))
 
 ;; A panel is returned to callers, so it must print: the Runtime and the Theme
 ;; ref are cyclic (refs, keymaps, closures), and `prin1' on them loops until
@@ -705,7 +948,8 @@ area, and every place is one of `etaf-posframe--anchor-places'.  `point' and
 
 (defconst etaf-posframe--show-keys
   '(:at :stack :width :height :fill-height :focusable :focus-on-open
-    :auto-hide :theme :border :draggable :title :key :resizable)
+    :auto-hide :theme :border :draggable :title :key :resizable
+    :scrollable :on-escape :on-blur :on-move)
   "Options accepted by `etaf-posframe-show'.")
 
 (defconst etaf-posframe--app-keys
@@ -764,10 +1008,14 @@ With APP non-nil the registration keys are accepted as well."
                      (list (format "Panel :resizable must be t, nil or a list of %s: %S"
                                    etaf-posframe--resize-sides value)))))
           ((or :stack :fill-height :focusable :focus-on-open :draggable
-               :keep-alive)
+               :keep-alive :scrollable)
            (unless (memq value '(t nil))
              (signal 'etaf-posframe-error
                      (list (format "Panel %s must be t or nil: %S" key value)))))
+          ((or :on-escape :on-blur :on-move)
+           (unless (or (null value) (functionp value))
+             (signal 'etaf-posframe-error
+                     (list (format "Panel %s must be a function or nil: %S" key value)))))
           ((or :width :height)
            (unless (or (and (wholenump value) (> value 0))
                        (and (consp value) (eq (car value) 'fraction)
@@ -858,6 +1106,7 @@ With APP non-nil the registration keys are accepted as well."
                         (cons :fill-height nil)
                         (cons :focusable nil)
                         (cons :draggable nil)
+                        (cons :scrollable t)
                         (cons :title nil)
                         (cons :resizable t)
                         (cons :theme 'auto)))
@@ -1015,30 +1264,44 @@ and BOTTOM."
          (<= (+ y height) bottom)
          y)))
 
-(defun etaf-posframe--stacking-poshandler (at)
+(defun etaf-posframe--stacking-poshandler (at &optional base-handler)
   "Return a poshandler placing the panel at AT, clear of live panels.
-A panel stacks against the live panels however tall each of them turned out:
-from a top or centre anchor it sits directly below the lowest panel it meets,
-from a bottom one directly above the highest, and a column to the left takes it
-when the frame has no room left, never outside the frame."
-  (let* ((base (etaf-posframe--poshandler at))
+BASE-HANDLER, when non-nil, computes the starting anchor position (such as an
+offset anchor); otherwise `etaf-posframe--poshandler' for AT is used.
+A panel stacks against live non-modal panels on the same parent frame,
+excluding itself: from a top or centre anchor it sits directly below the lowest
+panel it meets, from a bottom one directly above the highest, and a column to
+the left takes it when the frame has no room left, never outside the frame."
+  (let* ((base (or base-handler (etaf-posframe--poshandler at)))
          (place (cadr (split-string (symbol-name at) "-")))
          (down (not (and place (string-prefix-p "bottom" place)))))
     (lambda (info)
       (let* ((position (funcall base info))
              (x0 (car position))
              (y0 (cdr position))
-             (bevel (etaf-posframe--terminal-bevel (plist-get info :posframe)))
+             (self (plist-get info :posframe))
+             (parent (or (plist-get info :parent-frame)
+                         (and (frame-live-p self) (frame-parent self))))
+             (bevel (etaf-posframe--terminal-bevel self))
              (width (+ (or (plist-get info :posframe-width) 0) bevel))
              (height (+ (or (plist-get info :posframe-height) 0) bevel))
              (frame-rect (etaf-posframe--rect info 'frame))
              (left (nth 0 frame-rect))
              (top (nth 1 frame-rect))
              (bottom (nth 3 frame-rect))
-             (others (delq nil (mapcar (lambda (panel)
-                                         (etaf-posframe--frame-rect
-                                          (etaf-posframe--panel-frame panel)))
-                                       (etaf-posframe-panels)))))
+             (others
+              (if (eq etaf-posframe--stack-obstacles :auto)
+                  (delq nil
+                        (mapcar (lambda (panel)
+                                  (let ((frame (etaf-posframe--panel-frame panel)))
+                                    (when (and (not (etaf-posframe--panel-modal-p panel))
+                                               (not (eq frame self))
+                                               (or (null parent)
+                                                   (eq (etaf-posframe--panel-parent-frame panel)
+                                                       parent)))
+                                      (etaf-posframe--frame-rect frame))))
+                                (etaf-posframe-panels)))
+                etaf-posframe--stack-obstacles)))
         (or (cl-loop for column from 0 below 60
                      for x = (- x0 (* column (+ width (etaf-posframe--stack-gap info))))
                      while (>= x left)
@@ -1107,16 +1370,35 @@ start at zero, so (0 . 0) is its first cell."
                             (etaf-posframe--panel-buffer panel))))
           (etaf-posframe-hide panel))))))
 
+(defun etaf-posframe--check-blur ()
+  "Notify any panel whose focus moved away to a different frame."
+  (unless (or etaf-posframe--dismissing etaf-posframe--dragging)
+    (let ((selected (selected-frame)))
+      (dolist (panel (copy-sequence etaf-posframe--panels))
+        (let ((frame (etaf-posframe--panel-frame panel)))
+          (cond
+           ((eq selected frame)
+            (setf (etaf-posframe--panel-focused panel) t))
+           ((etaf-posframe--panel-focused panel)
+            (setf (etaf-posframe--panel-focused panel) nil)
+            (when-let* ((cb (plist-get (etaf-posframe--panel-options panel) :on-blur)))
+              (when (functionp cb)
+                (let ((p panel) (fn cb))
+                  (run-at-time 0 nil
+                               (lambda ()
+                                 (when (and (etaf-posframe-live-p p)
+                                            (not etaf-posframe--dragging)
+                                            (not (eq (selected-frame)
+                                                     (etaf-posframe--panel-frame p))))
+                                   (ignore-errors (funcall fn p)))))))))))))))
+
 (defun etaf-posframe--focus-change ()
   "Track which panel holds the focus and repaint after a focus change."
   (unless etaf-posframe--dismissing
-    (let ((selected (selected-frame)))
-      (dolist (panel (copy-sequence etaf-posframe--panels))
-        (when (eq selected (etaf-posframe--panel-frame panel))
-          (setf (etaf-posframe--panel-focused panel) t)))
-      (etaf-posframe--refresh-hover)
-      (etaf-posframe--paint-borders)
-      (etaf-posframe--sync-activation))))
+    (etaf-posframe--check-blur)
+    (etaf-posframe--refresh-hover)
+    (etaf-posframe--paint-borders)
+    (etaf-posframe--sync-activation)))
 
 (defun etaf-posframe--refresh-hooks ()
   "Install the dismiss hooks exactly while a panel needs them."
@@ -1131,6 +1413,12 @@ start at zero, so (0 . 0) is its first cell."
                     #'etaf-posframe--focus-change)
     (remove-function after-focus-change-function
                      #'etaf-posframe--focus-change))
+  (if (cl-some #'etaf-posframe--panel-modal-p etaf-posframe--panels)
+      (progn
+        (add-hook 'window-buffer-change-functions #'etaf-posframe--sync-modal-visibility)
+        (add-hook 'window-configuration-change-hook #'etaf-posframe--sync-modal-visibility))
+    (remove-hook 'window-buffer-change-functions #'etaf-posframe--sync-modal-visibility)
+    (remove-hook 'window-configuration-change-hook #'etaf-posframe--sync-modal-visibility))
   (etaf-posframe--watch-hover))
 
 ;;; Rendering
@@ -1193,11 +1481,72 @@ the theme's `header-line' box would draw a coloured outline around it."
       ;; replace the segment faces with the title bar's.
       (concat plain (or strip "")))))
 
-(defun etaf-posframe--prepare-buffer (buffer header theme width &optional mode)
+(defvar-local etaf-posframe--non-scrollable nil
+  "Non-nil in panel buffers whose viewport is locked against scrolling.")
+
+(defvar-local etaf-posframe--headerless-drag nil
+  "Non-nil in headerless `:draggable t' panel buffers.")
+
+(defvar etaf-posframe--no-scroll-map
+  (let ((map (make-sparse-keymap)))
+    (dolist (ev '(wheel-up wheel-down double-wheel-up double-wheel-down
+                  triple-wheel-up triple-wheel-down mouse-4 mouse-5))
+      (define-key map (vector ev) #'ignore))
+    (define-key map [remap scroll-up-command] #'ignore)
+    (define-key map [remap scroll-down-command] #'ignore)
+    (define-key map [remap mwheel-scroll] #'ignore)
+    map)
+  "Keymap suppressing accidental viewport scrolling in `:scrollable nil' panels.")
+
+(defvar etaf-posframe--just-dragged nil
+  "Non-nil for one command cycle after dragging an unfocused headerless panel.")
+
+(defun etaf-posframe--handle-headerless-drag (event)
+  "Track drag on a headerless `:draggable t' panel; replay click if not dragged."
+  (let* ((start (and (consp event) (event-start event)))
+         (win (and start (posn-window start)))
+         (frame (and (window-live-p win) (window-frame win)))
+         (panel (and frame (etaf-posframe--panel-for-frame frame)))
+         (was-focused (and frame (eq (selected-frame) frame))))
+    (if (and panel (display-graphic-p))
+        (let* ((on-move (plist-get (etaf-posframe--panel-options panel) :on-move))
+               (moved (progn
+                        (raise-frame frame)
+                        (etaf-posframe-drag panel on-move))))
+          (when (and moved (not was-focused))
+            (setq etaf-posframe--just-dragged panel))
+          moved)
+      nil)))
+
+(defvar etaf-posframe--headerless-drag-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map [down-mouse-1]
+                (lambda (ev)
+                  (interactive "e")
+                  (etaf-posframe--handle-headerless-drag ev)))
+    map)
+  "Keymap enabling smooth body drag on headerless `:draggable t' panels.")
+
+(add-to-list 'emulation-mode-map-alists
+             (list (cons 'etaf-posframe--non-scrollable etaf-posframe--no-scroll-map)
+                   (cons 'etaf-posframe--headerless-drag etaf-posframe--headerless-drag-map)))
+
+(defun etaf-posframe--lock-scroll (panel &optional window)
+  "Keep PANEL's WINDOW pinned to `point-min' when `:scrollable' is nil."
+  (when (and panel (not (plist-get (etaf-posframe--panel-options panel) :scrollable)))
+    (let* ((buf (etaf-posframe--panel-buffer panel))
+           (win (or window (and (buffer-live-p buf) (get-buffer-window buf t)))))
+      (when (and (buffer-live-p buf) (window-live-p win))
+        (with-current-buffer buf
+          (when (> (window-start win) (point-min))
+            (set-window-start win (point-min) t)))))))
+
+(defun etaf-posframe--prepare-buffer (buffer header theme width &optional mode scrollable)
   "Set BUFFER up as a panel surface with HEADER and THEME.
 MODE adds the title-bar theme toggle over `etaf-posframe--theme-modes', as in
-`etaf-posframe--header-format'."
-  (let ((theme theme))
+`etaf-posframe--header-format'.  SCROLLABLE defaults to t; nil locks scroll."
+  (let ((theme theme)
+        (can-scroll (if (null scrollable) nil t)))
     (with-current-buffer buffer
       (erase-buffer)
       (setq-local truncate-lines t)
@@ -1213,9 +1562,25 @@ MODE adds the title-bar theme toggle over `etaf-posframe--theme-modes', as in
                         etaf-posframe--theme-modes)
                    mode))
       (setq-local mode-line-format nil)
+      (setq-local tab-line-format nil)
+      (setq-local display-line-numbers nil)
+      (setq-local frame-title-format "")
+      (setq-local left-margin-width nil)
+      (setq-local right-margin-width nil)
+      (setq-local left-fringe-width nil)
+      (setq-local right-fringe-width nil)
+      (setq-local fringes-outside-margins 0)
+      (setq-local fringe-indicator-alist nil)
+      (setq-local show-trailing-whitespace nil)
       (setq-local cursor-type nil)
+      (setq-local cursor-in-non-selected-windows nil)
       (setq-local vertical-scroll-bar nil)
       (setq-local horizontal-scroll-bar nil)
+      (unless can-scroll
+        (setq-local etaf-posframe--non-scrollable t)
+        (setq-local scroll-margin 0)
+        (setq-local scroll-conservatively 0)
+        (setq-local auto-hscroll-mode nil))
       ;; Mouse tracking in the buffer would make Emacs select the frame under
       ;; the pointer whenever it moves, so leaving a panel would take the
       ;; keyboard with it.  A panel keeps Emacs' focus rules: only a click moves
@@ -1256,17 +1621,19 @@ example) would lose its left or top border."
        ('anchor+offset
         (let* ((anchor (nth 1 placement))
                (offset (cons (nth 2 placement) (nth 3 placement)))
-               (base (if stack
-                         (etaf-posframe--stacking-poshandler anchor)
-                       (etaf-posframe--poshandler anchor))))
-          (etaf-posframe--offset-poshandler base offset)))))))
+               (base (etaf-posframe--offset-poshandler
+                      (etaf-posframe--poshandler anchor) offset)))
+          (if stack
+              (etaf-posframe--stacking-poshandler anchor base)
+            base)))))))
 
 (defun etaf-posframe--frame-args (panel lines)
   "Return the `posframe-show' arguments for PANEL showing LINES of content."
   (let* ((options (etaf-posframe--panel-options panel))
          (title (plist-get options :title))
          (border (plist-get options :border))
-         (theme (etaf-value (etaf-posframe--panel-theme panel))))
+         (theme-ref (etaf-posframe--panel-theme panel))
+         (theme (and theme-ref (etaf-value theme-ref))))
     (append
      (list :width (plist-get options :width)
            :height (+ lines (if title 1 0))
@@ -1304,7 +1671,9 @@ example) would lose its left or top border."
               (top-visible . 24)
               (snap-width . 12))
             (when (etaf-posframe--draggable-p options)
-              '((drag-with-header-line . t)))))
+              '((drag-with-header-line . t)))
+            (when (null (plist-get options :resizable))
+              '((drag-internal-border . nil)))))
      (list :poshandler
            (etaf-posframe--placement-poshandler
             (etaf-posframe--placement (plist-get options :at))
@@ -1327,7 +1696,15 @@ keeps the frame at header plus content instead of adding a blank row."
       (with-current-buffer (etaf-posframe--panel-buffer panel)
         (save-excursion
           (goto-char (point-max))
-          (skip-chars-backward " \t\n")
+          ;; Preserve background-painted bottom padding rows (e.g. `:padding ((lh 1) ...)').
+          ;; Only strip trailing newlines and unpainted trailing whitespace.
+          (skip-chars-backward "\n")
+          (unless (etaf-posframe--panel-modal-p panel)
+            (while (and (> (point) (point-min))
+                        (memq (char-before) '(?\s ?\t ?\n))
+                        (not (let ((f (get-text-property (1- (point)) 'face)))
+                               (and (listp f) (plist-get f :background)))))
+              (backward-char 1)))
           (if (display-graphic-p)
               (cdr (window-text-pixel-size window nil (point) nil 10000 t))
             (* (count-lines (point-min) (point))
@@ -1362,9 +1739,14 @@ already has is what turns one resize into a stream of size-change hooks."
          (height (if (plist-get options :fill-height)
                      limit
                    (min content limit))))
+    ;; `set-frame-size' with PIXELWISE non-nil sets the frame's text area
+    ;; (`frame-text-width' / `frame-text-height'), excluding child-frame
+    ;; borders.  Comparing against `frame-pixel-width' / `frame-pixel-height'
+    ;; always differed by `2 * border-width', causing every refresh to resize
+    ;; and reposition even when the frame already matched its exact size.
     (when (and width (> height 0)
-               (or (/= width (frame-pixel-width frame))
-                   (/= height (frame-pixel-height frame))))
+               (or (/= width (frame-text-width frame))
+                   (/= height (frame-text-height frame))))
       (set-frame-size frame width height t)
       t)))
 
@@ -1379,54 +1761,93 @@ already has is what turns one resize into a stream of size-change hooks."
     (etaf-runtime-refit runtime width (etaf-posframe--row-budget panel))
     (etaf-posframe--resize-to-content panel window)
     (etaf-runtime-refit runtime width nil)
-    (etaf-posframe--fit panel)))
+    (etaf-posframe--fit panel)
+    (etaf-posframe--lock-scroll panel window)))
+
+(defvar posframe-mouse-banish-function)
 
 (defun etaf-posframe--show-frame (panel lines)
   "Show PANEL's frame for LINES of content and return its frame.
-Re-fit once when the settled window width changes the content height."
-  (let* ((budget (etaf-posframe--row-budget panel))
+On graphical displays, reuses a parked child frame when available and
+configures it while hidden so neither `delete-frame' nor intermediate
+flashes occur.  On text terminals, keeps the cell-based posframe path."
+  (let* ((posframe-mouse-banish-function #'ignore)
+         (budget (etaf-posframe--row-budget panel))
          ;; A filled panel is created at its full height, so the poshandler
          ;; places the stage it will keep instead of the one-row frame a short
          ;; View produces before the fit.
          (lines (max 1 (if (plist-get (etaf-posframe--panel-options panel)
-                                     :fill-height)
+                                      :fill-height)
                            budget
                          (min lines budget))))
-         (args (etaf-posframe--frame-args panel lines))
-         (buffer (etaf-posframe--panel-buffer panel)))
-    (apply #'posframe-show buffer args)
-    (dotimes (_ 2)
-      (let ((window (get-buffer-window buffer t)))
-        (when (window-live-p window)
+         (buffer (etaf-posframe--panel-buffer panel))
+         (parent-frame (etaf-posframe--panel-parent-frame panel)))
+    (if (display-graphic-p)
+        (let* ((etaf-posframe--positioning t)
+               (pooled (etaf-posframe--acquire-pooled-frame parent-frame))
+               (frame
+                (if pooled
+                    (etaf-posframe--configure-pooled-frame pooled panel lines)
+                  (let* ((args (etaf-posframe--frame-args panel lines))
+                         (ov (copy-sequence (plist-get args :override-parameters)))
+                         (ov (cons '(visibility . nil)
+                                   (assq-delete-all 'visibility ov)))
+                         (hidden-args (plist-put (copy-sequence args)
+                                                 :override-parameters ov)))
+                    (if (fboundp 'posframe--make-frame-visible)
+                        (cl-letf (((symbol-function 'posframe--make-frame-visible)
+                                   #'ignore))
+                          (apply #'posframe-show buffer hidden-args))
+                      (apply #'posframe-show buffer hidden-args)))))
+               (window (if (frame-live-p frame)
+                           (frame-root-window frame)
+                         (get-buffer-window buffer t))))
+          (unless (window-live-p window)
+            (signal 'etaf-posframe-error (list "Panel frame did not appear" buffer)))
+          (setf (etaf-posframe--panel-frame panel) frame)
           (set-window-scroll-bars window 0 nil nil)
-          (etaf-posframe--fit panel)
-          (let ((settled (min budget (etaf-posframe--lines buffer))))
+          (etaf-posframe--fit-height panel window)
+          (etaf-posframe--reposition-one panel t)
+          (unless (frame-visible-p frame)
+            (make-frame-visible frame))
+          (when (etaf-posframe--resize-to-content panel window)
+            (etaf-posframe--reposition-one panel t))
+          (etaf-posframe--remember-size panel window)
+          frame)
+      (let ((args (etaf-posframe--frame-args panel lines))
+            (etaf-posframe--positioning t))
+        (apply #'posframe-show buffer args)
+        (dotimes (_ 2)
+          (let ((window (get-buffer-window buffer t)))
+            (when (window-live-p window)
+              (set-window-scroll-bars window 0 nil nil)
+              (etaf-posframe--fit panel)
+              (let ((settled (min budget (etaf-posframe--lines buffer))))
+                (unless (= settled lines)
+                  (setq lines settled)
+                  (apply #'posframe-show buffer
+                         (plist-put (copy-sequence args) :height
+                                    (+ settled (if (plist-get
+                                                    (etaf-posframe--panel-options panel)
+                                                    :title)
+                                                   1 0)))))))))
+        (let ((window (get-buffer-window buffer t)))
+          (unless (window-live-p window)
+            (signal 'etaf-posframe-error (list "Panel frame did not appear" buffer)))
+          (set-window-scroll-bars window 0 nil nil)
+          (etaf-posframe--fit-height panel window)
+          (let ((settled (+ (window-body-height window)
+                            (if (plist-get (etaf-posframe--panel-options panel) :title)
+                                1
+                              0))))
             (unless (= settled lines)
-              (setq lines settled)
               (apply #'posframe-show buffer
-                     (plist-put (copy-sequence args) :height
-                                (+ settled (if (plist-get
-                                               (etaf-posframe--panel-options panel)
-                                               :title)
-                                               1 0)))))))))
-    (let ((window (get-buffer-window buffer t)))
-      (unless (window-live-p window)
-        (signal 'etaf-posframe-error (list "Panel frame did not appear" buffer)))
-      (set-window-scroll-bars window 0 nil nil)
-      (etaf-posframe--fit-height panel window)
-      ;; The poshandler ran while the fresh frame still had its one-row size,
-      ;; so a vertical anchor would be off by the difference.  Show once more
-      ;; with the settled height: posframe then places the frame it will keep.
-      (let ((settled (+ (window-body-height window)
-                        (if (plist-get (etaf-posframe--panel-options panel) :title)
-                            1
-                          0))))
-        (unless (= settled lines)
-          (apply #'posframe-show buffer
-                 (plist-put (copy-sequence args) :height settled))
-          (etaf-posframe--fit-height panel window)))
-      (etaf-posframe--remember-size panel window)
-      (window-frame window))))
+                     (plist-put (copy-sequence args) :height settled))
+              (etaf-posframe--fit-height panel window)))
+          (setf (etaf-posframe--panel-frame panel) (window-frame window))
+          (etaf-posframe--reposition-one panel)
+          (etaf-posframe--remember-size panel window)
+          (window-frame window))))))
 
 (defun etaf-posframe--border-color (panel focused hovered)
   "Return PANEL's border colour for the FOCUSED or HOVERED state.
@@ -1483,8 +1904,14 @@ child frames included, so this is the hover question itself.  The current
 buffer cannot answer it: a motion command inside a panel runs while another
 frame still holds the keyboard."
   (let* ((position (and (display-graphic-p) (mouse-pixel-position)))
-         (frame (car-safe position)))
-    (when (and (frame-live-p frame) (numberp (nth 1 position)))
+         (frame (car-safe position))
+         (x (and (consp (cdr-safe position)) (cadr position)))
+         (y (let ((tail (cdr-safe (cdr-safe position))))
+              (if (consp tail) (car tail) tail))))
+    (when (and (frame-live-p frame)
+               (numberp x) (numberp y)
+               (>= x 0) (< x (frame-pixel-width frame))
+               (>= y 0) (< y (frame-pixel-height frame)))
       (cl-find-if (lambda (panel)
                     (and (plist-get (etaf-posframe--panel-options panel)
                                     :focusable)
@@ -1560,19 +1987,28 @@ the keyboard only moves when the panel accepts it."
            (panel (and frame (etaf-posframe--panel-for-frame frame))))
       (when panel
         (raise-frame frame)
-        (when (and (window-live-p window)
-                   (plist-get (etaf-posframe--panel-options panel) :focusable)
-                   (not (eq (selected-frame) frame)))
-          (select-window window)
-          (setf (etaf-posframe--panel-focused panel) t))))))
+        (if (eq panel etaf-posframe--just-dragged)
+            (setq etaf-posframe--just-dragged nil)
+          (when (and (window-live-p window)
+                     (plist-get (etaf-posframe--panel-options panel) :focusable)
+                     (not (eq (selected-frame) frame)))
+            (let ((cur (selected-frame)))
+              (when (and (frame-live-p cur) (null (frame-parent cur)))
+                (setf (etaf-posframe--panel-restore-frame panel) cur
+                      (etaf-posframe--panel-restore-window panel) (selected-window))))
+            (select-window window)
+            (setf (etaf-posframe--panel-focused panel) t)))))))
 
 (defun etaf-posframe--follow-focus ()
   "Follow the pointer and the selection for the panel borders.
 The panel under the pointer gets the hover border without taking the keyboard;
 the keyboard moves only on a click, or on hover when
 `etaf-posframe-focus-follows-mouse' asks for it."
+  (dolist (panel (copy-sequence etaf-posframe--panels))
+    (ignore-errors (etaf-posframe--sync-external-move panel)))
   (etaf-posframe--refresh-hover)
   (etaf-posframe--raise-clicked-panel)
+  (etaf-posframe--check-blur)
   (when etaf-posframe-focus-follows-mouse
     (etaf-posframe--focus-pointer-panel))
   (etaf-posframe--sync-activation)
@@ -1585,42 +2021,100 @@ stale one, would give it that frame's face metrics and colours."
   (let ((frame (or frame (selected-frame))))
     (while (and (frame-live-p frame) (frame-parent frame))
       (setq frame (frame-parent frame)))
-    (if (frame-live-p frame)
+    (if (etaf-posframe--frame-active-p frame)
         frame
-      (or (cl-find-if (lambda (candidate) (null (frame-parent candidate)))
+      (or (cl-find-if (lambda (candidate)
+                        (and (etaf-posframe--frame-active-p candidate)
+                             (null (frame-parent candidate))))
                       (frame-list))
           (selected-frame)))))
 
 (defun etaf-posframe--restore-input-focus (frame)
   "Select FRAME and give it the window system's input focus.
 `select-frame' alone leaves the system without a key window after a focused
-child frame is deleted, which then swallows the next command."
-  (when (frame-live-p frame)
+child frame is hidden or deleted, which then swallows the next command."
+  (when (etaf-posframe--frame-active-p frame)
     (select-frame-set-input-focus frame)))
+
+(defun etaf-posframe--release-buffer-frame (buffer &optional frame parent-frame)
+  "Release the child frame associated with BUFFER safely.
+On graphical displays, parks the child frame for reuse instead of calling
+`delete-frame', avoiding macOS NS `NSTextInputContext' crashes inside
+`ns_free_frame_resources'.  On text terminals, deletes the frame."
+  (let ((target (or (and (frame-live-p frame) frame)
+                    (and (buffer-live-p buffer)
+                         (fboundp 'posframe--find-existing-posframe)
+                         (posframe--find-existing-posframe buffer)))))
+    (cond
+     ((and (frame-live-p target) (display-graphic-p target) (frame-parent target))
+      (etaf-posframe--park-frame target parent-frame))
+     ((buffer-live-p buffer)
+      (ignore-errors (posframe-hide buffer))
+      (ignore-errors (posframe-delete-frame buffer)))
+     ((frame-live-p target)
+      (ignore-errors (make-frame-invisible target))
+      (unless (display-graphic-p target)
+        (let ((delete-frame-functions nil))
+          (ignore-errors (delete-frame target))))))))
 
 (defun etaf-posframe--teardown (panel)
   "Release PANEL's frame, Runtime and timer without callbacks."
-  (let ((buffer (etaf-posframe--panel-buffer panel))
-        (frame (etaf-posframe--panel-frame panel))
-        (parent (etaf-posframe--panel-parent panel))
-        (restore (etaf-posframe--panel-restore-frame panel)))
+  (let* ((etaf-posframe--dismissing t)
+         (etaf-posframe--fitting t)
+         (buffer (etaf-posframe--panel-buffer panel))
+         (frame (etaf-posframe--panel-frame panel))
+         (parent (etaf-posframe--panel-parent panel))
+         (parent-frame (etaf-posframe--panel-parent-frame panel))
+         (restore (etaf-posframe--panel-restore-frame panel))
+         (restore-win (etaf-posframe--panel-restore-window panel)))
+    ;; Hide nested panels parented to BUFFER first so nested modal chains
+    ;; (such as `?' help over a dialog) unwind in LIFO order before FRAME is
+    ;; parked.
+    (when (buffer-live-p buffer)
+      (dolist (child (copy-sequence etaf-posframe--panels))
+        (when (and (not (eq child panel))
+                   (eq (etaf-posframe--panel-parent child) buffer))
+          (etaf-posframe-hide child))))
     (when (buffer-live-p parent)
       (with-current-buffer parent
-        (unless (etaf-posframe--panel-for-buffer parent)
+        (unless (cl-some (lambda (other)
+                           (eq (etaf-posframe--panel-parent other) parent))
+                         etaf-posframe--panels)
           (remove-hook 'kill-buffer-hook #'etaf-posframe--parent-killed t))
         (when (eq etaf-posframe--parent-panel panel)
           (setq etaf-posframe--parent-panel nil))))
-    ;; Deleting a child frame that held the window system's focus leaves macOS
-    ;; without a key window: `select-frame' only moves Emacs's own selection, so
-    ;; the next command has nowhere to go and the session appears frozen.  Hand
-    ;; input focus back to the frame the panel was opened from.
-    (when (frame-live-p restore)
-      (cond
-       ((eq (selected-frame) frame)
-        (etaf-posframe--restore-input-focus restore))
-       ((not (frame-focus-state frame))
-        (when (frame-parent frame)
-          (etaf-posframe--restore-input-focus restore)))))
+    ;; Hiding a child frame that held the window system's focus leaves macOS
+    ;; without a key window unless input focus moves back before `orderOut:'.
+    ;; Never restore focus to a pooled/parked frame; fall back to the active
+    ;; top-level parent frame instead.
+    (let* ((target-restore
+            (cond
+             ((and (etaf-posframe--frame-active-p restore)
+                   (not (eq restore frame)))
+              restore)
+             ((and (etaf-posframe--frame-active-p parent-frame)
+                   (not (eq parent-frame frame)))
+              parent-frame)
+             (t (let ((top (etaf-posframe--top-frame parent-frame)))
+                  (and (etaf-posframe--frame-active-p top)
+                       (not (eq top frame))
+                       top)))))
+           (need-restore
+            (and target-restore
+                 (or (eq (selected-frame) frame)
+                     (etaf-posframe--panel-focused panel)
+                     (and restore
+                          (frame-live-p frame)
+                          (frame-parent frame)
+                          (not (frame-focus-state frame)))))))
+      (when need-restore
+        (etaf-posframe--restore-input-focus target-restore)
+        (when (frame-parent target-restore)
+          (raise-frame target-restore))
+        (when (and (window-live-p restore-win)
+                   (eq (window-frame restore-win) target-restore))
+          (select-window restore-win))))
+    (setf (etaf-posframe--panel-focused panel) nil)
     (when-let* ((timer (etaf-posframe--panel-timer panel)))
       (cancel-timer timer)
       (setf (etaf-posframe--panel-timer panel) nil))
@@ -1632,30 +2126,60 @@ child frame is deleted, which then swallows the next command."
         (when etaf-posframe--surface-scope
           (ignore-errors (etaf-scope-stop etaf-posframe--surface-scope))
           (setq etaf-posframe--surface-scope nil))))
-    (when (buffer-live-p buffer)
-      (ignore-errors (posframe-hide buffer)))
-    (when (buffer-live-p buffer)
-      (ignore-errors (posframe-delete-frame buffer)))
+    ;; Park (graphical) or delete (TTY) the child frame BEFORE killing BUFFER
+    ;; so the root window is un-dedicated and switched to the park buffer first.
+    (etaf-posframe--release-buffer-frame buffer frame parent-frame)
+    (setf (etaf-posframe--panel-frame panel) nil)
     (when (buffer-live-p buffer)
       (when-let* ((runtime (etaf-runtime-for-buffer buffer)))
         (ignore-errors (etaf-unmount runtime)))
-      (ignore-errors (kill-buffer buffer)))
-    (ignore frame)))
+      (ignore-errors (kill-buffer buffer)))))
 
 ;;;###autoload
 (defun etaf-posframe--focus (panel)
-  "Select PANEL's frame and window, remembering the frame to restore."
+  "Select PANEL's frame and window, remembering the host frame to restore."
   (let ((frame (etaf-posframe--panel-frame panel)))
-    (when (frame-live-p frame)
-      (setf (etaf-posframe--panel-restore-frame panel) (selected-frame))
+    (when (etaf-posframe--frame-active-p frame)
+      (unless (eq (selected-frame) frame)
+        (setf (etaf-posframe--panel-restore-frame panel)
+              (etaf-posframe--top-frame (selected-frame))))
       (select-frame frame)
       (when (frame-parameter frame 'window-id)
         (ignore-errors (x-focus-frame frame)))
       (when-let* ((window (get-buffer-window (etaf-posframe--panel-buffer panel) t)))
         (select-window window)
-        (set-window-point window (point-min))
+        (when (not (plist-get (etaf-posframe--panel-options panel) :scrollable))
+          (etaf-posframe--lock-scroll panel window))
         (setf (etaf-posframe--panel-focused panel) t)))
     (etaf-posframe--paint-borders)))
+
+;;;###autoload
+(defun etaf-posframe-focus (panel)
+  "Give input focus to live focusable PANEL and return PANEL when focused."
+  (when (and (etaf-posframe-live-p panel)
+             (plist-get (etaf-posframe--panel-options panel) :focusable))
+    (etaf-posframe--focus panel)
+    panel))
+
+;;;###autoload
+(defun etaf-posframe-unfocus (panel)
+  "Return input focus from PANEL back to its host frame without hiding PANEL."
+  (when (etaf-posframe-live-p panel)
+    (let* ((frame (etaf-posframe--panel-frame panel))
+           (restore (or (let ((r (etaf-posframe--panel-restore-frame panel)))
+                          (and (etaf-posframe--frame-active-p r)
+                               (not (eq r frame))
+                               r))
+                        (let ((p (etaf-posframe--panel-parent-frame panel)))
+                          (and (etaf-posframe--frame-active-p p)
+                               (not (eq p frame))
+                               p)))))
+      (setf (etaf-posframe--panel-focused panel) nil)
+      (when (and (etaf-posframe--frame-active-p restore)
+                 (eq (selected-frame) frame))
+        (etaf-posframe--restore-input-focus restore)
+        (etaf-posframe--paint-borders)
+        t))))
 
 (defun etaf-posframe-hide (&optional panel)
   "Hide PANEL and release its Runtime, timer and frame.
@@ -1663,18 +2187,20 @@ PANEL defaults to the panel of the current buffer.  Return non-nil when a live
 panel was hidden."
   (interactive)
   (when-let* ((panel (or panel (etaf-posframe--current-panel))))
-    (setq etaf-posframe--panels (delq panel etaf-posframe--panels))
-    (when (eq panel etaf-posframe--hover-panel)
-      (setq etaf-posframe--hover-panel nil))
-    (etaf-posframe--teardown panel)
-    (etaf-posframe--refresh-hooks)
-    (etaf-posframe--paint-borders)
-    (when-let* ((callback (etaf-posframe--panel-close-callback panel)))
-      (condition-case error
-          (funcall callback panel)
-        (error (message "ETAF panel close callback failed: %s"
-                        (error-message-string error)))))
-    t))
+    (unless (etaf-posframe--panel-closed-p panel)
+      (setf (etaf-posframe--panel-closed-p panel) t)
+      (setq etaf-posframe--panels (delq panel etaf-posframe--panels))
+      (when (eq panel etaf-posframe--hover-panel)
+        (setq etaf-posframe--hover-panel nil))
+      (etaf-posframe--teardown panel)
+      (etaf-posframe--refresh-hooks)
+      (etaf-posframe--paint-borders)
+      (when-let* ((callback (etaf-posframe--panel-close-callback panel)))
+        (condition-case error
+            (funcall callback panel)
+          (error (message "ETAF panel close callback failed: %s"
+                          (error-message-string error)))))
+      t)))
 
 (defun etaf-posframe--set-frame-palette (frame palette)
   "Paint FRAME as PANEL's surface from PALETTE.
@@ -1827,7 +2353,9 @@ because repainting the View is the expensive part of a theme change.  A panel
 whose content declared its surface owns the palette already; the pass only
 updates the appearance that content may follow."
   (if (etaf-posframe--panel-adopted-p panel)
-      (ignore-errors (etaf-posframe--update-appearance panel))
+      (progn
+        (ignore-errors (etaf-posframe--hold-theme panel))
+        (ignore-errors (etaf-posframe--update-appearance panel)))
     (let ((theme (etaf-posframe--panel-theme panel))
           (parent-frame (etaf-posframe--panel-parent-frame panel))
           (options (etaf-posframe--panel-options panel)))
@@ -1901,8 +2429,10 @@ previous one; panels with distinct keys coexist."
               etaf-posframe--panels))
 
 (defun etaf-posframe--panel-for-buffer (buffer)
-  "Return the live panel anchored to BUFFER."
-  (cl-find-if (lambda (panel) (eq (etaf-posframe--panel-parent panel) buffer))
+  "Return the live non-modal panel anchored to BUFFER."
+  (cl-find-if (lambda (panel)
+                (and (not (etaf-posframe--panel-modal-p panel))
+                     (eq (etaf-posframe--panel-parent panel) buffer)))
               etaf-posframe--panels))
 
 (defun etaf-posframe--current-panel ()
@@ -1930,6 +2460,8 @@ described in the package Commentary."
   (let* ((options (etaf-posframe--defaults
                    (etaf-posframe--validate (copy-sequence options))))
          (parent-frame (etaf-posframe--top-frame))
+         (parent-window (etaf-posframe--anchor-window
+                         parent-frame (selected-window)))
          (parent-buffer (etaf-posframe--anchor-buffer (current-buffer)))
          (char-width (max 1 (frame-char-width parent-frame)))
          (char-height (max 1 (frame-char-height parent-frame)))
@@ -1992,7 +2524,8 @@ described in the package Commentary."
                                    (plist-get options :width)
                                    (and (memq (plist-get options :theme)
                                               '(light auto dark))
-                                        (plist-get options :theme)))
+                                        (plist-get options :theme))
+                                   (plist-get options :scrollable))
     (unwind-protect
         (progn
           (etaf-mount buffer
@@ -2019,45 +2552,55 @@ described in the package Commentary."
                          :buffer buffer
                          :options options
                          :parent parent-buffer
-                         :parent-frame parent-frame))
+                         :parent-frame parent-frame
+                         :parent-window parent-window
+                         :parent-geometry (etaf-posframe--frame-geometry parent-frame)
+                         :parent-window-edges
+                         (and (window-live-p parent-window)
+                              (window-inside-pixel-edges parent-window))))
             ;; An application that declared its surface paints the frame this
             ;; panel is about to show, so the first paint is already its own.
             (etaf-posframe--sync-surface panel)
-            (setf (etaf-posframe--panel-frame panel)
-                  (etaf-posframe--show-frame
-                   panel (max 1 (etaf-posframe--lines buffer))))
-            ;; From here on a frame resized from outside re-lays the View out
-            ;; at its new width instead of being snapped back.
-            (setf (etaf-posframe--panel-settled panel) t)
-            (etaf-posframe--set-frame-palette
-             (etaf-posframe--panel-frame panel) (etaf-value theme-ref))
-            (ignore-errors (etaf-posframe--paint-border panel))
-            (ignore-errors (etaf-posframe--sync-activation))
-            (etaf-posframe--watch-surface panel)
-            (with-current-buffer buffer
-              (setq etaf-posframe--panel panel))
-            (with-current-buffer parent-buffer
-              (setq etaf-posframe--parent-panel panel)
-              (add-hook 'kill-buffer-hook #'etaf-posframe--parent-killed nil t))
-            (push panel etaf-posframe--panels)
-            (when-let* ((seconds (plist-get options :auto-hide))
-                        ((numberp seconds)))
-              (setf (etaf-posframe--panel-timer panel)
-                    (run-at-time seconds nil
-                                 (lambda ()
-                                   (when (memq panel etaf-posframe--panels)
-                                     (etaf-posframe-hide panel))))))
-            (when (plist-get options :focus-on-open)
-              (etaf-posframe--focus panel))
-            (etaf-posframe--refresh-hooks)
-            panel))
+            (let ((etaf-posframe--dismissing t))
+              (setf (etaf-posframe--panel-frame panel)
+                    (etaf-posframe--show-frame
+                     panel (max 1 (etaf-posframe--lines buffer))))
+              ;; From here on a frame resized from outside re-lays the View out
+              ;; at its new width instead of being snapped back.
+              (setf (etaf-posframe--panel-settled panel) t)
+              (etaf-posframe--set-frame-palette
+               (etaf-posframe--panel-frame panel) (etaf-value theme-ref))
+              (ignore-errors (etaf-posframe--paint-border panel))
+              (ignore-errors (etaf-posframe--sync-activation))
+              (etaf-posframe--watch-surface panel)
+              (with-current-buffer buffer
+                (setq etaf-posframe--panel panel
+                      etaf-posframe--panel-keys-p t
+                      etaf-posframe--headerless-drag
+                      (and (not (plist-get options :title))
+                           (plist-get options :draggable)
+                           t)))
+              (with-current-buffer parent-buffer
+                (setq etaf-posframe--parent-panel panel)
+                (add-hook 'kill-buffer-hook #'etaf-posframe--parent-killed nil t))
+              (push panel etaf-posframe--panels)
+              (when-let* ((seconds (plist-get options :auto-hide))
+                          ((numberp seconds)))
+                (setf (etaf-posframe--panel-timer panel)
+                      (run-at-time seconds nil
+                                   (lambda ()
+                                     (when (memq panel etaf-posframe--panels)
+                                       (etaf-posframe-hide panel))))))
+              (when (plist-get options :focus-on-open)
+                (etaf-posframe--focus panel))
+              (etaf-posframe--refresh-hooks)
+              panel)))
       (unless panel
+        (etaf-posframe--release-buffer-frame buffer nil parent-frame)
         (when-let* ((runtime (etaf-runtime-for-buffer buffer)))
           (ignore-errors (etaf-unmount runtime)))
         (when (buffer-live-p buffer)
-          (ignore-errors (posframe-hide buffer))
-          (ignore-errors (posframe-delete-frame buffer))
-          (kill-buffer buffer))))))
+          (ignore-errors (kill-buffer buffer)))))))
 
 ;;;###autoload
 (defun etaf-posframe-toggle (view &rest options)
@@ -2127,9 +2670,10 @@ Return non-nil when the frame was set back."
                         (/= (car origin) (car position)))
                    (and (not (cdr permitted))
                         (/= (cdr origin) (cdr position)))))
-      (set-frame-position frame
-                          (if (car permitted) (car origin) (car position))
-                          (if (cdr permitted) (cdr origin) (cdr position)))
+      (let ((etaf-posframe--positioning t))
+        (set-frame-position frame
+                            (if (car permitted) (car origin) (car position))
+                            (if (cdr permitted) (cdr origin) (cdr position))))
       (setq moved t))
     moved))
 
@@ -2144,12 +2688,20 @@ decides which axes accept the change, and a refused axis is put back.  Return
 non-nil when the panel adopted or restored a size."
   (let* ((frame (window-frame window))
          (options (etaf-posframe--panel-options panel))
+         (prev-size (etaf-posframe--panel-size panel))
          (char (frame-char-width frame))
          (width (window-body-width window t))
+         (pixel-height (window-pixel-height window))
+         ;; Only a change in the frame's actual pixel dimensions counts as an
+         ;; outside resize.  A theme switch or initial redisplay can change
+         ;; header-line or font height without resizing the frame, and must not
+         ;; corrupt the panel's row budget.
+         (width-changed (or (null prev-size) (/= width (car prev-size))))
+         (height-changed (or (null prev-size) (/= pixel-height (cdr prev-size))))
          (header (if (plist-get options :title)
                      (window-header-line-height window)
                    0))
-         (rows (max 1 (floor (- (window-pixel-height window) header)
+         (rows (max 1 (floor (- pixel-height header)
                              (float (frame-char-height frame)))))
          (budget (etaf-posframe--row-budget panel))
          (content (etaf-posframe--lines (etaf-posframe--panel-buffer panel)))
@@ -2157,7 +2709,7 @@ non-nil when the panel adopted or restored a size."
          (adopted options)
          (resized nil)
          (restored nil))
-    (when (and (etaf-posframe--panel-settled panel) (> width 0))
+    (when (and (etaf-posframe--panel-settled panel) width-changed (> width 0))
       (cond
        ((= width (or (plist-get options :pixel-width) 0)))
        ((not (car permitted))
@@ -2176,6 +2728,7 @@ non-nil when the panel adopted or restored a size."
     ;; shorter only when it cuts into the content.  The panel's own fit sets
     ;; the frame to the content height, which must not shrink the budget.
     (when (and (etaf-posframe--panel-settled panel)
+               height-changed
                (or (> rows budget) (< rows (min budget content))))
       (if (cdr permitted)
           (setq adopted (plist-put (copy-sequence adopted) :height rows)
@@ -2202,8 +2755,13 @@ fits more often than `etaf-posframe--fit-limit' in one second backs off for
 `etaf-posframe--fit-backoff', so a condition that keeps resizing it can never
 run away with the CPU."
   (when (and (etaf-posframe-live-p panel)
-             (or (null (etaf-posframe--panel-fit-muted-until panel))
-                 (< (float-time) (etaf-posframe--panel-fit-muted-until panel))))
+             (let ((muted (etaf-posframe--panel-fit-muted-until panel)))
+               (cond
+                ((null muted) t)
+                ((>= (float-time) muted)
+                 (setf (etaf-posframe--panel-fit-muted-until panel) nil)
+                 t)
+                (t nil))))
     (let* ((now (float-time))
            (start (etaf-posframe--panel-fit-window panel))
            (count (if (and start (< (- now start) 1.0))
@@ -2223,16 +2781,21 @@ run away with the CPU."
         (let* ((buffer (etaf-posframe--panel-buffer panel))
                (window (get-buffer-window buffer t)))
           (when (window-live-p window)
-            ;; A frame resized from outside re-lays the View out at its new
-            ;; width and rows; a content change needs no re-layout, because
-            ;; ETAF already rendered it and a second layout writer duplicates
-            ;; rows.  Either way only the frame height follows the content.
-            (let ((adopted (etaf-posframe--adopt-frame-size panel window))
-                  (fitted (etaf-posframe--resize-to-content panel window)))
-              (when (and (or adopted fitted)
-                         (etaf-posframe--panel-settled panel))
-                (etaf-posframe--fit panel)))
-            (etaf-posframe--remember-size panel window)))))))
+            (if (etaf-posframe--panel-modal-p panel)
+                (etaf-posframe--fit-modal panel window)
+              ;; A frame resized from outside re-lays the View out at its new
+              ;; width and rows; a content change needs no re-layout, because
+              ;; ETAF already rendered it and a second layout writer duplicates
+              ;; rows.  Either way only the frame height follows the content.
+              (let ((adopted (etaf-posframe--adopt-frame-size panel window))
+                    (fitted (etaf-posframe--resize-to-content panel window)))
+                (when (and (or adopted fitted)
+                           (etaf-posframe--panel-settled panel))
+                  (etaf-posframe--fit panel))
+                (etaf-posframe--lock-scroll panel window)
+                (when fitted
+                  (etaf-posframe--reposition panel)))
+              (etaf-posframe--remember-size panel window))))))))
 
 ;;;###autoload
 (defun etaf-posframe-refresh (&optional panel)
@@ -2279,22 +2842,486 @@ panel on screen at the anchor it was opened with."
                                              :width columns)
                                   :pixel-width (* columns char))
                        :height budget))
-      (apply #'posframe-show buffer
-             (etaf-posframe--frame-args panel lines))
+      (let ((posframe-mouse-banish-function #'ignore)
+            (etaf-posframe--positioning t))
+        (apply #'posframe-show buffer
+               (etaf-posframe--frame-args panel lines)))
+      (setf (etaf-posframe--panel-parent-geometry panel)
+            (etaf-posframe--frame-geometry parent))
       (when-let* ((window (get-buffer-window buffer t)))
-        (etaf-posframe--fit-height panel window)))))
+        (etaf-posframe--fit-height panel window)
+        (etaf-posframe--remember-size panel window)))))
+
+(defun etaf-posframe--frame-geometry (frame)
+  "Return (PIXEL-WIDTH PIXEL-HEIGHT CHAR-WIDTH CHAR-HEIGHT) of FRAME, or nil."
+  (when (frame-live-p frame)
+    (list (frame-pixel-width frame)
+          (frame-pixel-height frame)
+          (max 1 (frame-char-width frame))
+          (max 1 (frame-char-height frame)))))
+
+(defun etaf-posframe--anchor-window (parent &optional preferred)
+  "Return the non-minibuffer window on PARENT to anchor against.
+Uses PREFERRED when it is live on PARENT and not a minibuffer, otherwise
+PARENT's selected window (stepping back from the minibuffer when active)."
+  (cond
+   ((and (window-live-p preferred)
+         (eq (window-frame preferred) parent)
+         (not (window-minibuffer-p preferred)))
+    preferred)
+   ((frame-live-p parent)
+    (let ((selected (frame-selected-window parent)))
+      (if (and (window-live-p selected) (not (window-minibuffer-p selected)))
+          selected
+        (let ((mini-owner (minibuffer-selected-window)))
+          (if (and (window-live-p mini-owner)
+                   (eq (window-frame mini-owner) parent)
+                   (not (window-minibuffer-p mini-owner)))
+              mini-owner
+            (frame-first-window parent))))))))
+
+(defun etaf-posframe--placement-stacked-p (placement options)
+  "Return non-nil when PLACEMENT with OPTIONS participates in anchor stacking."
+  (and (plist-get options :stack)
+       (memq (car placement) '(anchor anchor+offset))))
+
+(defun etaf-posframe--placement-window-relative-p (placement)
+  "Return non-nil when PLACEMENT depends on a parent window's pixel edges."
+  (pcase (car placement)
+    ('cells t)
+    ('anchor (string-prefix-p "window-" (symbol-name (cdr placement))))
+    ('anchor+offset (string-prefix-p "window-" (symbol-name (nth 1 placement))))
+    (_ nil)))
+
+(defun etaf-posframe--placement-point-p (placement)
+  "Return non-nil when PLACEMENT anchors to buffer point."
+  (and (memq (car placement) '(anchor anchor+offset))
+       (memq (if (eq (car placement) 'anchor)
+                 (cdr placement)
+               (nth 1 placement))
+             '(point point-top))))
+
+(defun etaf-posframe--sync-external-move (panel)
+  "Pin PANEL's position when the user dragged it via native title-bar drag.
+Emacs's `drag-with-header-line' moves the child frame directly without calling
+`etaf-posframe-drag', leaving `:at' on the old anchor.  Detecting a pure
+position change (same frame text size, different position) pins the dragged
+place so later theme switches, fits or resizes never snap it back."
+  (when (and (etaf-posframe-live-p panel)
+             (not etaf-posframe--positioning)
+             (not etaf-posframe--dragging)
+             (not (etaf-posframe--panel-modal-p panel))
+             (etaf-posframe--panel-settled panel)
+             (plist-get (etaf-posframe--panel-options panel) :draggable))
+    (let* ((frame (etaf-posframe--panel-frame panel))
+           (known-pos (etaf-posframe--panel-position panel))
+           (known-size (etaf-posframe--panel-size panel))
+           (cur-pos (frame-position frame))
+           (window (get-buffer-window (etaf-posframe--panel-buffer panel) t))
+           (cur-size (and (window-live-p window)
+                          (cons (window-body-width window t)
+                                (window-pixel-height window)))))
+      (when (and known-pos cur-pos
+                 (not (equal cur-pos known-pos))
+                 known-size cur-size
+                 (equal cur-size known-size))
+        (let ((x (car cur-pos))
+              (y (cdr cur-pos))
+              (on-move (plist-get (etaf-posframe--panel-options panel) :on-move)))
+          (etaf-posframe--pin-position panel x y)
+          (when (functionp on-move)
+            (ignore-errors (funcall on-move x y panel)))
+          t)))))
+
+(defun etaf-posframe--position-info (panel)
+  "Build the poshandler `info' plist for live PANEL."
+  (let* ((frame (etaf-posframe--panel-frame panel))
+         (parent (etaf-posframe--panel-parent-frame panel))
+         (pwin (etaf-posframe--anchor-window
+                parent (etaf-posframe--panel-parent-window panel)))
+         (pw (frame-pixel-width parent))
+         (ph (frame-pixel-height parent))
+         (fw (frame-pixel-width frame))
+         (fh (frame-pixel-height frame))
+         (pwin-live (window-live-p pwin))
+         (pwin-left (if pwin-live (window-pixel-left pwin) 0))
+         (pwin-top (if pwin-live (window-pixel-top pwin) 0))
+         (pwin-w (if pwin-live (window-pixel-width pwin) pw))
+         (pwin-h (if pwin-live (window-pixel-height pwin) ph))
+         (header-h (if pwin-live (window-header-line-height pwin) 0))
+         (mode-h (if pwin-live (window-mode-line-height pwin) 0))
+         (tab-h (if (and pwin-live (fboundp 'window-tab-line-height))
+                    (window-tab-line-height pwin)
+                  0))
+         (mini-w (minibuffer-window parent))
+         (mini-h (if (window-live-p mini-w) (window-pixel-height mini-w) 0)))
+    (list :position (if pwin-live (window-point pwin) 1)
+          :parent-frame parent
+          :parent-frame-width pw
+          :parent-frame-height ph
+          :parent-window pwin
+          :parent-window-left pwin-left
+          :parent-window-top pwin-top
+          :parent-window-width pwin-w
+          :parent-window-height pwin-h
+          :posframe frame
+          :posframe-width fw
+          :posframe-height fh
+          :posframe-buffer (etaf-posframe--panel-buffer panel)
+          :font-width (max 1 (frame-char-width parent))
+          :font-height (max 1 (frame-char-height parent))
+          :header-line-height header-h
+          :mode-line-height mode-h
+          :tab-line-height tab-h
+          :minibuffer-height mini-h
+          :x-pixel-offset 0
+          :y-pixel-offset 0)))
+
+(defun etaf-posframe--reposition-one (panel &optional force)
+  "Recompute and apply PANEL's `(X . Y)' position against its parent frame.
+Respects `etaf-posframe--stack-obstacles' when bound by a reflow pass.
+Point-anchored panels are left alone unless FORCE is non-nil."
+  (when (and (etaf-posframe-live-p panel)
+             (not (etaf-posframe--panel-modal-p panel)))
+    (let* ((frame (etaf-posframe--panel-frame panel))
+           (parent (etaf-posframe--panel-parent-frame panel))
+           (options (etaf-posframe--panel-options panel))
+           (placement (etaf-posframe--placement (plist-get options :at))))
+      (when (and (frame-live-p frame) (frame-live-p parent)
+                 (or force (not (etaf-posframe--placement-point-p placement))))
+        (let* ((info (etaf-posframe--position-info panel))
+               (pw (plist-get info :parent-frame-width))
+               (ph (plist-get info :parent-frame-height))
+               (bevel (etaf-posframe--terminal-bevel frame))
+               (fw (+ (plist-get info :posframe-width) bevel))
+               (fh (+ (plist-get info :posframe-height) bevel))
+               (pos (condition-case nil
+                        (funcall (etaf-posframe--placement-poshandler placement options) info)
+                      (error (frame-position frame))))
+               (raw-x (or (car-safe pos) 0))
+               (raw-y (or (cdr-safe pos) 0))
+               ;; Standard Posframe poshandlers encode right/bottom offsets as
+               ;; negative pixel coordinates (e.g. `(-1 . 0)' for top-right).
+               (norm-x (if (and (eq (car placement) 'function) (< raw-x 0))
+                           (+ raw-x pw (- fw))
+                         raw-x))
+               (norm-y (if (and (eq (car placement) 'function) (< raw-y 0))
+                           (+ raw-y ph (- fh))
+                         raw-y))
+               (min-x (if (> bevel 0) 1 0))
+               (min-y (if (> bevel 0) 1 0))
+               (max-x (max min-x (- pw fw (if (> bevel 0) 1 0))))
+               (max-y (max min-y (- ph fh (if (> bevel 0) 1 0))))
+               (x (max min-x (min norm-x max-x)))
+               (y (max min-y (min norm-y max-y)))
+               (cur (frame-position frame)))
+          (when (or (/= x (or (car-safe cur) -1))
+                    (/= y (or (cdr-safe cur) -1)))
+            (let ((etaf-posframe--positioning t))
+              (set-frame-position frame x y)))
+          (setf (etaf-posframe--panel-parent-geometry panel)
+                (etaf-posframe--frame-geometry parent))
+          (let ((pwin (plist-get info :parent-window)))
+            (when (window-live-p pwin)
+              (setf (etaf-posframe--panel-parent-window panel) pwin
+                    (etaf-posframe--panel-parent-window-edges panel)
+                    (window-inside-pixel-edges pwin))))
+          (when-let* ((win (get-buffer-window (etaf-posframe--panel-buffer panel) t)))
+            (etaf-posframe--remember-size panel win))
+          (cons x y))))))
+
+(defun etaf-posframe--reflow-stacked (parent &optional force)
+  "Reflow all live stacked panels on PARENT in oldest-first creation order.
+Non-stacked panels on PARENT stay at their current positions and act as fixed
+obstacles; each stacked panel is placed against those obstacles plus the
+earlier stacked panels already placed in this pass, so panels never collide
+with themselves, never reverse stack order, and never overlap when an earlier
+panel changes height."
+  (when (frame-live-p parent)
+    (let* ((live (cl-remove-if-not
+                  (lambda (p)
+                    (and (not (etaf-posframe--panel-modal-p p))
+                         (eq (etaf-posframe--panel-parent-frame p) parent)))
+                  (etaf-posframe-panels)))
+           (ordered (reverse live))
+           (fixed nil)
+           (stacked nil))
+      (dolist (p ordered)
+        (etaf-posframe--sync-external-move p)
+        (let* ((opts (etaf-posframe--panel-options p))
+               (placement (etaf-posframe--placement (plist-get opts :at))))
+          (if (etaf-posframe--placement-stacked-p placement opts)
+              (push p stacked)
+            (push p fixed))))
+      (setq stacked (nreverse stacked))
+      (let ((obstacles (delq nil (mapcar (lambda (p)
+                                           (etaf-posframe--frame-rect
+                                            (etaf-posframe--panel-frame p)))
+                                         fixed))))
+        (dolist (p stacked)
+          (let ((etaf-posframe--stack-obstacles obstacles))
+            (etaf-posframe--reposition-one p force))
+          (when-let* ((rect (etaf-posframe--frame-rect
+                             (etaf-posframe--panel-frame p))))
+            (push rect obstacles)))))))
+
+(defun etaf-posframe--reposition-frame (parent)
+  "Reposition all non-modal panels belonging to PARENT after PARENT resized.
+Non-stacked panels reposition first (clamping pinned pixels and updating
+anchors); stacked panels then reflow in oldest-first order around them."
+  (when (frame-live-p parent)
+    (let* ((live (cl-remove-if-not
+                  (lambda (p)
+                    (and (not (etaf-posframe--panel-modal-p p))
+                         (eq (etaf-posframe--panel-parent-frame p) parent)))
+                  (etaf-posframe-panels)))
+           (ordered (reverse live))
+           (has-stacked nil))
+      (dolist (p ordered)
+        (etaf-posframe--sync-external-move p)
+        (let* ((opts (etaf-posframe--panel-options p))
+               (placement (etaf-posframe--placement (plist-get opts :at))))
+          (if (etaf-posframe--placement-stacked-p placement opts)
+              (setq has-stacked t)
+            (etaf-posframe--reposition-one p))))
+      (when has-stacked
+        (etaf-posframe--reflow-stacked parent)))))
+
+(defun etaf-posframe--reposition (panel &optional force)
+  "Recompute and apply PANEL's `(X . Y)' position against its parent frame.
+Keeps anchored panels aligned when sizes change, keeps pinned pixel positions
+clamped cleanly inside the parent frame, and reflows sibling stacked panels in
+oldest-first order so a panel never collides with itself or swaps order.
+Point-anchored panels are left alone unless FORCE is non-nil."
+  (when (and (etaf-posframe-live-p panel)
+             (not (etaf-posframe--panel-modal-p panel)))
+    (etaf-posframe--sync-external-move panel)
+    (let* ((parent (etaf-posframe--panel-parent-frame panel))
+           (options (etaf-posframe--panel-options panel))
+           (placement (etaf-posframe--placement (plist-get options :at))))
+      (if (etaf-posframe--placement-stacked-p placement options)
+          (progn
+            (etaf-posframe--reflow-stacked parent force)
+            (frame-position (etaf-posframe--panel-frame panel)))
+        (let ((pos (etaf-posframe--reposition-one panel force)))
+          (when-let* ((self-rect (etaf-posframe--frame-rect
+                                  (etaf-posframe--panel-frame panel))))
+            (when (cl-some
+                   (lambda (other)
+                     (and (not (eq other panel))
+                          (not (etaf-posframe--panel-modal-p other))
+                          (eq (etaf-posframe--panel-parent-frame other) parent)
+                          (let* ((oopts (etaf-posframe--panel-options other))
+                                 (oplace (etaf-posframe--placement (plist-get oopts :at))))
+                            (etaf-posframe--placement-stacked-p oplace oopts))
+                          (let ((orect (etaf-posframe--frame-rect
+                                        (etaf-posframe--panel-frame other))))
+                            (and orect (etaf-posframe--rect-overlap-p self-rect orect)))))
+                   (etaf-posframe-panels))
+              (etaf-posframe--reflow-stacked parent)))
+          pos)))))
+
+;;;###autoload
+(defun etaf-posframe-reshape (panel &rest options)
+  "Update live PANEL in place without recreating its frame or unmounting its View.
+OPTIONS accepts `:width', `:height', `:at', `:theme', `:border',
+`:fill-height' and `:focus-on-open'."
+  (when (etaf-posframe-live-p panel)
+    (let* ((cur-opts (copy-sequence (etaf-posframe--panel-options panel)))
+           (parent (etaf-posframe--panel-parent-frame panel))
+           (frame (etaf-posframe--panel-frame panel))
+           (buffer (etaf-posframe--panel-buffer panel))
+           (window (get-buffer-window buffer t))
+           (char-w (max 1 (frame-char-width parent)))
+           (char-h (max 1 (frame-char-height parent)))
+           (pw (frame-pixel-width parent))
+           (ph (frame-pixel-height parent))
+           (avail (max 20 (- (/ pw char-w) (* 2 etaf-posframe--margin))))
+           (cap (max 4 (floor (- ph (* 2 char-h)) (float char-h)))))
+      (etaf-posframe--validate (copy-sequence options))
+      (when (plist-member options :at)
+        (let ((new-at (plist-get options :at)))
+          (setq cur-opts (plist-put cur-opts :at new-at))
+          (unless (memq (car (etaf-posframe--placement new-at))
+                        '(anchor anchor+offset))
+            (setq cur-opts (plist-put cur-opts :stack nil)))))
+      (when (plist-member options :fill-height)
+        (setq cur-opts (plist-put cur-opts :fill-height (plist-get options :fill-height))))
+      (when (plist-member options :border)
+        (setq cur-opts (plist-put cur-opts :border (plist-get options :border))))
+      (when (plist-member options :width)
+        (let* ((wspec (plist-get options :width))
+               (cols (max 1 (min (if (numberp wspec)
+                                     wspec
+                                   (round (/ (* pw (nth 1 wspec)) char-w)))
+                                 avail))))
+          (setq cur-opts (plist-put cur-opts :width cols)
+                cur-opts (plist-put cur-opts :pixel-width (* cols char-w)))))
+      (when (plist-member options :height)
+        (let* ((hspec (plist-get options :height))
+               (budget (if (numberp hspec)
+                           hspec
+                         (round (/ (* ph (nth 1 hspec)) char-h)))))
+          (setq cur-opts (plist-put cur-opts :height (min budget cap)))))
+      (when (plist-member options :theme)
+        (let* ((tspec (plist-get options :theme))
+               (theme (if (memq tspec '(auto light dark))
+                          (etaf-posframe-theme parent (and (not (eq tspec 'auto)) tspec))
+                        tspec))
+               (tref (etaf-posframe--panel-theme panel)))
+          (setq cur-opts (plist-put cur-opts :theme tspec))
+          (when (and (etaf-ref-p tref) (not (etaf-ref-p theme)))
+            (setf (etaf-value tref) theme))
+          (let ((pal (if (or (etaf-ref-p theme) (etaf-computed-p theme))
+                         (etaf-value theme)
+                       theme)))
+            (etaf-posframe--set-frame-palette frame pal))))
+      (setf (etaf-posframe--panel-options panel) cur-opts)
+      (when (window-live-p window)
+        (let ((etaf-posframe--dismissing t))
+          (setf (etaf-posframe--panel-settled panel) nil)
+          (unwind-protect
+              (progn
+                (etaf-posframe--fit-height panel window)
+                (etaf-posframe--reposition panel t)
+                (etaf-posframe--lock-scroll panel window)
+                (etaf-posframe--remember-size panel window))
+            (setf (etaf-posframe--panel-settled panel) t))))
+      (ignore-errors (etaf-posframe--paint-border panel))
+      (when (plist-member options :focus-on-open)
+        (if (plist-get options :focus-on-open)
+            (etaf-posframe-focus panel)
+          (etaf-posframe-unfocus panel)))
+      panel)))
+
+;;;###autoload
+(defun etaf-posframe-drag (panel &optional on-done)
+  "Drag live PANEL smoothly with the mouse pointer inside its parent frame.
+Works on headerless panels without `:title'.  When the pointer moves more than
+3 pixels, pins the panel's new `(X . Y)' and calls ON-DONE with `(X Y PANEL)'."
+  (when (and (etaf-posframe-live-p panel) (display-graphic-p))
+    (let* ((frame (etaf-posframe--panel-frame panel))
+           (parent (etaf-posframe--panel-parent-frame panel))
+           (start-mouse (mouse-absolute-pixel-position))
+           (start-pos (frame-position frame))
+           (mx0 (or (car-safe start-mouse) 0))
+           (my0 (or (cdr-safe start-mouse) 0))
+           (fx0 (or (car-safe start-pos) 0))
+           (fy0 (or (cdr-safe start-pos) 0))
+           (pw (frame-pixel-width parent))
+           (ph (frame-pixel-height parent))
+           (fw (frame-pixel-width frame))
+           (fh (frame-pixel-height frame))
+           (cur-x fx0)
+           (cur-y fy0)
+           (moved nil)
+           (etaf-posframe--dragging t))
+      (when (and (numberp mx0) (numberp my0))
+        (track-mouse
+          (let ((done nil)
+                (end-ev nil))
+            (while (not done)
+              (let ((ev (read-event)))
+                (cond
+                 ((mouse-movement-p ev)
+                  (let* ((mp (mouse-absolute-pixel-position))
+                         (dx (- (or (car-safe mp) mx0) mx0))
+                         (dy (- (or (cdr-safe mp) my0) my0)))
+                    (when (or moved (> (abs dx) 3) (> (abs dy) 3))
+                      (setq moved t
+                            cur-x (max 0 (min (+ fx0 dx) (max 0 (- pw fw))))
+                            cur-y (max 0 (min (+ fy0 dy) (max 0 (- ph fh)))))
+                      (set-frame-position frame cur-x cur-y))))
+                 (t
+                  (setq end-ev ev
+                        done t)))))
+            (when (and (not moved) end-ev)
+              (push end-ev unread-command-events))))
+        (when moved
+          (etaf-posframe--pin-position panel cur-x cur-y)
+          (when-let* ((win (get-buffer-window (etaf-posframe--panel-buffer panel) t)))
+            (etaf-posframe--remember-size panel win))
+          (when (functionp on-done)
+            (ignore-errors (funcall on-done cur-x cur-y panel))))
+        moved))))
 
 (defun etaf-posframe--window-size-changed (frame)
   "Re-fit the panels FRAME hosts or the panel FRAME itself after a resize."
-  (let ((terminal (not (display-graphic-p frame))))
-    (dolist (panel (copy-sequence etaf-posframe--panels))
-      (cond
-       ((eq (etaf-posframe--panel-frame panel) frame)
-        (etaf-posframe-refresh panel))
-       ((eq (etaf-posframe--panel-parent-frame panel) frame)
-        (if terminal
-            (etaf-posframe--terminal-refit panel)
-          (etaf-posframe-refresh panel)))))))
+  (let* ((terminal (not (display-graphic-p frame)))
+         (panels (copy-sequence etaf-posframe--panels))
+         (cur-geom (etaf-posframe--frame-geometry frame))
+         (parent-resized nil)
+         (window-moved-panels nil)
+         (modal-panels nil))
+    (dolist (panel panels)
+      (let* ((modal-win (etaf-posframe--panel-modal-window panel))
+             (modal-owner (and (window-live-p modal-win)
+                               (window-frame modal-win))))
+        (cond
+         ((eq (etaf-posframe--panel-frame panel) frame)
+          (unless (and (etaf-posframe--panel-modal-p panel) etaf-posframe--fitting)
+            (etaf-posframe-refresh panel)))
+         ((and (etaf-posframe--panel-modal-p panel)
+               (or (eq (etaf-posframe--panel-parent-frame panel) frame)
+                   (and modal-owner (eq modal-owner frame))))
+          (push panel modal-panels))
+         ((eq (etaf-posframe--panel-parent-frame panel) frame)
+          (if (not (equal cur-geom (etaf-posframe--panel-parent-geometry panel)))
+              (setq parent-resized t)
+            ;; Parent frame pixel size and character cell metrics are unchanged
+            ;; (e.g. a window split, minibuffer resize or theme mode-line
+            ;; tweak).  Only window-relative panels whose anchor window changed
+            ;; edges need repositioning.
+            (let* ((opts (etaf-posframe--panel-options panel))
+                   (placement (etaf-posframe--placement (plist-get opts :at))))
+              (when (etaf-posframe--placement-window-relative-p placement)
+                (let* ((pwin (etaf-posframe--anchor-window
+                              frame (etaf-posframe--panel-parent-window panel)))
+                       (edges (and (window-live-p pwin)
+                                   (window-inside-pixel-edges pwin))))
+                  (when (and edges
+                             (not (equal edges
+                                         (etaf-posframe--panel-parent-window-edges panel))))
+                    (push panel window-moved-panels))))))))))
+    (cond
+     (parent-resized
+      (if terminal
+          (let* ((live (reverse
+                        (cl-remove-if-not
+                         (lambda (p)
+                           (and (not (etaf-posframe--panel-modal-p p))
+                                (eq (etaf-posframe--panel-parent-frame p) frame)))
+                         (etaf-posframe-panels))))
+                 (fixed nil)
+                 (stacked nil)
+                 (obstacles nil))
+            (dolist (p live)
+              (let* ((opts (etaf-posframe--panel-options p))
+                     (placement (etaf-posframe--placement (plist-get opts :at))))
+                (if (etaf-posframe--placement-stacked-p placement opts)
+                    (push p stacked)
+                  (push p fixed))))
+            (dolist (p (nreverse fixed))
+              (etaf-posframe--terminal-refit p)
+              (when-let* ((rect (etaf-posframe--frame-rect
+                                 (etaf-posframe--panel-frame p))))
+                (push rect obstacles)))
+            (dolist (p (nreverse stacked))
+              (let ((etaf-posframe--stack-obstacles obstacles))
+                (etaf-posframe--terminal-refit p))
+              (when-let* ((rect (etaf-posframe--frame-rect
+                                 (etaf-posframe--panel-frame p))))
+                (push rect obstacles))))
+        (etaf-posframe--reposition-frame frame)
+        (dolist (p panels)
+          (when (and (not (etaf-posframe--panel-modal-p p))
+                     (eq (etaf-posframe--panel-parent-frame p) frame))
+            (etaf-posframe-refresh p)))))
+     (window-moved-panels
+      (dolist (p (nreverse window-moved-panels))
+        (etaf-posframe--reposition p))))
+    (dolist (m modal-panels)
+      (etaf-posframe-refresh m))))
 
 (defun etaf-posframe-panel-theme (panel)
   "Return PANEL's current Theme plist, or nil when it is not live."
@@ -2326,7 +3353,12 @@ panel on screen at the anchor it was opened with."
 
 (defun etaf-posframe-panels ()
   "Return the live panels, most recent first."
-  (cl-remove-if-not #'etaf-posframe-live-p etaf-posframe--panels))
+  ;; Always return a fresh list so callers may mutate or hide panels while
+  ;; walking it (`cl-remove-if-not' can return the original list when every
+  ;; element matches).
+  (cl-loop for panel in etaf-posframe--panels
+           when (etaf-posframe-live-p panel)
+           collect panel))
 
 ;;; Panel input
 
@@ -2340,9 +3372,11 @@ a text terminal cannot give a child frame the keyboard or the mouse."
 
 (defun etaf-posframe--pin-position (panel x y)
   "Make (X . Y) PANEL's anchor, so a later refresh keeps that place."
-  (setf (etaf-posframe--panel-options panel)
-        (plist-put (copy-sequence (etaf-posframe--panel-options panel))
-                   :at (cons 'pixels (cons x y)))))
+  (let ((options (copy-sequence (etaf-posframe--panel-options panel))))
+    (setq options (plist-put options :at (cons 'pixels (cons x y)))
+          options (plist-put options :stack nil))
+    (setf (etaf-posframe--panel-options panel) options
+          (etaf-posframe--panel-position panel) (cons x y))))
 
 (defun etaf-posframe--pin-size (panel width height)
   "Record WIDTH by HEIGHT as PANEL's size, so later refreshes keep it.
@@ -2385,7 +3419,8 @@ neither the keyboard nor the mouse."
                           (max 0 (- parent-width (frame-pixel-width frame))))))
            (y (max 0 (min (+ (or (cdr-safe position) 0) dy)
                           (max 0 (- parent-height (frame-pixel-height frame)))))))
-      (set-frame-position frame x y)
+      (let ((etaf-posframe--positioning t))
+        (set-frame-position frame x y))
       (etaf-posframe--pin-position panel x y)
       panel)))
 
@@ -2402,16 +3437,22 @@ through later refreshes."
          (frame (and panel (etaf-posframe-panel-frame panel))))
     (unless (frame-live-p frame)
       (signal 'etaf-posframe-error (list "No live ETAF panel to resize")))
-    (let* ((steps (or steps etaf-posframe-resize-step))
-           (dw (pcase axis ('wider steps) ('narrower (- steps)) (_ 0)))
-           (dh (pcase axis ('taller steps) ('shorter (- steps)) (_ 0)))
+    (let* ((permitted (etaf-posframe--resize-permitted panel))
+           (steps (or steps etaf-posframe-resize-step))
+           (dw (if (car permitted)
+                   (pcase axis ('wider steps) ('narrower (- steps)) (_ 0))
+                 0))
+           (dh (if (cdr permitted)
+                   (pcase axis ('taller steps) ('shorter (- steps)) (_ 0))
+                 0))
            (width (max 4 (+ (frame-width frame) dw)))
            (height (max 2 (+ (frame-height frame) dh))))
-      ;; Record the size first: the frame's own size change runs a refresh
-      ;; that would otherwise put the old width back.
-      (etaf-posframe--pin-size panel width height)
-      (set-frame-size frame width height)
-      (etaf-posframe-refresh panel)
+      (when (or (/= dw 0) (/= dh 0))
+        ;; Record the size first: the frame's own size change runs a refresh
+        ;; that would otherwise put the old width back.
+        (etaf-posframe--pin-size panel width height)
+        (set-frame-size frame width height)
+        (etaf-posframe-refresh panel))
       panel)))
 
 ;;;###autoload
@@ -2570,7 +3611,7 @@ has focus."
                        (t (or (etaf-posframe--panel-parent-frame
                                (nth current panels))
                               (selected-frame))))))
-    (when (frame-live-p target)
+    (when (etaf-posframe--frame-active-p target)
       (etaf-posframe--restore-input-focus target)
       (when-let* ((panel (etaf-posframe--panel-for-frame target))
                   (window (get-buffer-window (etaf-posframe--panel-buffer panel) t)))
@@ -2663,6 +3704,446 @@ and the next open resumes it.  Return the panel, or nil when it hid one."
       (etaf-posframe--app-stop id session))
     (puthash id nil etaf-posframe--app-panels)
     nil))
+
+;;; Modal child-frame host for `etaf-ui'
+
+(defun etaf-posframe--modal-owner-rect (parent-window top-frame)
+  "Return (X Y WIDTH HEIGHT) of PARENT-WINDOW in TOP-FRAME pixels.
+Works identically whether PARENT-WINDOW lives directly in TOP-FRAME or
+inside another floating child frame (such as an `etaf-posframe' app)."
+  (let ((owner-frame (and (window-live-p parent-window)
+                          (window-frame parent-window))))
+    (cond
+     ((and (frame-live-p owner-frame)
+           (eq owner-frame top-frame)
+           (window-live-p parent-window))
+      (let ((edges (window-inside-pixel-edges parent-window)))
+        (list (nth 0 edges)
+              (nth 1 edges)
+              (max 1 (- (nth 2 edges) (nth 0 edges)))
+              (max 1 (- (nth 3 edges) (nth 1 edges))))))
+     ((and (frame-live-p owner-frame)
+           (frame-parent owner-frame))
+      (let ((pos (frame-position owner-frame)))
+        (list (or (car-safe pos) 0)
+              (or (cdr-safe pos) 0)
+              (max 1 (frame-pixel-width owner-frame))
+              (max 1 (frame-pixel-height owner-frame)))))
+     ((frame-live-p top-frame)
+      (list 0 0
+            (max 1 (frame-pixel-width top-frame))
+            (max 1 (frame-pixel-height top-frame))))
+     (t (list 0 0 800 600)))))
+
+(defun etaf-posframe--modal-position (parent-window top-frame modal-w modal-h)
+  "Return (X . Y) centering MODAL-W by MODAL-H over PARENT-WINDOW in TOP-FRAME."
+  (let* ((rect (etaf-posframe--modal-owner-rect parent-window top-frame))
+         (ox (nth 0 rect))
+         (oy (nth 1 rect))
+         (ow (nth 2 rect))
+         (oh (nth 3 rect))
+         (fw (if (frame-live-p top-frame)
+                 (frame-pixel-width top-frame)
+               (+ ox ow)))
+         (fh (if (frame-live-p top-frame)
+                 (frame-pixel-height top-frame)
+               (+ oy oh)))
+         (cx (+ ox (floor (/ (- ow modal-w) 2))))
+         (cy (+ oy (floor (/ (- oh modal-h) 2))))
+         (x (max 0 (min cx (max 0 (- fw modal-w)))))
+         (y (max 0 (min cy (max 0 (- fh modal-h))))))
+    (cons x y)))
+
+(defun etaf-posframe--modal-geometry (req-width-px req-height-rows req-max-rows
+                                      parent-window top-frame)
+  "Compute (PIXEL-WIDTH COLUMNS ROW-BUDGET FILL-HEIGHT) for a modal frame."
+  (let* ((rect (etaf-posframe--modal-owner-rect parent-window top-frame))
+         (ow (nth 2 rect))
+         (oh (nth 3 rect))
+         (char-w (max 1 (frame-char-width top-frame)))
+         (char-h (max 1 (frame-char-height top-frame)))
+         (min-w (min ow (* 16 char-w)))
+         (max-w (max min-w (- ow (* 2 char-w))))
+         (pixel-width (max min-w (min (or req-width-px (* 48 char-w)) max-w)))
+         (columns (max 1 (round (/ pixel-width (float char-w)))))
+         (owner-rows (max 6 (floor (- oh (* 2 char-h)) (float char-h))))
+         (fill-height (and (integerp req-height-rows) (> req-height-rows 0) t))
+         (row-budget (if fill-height
+                         (max 6 (min req-height-rows owner-rows))
+                       (max 6 (min (or req-max-rows owner-rows) owner-rows)))))
+    (list pixel-width columns row-budget fill-height)))
+
+(defun etaf-posframe--recenter-modal (panel)
+  "Re-center modal PANEL over its owning window without flashing."
+  (when (and (etaf-posframe-live-p panel)
+             (etaf-posframe--panel-modal-p panel))
+    (let* ((frame (etaf-posframe--panel-frame panel))
+           (top-frame (etaf-posframe--panel-parent-frame panel))
+           (owner-win (or (let ((w (etaf-posframe--panel-modal-window panel)))
+                            (and (window-live-p w) w))
+                          (get-buffer-window (etaf-posframe--panel-parent panel) t))))
+      (when (and (frame-live-p frame) (frame-live-p top-frame))
+        (let* ((pos (etaf-posframe--modal-position
+                     owner-win top-frame
+                     (frame-pixel-width frame)
+                     (frame-pixel-height frame)))
+               (cur (frame-position frame)))
+          (unless (equal pos cur)
+            (let ((etaf-posframe--positioning t))
+              (set-frame-position frame (car pos) (cdr pos))))
+          (setf (etaf-posframe--panel-position panel) pos))))))
+
+(defun etaf-posframe--fit-modal (panel window)
+  "Recompute modal PANEL's clamped geometry, fit its content and re-center it."
+  (let* ((etaf-posframe--fitting t)
+         (options (etaf-posframe--panel-options panel))
+         (top-frame (etaf-posframe--panel-parent-frame panel))
+         (owner-win (or (let ((w (etaf-posframe--panel-modal-window panel)))
+                          (and (window-live-p w) w))
+                        (get-buffer-window (etaf-posframe--panel-parent panel) t)))
+         (dims-changed nil))
+    (when (and (frame-live-p top-frame) (window-live-p owner-win))
+      (cl-destructuring-bind (pixel-width columns row-budget fill-height)
+          (etaf-posframe--modal-geometry
+           (plist-get options :requested-width-px)
+           (plist-get options :requested-height-rows)
+           (plist-get options :requested-max-height-rows)
+           owner-win top-frame)
+        (unless (and (equal pixel-width (plist-get options :pixel-width))
+                     (equal row-budget (plist-get options :height))
+                     (equal fill-height (plist-get options :fill-height)))
+          (let ((updated (copy-sequence options)))
+            (setq updated (plist-put updated :pixel-width pixel-width))
+            (setq updated (plist-put updated :width columns))
+            (setq updated (plist-put updated :height row-budget))
+            (setq updated (plist-put updated :fill-height fill-height))
+            (setf (etaf-posframe--panel-options panel) updated)
+            (setq dims-changed t)))))
+    (if dims-changed
+        (etaf-posframe--fit-height panel window)
+      (etaf-posframe--resize-to-content panel window))
+    (etaf-posframe--recenter-modal panel)
+    (etaf-posframe--remember-size panel window)))
+
+(defun etaf-posframe--modal-help-noop ()
+  "Ignore repeated `etaf-help' inside an already-open help modal child frame."
+  (when-let* ((panel (etaf-posframe--current-panel)))
+    (etaf-posframe--panel-parent panel)))
+
+(defun etaf-posframe--modal-anchor-window (parent-buffer parent-window)
+  "Return the non-modal window for centering a modal from PARENT-BUFFER.
+When a modal (such as keyboard help) opens over another modal child frame,
+walking up to the underlying application window prevents cascading shrinkage
+while `restore-window' still returns focus to PARENT-WINDOW on dismissal."
+  (let ((buf parent-buffer)
+        (win parent-window)
+        (seen nil))
+    (while (and (buffer-live-p buf)
+                (not (memq buf seen))
+                (let ((p (buffer-local-value 'etaf-posframe--panel buf)))
+                  (and (etaf-posframe--panel-p p)
+                       (etaf-posframe--panel-modal-p p))))
+      (push buf seen)
+      (let* ((p (buffer-local-value 'etaf-posframe--panel buf))
+             (next-buf (etaf-posframe--panel-parent p))
+             (next-win (or (let ((w (etaf-posframe--panel-modal-window p)))
+                             (and (window-live-p w) w))
+                           (and (buffer-live-p next-buf)
+                                (get-buffer-window next-buf t)))))
+        (setq buf next-buf)
+        (when (window-live-p next-win)
+          (setq win next-win))))
+    win))
+
+(defun etaf-posframe--modal-root-buffer (panel)
+  "Return the non-modal owning application buffer for modal PANEL."
+  (let ((buf (etaf-posframe--panel-parent panel))
+        (seen nil))
+    (while (and (buffer-live-p buf)
+                (not (memq buf seen))
+                (let ((p (buffer-local-value 'etaf-posframe--panel buf)))
+                  (and (etaf-posframe--panel-p p)
+                       (etaf-posframe--panel-modal-p p))))
+      (push buf seen)
+      (setq buf (etaf-posframe--panel-parent
+                 (buffer-local-value 'etaf-posframe--panel buf))))
+    buf))
+
+(defun etaf-posframe--sync-modal-visibility (&optional _frame)
+  "Keep modal child frames visible only while their owning buffer is shown.
+Switching tabs or buffers away from the owning application hides its modal
+child frame; switching back re-centers and reveals it cleanly."
+  (unless (or etaf-posframe--fitting etaf-posframe--dismissing)
+    (dolist (panel (copy-sequence etaf-posframe--panels))
+      (when (and (etaf-posframe-live-p panel)
+                 (etaf-posframe--panel-modal-p panel)
+                 (etaf-posframe--panel-settled panel))
+        (let* ((frame (etaf-posframe--panel-frame panel))
+               (root-buf (etaf-posframe--modal-root-buffer panel))
+               (win (and (buffer-live-p root-buf)
+                         (get-buffer-window root-buf 'visible))))
+          (when (frame-live-p frame)
+            (if (window-live-p win)
+                (progn
+                  (setf (etaf-posframe--panel-modal-window panel) win)
+                  (unless (frame-visible-p frame)
+                    (etaf-posframe--recenter-modal panel)
+                    (make-frame-visible frame)))
+              (when (frame-visible-p frame)
+                (make-frame-invisible frame)))))))))
+
+(defun etaf-posframe--show-modal-frame (panel lines)
+  "Show modal PANEL's child frame in one pass without redundant refits.
+Reuses a parked graphical child frame when available, keeping the frame
+hidden while applying exact pixel dimensions and palette so it never
+flashes or triggers `delete-frame' churn."
+  (let* ((posframe-mouse-banish-function #'ignore)
+         (options (etaf-posframe--panel-options panel))
+         (budget (etaf-posframe--row-budget panel))
+         (lines (max 1 (if (plist-get options :fill-height)
+                           budget
+                         (min lines budget))))
+         (buffer (etaf-posframe--panel-buffer panel))
+         (parent-frame (etaf-posframe--panel-parent-frame panel))
+         (pooled (and (display-graphic-p)
+                      (etaf-posframe--acquire-pooled-frame parent-frame)))
+         (frame nil))
+    (if pooled
+        (setq frame (etaf-posframe--configure-pooled-frame pooled panel lines))
+      (let* ((args (etaf-posframe--frame-args panel lines))
+             (ov (copy-sequence (plist-get args :override-parameters))))
+        (when (display-graphic-p)
+          (setq ov (cons '(visibility . nil) (assq-delete-all 'visibility ov)))
+          (setq args (plist-put (copy-sequence args) :override-parameters ov)))
+        ;; Suppress `posframe--make-frame-visible' when present so the child frame
+        ;; stays invisible until pixel sizing, palette, centering and border finish.
+        (if (fboundp 'posframe--make-frame-visible)
+            (cl-letf (((symbol-function 'posframe--make-frame-visible) #'ignore))
+              (setq frame (apply #'posframe-show buffer args)))
+          (setq frame (apply #'posframe-show buffer args)))))
+    (let ((window (if (frame-live-p frame)
+                      (frame-root-window frame)
+                    (get-buffer-window buffer t))))
+      (unless (window-live-p window)
+        (signal 'etaf-posframe-error (list "Modal frame did not appear" buffer)))
+      (set-window-scroll-bars window 0 nil nil)
+      ;; `etaf-mount' already laid out the buffer at exact `:pixel-width' and
+      ;; `row-budget'; size pixels directly without extra `etaf-runtime-refit's.
+      (etaf-posframe--resize-to-content panel window)
+      (etaf-posframe--remember-size panel window)
+      (window-frame window))))
+
+(defun etaf-posframe--update-modal (panel spec)
+  "Update live modal PANEL from SPEC (palette, size and centered placement)."
+  (when (etaf-posframe-live-p panel)
+    (let* ((frame (etaf-posframe--panel-frame panel))
+           (theme-ref (etaf-posframe--panel-theme panel))
+           (palette (and (etaf-ref-p theme-ref) (etaf-value theme-ref)))
+           (options (etaf-posframe--panel-options panel))
+           (req-w (plist-get spec :width-px))
+           (req-h (plist-get spec :height-rows))
+           (req-max (plist-get spec :max-height-rows))
+           (panel-ref (plist-get spec :panel))
+           (runtime (etaf-posframe--panel-runtime panel)))
+      (when (and palette (frame-live-p frame))
+        (ignore-errors (etaf-posframe--set-frame-palette frame palette))
+        (ignore-errors (etaf-posframe--paint-border panel)))
+      (unless (and (equal req-w (plist-get options :requested-width-px))
+                   (equal req-h (plist-get options :requested-height-rows))
+                   (equal req-max (plist-get options :requested-max-height-rows)))
+        (let ((updated (copy-sequence options)))
+          (setq updated (plist-put updated :requested-width-px req-w))
+          (setq updated (plist-put updated :requested-height-rows req-h))
+          (setq updated (plist-put updated :requested-max-height-rows req-max))
+          (setf (etaf-posframe--panel-options panel) updated)))
+      (when (and runtime panel-ref (null (etaf-focused-host-ref runtime)))
+        (ignore-errors (etaf-focus-within runtime panel-ref)))
+      (etaf-posframe-refresh panel))))
+
+(defun etaf-posframe--open-modal (spec)
+  "Project a centered `etaf-ui' modal dialog SPEC into a real child frame.
+Installed automatically into `etaf-ui-modal-host-function' when `etaf-posframe'
+loads, so every `etaf-dialog' and `etaf-key-help' modal renders in a native
+child frame while keeping the uniformly dimmed animated backdrop in the parent
+buffer."
+  (let* ((parent-buffer (plist-get spec :parent-buffer))
+         (parent-window (plist-get spec :parent-window))
+         (panel-ref (plist-get spec :panel))
+         (key (plist-get spec :key))
+         (req-w (plist-get spec :width-px))
+         (req-h (plist-get spec :height-rows))
+         (req-max (plist-get spec :max-height-rows))
+         (help-p (plist-get spec :help-p))
+         (on-close (plist-get spec :on-close))
+         (theme-ref (plist-get spec :theme))
+         (appearance-ref (plist-get spec :appearance))
+         (view-fn (plist-get spec :view)))
+    (when (and (etaf-posframe--display-supported-p)
+               (buffer-live-p parent-buffer)
+               (window-live-p parent-window)
+               (functionp view-fn)
+               (not (and help-p
+                         (let ((pp (buffer-local-value 'etaf-posframe--panel
+                                                       parent-buffer)))
+                           (and (etaf-posframe--panel-p pp)
+                                (etaf-posframe--panel-help-p pp))))))
+      (let* ((owner-frame (window-frame parent-window))
+             (anchor-window (etaf-posframe--modal-anchor-window
+                             parent-buffer parent-window))
+             (top-frame (etaf-posframe--top-frame owner-frame))
+             (char-h (max 1 (frame-char-height top-frame)))
+             (buffer (generate-new-buffer
+                      (format " *ETAF Modal %d*"
+                              (cl-incf etaf-posframe--counter))))
+             (panel nil))
+        (cl-destructuring-bind (pixel-width columns row-budget fill-height)
+            (etaf-posframe--modal-geometry
+             req-w req-h req-max anchor-window top-frame)
+          (when-let* ((previous (etaf-posframe--panel-for-key key)))
+            (etaf-posframe-hide previous))
+          (etaf-posframe--prepare-buffer
+           buffer nil (and (etaf-ref-p theme-ref) (etaf-value theme-ref))
+           columns nil)
+          (unwind-protect
+              (progn
+                (etaf-mount buffer view-fn
+                            (list :viewport-width pixel-width
+                                  :viewport-height row-budget))
+                (let ((runtime (etaf-runtime-for-buffer buffer)))
+                  (unless runtime
+                    (signal 'etaf-posframe-error
+                            (list "Modal View did not mount")))
+                  ;; Focus the initial control BEFORE creating/selecting the new
+                  ;; child frame so Ebox flushes against the already-settled
+                  ;; parent window without forcing a 60-110ms full redisplay.
+                  (when panel-ref
+                    (ignore-errors (etaf-focus-within runtime panel-ref)))
+                  (with-current-buffer buffer
+                    (setq etaf-posframe--theme-ref theme-ref
+                          etaf-posframe--appearance-ref appearance-ref
+                          etaf-posframe--panel-keys-p nil)
+                    (when help-p
+                      ;; Repeated `?' inside an open help child frame reuses
+                      ;; the current help instead of stacking another frame.
+                      (let ((map (make-sparse-keymap)))
+                        (when (current-local-map)
+                          (set-keymap-parent map (current-local-map)))
+                        (define-key map [remap etaf-help]
+                                    (lambda ()
+                                      (interactive)
+                                      (etaf-posframe--modal-help-noop)))
+                        (use-local-map map))))
+                  (let* ((options
+                          (list :key key
+                                :at (lambda (info)
+                                      (etaf-posframe--modal-position
+                                       anchor-window top-frame
+                                       (or (plist-get info :posframe-width)
+                                           pixel-width)
+                                       (or (plist-get info :posframe-height)
+                                           (* row-budget char-h))))
+                                :width columns
+                                :pixel-width pixel-width
+                                :height row-budget
+                                :fill-height fill-height
+                                :requested-width-px req-w
+                                :requested-height-rows req-h
+                                :requested-max-height-rows req-max
+                                :focusable t
+                                :focus-on-open t
+                                :auto-hide nil
+                                :title nil
+                                :draggable nil
+                                :resizable nil
+                                :theme theme-ref))
+                         (portal-closing nil)
+                         (created
+                          (etaf-posframe--make-panel
+                           :buffer buffer
+                           :options options
+                           :parent parent-buffer
+                           :parent-frame top-frame
+                           :restore-frame owner-frame
+                           :restore-window parent-window
+                           :close-callback
+                           (when (functionp on-close)
+                             (lambda (_panel)
+                               (when (and (not portal-closing)
+                                          (buffer-live-p parent-buffer))
+                                 (etaf-next-tick
+                                  (lambda ()
+                                    (when (buffer-live-p parent-buffer)
+                                      (ignore-errors (funcall on-close))))))))
+                           :modal-p t
+                           :modal-window anchor-window
+                           :help-p (and help-p t)))
+                         (frame
+                          (let ((etaf-posframe--fitting t))
+                            (with-selected-frame top-frame
+                              (etaf-posframe--show-modal-frame
+                               created
+                               (max 1 (etaf-posframe--lines buffer)))))))
+                    (let ((etaf-posframe--dismissing t))
+                      (setf (etaf-posframe--panel-frame created) frame
+                            (etaf-posframe--panel-settled created) t)
+                      (setq panel created)
+                      (when (etaf-ref-p theme-ref)
+                        (etaf-posframe--set-frame-palette
+                         frame (etaf-value theme-ref)))
+                      (with-current-buffer buffer
+                        (setq etaf-posframe--panel created)
+                        (add-hook 'after-change-functions
+                                  (lambda (_beg _end _len)
+                                    (when (and (not etaf-posframe--fitting)
+                                               (etaf-posframe--panel-settled created)
+                                               (etaf-posframe-live-p created)
+                                               (not (plist-get
+                                                     (etaf-posframe--panel-options created)
+                                                     :fill-height))
+                                               (not (etaf-text-input-active-p
+                                                     (etaf-posframe--panel-runtime created))))
+                                      (etaf-posframe-refresh created)))
+                                  nil t))
+                      (with-current-buffer parent-buffer
+                        (add-hook 'kill-buffer-hook
+                                  #'etaf-posframe--parent-killed nil t))
+                      (push created etaf-posframe--panels)
+                      (etaf-posframe--recenter-modal created)
+                      (ignore-errors (etaf-posframe--paint-border created))
+                      ;; Flush the parent buffer's already-dimmed frame-0 backdrop
+                      ;; to the window system immediately before showing the child
+                      ;; frame so the modal never pops over an undimmed canvas.
+                      (when (display-graphic-p)
+                        (redisplay))
+                      (unless (frame-visible-p frame)
+                        (make-frame-visible frame))
+                      (select-frame-set-input-focus frame)
+                      (raise-frame frame)
+                      (when-let* ((win (frame-root-window frame)))
+                        (select-window win)
+                        (set-window-point win (point-min))
+                        (setf (etaf-posframe--panel-focused created) t))
+                      (etaf-posframe--refresh-hooks))
+                    (list :frame frame
+                          :runtime-fn (lambda ()
+                                        (and (buffer-live-p buffer)
+                                             (etaf-runtime-for-buffer buffer)))
+                          :update (lambda (new-spec)
+                                    (when (etaf-posframe-live-p created)
+                                      (etaf-posframe--update-modal created new-spec)))
+                          :close (lambda ()
+                                   (setq portal-closing t)
+                                   (when (etaf-posframe-live-p created)
+                                     (etaf-posframe-hide created)))))))
+            (unless panel
+              (etaf-posframe--release-buffer-frame buffer nil top-frame)
+              (when-let* ((runtime (etaf-runtime-for-buffer buffer)))
+                (ignore-errors (etaf-unmount runtime)))
+              (when (buffer-live-p buffer)
+                (ignore-errors (kill-buffer buffer))))))))))
+
+(unless etaf-ui-modal-host-function
+  (setq etaf-ui-modal-host-function #'etaf-posframe--open-modal))
 
 (provide 'etaf-posframe)
 ;;; etaf-posframe.el ends here

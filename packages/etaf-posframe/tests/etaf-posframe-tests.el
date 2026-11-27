@@ -384,7 +384,9 @@ frame, and a board scrambles until the fit catches up."
 
 (defun etaf-posframe-tests--panel-frame (parent)
   "Return the single child frame of PARENT that shows a panel."
-  (let ((frames (seq-filter (lambda (frame) (eq (frame-parent frame) parent))
+  (let ((frames (seq-filter (lambda (frame)
+                              (and (eq (frame-parent frame) parent)
+                                   (frame-visible-p frame)))
                             (frame-list))))
     (should (= 1 (length frames)))
     (car frames)))
@@ -587,8 +589,10 @@ slot made that print follow a cycle until Emacs ran out of memory."
           (should (etaf-posframe-live-p first))
           (should (etaf-posframe-live-p second))
           (should (= 2 (length (etaf-posframe-panels))))
-          (should (= 2 (length (seq-filter (lambda (frame) (frame-parent frame))
-                                          (frame-list)))))
+          (should (= 2 (length (seq-filter (lambda (frame)
+                                             (and (frame-parent frame)
+                                                  (frame-visible-p frame)))
+                                           (frame-list)))))
           (should (etaf-posframe-hide first))
           (should-not (etaf-posframe-live-p first))
           (should (etaf-posframe-live-p second))
@@ -1638,6 +1642,445 @@ The batch runner has no terminal, so these cases skip there and run under
             (should (= (+ (car start) 2) (car (frame-position frame))))
             (should (= (+ (cdr start) 1) (cdr (frame-position frame))))))
       (etaf-posframe-hide panel))))
+
+(ert-deftest etaf-posframe-registers-modal-host-function ()
+  "Loading `etaf-posframe' installs the child-frame modal host for `etaf-ui'."
+  (should (functionp etaf-ui-modal-host-function)))
+
+(ert-deftest etaf-posframe-hosts-dialog-and-key-help-in-child-frames ()
+  "Centered dialogs and key help open in real child frames over dimmed backdrops."
+  (skip-unless (display-graphic-p))
+  (let* ((etaf-ui-modal-use-child-frame t)
+         (origin (selected-frame))
+         (parent-buf (generate-new-buffer " *etaf-posframe-modal-parent*"))
+         (open (etaf-ref nil))
+         (step (etaf-ref 1)))
+    (unwind-protect
+        (progn
+          (switch-to-buffer parent-buf)
+          (let ((parent-win (selected-window)))
+            (etaf-mount
+             parent-buf
+             (etaf-view
+              (column :width '(ch 80) :height '(lh 24)
+                (box :color "#FFFFFF" "Underlay")
+                (etaf-button :ref 'opener :label "Open"
+                             :on-press (lambda () (setf (etaf-value open) t)))
+                (etaf-dialog :open open :title "Posframe Dialog" :width '(ch 44)
+                             :on-close (lambda () (setf (etaf-value open) nil))
+                  (etaf-label :text (format "Modal step %d" (etaf-value step)))))))
+            (let ((rt (etaf-runtime-for-buffer parent-buf)))
+              (etaf-focus rt 'opener)
+              (etaf-activate rt)
+              (etaf-posframe-test--settle 0.15)
+              ;; Dialog opens in a focused child frame; parent keeps only dimmed underlay.
+              (should (etaf-value open))
+              (should-not (eq (selected-frame) origin))
+              (should (eq (frame-parent (selected-frame)) origin))
+              (with-current-buffer parent-buf
+                (should (string-match-p "Underlay" (buffer-string)))
+                (should-not (string-match-p "Posframe Dialog" (buffer-string))))
+              (with-current-buffer (window-buffer (frame-root-window (selected-frame)))
+                (should (string-match-p "Posframe Dialog" (buffer-string)))
+                (should (string-match-p "Modal step 1" (buffer-string))))
+              ;; Reactive update repaints inside the child frame in place.
+              (setf (etaf-value step) 2)
+              (etaf-posframe-test--settle 0.1)
+              (let ((modal-frame (selected-frame)))
+                (with-current-buffer (window-buffer (frame-root-window modal-frame))
+                  (should (string-match-p "Modal step 2" (buffer-string))))
+                ;; Switching the owning window to another buffer hides the modal
+                ;; child frame; switching back reveals it cleanly.
+                (with-selected-frame origin
+                  (set-window-buffer parent-win (get-buffer-create "*scratch*")))
+                (etaf-posframe-test--settle 0.05)
+                (should-not (frame-visible-p modal-frame))
+                (with-selected-frame origin
+                  (set-window-buffer parent-win parent-buf))
+                (etaf-posframe-test--settle 0.05)
+                (should (frame-visible-p modal-frame))
+                (select-frame-set-input-focus modal-frame))
+              ;; Escape inside the modal child frame dismisses and returns focus.
+              (with-current-buffer (window-buffer (frame-root-window (selected-frame)))
+                (let ((cmd (key-binding (kbd "<escape>"))))
+                  (should (commandp cmd))
+                  (call-interactively cmd)))
+              (etaf-posframe-test--settle 0.1)
+              (should-not (etaf-value open))
+              (should (eq (selected-frame) origin))
+              (should (eq (selected-window) parent-win))
+              (should (eq 'opener (etaf-focused-host-ref rt)))
+              ;; Closing a modal child frame externally via `etaf-posframe-hide'
+              ;; also dismisses the parent dialog state so backdrop never sticks.
+              (etaf-focus rt 'opener)
+              (etaf-activate rt)
+              (etaf-posframe-test--settle 0.15)
+              (should (etaf-value open))
+              (with-current-buffer (window-buffer (frame-root-window (selected-frame)))
+                (etaf-posframe-hide))
+              (etaf-posframe-test--settle 0.1)
+              (should-not (etaf-value open))
+              ;; `?` key help also opens in a real child frame where `q` does not kill it,
+              ;; and repeated `?` presses never stack nested help frames.
+              (etaf-help rt)
+              (etaf-posframe-test--settle 0.15)
+              (let ((help-frame (selected-frame))
+                    (frames-before (length (frame-list))))
+                (should-not (eq help-frame origin))
+                (should (eq (frame-parent help-frame) origin))
+                (with-current-buffer (window-buffer (frame-root-window help-frame))
+                  (should (string-match-p "快捷键" (buffer-string)))
+                  ;; Both remapped `?` and direct `(etaf-help)` stay single-frame.
+                  (let* ((raw (key-binding (kbd "?")))
+                         (cmd (or (command-remapping raw) raw)))
+                    (should (commandp cmd))
+                    (call-interactively cmd)
+                    (call-interactively cmd))
+                  (etaf-help)
+                  (etaf-posframe-test--settle 0.1)
+                  (should (eq (selected-frame) help-frame))
+                  (should (= (length (frame-list)) frames-before))
+                  (let ((cmd (key-binding (kbd "<escape>"))))
+                    (should (commandp cmd))
+                    (call-interactively cmd)))
+                (etaf-posframe-test--settle 0.1)
+                (should (eq (selected-frame) origin))))))
+      (when-let* ((rt (etaf-runtime-for-buffer parent-buf)))
+        (ignore-errors (etaf-unmount rt)))
+      (when (buffer-live-p parent-buf)
+        (kill-buffer parent-buf)))))
+
+(ert-deftest etaf-posframe-reshape-scroll-lock-and-escape ()
+  "In-place reshape keeps one frame; scroll lock, escape and unfocus behave cleanly."
+  (let ((view (etaf-view (text "panel"))))
+    (should-error (etaf-posframe-show view :scrollable 'yes)
+                  :type 'etaf-posframe-error)
+    (should-error (etaf-posframe-show view :on-escape 123)
+                  :type 'etaf-posframe-error)
+    (should-error (etaf-posframe-show view :on-blur "bad")
+                  :type 'etaf-posframe-error))
+  (skip-unless (display-graphic-p))
+  (let* ((origin (selected-frame))
+         (escaped nil)
+         (view (etaf-view (column :width 'stretch
+                            (text "Row 1")
+                            (text "Row 2"))))
+         (panel (etaf-posframe-show
+                 view
+                 :key 'reshape-test
+                 :at '(frame-top-center 1 0)
+                 :width 24 :height 4
+                 :resizable nil
+                 :scrollable nil
+                 :focusable t
+                 :focus-on-open nil
+                 :on-escape (lambda (_p) (setq escaped t)))))
+    (unwind-protect
+        (let ((orig-frame (etaf-posframe-panel-frame panel)))
+          (etaf-posframe-test--settle 0.1)
+          (should (eq (selected-frame) origin))
+          (etaf-posframe-reshape panel :width 48 :height 8 :focus-on-open t)
+          (etaf-posframe-test--settle 0.1)
+          (should (eq (etaf-posframe-panel-frame panel) orig-frame))
+          (should (eq (selected-frame) orig-frame))
+          ;; Escape invokes `:on-escape' without hiding the panel.
+          (with-current-buffer (window-buffer (frame-root-window orig-frame))
+            (call-interactively (key-binding (kbd "<escape>"))))
+          (should escaped)
+          (should (etaf-posframe-live-p panel))
+          ;; Unfocus returns keyboard focus cleanly without hiding.
+          (should (etaf-posframe-unfocus panel))
+          (should (eq (selected-frame) origin))
+          (should (etaf-posframe-live-p panel)))
+      (etaf-posframe-hide panel))))
+
+(defun etaf-posframe-test--flush (seconds)
+  "Force redisplay and drive timers for SECONDS regardless of pending input."
+  (redisplay t)
+  (sleep-for seconds)
+  (redisplay t))
+
+(ert-deftest etaf-posframe-stacked-panel-stays-put-across-theme-switches ()
+  "A stacked panel keeps its exact position across theme switches, splits and refreshes.
+Stacking used to include the panel itself as an obstacle and `resize-to-content'
+compared text size against outer frame pixels, so theme switches and refreshes
+leapfrogged a top-right stacked panel down below itself and back."
+  (skip-unless (display-graphic-p))
+  (let* ((origin (etaf-posframe-tests--top-frame))
+         (enabled (copy-sequence custom-enabled-themes))
+         (panel (etaf-posframe-show
+                 (etaf-view (column (text "Track") (text "Lyric")))
+                 :key 'stack-theme-stable :title "Player"
+                 :width 36 :height 14 :fill-height t
+                 :at 'frame-top-right :stack t :draggable t :focusable t))
+         (frame (etaf-posframe-panel-frame panel)))
+    (unwind-protect
+        (progn
+          (etaf-posframe-test--flush 0.25)
+          (let ((settled-pos (frame-position frame))
+                (settled-height (frame-pixel-height frame)))
+            (dolist (theme '(modus-vivendi modus-operandi modus-vivendi))
+              (mapc #'disable-theme custom-enabled-themes)
+              (load-theme theme t)
+              (etaf-posframe-test--flush 0.25)
+              (should (equal settled-pos (frame-position frame)))
+              (should (= settled-height (frame-pixel-height frame))))
+            ;; Explicit refreshes and window splits on the parent frame must
+            ;; not bounce or leapfrog the stacked panel either.
+            (dotimes (_ 3)
+              (etaf-posframe-refresh panel)
+              (etaf-posframe-test--flush 0.15)
+              (should (equal settled-pos (frame-position frame))))
+            (with-selected-frame origin
+              (let ((split (split-window-below)))
+                (unwind-protect
+                    (progn
+                      (etaf-posframe-test--flush 0.2)
+                      (should (equal settled-pos (frame-position frame))))
+                  (when (window-live-p split)
+                    (delete-window split)))))
+            (etaf-posframe-test--flush 0.2)
+            (should (equal settled-pos (frame-position frame)))))
+      (ignore-errors (etaf-posframe-hide panel))
+      (ignore-errors (select-frame origin))
+      (mapc #'disable-theme custom-enabled-themes)
+      (dolist (theme enabled)
+        (ignore-errors (load-theme theme t))))))
+
+(ert-deftest etaf-posframe-stacked-panels-keep-order-on-parent-resize-and-refit ()
+  "Stacked panels preserve oldest-first order on parent resize and earlier height growth."
+  (skip-unless (display-graphic-p))
+  (let* ((parent (etaf-posframe-tests--top-frame))
+         (orig-w (frame-text-width parent))
+         (orig-h (frame-text-height parent))
+         (first (etaf-posframe-show (etaf-view (column (text "one") (text "two")))
+                                    :key 'stack-order-a :title "First"
+                                    :at 'frame-top-right :stack t
+                                    :width 24 :height 4 :fill-height t))
+         (second (etaf-posframe-show (etaf-view (column (text "three") (text "four")))
+                                     :key 'stack-order-b :title "Second"
+                                     :at 'frame-top-right :stack t
+                                     :width 24 :height 4 :fill-height t)))
+    (unwind-protect
+        (let ((f1 (etaf-posframe-panel-frame first))
+              (f2 (etaf-posframe-panel-frame second)))
+          (etaf-posframe-test--flush 0.25)
+          (should (< (cdr (frame-position f1)) (cdr (frame-position f2))))
+          ;; Resize the parent frame narrower then back to original width;
+          ;; both panels track the right edge in their original top-to-bottom order.
+          (let ((narrow-w (max 500 (- orig-w 160))))
+            (set-frame-size parent narrow-w orig-h t)
+            (etaf-posframe-test--flush 0.25)
+            (should (= (car (frame-position f1)) (car (frame-position f2))))
+            (should (< (cdr (frame-position f1)) (cdr (frame-position f2))))
+            (should (>= (cdr (frame-position f2))
+                        (+ (cdr (frame-position f1)) (frame-pixel-height f1)))))
+          (set-frame-size parent orig-w orig-h t)
+          (etaf-posframe-test--flush 0.25)
+          (should (= (car (frame-position f1)) (car (frame-position f2))))
+          (should (< (cdr (frame-position f1)) (cdr (frame-position f2))))
+          (should (>= (cdr (frame-position f2))
+                      (+ (cdr (frame-position f1)) (frame-pixel-height f1))))
+          ;; Growing the first panel keeps it on top and shifts the second
+          ;; downward cleanly instead of flipping their order or overlapping.
+          (etaf-posframe-reshape first :height 9 :fill-height t)
+          (etaf-posframe-test--flush 0.25)
+          (should (< (cdr (frame-position f1)) (cdr (frame-position f2))))
+          (should (>= (cdr (frame-position f2))
+                      (+ (cdr (frame-position f1)) (frame-pixel-height f1)))))
+      (ignore-errors (etaf-posframe-hide second))
+      (ignore-errors (etaf-posframe-hide first))
+      (set-frame-size parent orig-w orig-h t)
+      (etaf-posframe-test--flush 0.2))))
+
+(ert-deftest etaf-posframe-draggable-panel-keeps-moved-position-across-refresh-and-theme ()
+  "A draggable panel moved via native frame positioning stays pinned across refreshes and themes."
+  (skip-unless (display-graphic-p))
+  (let* ((origin (etaf-posframe-tests--top-frame))
+         (enabled (copy-sequence custom-enabled-themes))
+         (panel (etaf-posframe-show (etaf-view (text "dragged"))
+                                    :key 'drag-pin :title "Draggable"
+                                    :width 24 :height 4 :fill-height t
+                                    :at 'frame-top-right :stack t :draggable t))
+         (frame (etaf-posframe-panel-frame panel)))
+    (unwind-protect
+        (progn
+          (etaf-posframe-test--flush 0.25)
+          (let ((target '(120 . 140)))
+            (set-frame-position frame (car target) (cdr target))
+            (run-hooks 'post-command-hook)
+            (etaf-posframe-refresh panel)
+            (etaf-posframe-test--flush 0.2)
+            (should (equal target (frame-position frame)))
+            (mapc #'disable-theme custom-enabled-themes)
+            (load-theme 'modus-vivendi t)
+            (etaf-posframe-test--flush 0.25)
+            (should (equal target (frame-position frame)))))
+      (ignore-errors (etaf-posframe-hide panel))
+      (ignore-errors (select-frame origin))
+      (mapc #'disable-theme custom-enabled-themes)
+      (dolist (theme enabled)
+        (ignore-errors (load-theme theme t))))))
+
+(ert-deftest etaf-posframe-window-anchor-tracks-its-window-on-split ()
+  "A window-anchored panel follows its owning window's edges when split."
+  (skip-unless (display-graphic-p))
+  (let* ((parent (etaf-posframe-tests--top-frame))
+         (owner-win (with-selected-frame parent (selected-window)))
+         (panel (with-selected-frame parent
+                  (etaf-posframe-show (etaf-view (text "win-anchor"))
+                                      :key 'win-anchor :width 20 :height 3
+                                      :at 'window-top-right)))
+         (frame (etaf-posframe-panel-frame panel))
+         (split nil))
+    (unwind-protect
+        (progn
+          (etaf-posframe-test--flush 0.2)
+          (let ((x-before (car (frame-position frame))))
+            (with-selected-frame parent
+              (select-window owner-win)
+              (setq split (split-window-right))
+              ;; Select the new right-hand window to ensure the panel still
+              ;; tracks OWNER-WIN rather than jumping to the selected window.
+              (select-window split))
+            (etaf-posframe-test--flush 0.25)
+            (let* ((edges (window-inside-pixel-edges owner-win))
+                   (x-after (car (frame-position frame))))
+              (should (< x-after x-before))
+              (should (<= (+ x-after (frame-pixel-width frame)) (nth 2 edges))))))
+      (ignore-errors (etaf-posframe-hide panel))
+      (when (window-live-p split)
+        (delete-window split)))))
+
+(ert-deftest etaf-posframe-anchor-offset-stack-clears-previous-panel ()
+  "Stacked panels with an anchor offset stack against the offset position."
+  (skip-unless (display-graphic-p))
+  (let* ((first (etaf-posframe-show (etaf-view (text "first"))
+                                    :key 'offset-stack-a
+                                    :at '(frame-top-right 2 0) :stack t
+                                    :width 20 :height 2 :fill-height t))
+         (second (etaf-posframe-show (etaf-view (text "second"))
+                                     :key 'offset-stack-b
+                                     :at '(frame-top-right 2 0) :stack t
+                                     :width 20 :height 2 :fill-height t)))
+    (unwind-protect
+        (let ((f1 (etaf-posframe-panel-frame first))
+              (f2 (etaf-posframe-panel-frame second)))
+          (etaf-posframe-test--flush 0.2)
+          (should (= (car (frame-position f1)) (car (frame-position f2))))
+          (should (>= (cdr (frame-position f2))
+                      (+ (cdr (frame-position f1)) (frame-pixel-height f1)))))
+      (ignore-errors (etaf-posframe-hide second))
+      (ignore-errors (etaf-posframe-hide first)))))
+
+(ert-deftest etaf-posframe-recycles-graphical-child-frames-across-rapid-toggles ()
+  "Rapid panel and modal open/close storms recycle graphical child frames without leaking or losing focus."
+  (skip-unless (display-graphic-p))
+  (let* ((origin (etaf-posframe-tests--top-frame))
+         (first-frame nil)
+         (reused-count 0))
+    (unwind-protect
+        (progn
+          ;; 25 rapid focusable panel open/hide cycles reuse the same graphical
+          ;; child frame instead of deleting and recreating it every time.
+          (dotimes (i 25)
+            (let* ((panel (etaf-posframe-show
+                           (etaf-view (text (expr (format "cycle-%d" i))))
+                           :key 'recycle-panel :width 24 :height 3 :focusable t))
+                   (frame (etaf-posframe-panel-frame panel)))
+              (should (etaf-posframe-live-p panel))
+              (should (frame-live-p frame))
+              (should (frame-visible-p frame))
+              (if first-frame
+                  (when (eq frame first-frame)
+                    (setq reused-count (1+ reused-count)))
+                (setq first-frame frame))
+              (should (etaf-posframe-hide panel))
+              (should-not (etaf-posframe-live-p panel))
+              (should-not (etaf-posframe-panel-frame panel))
+              (should-not (etaf-posframe-hide panel))
+              (should (frame-live-p frame))
+              (should-not (frame-visible-p frame))
+              (should (eq (selected-frame) origin))))
+          (should (= reused-count 24))
+          (should-not (etaf-posframe-panels))
+          ;; 25 rapid centered `etaf-dialog' open/close cycles also reuse the
+          ;; parked graphical child frame and restore focus cleanly every time.
+          (let* ((etaf-ui-modal-use-child-frame t)
+                 (parent-buf (generate-new-buffer " *etaf-posframe-rapid-modal*"))
+                 (open (etaf-ref nil))
+                 (frames-before (length (frame-list))))
+            (unwind-protect
+                (progn
+                  (with-selected-frame origin
+                    (switch-to-buffer parent-buf)
+                    (etaf-mount
+                     parent-buf
+                     (etaf-view
+                      (column :width '(ch 80) :height '(lh 24)
+                        (box "Base")
+                        (etaf-dialog :open open :title "Rapid Modal" :width '(ch 44)
+                                     :on-close (lambda () (setf (etaf-value open) nil))
+                          (etaf-label :text "Press g repeatedly"))))))
+                  (dotimes (_ 25)
+                    (setf (etaf-value open) t)
+                    (should (etaf-value open))
+                    (let ((mf (selected-frame)))
+                      (should-not (eq mf origin))
+                      (should (eq (frame-parent mf) origin))
+                      (should (frame-visible-p mf)))
+                    (setf (etaf-value open) nil)
+                    (should-not (etaf-value open))
+                    (should (eq (selected-frame) origin))
+                    (should-not (etaf-posframe-panels)))
+                  (should (<= (length (frame-list)) frames-before)))
+              (when-let* ((rt (etaf-runtime-for-buffer parent-buf)))
+                (ignore-errors (etaf-unmount rt)))
+              (when (buffer-live-p parent-buf)
+                (kill-buffer parent-buf)))))
+      (mapc #'etaf-posframe-hide (etaf-posframe-panels))
+      (ignore-errors (select-frame-set-input-focus origin)))))
+
+(ert-deftest etaf-posframe-nested-modal-teardown-restores-active-frame ()
+  "Closing an outer modal while a nested help modal is open unwinds both to the active parent frame."
+  (skip-unless (display-graphic-p))
+  (let* ((etaf-ui-modal-use-child-frame t)
+         (origin (etaf-posframe-tests--top-frame))
+         (parent-buf (generate-new-buffer " *etaf-posframe-nested-modal*"))
+         (open (etaf-ref nil)))
+    (unwind-protect
+        (progn
+          (with-selected-frame origin
+            (switch-to-buffer parent-buf)
+            (etaf-mount
+             parent-buf
+             (etaf-view
+              (column :width '(ch 80) :height '(lh 24)
+                (box "Host")
+                (etaf-dialog :open open :title "Outer Dialog" :width '(ch 44)
+                             :on-close (lambda () (setf (etaf-value open) nil))
+                  (etaf-label :text "Outer body"))))))
+          (setf (etaf-value open) t)
+          (etaf-posframe-test--settle 0.1)
+          (let ((outer-frame (selected-frame)))
+            (should-not (eq outer-frame origin))
+            (with-current-buffer (window-buffer (frame-root-window outer-frame))
+              (etaf-help))
+            (etaf-posframe-test--settle 0.1)
+            (should (>= (length (etaf-posframe-panels)) 2))
+            ;; Dismissing the outer modal tears down the nested help modal too
+            ;; and restores focus to ORIGIN rather than a parked child frame.
+            (setf (etaf-value open) nil)
+            (etaf-posframe-test--settle 0.1)
+            (should-not (etaf-posframe-panels))
+            (should (eq (selected-frame) origin))
+            (should (frame-visible-p origin))))
+      (mapc #'etaf-posframe-hide (etaf-posframe-panels))
+      (when-let* ((rt (etaf-runtime-for-buffer parent-buf)))
+        (ignore-errors (etaf-unmount rt)))
+      (when (buffer-live-p parent-buf)
+        (kill-buffer parent-buf))
+      (ignore-errors (select-frame-set-input-focus origin)))))
 
 (provide 'etaf-posframe-tests)
 ;;; etaf-posframe-tests.el ends here

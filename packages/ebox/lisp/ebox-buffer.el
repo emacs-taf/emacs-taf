@@ -28,7 +28,8 @@
   queued observer (flushes 0) report last-report anchored
   focus active hover hover-saved hover-p session display-saved
   focus-anchor (focus-memory (make-hash-table :test #'eq :weakness 'key))
-  (written (make-hash-table)) tick canvas canvas-cookie)
+  (written (make-hash-table)) tick canvas canvas-cookie
+  fringe-canvas fringe-cookie canvas-dimmed last-line-overlay)
 
 (defvar ebox--current-mount nil
   "The mount being flushed, which supplies interaction-derived states.")
@@ -78,29 +79,158 @@ canvas owns them as well.")
         (set (make-local-variable variable) value)
       (kill-local-variable variable))))
 
+(defun ebox--root-surface-bg (root)
+  "Return the effective surface background of ROOT.
+Descends through single-child full-size unstyled wrapper nodes (such as
+root portal/help shells) so their child application's background is not
+lost."
+  (let ((node root) (bg nil))
+    (while (and node (not bg))
+      (let ((candidate (and (ebox-node-cs node)
+                            (ebox-cs-bg (ebox-node-cs node)))))
+        (if (stringp candidate)
+            (setq bg candidate)
+          (let ((kids (cl-remove-if #'ebox--abs-p (ebox-node-children node))))
+            (if (and (= (length kids) 1)
+                     (eql (ebox-node-w (car kids)) (ebox-node-w node))
+                     (eql (ebox-node-h (car kids)) (ebox-node-h node)))
+                (setq node (car kids))
+              (setq node nil))))))
+    bg))
+
+(defun ebox--root-backdrop-brightness (root)
+  "Return the combined brightness factor of full-canvas overlays on ROOT.
+Checks ROOT and full-size single-child wrapper nodes (such as portal/help
+shells and full-viewport application shells).  Returns 1.0 when no live
+non-hidden overlay covers the canvas with a `:backdrop-filter' brightness
+different from 1."
+  (let* ((geo (and root (ebox-node-layout root)))
+         (bw (and geo (ebox-geo-bw geo)))
+         (bh (and geo (ebox-geo-bh geo)))
+         (rw (and root (ebox-node-w root)))
+         (rh (and root (ebox-node-h root)))
+         (node root)
+         (factor 1.0))
+    (when (and bw bh (> bw 0) (> bh 0))
+      (while node
+        (let* ((ngeo (ebox-node-layout node))
+               (nbw (or (and ngeo (ebox-geo-bw ngeo)) bw))
+               (nbh (or (and ngeo (ebox-geo-bh ngeo)) bh)))
+          (dolist (ov (ebox--live-overlays node))
+            (when (and (ebox-node-placed ov)
+                       (not (ebox--hidden-p ov))
+                       (<= (ebox-node-x ov) 0)
+                       (<= (ebox-node-y ov) 0)
+                       (>= (+ (ebox-node-x ov) (ebox-node-w ov)) nbw)
+                       (>= (+ (ebox-node-y ov) (ebox-node-h ov)) nbh))
+              (when-let* ((filter (and (ebox-node-cs ov)
+                                       (ebox--cv (ebox-node-cs ov)
+                                                 'ebox/backdrop-filter)))
+                          (b (cadr filter))
+                          ((and (numberp b) (/= b 1))))
+                (setq factor (* factor b))))))
+        (let ((kids (cl-remove-if #'ebox--abs-p (ebox-node-children node))))
+          (if (and (= (length kids) 1)
+                   (eql (ebox-node-w (car kids)) rw)
+                   (eql (ebox-node-h (car kids)) rh))
+              (setq node (car kids))
+            (setq node nil)))))
+    factor))
+
+(defun ebox--last-line-dominant-bg ()
+  "Return the widest `:background' color on the buffer's last line, or nil."
+  (save-excursion
+    (goto-char (point-max))
+    (let ((bol (line-beginning-position))
+          (eol (point-max))
+          (totals nil))
+      (when (> eol bol)
+        (let ((pos bol))
+          (while (< pos eol)
+            (let* ((next (or (next-single-property-change pos 'face nil eol) eol))
+                   (bg (ebox--face-attribute (get-text-property pos 'face) :background)))
+              (when (stringp bg)
+                (let* ((w (ebox--part-width (buffer-substring pos next)))
+                       (cell (assoc bg totals)))
+                  (if cell
+                      (setcdr cell (+ (cdr cell) w))
+                    (push (cons bg w) totals))))
+              (setq pos next))))
+        (let ((best nil) (best-w -1))
+          (dolist (entry totals best)
+            (when (> (cdr entry) best-w)
+              (setq best (car entry) best-w (cdr entry)))))))))
+
+(defun ebox--canvas-background (mount)
+  "Return (BG . DIMMED) for MOUNT's buffer canvas background.
+For full-viewport trees, Emacs exposes at most a sub-line pixel sliver
+below the final row, so matching the final row's composited dominant
+surface keeps bottom bars, split panes and dimmed modal backdrops seamless.
+For shorter trees, empty rows below the tree belong to the root surface
+itself (dimmed when a full-canvas `:backdrop-filter' overlay is active)."
+  (let* ((root (ebox-mount-root mount))
+         (vh (ebox-mount-vh mount))
+         (full-p (and (integerp vh) (> vh 0) (>= (ebox-node-h root) vh)))
+         (factor (ebox--root-backdrop-brightness root))
+         (dimmed (/= factor 1.0))
+         (root-bg (ebox--root-surface-bg root))
+         (dimmed-root (and root-bg
+                           (if dimmed
+                               (or (ebox--backdrop-filter-color root-bg factor) root-bg)
+                             root-bg)))
+         (dimmed-default
+          (and dimmed
+               (when-let* ((base (ebox--backdrop-filter-default :background)))
+                 (ebox--backdrop-filter-color base factor))))
+         (bg (if full-p
+                 (or (ebox--last-line-dominant-bg) dimmed-root dimmed-default)
+               (or dimmed-root dimmed-default))))
+    (cons (and (stringp bg) bg) dimmed)))
+
 (defun ebox--sync-canvas (mount)
-  "Paint MOUNT's buffer background with its root's background color.
-Window areas beyond the laid-out text, such as the partial line below the
-last row, show the buffer's default face; remapping its background to the
-root's color keeps them the same as the application surface."
-  (let ((bg (ebox-cs-bg (ebox-node-cs (ebox-mount-root mount)))))
-    (unless (stringp bg) (setq bg nil))
-    (unless (equal bg (ebox-mount-canvas mount))
+  "Paint MOUNT's buffer and fringe background to match its composited canvas.
+Window areas beyond the laid-out text, such as the sub-line pixel remainder
+below the last row and any exposed window fringes, show the buffer's default
+and fringe faces; keeping them aligned with the composited canvas prevents
+bright or un-dimmed edge strips around applications and modal backdrops."
+  (pcase-let* ((`(,bg . ,dimmed) (ebox--canvas-background mount))
+               (default-changed (not (and (equal bg (ebox-mount-canvas mount))
+                                          (eq dimmed (ebox-mount-canvas-dimmed mount))))))
+    (when default-changed
       (when-let* ((cookie (ebox-mount-canvas-cookie mount)))
         (face-remap-remove-relative cookie))
-      (setf (ebox-mount-canvas mount) bg
-            (ebox-mount-canvas-cookie mount)
-            (and bg (face-remap-add-relative 'default :background bg)))
+      (let ((cookie (and bg (face-remap-add-relative 'default :background bg))))
+        (setq ebox--canvas-remap-entry (and cookie (cdr cookie)))
+        (setf (ebox-mount-canvas mount) bg
+              (ebox-mount-canvas-dimmed mount) dimmed
+              (ebox-mount-canvas-cookie mount) cookie)))
+    (let ((fringe-bg (and dimmed bg)))
+      (unless (equal fringe-bg (ebox-mount-fringe-canvas mount))
+        (when-let* ((fcookie (ebox-mount-fringe-cookie mount)))
+          (face-remap-remove-relative fcookie))
+        (setf (ebox-mount-fringe-canvas mount) fringe-bg
+              (ebox-mount-fringe-cookie mount)
+              (and fringe-bg (face-remap-add-relative 'fringe :background fringe-bg)))))
+    (when default-changed
       ;; Record Ebox's paint-only remap at its mutation boundary, not on the
       ;; next unrelated measurement or input event.
       (ebox--compute-metric-key))))
 
 (defun ebox--release-canvas (mount)
-  "Remove the background remapping of MOUNT's buffer."
+  "Remove the background remappings and last-line extension of MOUNT's buffer."
   (when-let* ((cookie (ebox-mount-canvas-cookie mount)))
     (face-remap-remove-relative cookie))
+  (when-let* ((fcookie (ebox-mount-fringe-cookie mount)))
+    (face-remap-remove-relative fcookie))
+  (when-let* ((ov (ebox-mount-last-line-overlay mount)))
+    (when (overlayp ov) (delete-overlay ov)))
+  (setq ebox--canvas-remap-entry nil)
   (setf (ebox-mount-canvas mount) nil
-        (ebox-mount-canvas-cookie mount) nil))
+        (ebox-mount-canvas-dimmed mount) nil
+        (ebox-mount-canvas-cookie mount) nil
+        (ebox-mount-fringe-canvas mount) nil
+        (ebox-mount-fringe-cookie mount) nil
+        (ebox-mount-last-line-overlay mount) nil))
 
 (defconst ebox--anchor-span 128
   "Target number of lines between two line anchors.")
@@ -917,6 +1047,43 @@ mounted buffer does."
       (cl-incf position)))
   string)
 
+(defun ebox--line-end-face (bol eol)
+  "Return the `:extend' face plist matching the last cell of BOL..EOL, or nil."
+  (let ((tail (and (> eol bol) (get-text-property (1- eol) 'face)))
+        (face nil))
+    (dolist (key '(:overline :underline :background))
+      (when-let* ((value (ebox--face-attribute tail key)))
+        (setq face (cl-list* key value face))))
+    (when face (cl-list* :extend t face))))
+
+(defun ebox--sync-last-line-end (mount)
+  "Extend MOUNT's final line to the window's right edge with a virtual newline.
+Lines 0 .. HEIGHT-2 carry `:extend t' on their trailing newline character,
+but the final line ends at `point-max' without a newline; without one,
+Emacs leaves the reserved right-edge column (and any width past the line's
+last glyph) painted in the buffer's default face."
+  (let* ((ov (ebox-mount-last-line-overlay mount))
+         (eol (point-max))
+         (bol (save-excursion (goto-char eol) (line-beginning-position)))
+         (face (and (> (ebox-mount-lines mount) 0)
+                    (ebox--line-end-face bol eol))))
+    (if face
+        (progn
+          (unless (and (overlayp ov) (eq (overlay-buffer ov) (current-buffer)))
+            (when (overlayp ov) (delete-overlay ov))
+            (setq ov (make-overlay eol eol nil t nil))
+            (overlay-put ov 'ebox-last-line-end t)
+            (setf (ebox-mount-last-line-overlay mount) ov))
+          (unless (and (= (overlay-start ov) eol) (= (overlay-end ov) eol))
+            (move-overlay ov eol eol))
+          (let ((cur (overlay-get ov 'after-string)))
+            (unless (and (stringp cur)
+                         (equal face (get-text-property 0 'face cur)))
+              (overlay-put ov 'after-string (propertize "\n" 'face face)))))
+      (when (overlayp ov)
+        (delete-overlay ov)
+        (setf (ebox-mount-last-line-overlay mount) nil)))))
+
 (defun ebox--extend-line-ends (mount from count)
   "Carry COUNT lines of MOUNT from FROM to the window's right edge.
 Emacs keeps the last text column free for the truncation glyph when a
@@ -925,26 +1092,26 @@ rest of the screen row to the default face.  Giving each newline the
 background and border lines of its line's last cell with `:extend' paints
 that remainder like the box that reaches the line's right edge.  The same
 newline carries the cell's `mouse-face', so native hover feedback covers
-every row an interactive element spans."
-  (let ((last (min (+ from count) (1- (ebox-mount-lines mount)))))
+every row an interactive element spans.  The final line has no buffer
+newline, so `ebox--sync-last-line-end' supplies a virtual extending
+newline overlay at `point-max'."
+  (let* ((total (ebox-mount-lines mount))
+         (last (min (+ from count) (1- total))))
     (when (and (>= from 0) (< from last))
       (ebox--goto-line mount from)
       (let ((line from))
         (while (< line last)
           (let* ((bol (point))
                  (eol (line-end-position))
-                 (tail (and (> eol bol) (get-text-property (1- eol) 'face)))
                  (hover (and (> eol bol) (get-text-property (1- eol) 'mouse-face)))
-                 (face nil))
-            (dolist (key '(:overline :underline :background))
-              (when-let* ((value (ebox--face-attribute tail key)))
-                (setq face (cl-list* key value face))))
-            (when face (setq face (cl-list* :extend t face)))
+                 (face (ebox--line-end-face bol eol)))
             (unless (equal face (get-text-property eol 'face))
               (put-text-property eol (1+ eol) 'face face))
             (ebox--carry-mouse-face eol hover (get-text-property (1+ eol) 'mouse-face))
             (goto-char (1+ eol))
-            (setq line (1+ line))))))))
+            (setq line (1+ line))))))
+    (when (or (zerop total) (>= (+ from count) total))
+      (ebox--sync-last-line-end mount))))
 
 (defun ebox--paint-all (mount)
   "Rewrite MOUNT's whole buffer from its root."
@@ -989,7 +1156,12 @@ every row an interactive element spans."
             (ebox--replace-lines mount start (nth 1 edit) lines)
             ;; The newline before START may be new, and each rewritten
             ;; line may now end over another background.
-            (ebox--extend-line-ends mount (max 0 (1- start)) (1+ new))))))
+            (ebox--extend-line-ends mount (max 0 (1- start)) (1+ new))))
+        (when-let* ((ov (ebox-mount-last-line-overlay mount)))
+          (when (and (overlayp ov) (eq (overlay-buffer ov) (current-buffer)))
+            (let ((eol (point-max)))
+              (unless (and (= (overlay-start ov) eol) (= (overlay-end ov) eol))
+                (move-overlay ov eol eol)))))))
     (setf (ebox-mount-tick mount) (buffer-modified-tick))
     (ebox--restore-positions mount tracked edits)))
 

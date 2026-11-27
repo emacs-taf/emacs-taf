@@ -640,5 +640,148 @@ props, so the catalog resolves it before the mouse face reaches Ebox."
         (when-let* ((runtime (etaf-runtime-for-buffer (current-buffer))))
           (etaf-unmount runtime))))))
 
+(ert-deftest etaf-ui-dialog-projects-into-modal-host-with-dimmed-backdrop ()
+  "A centered dialog delegates to `etaf-ui-modal-host-function' and keeps a dimmed backdrop."
+  (let ((parent-buf (generate-new-buffer " *dialog-portal-parent*"))
+        (portal-buf (generate-new-buffer " *dialog-portal-child*"))
+        (open (etaf-ref nil))
+        (step (etaf-ref 1))
+        (opened-specs nil)
+        (updated-specs nil)
+        (closed-count 0)
+        (saved-buf (current-buffer)))
+    (unwind-protect
+        (with-current-buffer parent-buf
+          (let ((etaf-ui-modal-use-child-frame t)
+                (etaf-ui-modal-host-function
+                 (lambda (spec)
+                   (push spec opened-specs)
+                   (etaf-mount portal-buf (plist-get spec :view)
+                               (list :viewport-width (or (plist-get spec :width-px) 480)
+                                     :viewport-height 24))
+                   (list :update (lambda (next) (push next updated-specs))
+                         :close (lambda ()
+                                  (cl-incf closed-count)
+                                  (when-let* ((rt (etaf-runtime-for-buffer portal-buf)))
+                                    (etaf-unmount rt)))))))
+            (cl-letf (((symbol-function 'display-graphic-p) (lambda (&optional _) t))
+                      ((symbol-function 'get-buffer-window)
+                       (lambda (buf &optional _)
+                         (when (eq buf parent-buf) (selected-window)))))
+              (let ((noninteractive nil))
+                (etaf-mount
+                 parent-buf
+                 (etaf-view
+                  (column :width '(ch 80) :height '(lh 24)
+                    (box :color "#FFFFFF" "Underlay")
+                    (etaf-button :ref 'opener :label "Open"
+                                 :on-press (lambda () (setf (etaf-value open) t)))
+                    (etaf-dialog :open open
+                                 :title (format "Portal Modal %d" (etaf-value step))
+                                 :width '(ch 44)
+                                 :on-close (lambda () (setf (etaf-value open) nil))
+                      (etaf-label :text (format "Step %d" (etaf-value step)))))))
+                (let* ((runtime (etaf-runtime-for-buffer parent-buf))
+                       (before (etaf-ui-surface-test--underlay-face)))
+                  (etaf-focus runtime 'opener)
+                  (etaf-activate runtime)
+                  (should (etaf-value open))
+                  (should (= 1 (length opened-specs)))
+                  ;; Parent canvas keeps dimmed underlay only, never modal card text.
+                  (should (string-match-p "Underlay" (buffer-string)))
+                  (should-not (string-match-p "Portal Modal" (buffer-string)))
+                  (should-not (equal before (etaf-ui-surface-test--underlay-face)))
+                  ;; Portal buffer holds the modal card and updates in place.
+                  (with-current-buffer portal-buf
+                    (should (string-match-p "Portal Modal 1" (buffer-string)))
+                    (should (string-match-p "Step 1" (buffer-string))))
+                  (setf (etaf-value step) 2)
+                  (should (>= (length updated-specs) 1))
+                  (with-current-buffer portal-buf
+                    (should (string-match-p "Portal Modal 2" (buffer-string)))
+                    (should (string-match-p "Step 2" (buffer-string))))
+                  ;; Clicking the dimmed parent backdrop dismisses portal and restores focus.
+                  (let* ((backdrop
+                          (car (cl-find-if
+                                (lambda (entry) (plist-get (cdr entry) :backdrop-filter))
+                                (etaf-runtime-host-props-entries runtime))))
+                         (click (list 'mouse-1 (list (selected-window) 1 '(0 . 0) 0))))
+                    (should backdrop)
+                    (let ((last-input-event click))
+                      (etaf-dispatch-event runtime backdrop 'press)))
+                  (should-not (etaf-value open))
+                  (should (= 1 closed-count))
+                  (should (equal before (etaf-ui-surface-test--underlay-face)))
+                  (should (eq 'opener (etaf-focused-host-ref runtime))))))))
+      (when-let* ((rt (etaf-runtime-for-buffer portal-buf))) (etaf-unmount rt))
+      (when-let* ((rt (etaf-runtime-for-buffer parent-buf))) (etaf-unmount rt))
+      (when (buffer-live-p portal-buf) (kill-buffer portal-buf))
+      (when (buffer-live-p parent-buf) (kill-buffer parent-buf))
+      (when (buffer-live-p saved-buf) (set-buffer saved-buf)))))
+
+(ert-deftest etaf-ui-dialog-defaults-to-centered-in-buffer-with-uniform-backdrop ()
+  "Centered dialogs default to in-buffer rendering with exact vertical centering."
+  (should-not etaf-ui-modal-use-child-frame)
+  (let ((parent-buf (generate-new-buffer " *dialog-inbuf-default*"))
+        (open (etaf-ref nil))
+        (host-called 0)
+        (saved-buf (current-buffer)))
+    (unwind-protect
+        (with-current-buffer parent-buf
+          (let ((etaf-ui-modal-host-function
+                 (lambda (_spec) (cl-incf host-called) nil)))
+            (etaf-mount
+             parent-buf
+             (etaf-view
+              (column :width '(ch 80) :height '(lh 24)
+                      :background-color "#FFFFFF"
+                (box :color "#111111" "Underlay")
+                (etaf-button :ref 'opener :label "Open"
+                             :on-press (lambda () (setf (etaf-value open) t)))
+                (etaf-dialog :open open :title "Centered In-Buffer" :width '(ch 40)
+                             :animated nil
+                             :on-close (lambda () (setf (etaf-value open) nil))
+                  (etaf-label :text "Body line 1")
+                  (etaf-label :text "Body line 2"))))
+             (list :viewport-width (* 80 (frame-char-width))
+                   :viewport-height 24))
+            (let ((runtime (etaf-runtime-for-buffer parent-buf)))
+              (etaf-focus runtime 'opener)
+              (etaf-activate runtime)
+              (should (etaf-value open))
+              ;; Default nil never invokes the child-frame modal host.
+              (should (= host-called 0))
+              (should (string-match-p "Centered In-Buffer" (buffer-string)))
+              ;; Dialog panel is vertically centered in the 24-row viewport
+              ;; rather than pinned to the upper fifth.
+              (let* ((panel-entry
+                      (cl-find-if
+                       (lambda (entry) (eq (plist-get (cdr entry) :role) 'dialog))
+                       (etaf-runtime-host-props-entries runtime)))
+                     (bounds (and panel-entry
+                                  (etaf-host-ref-bounds runtime (car panel-entry))))
+                     (size (and panel-entry
+                                (etaf-host-ref-size runtime (car panel-entry))))
+                     (top-line (and bounds
+                                    (1- (line-number-at-pos (car bounds)))))
+                     (height (and size (cdr size))))
+                (should top-line)
+                (should height)
+                (should (= top-line (floor (/ (- 24 height) 2)))))
+              ;; Canvas background dimmed uniformly with the backdrop.
+              (should-not (equal (plist-get (car (cdr (assq 'default face-remapping-alist)))
+                                            :background)
+                                 "#FFFFFF"))
+              ;; Dismiss restores canvas and opener focus.
+              (setf (etaf-value open) nil)
+              (should-not (string-match-p "Centered In-Buffer" (buffer-string)))
+              (should (equal (plist-get (car (cdr (assq 'default face-remapping-alist)))
+                                        :background)
+                             "#FFFFFF"))
+              (should (eq 'opener (etaf-focused-host-ref runtime))))))
+      (when-let* ((rt (etaf-runtime-for-buffer parent-buf))) (etaf-unmount rt))
+      (when (buffer-live-p parent-buf) (kill-buffer parent-buf))
+      (when (buffer-live-p saved-buf) (set-buffer saved-buf)))))
+
 (provide 'etaf-ui-surface-tests)
 ;;; etaf-ui-surface-tests.el ends here

@@ -56,10 +56,21 @@ epoch, the face remapping, and the buffer-local settings that change a
 string's size.  Emacs mutates some of these in place, so compare the live
 values with a snapshot before rebuilding the key."
   (with-current-buffer (or ebox--measure-buffer (current-buffer))
-    (let* ((frame (window-frame (ebox--measuring-window)))
-           (font (and (window-system frame) (frame-parameter frame 'font)))
-           (height (and (window-system frame)
-                        (face-attribute 'default :height frame)))
+    (let* ((raw-frame (window-frame (ebox--measuring-window)))
+           (ws (window-system raw-frame))
+           (font (and ws (frame-parameter raw-frame 'font)))
+           (height (and ws (face-attribute 'default :height raw-frame)))
+           ;; Child frames inheriting the parent frame's exact window system,
+           ;; font and default height share its already-warm glyph width cache
+           ;; instead of cold-measuring every character on every popup.
+           (parent (and ws (frame-parent raw-frame)))
+           (frame (if (and parent
+                           (frame-live-p parent)
+                           (eq (window-system parent) ws)
+                           (equal (frame-parameter parent 'font) font)
+                           (equal (face-attribute 'default :height parent) height))
+                      parent
+                    raw-frame))
            (now (list ebox--width-epoch frame font height
                       overline-margin line-spacing
                       default-text-properties char-property-alias-alist
@@ -450,27 +461,44 @@ these characters alone does not decide."
 (defvar ebox--default-font-box nil
   "The default font's (ASCENT . DESCENT) in pixels, or nil before use.")
 
+(defvar ebox--default-font-family nil
+  "The default font's family string, or nil before use.")
+
 (defun ebox--font-box (font)
   "Return FONT's (ASCENT . DESCENT) in pixels."
   (let ((info (query-font font)))
     (cons (aref info 4) (aref info 5))))
 
 (defun ebox--tall-char-p (char)
-  "Return non-nil when CHAR's font reaches beyond the default font's line.
+  "Return non-nil when CHAR exceeds the default line or uses a fallback font.
 Only graphical frames have fonts; elsewhere every row is one text line."
   (let ((known (aref ebox--tall-chars char)))
     (cond (known (eq known t))
           ((or noninteractive (not (display-graphic-p))) nil)
           (t
-           (let* ((base (or ebox--default-font-box
-                            (setq ebox--default-font-box
-                                  (ebox--font-box (car (internal-char-font nil ?0))))))
+           (let* ((base-font (car-safe (internal-char-font nil ?0)))
+                  (base (or ebox--default-font-box
+                            (and base-font
+                                 (setq ebox--default-font-box
+                                       (ebox--font-box base-font)))))
+                  (base-family
+                   (or ebox--default-font-family
+                       (and base-font
+                            (setq ebox--default-font-family
+                                  (let ((f (font-get base-font :family)))
+                                    (and f (format "%s" f)))))))
                   (font (car-safe (internal-char-font nil char)))
                   (box (and font (ebox--font-box font)))
-                  (tall (and box (or (> (car box) (car base))
-                                     (> (cdr box) (cdr base))))))
-             (aset ebox--tall-chars char (if tall t 'no))
-             tall)))))
+                  (tall (and base box (or (> (car box) (car base))
+                                          (> (cdr box) (cdr base)))))
+                  (foreign (and font base-family
+                                (not (ebox--cjk-char-p char))
+                                (not (equal (let ((f (font-get font :family)))
+                                              (and f (format "%s" f)))
+                                            base-family))))
+                  (candidate (and (or tall foreign) t)))
+             (aset ebox--tall-chars char (if candidate t 'no))
+             candidate)))))
 
 (defsubst ebox--fit-candidate-p (char)
   "Return non-nil when CHAR may need fitting into the line."
@@ -631,9 +659,44 @@ cannot drop it.  Return nil when ordinary text already reaches the line."
                                                         :ascent ascent))))))
       (cdr ebox--row-strut-cache))))
 
-(defun ebox--fit-row-height (cluster face scale)
-  "Return the height of a row holding CLUSTER at SCALE beside text under FACE."
-  (let ((glyph (propertize cluster 'face face)))
+(defvar ebox--family-faces (make-hash-table :test 'equal)
+  "Interned (:family NAME) face plists keyed by font family string.")
+
+(defun ebox--family-face (family)
+  "Return the shared (:family FAMILY) face plist for FAMILY."
+  (or (gethash family ebox--family-faces)
+      (puthash family (list :family family) ebox--family-faces)))
+
+(defun ebox--font-family-name (string)
+  "Return the font family string Emacs resolves for STRING's first character."
+  (let* ((buffer (or ebox--measure-buffer (current-buffer)))
+         (window (with-current-buffer buffer (ebox--measuring-window)))
+         (font (with-current-buffer buffer (font-at 0 window string)))
+         (family (and font (font-get font :family))))
+    (and family (format "%s" family))))
+
+(defun ebox--base-font-family (face)
+  "Return the font family string of ordinary Latin text under FACE, or nil."
+  (let* ((hash (cdr (ebox--face-table face)))
+         (cached (gethash 'base-family hash)))
+    (if cached
+        (and (stringp cached) cached)
+      (let ((name (ebox--font-family-name
+                   (if face (propertize "0" 'face face) "0"))))
+        (puthash 'base-family (or name 'none) hash)
+        name))))
+
+(defun ebox--foreign-family (cluster face)
+  "Return CLUSTER's resolved font family when it differs from FACE's base font."
+  (let ((name (ebox--font-family-name
+               (if face (propertize cluster 'face face) cluster))))
+    (and name (not (equal name (ebox--base-font-family face))) name)))
+
+(defun ebox--fit-row-height (cluster face scale &optional glyph-face)
+  "Return the height of a row holding CLUSTER at SCALE beside text under FACE.
+When GLYPH-FACE is non-nil, paint CLUSTER with it while the body probe keeps
+FACE."
+  (let ((glyph (propertize cluster 'face (or glyph-face face))))
     (when scale
       (put-text-property 0 (length glyph) 'display (ebox--fit-spec face scale) glyph))
     (cdr (ebox--measure-raw-size
@@ -720,9 +783,11 @@ cannot drop it.  Return nil when ordinary text already reaches the line."
                       :ascent ascent :margin 0)))))
 
 (defun ebox--fit (cluster face)
-  "Return nil when CLUSTER fits its line under FACE, else (WIDTH . DISPLAY).
-DISPLAY, painted over CLUSTER, is a line-high emoji image or a `height'
-display specification."
+  "Return nil when CLUSTER needs no paint override, else (WIDTH DISPLAY . FAMILY).
+DISPLAY, painted over CLUSTER, is a line-high emoji image, a `height' display
+specification, or nil when only FAMILY must be pinned.  FAMILY is the foreign
+font family string resolved during measurement so differently colored realized
+faces paint the exact same fallback font."
   (if (or noninteractive (not (display-graphic-p)))
       nil
     (let* ((hash (cdr (ebox--face-table face)))
@@ -732,22 +797,38 @@ display specification."
       (if cached
           (and (consp cached) cached)
         ;; A row's height is its largest ascent plus its largest descent, so
-        ;; each candidate is measured beside an ordinary character.
+        ;; each candidate is measured beside an ordinary character.  Emacs
+        ;; caches discovered fallback fonts per realized face (which includes
+        ;; foreground/background), so pin any foreign fallback family resolved
+        ;; here onto painted glyphs to keep layout and paint widths identical.
         (let* ((line (ebox--face-line-height face))
+               (cjk (ebox--cjk-char-p (aref cluster 0)))
+               (family (unless cjk (ebox--foreign-family cluster face)))
+               (glyph-face (if family
+                               (ebox--merge-face (ebox--family-face family) face)
+                             face))
                (image nil)
                (fit
-                (and (> (ebox--fit-row-height cluster face nil) line)
-                     (if (setq image (ebox--emoji-image cluster line))
-                         (cons line image)
-                       (cl-loop
-                      for (scale . more) on ebox--fit-scales
-                      when (or (null more)
-                               (<= (ebox--fit-row-height cluster face scale) line))
-                      return (cons (car (ebox--measure-raw-size
-                                         (propertize cluster 'face face
-                                                     'display
-                                                     (ebox--fit-spec face scale))))
-                                   (ebox--fit-spec face scale)))))))
+                (cond
+                 ((> (ebox--fit-row-height cluster face nil glyph-face) line)
+                  (if (setq image (ebox--emoji-image cluster line))
+                      (cons line (cons image nil))
+                    (let* ((pinned (or family (ebox--foreign-family cluster face)))
+                           (gface (if (and pinned (not family))
+                                      (ebox--merge-face (ebox--family-face pinned) face)
+                                    glyph-face)))
+                      (cl-loop
+                       for (scale . more) on ebox--fit-scales
+                       when (or (null more)
+                                (<= (ebox--fit-row-height cluster face scale gface) line))
+                       return (let ((spec (ebox--fit-spec face scale)))
+                                (cons (car (ebox--measure-raw-size
+                                            (propertize cluster 'face gface
+                                                        'display spec)))
+                                      (cons spec pinned)))))))
+                 (family
+                  (cons (ebox--measure-raw (propertize cluster 'face glyph-face))
+                        (cons nil family))))))
           (puthash cluster (or fit 'fits) fits)
           fit)))))
 
@@ -966,9 +1047,11 @@ See `ebox--join'."
   (clrhash ebox--cluster-width-cache)
   (clrhash ebox--space-cache)
   (clrhash ebox--image-widths)
+  (clrhash ebox--family-faces)
   (fillarray ebox--face-memo nil)
   (setq ebox--tall-chars (make-char-table 'ebox-tall-chars)
-        ebox--default-font-box nil)
+        ebox--default-font-box nil
+        ebox--default-font-family nil)
   (cl-incf ebox--width-epoch))
 
 (defun ebox--reset-metrics (&rest _)

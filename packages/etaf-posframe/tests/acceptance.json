@@ -315,6 +315,56 @@
    "name": "etaf-posframe-tty-move-keeps-the-place",
    "file": "tests/etaf-posframe-tests.el",
    "purpose": "Moving a terminal panel keeps its new place through a refresh."
+  },
+  {
+   "name": "etaf-posframe-registers-modal-host-function",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "Loading etaf-posframe registers its child-frame modal host into etaf-ui-modal-host-function."
+  },
+  {
+   "name": "etaf-posframe-hosts-dialog-and-key-help-in-child-frames",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "Centered etaf-dialog and etaf-help modals open in real child frames over dimmed parent backdrops, update reactively in place, and return focus on Escape."
+  },
+  {
+   "name": "etaf-posframe-reshape-scroll-lock-and-escape",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "etaf-posframe-reshape updates a live panel in place without recreating its frame, enforces :scrollable nil and :on-escape, and returns focus via etaf-posframe-unfocus."
+  },
+  {
+   "name": "etaf-posframe-stacked-panel-stays-put-across-theme-switches",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "A stacked panel stays at its exact position across theme switches, window splits and refreshes instead of colliding with itself."
+  },
+  {
+   "name": "etaf-posframe-stacked-panels-keep-order-on-parent-resize-and-refit",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "Multiple stacked panels preserve oldest-first order when the parent frame resizes or an earlier panel grows taller."
+  },
+  {
+   "name": "etaf-posframe-draggable-panel-keeps-moved-position-across-refresh-and-theme",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "A draggable panel moved via native frame positioning stays pinned at its moved coordinates across refreshes and theme switches."
+  },
+  {
+   "name": "etaf-posframe-window-anchor-tracks-its-window-on-split",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "A window-anchored panel tracks its owning window's edges on window splits rather than jumping to another selected window."
+  },
+  {
+   "name": "etaf-posframe-anchor-offset-stack-clears-previous-panel",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "Stacked panels with an (ANCHOR ROWS COLS) offset clear earlier panels at the offset anchor instead of overlapping."
+  },
+  {
+   "name": "etaf-posframe-recycles-graphical-child-frames-across-rapid-toggles",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "Rapidly opening and hiding panels and centered etaf-dialog modals recycles graphical child frames without leaking frames, breaking idempotency, or losing parent focus."
+  },
+  {
+   "name": "etaf-posframe-nested-modal-teardown-restores-active-frame",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "Closing an outer modal while a nested help modal is open unwinds both child frames and restores focus to the active parent frame rather than a parked frame."
   }
  ]
 }

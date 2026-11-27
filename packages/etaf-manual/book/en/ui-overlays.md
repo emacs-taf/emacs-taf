@@ -46,9 +46,9 @@ Show controlled OPEN content on Ebox's root layer, anchored to a unique semantic
 
 Show a controlled modal panel using the same floating surface as Popover.
 
-**Arguments.** OPEN is a value, ref or computed. TITLE defaults to `"Dialog"`. WIDTH defaults to `(ch 48)`. HEIGHT is nil or `(lh N)` with positive N, bounding the panel to text rows within the visible window. COMPACT removes the body's vertical air so short forms stay dense. CLOSE-LABEL defaults to `"Close"`; nil omits the default footer button so the footer slot orders every action. BACKDROP defaults to t. ON-CLOSE is required. KEYS and ON-DIRECTION declare the panel Host's scoped `:keys` and `:on-direction`, never those of its backdrop. ANIMATED, when non-nil (default nil), smoothly dims the modal backdrop over the shared animation clock on open.
+**Arguments.** OPEN is a value, ref or computed. TITLE defaults to `"Dialog"`. WIDTH defaults to `(ch 48)`. HEIGHT is nil or `(lh N)` with positive N, bounding the panel to text rows within the visible window. COMPACT removes the body's vertical air so short forms stay dense. CLOSE-LABEL defaults to `"Close"`; nil omits the default footer button so the footer slot orders every action. BACKDROP defaults to t. ON-CLOSE is required. KEYS and ON-DIRECTION declare the panel Host's scoped `:keys` and `:on-direction`, never those of its backdrop. ANIMATED, when non-nil (default t), smoothly dims the modal backdrop over the shared animation clock on open.
 
-**Semantics.** The dialog centers itself in the window that displays its buffer when that window is graphical, and it never moves the application's geometry or global focus policy. The header shows TITLE and a pointer-only `x` that requests ON-CLOSE, and Escape does the same, so a modal always has a keyboard exit. With BACKDROP (the default) the backdrop dims the root canvas while keeping the covered application, text and images included, visible; covered controls and their focus targets stay blocked. A pointer press on the backdrop requests ON-CLOSE without clicking through to the background; a press inside the panel does not dismiss it. Nested modal backdrops dismiss their own topmost surface, not the covered parent. With BACKDROP nil no backdrop is painted at all and the caller owns any outside-click policy. A fixed HEIGHT needs the body rows plus five for the header, body air and footer; a too-short window clips the dialog body instead of overflowing the frame. Dialogs own no form data.
+**Semantics.** By default, the dialog renders in-buffer and centers itself both horizontally and vertically within the visible viewport without creating an OS child window, and it never moves the application's geometry or global focus policy. When `etaf-ui-modal-use-child-frame` is explicitly enabled and `etaf-ui-modal-host-function` is installed (for example automatically by `etaf-posframe`), centered dialogs project their card into a floating child frame on graphical displays over the uniformly dimmed parent canvas; batch and non-graphical displays always render in-buffer. The header shows TITLE and a pointer-only `x` that requests ON-CLOSE, and Escape does the same, so a modal always has a keyboard exit. With BACKDROP (the default) the backdrop dims the root canvas uniformly — including box border decorations, named faces and the surrounding buffer canvas — while keeping the covered application, text and images included, visible; covered controls and their focus targets stay blocked. A pointer press on the backdrop requests ON-CLOSE without clicking through to the background; a press inside the panel does not dismiss it. Nested modal backdrops dismiss their own topmost surface, not the covered parent. With BACKDROP nil no backdrop is painted at all and the caller owns any outside-click policy. A fixed HEIGHT needs the body rows plus five for the header, body air and footer; a too-short window clips the dialog body instead of overflowing the frame. Dialogs own no form data.
 
 **Returns.** A View.
 
@@ -64,7 +64,23 @@ Show a controlled modal panel using the same floating surface as Popover.
                (etaf-button :label "Delete" :variant 'primary :on-press #'delete)))
 ```
 
-**See also.** `etaf-popover`, `etaf-confirm-dialog`.
+**See also.** `etaf-popover`, `etaf-confirm-dialog`, `etaf-ui-modal-host-function`, `etaf-ui-modal-use-child-frame`.
+
+#### Variable: etaf-ui-modal-host-function
+
+Optional callback that projects a centered `etaf-dialog` (including `etaf-key-help`) into a floating child frame on graphical displays, default nil.
+
+**Semantics.** When non-nil and `etaf-ui-modal-use-child-frame` is non-nil on a graphical display, centered modal dialogs keep only their uniformly dimmed animated backdrop scrim in the parent buffer and call this function with a spec plist (`:key`, `:parent-buffer`, `:parent-window`, `:panel`, `:title`, `:width-px`, `:height-rows`, `:max-height-rows`, `:help-p`, `:theme`, `:appearance`, `:view`, `:on-close`). The host returns a handle plist (`:update`, `:close`, `:frame`, `:runtime-fn`) so reactive updates repaint in place and dismissal closes the child frame and restores focus. Loading `etaf-posframe` installs its child-frame modal host here automatically unless another host is already set.
+
+**See also.** `etaf-ui-modal-use-child-frame`, `etaf-dialog`.
+
+#### Variable: etaf-ui-modal-use-child-frame
+
+Boolean flag controlling whether centered `etaf-dialog` modals project through `etaf-ui-modal-host-function` on graphical displays, default nil.
+
+**Semantics.** The default nil renders all modal dialogs inside the parent application buffer using single-pass viewport centering and incremental text updates for fast, uniform cross-platform behavior. Set this variable to non-nil when a child-frame modal host such as `etaf-posframe` is loaded to opt into floating child-frame modals on graphical displays. Batch and terminal displays always use in-buffer rendering regardless of this flag.
+
+**See also.** `etaf-ui-modal-host-function`, `etaf-dialog`.
 
 ## Keyboard help
 

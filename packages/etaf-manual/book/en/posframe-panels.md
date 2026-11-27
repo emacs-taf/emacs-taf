@@ -24,6 +24,10 @@ A panel is a child frame that hosts one ETAF Runtime above the window you are wo
 | `:theme` | mode, plist, ref | `auto` | Palette |
 | `:border` | border plist | `nil` | Border width and state colours |
 | `:key` | symbol | `nil` | Identity of the panel |
+| `:scrollable` | `t`, `nil` | `t` | Allow viewport scrolling in the panel buffer |
+| `:on-escape` | function, `nil` | `nil` | Handler called with `(PANEL)` on `ESC` or `C-g` instead of hiding |
+| `:on-blur` | function, `nil` | `nil` | Handler called with `(PANEL)` when input focus leaves the panel |
+| `:on-move` | function, `nil` | `nil` | Handler called with `(X Y PANEL)` after interactive dragging finishes |
 
 Every option is validated on entry, so a bad value signals before a frame exists rather than after a panel is half built. The rest of this section gives the accepted forms and the behaviour of each group; the entry for `etaf-posframe-show` below states the function contract, and the entries for `etaf-posframe-theme` and the variables give the palette.
 
@@ -203,6 +207,38 @@ Schedule PANEL to re-lay out at its frame width and fit the frame to the rendere
 **Semantics.** PANEL defaults to the current buffer's panel. A frame resized from outside becomes the panel width, so the View reflows and the title bar repaints to the new column count; the fit is deferred past the current event and render, so it is safe to call from a Button, a timer or a theme callback. A panel also re-fits automatically when its host frame changes size, so the call is only needed after content changed height without a Runtime update. The fit backs off when it keeps resizing, so a condition that fights it cannot run away with the CPU: it gives up after twenty fits in one second and waits two seconds before trying again.
 
 **Returns.** Non-nil when PANEL is live.
+
+#### Function: etaf-posframe-reshape (panel &rest options)
+
+Update a live PANEL in place without recreating its frame or unmounting its View.
+
+**Arguments.** OPTIONS accepts `:width`, `:height`, `:at`, `:theme`, `:border`, `:fill-height` and `:focus-on-open`.
+
+**Semantics.** Re-validates the supplied options, updates the panel's width, height budget, border or Theme palette in place, refits and repositions the existing child frame smoothly around its anchor or pinned coordinates, and optionally moves or restores input focus via `:focus-on-open`.
+
+**Returns.** PANEL when live, or nil.
+
+#### Function: etaf-posframe-focus (panel)
+
+Give input focus to a live focusable PANEL.
+
+**Semantics.** Selects PANEL's child frame and remembers the parent host frame so hiding or calling `etaf-posframe-unfocus` returns focus cleanly.
+
+**Returns.** PANEL when focused, or nil.
+
+#### Function: etaf-posframe-unfocus (panel)
+
+Return input focus from a live PANEL back to its remembered host frame without hiding PANEL.
+
+**Returns.** Non-nil when focus was restored, nil otherwise.
+
+#### Function: etaf-posframe-drag (panel &optional on-done)
+
+Drag a live PANEL interactively with the mouse pointer inside its parent frame.
+
+**Semantics.** Works on headerless panels without `:title`. Tracks mouse movement while the button is held and moves PANEL clamped inside its parent frame. Only a genuine drag (more than three pixels) pins the new position and invokes optional ON-DONE with `(X Y PANEL)`.
+
+**Returns.** Non-nil when the panel moved, nil otherwise.
 
 ## Reading the open panels
 

@@ -396,7 +396,7 @@ Keep native slice/raise modifiers and share each derived display value."
   (let* ((image (ebox-image--display-image display))
          (frame (or ebox--measure-frame
                     (and ebox--measure-buffer
-                         (when-let* ((window (get-buffer-window ebox--measure-buffer)))
+                         (when-let* ((window (get-buffer-window ebox--measure-buffer t)))
                            (window-frame window)))
                     (selected-frame))))
     (if (or (= amount 1) (not image)) display

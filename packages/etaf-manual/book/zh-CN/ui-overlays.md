@@ -46,9 +46,9 @@
 
 用与 Popover 相同的浮动表面显示受控模态面板。
 
-**参数。** OPEN 是值、ref 或 computed。TITLE 默认 `"Dialog"`。WIDTH 默认 `(ch 48)`。HEIGHT 为 nil 或 `(lh N)`（N 为正），把面板限制在可见窗口内的若干文本行。COMPACT 去掉正文的纵向留白，让短表单保持紧凑。CLOSE-LABEL 默认 `"Close"`；nil 时省略默认 footer 按钮，让 footer slot 决定全部动作。BACKDROP 默认 t。ON-CLOSE 必需。KEYS 与 ON-DIRECTION 声明面板 Host 的作用域 `:keys` 和 `:on-direction`，不绑定遮罩。ANIMATED 非 nil（默认 nil）时，打开后经共享动画时钟平滑渐暗模态遮罩。
+**参数。** OPEN 是值、ref 或 computed。TITLE 默认 `"Dialog"`。WIDTH 默认 `(ch 48)`。HEIGHT 为 nil 或 `(lh N)`（N 为正），把面板限制在可见窗口内的若干文本行。COMPACT 去掉正文的纵向留白，让短表单保持紧凑。CLOSE-LABEL 默认 `"Close"`；nil 时省略默认 footer 按钮，让 footer slot 决定全部动作。BACKDROP 默认 t。ON-CLOSE 必需。KEYS 与 ON-DIRECTION 声明面板 Host 的作用域 `:keys` 和 `:on-direction`，不绑定遮罩。ANIMATED 非 nil（默认 t）时，打开后经共享动画时钟平滑渐暗模态遮罩。
 
-**语义。** 显示 buffer 的窗口是图形窗口时，对话框在窗口内居中，且永不移动应用的几何或全局焦点策略。header 显示 TITLE 与一个仅指针可用的 `x`，它请求 ON-CLOSE，Escape 同样如此，所以模态总有一条键盘出口。带 BACKDROP（默认）时，遮罩调暗 root 画布，同时让被盖住的应用（包括文字与图片）保持可见；被覆盖的控件及其焦点目标仍被挡住。点击遮罩请求 ON-CLOSE，不会穿透并点击背景；点击面板内部不会关闭。嵌套模态遮罩只关闭自己所属的最上层界面，不关闭被覆盖的父界面。BACKDROP 为 nil 时完全不绘制遮罩，外部按压策略归调用方。固定 HEIGHT 需要正文行数再加五（header、正文留白与 footer）；窗口太矮时裁剪对话框正文，而不溢出 frame。对话框不拥有表单数据。
+**语义。** 对话框默认在父应用 buffer 内直接按可见视口垂直与水平居中渲染，不创建操作系统子窗口，且永不移动应用的几何或全局焦点策略。当显式启用 `etaf-ui-modal-use-child-frame` 且安装了 `etaf-ui-modal-host-function`（例如加载 `etaf-posframe` 时自动注册）时，居中对话框会在图形显示下把卡片投射到真正的浮动子 frame 中，同时在父画布保留统一压暗的渐暗遮罩；批处理或非图形终端始终使用 buffer 内渲染。header 显示 TITLE 与一个仅指针可用的 `x`，它请求 ON-CLOSE，Escape 同样如此，所以模态总有一条键盘出口。带 BACKDROP（默认）时，遮罩统一调暗 root 画布（含盒边框装饰、命名 face 与窗口余白画布背景），同时让被盖住的应用（包括文字与图片）保持可见；被覆盖的控件及其焦点目标仍被挡住。点击遮罩请求 ON-CLOSE，不会穿透并点击背景；点击面板内部不会关闭。嵌套模态遮罩只关闭自己所属的最上层界面，不关闭被覆盖的父界面。BACKDROP 为 nil 时完全不绘制遮罩，外部按压策略归调用方。固定 HEIGHT 需要正文行数再加五（header、正文留白与 footer）；窗口太矮时裁剪对话框正文，而不溢出 frame。对话框不拥有表单数据。
 
 **返回。** 一个 View。
 
@@ -64,7 +64,23 @@
                (etaf-button :label "Delete" :variant 'primary :on-press #'delete)))
 ```
 
-**参见。** `etaf-popover`、`etaf-confirm-dialog`。
+**参见。** `etaf-popover`、`etaf-confirm-dialog`、`etaf-ui-modal-host-function`、`etaf-ui-modal-use-child-frame`。
+
+#### Variable: etaf-ui-modal-host-function
+
+可选的模态子 frame 宿主回调，默认 nil；在图形显示上负责把居中的 `etaf-dialog`（含 `etaf-key-help`）投射到真实浮动子 frame。
+
+**语义。** 当该变量非 nil 且 `etaf-ui-modal-use-child-frame` 为真并在图形显示下运行时，居中模态框仅在父 buffer 绘制统一压暗的渐暗遮罩，并以规格 plist（`:key`、`:parent-buffer`、`:parent-window`、`:panel`、`:title`、`:width-px`、`:height-rows`、`:max-height-rows`、`:help-p`、`:theme`、`:appearance`、`:view`、`:on-close`）调用此函数。宿主返回句柄 plist（`:update`、`:close`、`:frame`、`:runtime-fn`），使响应式更新就地重绘、关闭时释放子 frame 并恢复焦点。加载 `etaf-posframe` 时若未自定义其它宿主，会自动安装其子 frame 模态宿主。
+
+**参见。** `etaf-ui-modal-use-child-frame`、`etaf-dialog`。
+
+#### Variable: etaf-ui-modal-use-child-frame
+
+控制居中的 `etaf-dialog` 在图形显示下是否经 `etaf-ui-modal-host-function` 投射到子 frame 的布尔开关，默认 nil。
+
+**语义。** 默认值 nil 让所有模态对话框直接在父应用 buffer 内以纯文本增量更新渲染并按可见视口居中，跨平台响应快且无子窗口抖动。将其设为非 nil 且加载了 `etaf-posframe` 等子 frame 宿主时，图形显示下的居中模态框会投射到浮动子 frame；批处理与终端显示无论此开关取值如何都会使用 buffer 内渲染。
+
+**参见。** `etaf-ui-modal-host-function`、`etaf-dialog`。
 
 ## 快捷键帮助
 
