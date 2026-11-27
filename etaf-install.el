@@ -1,7 +1,7 @@
 ;;; -*- lexical-binding: t; -*-
 ;;; etaf-install.el --- Install ETAF with the Emacs package manager
 
-;; Version: 0.2.32
+;; Version: 0.2.33
 ;; Package-Requires: ((emacs "29.1"))
 ;; URL: https://github.com/emacs-taf/emacs-taf
 ;; Keywords: convenience
@@ -65,10 +65,13 @@
 ;;
 ;; Function: etaf-install-update (&optional package)
 ;; Refresh the ETAF and standard archives and upgrade PACKAGE, or every
-;; installed target plus the installer.  When `etaf-install-auto-native' is
-;; non-nil, also fetch any newly required or updated prebuilt native modules
-;; declared by upgraded packages.  Return a report.  Restart Emacs when an
-;; update replaces loaded Lisp.
+;; installed target plus the installer, in bottom-up dependency order.
+;; Removes superseded older package directories left by dependency upgrades
+;; (respecting `package-retention-policy' and `package-load-list').  When
+;; `etaf-install-auto-native' is non-nil, also fetch any newly required or
+;; updated prebuilt native modules declared by upgraded packages.  Return a
+;; plist with :updated, :pruned, :failed, :native-installed, :native-failed
+;; and :restart.  Restart Emacs when an update replaces loaded Lisp.
 ;;
 ;; Function: etaf-install-remove (package &optional no-confirm)
 ;; Remove PACKAGE's package files and its `package-selected-packages' entry.
@@ -983,7 +986,12 @@ INSTALLED-ONLY checks offline reopening without computing an upgrade plan."
               (unless (package-installed-p package)
                 (error "Package installation did not activate %s" package))
               (require package)
-              (package-install descriptor))
+              (package-install descriptor)
+              ;; Remove superseded older versions of packages upgraded by this
+              ;; installation only after load and selection have succeeded.
+              (etaf-install--prune-obsolete-packages
+               (mapcar #'package-desc-name
+                       (etaf-install--added-packages before))))
           ((error quit)
            ;; package.el keeps old versions. Remove only newly added versions,
            ;; not user data, existing installations or unrelated packages.
@@ -997,7 +1005,7 @@ INSTALLED-ONLY checks offline reopening without computing an upgrade plan."
                          (package-desc-full-name added) (error-message-string cleanup-error)))))
            (message "ETAF installation failed; previous packages were kept. Restart Emacs before retrying.")
            (signal (car error-data) (cdr error-data))))))
-    (etaf-install--check-plan (cadr (assq package package-alist)) t)
+    (etaf-install--check-plan (etaf-install--newest-installed-desc package) t)
     (require package)
     (let* ((native-auto (etaf-install--native-ensure-best-effort package))
            (native-installed (plist-get native-auto :installed))
@@ -1604,16 +1612,137 @@ Return a report plist."
   "Return VERSION as a dotted string, or nil."
   (and version (package-version-join version)))
 
+(defun etaf-install--live-installed-descs (package)
+  "Return live installed descriptors for PACKAGE from `package-alist'."
+  (let ((descs (cdr (assq package package-alist))))
+    (cl-remove-if
+     (lambda (desc)
+       (let ((dir (package-desc-dir desc)))
+         (and (stringp dir) (not (file-directory-p dir)))))
+     descs)))
+
+(defun etaf-install--newest-installed-desc (package)
+  "Return the highest-version live installed descriptor for PACKAGE, or nil."
+  (when-let* ((descs (etaf-install--live-installed-descs package)))
+    (cl-reduce (lambda (a b)
+                 (if (version-list-< (package-desc-version a)
+                                     (package-desc-version b))
+                     b a))
+               descs)))
+
 (defun etaf-install--installed-version (package)
-  "Return PACKAGE's installed version list, or nil."
+  "Return PACKAGE's highest installed version list, or nil."
   (when (package-installed-p package)
-    (let ((descriptor (cadr (assq package package-alist))))
+    (let ((descriptor (etaf-install--newest-installed-desc package)))
       (and descriptor (package-desc-version descriptor)))))
 
 (defun etaf-install--available-version (package)
   "Return PACKAGE's archive version list, or nil."
   (let ((descriptor (cadr (assq package package-archive-contents))))
     (and descriptor (package-desc-version descriptor))))
+
+(defun etaf-install--package-reqs (package)
+  "Return direct dependency symbols of PACKAGE from archive or installed data."
+  (let ((desc (or (cadr (assq package package-archive-contents))
+                  (etaf-install--newest-installed-desc package))))
+    (when desc
+      (delq 'emacs (mapcar #'car (package-desc-reqs desc))))))
+
+(defun etaf-install--sort-by-dependencies (packages)
+  "Return PACKAGES ordered bottom-up so dependencies precede dependents.
+Preserves input order for unrelated packages and guards against cycles."
+  (let ((allowed (copy-sequence packages))
+        (visited (make-hash-table :test #'eq))
+        (visiting (make-hash-table :test #'eq))
+        result)
+    (cl-labels
+        ((visit (pkg)
+           (unless (or (gethash pkg visited) (gethash pkg visiting))
+             (puthash pkg t visiting)
+             (dolist (dep (etaf-install--package-reqs pkg))
+               (when (memq dep allowed)
+                 (visit dep)))
+             (remhash pkg visiting)
+             (puthash pkg t visited)
+             (push pkg result))))
+      (dolist (pkg packages)
+        (visit pkg)))
+    (nreverse result)))
+
+(defun etaf-install--descriptor-deletable-p (desc)
+  "Return non-nil when DESC lives inside `package-user-dir' and is removable."
+  (let ((dir (and (package-desc-p desc) (package-desc-dir desc))))
+    (and (stringp dir)
+         (not (and (fboundp 'package-vc-p) (funcall 'package-vc-p desc)))
+         (file-in-directory-p
+          dir
+          (file-name-as-directory (expand-file-name package-user-dir))))))
+
+(defun etaf-install--descriptor-retained-p (desc)
+  "Return non-nil when Emacs retention policy or `package-load-list' keeps DESC."
+  (let* ((name (package-desc-name desc))
+         (version (package-version-join (package-desc-version desc)))
+         (load-entry (assq name package-load-list))
+         (pinned-ver (and (consp load-entry)
+                          (if (consp (cdr load-entry))
+                              (cadr load-entry)
+                            (cdr load-entry))))
+         (pinned (and (stringp pinned-ver)
+                      (equal pinned-ver version))))
+    (or pinned
+        (and (boundp 'package-retention-policy)
+             (fboundp 'package-matches-selector-p)
+             (funcall 'package-matches-selector-p
+                      (symbol-value 'package-retention-policy)
+                      desc)))))
+
+(defun etaf-install--prune-obsolete-packages (packages)
+  "Delete superseded older versions of PACKAGES from `package-user-dir'.
+Keeps the highest installed version of each package, respects
+`package-retention-policy' and `package-load-list', deduplicates stale or
+duplicate entries in `package-alist', and never fails an already-completed
+install or update.  Return deleted full package names."
+  (let (pruned)
+    (dolist (name (delete-dups (copy-sequence packages)))
+      (when-let* ((entry (assq name package-alist))
+                  (descs (cdr entry))
+                  ((> (length descs) 1))
+                  (newest (etaf-install--newest-installed-desc name)))
+        (let* ((newest-ver (package-desc-version newest))
+               (newest-raw (package-desc-dir newest))
+               (newest-dir (and (stringp newest-raw)
+                                (file-directory-p newest-raw)
+                                (file-truename newest-raw))))
+          (dolist (desc (copy-sequence descs))
+            (unless (eq desc newest)
+              (let* ((dir (and (package-desc-p desc) (package-desc-dir desc)))
+                     (live (and (stringp dir) (file-directory-p dir)))
+                     (same-dir (and live newest-dir
+                                    (equal (file-truename dir) newest-dir))))
+                (cond
+                 ;; Deduplicate in-memory descriptors pointing to the active
+                 ;; directory without ever touching disk.
+                 (same-dir
+                  (setcdr entry (delq desc (cdr entry))))
+                 ;; Remove ghost descriptors whose directory is already gone
+                 ;; (Emacs `package-delete' leaves them in `package-alist').
+                 ((and (stringp dir) (not live))
+                  (setcdr entry (delq desc (cdr entry))))
+                 ((and live
+                       (version-list-< (package-desc-version desc) newest-ver)
+                       (etaf-install--descriptor-deletable-p desc)
+                       (not (etaf-install--descriptor-retained-p desc)))
+                  (condition-case err
+                      (progn
+                        (package-delete desc t t)
+                        (unless (file-directory-p dir)
+                          (setcdr entry (delq desc (cdr entry)))
+                          (push (package-desc-full-name desc) pruned)))
+                    (error
+                     (message "ETAF: could not remove old %s: %s"
+                              (package-desc-full-name desc)
+                              (error-message-string err))))))))))))
+    (nreverse pruned)))
 
 (defun etaf-install--installed-targets ()
   "Return installed supported targets in menu order."
@@ -1696,34 +1825,87 @@ Each plist has :package, :label, :group, :installed, :available,
     (intern (completing-read (or prompt "Target: ")
                              (mapcar #'symbol-name installed) nil t))))
 
+(defun etaf-install--format-update-summary (report)
+  "Format a concise one-line status message for `etaf-install-update' REPORT."
+  (let ((updated (plist-get report :updated))
+        (pruned (plist-get report :pruned))
+        (failed (plist-get report :failed)))
+    (format "ETAF: %s%s%s%s"
+            (if updated
+                (format "updated %s"
+                        (mapconcat (lambda (item)
+                                     (format "%s %s" (car item) (cdr item)))
+                                   updated ", "))
+              "no updates")
+            (if (and pruned (null updated))
+                (format "; cleaned %d old package version%s"
+                        (length pruned)
+                        (if (= (length pruned) 1) "" "s"))
+              "")
+            (if failed (format "; %d failed" (length failed)) "")
+            (if updated "; restart Emacs to use it" ""))))
+
 ;;;###autoload
 (defun etaf-install-update (&optional package)
   "Update PACKAGE, or every installed target and the installer.
 Refresh the ETAF archive and the standard archives installed targets need,
-upgrade only installed ETAF packages, and return a plist with `:updated',
-`:failed' and `:restart'.  Restart Emacs when a loaded package changes;
-package.el remains the package manager."
+upgrade installed ETAF packages in bottom-up dependency order, remove
+superseded older versions (respecting `package-retention-policy' and
+`package-load-list'), and return a plist with `:updated', `:pruned',
+`:failed', `:native-installed', `:native-failed' and `:restart'.  Restart
+Emacs when a loaded package changes; package.el remains the package manager."
   (interactive (list (unless current-prefix-arg
                        (etaf-install--read-installed-target "Update: "))))
   (unless package--initialized (package-initialize))
   (let* ((targets (if package (list package) (etaf-install--installed-targets)))
-         (all (if package targets
-                (if (package-installed-p 'etaf-install)
-                    (cons 'etaf-install targets)
-                  targets)))
-         updated failed)
+         (all (delete-dups
+               (if package
+                   (copy-sequence targets)
+                 (if (package-installed-p 'etaf-install)
+                     (cons 'etaf-install (copy-sequence targets))
+                   (copy-sequence targets)))))
+         updated pruned failed)
     (condition-case error
         (etaf-install--refresh-archives all)
       (error (push (cons 'archives (error-message-string error)) failed)))
     (unless failed
-      (dolist (name all)
-        (condition-case error
-            (let ((installed (etaf-install--installed-version name))
-                  (available (etaf-install--available-version name)))
-              (when (and installed available (version-list-< installed available))
-                (package-upgrade name)
-                (push (cons name (etaf-install--version-string available)) updated)))
-          (error (push (cons name (error-message-string error)) failed)))))
+      (let* ((ordered (etaf-install--sort-by-dependencies all))
+             (before (apply #'append (mapcar #'cdr package-alist))))
+        (dolist (name ordered)
+          (condition-case error
+              (let ((installed (etaf-install--installed-version name))
+                    (available (etaf-install--available-version name)))
+                (when (and installed available (version-list-< installed available))
+                  (package-upgrade name)
+                  (push (cons name (etaf-install--version-string available)) updated)))
+            (error (push (cons name (error-message-string error)) failed))))
+        ;; Record any dependencies upgraded transitively by `package-upgrade'.
+        (let* ((added (etaf-install--added-packages before))
+               (added-names nil))
+          (dolist (desc added)
+            (let ((dep-name (package-desc-name desc)))
+              (push dep-name added-names)
+              (unless (assq dep-name updated)
+                (push (cons dep-name
+                            (etaf-install--version-string
+                             (package-desc-version desc)))
+                      updated))))
+          ;; Order reported updates bottom-up for readable summaries.
+          (when updated
+            (let ((order (etaf-install--sort-by-dependencies
+                          (mapcar #'car updated))))
+              (setq updated
+                    (delq nil (mapcar (lambda (n) (assq n updated)) order)))))
+          ;; Prune superseded older versions for upgraded packages and installed
+          ;; ETAF dependencies in scope (never touching unrelated packages).
+          (let ((etaf-names (mapcar #'car (etaf-install--available-targets)))
+                (prune-scope (append ordered added-names)))
+            (dolist (name ordered)
+              (when (package-installed-p name)
+                (dolist (dep (etaf-install--installed-dependency-closure name))
+                  (when (memq dep etaf-names)
+                    (push dep prune-scope)))))
+            (setq pruned (etaf-install--prune-obsolete-packages prune-scope))))))
     (let (native-installed native-failed)
       (when updated
         (setq etaf-install--restart-needed t)
@@ -1731,20 +1913,14 @@ package.el remains the package manager."
           (let ((one (etaf-install--native-ensure-best-effort (car item))))
             (setq native-installed (append native-installed (plist-get one :installed))
                   native-failed (append native-failed (plist-get one :failed))))))
-      (let ((report (list :updated (nreverse updated)
+      (let ((report (list :updated updated
+                          :pruned pruned
                           :failed (nreverse failed)
                           :native-installed native-installed
                           :native-failed native-failed
                           :restart (and updated t))))
         (when (called-interactively-p 'interactive)
-          (message "ETAF: %s%s%s"
-                   (if updated
-                       (format "updated %s"
-                               (mapconcat (lambda (item) (format "%s %s" (car item) (cdr item)))
-                                          updated ", "))
-                     "no updates")
-                   (if failed (format "; %d failed" (length failed)) "")
-                   (if updated "; restart Emacs to use it" "")))
+          (message "%s" (etaf-install--format-update-summary report)))
         report))))
 
 ;;;###autoload
@@ -1761,9 +1937,40 @@ installed.  With NO-CONFIRM, skip the prompt."
               (y-or-n-p (format "Remove %s? Package files only; app data, logins and caches stay. "
                                 package)))
     (user-error "Cancelled"))
-  (let ((descriptor (cadr (assq package package-alist))))
-    (package-delete descriptor)
-    (setq package-selected-packages (delete package package-selected-packages))
+  (let* ((descs (etaf-install--live-installed-descs package))
+         (newest (etaf-install--newest-installed-desc package))
+         (dependents
+          (cl-loop for (other . other-descs) in package-alist
+                   unless (eq other package)
+                   when (cl-some
+                         (lambda (od)
+                           (let ((dir (package-desc-dir od)))
+                             (and (or (not (stringp dir)) (file-directory-p dir))
+                                  (assq package (package-desc-reqs od)))))
+                         other-descs)
+                   collect other)))
+    (when dependents
+      (user-error "Cannot remove %s; still required by %s"
+                  package (mapconcat #'symbol-name dependents ", ")))
+    (let* ((entry (assq package package-alist))
+           (newest-raw (and newest (package-desc-dir newest)))
+           (seen-dirs (when (and (stringp newest-raw) (file-directory-p newest-raw))
+                        (list (file-truename newest-raw)))))
+      (dolist (desc (remq newest descs))
+        (let* ((dir (and (package-desc-p desc) (package-desc-dir desc)))
+               (true-dir (and (stringp dir) (file-directory-p dir)
+                              (file-truename dir))))
+          (when (and true-dir
+                     (not (member true-dir seen-dirs))
+                     (etaf-install--descriptor-deletable-p desc))
+            (package-delete desc t t)
+            (push true-dir seen-dirs))
+          (when entry
+            (setcdr entry (delq desc (cdr entry)))))))
+    (when newest
+      (package-delete newest))
+    (setq package-alist (assq-delete-all package package-alist)
+          package-selected-packages (delete package package-selected-packages))
     (message "ETAF: %s removed. App data, logins and caches were kept." package)
     package))
 
@@ -2383,16 +2590,18 @@ When HEADLINE is non-nil, display it above the key hints in the echo area."
 (defun etaf-install--manage-update ()
   "Update the target at point."
   (interactive)
-  (let ((package (etaf-install--manage-current-target)))
-    (etaf-install-update package)
-    (etaf-install--manage-reprint)))
+  (let* ((package (etaf-install--manage-current-target))
+         (report (etaf-install-update package)))
+    (etaf-install--manage-reprint
+     (etaf-install--format-update-summary report))))
 
 (defun etaf-install--manage-update-all ()
   "Update every installed target and the installer."
   (interactive)
   (when (y-or-n-p "Update all installed ETAF targets and the installer? ")
-    (etaf-install-update)
-    (etaf-install--manage-reprint)))
+    (let ((report (etaf-install-update)))
+      (etaf-install--manage-reprint
+       (etaf-install--format-update-summary report)))))
 
 (defun etaf-install--manage-remove ()
   "Remove the target at point."

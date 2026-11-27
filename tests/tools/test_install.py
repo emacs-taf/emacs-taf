@@ -1074,5 +1074,180 @@ class InstallTests(unittest.TestCase):
 """)
 
 
+    def _bump_core_stack_v2(self):
+        """Bump ecss, ebox, etaf and etaf-ui with chained minimum requirements."""
+        updates = {
+            "ecss": [("Version: 0.1.0", "Version: 0.1.1")],
+            "ebox": [("Version: 3.0.0", "Version: 3.0.1"), ('(ecss "0.1.0")', '(ecss "0.1.1")')],
+            "etaf": [("Version: 0.2.1", "Version: 0.2.2"), ('(ebox "3.0.0")', '(ebox "3.0.1")')],
+            "etaf-ui": [("Version: 0.1.0", "Version: 0.1.1"), ('(etaf "0.2.1")', '(etaf "0.2.2")')],
+        }
+        for name, pairs in updates.items():
+            entry = self.sources / name / f"{name}.el"
+            text = entry.read_text()
+            for old, new in pairs:
+                self.assertIn(old, text, f"Missing {old!r} in {entry}")
+                text = text.replace(old, new)
+            entry.write_text(text)
+        self.build()
+
+    def _elpa_dirs(self):
+        return sorted(p.name for p in (self.profile / "elpa").iterdir()
+                      if p.is_dir() and p.name != "archives")
+
+    def test_update_all_upgrades_bottom_up_and_prunes_old_versions(self):
+        self.run_lisp("(etaf-install 'etaf-ui t)")
+        self._bump_core_stack_v2()
+        self.run_lisp("""
+(package-initialize)
+(let ((report (etaf-install-update)))
+  (unless (equal (plist-get report :updated)
+                 '((ecss . "0.1.1") (ebox . "3.0.1") (etaf . "0.2.2") (etaf-ui . "0.1.1")))
+    (error "Expected bottom-up updates for entire stack, got: %S" report))
+  (when (plist-get report :failed)
+    (error "Unexpected failures: %S" report))
+  (dolist (name '(ecss ebox etaf etaf-ui))
+    (let ((descs (cdr (assq name package-alist))))
+      (unless (= 1 (length descs))
+        (error "Stale package-alist entries for %s: %S" name descs))))
+  ;; Second update must be a clean no-op with no leftover old versions.
+  (let ((second (etaf-install-update)))
+    (when (or (plist-get second :updated) (plist-get second :pruned))
+      (error "Second update was not a clean no-op: %S" second))))
+""")
+        self.assertEqual(
+            ["ebox-3.0.1", "ecss-0.1.1", "etaf-0.2.2", "etaf-ui-0.1.1"],
+            self._elpa_dirs(),
+        )
+
+    def test_single_target_update_prunes_transitively_upgraded_dependencies(self):
+        self.run_lisp("(etaf-install 'etaf-ui t)")
+        self._bump_core_stack_v2()
+        self.run_lisp("""
+(package-initialize)
+(let ((report (etaf-install-update 'etaf-ui)))
+  (unless (equal (plist-get report :updated)
+                 '((ecss . "0.1.1") (ebox . "3.0.1") (etaf . "0.2.2") (etaf-ui . "0.1.1")))
+    (error "Expected transitive dependency updates reported bottom-up, got: %S" report))
+  (unless (and (member "ecss-0.1.0" (plist-get report :pruned))
+               (member "ebox-3.0.0" (plist-get report :pruned))
+               (member "etaf-0.2.1" (plist-get report :pruned)))
+    (error "Expected superseded dependency dirs pruned, got: %S" report))
+  (dolist (name '(ecss ebox etaf etaf-ui))
+    (unless (= 1 (length (cdr (assq name package-alist))))
+      (error "Stale package-alist entries remain for %s" name))))
+""")
+        self.assertEqual(
+            ["ebox-3.0.1", "ecss-0.1.1", "etaf-0.2.2", "etaf-ui-0.1.1"],
+            self._elpa_dirs(),
+        )
+
+    def test_installing_new_target_prunes_superseded_deps_and_spares_unrelated_packages(self):
+        self.run_lisp("(etaf-install 'etaf t)")
+        # Simulate an unrelated third-party package that has two versions in elpa/.
+        elpa = self.profile / "elpa"
+        for ver in ("1.0", "2.0"):
+            d = elpa / f"unrelated-{ver}"
+            d.mkdir(parents=True)
+            (d / "unrelated-pkg.el").write_text(
+                f'(define-package "unrelated" "{ver}" "Third-party" nil)\n'
+            )
+            (d / "unrelated.el").write_text(f"(provide 'unrelated)\n")
+        self._bump_core_stack_v2()
+        self.run_lisp("""
+(package-initialize)
+(etaf-install 'etaf-ui t)
+(dolist (name '(ecss ebox etaf etaf-ui))
+  (unless (= 1 (length (cdr (assq name package-alist))))
+    (error "Stale package-alist entries remain for %s" name)))
+""")
+        self.assertEqual(
+            ["ebox-3.0.1", "ecss-0.1.1", "etaf-0.2.2", "etaf-ui-0.1.1",
+             "unrelated-1.0", "unrelated-2.0"],
+            self._elpa_dirs(),
+        )
+
+    def test_update_cleans_preexisting_obsolete_etaf_versions_and_respects_retention(self):
+        self.run_lisp("(etaf-install 'etaf-ui t)")
+        self._bump_core_stack_v2()
+        # Install v2 via raw package-install so v1 and v2 coexist on disk.
+        self.run_lisp("""
+(package-initialize)
+(package-refresh-contents)
+(package-install (cadr (assq 'etaf-ui package-archive-contents)) t)
+""")
+        self.assertIn("etaf-ui-0.1.0", self._elpa_dirs())
+        self.assertIn("etaf-ui-0.1.1", self._elpa_dirs())
+        # 1) Emacs 31 `package-retention-policy' = t retains all old versions.
+        self.run_lisp("""
+(package-initialize)
+(when (boundp 'package-retention-policy)
+  (let ((package-retention-policy t))
+    (let ((report (etaf-install-update)))
+      (when (plist-get report :pruned)
+        (error "Retained versions should not be pruned: %S" report)))))
+""")
+        self.assertIn("etaf-ui-0.1.0", self._elpa_dirs())
+        self.assertIn("etaf-0.2.1", self._elpa_dirs())
+        # 2) `package-load-list' pinning keeps the pinned version while cleaning unpinned ones.
+        self.run_lisp("""
+(package-initialize)
+(let ((package-load-list '((etaf-ui "0.1.0") all)))
+  (let ((report (etaf-install-update)))
+    (when (member "etaf-ui-0.1.0" (plist-get report :pruned))
+      (error "Pinned version should not be pruned: %S" report))
+    (unless (member "etaf-0.2.1" (plist-get report :pruned))
+      (error "Expected unpinned obsolete etaf-0.2.1 pruned: %S" report))))
+""")
+        self.assertIn("etaf-ui-0.1.0", self._elpa_dirs())
+        self.assertNotIn("etaf-0.2.1", self._elpa_dirs())
+        # 3) With default policy and no archive updates, etaf-install-update cleans remaining old ETAF dir.
+        self.run_lisp("""
+(package-initialize)
+(let ((report (etaf-install-update)))
+  (when (plist-get report :updated)
+    (error "Unexpected updates: %S" report))
+  (when (plist-get report :restart)
+    (error "Pruning inactive old dirs should not require restart: %S" report))
+  (unless (equal (plist-get report :pruned) '("etaf-ui-0.1.0"))
+    (error "Expected preexisting obsolete etaf-ui-0.1.0 pruned: %S" report)))
+""")
+        self.assertEqual(
+            ["ebox-3.0.1", "ecss-0.1.1", "etaf-0.2.2", "etaf-ui-0.1.1"],
+            self._elpa_dirs(),
+        )
+
+    def test_remove_deletes_duplicate_versions_and_refuses_required_dependency(self):
+        self.run_lisp("(etaf-install 'etaf-ui t)")
+        self._bump_core_stack_v2()
+        # Leave both v1 and v2 on disk for etaf and etaf-ui.
+        self.run_lisp("""
+(package-initialize)
+(package-refresh-contents)
+(package-install (cadr (assq 'etaf-ui package-archive-contents)) t)
+""")
+        self.run_lisp("""
+(package-initialize)
+;; Removing etaf while etaf-ui requires it must refuse without deleting anything.
+(let (refused)
+  (condition-case err
+      (etaf-install-remove 'etaf t)
+    (user-error (setq refused (string-match-p "etaf-ui" (error-message-string err)))))
+  (unless refused (error "Expected removal of required dependency etaf to be refused")))
+(unless (= 2 (length (cdr (assq 'etaf package-alist))))
+  (error "Refused remove should not alter etaf descriptors"))
+;; Removing leaf etaf-ui must remove BOTH duplicate versions completely.
+(etaf-install-remove 'etaf-ui t)
+(when (package-installed-p 'etaf-ui)
+  (error "etaf-ui remained installed after remove"))
+(when (assq 'etaf-ui package-alist)
+  (error "Stale etaf-ui entry remained in package-alist"))
+""")
+        dirs = self._elpa_dirs()
+        self.assertFalse(any(d.startswith("etaf-ui-") for d in dirs), dirs)
+        self.assertIn("etaf-0.2.1", dirs)
+        self.assertIn("etaf-0.2.2", dirs)
+
+
 if __name__ == "__main__":
     unittest.main()
