@@ -255,24 +255,114 @@ and falling back to `viewBox' keeps responsive SVGs at their true aspect ratio."
              ((and vb-w vb-h)
               (cons vb-w vb-h)))))))))
 
+(defun etaf-md--raster-header-pixels (path)
+  "Return raster image pixel size `(WIDTH . HEIGHT)' from PATH's file header.
+Supports PNG, GIF, JPEG and WebP without requiring a graphical frame or full
+image decode; returns nil for unrecognized or unreadable files."
+  (when (and (stringp path) (file-readable-p path))
+    (ignore-errors
+      (with-temp-buffer
+        (set-buffer-multibyte nil)
+        (insert-file-contents-literally path nil 0 65536)
+        (let ((size (buffer-size)))
+          (cond
+           ;; PNG: 8-byte signature + IHDR chunk (width at 17..20, height at 21..24)
+           ((and (>= size 24)
+                 (equal (buffer-substring-no-properties 1 9)
+                        "\x89PNG\r\n\x1a\n"))
+            (let ((w (+ (ash (char-after 17) 24) (ash (char-after 18) 16)
+                        (ash (char-after 19) 8) (char-after 20)))
+                  (h (+ (ash (char-after 21) 24) (ash (char-after 22) 16)
+                        (ash (char-after 23) 8) (char-after 24))))
+              (when (and (> w 0) (> h 0)) (cons w h))))
+           ;; GIF87a / GIF89a: 16-bit LE width at 7..8, height at 9..10
+           ((and (>= size 10)
+                 (member (buffer-substring-no-properties 1 7) '("GIF87a" "GIF89a")))
+            (let ((w (+ (char-after 7) (ash (char-after 8) 8)))
+                  (h (+ (char-after 9) (ash (char-after 10) 8))))
+              (when (and (> w 0) (> h 0)) (cons w h))))
+           ;; WebP: RIFF....WEBP + VP8X / VP8L / VP8 chunk
+           ((and (>= size 30)
+                 (equal (buffer-substring-no-properties 1 5) "RIFF")
+                 (equal (buffer-substring-no-properties 9 13) "WEBP"))
+            (let ((chunk (buffer-substring-no-properties 13 17)))
+              (cond
+               ((equal chunk "VP8X")
+                (let ((w (1+ (+ (char-after 25) (ash (char-after 26) 8)
+                                (ash (char-after 27) 16))))
+                      (h (1+ (+ (char-after 28) (ash (char-after 29) 8)
+                                (ash (char-after 30) 16)))))
+                  (when (and (> w 0) (> h 0)) (cons w h))))
+               ((and (equal chunk "VP8L") (= (char-after 21) #x2f))
+                (let* ((bits (+ (char-after 22) (ash (char-after 23) 8)
+                                (ash (char-after 24) 16) (ash (char-after 25) 24)))
+                       (w (1+ (logand bits #x3fff)))
+                       (h (1+ (logand (ash bits -14) #x3fff))))
+                  (when (and (> w 0) (> h 0)) (cons w h))))
+               ((equal chunk "VP8 ")
+                (let ((w (logand (+ (char-after 27) (ash (char-after 28) 8)) #x3fff))
+                      (h (logand (+ (char-after 29) (ash (char-after 30) 8)) #x3fff)))
+                  (when (and (> w 0) (> h 0)) (cons w h)))))))
+           ;; JPEG: SOI (FF D8) followed by marker segments until SOF0..SOF15
+           ((and (>= size 4)
+                 (= (char-after 1) #xff)
+                 (= (char-after 2) #xd8))
+            (let ((pos 3)
+                  (found nil))
+              (while (and (not found) (< (1+ pos) size))
+                (while (and (< pos size) (/= (char-after pos) #xff))
+                  (setq pos (1+ pos)))
+                (while (and (< pos size) (= (char-after pos) #xff))
+                  (setq pos (1+ pos)))
+                (when (< pos size)
+                  (let ((marker (char-after pos)))
+                    (setq pos (1+ pos))
+                    (cond
+                     ;; Standalone markers without length
+                     ((or (= marker #x01)
+                          (and (>= marker #xd0) (<= marker #xd9)))
+                      nil)
+                     ;; Start of Frame markers carrying height/width
+                     ((and (memq marker '(#xc0 #xc1 #xc2 #xc3 #xc5 #xc6 #xc7
+                                               #xc9 #xca #xcb #xcd #xce #xcf))
+                           (<= (+ pos 6) size))
+                      (let ((h (+ (ash (char-after (+ pos 3)) 8)
+                                  (char-after (+ pos 4))))
+                            (w (+ (ash (char-after (+ pos 5)) 8)
+                                  (char-after (+ pos 6)))))
+                        (when (and (> w 0) (> h 0))
+                          (setq found (cons w h)))))
+                     ((<= (1+ pos) size)
+                      (let ((len (+ (ash (char-after pos) 8)
+                                    (char-after (1+ pos)))))
+                        (if (< len 2)
+                            (setq pos size)
+                          (setq pos (+ pos len)))))
+                     (t (setq pos size))))))
+              found))))))))
+
 (defun etaf-md--probe-image-pixels (path)
   "Return PATH's image pixel size as (WIDTH . HEIGHT), or nil.
 Drop PATH's entry first so an updated file is measured from its bytes rather
-than the previous render."
-  (if (string-suffix-p ".svg" (downcase path))
-      (etaf-md--svg-declared-size path)
-    (ignore-errors
-      (clear-image-cache path)
-      (when-let* ((image (create-image path nil nil)))
-        (let ((size (image-size image t)))
-          (cons (car size) (cdr size)))))))
+than the previous render.  On non-graphical frames, inspects PNG/GIF/JPEG/WebP
+headers directly so terminal and batch renders preserve aspect ratio."
+  (cond
+   ((string-suffix-p ".svg" (downcase path))
+    (etaf-md--svg-declared-size path))
+   ((display-graphic-p)
+    (or (ignore-errors
+          (clear-image-cache path)
+          (when-let* ((image (create-image path nil nil)))
+            (let ((size (image-size image t)))
+              (cons (car size) (cdr size)))))
+        (etaf-md--raster-header-pixels path)))
+   (t
+    (etaf-md--raster-header-pixels path))))
 
 (defun etaf-md--image-pixels (path)
   "Return PATH's pixel size as (WIDTH . HEIGHT), or nil.
-SVG headers are parsed directly without requiring a graphic frame; raster pixel
-measurement needs a graphic frame.  Unchanged files reuse their cached probe."
-  (when (or (display-graphic-p)
-            (and (stringp path) (string-suffix-p ".svg" (downcase path))))
+Unchanged files reuse their cached probe."
+  (when (and (stringp path) (file-readable-p path))
     (etaf-md--media-pixels-cached
      path #'etaf-md--probe-image-pixels)))
 
@@ -956,12 +1046,87 @@ ETAF match unchanged siblings in place when blocks are inserted or removed."
 ;;; Media rendering
 ;;; ---------------------------------------------------------------------------
 
+(defconst etaf-md--table-image-max-rows 16
+  "Maximum character-row height for an image rendered inside a table cell.
+Keeps tall portrait images legible while preserving multi-row table density.")
+
+(defun etaf-md--table-image-view (node env)
+  "Return the View of image NODE fitted inside its table cell in ENV.
+Local images and cached remote images draw via the ETAF image Host without a
+redundant figure border or caption; missing files and uncached remote URLs
+fall back to the clickable inline image chip until available."
+  (let* ((url (plist-get node :url))
+         (alt (plist-get node :alt))
+         (href (plist-get node :link))
+         (remote (etaf-md--remote-url-p url))
+         (cached-remote (and remote (etaf-md-cache-image-path url)))
+         (path (cond (cached-remote cached-remote)
+                     ((and (stringp url) (not remote))
+                      (etaf-md--absolute-media url env))))
+         (exists (and path (file-exists-p path)
+                      (eq (etaf-md--media-kind path) 'image))))
+    (if (not exists)
+        (etaf-md--inline-image-view node env)
+      (let* ((cell-width (max 4 (or (plist-get env :table-cell-width)
+                                    (plist-get env :width)
+                                    24)))
+             (natural (etaf-md--image-pixels path))
+             (pixels (etaf-md--media-target-pixels
+                      natural (plist-get node :width) (plist-get node :height)))
+             (grid (if (and (consp pixels)
+                            (numberp (car pixels))
+                            (numberp (cdr pixels)))
+                       (etaf-md--media-grid-cells
+                        pixels cell-width etaf-md--table-image-max-rows)
+                     (cons (min cell-width 20) 8)))
+             (cross (pcase (plist-get env :table-cell-align)
+                      ('center 'center)
+                      ('right 'end)
+                      (_ 'start)))
+             (label (if (and (stringp alt) (not (string-empty-p alt)))
+                        alt
+                      (or (file-name-nondirectory path) url "图片")))
+             (open
+              (if href
+                  (lambda () (funcall (plist-get env :open-url) href))
+                (lambda ()
+                  (etaf-md--activate-media
+                   env 'image path
+                   (lambda ()
+                     (let ((lb (plist-get env :open-lightbox)))
+                       (unless (and (functionp lb)
+                                    (funcall lb path alt))
+                         (if (and (not remote) path)
+                             (funcall (plist-get env :open-file) path)
+                           (funcall (plist-get env :open-url) url))))))))))
+        (etaf-node 'column
+                   (list :width 'stretch
+                         :cross-align cross
+                         :margin '((lh 1) (ch 0))
+                         :item-gap '(lh 0))
+                   (list
+                    (etaf-node 'image
+                               (list :src path
+                                     :columns (car grid)
+                                     :rows (cdr grid)
+                                     :adapter 'auto
+                                     :on-press open
+                                     :role (if href 'link 'button)
+                                     :tab-index 0
+                                     :pointer 'hand
+                                     :help-echo (if href
+                                                    (format "%s → %s" label href)
+                                                  (format "%s（按 RET 放大/打开）" label)))
+                               nil)))))))
+
 (defun etaf-md--render-media (kind node env)
   "Return the media View for NODE of KIND in ENV.
-Inline images render as a compact chip; block images, videos and HTML media
-elements render as the full poster card with caption and activation."
+Inline images render as a compact chip; table images render fitted inside
+their table cell without redundant borders; block images, videos and HTML
+media elements render as the full poster card with caption and activation."
   (pcase kind
     ('inline-image (etaf-md--inline-image-view node env))
+    ('table-image (etaf-md--table-image-view node env))
     (_ (etaf-md--media-card (plist-get node :url)
                             (plist-get node :alt)
                             env kind

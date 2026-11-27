@@ -486,18 +486,24 @@ keeps its text one gutter in rather than on the edge."
 
 (ert-deftest etaf-md-tests-media-keeps-source-aspect-under-height-cap ()
   "A wide image narrows its grid with the height cap instead of squashing.
-The fixture is 4:1; a card that only capped the rows would render it at
-roughly 9:1 while the visible cell grid must stay close to the source."
+The fixture is 4:1; accounting for character cell aspect ratio (1:2 in
+terminal/batch mode or frame char metrics in GUI), the visible grid must
+match the source proportions instead of falling back to a fixed card shape."
   (let* ((image (etaf-md-tests--fixture "wide-400x100.png"))
          (session (etaf-md-create
                    :text (format "![wide](%s)\n" image))))
     (etaf-md-tests--with-mount session
       (let* ((shape (etaf-md-tests--media-grid-shape))
              (columns (car shape))
-             (rows (cdr shape)))
+             (rows (cdr shape))
+             (cell-aspect (if (display-graphic-p)
+                              (/ (float (frame-char-height))
+                                 (max 1.0 (float (frame-char-width))))
+                            2.0))
+             (visual-aspect (/ (* 1.0 columns) (* rows cell-aspect))))
         (should (> rows 1))
         (should (> columns 1))
-        (should (< (abs (- (/ (* 1.0 columns) rows) 4.0)) 1.2))))))
+        (should (< (abs (- visual-aspect 4.0)) 0.8))))))
 
 (ert-deftest etaf-md-tests-video-card-plays-with-a-native-decoder ()
   "A local video card offers inline playback when ffmpeg can decode it.
@@ -4339,3 +4345,84 @@ without waiting for another command, while `pulse-flag' = `never' suppresses it.
         (with-current-buffer preview (ignore-errors (etaf-md-close))))
       (when (buffer-live-p source) (kill-buffer source))
       (delete-file file))))
+
+(ert-deftest etaf-md-tests-table-renders-images-and-opens-lightbox ()
+  "Markdown pipe tables and `:::table' containers render fitted images and open the lightbox.
+Local Markdown images, empty-alt images, inline HTML `<img>' tags and `:::table'
+cells paint raster blocks inside intact column borders instead of `🖼' chips,
+missing images fall back to a labeled chip, linked images follow `:on-link', and
+activating a table image opens the multi-image lightbox gallery."
+  (let* ((dir (make-temp-file "etaf-md-table-img-" t))
+         (src-img (etaf-md-tests--fixture "wide-400x100.png"))
+         (img1 (expand-file-name "img1.png" dir))
+         (img2 (expand-file-name "img2.png" dir))
+         (md-file (expand-file-name "table-images.md" dir))
+         (preview nil)
+         (etaf-md-media-lightbox t))
+    (unwind-protect
+        (progn
+          (copy-file src-img img1 t)
+          (copy-file src-img img2 t)
+          (with-temp-file md-file
+            (insert "# 表格图片测试\n\n"
+                    "| 列一 | 列二 |\n"
+                    "| --- | --- |\n"
+                    "| ![图一](./img1.png) | 文本说明 |\n"
+                    "| ![](./img2.png) | <img src=\"./img1.png\" alt=\"HTML图\" width=\"160\"> |\n"
+                    "| ![缺失](./missing.png) | 正常行 |\n\n"
+                    ":::table {title=\"容器表格\"}\n"
+                    "| 图例 | 备注 |\n"
+                    "| --- | --- |\n"
+                    "| ![容器图](./img2.png) | 容器内图片 |\n"
+                    ":::\n"))
+          (setq preview (etaf-md-open md-file))
+          (let ((rt (etaf-runtime-for-buffer preview)))
+            (should rt)
+            (with-current-buffer preview
+              (let* ((text (buffer-substring-no-properties (point-min) (point-max)))
+                     (table-rows (cl-remove-if-not (lambda (l) (string-match-p "│" l))
+                                                   (split-string text "\n"))))
+                ;; Existing images render as rasters, never placeholder chips.
+                (should (string-match-p "[▀.]\\{4,\\}" text))
+                (should-not (string-match-p "🖼 图一" text))
+                (should-not (string-match-p "🖼 HTML图" text))
+                (should-not (string-match-p "🖼 容器图" text))
+                ;; Missing local image still falls back gracefully.
+                (should (string-match-p "🖼 缺失" text))
+                (should (string-match-p "容器内图片" text))
+                ;; Every 2-column table row keeps all 3 vertical border bars intact.
+                (should (> (length table-rows) 6))
+                (should (cl-every (lambda (r) (= 3 (cl-count ?│ r))) table-rows)))
+              ;; Activating the first table image opens the lightbox over both unique images.
+              (goto-char (point-min))
+              (should (re-search-forward "[▀.]\\{4,\\}" nil t))
+              (goto-char (match-beginning 0))
+              (call-interactively (key-binding (kbd "RET")))
+              (etaf-runtime-flush rt)
+              (should (string-match-p "1 / 2"
+                                      (buffer-substring-no-properties (point-min) (point-max))))
+              (execute-kbd-macro (kbd "n"))
+              (etaf-runtime-flush rt)
+              (should (string-match-p "2 / 2"
+                                      (buffer-substring-no-properties (point-min) (point-max))))
+              (execute-kbd-macro (kbd "q"))
+              (etaf-runtime-flush rt)
+              (should-not (string-match-p "2 / 2"
+                                          (buffer-substring-no-properties (point-min) (point-max))))))
+          ;; Linked image inside a table follows `:on-link' on activation.
+          (let* ((opened nil)
+                 (linked-file (expand-file-name "linked.md" dir))
+                 (session nil))
+            (with-temp-file linked-file
+              (insert "| 链接图 | 说明 |\n| --- | --- |\n| [![点击](./img1.png)](https://example.com/pic) | ok |\n"))
+            (setq session (etaf-md-create :file linked-file
+                                          :on-link (lambda (url) (push url opened) t)))
+            (etaf-md-tests--with-mount session
+              (goto-char (point-min))
+              (should (re-search-forward "[▀.]\\{4,\\}" nil t))
+              (goto-char (match-beginning 0))
+              (call-interactively (key-binding (kbd "RET"))))
+            (should (equal opened '("https://example.com/pic")))))
+      (when (buffer-live-p preview)
+        (with-current-buffer preview (ignore-errors (etaf-md-close))))
+      (delete-directory dir t))))

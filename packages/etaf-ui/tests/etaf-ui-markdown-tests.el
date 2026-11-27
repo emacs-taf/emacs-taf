@@ -1472,5 +1472,91 @@ narrow splits fold rows into stacked record cards."
         (when-let* ((rt (etaf-runtime-for-buffer buf))) (etaf-unmount rt))
         (when (get-buffer buf) (kill-buffer buf))))))
 
+(ert-deftest etaf-ui-markdown-table-images-dispatch-with-column-width ()
+  "Table cells dispatch Markdown, linked and inline HTML images as `table-image'.
+Each call receives `:table-cell t', the resolved column `:table-cell-width' and
+`:table-cell-align', empty-alt image columns retain usable width, and stacked
+card layouts at narrow widths continue dispatching `table-image'."
+  (let* ((calls nil)
+         (md (concat
+              "| 左图 | 中图 | 右图 |\n"
+              "| :--- | :---: | ---: |\n"
+              "| ![封面](cover.png) | ![](empty.png) | [![徽章](badge.png)](https://example.com/doc) |\n"
+              "| <img src=\"shot.png\" alt=\"截图\" width=\"120\" height=\"80\"> | 说明 | ok |\n"))
+         (doc (etaf-ui-markdown-parse md))
+         (spy (lambda (kind node env)
+                (push (list :kind kind
+                            :url (plist-get node :url)
+                            :alt (plist-get node :alt)
+                            :link (plist-get node :link)
+                            :width (plist-get node :width)
+                            :height (plist-get node :height)
+                            :table-cell (plist-get env :table-cell)
+                            :cell-width (plist-get env :table-cell-width)
+                            :env-width (plist-get env :width)
+                            :align (plist-get env :table-cell-align))
+                      calls)
+                (etaf-node 'text nil
+                           (list (format "[IMG:%s@%d]"
+                                         (or (plist-get node :url) "")
+                                         (or (plist-get env :table-cell-width) 0))))))
+         (env (etaf-ui-markdown-test--env :width 72
+                                          :features (plist-get doc :features)
+                                          :render-media spy))
+         (views (etaf-ui-markdown-view-blocks (plist-get doc :children) env))
+         (buf (format " *etaf-ui-markdown-%s*" (cl-gensym))))
+    (unwind-protect
+        (progn
+          (etaf-mount buf (etaf-node 'column (list :width '(ch 72)) views))
+          (setq calls (nreverse calls))
+          (should (= 4 (length calls)))
+          (dolist (c calls)
+            (should (eq 'table-image (plist-get c :kind)))
+            (should (eq t (plist-get c :table-cell)))
+            (should (integerp (plist-get c :cell-width)))
+            (should (equal (plist-get c :cell-width) (plist-get c :env-width)))
+            (should (>= (plist-get c :cell-width) 10)))
+          ;; Alignment and payload attributes match each column/source.
+          (let ((cover (nth 0 calls))
+                (empty (nth 1 calls))
+                (badge (nth 2 calls))
+                (shot  (nth 3 calls)))
+            (should (equal (plist-get cover :url) "cover.png"))
+            (should (eq (plist-get cover :align) 'left))
+            (should (equal (plist-get empty :url) "empty.png"))
+            (should (eq (plist-get empty :align) 'center))
+            (should (equal (plist-get badge :url) "badge.png"))
+            (should (equal (plist-get badge :link) "https://example.com/doc"))
+            (should (eq (plist-get badge :align) 'right))
+            (should (equal (plist-get shot :url) "shot.png"))
+            (should (equal (plist-get shot :alt) "截图"))
+            (should (= 120 (plist-get shot :width)))
+            (should (= 80 (plist-get shot :height)))
+            (should (eq (plist-get shot :align) 'left))))
+      (when-let* ((rt (etaf-runtime-for-buffer buf))) (etaf-unmount rt))
+      (when (get-buffer buf) (kill-buffer buf)))
+    ;; Ultra-narrow stacked card fallback (8 columns at width 40) still dispatches `table-image'.
+    (setq calls nil)
+    (let* ((wide-md (concat
+                     "| A | B | C | D | E | F | G | H |\n"
+                     "| --- | --- | --- | --- | --- | --- | --- | --- |\n"
+                     "| 标题行 | ![卡片图](card.png) | ccc | ddd | eee | fff | ggg | hhh |\n"))
+           (wide-doc (etaf-ui-markdown-parse wide-md))
+           (card-env (etaf-ui-markdown-test--env :width 40
+                                                 :features (plist-get wide-doc :features)
+                                                 :render-media spy))
+           (card-views (etaf-ui-markdown-view-blocks (plist-get wide-doc :children) card-env))
+           (card-buf (format " *etaf-ui-markdown-%s*" (cl-gensym))))
+      (unwind-protect
+          (progn
+            (etaf-mount card-buf (etaf-node 'column (list :width '(ch 40)) card-views))
+            (should (string-match-p "A · 标题行" (etaf-ui-markdown-test--text card-buf)))
+            (should (= 1 (length calls)))
+            (should (eq 'table-image (plist-get (car calls) :kind)))
+            (should (eq t (plist-get (car calls) :table-cell)))
+            (should (>= (plist-get (car calls) :cell-width) 16)))
+        (when-let* ((rt (etaf-runtime-for-buffer card-buf))) (etaf-unmount rt))
+        (when (get-buffer card-buf) (kill-buffer card-buf))))))
+
 (provide 'etaf-ui-markdown-tests)
 ;;; etaf-ui-markdown-tests.el ends here

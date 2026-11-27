@@ -1462,6 +1462,11 @@
       "name": "etaf-ui-dialog-defaults-to-centered-in-buffer-with-uniform-backdrop",
       "file": "tests/etaf-ui-surface-tests.el",
       "purpose": "Centered modal dialogs default to in-buffer rendering with exact vertical centering, uniform dimmed canvas background and clean focus restoration."
+    },
+    {
+      "name": "etaf-ui-markdown-table-images-dispatch-with-column-width",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "Table cells dispatch Markdown, empty-alt, linked and inline HTML images via `:render-media' as `table-image' with resolved column width and alignment across both grid and narrow card layouts."
     }
   ]
 }

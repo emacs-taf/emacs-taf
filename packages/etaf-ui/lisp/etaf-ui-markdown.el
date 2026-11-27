@@ -551,12 +551,29 @@ Entries are (:text STRING :props PLIST) or (:view VIEW)."
         ('footnote-ref
          (push (list :view (etaf-ui-markdown--footnote-view node env)) result))
         ('image
-         (push (list :view (etaf-ui-markdown--render-media 'inline-image node env))
-               result))
+         (let* ((in-table (plist-get env :table-cell))
+                (href (plist-get inherited :link))
+                (payload (if href
+                             (plist-put (copy-sequence node) :link href)
+                           node)))
+           (push (list :view (etaf-ui-markdown--render-media
+                              (if in-table 'table-image 'inline-image)
+                              payload env))
+                 result)))
         ('html
-         (push (list :text (or (plist-get node :text) "")
-                     :props (plist-put (copy-sequence inherited) :muted t))
-               result))
+         (let ((media (and (plist-get env :table-cell)
+                           (etaf-ui-markdown--inline-html-image node))))
+           (if media
+               (let* ((href (plist-get inherited :link))
+                      (payload (if href
+                                   (plist-put (copy-sequence media) :link href)
+                                 media)))
+                 (push (list :view (etaf-ui-markdown--render-media
+                                    'table-image payload env))
+                       result))
+             (push (list :text (or (plist-get node :text) "")
+                         :props (plist-put (copy-sequence inherited) :muted t))
+                   result))))
         (_ nil)))
     (nreverse result)))
 
@@ -585,9 +602,12 @@ Adjacent text runs with equal styles are merged into one entry."
 (defun etaf-ui-markdown--render-media (kind node env)
   "Render media NODE of KIND through ENV's `:render-media', or a placeholder.
 KIND is `image' for a block image, `video' for a block video, `inline-image'
-for an inline image and `html-media' for a source-bearing HTML media element.
-NODE is the parsed inline or a media descriptor.  Without `:render-media' the
-renderer keeps the document text: the media's alt text or URL."
+for an inline image, `table-image' for an image inside a table cell, and
+`html-media' for a source-bearing HTML media element.
+NODE is the parsed inline or a media descriptor.  For `table-image', ENV
+carries `:table-cell' t, `:width' and `:table-cell-width' set to the cell's
+inner content column budget, and `:table-cell-align'.  Without `:render-media'
+the renderer keeps the document text: the media's alt text or URL."
   (if-let* ((renderer (plist-get env :render-media)))
       (funcall renderer kind node env)
     (etaf-node 'text
@@ -683,7 +703,9 @@ their detail cards immediately below the paragraph."
     (cond
      ((and (= 1 (length children))
            (eq (plist-get (car children) :type) 'image))
-      (etaf-ui-markdown--render-media 'image (car children) env))
+      (etaf-ui-markdown--render-media
+       (if (plist-get env :table-cell) 'table-image 'image)
+       (car children) env))
      ((cl-every (lambda (child) (eq (plist-get child :type) 'comment)) children)
       nil)
      (t
@@ -1447,26 +1469,85 @@ The floor of a column covers this padding on both sides plus its one-pixel
 border, so a change here has to reach both places or the widest token in a
 column gets clipped to its last character.")
 
+(defconst etaf-ui-markdown--table-image-min-width 12
+  "Minimum content width (in character cells) reserved for an image column.
+Prevents columns holding images with short or empty alt text from being crushed
+next to wide text columns.")
+
+(defconst etaf-ui-markdown--table-image-weight 18
+  "Minimum proportional weight for a table column containing images.")
+
+(defun etaf-ui-markdown--inline-html-image (node)
+  "Return an image media descriptor when inline html NODE is an `<img>' tag."
+  (when (eq (plist-get node :type) 'html)
+    (let ((media (etaf-ui-markdown--html-media (or (plist-get node :text) ""))))
+      (when (and media (eq (plist-get media :kind) 'image))
+        media))))
+
+(defun etaf-ui-markdown--cell-has-image-p (inlines)
+  "Return non-nil when inline list INLINES contains an image or `<img>' tag."
+  (cl-some (lambda (node)
+             (or (eq (plist-get node :type) 'image)
+                 (etaf-ui-markdown--inline-html-image node)
+                 (etaf-ui-markdown--cell-has-image-p (plist-get node :children))))
+           inlines))
+
 (defun etaf-ui-markdown--table-floors (rows columns)
   "Return the min-width floors of COLUMNS for table ROWS.
-A column's floor covers its widest unbreakable token plus the cell's padding
-and hairline borders, so a word or a short CJK run stays whole.  Every row
-gets the same floor for a column: the table is one grid, so a floor taken
-from a single row would resolve that row's tracks against other widths and
-push it out of line."
+A column's floor covers its widest unbreakable token (or image floor) plus the
+cell's padding and hairline borders, so a word, short CJK run or thumbnail
+stays whole.  Every row gets the same floor for a column: the table is one
+grid, so a floor taken from a single row would resolve that row's tracks
+against other widths and push it out of line."
   (let ((widths (make-list columns 0)))
     (dolist (row rows)
       (cl-loop for inlines in row
                for column from 0
-               do (setf (nth column widths)
-                        (max (nth column widths)
-                             (apply #'max 0
-                                    (etaf-ui-markdown--inline-segments inlines))))))
+               do (let ((cell-floor (apply #'max 0
+                                           (etaf-ui-markdown--inline-segments inlines))))
+                    (when (etaf-ui-markdown--cell-has-image-p inlines)
+                      (setq cell-floor (max cell-floor
+                                            etaf-ui-markdown--table-image-min-width)))
+                    (setf (nth column widths)
+                          (max (nth column widths) cell-floor)))))
     (mapcar (lambda (width)
               (+ (* 2 etaf-ui-markdown--table-cell-padding)
                  1
                  (min etaf-ui-markdown--cell-max-floor (or width 0))))
             widths)))
+
+(defun etaf-ui-markdown--table-resolved-widths (floors frs total-inner)
+  "Return resolved per-column track widths for FLOORS and FRS within TOTAL-INNER.
+Matches CSS Grid `minmax(floor, fr)' track sizing so cell media renderers know
+their exact column budget without overflowing."
+  (let* ((count (length floors))
+         (sizes (vconcat floors))
+         (flexible (number-sequence 0 (1- count)))
+         (remaining (max (apply #'+ floors) (or total-inner 0))))
+    (while flexible
+      (let* ((total-fr (cl-loop for i in flexible sum (max 1 (nth i frs))))
+             (unit (/ (float (max 0 remaining)) (max 1 total-fr)))
+             (frozen (cl-remove-if-not
+                      (lambda (i) (> (aref sizes i) (* unit (max 1 (nth i frs)))))
+                      flexible)))
+        (if frozen
+            (dolist (i frozen)
+              (setq remaining (- remaining (aref sizes i))
+                    flexible (delq i flexible)))
+          (dolist (i flexible)
+            (aset sizes i (floor (* unit (max 1 (nth i frs))))))
+          (setq flexible nil))))
+    (append sizes nil)))
+
+(defun etaf-ui-markdown--table-cell-env (env inner-width align)
+  "Return a copy of ENV scoped to a table cell of INNER-WIDTH columns and ALIGN."
+  (let ((width (max 4 inner-width))
+        (copy (copy-sequence env)))
+    (setq copy (plist-put copy :table-cell t))
+    (setq copy (plist-put copy :width width))
+    (setq copy (plist-put copy :table-cell-width width))
+    (setq copy (plist-put copy :table-cell-align (or align 'left)))
+    copy))
 
 (defun etaf-ui-markdown--table-tracks (floors weights)
   "Return the grid tracks of a table from FLOORS and content WEIGHTS.
@@ -1590,7 +1671,10 @@ without clipping or collapsing columns below readable width."
                                                      :border-bottom (and (< idx (1- (length header)))
                                                                          soft-line))
                                                (etaf-ui-markdown--runs-view
-                                                cell env (list :bold t)))))
+                                                cell
+                                                (etaf-ui-markdown--table-cell-env
+                                                 env (max 8 (- card-w 4)) 'left)
+                                                (list :bold t)))))
       (etaf-node
        'column
        (list :width 'stretch
@@ -1620,7 +1704,10 @@ without clipping or collapsing columns below readable width."
                 (when (and lead-hdr (> (etaf-ui-markdown--inline-width lead-hdr) 0))
                   (append (etaf-ui-markdown--runs-view lead-hdr env (list :color muted))
                           (list (etaf-node 'text (list :color muted) (list " · ")))))
-                (etaf-ui-markdown--runs-view lead-val env (list :bold t))))
+                (etaf-ui-markdown--runs-view
+                 lead-val
+                 (etaf-ui-markdown--table-cell-env env (max 8 (- card-w 4)) 'left)
+                 (list :bold t))))
               (cl-loop for h in rest-hdr
                        for v in rest-val
                        for idx from 0
@@ -1645,7 +1732,11 @@ without clipping or collapsing columns below readable width."
                                         (list :width 'stretch
                                               :padding '((lh 0) (ch 1))
                                               :wrap-mode 'word)
-                                        (etaf-ui-markdown--runs-view v env nil))))
+                                        (etaf-ui-markdown--runs-view
+                                         v
+                                         (etaf-ui-markdown--table-cell-env
+                                          env (max 8 (- val-w 2)) 'left)
+                                         nil))))
                          (etaf-node
                           'column
                           (list :width 'stretch
@@ -1657,7 +1748,11 @@ without clipping or collapsing columns below readable width."
                                       (etaf-ui-markdown--runs-view
                                        h env (list :bold t :color muted)))
                            (etaf-node 'box (list :width 'stretch :wrap-mode 'word)
-                                      (etaf-ui-markdown--runs-view v env nil))))))))))
+                                      (etaf-ui-markdown--runs-view
+                                       v
+                                       (etaf-ui-markdown--table-cell-env
+                                        env (max 8 (- card-w 4)) 'left)
+                                       nil))))))))))
         body)))))
 
 (defun etaf-ui-markdown--table-node (block env)
@@ -1685,8 +1780,11 @@ folding into stacked record cards when too many columns face a narrow split."
          (natural-w (+ 2 (apply #'+ floors)))
          (weights (cl-loop for column below columns
                            collect (cl-loop for row in rows
-                                            maximize (etaf-ui-markdown--inline-width
-                                                      (nth column row)))))
+                                            for cell = (nth column row)
+                                            for w = (etaf-ui-markdown--inline-width cell)
+                                            maximize (if (etaf-ui-markdown--cell-has-image-p cell)
+                                                         (max w etaf-ui-markdown--table-image-weight)
+                                                       w))))
          (ideal-w (+ 2 (cl-loop for w in weights
                                 sum (+ (* 2 etaf-ui-markdown--table-cell-padding)
                                        1
@@ -1728,6 +1826,22 @@ folding into stacked record cards when too many columns face a narrow split."
                ((and measure (> max-w measure))
                 measure)
                (t max-w)))
+             (table-w (max min-w (or box-max-w max-w measure ideal-w 40)))
+             (resolved-cols
+              (if compact-cols
+                  compact-cols
+                (etaf-ui-markdown--table-resolved-widths
+                 active-floors
+                 (mapcar (lambda (w) (max 4 (min 32 w))) weights)
+                 (max (apply #'+ active-floors) (- table-w 2)))))
+             (cell-envs
+              (cl-loop for column-index below columns
+                       for align in aligns
+                       for col-w in resolved-cols
+                       collect (etaf-ui-markdown--table-cell-env
+                                env
+                                (max 4 (- col-w (* 2 cell-pad) 1))
+                                align)))
              (last-row (1- (length rows)))
              (cells nil))
         (cl-loop for row in rows
@@ -1752,7 +1866,8 @@ folding into stacked record cards when too many columns face a narrow split."
                                                   :background-color
                                                   (and (zerop row-index) header-fill))
                                             (etaf-ui-markdown--runs-view
-                                             inlines env
+                                             inlines
+                                             (nth column-index cell-envs)
                                              (when (zerop row-index) (list :bold t))))
                                  cells)))
         (etaf-node 'box

@@ -320,8 +320,17 @@ Return a zero-argument cancel function."
              (push (string-trim url) urls)))
          (walk-inline (node)
            (when (and (listp node) (keywordp (car node)))
-             (when (eq (plist-get node :type) 'image)
-               (maybe (plist-get node :url)))
+             (pcase (plist-get node :type)
+               ('image
+                (maybe (plist-get node :url)))
+               ('html
+                (let ((text (or (plist-get node :text) ""))
+                      (pos 0)
+                      (case-fold-search t))
+                  (while (string-match "<img\\b[^>]*\\bsrc=[\"']\\(https?://[^\"']+\\)[\"']"
+                                       text pos)
+                    (maybe (match-string 1 text))
+                    (setq pos (match-end 0))))))
              (dolist (child (plist-get node :children))
                (walk-inline child))))
          (walk-block (b)

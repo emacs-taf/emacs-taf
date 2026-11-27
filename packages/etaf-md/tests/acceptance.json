@@ -709,6 +709,11 @@
       "name": "etaf-md-tests-goto-source-clears-highlight-on-tty",
       "file": "tests/etaf-md-tests.el",
       "purpose": "`etaf-md-goto-source' automatically clears its momentary source-line highlight on terminal frames where `pulse' cannot fade, matching GUI behavior while still honoring `pulse-flag' set to `never'."
+    },
+    {
+      "name": "etaf-md-tests-table-renders-images-and-opens-lightbox",
+      "file": "tests/etaf-md-tests.el",
+      "purpose": "Markdown pipe tables and `:::table' containers render local Markdown images, empty-alt images and inline HTML `<img>' tags as fitted rasters inside intact column borders, fall back to labeled chips for missing files, follow `:on-link' on linked images and open the multi-image lightbox gallery on activation."
     }
   ]
 }

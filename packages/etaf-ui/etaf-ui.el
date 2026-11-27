@@ -2017,8 +2017,11 @@
 ;; (label)' appends a clickable `↩' return control on each footnote definition;
 ;; `:on-copy (kind text lines)' is called after the code block copy button
 ;; copies TEXT into the kill ring; `:render-media (kind node env)'
-;; returns the View for media, where KIND is `image', `video', `inline-image'
-;; or `html-media' (without it media renders as its alt text or URL);
+;; returns the View for media, where KIND is `image', `video', `inline-image',
+;; `table-image' or `html-media' (without it media renders as its alt text or
+;; URL); for `table-image', ENV supplies `:table-cell' t, `:width' and
+;; `:table-cell-width' set to the cell's inner content columns, and
+;; `:table-cell-align';
 ;; `:render-code-block (block env)' may return a View for a code block and
 ;; nil keeps the default fenced block, so a diagram language can be drawn by a
 ;; program without teaching the renderer about it; `:render-math (block env)'

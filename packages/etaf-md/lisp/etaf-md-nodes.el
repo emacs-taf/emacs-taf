@@ -1785,25 +1785,37 @@ whole text as the message."
                 "\t"))
    rows "\n"))
 
-(defun etaf-md--table-cell-content (cell md-env env)
+(defun etaf-md--table-cell-has-image-p (cell)
+  "Return non-nil when table CELL contains an image or inline `<img>' node."
+  (let ((block (and cell (etaf-md-node-block cell))))
+    (cl-labels ((walk (nodes)
+                  (cl-some (lambda (n)
+                             (or (eq (plist-get n :type) 'image)
+                                 (and (eq (plist-get n :type) 'html)
+                                      (string-match-p "<img\\b[^>]*\\bsrc="
+                                                      (or (plist-get n :text) "")))
+                                 (walk (plist-get n :children))))
+                           nodes)))
+      (and block (walk (plist-get block :children))))))
+
+(defun etaf-md--table-cell-content (cell md-env env &optional inner-width align)
   "Return the rendered inline view list for table CELL under MD-ENV and ENV.
-Preserves inline emphasis, code spans, links and footnotes parsed into CELL's
-block; an empty cell paints empty text."
+Preserves inline emphasis, code spans, links, footnotes and images parsed into
+CELL's block; an empty cell paints empty text.  INNER-WIDTH and ALIGN scope
+table-cell media sizing when supplied."
   (let* ((block (etaf-md-node-block cell))
          (inlines (and block (plist-get block :children))))
     (if (null inlines)
         (list (etaf-node 'text nil
                          (list (or (etaf-md-attr env :text cell) ""))))
-      ;; A lone image inside a paragraph renders as a full media card; keep
-      ;; table cells inline by pairing it with an empty text node.
-      (let* ((safe-block
-              (if (and (= 1 (length inlines))
-                       (eq (plist-get (car inlines) :type) 'image))
-                  (plist-put (copy-sequence block)
-                             :children (append inlines
-                                               (list (list :type 'text :text ""))))
-                block))
-             (rendered (etaf-ui-markdown-view-block safe-block md-env)))
+      (let* ((cell-env (let ((copy (copy-sequence md-env))
+                             (w (max 4 (or inner-width (plist-get md-env :width) 24))))
+                         (setq copy (plist-put copy :table-cell t))
+                         (setq copy (plist-put copy :width w))
+                         (setq copy (plist-put copy :table-cell-width w))
+                         (setq copy (plist-put copy :table-cell-align (or align 'left)))
+                         copy))
+             (rendered (etaf-ui-markdown-view-block block cell-env)))
         (if rendered
             (list rendered)
           (list (etaf-node 'text nil
@@ -1861,13 +1873,13 @@ block; an empty cell paints empty text."
                               collect (+ 4 extra-hdr
                                          (cl-loop
                                           for row in display-rows
-                                          maximize
-                                          (string-width
-                                           (or (etaf-md-attr
-                                                env :text
-                                                (nth column
-                                                     (etaf-md-children env row)))
-                                               ""))))))
+                                          for cell = (nth column
+                                                          (etaf-md-children env row))
+                                          for w = (string-width
+                                                   (or (etaf-md-attr env :text cell) ""))
+                                          maximize (if (etaf-md--table-cell-has-image-p cell)
+                                                       (max w 18)
+                                                     w)))))
          (sum-w (apply #'+ raw-widths))
          (clamped-widths
           (cond
@@ -1911,6 +1923,11 @@ block; an empty cell paints empty text."
                                   (memq column hit-columns)
                                   (member (cons row-number column) hit-cells)))
                  (header-sortable (and sortable (= row-number 1)))
+                 (cell-align (or (etaf-md-attr env :align cell)
+                                 table-align
+                                 (etaf-md-attr env :text-align)
+                                 'left))
+                 (cell-inner-w (max 4 (- (nth col-idx clamped-widths) 3)))
                  (content
                   (if header-sortable
                       (let* ((active-col (eql sort-col col-idx))
@@ -1944,16 +1961,14 @@ block; an empty cell paints empty text."
                                      (when hover
                                        (list :hover-style (list :background-color hover))))
                                     (list label))))
-                    (etaf-md--table-cell-content cell md-env env))))
+                    (etaf-md--table-cell-content cell md-env env cell-inner-w cell-align))))
             (push (etaf-node
                    'box
                    (list :width (nth col-idx tracks)
                          :padding '((lh 0) (ch 1))
                          :overflow 'hidden
                          :wrap-mode 'word
-                         :text-align (or (etaf-md-attr env :align cell)
-                                         table-align
-                                         (etaf-md-attr env :text-align))
+                         :text-align cell-align
                          :background-color
                          (cond ((= row-number 1) header-fill)
                                ((and stripe-fill (cl-oddp row-number))

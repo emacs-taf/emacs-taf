@@ -1840,5 +1840,66 @@
           (when (buffer-live-p buf)
             (kill-buffer buf)))))))
 
+(ert-deftest etaf-org-tests-table-renders-images-and-opens-lightbox ()
+  "Org tables render bare and sole-link local images inside cells and open the lightbox.
+Image links in Org table cells render as fitted rasters without breaking table
+rules, prose paired with a described image link stays inline link text, missing
+images degrade cleanly, and activating a table image opens the multi-image
+lightbox gallery."
+  (let* ((dir (make-temp-file "etaf-org-table-img-" t))
+         (png-bytes
+          (base64-decode-string
+           (concat
+            "iVBORw0KGgoAAAANSUhEUgAAAHgAAAA8CAIAAAAiz+n/AAAAaklEQVR42u3QMQ0A"
+            "AAgDsInDIWY5cUE4mlRBUz0ciALRohEtWrQF0aIRLVq0BdGiES1aNKJFI1q0aESL"
+            "RrRo0YgWjWjRohEtGtGiRSNaNKJFi0a0aESLFo1o0YgWLRrRohEtWjSiRSP6lwUF"
+            "G+DPn1GT/gAAAABJRU5ErkJggg==")))
+         (pic1 (expand-file-name "pic1.png" dir))
+         (pic2 (expand-file-name "pic2.png" dir))
+         (org-file (expand-file-name "table-images.org" dir))
+         (preview nil)
+         (etaf-org-media-lightbox t))
+    (unwind-protect
+        (progn
+          (let ((coding-system-for-write 'no-conversion))
+            (with-temp-file pic1 (set-buffer-multibyte nil) (insert png-bytes))
+            (with-temp-file pic2 (set-buffer-multibyte nil) (insert png-bytes)))
+          (with-temp-file org-file
+            (insert "#+TITLE: Org 表格图片\n\n"
+                    "* 示例\n"
+                    "| 图片 | 说明 |\n"
+                    "|------+------|\n"
+                    "| [[file:./pic1.png]] | 裸图片链接 |\n"
+                    "| [[file:./pic2.png][图二]] | 参见 [[file:./pic1.png][说明链接]] |\n"
+                    "| [[file:./missing.png]] | 缺失图片 |\n"))
+          (setq preview (etaf-org-open org-file))
+          (let ((rt (etaf-runtime-for-buffer preview)))
+            (should rt)
+            (with-current-buffer preview
+              (let ((text (etaf-org-tests--text)))
+                ;; Bare and sole described image links render rasters inside the table.
+                (should (string-match-p "[▀.]\\{4,\\}" text))
+                ;; Prose + described link stays readable link text, not turned into an image.
+                (should (string-match-p "参见 说明链接" text))
+                ;; Missing image falls back gracefully without erroring.
+                (should (string-match-p "缺失图片" text))
+                (should (string-match-p "missing\\.png" text)))
+              ;; Activating the first table image opens the lightbox over both unique images.
+              (goto-char (point-min))
+              (should (re-search-forward "[▀.]\\{4,\\}" nil t))
+              (goto-char (match-beginning 0))
+              (call-interactively (key-binding (kbd "RET")))
+              (etaf-runtime-flush rt)
+              (should (string-match-p "1 / 2" (etaf-org-tests--text)))
+              (execute-kbd-macro (kbd "n"))
+              (etaf-runtime-flush rt)
+              (should (string-match-p "2 / 2" (etaf-org-tests--text)))
+              (execute-kbd-macro (kbd "q"))
+              (etaf-runtime-flush rt)
+              (should-not (string-match-p "2 / 2" (etaf-org-tests--text))))))
+      (when (buffer-live-p preview)
+        (with-current-buffer preview (ignore-errors (etaf-org-close))))
+      (delete-directory dir t))))
+
 (provide 'etaf-org-tests)
 ;;; etaf-org-tests.el ends here

@@ -133,6 +133,34 @@ Clamped between 18 and 52 columns."
      (lambda (section)
        (etaf-org--walk-blocks (etaf-org-section-body section) function)))))
 
+(defun etaf-org--walk-published-section-entries (entries function)
+  "Call FUNCTION on every published block across section ENTRIES recursively."
+  (dolist (entry entries)
+    (dolist (bentry (plist-get entry :body))
+      (when-let* ((block (or (when-let* ((slot (plist-get bentry :slot))
+                                         (cell (plist-get slot :cell)))
+                               (etaf-value cell))
+                             (plist-get bentry :block))))
+        (etaf-org--walk-blocks (list block) function)))
+    (etaf-org--walk-published-section-entries
+     (plist-get entry :children) function)))
+
+(defun etaf-org--walk-published-blocks (document function)
+  "Call FUNCTION on every published (asset-attached) block in DOCUMENT order."
+  (when document
+    (if (or (plist-get document :preamble-entries)
+            (plist-get document :section-entries))
+        (progn
+          (dolist (bentry (plist-get document :preamble-entries))
+            (when-let* ((block (or (when-let* ((slot (plist-get bentry :slot))
+                                               (cell (plist-get slot :cell)))
+                                     (etaf-value cell))
+                                   (plist-get bentry :block))))
+              (etaf-org--walk-blocks (list block) function)))
+          (etaf-org--walk-published-section-entries
+           (plist-get document :section-entries) function))
+      (etaf-org--walk-document-blocks document function))))
+
 (defun etaf-org--remote-url-p (target)
   "Return non-nil when TARGET is a remote resource."
   (and (stringp target)
@@ -190,48 +218,138 @@ Clamped between 18 and 52 columns."
            (eq (plist-get (car inlines) :type) 'link)
            (car inlines)))))
 
-(defun etaf-org--resolve-media-block (block session)
-  "Attach `:media' descriptor onto BLOCK when it displays a single image/video."
-  (let ((link (etaf-org--lone-link block)))
+(defun etaf-org--resolve-image-link (link session)
+  "Return a `:media' image descriptor for Org LINK in SESSION, or nil."
+  (let ((kind (plist-get link :kind))
+        (target (plist-get link :target))
+        (desc (plist-get link :desc)))
     (cond
-     ((and link (memq (plist-get link :kind) '(file other attachment)))
-      (let* ((target (plist-get link :target))
-             (path (etaf-org--link-file target (plist-get session :dir)))
+     ((memq kind '(file other attachment))
+      (let* ((path (etaf-org--link-file target (plist-get session :dir)))
              (ext (and path (downcase (or (file-name-extension path) ""))))
              (image (member ext etaf-org--image-extensions))
-             (video (member ext etaf-org--video-extensions))
-             (size (and image path (file-exists-p path)
-                        (etaf-org-typeset--image-pixels path))))
-        (if (or image video)
-            (plist-put (copy-sequence block) :media
-                       (list :path path
-                             :kind (if image 'image 'video)
-                             :exists (and path (file-exists-p path))
-                             :width (car size)
-                             :height (cdr size)
-                             :attrs (plist-get block :attrs)
-                             :alt (plist-get (plist-get block :attrs) :alt)))
-          block)))
-     ;; Remote image URL cached on disk (fetched asynchronously only when mounted).
-     ((and link (eq (plist-get link :kind) 'url)
-           (let ((u (plist-get link :target)))
-             (and u (member (downcase (or (file-name-extension
-                                           (car (split-string u "[?#]")))
-                                          ""))
-                            etaf-org--image-extensions))))
-      (let* ((url (plist-get link :target))
-             (cached (etaf-org-cache-image-path url))
-             (size (and cached (etaf-org-typeset--image-pixels cached))))
-        (plist-put (copy-sequence block) :media
-                   (list :path (or cached url)
-                         :remote-url url
-                         :kind 'image
-                         :exists (and cached (file-exists-p cached))
-                         :width (car size)
-                         :height (cdr size)
-                         :attrs (plist-get block :attrs)
-                         :alt (plist-get (plist-get block :attrs) :alt)))))
-     (t block))))
+             (exists (and image path (file-exists-p path)))
+             (size (and exists (etaf-org-typeset--image-pixels path))))
+        (when image
+          (list :path path
+                :kind 'image
+                :exists exists
+                :width (car size)
+                :height (cdr size)
+                :alt (when desc (etaf-org-inline-plain-text desc))))))
+     ((and (eq kind 'url)
+           target
+           (member (downcase (or (file-name-extension
+                                  (car (split-string target "[?#]")))
+                                 ""))
+                   etaf-org--image-extensions))
+      (let* ((cached (etaf-org-cache-image-path target))
+             (exists (and cached (file-exists-p cached)))
+             (size (and exists (etaf-org-typeset--image-pixels cached))))
+        (list :path (or cached target)
+              :remote-url target
+              :kind 'image
+              :exists exists
+              :width (car size)
+              :height (cdr size)
+              :alt (when desc (etaf-org-inline-plain-text desc))))))))
+
+(defun etaf-org--resolve-table-media (block session)
+  "Attach `:media' descriptors onto image links inside Org table BLOCK."
+  (let* ((rows (plist-get block :rows))
+         (changed nil)
+         (new-rows
+          (mapcar
+           (lambda (row)
+             (let* ((cells (plist-get row :cells))
+                    (row-changed nil)
+                    (new-cells
+                     (mapcar
+                      (lambda (cell)
+                        (let* ((inlines (plist-get cell :inlines))
+                               (non-blank
+                                (cl-remove-if
+                                 (lambda (n)
+                                   (and (eq (plist-get n :type) 'text)
+                                        (string-blank-p (or (plist-get n :text) ""))))
+                                 inlines))
+                               (sole-link-p (= 1 (length non-blank)))
+                               (cell-changed nil)
+                               (new-inlines
+                                (mapcar
+                                 (lambda (node)
+                                   (if (and (eq (plist-get node :type) 'link)
+                                            (or (null (plist-get node :desc))
+                                                sole-link-p))
+                                       (if-let* ((media (etaf-org--resolve-image-link
+                                                         node session)))
+                                           (if (equal media (plist-get node :media))
+                                               node
+                                             (setq cell-changed t)
+                                             (plist-put (copy-sequence node) :media media))
+                                         node)
+                                     node))
+                                 inlines)))
+                          (if cell-changed
+                              (progn
+                                (setq row-changed t)
+                                (plist-put (copy-sequence cell) :inlines new-inlines))
+                            cell)))
+                      cells)))
+               (if row-changed
+                   (progn
+                     (setq changed t)
+                     (plist-put (copy-sequence row) :cells new-cells))
+                 row)))
+           rows)))
+    (if changed
+        (plist-put (copy-sequence block) :rows new-rows)
+      block)))
+
+(defun etaf-org--resolve-media-block (block session)
+  "Attach `:media' descriptor onto BLOCK when it displays images or videos."
+  (if (eq (plist-get block :type) 'table)
+      (etaf-org--resolve-table-media block session)
+    (let ((link (etaf-org--lone-link block)))
+      (cond
+       ((and link (memq (plist-get link :kind) '(file other attachment)))
+        (let* ((target (plist-get link :target))
+               (path (etaf-org--link-file target (plist-get session :dir)))
+               (ext (and path (downcase (or (file-name-extension path) ""))))
+               (image (member ext etaf-org--image-extensions))
+               (video (member ext etaf-org--video-extensions))
+               (size (and image path (file-exists-p path)
+                          (etaf-org-typeset--image-pixels path))))
+          (if (or image video)
+              (plist-put (copy-sequence block) :media
+                         (list :path path
+                               :kind (if image 'image 'video)
+                               :exists (and path (file-exists-p path))
+                               :width (car size)
+                               :height (cdr size)
+                               :attrs (plist-get block :attrs)
+                               :alt (plist-get (plist-get block :attrs) :alt)))
+            block)))
+       ;; Remote image URL cached on disk (fetched asynchronously only when mounted).
+       ((and link (eq (plist-get link :kind) 'url)
+             (let ((u (plist-get link :target)))
+               (and u (member (downcase (or (file-name-extension
+                                             (car (split-string u "[?#]")))
+                                            ""))
+                              etaf-org--image-extensions))))
+        (let* ((url (plist-get link :target))
+               (cached (etaf-org-cache-image-path url))
+               (size (and cached (etaf-org-typeset--image-pixels cached))))
+          (plist-put (copy-sequence block) :media
+                     (list :path (or cached url)
+                           :remote-url url
+                           :kind 'image
+                           :exists (and cached (file-exists-p cached))
+                           :width (car size)
+                           :height (cdr size)
+                           :attrs (plist-get block :attrs)
+                           :alt (plist-get (plist-get block :attrs) :alt)))))
+       (t block)))))
 
 (defun etaf-org--attach-block-assets (session document block env &optional section)
   "Attach media, L1 snapshots, cached typeset pictures and QR codes to BLOCK."
@@ -1114,7 +1232,7 @@ Runs only when the outline side window is open unless FORCE is non-nil."
   "Return list of `(:src PATH :caption TEXT)' for all images in SESSION."
   (let ((items nil)
         (seen (make-hash-table :test #'equal)))
-    (etaf-org--walk-document-blocks
+    (etaf-org--walk-published-blocks
      (etaf-org--read session :document)
      (lambda (block)
        (when-let* ((media (plist-get block :media))
@@ -1128,6 +1246,20 @@ Runs only when the outline side window is open unless FORCE is non-nil."
                                     (plist-get media :alt)
                                     (file-name-nondirectory path)))
                  items)))
+       (when (eq (plist-get block :type) 'table)
+         (dolist (row (plist-get block :rows))
+           (dolist (cell (plist-get row :cells))
+             (dolist (node (plist-get cell :inlines))
+               (when-let* ((media (plist-get node :media))
+                           ((eq (plist-get media :kind) 'image))
+                           ((plist-get media :exists))
+                           (path (plist-get media :path)))
+                 (unless (gethash path seen)
+                   (puthash path t seen)
+                   (push (list :src path
+                               :caption (or (plist-get media :alt)
+                                            (file-name-nondirectory path)))
+                         items)))))))
        (when-let* ((pic (plist-get block :picture))
                    ((file-exists-p pic)))
          (unless (gethash pic seen)

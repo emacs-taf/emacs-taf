@@ -444,6 +444,11 @@
       "name": "etaf-org-tests-accordion-and-details-edge-cases-and-hover-borders",
       "file": "tests/etaf-org-tests.el",
       "purpose": "Org `details' and `accordion' blocks clamp multiple `:open t' sections in single-open mode, close cleanly and preserve border overlines with distinct hover fill across dark, light and sepia themes."
+    },
+    {
+      "name": "etaf-org-tests-table-renders-images-and-opens-lightbox",
+      "file": "tests/etaf-org-tests.el",
+      "purpose": "Org tables render bare and sole-link local images inside cells with intact rules, preserve inline prose links, degrade missing files cleanly and open the multi-image lightbox gallery on activation."
     }
   ]
 }

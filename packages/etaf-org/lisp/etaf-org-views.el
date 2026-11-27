@@ -353,19 +353,24 @@
           ('inline-widget
            (push (etaf-org--inline-widget-entry node env inherited) result))
           ('link
-           (let* ((target (plist-get node :target))
+           (let* ((media (and (plist-get env :table-cell) (plist-get node :media)))
+                  (target (plist-get node :target))
                   (desc (plist-get node :desc))
                   (text (if desc (etaf-org-inline-plain-text desc) target)))
-             (push (list :text text
-                         :props (append
-                                 (list :color (etaf-org--color env :link)
-                                       :text-decoration-line '(underline))
-                                 inherited)
-                         :press (lambda () (etaf-org--act env :open target))
-                         :hover hover
-                         :data-target target
-                         :help (format "%s（RET 打开 / K 速览）" target))
-                   result)))
+             (if (and media (eq (plist-get media :kind) 'image)
+                      (plist-get media :exists)
+                      (plist-get media :path))
+                 (push (list :view (etaf-org--table-image-view media env)) result)
+               (push (list :text text
+                           :props (append
+                                   (list :color (etaf-org--color env :link)
+                                         :text-decoration-line '(underline))
+                                   inherited)
+                           :press (lambda () (etaf-org--act env :open target))
+                           :hover hover
+                           :data-target target
+                           :help (format "%s（RET 打开 / K 速览）" target))
+                     result))))
           ('timestamp
            (push (list :text (etaf-org--timestamp-text node)
                        :props (append
@@ -583,6 +588,54 @@
         (cons (max 4 (round (* (car grid) scale)))
               (max 1 (round (* (cdr grid) scale))))
       grid)))
+
+(defconst etaf-org--table-image-max-rows 16
+  "Maximum character-row height for an image rendered inside an Org table cell.")
+
+(defun etaf-org--table-image-view (media env)
+  "Return the fitted image View for table cell MEDIA in ENV."
+  (let* ((path (plist-get media :path))
+         (alt (plist-get media :alt))
+         (cell-w (max 4 (or (plist-get env :table-cell-width) 20)))
+         (pixels (and (plist-get media :width) (plist-get media :height)
+                      (cons (plist-get media :width) (plist-get media :height))))
+         (grid (if pixels
+                   (let* ((cell (etaf-org--cell-metrics))
+                          (cw (float (max 1 (car cell))))
+                          (ch (float (max 1 (cdr cell))))
+                          (nw (float (max 1 (car pixels))))
+                          (nh (float (max 1 (cdr pixels))))
+                          (scale (min 1.0
+                                      (/ (* cell-w cw) nw)
+                                      (/ (* etaf-org--table-image-max-rows ch) nh)))
+                          (cols (max 1 (min cell-w (round (/ (* nw scale) cw)))))
+                          (rows (max 1 (min etaf-org--table-image-max-rows
+                                            (round (/ (* nh (/ (* cols cw) nw)) ch))))))
+                     (cons cols rows))
+                 (cons (min cell-w 20) 8)))
+         (cross (pcase (plist-get env :table-cell-align)
+                  ('center 'center)
+                  ('right 'end)
+                  (_ 'start)))
+         (session (plist-get env :session)))
+    (etaf-node 'column
+               (list :width 'stretch
+                     :cross-align cross
+                     :margin '((lh 1) (ch 0))
+                     :item-gap '(lh 0))
+               (list
+                (etaf-node 'image
+                           (list :src path
+                                 :columns (car grid) :rows (cdr grid)
+                                 :adapter 'auto
+                                 :role 'button :tab-index 0 :pointer 'hand
+                                 :on-press (lambda ()
+                                             (if (and session (fboundp 'etaf-org--activate-media))
+                                                 (etaf-org--activate-media session 'image path alt)
+                                               (etaf-org--act env :open-file path)))
+                                 :help-echo (format "%s（RET 灯箱预览/打开）"
+                                                    (or alt (file-name-nondirectory path))))
+                           nil)))))
 
 (defun etaf-org--image-card (media env)
   "Return the image card for MEDIA in ENV, or a placeholder card."
@@ -826,12 +879,16 @@ headers when `:sortable t', and whole-table centering/right alignment when
                          (+ 3 cookie)
                        (+ 4 extra-hdr
                           (cl-loop for row in rows
-                                   maximize
-                                   (string-width
-                                    (etaf-org-inline-plain-text
-                                     (plist-get
-                                      (nth column (plist-get row :cells))
-                                      :inlines)))
+                                   for cell = (nth column (plist-get row :cells))
+                                   for inlines = (plist-get cell :inlines)
+                                   for has-img = (cl-some
+                                                  (lambda (n)
+                                                    (when-let* ((m (plist-get n :media)))
+                                                      (and (eq (plist-get m :kind) 'image)
+                                                           (plist-get m :exists))))
+                                                  inlines)
+                                   for w0 = (string-width (etaf-org-inline-plain-text inlines))
+                                   maximize (if has-img (max 18 w0) w0)
                                    into w
                                    finally return (max 3 w)))))))
          (sum-w (apply #'+ raw-widths))
@@ -955,10 +1012,17 @@ headers when `:sortable t', and whole-table centering/right alignment when
                              :bold t
                              :help "点击按此列排序"))))
                    (cell
-                    (etaf-org--inline-nodes
-                     (plist-get cell :inlines) env
-                     (append (when (or is-header cell-hi row-hi) '(:font-weight bold))
-                             (when (or cell-hi row-hi) (list :color hi-fg)))))
+                    (let* ((cell-inner-w (max 4 (- (nth col-idx clamped-widths)
+                                                   (* 2 cell-pad-ch))))
+                           (cell-env (let ((copy (copy-sequence env)))
+                                       (setq copy (plist-put copy :table-cell t))
+                                       (setq copy (plist-put copy :table-cell-width cell-inner-w))
+                                       (setq copy (plist-put copy :table-cell-align align))
+                                       copy)))
+                      (etaf-org--inline-nodes
+                       (plist-get cell :inlines) cell-env
+                       (append (when (or is-header cell-hi row-hi) '(:font-weight bold))
+                               (when (or cell-hi row-hi) (list :color hi-fg))))))
                    (t (list (etaf-node 'text nil (list "")))))))
             (push (etaf-node 'box
                              (append
