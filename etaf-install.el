@@ -592,7 +592,6 @@ Return a list of command strings (usually 1 string combining OS packages)."
 
 (defun etaf-install--doctor-copy-command ()
   "Copy the combined system install command in `*ETAF Installation*'."
-  (interactive)
   (unless (and (stringp etaf-install--doctor-copy-cmd)
                (not (string-empty-p etaf-install--doctor-copy-cmd)))
     (user-error "No system install command to copy for %s"
@@ -602,7 +601,6 @@ Return a list of command strings (usually 1 string combining OS packages)."
 
 (defun etaf-install--doctor-recheck ()
   "Re-run capability checks for the package shown in `*ETAF Installation*'."
-  (interactive)
   (let ((package (or etaf-install--doctor-package
                      (user-error "No ETAF package in this buffer"))))
     (let ((facts (etaf-install-doctor package)))
@@ -626,7 +624,6 @@ Return a list of command strings (usually 1 string combining OS packages)."
 
 (defun etaf-install--doctor-open ()
   "Open the package shown in `*ETAF Installation*' when installed and ready."
-  (interactive)
   (let* ((package (or etaf-install--doctor-package
                       (user-error "No ETAF package in this buffer")))
          (target (etaf-install--target package))
@@ -644,7 +641,6 @@ Return a list of command strings (usually 1 string combining OS packages)."
 
 (defun etaf-install--doctor-install-native ()
   "Install prebuilt native module(s) for the package in `*ETAF Installation*'."
-  (interactive)
   (let ((package (or etaf-install--doctor-package
                      (user-error "No ETAF package in this buffer"))))
     (etaf-install-native package)
@@ -653,15 +649,32 @@ Return a list of command strings (usually 1 string combining OS packages)."
 (defvar etaf-install--doctor-mode-map
   (let ((map (make-sparse-keymap)))
     (set-keymap-parent map special-mode-map)
-    (define-key map (kbd "c") #'etaf-install--doctor-copy-command)
-    (define-key map (kbd "r") #'etaf-install--doctor-recheck)
-    (define-key map (kbd "o") #'etaf-install--doctor-open)
-    (define-key map (kbd "n") #'etaf-install--doctor-install-native)
+    (define-key map (kbd "c")
+      (lambda ()
+        "Copy the combined system install command in `*ETAF Installation*'."
+        (interactive)
+        (etaf-install--doctor-copy-command)))
+    (define-key map (kbd "r")
+      (lambda ()
+        "Re-run capability checks for the package in `*ETAF Installation*'."
+        (interactive)
+        (etaf-install--doctor-recheck)))
+    (define-key map (kbd "o")
+      (lambda ()
+        "Open the package in `*ETAF Installation*' when installed and ready."
+        (interactive)
+        (etaf-install--doctor-open)))
+    (define-key map (kbd "n")
+      (lambda ()
+        "Install prebuilt native module(s) for `*ETAF Installation*'."
+        (interactive)
+        (etaf-install--doctor-install-native)))
     map)
   "Keymap for `*ETAF Installation*' doctor guide buffer.")
 
 (define-derived-mode etaf-install--doctor-mode special-mode "ETAF Doctor"
   "Major mode for the interactive `*ETAF Installation*' guide buffer."
+  :interactive nil
   (setq-local truncate-lines nil))
 
 (defun etaf-install--render-doctor-buffer (package facts)
@@ -1991,6 +2004,9 @@ installed.  With NO-CONFIRM, skip the prompt."
 (defvar-local etaf-install--manage-last-status nil
   "Pending status headline set by a manage action for `post-command-hook'.")
 
+(defvar-local etaf-install--manage-suppress-hints nil
+  "Non-nil after quitting `*ETAF Packages*' so `post-command-hook' stays silent.")
+
 (defconst etaf-install--group-short-labels
   '((framework . "Core") (extension . "Ext")
     (application . "App") (game . "Game"))
@@ -2450,18 +2466,13 @@ auto-downloaded native modules, bundled package backends and managed engines)."
     ("q" . "quit"))
   "Key-to-action hint pairs shown in the echo area for `*ETAF Packages*'.")
 
-(defconst etaf-install--manage-action-commands
-  '(etaf-install--manage-install
-    etaf-install--manage-install-native
-    etaf-install--manage-update
-    etaf-install--manage-update-all
-    etaf-install--manage-remove
-    etaf-install--manage-refresh-archives)
-  "Manage commands whose own status message is kept above the key hints.")
-
 (defvar etaf-install--manage-refresh-map
   (let ((map (make-sparse-keymap)))
-    (define-key map [mode-line mouse-1] #'etaf-install--manage-refresh-archives)
+    (define-key map [mode-line mouse-1]
+      (lambda ()
+        "Refresh the ETAF and installed targets' standard archives."
+        (interactive)
+        (etaf-install--manage-refresh-archives)))
     map)
   "Mouse map for the mode line's refresh button.")
 
@@ -2548,14 +2559,15 @@ When HEADLINE is non-nil, display it above the key hints."
 
 (defun etaf-install--manage-post-command ()
   "Refresh the echo-area key hints after a command."
-  (let ((pending etaf-install--manage-last-status))
-    (setq etaf-install--manage-last-status nil)
-    (unless (or (active-minibuffer-window)
-                (eq this-command 'etaf-install--manage-quit))
+  (let ((pending etaf-install--manage-last-status)
+        (suppress etaf-install--manage-suppress-hints))
+    (setq etaf-install--manage-last-status nil
+          etaf-install--manage-suppress-hints nil)
+    (unless (or suppress (active-minibuffer-window))
       (let ((msg (or pending (current-message))))
         (cond
-         ((and msg (memq this-command etaf-install--manage-action-commands))
-          (etaf-install--manage-echo (car (split-string msg "\n"))))
+         ((and pending (not (string-empty-p pending)))
+          (etaf-install--manage-echo (car (split-string pending "\n"))))
          ((and this-command msg (not (eq this-command 'etaf-install-manage)))
           nil)
          (t
@@ -2582,14 +2594,12 @@ When HEADLINE is non-nil, display it above the key hints in the echo area."
 
 (defun etaf-install--manage-install ()
   "Install the target at point."
-  (interactive)
   (let ((package (etaf-install--manage-current-target)))
     (etaf-install package t)
     (etaf-install--manage-reprint (current-message))))
 
 (defun etaf-install--manage-update ()
   "Update the target at point."
-  (interactive)
   (let* ((package (etaf-install--manage-current-target))
          (report (etaf-install-update package)))
     (etaf-install--manage-reprint
@@ -2597,7 +2607,6 @@ When HEADLINE is non-nil, display it above the key hints in the echo area."
 
 (defun etaf-install--manage-update-all ()
   "Update every installed target and the installer."
-  (interactive)
   (when (y-or-n-p "Update all installed ETAF targets and the installer? ")
     (let ((report (etaf-install-update)))
       (etaf-install--manage-reprint
@@ -2605,14 +2614,12 @@ When HEADLINE is non-nil, display it above the key hints in the echo area."
 
 (defun etaf-install--manage-remove ()
   "Remove the target at point."
-  (interactive)
   (let ((package (etaf-install--manage-current-target)))
     (etaf-install-remove package)
     (etaf-install--manage-reprint (current-message))))
 
 (defun etaf-install--manage-open ()
   "Open the installed target at point."
-  (interactive)
   (let* ((package (etaf-install--manage-current-target))
          (target (etaf-install--target package))
          (open (nth 3 target)))
@@ -2631,7 +2638,6 @@ When HEADLINE is non-nil, display it above the key hints in the echo area."
 
 (defun etaf-install--manage-install-native (&optional force)
   "Install prebuilt native module(s) for the target at point."
-  (interactive "P")
   (let ((package (etaf-install--manage-current-target)))
     (unless (package-installed-p package)
       (user-error "Install %s first (press `i')" package))
@@ -2640,12 +2646,10 @@ When HEADLINE is non-nil, display it above the key hints in the echo area."
 
 (defun etaf-install--manage-doctor ()
   "Show the doctor report for the target at point."
-  (interactive)
   (etaf-install--display-doctor (etaf-install--manage-current-target)))
 
 (defun etaf-install--manage-refresh-archives ()
   "Refresh the ETAF and installed targets' standard archives."
-  (interactive)
   (unless package--initialized (package-initialize))
   (etaf-install--refresh-archives
    (cons 'etaf-install (etaf-install--installed-targets)))
@@ -2657,33 +2661,55 @@ When HEADLINE is non-nil, display it above the key hints in the echo area."
   "Open the standard package menu beside the ETAF list.
 `list-packages' otherwise claims this window and hides the manager until it is
 reopened."
-  (interactive)
   (let ((display-buffer-overriding-action '((display-buffer-pop-up-window))))
     (list-packages)))
 
 (defun etaf-install--manage-quit ()
   "Quit the ETAF Packages window."
-  (interactive)
+  (setq etaf-install--manage-suppress-hints t)
   (quit-window))
 
 (defvar etaf-install--manage-mode-map
   (let ((map (make-sparse-keymap)))
     (set-keymap-parent map tabulated-list-mode-map)
-    (define-key map (kbd "i") #'etaf-install--manage-install)
-    (define-key map (kbd "n") #'etaf-install--manage-install-native)
-    (define-key map (kbd "u") #'etaf-install--manage-update)
-    (define-key map (kbd "U") #'etaf-install--manage-update-all)
-    (define-key map (kbd "d") #'etaf-install--manage-remove)
-    (define-key map (kbd "RET") #'etaf-install--manage-open)
-    (define-key map (kbd "?") #'etaf-install--manage-doctor)
-    (define-key map (kbd "g") #'etaf-install--manage-refresh-archives)
-    (define-key map (kbd "l") #'etaf-install--manage-list-packages)
-    (define-key map (kbd "q") #'etaf-install--manage-quit)
+    (define-key map (kbd "i")
+      (lambda () "Install the target at point." (interactive)
+        (etaf-install--manage-install)))
+    (define-key map (kbd "n")
+      (lambda (&optional force)
+        "Install prebuilt native module(s) for the target at point."
+        (interactive "P")
+        (etaf-install--manage-install-native force)))
+    (define-key map (kbd "u")
+      (lambda () "Update the target at point." (interactive)
+        (etaf-install--manage-update)))
+    (define-key map (kbd "U")
+      (lambda () "Update every installed target and the installer." (interactive)
+        (etaf-install--manage-update-all)))
+    (define-key map (kbd "d")
+      (lambda () "Remove the target at point." (interactive)
+        (etaf-install--manage-remove)))
+    (define-key map (kbd "RET")
+      (lambda () "Open the installed target at point." (interactive)
+        (etaf-install--manage-open)))
+    (define-key map (kbd "?")
+      (lambda () "Show the doctor report for the target at point." (interactive)
+        (etaf-install--manage-doctor)))
+    (define-key map (kbd "g")
+      (lambda () "Refresh the ETAF and installed targets' standard archives." (interactive)
+        (etaf-install--manage-refresh-archives)))
+    (define-key map (kbd "l")
+      (lambda () "Open the standard package menu beside the ETAF list." (interactive)
+        (etaf-install--manage-list-packages)))
+    (define-key map (kbd "q")
+      (lambda () "Quit the ETAF Packages window." (interactive)
+        (etaf-install--manage-quit)))
     map)
   "Key map for `etaf-install--manage-mode'.")
 
 (define-derived-mode etaf-install--manage-mode tabulated-list-mode "ETAF Packages"
   "Major mode for the ETAF Packages buffer."
+  :interactive nil
   (setq tabulated-list-format
         [("Status" 16 t) ("Target" 54 t) ("Group" 12 t)
          ("Installed" 10 t) ("Available" 10 t) ("Runtime" 8 t)

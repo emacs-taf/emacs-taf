@@ -1248,6 +1248,29 @@ class InstallTests(unittest.TestCase):
         self.assertIn("etaf-0.2.1", dirs)
         self.assertIn("etaf-0.2.2", dirs)
 
+    def test_private_helpers_and_modes_stay_out_of_mx(self):
+        self.run_lisp("""
+(let (public-cmds private-cmds)
+  (mapatoms
+   (lambda (sym)
+     (let ((name (symbol-name sym)))
+       (when (and (commandp sym)
+                  (or (string= name "etaf-install")
+                      (string-prefix-p "etaf-install-" name)))
+         (if (string-prefix-p "etaf-install--" name)
+             (push sym private-cmds)
+           (push sym public-cmds))))))
+  (when private-cmds
+    (error "Private etaf-install commands leaked into M-x: %S"
+           (sort private-cmds #'string<)))
+  (let ((expected '(etaf-install etaf-install-doctor etaf-install-manage
+                    etaf-install-native etaf-install-remove etaf-install-update))
+        (actual (sort public-cmds #'string<)))
+    (unless (equal actual expected)
+      (error "Unexpected public M-x commands: expected=%S actual=%S"
+             expected actual))))
+""")
+
 
 if __name__ == "__main__":
     unittest.main()
