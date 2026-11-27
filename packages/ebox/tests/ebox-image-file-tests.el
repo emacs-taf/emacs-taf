@@ -180,4 +180,28 @@ two preparations with the same :id and size are the same image."
                 2 1 :adapter 'placeholder)))
     (should-not (eq left right))))
 
+(ert-deftest ebox-image-kitty-api-validates-inputs-and-degrades-in-batch ()
+  "Kitty protocol queries and streams validate inputs and degrade cleanly in batch."
+  (should-not (ebox-image-kitty-available-p))
+  (let ((ebox-image-kitty-protocol nil))
+    (should-not (ebox-image-kitty-available-p)))
+  (let* ((called nil)
+         (converter (lambda (_source _cols _rows) (setq called t) nil))
+         (prepared (ebox-image-prepare
+                    '(image :type png :data "not-png") 3 2
+                    :adapter 'kitty
+                    :converters (list (cons 'spy converter)))))
+    (should-not called)
+    (should (equal (ebox-image-info prepared)
+                   '(:adapter placeholder :converter nil :columns 3 :rows 2)))
+    (should (equal (substring-no-properties (ebox-image-content prepared))
+                   "...\n...")))
+  (should-not (ebox-image-kitty-stream-create 4 2))
+  (should-error (ebox-image-kitty-stream-create 0 2))
+  (should-error (ebox-image-kitty-stream-create 4 0))
+  (should-error (ebox-image-kitty-stream-create 300 2))
+  (should-error (ebox-image-kitty-stream-grid 'not-a-stream))
+  (should-error (ebox-image-kitty-stream-present 'not-a-stream "abc" 1 1))
+  (should-error (ebox-image-kitty-stream-destroy 'not-a-stream)))
+
 ;;; ebox-image-file-tests.el ends here

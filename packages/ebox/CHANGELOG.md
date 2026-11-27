@@ -4,7 +4,13 @@ All notable changes to Ebox are documented here.
 
 ## Unreleased
 
+### Added
+
+- Support Kitty terminal graphics protocol Unicode placeholders and live TTY frame streams via `ebox-image-kitty-protocol`, `ebox-image-kitty-available-p`, `:adapter 'kitty` in `ebox-image-prepare`, and `ebox-image-kitty-stream-create` / `grid` / `present` / `destroy`.
+
 ### Fixed
+
+- Decode ESC-prefixed terminal mouse reports through `read-key` while tracking pointer clicks, drags and input sessions on TTY frames with `xterm-mouse-mode` (supporting both Emacs 30+ `disable-fallbacks` and Emacs 29 one-argument `read-key`), repair `xterm-mouse-translate-1`'s `0` (`C-@`) substitution when releasing over symbolic areas such as the mode line, vertical border or margin, suppress `mouse-autoselect-window` while tracking, and ignore releases outside the pressed window.
 
 - Stop `ebox--canvas-background` from remapping the buffer's `default` face background to the final row's dominant color on transparent-root (`auto` theme), scrollable (`height > viewport`), or last-row-hovered trees, preventing hover on the last item of a list from lighting up every transparent row in the buffer.
 

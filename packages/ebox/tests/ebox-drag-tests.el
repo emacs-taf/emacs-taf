@@ -236,4 +236,146 @@ BODY can call `ebox-drag-test-press' and `ebox-drag-test-release'."
                (cons 0.5 (funcall release point))))
         (should (equal (nreverse phases) '(start move end)))))))
 
+(defvar xterm-mouse-mode)
+
+(ert-deftest ebox-drag-tty-xterm-mouse-decodes-release-through-read-key ()
+  "On TTY with `xterm-mouse-mode', ESC-prefixed releases decode via `read-key'."
+  (let ((activated 0)
+        (decoded-reads 0)
+        (xterm-mouse-mode t))
+    (ebox-drag-test-with-target
+        (ebox-keymap-create
+         :activate (lambda () (setq activated (1+ activated))))
+      (let ((release-ev (funcall release '(4 . 4))))
+        ;; Emacs 30+ two-argument `read-key' receives non-nil DISABLE-FALLBACKS.
+        (let ((unread-command-events (list ?\e)))
+          (cl-letf (((symbol-function 'display-graphic-p) #'ignore)
+                    ((symbol-function 'read-key)
+                     (lambda (&optional _prompt disable-fallbacks)
+                       (should disable-fallbacks)
+                       (should (eq (pop unread-command-events) ?\e))
+                       (setq decoded-reads (1+ decoded-reads))
+                       release-ev)))
+            (funcall command press)))
+        ;; Emacs 29 one-argument `read-key' receives a fallback-disabling map.
+        (let ((unread-command-events (list ?\e))
+              (saw-fallback-map nil))
+          (cl-letf (((symbol-function 'display-graphic-p) #'ignore)
+                    ((symbol-function 'read-key)
+                     (lambda (&optional _prompt)
+                       (setq saw-fallback-map
+                             (and (keymapp read-key-empty-map)
+                                  (eq (lookup-key read-key-empty-map [t]) #'ignore)
+                                  (null (lookup-key read-key-empty-map [?\e]))))
+                       (should (eq (pop unread-command-events) ?\e))
+                       (setq decoded-reads (1+ decoded-reads))
+                       release-ev)))
+            (funcall command press))
+          (should saw-fallback-map)))
+      (should (= activated 2))
+      (should (= decoded-reads 2)))))
+
+(ert-deftest ebox-drag-tty-symbolic-area-release-ends-without-leaking-mark ()
+  "Releasing over a symbolic area on TTY ends the gesture and never leaks C-@ (0)."
+  (let ((xterm-mouse-mode t)
+        (phases nil)
+        (activated 0))
+    (ebox-drag-test-with-target
+        (ebox-keymap-create
+         :drag (lambda (gesture)
+                 (push (list (plist-get gesture :phase)
+                             (plist-get gesture :reason))
+                       phases)))
+      (let* ((frame (window-frame window))
+             (saved-down (terminal-parameter frame 'xterm-mouse-last-down))
+             (mode-line (list window 'mode-line '(6 . 20) 2)))
+        (unwind-protect
+            (let ((unread-command-events (list ?\e)))
+              (set-terminal-parameter frame 'xterm-mouse-last-down press)
+              (cl-letf (((symbol-function 'display-graphic-p) #'ignore)
+                        ((symbol-function 'read-key)
+                         (lambda (&optional _prompt _disable-fallbacks)
+                           (should (eq (pop unread-command-events) ?\e))
+                           ;; Simulate `xterm-mouse-translate-1' on a symbolic area.
+                           (set-terminal-parameter frame 'xterm-mouse-last-down nil)
+                           (push 0 unread-command-events)
+                           (list 'mouse-movement mode-line))))
+                (funcall command press))
+              (should (equal (nreverse phases) '((start nil) (move nil) (end nil))))
+              (should (null unread-command-events)))
+          (set-terminal-parameter frame 'xterm-mouse-last-down saved-down))))
+    (ebox-drag-test-with-target
+        (ebox-keymap-create
+         :activate (lambda () (setq activated (1+ activated))))
+      (let* ((frame (window-frame window))
+             (saved-down (terminal-parameter frame 'xterm-mouse-last-down))
+             (mode-line (list window 'mode-line '(6 . 20) 2)))
+        (unwind-protect
+            (let ((unread-command-events (list ?\e)))
+              (set-terminal-parameter frame 'xterm-mouse-last-down press)
+              (cl-letf (((symbol-function 'display-graphic-p) #'ignore)
+                        ((symbol-function 'read-key)
+                         (lambda (&optional _prompt _disable-fallbacks)
+                           (should (eq (pop unread-command-events) ?\e))
+                           (set-terminal-parameter frame 'xterm-mouse-last-down nil)
+                           (push 0 unread-command-events)
+                           (list 'mouse-movement mode-line))))
+                (funcall command press))
+              (should (= activated 0))
+              (should (null unread-command-events)))
+          (set-terminal-parameter frame 'xterm-mouse-last-down saved-down))))))
+
+(ert-deftest ebox-drag-tty-input-session-decodes-release-through-read-key ()
+  "TTY input-session clicks decode release via `read-key' without leaking."
+  (let ((buffer (generate-new-buffer " *ebox-tty-input*"))
+        (xterm-mouse-mode t)
+        (decoded 0))
+    (unwind-protect
+        (save-window-excursion
+          (switch-to-buffer buffer)
+          (ebox-mount buffer '(column (box (text :id "field" "abcd"))))
+          (let* ((node (car (ebox-selector-query-buffer buffer "#field")))
+                 (session (ebox-input-begin buffer node))
+                 (pos (with-current-buffer buffer
+                        (save-excursion (goto-char (point-min))
+                                        (search-forward "cd")
+                                        (match-beginning 0))))
+                 (posn (list (selected-window) pos '(0 . 0) 0 nil pos
+                             '(0 . 0) nil '(0 . 0) '(1 . 1)))
+                 (press (list 'down-mouse-1 posn 1))
+                 (rel (list 'mouse-1 posn 1)))
+            (unwind-protect
+                (progn
+                  (cl-letf (((symbol-function 'display-graphic-p) #'ignore)
+                            ((symbol-function 'read-key)
+                             (lambda (&optional _prompt _disable-fallbacks)
+                               (should (eq (pop unread-command-events) ?\e))
+                               (setq decoded (1+ decoded))
+                               rel)))
+                    (execute-kbd-macro (vector press ?\e))
+                    (execute-kbd-macro "X"))
+                  (should (= decoded 1))
+                  (should (equal (ebox-input-text session) "abXcd"))
+                  (should (null unread-command-events)))
+              (ebox-input-end session))))
+      (when (buffer-live-p buffer) (kill-buffer buffer)))))
+
+(ert-deftest ebox-press-release-outside-window-does-not-activate ()
+  "Releasing a button press in another window does not activate the pressed node."
+  (let ((activated 0)
+        (other-buf (generate-new-buffer " *ebox-other-win*")))
+    (unwind-protect
+        (ebox-drag-test-with-target
+            (ebox-keymap-create
+             :activate (lambda () (setq activated (1+ activated))))
+          (let* ((other-win (split-window-right))
+                 (_ (set-window-buffer other-win other-buf))
+                 (outside (list 'drag-mouse-1
+                                (list window position '(4 . 4) 0)
+                                (list other-win position '(4 . 4) 2))))
+            (let ((unread-command-events (list outside)))
+              (funcall command press))
+            (should (= activated 0))))
+      (when (buffer-live-p other-buf) (kill-buffer other-buf)))))
+
 ;;; ebox-drag-tests.el ends here

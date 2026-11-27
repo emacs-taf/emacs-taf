@@ -408,10 +408,13 @@ Other display modifiers, such as `raise', do not change the slice width."
 
 (defun ebox--display-width (string start end &optional face)
   "Measure display run START..END of STRING under FACE.
-Fixed spaces need no measurement, and an image keeps its width while its
-specification object and the measuring context stay the same."
+Fixed spaces need no measurement, Kitty placeholder cells occupy one text
+column each, and an image keeps its width while its specification object
+and the measuring context stay the same."
   (let ((display (get-text-property start 'display string)))
-    (or (ebox--fixed-space-width display)
+    (or (and (get-text-property start 'ebox-kitty-image string)
+             (- end start))
+        (ebox--fixed-space-width display)
         (ebox--slice-width display start end)
         (if (eq (car-safe display) 'image)
             (let ((key (ebox--metric-key))

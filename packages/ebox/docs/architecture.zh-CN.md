@@ -24,6 +24,7 @@ Public 合同是 [`../ebox.el`](../ebox.el) 的 Commentary。`lisp/` 下的文�
 | `ebox-interaction.el` | Keymap、help/pointer/hover decoration、focus、activation、drag tracking、input session、scrolling 与 selector query。 |
 | `ebox-viewport.el` | Window-size event 桥接和稳定后的 viewport refit 调度。 |
 | `ebox-image.el` | 图片准备、converter 协议、不可变 raster cache 与图片内容访问。 |
+| `ebox-kitty.el` | Kitty 终端图形协议探测、Unicode placeholder 栅格与终端实时视频帧流。 |
 | `ebox-file.el` | `.ebox` source 读取、companion 加载、preview mode 与包 byte compilation helper。 |
 
 底层纯模块不知道 mount。node 依赖 size、style 与 measurement。layout 依赖 retained node，并通过 private function 调用 flex/grid。buffer flushing 依赖 node 与 layout。interaction 位于 mounted buffer 之上。viewport delivery 对尺寸变化 refit，对度量变化刷新，均不重建挂载。图片在 layout 之外准备，随后成为节点内容。

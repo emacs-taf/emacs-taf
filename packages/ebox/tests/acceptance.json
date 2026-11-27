@@ -955,6 +955,26 @@
       "purpose": "Without :drag-edge a drag keeps its start, move and end phases and reports no edge intent."
     },
     {
+      "name": "ebox-drag-tty-xterm-mouse-decodes-release-through-read-key",
+      "file": "tests/ebox-drag-tests.el",
+      "purpose": "A click on a text terminal with xterm-mouse-mode decodes an ESC-prefixed release through read-key across both Emacs 29 and Emacs 30+ arities."
+    },
+    {
+      "name": "ebox-drag-tty-symbolic-area-release-ends-without-leaking-mark",
+      "file": "tests/ebox-drag-tests.el",
+      "purpose": "Releasing a TTY mouse drag or click over a symbolic window area such as the mode line ends cleanly without cancelling or leaking C-@ (0)."
+    },
+    {
+      "name": "ebox-drag-tty-input-session-decodes-release-through-read-key",
+      "file": "tests/ebox-drag-tests.el",
+      "purpose": "Clicking inside an active input session on a TTY with xterm-mouse-mode decodes the release through read-key and keeps subsequent editing intact."
+    },
+    {
+      "name": "ebox-press-release-outside-window-does-not-activate",
+      "file": "tests/ebox-drag-tests.el",
+      "purpose": "Pressing an activatable node and releasing in another window cancels activation instead of matching an offset in the pressed buffer."
+    },
+    {
       "name": "ebox-image-canvas-preparation-ignores-its-live-pixels",
       "file": "tests/ebox-image-file-tests.el",
       "purpose": "A canvas keeps one preparation while its producer rewrites pixels."
@@ -1113,6 +1133,11 @@
       "name": "ebox-flex-child-removal-clears-painted-tail",
       "file": "tests/ebox-update-tests.el",
       "purpose": "Removing trailing children from a fixed-height flex container whose size and remaining children's positions stay unchanged still repaints its line so removed children never stay ghost-painted."
+    },
+    {
+      "name": "ebox-image-kitty-api-validates-inputs-and-degrades-in-batch",
+      "file": "tests/ebox-image-file-tests.el",
+      "purpose": "Kitty graphics capability queries, `:adapter kitty' preparation and stream lifecycle helpers validate inputs and degrade cleanly when Kitty graphics are unavailable."
     }
   ]
 }

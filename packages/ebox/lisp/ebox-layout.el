@@ -418,23 +418,31 @@ Keeps a flat plist face as a single interned plist so callers reading
   "Apply border attribute KEY VALUE to STRING's `face' and any `mouse-face' runs.
 Emacs renders `mouse-face' instead of `face' while the pointer hovers a run, so
 a child control's hover face on an ancestor's top or bottom edge would otherwise
-erase the border rule on hover."
+erase the border rule on hover.  Skip `ebox-kitty-image' cells so underline
+border colors cannot collide with Kitty placement ID encoding or slash across
+terminal image pixels."
   (let ((len (length string)))
     (when (> len 0)
-      (add-face-text-property 0 len (list key value) t string)
       (let ((pos 0))
         (while (< pos len)
-          (let* ((next (or (next-single-property-change pos 'mouse-face string len) len))
-                 (mf (get-text-property pos 'mouse-face string)))
-            (when mf
-              (put-text-property pos next 'mouse-face
-                                 (ebox--merge-face-attr mf key value)
-                                 string))
+          (let* ((next (or (next-single-property-change pos 'ebox-kitty-image string len) len)))
+            (unless (get-text-property pos 'ebox-kitty-image string)
+              (add-face-text-property pos next (list key value) t string)
+              (let ((mpos pos))
+                (while (< mpos next)
+                  (let* ((mnext (or (next-single-property-change mpos 'mouse-face string next) next))
+                         (mf (get-text-property mpos 'mouse-face string)))
+                    (when mf
+                      (put-text-property mpos mnext 'mouse-face
+                                         (ebox--merge-face-attr mf key value)
+                                         string))
+                    (setq mpos mnext)))))
             (setq pos next)))))))
 
 (defun ebox--text-frame-ink-p (line)
   "Return non-nil when LINE holds only blanks and vertical border rules."
-  (not (string-match-p "[^│ \t]" (substring-no-properties line))))
+  (and (not (text-property-not-all 0 (length line) 'ebox-kitty-image nil line))
+       (not (string-match-p "[^│ \t]" (substring-no-properties line)))))
 
 (defun ebox--text-frame-row (node geo top)
   "Return box-drawing text for NODE's blank top or bottom border row.
@@ -2087,32 +2095,52 @@ Slices of one image share one descriptor variant, so it decodes once.")
 (defun ebox--image-on-background (line node)
   "Return image slice LINE composited over NODE's background.
 A descriptor prepared for this background is shown as is; any other
-background gets one shared variant."
+background gets one shared variant.  For Kitty placeholder rows, paint
+NODE's background onto each cell while preserving the `:foreground' color
+that encodes the Kitty image ID."
   (let* ((bg (and (not noninteractive) (ebox-cs-bg (ebox-node-cs node))))
          (bg (and (stringp bg) bg))
+         (kitty (and (> (length line) 0) (get-text-property 0 'ebox-kitty-image line)))
          (display (and (> (length line) 0) (get-text-property 0 'display line)))
          (image (and (consp display) (eq (car-safe (car (last display))) 'image)
                      (car (last display)))))
-    (when (and image bg) (setq ebox-image--background bg))
-    (if (or (not image) (equal bg (plist-get (cdr image) :background)))
-        line
-      (ebox--background-variant
-       line bg
-       (lambda ()
-         (let ((copy (copy-sequence line))
-               (variant (ebox--background-variant
-                         image bg
-                         (lambda ()
-                           (cons 'image
-                                 (if bg
-                                     (plist-put (copy-sequence (cdr image))
-                                                :background bg)
-                                   (cl-loop for (key value) on (cdr image) by #'cddr
-                                            unless (eq key :background)
-                                            append (list key value))))))))
-           (put-text-property 0 1 'display (append (butlast display) (list variant))
-                              copy)
-           copy))))))
+    (cond
+     (kitty
+      (let* ((face (get-text-property 0 'face line))
+             (cur-bg (and (consp face) (plist-get face :background))))
+        (if (equal bg cur-bg)
+            line
+          (ebox--background-variant
+           line bg
+           (lambda ()
+             (let* ((copy (copy-sequence line))
+                    (fg (and (consp face) (plist-get face :foreground)))
+                    (new-face (if bg
+                                  (list :foreground fg :background bg)
+                                (list :foreground fg))))
+               (put-text-property 0 (length copy) 'face new-face copy)
+               copy))))))
+     (t
+      (when (and image bg) (setq ebox-image--background bg))
+      (if (or (not image) (equal bg (plist-get (cdr image) :background)))
+          line
+        (ebox--background-variant
+         line bg
+         (lambda ()
+           (let ((copy (copy-sequence line))
+                 (variant (ebox--background-variant
+                           image bg
+                           (lambda ()
+                             (cons 'image
+                                   (if bg
+                                       (plist-put (copy-sequence (cdr image))
+                                                  :background bg)
+                                     (cl-loop for (key value) on (cdr image) by #'cddr
+                                              unless (eq key :background)
+                                              append (list key value))))))))
+             (put-text-property 0 1 'display (append (butlast display) (list variant))
+                                copy)
+             copy))))))))
 
 (defun ebox--content-parts (node geo ci tail)
   "Return the strings of content line CI of NODE followed by TAIL.
@@ -2912,24 +2940,38 @@ Immutable image composites remain shared.  Paint performs no source I/O."
           (position 0))
       (while (< position length)
         (let* ((next (min (next-single-property-change position 'face string length)
-                          (next-single-property-change position 'display string length)))
+                          (next-single-property-change position 'display string length)
+                          (next-single-property-change position 'ebox-kitty-image string length)))
                (face (get-text-property position 'face string))
-               (dimmed (ebox--backdrop-filter-face face filter))
+               (kitty (get-text-property position 'ebox-kitty-image string))
                (display (get-text-property position 'display string))
                (image (ebox-image--display-image display)))
-          (when dimmed
-            (put-text-property position next 'face dimmed string))
-          (when image
-            (let* ((own-bg (plist-get (cdr image) :background))
-                   (foreground (or (plist-get (cdr image) :foreground)
-                                   (ebox--face-attribute face :foreground)
-                                   (ebox--backdrop-filter-default :foreground)))
-                   (background (if own-bg
-                                   (ebox--backdrop-filter-color own-bg (cadr filter))
-                                 (ebox--face-attribute dimmed :background)))
-                   (variant (ebox-image--brightness-display
-                             display (cadr filter) foreground background)))
-              (put-text-property position next 'display variant string)))
+          (if kitty
+              ;; Kitty placeholder cells encode their image ID in `:foreground';
+              ;; never alter `:foreground', only dim transparent `:background'.
+              (let* ((bg (ebox--face-attribute face :background))
+                     (dim-bg (and bg (ebox--backdrop-filter-color bg (cadr filter)))))
+                (when (and dim-bg (not (equal dim-bg bg)))
+                  (let ((fg (ebox--face-attribute face :foreground)))
+                    (put-text-property position next 'face
+                                       (if fg
+                                           (list :foreground fg :background dim-bg)
+                                         (list :background dim-bg))
+                                       string))))
+            (let ((dimmed (ebox--backdrop-filter-face face filter)))
+              (when dimmed
+                (put-text-property position next 'face dimmed string))
+              (when image
+                (let* ((own-bg (plist-get (cdr image) :background))
+                       (foreground (or (plist-get (cdr image) :foreground)
+                                       (ebox--face-attribute face :foreground)
+                                       (ebox--backdrop-filter-default :foreground)))
+                       (background (if own-bg
+                                       (ebox--backdrop-filter-color own-bg (cadr filter))
+                                     (ebox--face-attribute dimmed :background)))
+                       (variant (ebox-image--brightness-display
+                                 display (cadr filter) foreground background)))
+                  (put-text-property position next 'display variant string)))))
           (setq position next)))))
   string)
 

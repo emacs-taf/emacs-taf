@@ -4,7 +4,13 @@ Ebox 的重要变化记录在这里。
 
 ## 未发布
 
+### 新增
+
+- 支持 Kitty 终端图形协议的 Unicode placeholder 图片渲染与终端实时帧流，公开 `ebox-image-kitty-protocol`、`ebox-image-kitty-available-p`、`ebox-image-prepare` 的 `:adapter 'kitty`，以及 `ebox-image-kitty-stream-create` / `grid` / `present` / `destroy`。
+
 ### 修复
+
+- 在启用 `xterm-mouse-mode` 的 TTY 终端上跟踪点击、拖拽与输入会话指针时，对 `?\e` 前缀的终端鼠标序列改由 `read-key` 解码（同时兼容 Emacs 30+ 双参数与 Emacs 29 单参数），修复 `xterm-mouse-translate-1` 在 mode-line、竖线或边距等符号区域释放时误吐出 `0`（`C-@`）触发 `Mark set` 的问题，跟踪期间临时屏蔽 `mouse-autoselect-window`，并忽略跨窗口释放带来的误激活。
 
 - 在 `ebox--display-window-notify` 中先判断缓存几何 `last` 为 `consp` 再取 `car`，避免 Emacs 29.3 原生编译在首次挂载且回显区借用行高时触发段错误。
 

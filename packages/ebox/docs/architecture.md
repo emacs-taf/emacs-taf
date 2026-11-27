@@ -24,6 +24,7 @@ Implementation modules are organized by responsibility:
 | `ebox-interaction.el` | Keymaps, help/pointer/hover decoration, focus, activation, drag tracking, input sessions, scrolling and selector queries. |
 | `ebox-viewport.el` | Window-size event bridge and settled viewport refit scheduling. |
 | `ebox-image.el` | Image preparation, converter protocol, immutable raster cache and image content access. |
+| `ebox-kitty.el` | Kitty terminal graphics protocol probing, Unicode placeholder grids and live TTY frame streaming. |
 | `ebox-file.el` | `.ebox` source reading, companion loading, preview mode and package byte compilation helper. |
 
 Low-level pure modules do not know about mounts.  Nodes depend on size, style and measurement.  Layout depends on retained nodes and calls flex/grid through private functions.  Buffer flushing depends on node and layout.  Interaction is layered above mounted buffers.  Viewport delivery refits size changes and refreshes metric changes without remounting. Images are prepared outside layout and become node content.

@@ -655,13 +655,17 @@
 ;;
 ;; Function: ebox-image-prepare (source columns rows &key (adapter 'auto) (frame (selected-frame)) inset (converters ebox-image-converters))
 ;;;###autoload (autoload 'ebox-image-prepare "ebox" nil nil)
-;; Prepare SOURCE for an integer COLUMNS by ROWS character area.  INSET
-;; (TOP . BOTTOM) leaves that many pixels, under one line each, empty inside a
-;; graphics image's first and last rows; the gap shows the box background.
-;; Graphics images composite transparent pixels over their box background.
-;; With native SVG support, filtered overlays dim prepared PNG/JPEG/SVG
-;; pixels as cached in-memory composites, keeping alpha, slices and geometry.
-;; Other native image formats remain visible without pixel filtering.
+;; Prepare SOURCE for an integer COLUMNS by ROWS character area.  ADAPTER is
+;; `auto' (default: native GUI graphics, then Kitty terminal graphics on
+;; compliant 24-bit TTY frames, then CONVERTERS, then placeholder), `kitty'
+;; (Kitty terminal graphics only, falling back to placeholder), `text' or
+;; `placeholder'.  INSET (TOP . BOTTOM) leaves that many pixels, under one
+;; line each, empty inside a graphics image's first and last rows; the gap
+;; shows the box background.  Graphics and Kitty images composite transparent
+;; pixels over their box background.  With native SVG support, filtered
+;; overlays dim prepared PNG/JPEG/SVG pixels as cached in-memory composites,
+;; keeping alpha, slices and geometry.  Other native image formats remain
+;; visible without pixel filtering.
 ;;
 ;; Function: ebox-image-content (prepared)
 ;;;###autoload (autoload 'ebox-image-content "ebox" nil nil)
@@ -677,6 +681,36 @@
 ;;
 ;; Variable: ebox-image-converters
 ;; Ordered (NAME . FUNCTION) image converters, called only by preparation.
+;;
+;; Variable: ebox-image-kitty-protocol
+;; Control Kitty terminal graphics protocol use on text frames: `auto'
+;; (default: probe once and enable on compliant 24-bit Unicode-placeholder
+;; terminals such as Kitty 0.28+, Ghostty, Ghostel and iTerm2 3.6+), t
+;; (enable on any 24-bit text terminal acknowledging the Kitty query), or
+;; nil (disable).
+;;
+;; Function: ebox-image-kitty-available-p (&optional frame)
+;;;###autoload (autoload 'ebox-image-kitty-available-p "ebox" nil nil)
+;; Return a capability plist (:cell-width :cell-height :local) when FRAME
+;; supports Kitty Unicode placeholder graphics, or nil otherwise.
+;;
+;; Function: ebox-image-kitty-stream-create (columns rows &optional frame)
+;;;###autoload (autoload 'ebox-image-kitty-stream-create "ebox" nil nil)
+;; Create a Kitty virtual placement stream for COLUMNS by ROWS cells on FRAME,
+;; returning an opaque stream handle or nil when Kitty graphics are unavailable.
+;;
+;; Function: ebox-image-kitty-stream-grid (stream)
+;;;###autoload (autoload 'ebox-image-kitty-stream-grid "ebox" nil nil)
+;; Return an owned Unicode placeholder grid string for Kitty STREAM.
+;;
+;; Function: ebox-image-kitty-stream-present (stream bytes width height &optional format)
+;;;###autoload (autoload 'ebox-image-kitty-stream-present "ebox" nil nil)
+;; Present one unibyte frame of BYTES (WIDTH by HEIGHT, FORMAT `rgb24',
+;; `rgba32' or `png') into Kitty STREAM in place without modifying buffers.
+;;
+;; Function: ebox-image-kitty-stream-destroy (stream)
+;;;###autoload (autoload 'ebox-image-kitty-stream-destroy "ebox" nil nil)
+;; Destroy Kitty STREAM and release its image data on its terminal.
 ;;
 ;;;; Ebox files
 ;;

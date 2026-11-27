@@ -14,6 +14,7 @@
 (require 'xml)
 (require 'ansi-color)
 (require 'ebox-measure)
+(require 'ebox-kitty)
 
 ;; Native image primitives are absent from text-only Emacs builds. They are
 ;; used only after graphical capability selection, not for the text adapter.
@@ -499,9 +500,11 @@ Keep native slice/raise modifiers and share each derived display value."
   "Prepare SOURCE for an integer COLUMNS by ROWS character area.
 Return an opaque reusable value; inspect it with `ebox-image-info'.  SOURCE
 is a local file or an Emacs image descriptor containing :file or :data.
-ADAPTER is auto, text, or placeholder.  Auto tries graphics on FRAME with a
-usable image type and font metrics, then CONVERTERS, then a monochrome ASCII
-placeholder.  Text skips graphics.  Placeholder skips both.  CONVERTERS obeys
+ADAPTER is auto, kitty, text, or placeholder.  Auto tries native graphics on
+a graphical FRAME, then Kitty terminal graphics on a compliant 24-bit text
+FRAME, then CONVERTERS, then a monochrome ASCII placeholder.  Kitty tries
+only Kitty terminal graphics and falls back to the placeholder.  Text skips
+both graphics paths.  Placeholder skips all of them.  CONVERTERS obeys
 `ebox-image-converters'.  Missing/corrupt images also become placeholders.
 INSET is nil or (TOP . BOTTOM), pixels below one line height that a graphics
 image leaves empty above and below it inside its rows; the image scales
@@ -512,7 +515,7 @@ composites from these bytes without reopening the source or converters.
 Repeat after source or frame/font changes; identical preparations are cached."
   (unless (and (integerp columns) (> columns 0) (integerp rows) (> rows 0))
     (error "Ebox image columns and rows must be positive integers"))
-  (unless (memq adapter '(auto text placeholder))
+  (unless (memq adapter '(auto kitty text placeholder))
     (error "Unknown Ebox image adapter: %S" adapter))
   (unless (or (null inset)
               (and (consp inset) (natnump (car inset)) (natnump (cdr inset))))
@@ -524,17 +527,27 @@ Repeat after source or frame/font changes; identical preparations are cached."
     (error "Invalid Ebox image converter protocol"))
   (pcase-let* ((`(,owned ,identity) (ebox-image--source source))
                (metrics (and (eq adapter 'auto) (ebox-image--metrics frame)))
+               (kitty-caps (and (memq adapter '(auto kitty))
+                                (not metrics)
+                                (ebox-image-kitty-available-p frame)))
+               (kitty-term (and kitty-caps (frame-terminal frame)))
                (key (list identity columns rows adapter metrics inset
-                          (and metrics image-types) (copy-tree converters)))
+                          (and metrics image-types) kitty-term kitty-caps
+                          (copy-tree converters)))
                (cached (ebox-image--cache-take key)))
     (or cached
         (let ((text (and metrics
                          (ignore-errors
                            (ebox-image--graphics owned identity columns rows metrics frame inset))))
               (selected 'graphics) converter)
+          (when (and (not text) kitty-caps)
+            (setq text (ignore-errors
+                         (ebox-kitty--prepare owned columns rows frame)))
+            (when text
+              (setq selected 'kitty)))
           (unless text
             (setq selected 'text)
-            (unless (eq adapter 'placeholder)
+            (unless (memq adapter '(placeholder kitty))
               (catch 'converted
                 (dolist (entry converters)
                   (let ((result (ignore-errors

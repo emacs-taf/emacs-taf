@@ -158,13 +158,26 @@ each run's `face' so hovering never shifts glyphs or erases borders."
     (while (< pos len)
       (let* ((next (min (or (next-single-property-change pos 'mouse-face string len) len)
                         (or (next-single-property-change pos 'face string len) len)
-                        (or (next-single-property-change pos 'ebox-border string len) len)))
+                        (or (next-single-property-change pos 'ebox-border string len) len)
+                        (or (next-single-property-change pos 'ebox-kitty-image string len) len)))
              (props (text-properties-at pos string)))
         (unless (plist-member props 'mouse-face)
           (let* ((face (plist-get props 'face))
                  (hover
                   (cond
                    ((null value) nil)
+                   ((plist-get props 'ebox-kitty-image)
+                    ;; Kitty placeholder cells encode their image ID in
+                    ;; `:foreground'; never overwrite `:foreground' on hover.
+                    (let ((fg (and face (ebox--face-attribute face :foreground)))
+                          (hbg (ebox--face-attribute value :background))
+                          (fbg (and face (ebox--face-attribute face :background))))
+                      (cond
+                       ((and fg (or hbg fbg))
+                        (ebox--intern-face
+                         (list :foreground fg :background (or hbg fbg))))
+                       (fg (ebox--intern-face (list :foreground fg)))
+                       (t face))))
                    ((plist-get props 'ebox-border)
                     ;; Side border cells keep their own border paint on hover.
                     (or face value))
@@ -626,6 +639,75 @@ come in the fixed order `left', `right', `top', `bottom'."
       ebox-drag-edge-interval
     0.12))
 
+(defconst ebox--tty-read-key-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map [t] #'ignore)
+    ;; Keep ESC unbound so `read-key-sequence' still decodes terminal escape
+    ;; sequences (including xterm mouse reports) through `input-decode-map'.
+    (define-key map [?\e] nil)
+    map)
+  "Fallback-disabling map for `read-key' on Emacs 29.
+Used when `read-key' does not yet accept DISABLE-FALLBACKS.")
+
+(defun ebox--tty-xterm-mouse-p (&optional frame)
+  "Return non-nil when FRAME decodes pointer events through `xterm-mouse-mode'."
+  (let ((frame (or frame (selected-frame))))
+    (and (not (display-graphic-p frame))
+         (or (bound-and-true-p xterm-mouse-mode)
+             (and (frame-live-p frame)
+                  (terminal-parameter frame 'xterm-mouse-mode))))))
+
+(defun ebox--read-decoded-key ()
+  "Read one decoded event through `read-key' with unbound fallbacks disabled."
+  (let ((mouse-autoselect-window nil)
+        (max (cdr (func-arity #'read-key))))
+    (if (or (eq max 'many) (and (integerp max) (>= max 2)))
+        ;; Older byte compilers see this Emacs 30+ arity; the arity check
+        ;; above selects it only when `disable-fallbacks' is accepted.
+        (with-suppressed-warnings ((callargs read-key))
+          (read-key nil t))
+      (let ((read-key-empty-map ebox--tty-read-key-map))
+        (read-key)))))
+
+(defun ebox--tty-area-drag-event (down end-posn)
+  "Build a drag release event from xterm-mouse DOWN and END-POSN.
+Emacs's `xterm-mouse-translate-1' substitutes integer 0 (`C-@') when a
+button pressed in text is released over a symbolic window area such as
+the mode line, vertical border or margin.  Reconstruct the matching drag
+event so Ebox ends the gesture cleanly without leaking `set-mark-command'."
+  (let* ((down-type (car-safe down))
+         (down-data (nth 1 down))
+         (drag-type
+          (if (symbolp down-type)
+              (intern (string-replace "down-" "drag-" (symbol-name down-type)))
+            'drag-mouse-1)))
+    (list drag-type down-data end-posn)))
+
+(defun ebox--read-pointer-event (&optional timeout frame)
+  "Read one event while tracking the pointer, waiting at most TIMEOUT seconds.
+On a text terminal with `xterm-mouse-mode' active, pointer reports arrive as
+escape sequences decoded through `input-decode-map'; raw `read-event' returns
+only the leading ESC byte and leaves the rest of the sequence as keystrokes.
+Wait with `read-event' so timeouts and pending polls stay lightweight, then
+decode ESC-prefixed sequences through `read-key' and repair
+`xterm-mouse-translate-1' when it replaces a symbolic-area release with 0."
+  (let ((event (read-event nil nil timeout)))
+    (if (and (eq event ?\e) (ebox--tty-xterm-mouse-p frame))
+        (let* ((target (or frame (selected-frame)))
+               (down (and (frame-live-p target)
+                          (terminal-parameter target 'xterm-mouse-last-down))))
+          (push event unread-command-events)
+          (let ((decoded (ebox--read-decoded-key)))
+            (when (and down
+                       (mouse-movement-p decoded)
+                       (eq (car unread-command-events) 0)
+                       (frame-live-p target)
+                       (null (terminal-parameter target 'xterm-mouse-last-down)))
+              (setcar unread-command-events
+                      (ebox--tty-area-drag-event down (event-end decoded))))
+            decoded))
+      event)))
+
 (defun ebox--track-drag (event callback &optional defer-active lock edge)
   "Track primary-button EVENT on its owner, calling CALLBACK per phase.
 DEFER-ACTIVE delays the active state until the first motion.  LOCK keeps the
@@ -723,7 +805,7 @@ leave the text area: positions clamp to it and :overshoot reports the rest."
                       (let ((track-mouse 'dragging)
                             (show-help-function #'ignore))
                         (while (and (not done) (or finishing (available)))
-                          (when-let* ((next (read-event nil nil 0.05)))
+                          (when-let* ((next (ebox--read-pointer-event 0.05 frame)))
                             (unless (or finishing (available))
                               (push next unread-command-events)
                               (setq reason 'target-unavailable done t))
@@ -732,7 +814,7 @@ leave the text area: positions clamp to it and :overshoot reports the rest."
                               ;; Merge already pending motions, bounded per round.
                               (let ((count 1) (poll t))
                                 (while (and poll (< count 64))
-                                  (let ((candidate (read-event nil nil 0)))
+                                  (let ((candidate (ebox--read-pointer-event 0 frame)))
                                     (cond
                                      ((null candidate) (setq poll nil))
                                      ((mouse-movement-p candidate)
@@ -811,7 +893,10 @@ leave the text area: positions clamp to it and :overshoot reports the rest."
          (when (eq (plist-get gesture :phase) 'end)
            (let* ((owner (plist-get gesture :node))
                   (mount (ebox-buffer-mount buffer))
-                  (position (posn-point (event-end (plist-get gesture :event))))
+                  (end (event-end (plist-get gesture :event)))
+                  (position (and (eq (posn-window end) window)
+                                 (null (posn-area end))
+                                 (posn-point end)))
                   (hit (with-current-buffer buffer (ebox--event-owner position))))
              (when (eq owner hit)
                (ebox--set-mount-state mount 'active nil)
@@ -1568,7 +1653,6 @@ plain buffer reaches only through `local-function-key-map' (as DEL)."
    "ebox--input-put-preedit"
    (lambda () (interactive) (ebox--input-put-preedit)))
   "Internal uninterned command for `ebox--input-put-preedit'.")
-
 (defvar ebox--input-special-saved nil
   "Input-method special-event bindings displaced while sessions are active.")
 
@@ -1687,7 +1771,6 @@ Emacs runs these outside the command loop, so command hooks never see them.")
    "ebox--input-previous-row"
    (lambda () (interactive) (ebox--input-previous-row)))
   "Internal uninterned command for `ebox--input-previous-row'.")
-
 (defun ebox--input-sync (session)
   "Publish SESSION's edited value and show its caret."
   (let ((value (with-current-buffer (ebox--input-session-shadow session)
@@ -1756,7 +1839,10 @@ included, or the value's painted rows when no owner frames it."
   "Place the input caret at primary press EVENT and select while dragging.
 A double press selects the word at the caret and a triple press the value."
   (when-let* ((session (ebox--input-current)))
-    (let* ((from (posn-point (event-start event)))
+    (let* ((start (event-start event))
+           (from (posn-point start))
+           (window (posn-window start))
+           (frame (and (window-live-p window) (window-frame window)))
            (count (cond ((memq 'triple (event-modifiers event)) 3)
                         ((memq 'double (event-modifiers event)) 2)
                         (t 1))))
@@ -1764,14 +1850,15 @@ A double press selects the word at the caret and a triple press the value."
       (let (next)
         (track-mouse
           (setq track-mouse 'dragging)
-          (while (progn (setq next (read-event))
+          (while (progn (setq next (ebox--read-pointer-event nil frame))
                         (mouse-movement-p next))
             (let ((to (posn-point (event-end next))))
               (when (and (= count 1) (integerp to) (ebox--input-inside-p session to))
                 (ebox--input-select session from to)))))
         ;; The release belongs to this press; anything else runs normally.
-        (unless (and (consp next) (eq (event-basic-type next) 'mouse-1)
-                     (not (memq 'down (event-modifiers next))))
+        (unless (or (null next)
+                    (and (consp next) (eq (event-basic-type next) 'mouse-1)
+                         (not (memq 'down (event-modifiers next)))))
           (push next unread-command-events)))
       (pcase count
         (2 (ebox--input-select-unit session 'word))
@@ -1782,7 +1869,6 @@ A double press selects the word at the caret and a triple press the value."
    "ebox--input-track-pointer"
    (lambda (event) (interactive "e") (ebox--input-track-pointer event)))
   "Internal uninterned command for `ebox--input-track-pointer'.")
-
 (defun ebox--input-pointer (session event)
   "Place SESSION's caret and region from mouse EVENT, or leave the field."
   (let* ((end (event-end event))
