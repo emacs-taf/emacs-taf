@@ -22,6 +22,11 @@
       "branch": "main",
       "role": "framework"
     },
+    "etaf-agenda": {
+      "url": "https://github.com/emacs-taf/etaf-agenda.git",
+      "branch": "main",
+      "role": "application"
+    },
     "etaf-bili": {
       "url": "https://github.com/emacs-taf/etaf-bili.git",
       "branch": "main",

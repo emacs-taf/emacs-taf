@@ -166,15 +166,18 @@ to every repository changed from this workspace.
   to `etaf-app-open` and do not clear `mode-line-format` or override the mode-line
   face unless the user explicitly asks for a frameless mode (such as a fullscreen
   screensaver or transient overlay).
-- Interactive states must not stack.  A control or row that is already
-  active or selected keeps its selected presentation and takes no
-  pointer-hover highlight; hover feedback belongs to unselected targets
-  only.  Catalog components with a selected state suppress their hover
-  fill, and application rows apply hover only when they are not the
-  current or selected one.
-  A state style declares the paint it changes, typically the fill; the engine
-  restates the label's own ink, weight and decoration in the native hover face.
-  Components must not carry per-theme text colours to survive a hover.
+- Interactive states must not stack, and hover feedback must be earned rather than applied indiscriminately to every clickable surface:
+  - **When hover highlight belongs**: single-line independent buttons/tabs, unselected segmented/stepper controls, lightweight inline action links (using foreground colour shift rather than a zero-padding grey slab), and unselected single-line list or sidebar items where the hover target is homogeneous and clearly maps to one action.
+  - **When hover highlight must NOT be applied** (even if the region accepts clicks):
+    1. *Already-active, selected, editing, or no-op states*: an active tab, selected row/segment/kind pill, or "Today"/"This month" button while already on that period keeps its resting presentation with neither `:hover-style` nor `:pointer 'hand`.
+    2. *Spatial grid/canvas cells with read-only previews* (such as month calendar day cells): sweeping across a dense grid must stay calm, never flash partial single lines, and never make read-only preview chips look individually clickable.
+    3. *Compound rows hosting nested independent controls or colour-coded data matrices* (such as a multi-line habit matrix row with 21 day tiles): never put container-wide hover over nested targets or data grids; scope subtle hover only to the row's single-line title when needed.
+    4. *Colour-encoded data-visualization micro-tiles* (habit squares, heatmap cells, legends): rely on `:pointer 'hand` (when interactive) and `help-echo` tooltips instead of background hover boxes that flicker or overwrite semantic tile colours.
+    5. *Multi-line wrapped reading surfaces* (inspector notes body, wrapped title cards): keep reading calm without line-tearing hover fills, relying on explicit edit buttons and click-to-edit tooltips.
+    6. *Tinted semantic CTA buttons* (accent/ok/danger filled + bordered actions) must never be washed into neutral grey by a generic hover fill.
+    7. *Text inputs* and *read-only structure* (headers, counters, KPIs, progress bars, footers): inputs use `:pointer 'text` only; read-only surfaces take no hover.
+  - **Preserve child semantic colours under native `mouse-face`**: because Emacs renders a container's single `mouse-face` in place of each descendant's `face`, never place a container `:hover-style` across mixed-colour badges, coloured area dots, SVG `currentColor` icons or checkboxes that would be overwritten to monochrome ink; apply `:hover-style` on the homogeneous label/value node itself so icons, checkboxes and pills retain their true colours and independent click affordance.
+  - A state style declares the paint it changes, typically the fill or text colour; the engine restates the label's own ink, weight and decoration in the native hover face. Components must not carry per-theme text colours to survive a hover.
 - State colours must come from the Theme.  A hover, selected or active fill
   reads a theme token or is derived from the theme's own surface and text
   colours; never use a fixed light-only literal, because a dark application
@@ -183,6 +186,10 @@ to every repository changed from this workspace.
   visible.  Check every interactive surface with the pointer in both
   palettes, and prefer deriving in the owning catalog component over
   repeating a colour in each application.
+- Interactive state transitions and headers must preserve box geometry with zero text jitter or shifting controls:
+  - **Never toggle border presence, padding, or box dimensions on state change**: hover, selected, active, focused and editing states must never add or remove a border (`nil` ↔ `1px`) or alter padding/margins, because doing so shifts text horizontally or vertically. Either keep the border permanently present in every state (via shared-edge grid ownership or a permanent reserved `:bg` → `:accent` border) and swap only its colour, or express selection purely through invariant-geometry paint: theme-derived surface fill (`:select` / `:accent-soft`), pre-allocated fixed-width indicator slots (such as a permanent `1ch` `▎` slot), and foreground colour or weight.
+  - **Anchor interactive controls so dynamic text never shifts them**: never place variable-width text (dates, period titles, dynamic counters, filter badges) ahead of clickable controls on the same horizontal axis. Anchor mode switchers and tabs to the left edge and steppers or action buttons to the right edge, placing variable-length titles and counters in the flexible middle region or right-aligned immediately to the left of the right-anchored controls.
+  - **Keep stateful toggle labels equal-width**: controls whose caption changes in place across modes or states (such as `‹ 上年 | 本年 | 下年 ›`, `‹ 上月 | 本月 | 下月 ›`, `‹ 上周 | 本周 | 下周 ›`, or `隐藏已完成` ↔ `显示已完成`) must maintain identical display width so neighbouring controls stay rock-steady.
 - User-visible copy follows mixed-script typography: a Chinese character
   next to a Latin letter or digit keeps one separating space, in literal
   strings and in values joined at display time alike (for example a

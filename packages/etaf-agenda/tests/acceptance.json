@@ -1,0 +1,137 @@
+{
+  "schema": 1,
+  "load_path": [
+    ".",
+    "lisp",
+    "tests",
+    "../etaf",
+    "../etaf-ui",
+    "../ebox",
+    "../ecss",
+    "../etaf-db",
+    "../ekp"
+  ],
+  "support": [],
+  "cases": [
+    {
+      "name": "etaf-agenda-tests-open-shows-today-and-preserves-modeline",
+      "file": "tests/etaf-agenda-tests.el",
+      "purpose": "Opening mounts Today with date, clean borderless tabs, sidebar and preserved Emacs mode-line."
+    },
+    {
+      "name": "etaf-agenda-tests-capture-natural-language-grammar",
+      "file": "tests/etaf-agenda-tests.el",
+      "purpose": "Natural-language capture parses dates, time ranges, priority, tags, area, project, estimate and note/question kinds."
+    },
+    {
+      "name": "etaf-agenda-tests-j-k-navigation-and-page-digits",
+      "file": "tests/etaf-agenda-tests.el",
+      "purpose": "j/k move across visible rows and digits 1..6 always switch all six views cleanly."
+    },
+    {
+      "name": "etaf-agenda-tests-inline-capture-works-across-pages",
+      "file": "tests/etaf-agenda-tests.el",
+      "purpose": "a opens inline capture and commits entries on Today, Calendar, List, Project and Habits."
+    },
+    {
+      "name": "etaf-agenda-tests-inline-edit-updates-title-and-escape-cancels",
+      "file": "tests/etaf-agenda-tests.el",
+      "purpose": "e edits the selected entry title in place on RET and cancels cleanly on Escape."
+    },
+    {
+      "name": "etaf-agenda-tests-x-completes-today-and-overdue-and-persists",
+      "file": "tests/etaf-agenda-tests.el",
+      "purpose": "x completes both today and overdue tasks and persists state across reopen."
+    },
+    {
+      "name": "etaf-agenda-tests-recurring-task-spawns-next-day",
+      "file": "tests/etaf-agenda-tests.el",
+      "purpose": "Completing a recurring task automatically creates the next scheduled occurrence."
+    },
+    {
+      "name": "etaf-agenda-tests-smart-migrate-pull-back-and-batch-overdue",
+      "file": "tests/etaf-agenda-tests.el",
+      "purpose": "m migrates today to tomorrow, pulls migrated rows back idempotently, and M batch-migrates overdue items."
+    },
+    {
+      "name": "etaf-agenda-tests-delete-drop-and-undo-restore",
+      "file": "tests/etaf-agenda-tests.el",
+      "purpose": "d soft-deletes, z drops, and u / etaf-agenda-undo-last restores the prior state."
+    },
+    {
+      "name": "etaf-agenda-tests-inspector-status-priority-and-layered-escape",
+      "file": "tests/etaf-agenda-tests.el",
+      "purpose": "RET opens the interactive right-rail Inspector, s/! mutate fields, and Escape closes while preserving selection."
+    },
+    {
+      "name": "etaf-agenda-tests-search-filters-live-and-escape-clears",
+      "file": "tests/etaf-agenda-tests.el",
+      "purpose": "Live search filters entries across title, tags and area and Escape clears the filter."
+    },
+    {
+      "name": "etaf-agenda-tests-calendar-month-week-and-rail",
+      "file": "tests/etaf-agenda-tests.el",
+      "purpose": "Calendar switches Month/Week with w, navigates months and shows both events and tasks in the right rail."
+    },
+    {
+      "name": "etaf-agenda-tests-list-grouping-and-done-state",
+      "file": "tests/etaf-agenda-tests.el",
+      "purpose": "List cycles all four groupings, toggles completed visibility, and reflects true completion state."
+    },
+    {
+      "name": "etaf-agenda-tests-project-stages-and-real-progress",
+      "file": "tests/etaf-agenda-tests.el",
+      "purpose": "Projects create stages, group +project tasks, and update completion progress when tasks are toggled."
+    },
+    {
+      "name": "etaf-agenda-tests-habits-checkin-and-day-navigation",
+      "file": "tests/etaf-agenda-tests.el",
+      "purpose": "Habits check off via x and step across past days via h/l without inflating daily task counts."
+    },
+    {
+      "name": "etaf-agenda-tests-review-and-doctor",
+      "file": "tests/etaf-agenda-tests.el",
+      "purpose": "Review displays monthly KPIs and heatmap across months and doctor reports accurate database facts."
+    },
+    {
+      "name": "etaf-agenda-tests-area-filter-scopes-today-and-list",
+      "file": "tests/etaf-agenda-tests.el",
+      "purpose": "Filtering by an area via f narrows Today and List to that area and restores all entries on 全部."
+    },
+    {
+      "name": "etaf-agenda-tests-hover-discipline-across-views",
+      "file": "tests/etaf-agenda-tests.el",
+      "purpose": "Hover highlights apply only to eligible interactive controls and never paint calendar cells, habit matrices, badges, active tabs or reading cards."
+    },
+    {
+      "name": "etaf-agenda-tests-lossless-undo-across-mutations",
+      "file": "tests/etaf-agenda-tests.el",
+      "purpose": "u cleanly reverts batch overdue migrate, smart migrate, recurring completion and habit check-in without leaving ghost instances."
+    },
+    {
+      "name": "etaf-agenda-tests-reschedule-and-clear-date-remove-stale-day",
+      "file": "tests/etaf-agenda-tests.el",
+      "purpose": "Rescheduling or clearing scheduled date removes stale open instances from the old day and u restores them cleanly."
+    },
+    {
+      "name": "etaf-agenda-tests-inline-capture-on-review-and-empty-project",
+      "file": "tests/etaf-agenda-tests.el",
+      "purpose": "a opens a visible inline capture row and commits entries on both the empty Project page and the Review page."
+    },
+    {
+      "name": "etaf-agenda-tests-inspector-title-edit-recurrence-and-body-actions",
+      "file": "tests/etaf-agenda-tests.el",
+      "purpose": "Inspector supports inline title editing on Calendar, exposes recurrence on regular tasks, and provides explicit Save/Cancel actions for multiline notes."
+    },
+    {
+      "name": "etaf-agenda-tests-zero-jitter-selection-and-anchored-headers",
+      "file": "tests/etaf-agenda-tests.el",
+      "purpose": "Calendar mode tabs, steppers and day selection maintain exact columns with zero text jitter across Year/Month/Week modes, and Habits anchors to real today."
+    },
+    {
+      "name": "etaf-agenda-tests-light-theme-contrast-and-year-summary",
+      "file": "tests/etaf-agenda-tests.el",
+      "purpose": "Light themes enforce WCAG AA contrast across muted, dim and info text (avoiding washed-out yellow) and Year View renders all 12 months with annual summary and legend."
+    }
+  ]
+}
