@@ -227,29 +227,28 @@ clickable author name."
 (etaf-define-component etaf-bili--header
     (&key query account on-account on-submit on-theme width compact)
   "Header row with SearchField (keywords or BV/URL), account chip and theme."
-  :render
+  :view
   (let ((acc-label (if account
                        (format "● %s ▾" (etaf-bili--truncate account (if compact 8 12)))
                      (if compact "登录" "未登录 · 扫码登录"))))
-    (etaf-view
-     (flex :width (list 'ch width) :height '(lh 3) :align-items 'center
-           :gap '((lh 0) (ch 2))
-           :region '(:id search :label "搜索视频" :key "s" :enter bili-search)
-       (row :item-gap '(ch 1) :cross-align 'center :flex-shrink 0
-         (etaf-ui-icon :name 'video :set 'svg :min-width 2 :color (etaf-bili-color :accent))
-         (etaf-label :text "B 站" :variant 'strong))
-       (etaf-search-field :ref 'bili-search :bind query :icon t
-                          :placeholder (if compact
-                                           "搜索视频或粘贴 BV 号 (/)"
-                                         "搜索视频、UP 主，或直接粘贴 BV 号 / 链接直达播放 (/)")
-                          :on-submit on-submit)
-       (etaf-button :ref 'bili-account
-                    :label acc-label
-                    :variant (if account 'ghost 'secondary)
-                    :aria-label (if account (format "账号菜单 %s" account) "登录哔哩哔哩")
-                    :on-press on-account)
-       (etaf-button :ref 'bili-theme :label (if compact "明暗" "切换主题")
-                    :variant 'ghost :on-press on-theme)))))
+    (flex :width (list 'ch width) :height '(lh 3) :align-items 'center
+          :gap '((lh 0) (ch 2))
+          :region '(:id search :label "搜索视频" :key "s" :enter bili-search)
+      (row :item-gap '(ch 1) :cross-align 'center :flex-shrink 0
+        (etaf-ui-icon :name 'video :set 'svg :min-width 2 :color (etaf-bili-color :accent))
+        (etaf-label :text "B 站" :variant 'strong))
+      (etaf-search-field :ref 'bili-search :bind query :icon t
+                         :placeholder (if compact
+                                          "搜索视频或粘贴 BV 号 (/)"
+                                        "搜索视频、UP 主，或直接粘贴 BV 号 / 链接直达播放 (/)")
+                         :on-submit on-submit)
+      (etaf-button :ref 'bili-account
+                   :label acc-label
+                   :variant (if account 'ghost 'secondary)
+                   :aria-label (if account (format "账号菜单 %s" account) "登录哔哩哔哩")
+                   :on-press on-account)
+      (etaf-button :ref 'bili-theme :label (if compact "明暗" "切换主题")
+                   :variant 'ghost :on-press on-theme))))
 
 (etaf-define-component etaf-bili--navigation
     (&key mode status loading play-loading account on-mode on-refresh width compact)
@@ -327,125 +326,108 @@ clickable author name."
     (&key mode ranking-rid search-order fav-folders fav-folder-id space-name
           width on-rid on-order on-fav-folder on-leave-space)
   "Borderless 1-row filter pill strip aligned flush with the card grid."
-  :render
+  :view
   (let ((cur-mode (etaf-value mode)))
-    (pcase cur-mode
-      ('ranking
-       (let ((active-rid (etaf-value ranking-rid)))
-         (etaf-node
-          'flex (list :width (list 'ch width) :height '(lh 1) :align-items 'center
-                      :gap '((lh 0) (ch 1)))
-          (cons
-           (etaf-node 'text (list :color (etaf-bili-color :dim)) (list "分区："))
-           (mapcar
-            (lambda (pair)
-              (let ((rid (car pair)) (lbl (cdr pair)))
-                (etaf-node
-                 'box
-                 (list :height '(lh 1) :padding '((lh 0) (ch 1))
-                       :role 'button :tab-index 0
-                       :color (etaf-bili-color (if (= rid active-rid) :accent :muted))
-                       :font-weight (if (= rid active-rid) 'bold 'normal)
-                       :background-color (when (= rid active-rid) (etaf-bili-color :accent-soft))
-                       :pointer (unless (= rid active-rid) 'hand)
-                       :hover-style (unless (= rid active-rid)
-                                      (list :color (etaf-bili-color :ink)
-                                            :background-color (etaf-bili-color :hover)))
-                       :on-press (lambda () (funcall on-rid rid)))
-                 (list (etaf-node 'text nil (list lbl))))))
-            etaf-bili-ranking-partitions)))))
-      ('search
-       (let ((active-ord (etaf-value search-order)))
-         (etaf-node
-          'flex (list :width (list 'ch width) :height '(lh 1) :align-items 'center
-                      :gap '((lh 0) (ch 1)))
-          (cons
-           (etaf-node 'text (list :color (etaf-bili-color :dim)) (list "排序："))
-           (mapcar
-            (lambda (pair)
-              (let ((ord (car pair)) (lbl (cdr pair)))
-                (etaf-node
-                 'box
-                 (list :height '(lh 1) :padding '((lh 0) (ch 1))
-                       :role 'button :tab-index 0
-                       :color (etaf-bili-color (if (equal ord active-ord) :accent :muted))
-                       :font-weight (if (equal ord active-ord) 'bold 'normal)
-                       :background-color (when (equal ord active-ord) (etaf-bili-color :accent-soft))
-                       :pointer (unless (equal ord active-ord) 'hand)
-                       :hover-style (unless (equal ord active-ord)
-                                      (list :color (etaf-bili-color :ink)
-                                            :background-color (etaf-bili-color :hover)))
-                       :on-press (lambda () (funcall on-order ord)))
-                 (list (etaf-node 'text nil (list lbl))))))
-            etaf-bili-search-orders)))))
-      ('fav
-       (let ((folders (etaf-value fav-folders))
-             (active-id (etaf-value fav-folder-id)))
-         (when folders
-           (etaf-node
-            'flex (list :width (list 'ch width) :height '(lh 1) :align-items 'center
-                        :gap '((lh 0) (ch 1)))
-            (cons
-             (etaf-node 'text (list :color (etaf-bili-color :dim)) (list "收藏夹："))
-             (mapcar
-              (lambda (f)
-                (let* ((fid (plist-get f :id))
-                       (active (equal fid active-id))
-                       (lbl (format "%s (%d)" (etaf-bili--truncate (plist-get f :title) 12)
-                                    (or (plist-get f :count) 0))))
-                  (etaf-node
-                   'box
-                   (list :height '(lh 1) :padding '((lh 0) (ch 1))
-                         :role 'button :tab-index 0
-                         :color (etaf-bili-color (if active :accent :muted))
-                         :font-weight (if active 'bold 'normal)
-                         :background-color (when active (etaf-bili-color :accent-soft))
-                         :pointer (unless active 'hand)
-                         :hover-style (unless active
-                                        (list :color (etaf-bili-color :ink)
-                                              :background-color (etaf-bili-color :hover)))
-                         :on-press (lambda () (funcall on-fav-folder fid)))
-                   (list (etaf-node 'text nil (list lbl))))))
-              (seq-take folders 5)))))))
-      ('space
-       (etaf-view
+    (cond
+     ((eq cur-mode 'ranking)
+      (let ((active-rid (etaf-value ranking-rid)))
         (flex :width (list 'ch width) :height '(lh 1) :align-items 'center
-              :gap '((lh 0) (ch 2))
-          (etaf-button :label "← 返回列表" :variant 'ghost :on-press on-leave-space)
-          (text :color (etaf-bili-color :accent) :font-weight 'bold
-            (expr (format "UP 主空间：%s" (or space-name "")))))))
-      (_ nil))))
+              :gap '((lh 0) (ch 1))
+          (text :color (etaf-bili-color :dim) "分区：")
+          (box :for (pair etaf-bili-ranking-partitions) :key (car pair)
+               :height '(lh 1) :padding '((lh 0) (ch 1))
+               :role 'button :tab-index 0
+               :color (etaf-bili-color (if (= (car pair) active-rid) :accent :muted))
+               :font-weight (if (= (car pair) active-rid) 'bold 'normal)
+               :background-color (when (= (car pair) active-rid) (etaf-bili-color :accent-soft))
+               :pointer (unless (= (car pair) active-rid) 'hand)
+               :hover-style (unless (= (car pair) active-rid)
+                              (list :color (etaf-bili-color :ink)
+                                    :background-color (etaf-bili-color :hover)))
+               :on-press (let ((rid (car pair)))
+                           (lambda () (funcall on-rid rid)))
+            (text (cdr pair))))))
+     ((eq cur-mode 'search)
+      (let ((active-ord (etaf-value search-order)))
+        (flex :width (list 'ch width) :height '(lh 1) :align-items 'center
+              :gap '((lh 0) (ch 1))
+          (text :color (etaf-bili-color :dim) "排序：")
+          (box :for (pair etaf-bili-search-orders) :key (car pair)
+               :height '(lh 1) :padding '((lh 0) (ch 1))
+               :role 'button :tab-index 0
+               :color (etaf-bili-color (if (equal (car pair) active-ord) :accent :muted))
+               :font-weight (if (equal (car pair) active-ord) 'bold 'normal)
+               :background-color (when (equal (car pair) active-ord) (etaf-bili-color :accent-soft))
+               :pointer (unless (equal (car pair) active-ord) 'hand)
+               :hover-style (unless (equal (car pair) active-ord)
+                              (list :color (etaf-bili-color :ink)
+                                    :background-color (etaf-bili-color :hover)))
+               :on-press (let ((ord (car pair)))
+                           (lambda () (funcall on-order ord)))
+            (text (cdr pair))))))
+     ((eq cur-mode 'fav)
+      (let ((folders (etaf-value fav-folders))
+            (active-id (etaf-value fav-folder-id)))
+        (when folders
+          (flex :width (list 'ch width) :height '(lh 1) :align-items 'center
+                :gap '((lh 0) (ch 1))
+            (text :color (etaf-bili-color :dim) "收藏夹：")
+            (box :for (f (seq-take folders 5)) :key (plist-get f :id)
+                 :height '(lh 1) :padding '((lh 0) (ch 1))
+                 :role 'button :tab-index 0
+                 :color (etaf-bili-color (if (equal (plist-get f :id) active-id) :accent :muted))
+                 :font-weight (if (equal (plist-get f :id) active-id) 'bold 'normal)
+                 :background-color (when (equal (plist-get f :id) active-id)
+                                     (etaf-bili-color :accent-soft))
+                 :pointer (unless (equal (plist-get f :id) active-id) 'hand)
+                 :hover-style (unless (equal (plist-get f :id) active-id)
+                                (list :color (etaf-bili-color :ink)
+                                      :background-color (etaf-bili-color :hover)))
+                 :on-press (let ((fid (plist-get f :id)))
+                             (lambda () (funcall on-fav-folder fid)))
+              (text (format "%s (%d)"
+                            (etaf-bili--truncate (plist-get f :title) 12)
+                            (or (plist-get f :count) 0))))))))
+     ((eq cur-mode 'space)
+      (flex :width (list 'ch width) :height '(lh 1) :align-items 'center
+            :gap '((lh 0) (ch 2))
+        (etaf-button :label "← 返回列表" :variant 'ghost :on-press on-leave-space)
+        (text :color (etaf-bili-color :accent) :font-weight 'bold
+          (format "UP 主空间：%s" (or space-name ""))))))))
 
 (etaf-define-component etaf-bili--toast-banner
-    (&key toast width height center bottom-offset on-dismiss)
+    (&key toast ui-store width height center bottom-offset on-dismiss)
   "Non-destructive calm floating toast capsule centered inside WIDTH."
-  :render
-  (when-let* ((data (etaf-value toast)))
-    (let* ((kind (plist-get data :kind))
-           (msg (etaf-bili--truncate (or (plist-get data :message) "") 44))
-           (act-lbl (plist-get data :action-label))
-           (act-fn (plist-get data :action-fn))
-           (bg (if (eq kind 'error) (etaf-bili-color :danger-bg) (etaf-bili-color :panel2)))
-           (bd (if (eq kind 'error) (etaf-bili-color :danger) (etaf-bili-color :line)))
-           (fg (if (eq kind 'error) (etaf-bili-color :danger) (etaf-bili-color :accent)))
-           (dot (if (eq kind 'error) "!" "●"))
-           (area-w (or width 80))
-           (toast-w (min (max 20 (- area-w 4))
-                         (+ 10 (string-width msg)
-                            (if (and act-lbl act-fn) (+ 4 (string-width act-lbl)) 0))))
-           (left-ch (if center
-                        (max 2 (/ (- area-w toast-w) 2))
-                      (max 2 (- area-w toast-w 2))))
-           (top-lh (max 1 (- (or height 30) (or bottom-offset 5)))))
-      (etaf-view
-       (flex :position 'absolute :left (list 'ch left-ch) :top (list 'lh top-lh)
-             :z-index 900 :height '(lh 1) :align-items 'center :gap '((lh 0) (ch 1))
-             :padding '((lh 0) (ch 2))
-             :background-color bg :border (etaf-bili--border bd)
-         (text :color fg :font-weight 'bold (expr dot))
-         (text :color (etaf-bili-color :ink) (expr msg))
-         (etaf-button :if (and act-lbl act-fn) :label act-lbl :variant 'ghost :on-press act-fn)
-         (etaf-button :label "×" :variant 'ghost :on-press on-dismiss))))))
+  :view
+  (let ((data (if ui-store
+                  (etaf-store-get ui-store :toast)
+                (and toast (etaf-value toast)))))
+    (when data
+      (let* ((kind (plist-get data :kind))
+             (msg (etaf-bili--truncate (or (plist-get data :message) "") 44))
+             (act-lbl (plist-get data :action-label))
+             (act-fn (plist-get data :action-fn))
+             (bg (if (eq kind 'error) (etaf-bili-color :danger-bg) (etaf-bili-color :panel2)))
+             (bd (if (eq kind 'error) (etaf-bili-color :danger) (etaf-bili-color :line)))
+             (fg (if (eq kind 'error) (etaf-bili-color :danger) (etaf-bili-color :accent)))
+             (dot (if (eq kind 'error) "!" "●"))
+             (area-w (or width 80))
+             (toast-w (min (max 20 (- area-w 4))
+                           (+ 10 (string-width msg)
+                              (if (and act-lbl act-fn) (+ 4 (string-width act-lbl)) 0))))
+             (left-ch (if center
+                          (max 2 (/ (- area-w toast-w) 2))
+                        (max 2 (- area-w toast-w 2))))
+             (top-lh (max 1 (- (or height 30) (or bottom-offset 5)))))
+        (flex :position 'absolute :left (list 'ch left-ch) :top (list 'lh top-lh)
+              :z-index 900 :height '(lh 1) :align-items 'center :gap '((lh 0) (ch 1))
+              :padding '((lh 0) (ch 2))
+              :background-color bg :border (etaf-bili--border bd)
+          (text :color fg :font-weight 'bold dot)
+          (text :color (etaf-bili-color :ink) msg)
+          (when (and act-lbl act-fn)
+            (etaf-button :label act-lbl :variant 'ghost :on-press act-fn))
+          (etaf-button :label "×" :variant 'ghost :on-press on-dismiss))))))
 
 (provide 'etaf-bili-views)
 ;;; etaf-bili-views.el ends here

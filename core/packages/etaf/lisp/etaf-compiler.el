@@ -75,16 +75,18 @@
 
 (defun etaf-compiler--compile-property (form programs)
   "Compile property FORM, returning `(DESCRIPTOR . PROGRAMS)'."
-  (if-let* ((literal (etaf-compiler--literal form)))
-      (cons (list :kind 'static :value (cdr literal)) programs)
-    (let ((index (length programs)))
-      (cons (list :kind 'hole :index index)
-            (append programs (list `(lambda () ,form)))))))
+  (let ((unwrapped (etaf--unwrap-property-expr form)))
+    (if-let* ((literal (etaf-compiler--literal unwrapped)))
+        (cons (list :kind 'static :value (cdr literal)) programs)
+      (let ((index (length programs)))
+        (cons (list :kind 'hole :index index)
+              (append programs (list `(lambda () ,unwrapped))))))))
 
 (defun etaf-compiler--form-directives (form)
   "Return validated compiler directives from raw View FORM, or nil."
   (when (and (consp form) (symbolp (car form))
-             (not (memq (car form) '(expr slot))))
+             (not (memq (car form) '(expr slot)))
+             (not (memq (car form) etaf--declarative-control-heads)))
     (let ((props
            (car (etaf--parse-attributes-and-children (cdr form)))))
       (etaf--validate-directive-set
@@ -156,6 +158,25 @@ Return `(BLOCK PROGRAMS)' or nil."
    ((eq (car form) 'slot)
     (etaf-compiler--compile-program-block
      'slot (etaf--compile-slot-form (cdr form) slot-mode) path programs))
+   ((memq (car form) '(when unless))
+    (etaf-compiler--compile-program-block
+     'branch (etaf--compile-when-form (car form) (cdr form) slot-mode)
+     path programs))
+   ((eq (car form) 'cond)
+    (etaf-compiler--compile-program-block
+     'branch (etaf--compile-cond-form (cdr form) slot-mode)
+     path programs))
+   ((memq (car form) '(let let*))
+    (unless (>= (length (cdr form)) 2)
+      (etaf--syntax-error "%S requires bindings and at least one View body" (car form)))
+    (let ((bindings (cadr form))
+          (body (cddr form)))
+      (etaf--validate-let-bindings (car form) bindings)
+      (let ((index (length programs))
+            (compiled-body (etaf--compile-body-view body slot-mode)))
+        (list (list :kind 'expr :path path :hole index :static-p nil)
+              (append programs
+                      (list `(lambda () (,(car form) ,bindings ,compiled-body))))))))
    ((and (null (gethash (car form) etaf--view-registry))
          (etaf--ordinary-expression-head-p (car form)))
     (etaf--syntax-error
@@ -163,7 +184,18 @@ Return `(BLOCK PROGRAMS)' or nil."
    (t
     (let* ((parts (etaf--parse-attributes-and-children (cdr form)))
            (props (car parts))
-           (children (cdr parts))
+           (raw-children (cdr parts))
+           (children
+            (if (and (eq (car form) 'text)
+                     (= (length raw-children) 1)
+                     (let ((only (car raw-children)))
+                       (and (not (null only))
+                            (not (stringp only))
+                            (not (and (consp only)
+                                      (or (memq (car only) '(expr slot))
+                                          (memq (car only) etaf--declarative-control-heads)))))))
+                (list `(expr ,(car raw-children)))
+              raw-children))
            (host-view-p
             (eq (gethash (car form) etaf--view-registry) etaf--host-marker))
            (child-slot-mode (if host-view-p slot-mode :input))

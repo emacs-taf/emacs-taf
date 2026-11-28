@@ -55,7 +55,8 @@ ETAF has the largest module set. Its core is the authoring model; the Runtime is
 | --- | --- | --- |
 | `lisp/etaf-view.el` | The structural View language shared by Hosts and Components | Ebox |
 | `lisp/etaf-compiler.el` | Compiling supported topology into embedded blueprints | `lisp/etaf-view.el` |
-| `lisp/etaf-reactive.el` | The reactive graph: refs, computeds, effects and Scopes | — |
+| `lisp/etaf-reactive.el` | The reactive graph: refs, computeds, effects, deferred transitions and Scopes | — |
+| `lisp/etaf-store.el` | Path-level fine-grained reactive store | `lisp/etaf-reactive.el` |
 | `lisp/etaf-component.el` | Component definitions, instances, bindings and setup | `lisp/etaf-view.el`, `lisp/etaf-compiler.el`, `lisp/etaf-reactive.el`, ECSS |
 | `lisp/etaf-context.el` | The inherited provide/inject environment | `lisp/etaf-reactive.el` |
 | `lisp/etaf-behavior.el` | Reusable Behavior bundles of semantic attributes and setup | `lisp/etaf-reactive.el` |
@@ -67,6 +68,8 @@ ETAF has the largest module set. Its core is the authoring model; the Runtime is
 | `lisp/etaf-presentation.el` | Host presentations, tree inspection, Runtime metadata and named root overlays | `lisp/etaf-txn.el`, `lisp/etaf-host-bridge.el`, `lisp/etaf-reconcile.el` |
 | `lisp/etaf-runtime.el` | Root mounting, commit lifecycle, Runtime lookup, sticky Hosts, observation and viewport refit | `lisp/etaf-txn.el`, `lisp/etaf-host-bridge.el`, `lisp/etaf-reconcile.el`, `lisp/etaf-presentation.el` |
 | `lisp/etaf-error-boundary.el` | Declarative `etaf-error-boundary` isolation, error capture and reset recovery | `lisp/etaf-runtime.el`, `lisp/etaf-component.el`, `lisp/etaf-reactive.el` |
+| `lisp/etaf-portal.el` | Unified declarative `etaf-portal` (`in-buffer`, `child-frame`, `header-line`) and host registry | `lisp/etaf-runtime.el`, `lisp/etaf-presentation.el`, `lisp/etaf-component.el` |
+| `lisp/etaf-suspense.el` | Declarative `etaf-suspense` async aggregation boundary with anti-flicker delay | `lisp/etaf-resource.el`, `lisp/etaf-data.el`, `lisp/etaf-runtime.el`, `lisp/etaf-component.el` |
 | `lisp/etaf-app.el` | Application buffers: canvas, theme face, fitting, registry and single close | `lisp/etaf-runtime.el`, `lisp/etaf-reactive.el`, Ebox |
 | `lisp/etaf-fullscreen.el` | Two-tier window and OS frame fullscreen lifecycle | `lisp/etaf-runtime.el`, `lisp/etaf-viewport.el`, `lisp/etaf-reactive.el` |
 | `lisp/etaf-pip.el` | Floating Picture-in-Picture child-frame host and drag-resize | `lisp/etaf-runtime.el`, `lisp/etaf-viewport.el`, `lisp/etaf-reactive.el`, Ebox |

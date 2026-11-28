@@ -326,6 +326,7 @@ When FULL-YEAR is non-nil, load all 12 month buckets of DAY's year."
           :sidebar-width (etaf-ref sb-cols :name 'etaf-agenda-sidebar-width)
           :rail-width (etaf-ref rl-cols :name 'etaf-agenda-rail-width)
           :message (etaf-ref nil :name 'etaf-agenda-message)
+          :ui-store (etaf-store-create '(:notice (:message nil)) :name 'etaf-agenda-ui)
           :undo-stack (list nil))))
 
 (defun etaf-agenda--release (model)
@@ -334,7 +335,10 @@ When FULL-YEAR is non-nil, load all 12 month buckets of DAY's year."
 
 (defun etaf-agenda--notice (model text)
   "Set MODEL's status notice to TEXT."
-  (etaf-set-value (plist-get model :message) text))
+  (etaf-batch
+    (etaf-set-value (plist-get model :message) text)
+    (when-let* ((ui-store (plist-get model :ui-store)))
+      (etaf-store-set ui-store '(:notice :message) text))))
 
 ;;; ---------------------------------------------------------------------------
 ;;; Containers, lookup & predicates
@@ -1272,7 +1276,9 @@ nil outside the month, or (:day YYYYMMDD :dom D :today BOOL :count N))."
           :edit-draft (etaf-value (plist-get model :edit-draft))
           :drafting (etaf-value (plist-get model :drafting))
           :draft (etaf-value (plist-get model :draft))
-          :message (etaf-value (plist-get model :message)))))
+          ;; Read untracked so status notices update only `etaf-agenda-footer'
+          ;; through `:ui-store' without re-rendering the entire 3-pane shell.
+          :message (etaf-untracked (etaf-value (plist-get model :message))))))
 
 ;;; ---------------------------------------------------------------------------
 ;;; Undo support
@@ -1383,7 +1389,7 @@ is a list of newly created instance IDs to remove when undoing."
    (etaf-set-value (plist-get model :editing) nil)
    (etaf-set-value (plist-get model :drafting) nil)
    (etaf-set-value (plist-get model :inspector-body-editing) nil)
-   (etaf-set-value (plist-get model :message) nil)
+   (etaf-agenda--notice model nil)
    (when (eq view 'habits)
      ;; Keep Habits cursor day anchored inside the real 21-day window ending today.
      (let* ((today (etaf-agenda--today))
@@ -1427,7 +1433,7 @@ is a list of newly created instance IDs to remove when undoing."
   "Set MODEL's List page GROUPING (`time', `area', `project', `status')."
   (etaf-batch
    (etaf-set-value (plist-get model :grouping) grouping)
-   (etaf-set-value (plist-get model :message) nil)))
+   (etaf-agenda--notice model nil)))
 
 (defun etaf-agenda-cycle-grouping (model)
   "Cycle MODEL's List page grouping."
@@ -1457,7 +1463,7 @@ is a list of newly created instance IDs to remove when undoing."
    (when (eq (etaf-value (plist-get model :view)) 'project)
      (etaf-set-value (plist-get model :view) 'today))
    (etaf-set-value (plist-get model :selected) nil)
-   (etaf-set-value (plist-get model :message) nil)))
+   (etaf-agenda--notice model nil)))
 
 (defun etaf-agenda-set-project (model project-id)
   "Switch MODEL to Project view showing PROJECT-ID."
@@ -1467,7 +1473,7 @@ is a list of newly created instance IDs to remove when undoing."
    (etaf-set-value (plist-get model :editing) nil)
    (etaf-set-value (plist-get model :drafting) nil)
    (etaf-set-value (plist-get model :selected) nil)
-   (etaf-set-value (plist-get model :message) nil)))
+   (etaf-agenda--notice model nil)))
 
 (defun etaf-agenda-set-query (model text)
   "Update MODEL's live search query to TEXT."
@@ -1475,7 +1481,7 @@ is a list of newly created instance IDs to remove when undoing."
     (etaf-batch
      (etaf-set-value (plist-get model :search-input) clean)
      (etaf-set-value (plist-get model :query) (string-trim clean))
-     (etaf-set-value (plist-get model :message) nil))))
+     (etaf-agenda--notice model nil))))
 
 (defun etaf-agenda-select (model id)
   "Select row ID in MODEL."
@@ -1527,7 +1533,7 @@ through the selected day's items."
      (etaf-set-value (plist-get model :editing) nil)
      (etaf-set-value (plist-get model :drafting) nil)
      (etaf-set-value (plist-get model :inspector-body-editing) nil)
-     (etaf-set-value (plist-get model :message) nil))))
+     (etaf-agenda--notice model nil))))
 
 (defun etaf-agenda-shift-day (model delta)
   "Move MODEL's displayed day by DELTA days."
@@ -2114,7 +2120,7 @@ CONTEXT is an optional plist with `:area', `:project', `:stage', `:day'."
      (etaf-set-value (plist-get model :draft)
                      (if (eq (plist-get ctx :target) 'habits) "每天 " ""))
      (etaf-set-value (plist-get model :drafting) ctx)
-     (etaf-set-value (plist-get model :message) nil))))
+     (etaf-agenda--notice model nil))))
 
 (defun etaf-agenda-submit-draft (model &optional text-override)
   "Submit MODEL's in-place capture draft and close the capture row."
@@ -2142,7 +2148,7 @@ CONTEXT is an optional plist with `:area', `:project', `:stage', `:day'."
      (etaf-set-value (plist-get model :drafting) nil)
      (etaf-set-value (plist-get model :edit-draft) (or (plist-get entry :title) ""))
      (etaf-set-value (plist-get model :editing) id)
-     (etaf-set-value (plist-get model :message) nil))))
+     (etaf-agenda--notice model nil))))
 
 (defun etaf-agenda-submit-edit (model text)
   "Save TEXT as the title of MODEL's edited entry and close the inline editor."
@@ -2162,7 +2168,7 @@ CONTEXT is an optional plist with `:area', `:project', `:stage', `:day'."
      (etaf-set-value (plist-get model :selected) id)
      (etaf-set-value (plist-get model :inspector) id)
      (etaf-set-value (plist-get model :inspector-body-editing) nil)
-     (etaf-set-value (plist-get model :message) nil))
+     (etaf-agenda--notice model nil))
     (etaf-agenda--refresh-inspector-logs model)))
 
 (defun etaf-agenda-close-inspector (model)

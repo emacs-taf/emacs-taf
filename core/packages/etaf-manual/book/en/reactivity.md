@@ -427,6 +427,100 @@ Queued functions run in the order they were queued. Functions queued while they 
 
 **Errors.** `error→ etaf-render-side-effect-error` with data `(next-tick)` during rendering. `error→ wrong-type-argument` with data `(functionp FUNCTION)`. When queued functions signal, the remaining ones still run, and then the first of their errors is signaled. When the drain and a queued function both fail, the queued function's error is the one signaled.
 
+#### Function: etaf-start-transition (function &key pending on-complete)
+
+Schedule non-urgent state update FUNCTION on the next event-loop turn inside one reactive batch, and return a zero-argument cancel function.
+
+**Arguments.** FUNCTION is a zero-argument function that performs state writes. PENDING, when non-nil, is a writable ref set to non-nil while this transition is queued and to nil when it settles or is cancelled. ON-COMPLETE, when non-nil, is a zero-argument function called after FUNCTION finishes settling.
+
+**Semantics.** Calling `etaf-start-transition` increments the global pending counter so `etaf-transition-pending-p` returns non-nil immediately, sets PENDING to t when supplied, and schedules FUNCTION via a zero-delay timer. When the timer fires, FUNCTION runs inside `etaf-batch`, the pending counter decrements, PENDING returns to nil, and ON-COMPLETE runs if provided. Calling the returned cancel function before the timer fires cancels execution and clears the pending indicators without calling ON-COMPLETE.
+
+**Errors.** `error→ wrong-type-argument` when FUNCTION is not a function, when PENDING is non-nil and not a ref, or when ON-COMPLETE is non-nil and not a function.
+
+#### Function: etaf-transition-pending-p ()
+
+Reactive reader returning non-nil while any transition scheduled by `etaf-start-transition` has not yet completed or been cancelled. Reading it inside a View, computed or effect subscribes to pending transitions without triggering unrelated updates.
+
+## Path-level stores
+
+<!-- index: store; path-level reactivity; nested state -->
+
+A path-level store holds a nested keyword-plist state tree and tracks subscriptions per keyword path. Writing `(:ui :notice)` notifies observers reading `(:ui :notice)`, its ancestors (`(:ui)` and `()`), and its descendants, while observers of sibling paths such as `(:filters :query)` do not re-run.
+
+#### Function: etaf-store-create (initial-state &key name)
+
+Create a path-level fine-grained reactive store initialized from keyword plist INITIAL-STATE and return it.
+
+**Arguments.** INITIAL-STATE is nil or a keyword-keyed plist, which may nest keyword plists arbitrarily deep; it is deep-copied on creation so caller mutations do not bypass tracking. NAME optionally labels diagnostics and error messages.
+
+**Errors.** `error→ etaf-store-error` when INITIAL-STATE is not a valid keyword plist.
+
+#### Function: etaf-store-p (x)
+
+Return non-nil when X is a store created by `etaf-store-create`.
+
+#### Function: etaf-store-get (store &rest path)
+
+Read the value at keyword PATH in STORE and subscribe the active observer only to that path.
+
+**Arguments.** STORE is a store created by `etaf-store-create`. PATH is zero or more keywords (`:user :name`) or a single keyword list (`'(:user :name)`). An empty PATH reads the root plist.
+
+**Semantics.** First-time reads allocate path cells lazily without signaling `etaf-render-side-effect-error`, so Components can call `etaf-store-get` directly during rendering. A missing path returns nil and still tracks future writes at that path.
+
+**Errors.** `error→ etaf-store-error` when STORE is not a store or PATH contains a non-keyword element.
+
+#### Function: etaf-store-set (store path value)
+
+Set keyword PATH in STORE to VALUE inside one reactive batch, notifying only subscribers of PATH, its ancestors and its descendants, and return VALUE.
+
+**Semantics.** Writes that compare `equal` to the current value at PATH do not notify any observer. Writing a nested plist under PATH updates descendant path cells recursively and preserves sibling branches.
+
+**Errors.** `error→ etaf-store-error` when STORE is invalid or PATH is empty or contains non-keyword elements. `error→ etaf-render-side-effect-error` during rendering.
+
+#### Function: etaf-store-update (store path function &rest arguments)
+
+Replace the value at PATH in STORE with `(apply FUNCTION CURRENT ARGUMENTS)` and return the new value. CURRENT is read untracked before FUNCTION runs, and the result is written through `etaf-store-set`.
+
+**Errors.** `error→ wrong-type-argument` when FUNCTION is not a function; otherwise the errors of `etaf-store-set`.
+
+#### Function: etaf-store-patch (store &rest pairs)
+
+Apply alternating `PATH VALUE` PAIRS to STORE inside one reactive batch so observers see every updated path together, and return STORE.
+
+**Errors.** `error→ etaf-store-error` when PAIRS has odd length or any path is invalid. `error→ etaf-render-side-effect-error` during rendering.
+
+#### Function: etaf-store-select (store path &optional projector)
+
+Return a scoped `etaf-computed` that reads PATH in STORE, optionally maps the value through one-argument function PROJECTOR, and compares derived results with `equal`.
+
+**Errors.** `error→ etaf-store-error` for an invalid STORE or PATH. `error→ wrong-type-argument` when PROJECTOR is non-nil and not a function.
+
+#### Function: etaf-store-snapshot (store)
+
+Return an untracked deep copy of STORE's current root plist. Reading a snapshot records no reactive dependencies and cannot mutate STORE.
+
+**Errors.** `error→ etaf-store-error` when STORE is not a store.
+
+#### Function: etaf-store-reset (store &optional new-state)
+
+Reset STORE to NEW-STATE (or its initial state when NEW-STATE is omitted or nil) inside one reactive batch, notifying only paths whose values actually changed, and return STORE.
+
+**Errors.** `error→ etaf-store-error` when STORE is invalid or NEW-STATE is not a keyword plist. `error→ etaf-render-side-effect-error` during rendering.
+
+**Example.**
+
+```elisp
+(let* ((store (etaf-store-create '(:ui (:notice nil) :count 0)))
+       (count-runs 0)
+       (stop (etaf-watch-effect
+              (lambda () (etaf-store-get store :count) (setq count-runs (1+ count-runs))))))
+  (etaf-store-set store '(:ui :notice) "Saved")
+  (etaf-store-update store '(:count) #'1+)
+  (funcall stop)
+  (list count-runs (etaf-store-get store :ui :notice)))
+;; ⇒ (2 "Saved")
+```
+
 ## Scopes
 
 <!-- index: Scope; ownership; disposal -->
@@ -606,6 +700,10 @@ The reactive graph rejected an operation. Catch it with `condition-case`; a call
 #### Error: etaf-render-side-effect-error
 
 An operation that changes the reactive graph was attempted during rendering. The data is the operation, listed in [Rendering is free of side effects](#rendering-is-free-of-side-effects). Its parent condition is `etaf-reactive-error`, so a handler for `etaf-reactive-error` also catches it.
+
+#### Error: etaf-store-error
+
+A path-level store rejected an operation, such as an invalid store argument, a non-keyword path segment, an empty write path, an odd-length `etaf-store-patch` list or a non-keyword-plist state tree. Its parent condition is `etaf-reactive-error`.
 
 ### Recovery
 

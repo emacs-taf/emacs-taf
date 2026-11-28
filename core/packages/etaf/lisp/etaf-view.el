@@ -117,15 +117,19 @@ lowering for its :src, :columns, :rows, :adapter and :inset properties.")
   (or (ebox-style-schema-id property)
       (etaf--semantic-property-p property)))
 
+(defconst etaf--declarative-control-heads
+  '(when unless cond let let*)
+  "Declarative structural control-flow and lexical-binding heads in `etaf-view'.")
+
 (defconst etaf--ordinary-elisp-heads
-  '(and or not if when unless cond case pcase
-    let let* letrec letrec* prog prog1 prog2 progn
+  '(and or not if case pcase
+    letrec letrec* prog prog1 prog2 progn
     while dolist dotimes cl-loop mapcar mapc mapcan
     save-excursion save-restriction save-window-excursion
     condition-case condition-case-unless-debug unwind-protect
     catch throw signal error user-error quote function lambda
     setq setq-default setf psetf psetq incf decf push pop
-    funcall apply apply-partially progn eval macroexpand)
+    funcall apply apply-partially eval macroexpand)
   "Elisp heads that must appear inside `expr', not as View children.")
 
 (defvar etaf--view-registry (make-hash-table :test #'eq)
@@ -471,13 +475,22 @@ COMPONENT-NAME identifies the forwarding owner for diagnostics."
       (etaf--component-error
        "Component %S cannot apply Host attrs to %S" component-name value)))))
 
+(defun etaf--unwrap-property-expr (form)
+  "Unwrap optional `(expr FORM)' syntax in attribute value position."
+  (if (and (consp form) (eq (car form) 'expr))
+      (etaf--parse-expr-form (cdr form))
+    form))
+
 (defun etaf--compile-property-value (form)
-  "Compile property FORM as a constant or a render-time thunk."
-  (if (or (null form) (numberp form) (stringp form) (characterp form)
-          (keywordp form) (eq form t)
-          (and (consp form) (memq (car form) '(quote function))))
-      form
-    `(etaf--expr-create :thunk (lambda () ,form))))
+  "Compile property FORM as a constant or a render-time thunk.
+Supports literal values, ordinary inline Elisp expressions, and optional
+`(expr FORM)' wrappers."
+  (let ((unwrapped (etaf--unwrap-property-expr form)))
+    (if (or (null unwrapped) (numberp unwrapped) (stringp unwrapped)
+            (characterp unwrapped) (keywordp unwrapped) (eq unwrapped t)
+            (and (consp unwrapped) (memq (car unwrapped) '(quote function))))
+        unwrapped
+      `(etaf--expr-create :thunk (lambda () ,unwrapped)))))
 
 (defun etaf--compile-property-plist (props)
   "Compile alternating property FORMS in PROPS into a generated property list."
@@ -597,10 +610,108 @@ belong to the anonymous `default' slot."
   (and (etaf--expr-p value)
        (memq (etaf--expr-kind value) '(branch keyed-list))))
 
+(defun etaf--compile-body-view (forms slot-mode)
+  "Compile non-empty list of View child FORMS under SLOT-MODE to one View."
+  (let ((compiled (etaf--compile-child-sequence forms slot-mode)))
+    (if (= (length compiled) 1)
+        (car compiled)
+      (let ((token (gensym "etaf-fragment-site-")))
+        `(etaf--view-call 'fragment nil (list ,@compiled) ',token)))))
+
+(defun etaf--compile-when-form (head items slot-mode)
+  "Compile declarative `(when COND BODY...)' or `(unless COND BODY...)'."
+  (unless (>= (length items) 2)
+    (etaf--syntax-error "%S requires a condition and at least one View body" head))
+  (let* ((condition (car items))
+         (body (cdr items))
+         (test (if (eq head 'unless) `(not ,condition) condition))
+         (compiled (etaf--compile-body-view body slot-mode))
+         (token (gensym "etaf-branch-site-")))
+    `(etaf--expr-create
+      :kind 'branch
+      :token ',token
+      :range-snapshot (lambda () (when ,test 0))
+      :range-item (lambda (arm) (when (eql arm 0) ,compiled))
+      :thunk nil)))
+
+(defun etaf--compile-cond-form (clauses slot-mode)
+  "Compile declarative `(cond (TEST BODY...) ...)' into a retained branch."
+  (unless (proper-list-p clauses)
+    (etaf--syntax-error "cond requires a list of (TEST BODY...) clauses"))
+  (let ((compiled-arms nil)
+        (snapshot-clauses nil)
+        (index 0))
+    (dolist (clause clauses)
+      (unless (and (proper-list-p clause) (>= (length clause) 2))
+        (etaf--syntax-error
+         "cond clause must be (TEST BODY...): %S" clause))
+      (let ((test (car clause))
+            (body (etaf--compile-body-view (cdr clause) slot-mode)))
+        (push `(,test ,index) snapshot-clauses)
+        (push `(,index ,body) compiled-arms)
+        (cl-incf index)))
+    (let ((token (gensym "etaf-branch-site-"))
+          (selector (gensym "etaf-cond-arm-")))
+      `(let ((,selector
+              (lambda (arm)
+                (pcase arm
+                  ,@(nreverse compiled-arms)))))
+         (etaf--expr-create
+          :kind 'branch
+          :token ',token
+          :range-snapshot
+          (lambda ()
+            (cond ,@(nreverse snapshot-clauses)))
+          :range-item ,selector
+          :thunk nil)))))
+
+(defun etaf--validate-let-bindings (head bindings)
+  "Validate lexical BINDINGS for declarative `let' or `let*' HEAD."
+  (unless (proper-list-p bindings)
+    (etaf--syntax-error "%S bindings must be a proper list: %S" head bindings))
+  (dolist (binding bindings)
+    (unless (or (and (symbolp binding) (not (keywordp binding))
+                     (not (memq binding '(nil t))))
+                (and (proper-list-p binding)
+                     (<= 1 (length binding) 2)
+                     (symbolp (car binding))
+                     (not (keywordp (car binding)))
+                     (not (memq (car binding) '(nil t)))))
+      (etaf--syntax-error "Invalid %S binding: %S" head binding))))
+
+(defun etaf--compile-let-form (head items slot-mode)
+  "Compile declarative `(let (BINDINGS...) BODY...)' or `let*' into a View."
+  (unless (>= (length items) 2)
+    (etaf--syntax-error "%S requires bindings and at least one View body" head))
+  (let ((bindings (car items))
+        (body (cdr items)))
+    (etaf--validate-let-bindings head bindings)
+    (let ((compiled (etaf--compile-body-view body slot-mode))
+          (token (gensym "etaf-let-site-")))
+      `(etaf--expr-create
+        :kind 'interpolation
+        :token ',token
+        :thunk (lambda () (,head ,bindings ,compiled))))))
+
+(defun etaf--compile-text-payload (child slot-mode)
+  "Compile a single CHILD of a `text' Host, allowing inline expressions."
+  (cond
+   ((null child) nil)
+   ((stringp child) `(quote ,child))
+   ((and (consp child) (eq (car child) 'expr))
+    (etaf--compile-expr-form (cdr child)))
+   ((and (consp child) (eq (car child) 'slot))
+    (etaf--compile-slot-form (cdr child) slot-mode))
+   ((and (consp child) (memq (car child) etaf--declarative-control-heads))
+    (etaf--compile-child-form child slot-mode))
+   (t
+    (etaf--compile-expr-form (list child)))))
+
 (defun etaf--view-form-parts (form)
   "Return parsed `(TAG PROPS CHILDREN)' for directive-capable FORM."
   (unless (and (consp form) (symbolp (car form))
-               (not (memq (car form) '(expr slot))))
+               (not (memq (car form) '(expr slot)))
+               (not (memq (car form) etaf--declarative-control-heads)))
     (etaf--syntax-error "Directive requires a View node: %S" form))
   (let ((parts (etaf--parse-attributes-and-children (cdr form))))
     (list (car form) (car parts) (cdr parts))))
@@ -660,6 +771,7 @@ Return `(COMPILED . REMAINING)' for one compiler-owned Range program."
         (let* ((candidate (car remaining))
                (parts (and (consp candidate) (symbolp (car candidate))
                            (not (memq (car candidate) '(expr slot)))
+                           (not (memq (car candidate) etaf--declarative-control-heads))
                            (etaf--view-form-parts candidate)))
                (directives (and parts
                                 (etaf--view-directive-properties
@@ -757,6 +869,7 @@ Return `(COMPILED . REMAINING)' for one compiler-owned Range program."
       (let* ((form (car children))
              (parts (and (consp form) (symbolp (car form))
                          (not (memq (car form) '(expr slot)))
+                         (not (memq (car form) etaf--declarative-control-heads))
                          (etaf--view-form-parts form)))
              (directives
               (and parts
@@ -792,6 +905,12 @@ SLOT-MODE distinguishes Component-owned projections from call-site inputs."
     (etaf--compile-expr-form (cdr form)))
    ((and (consp form) (eq (car form) 'slot))
     (etaf--compile-slot-form (cdr form) slot-mode))
+   ((and (consp form) (memq (car form) '(when unless)))
+    (etaf--compile-when-form (car form) (cdr form) slot-mode))
+   ((and (consp form) (eq (car form) 'cond))
+    (etaf--compile-cond-form (cdr form) slot-mode))
+   ((and (consp form) (memq (car form) '(let let*)))
+    (etaf--compile-let-form (car form) (cdr form) slot-mode))
    ((and (consp form) (symbolp (car form)))
     (when (and (null (gethash (car form) etaf--view-registry))
                (etaf--ordinary-expression-head-p (car form)))
@@ -821,19 +940,28 @@ SLOT-MODE distinguishes Component-owned projections from call-site inputs."
     ;; the Component definition macro, so the public macro defaults to
     ;; projection mode.  An unowned projection simply uses its fallback.
     (etaf--compile-slot-form (cdr form) slot-mode))
+   ((memq (car form) '(when unless))
+    (etaf--compile-when-form (car form) (cdr form) slot-mode))
+   ((eq (car form) 'cond)
+    (etaf--compile-cond-form (cdr form) slot-mode))
+   ((memq (car form) '(let let*))
+    (etaf--compile-let-form (car form) (cdr form) slot-mode))
    (t
     (let* ((parts (etaf--parse-attributes-and-children (cdr form)))
            (props (car parts))
            (children (cdr parts))
            (host-view-p (eq (gethash (car form) etaf--view-registry)
                             etaf--host-marker))
-           (child-slot-mode (if host-view-p slot-mode :input)))
+           (child-slot-mode (if host-view-p slot-mode :input))
+           (compiled-children
+            (if (and (eq (car form) 'text) (= (length children) 1))
+                (list (etaf--compile-text-payload (car children) child-slot-mode))
+              (etaf--compile-child-sequence children child-slot-mode))))
       (let ((token (and (memq (car form) '(fragment etaf-fragment))
                         (gensym "etaf-fragment-site-"))))
         `(etaf--view-call ',(car form)
                           (list ,@(etaf--compile-property-plist props))
-                          (list ,@(etaf--compile-child-sequence
-                                   children child-slot-mode))
+                          (list ,@compiled-children)
                           ,(and token `',token)))))))
 
 ;;;###autoload

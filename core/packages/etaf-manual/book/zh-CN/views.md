@@ -108,10 +108,13 @@ NAME 是 Host 符号（如 `text`、`column`），或用 `etaf-define-component`
 | nil | 什么都不放；该位置不产出节点 |
 | 字符串 | 一个 text View |
 | 嵌套形式 | 一个 Host 节点或组件调用 |
+| `(when COND BODY...)` / `(unless COND BODY...)` | 声明式条件分支，只在 COND 为真（或为 nil）时挂载 BODY |
+| `(cond (TEST BODY...) ...)` | 声明式多分支条件，只挂载首个命中子句的 BODY |
+| `(let (BINDINGS...) BODY...)` / `(let* ...)` | 声明式词法绑定，自动追踪 BINDINGS 中的响应式读取并把局部变量暴露给子 View |
 | `(expr FORM)` | FORM 在渲染期算出的 View 结果 |
 | `(slot ...)` | 提供给组件默认 slot 或具名 slot 的调用方内容 |
 
-普通 Elisp 表达式不是子节点：`(column (format "n=%d" n))` 会被拒绝，必须写成 `(column (expr (format "n=%d" n)))`。这条规则让结构与计算的分界保持明确，编译器也才能把其余子节点都当作结构处理。
+其他普通 Elisp 表达式不是结构子节点：`(column (format "n=%d" n))` 会被拒绝，必须写成 `(column (expr (format "n=%d" n)))`。在 `text` Host 内，单个非字符串表达式（如 `(text (format "n=%d" n))` 或 `(text label)`）可直接书写而不必套 `(expr ...)`；属性值也同样直接接受内联 Elisp 表达式（以及可选 `(expr FORM)`）。这条规则在保持结构与计算清晰分界的同时，消除了条件分支、局部绑定与文本插值的样板代码。
 
 结构子节点位置上的 `expr` 值可以是 nil、字符串、一个有类型的 View，或由这些值组成的真列表；嵌套列表会被摊平。其他值（比如数字）在渲染期抛出 `etaf-renderer-error`。
 

@@ -2766,6 +2766,85 @@
 ;; Individual observer errors are isolated.  Presence of an observer suppresses
 ;; the fallback echo-area message.
 ;;
+;; Error: etaf-store-error
+;; Invalid ETAF Store operation; parent is `etaf-reactive-error'.
+;;
+;; Function: etaf-store-create (initial-state &key name)
+;;;###autoload (autoload 'etaf-store-create "etaf" nil nil)
+;; Create a path-level fine-grained reactive store from keyword plist INITIAL-STATE.
+;; NAME optionally labels diagnostics.  Updating one nested path notifies only
+;; observers of that path, its ancestors, and its descendants.
+;;
+;; Function: etaf-store-p (x)
+;;;###autoload (autoload 'etaf-store-p "etaf" nil nil)
+;; Return non-nil when X is an `etaf-store'.
+;;
+;; Function: etaf-store-get (store &rest path)
+;;;###autoload (autoload 'etaf-store-get "etaf" nil nil)
+;; Read value at keyword PATH in STORE and subscribe only to that path.
+;; PATH may be keyword arguments (`:user :name') or a keyword list (`(:user :name)').
+;;
+;; Function: etaf-store-set (store path value)
+;;;###autoload (autoload 'etaf-store-set "etaf" nil nil)
+;; Set keyword PATH in STORE to VALUE, notifying only affected path subscribers.
+;; Unchanged values under `equal' perform no notifications.  Return VALUE.
+;;
+;; Function: etaf-store-update (store path function &rest arguments)
+;;;###autoload (autoload 'etaf-store-update "etaf" nil nil)
+;; Replace PATH in STORE with FUNCTION applied to its current value and ARGUMENTS.
+;;
+;; Function: etaf-store-patch (store &rest pairs)
+;;;###autoload (autoload 'etaf-store-patch "etaf" nil nil)
+;; Apply alternating PATH VALUE PAIRS to STORE inside one reactive batch.
+;;
+;; Function: etaf-store-select (store path &optional projector)
+;;;###autoload (autoload 'etaf-store-select "etaf" nil nil)
+;; Return a scoped `etaf-computed' reading PATH in STORE (optionally mapped
+;; through PROJECTOR) comparing results with `equal'.
+;;
+;; Function: etaf-store-snapshot (store)
+;;;###autoload (autoload 'etaf-store-snapshot "etaf" nil nil)
+;; Return an untracked deep copy of STORE's current root plist.
+;;
+;; Function: etaf-store-reset (store &optional new-state)
+;;;###autoload (autoload 'etaf-store-reset "etaf" nil nil)
+;; Reset STORE to NEW-STATE (or its initial state) inside one reactive batch,
+;; notifying only paths whose values actually changed.
+;;
+;; Function: etaf-start-transition (function &key pending on-complete)
+;;;###autoload (autoload 'etaf-start-transition "etaf" nil nil)
+;; Schedule non-urgent state update FUNCTION on the next event-loop turn inside
+;; one reactive batch.  Tracks pending status through `etaf-transition-pending-p'
+;; and optional writable ref PENDING, runs optional ON-COMPLETE after settling,
+;; and returns a zero-argument cancel function.
+;;
+;; Function: etaf-transition-pending-p ()
+;;;###autoload (autoload 'etaf-transition-pending-p "etaf" nil nil)
+;; Reactive reader returning non-nil while any `etaf-start-transition' is pending.
+;;
+;; Function: etaf-portal-register-host (target host-function)
+;;;###autoload (autoload 'etaf-portal-register-host "etaf" nil nil)
+;; Register HOST-FUNCTION as the Portal adapter for symbol TARGET (`child-frame',
+;; etc.), or unregister when HOST-FUNCTION is nil.
+;;
+;; Function: etaf-portal-host (target)
+;;;###autoload (autoload 'etaf-portal-host "etaf" nil nil)
+;; Return the registered Portal host adapter for symbol TARGET, or nil.
+;;
+;; Component: etaf-portal (&key (target 'in-buffer) (open t) name title width height max-height (z-index 1000) backdrop on-close header-format)
+;; Project default slot children into TARGET (`in-buffer', `child-frame',
+;; `header-line', or a registered host target) while OPEN is non-nil.
+;; `in-buffer' mounts into the owning Runtime's root overlay layer; `child-frame'
+;; delegates to the registered host (falling back to `in-buffer' when unavailable);
+;; `header-line' projects into buffer-local `header-line-format' and restores it
+;; on close or unmount.
+;;
+;; Component: etaf-suspense (&key resources fallback (delay 0) error-fallback)
+;; Declarative async boundary aggregating one or more `etaf-resource' or
+;; `etaf-data-controller' sources.  Renders FALLBACK while any source is loading
+;; (after optional anti-flicker DELAY seconds), ERROR-FALLBACK when supplied and
+;; a source fails, and projects default slot children once settled.
+;;
 ;;; Code:
 
 ;;;###autoload
@@ -2794,6 +2873,7 @@
 (require 'etaf-compiler)
 (require 'etaf-component)
 (require 'etaf-reactive)
+(require 'etaf-store)
 (require 'etaf-animation)
 (require 'etaf-observer)
 (require 'etaf-context)
@@ -2801,6 +2881,8 @@
 (require 'etaf-data)
 (require 'etaf-runtime)
 (require 'etaf-error-boundary)
+(require 'etaf-portal)
+(require 'etaf-suspense)
 (require 'etaf-behavior)
 (require 'etaf-controlled-behavior)
 (require 'etaf-actions)

@@ -108,10 +108,13 @@ A child position accepts these forms:
 | nil | nothing; this position produces no node |
 | a string | one text View |
 | a nested form | a Host node or a Component call |
+| `(when COND BODY...)` / `(unless COND BODY...)` | declarative conditional branch mounting BODY only while COND holds (or is nil) |
+| `(cond (TEST BODY...) ...)` | declarative multi-way conditional branch mounting only the first matching clause |
+| `(let (BINDINGS...) BODY...)` / `(let* ...)` | declarative lexical scope over View children, tracking reactive reads in BINDINGS |
 | `(expr FORM)` | the View result of FORM, computed at rendering |
 | `(slot ...)` | caller content for a default or named Component slot |
 
-An ordinary Elisp expression is not a child: `(column (format "n=%d" n))` is rejected and must be written as `(column (expr (format "n=%d" n)))`. The rule keeps the boundary between structure and computation explicit, so the compiler can treat every other child as structure.
+Other ordinary Elisp expressions are not structural children: `(column (format "n=%d" n))` is rejected and must be written as `(column (expr (format "n=%d" n)))`. Inside a `text` Host, a single non-string expression such as `(text (format "n=%d" n))` or `(text label)` is accepted directly without wrapping in `(expr ...)`, and attribute values also accept inline Elisp expressions (as well as optional `(expr FORM)`). The rule keeps the boundary between structure and computation explicit while eliminating boilerplate around common conditionals, local bindings and text interpolations.
 
 The value of an `expr` in a structural child position may be nil, a string, one typed View, or a proper list of such values; nested lists are flattened. Any other value, such as a number, signals `etaf-renderer-error` at rendering.
 

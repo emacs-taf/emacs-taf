@@ -375,6 +375,7 @@
               :on-theme #'etaf-bili-toggle-theme)
              (etaf-bili--toast-banner
               :toast (etaf-bili--session-toast-ref session)
+              :ui-store (etaf-bili--session-ui-store session)
               :width (if show-side total-cols left-cols)
               :height watch-h
               :center (not show-side)
@@ -502,6 +503,7 @@
                             :on-press (lambda () (etaf-bili-logout session))))))
          (etaf-bili--toast-banner
           :toast (etaf-bili--session-toast-ref session)
+          :ui-store (etaf-bili--session-ui-store session)
           :width (plist-get layout :columns) :height height :center t :bottom-offset 5
           :on-dismiss (lambda () (etaf-bili--toast-clear session)))
          (etaf-ui-qr-login :open (and (plist-get login :open) t)

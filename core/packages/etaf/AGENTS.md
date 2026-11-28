@@ -10,14 +10,14 @@ The enclosing workspace `AGENTS.md` (`../AGENTS.md`) carries the shared engineer
 | --- | --- |
 | View grammar, Hosts, structural normalization | `etaf-view`, `etaf-compiler` |
 | Component definition, props, slots, retained instances | `etaf-component` |
-| Mounted lifetime, retained Host tree, transactions, Ebox bridge, reconciliation, presentations, error boundaries | `etaf-txn`, `etaf-host-bridge`, `etaf-reconcile`, `etaf-presentation`, `etaf-runtime`, `etaf-error-boundary` |
+| Mounted lifetime, retained Host tree, transactions, Ebox bridge, reconciliation, presentations, error boundaries, portals | `etaf-txn`, `etaf-host-bridge`, `etaf-reconcile`, `etaf-presentation`, `etaf-runtime`, `etaf-error-boundary`, `etaf-portal` |
 | Application buffers: canvas, theme face, fit after window changes, single close | `etaf-app` |
 | Two-tier buffer/window and frame fullscreen lifecycle, mode-line & split restore | `etaf-fullscreen` |
 | Floating adaptive Picture-in-Picture child-frame host and border drag-resize | `etaf-pip` |
 | Run-to-completion subprocesses for command-line backends | `etaf-process` |
 | Nested viewport regions: subtree layout region publication and resolution | `etaf-viewport` |
 | Text measurement for applications | `etaf-measure` |
-| Reactive state, derived values, effects, batches, Scopes | `etaf-reactive` |
+| Reactive state, path stores, derived values, effects, transitions, batches, Scopes | `etaf-reactive`, `etaf-store` |
 | Time-driven values, transitions and frame sequences | `etaf-animation` |
 | Events, activation, focus, input identity | `etaf-events` |
 | Scoped Host keys, keyboard drags, command palette | `etaf-keys` |
@@ -25,7 +25,7 @@ The enclosing workspace `AGENTS.md` (`../AGENTS.md`) carries the shared engineer
 | Named regions: declarations, entry resolution and adjacency | `etaf-regions` |
 | Behaviors and named Actions | `etaf-behavior`, `etaf-controlled-behavior`, `etaf-actions` |
 | Inherited Context and Theme resolution | `etaf-context` |
-| Data controllers, Resources, shared async completion | `etaf-data`, `etaf-resource`, `etaf-async` |
+| Data controllers, Resources, Suspense, shared async completion | `etaf-data`, `etaf-resource`, `etaf-suspense`, `etaf-async` |
 | Cached lists with background revalidation | `etaf-list-cache` |
 | Optional observation and recording | `etaf-observer`, `etaf-performance` |
 | Source projection of painted cells | `etaf-projection` |

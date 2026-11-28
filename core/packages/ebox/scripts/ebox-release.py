@@ -19,9 +19,11 @@ import tempfile
 
 # The archive primitives belong to the container; a standalone clone keeps a
 # copy beside this script.
-_container_scripts = Path(__file__).resolve().parents[3] / "scripts"
-if _container_scripts.is_dir():
-    sys.path.insert(0, str(_container_scripts))
+for _ancestor in Path(__file__).resolve().parents:
+    _candidate = _ancestor / "scripts"
+    if (_candidate / "package_archive.py").is_file():
+        sys.path.insert(0, str(_candidate))
+        break
 
 import package_archive
 

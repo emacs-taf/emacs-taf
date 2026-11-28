@@ -48,7 +48,12 @@ class ReleaseTests(unittest.TestCase):
         # from the container that owns them.
         shutil.copy2(ROOT / "scripts" / "ebox-release.py",
                      self.root / "scripts" / "ebox-release.py")
-        shutil.copy2(ROOT.parents[1] / "scripts" / "package_archive.py",
+        archive_helper = next(
+            p / "scripts" / "package_archive.py"
+            for p in ROOT.parents
+            if (p / "scripts" / "package_archive.py").is_file()
+        )
+        shutil.copy2(archive_helper,
                      self.root / "scripts" / "package_archive.py")
         self.command = [sys.executable, str(self.root / "scripts/ebox-release.py")]
 

@@ -173,6 +173,34 @@ Return a Resource loader result containing VALUE and optional CLEANUP.
 
 **See also.** `etaf-resource`, `etaf-resource-load`.
 
+## Aggregating async loading (`etaf-suspense`)
+
+<!-- index: etaf-suspense; Suspense; async loading; anti-flicker delay -->
+
+#### Component: etaf-suspense (&key resources fallback (delay 0) error-fallback)
+
+Aggregate asynchronous loading across one or more `etaf-resource` or `etaf-data-controller` sources and render FALLBACK while any source is pending.
+
+**Arguments.** RESOURCES is an `etaf-resource`, an `etaf-data-controller`, a list of them, or a reactive source/function returning them. FALLBACK is a View, string, or zero-argument function rendered while any source is in `loading` or `idle` status. DELAY is a nonnegative number of seconds (default `0`): when positive, Suspense waits DELAY seconds before revealing FALLBACK so fast cache hits never flicker. ERROR-FALLBACK, when supplied, is a View, string, or one-argument function receiving the list of recorded error conditions when any source is in `error` status.
+
+**Semantics.** A source in `refreshing` status retains the ready default slot children rather than collapsing back to FALLBACK. Once every source settles without a handled error, Suspense projects its default slot children cleanly. Any pending anti-flicker timer is cancelled automatically on unmount or when sources settle early.
+
+**Returns.** A View.
+
+**Errors.** `error→ etaf-component-call-error` when DELAY is negative or non-numeric, or when RESOURCES contains an unsupported value.
+
+**Example.**
+
+```elisp
+(etaf-view
+ (etaf-suspense :resources (list profile-res posts-res)
+                :delay 0.05
+                :fallback (text "Loading…")
+   (text (format "%s" (etaf-resource-value profile-res)))))
+```
+
+**See also.** `etaf-resource`, `etaf-data-controller`, `etaf-start-transition`.
+
 ## The shipped example
 
 <!-- index: etaf-resource-example-open; etaf-resource-example-close -->

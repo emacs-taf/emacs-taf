@@ -88,3 +88,39 @@ z-index 只在单个宿主的列表内比较。不同宿主的浮层由合成与
 锚点目标缺失不是错误：浮层只是不被放置。常见原因是 id 拼错、目标被隐藏、目标位于浮层自身之内，以及存在重复 id 而只有文档顺序里第一个节点会被跟随。未放置的浮层悄无声息，下拉不出现时值得先检查目标 id 与目标是否被绘制。
 
 已放置却看不见的浮层，通常是被裁或被盖。没有显式高度的宿主在流之后没有行，放在流之后的浮层会被切掉；恢复办法是给宿主设计所需的高度。z 更低会让浮层压在兄弟之下；嵌套宿主的浮层无论 z 多高，都会压在祖先宿主的浮层之下。被盖住的节点报告不出 buffer 位置、也不能获得焦点，这是有意的遮挡行为，不是缺陷。
+
+## 统一声明式传送门（`etaf-portal`）
+
+<!-- index: etaf-portal; etaf-portal-register-host; etaf-portal-host; child-frame; header-line -->
+
+`etaf-portal` 把默认 slot 子节点从局部布局祖先中投射到三种目标之一：所属 Runtime 的根浮层（`in-buffer`）、可插拔的子 frame 宿主（`child-frame`，加载 `etaf-posframe` 时自动注册），或 buffer 局部的 `header-line-format`（`header-line`）。
+
+#### Function: etaf-portal-register-host (target host-function)
+
+为目标符号 TARGET（如 `child-frame`）注册 Portal 宿主适配器 HOST-FUNCTION；HOST-FUNCTION 为 nil 时注销。适配器接收规格 plist（`:key`、`:parent-buffer`、`:parent-window`、`:panel`、`:title`、`:width-px`、`:height-rows`、`:max-height-rows`、`:theme`、`:appearance`、`:view`、`:on-close`），返回句柄 plist（`:update`、`:close`、`:frame`、`:runtime-fn`），或返回 nil 回退到 `in-buffer`。
+
+#### Function: etaf-portal-host (target)
+
+返回目标符号 TARGET 当前注册的 Portal 宿主函数，未注册时返回 nil。
+
+#### Component: etaf-portal (&key (target 'in-buffer) (open t) name title width height max-height (z-index 1000) backdrop on-close header-format)
+
+在 OPEN 为非 nil 时，将默认 slot 子节点投射到 TARGET（`in-buffer`、`child-frame`、`header-line` 或其他已注册目标符号）。
+
+**参数。** TARGET 指定投射目标（默认 `in-buffer`）。OPEN 为布尔值、ref、computed 或零参函数，控制显示（默认 `t`）。NAME 可选指定浮层符号键。TITLE、WIDTH、HEIGHT 与 MAX-HEIGHT 用于外部子 frame 尺寸。Z-INDEX（默认 `1000`）与 BACKDROP 控制根浮层层级与可选暗化遮罩。ON-CLOSE 在关闭时触发。HEADER-FORMAT 覆盖 `header-line` 目标的值（字符串、ref、computed 或函数，默认取 slot 纯文本）。
+
+**语义。** `in-buffer` 经 `etaf-runtime-set-overlay` 挂载到根浮层，脱离祖先裁剪与滚动容器。`child-frame` 在交互图形帧上委托给 `(etaf-portal-host 'child-frame)`，在终端、批处理或未注册宿主时自动回退到 `in-buffer`。`header-line` 保存原有 `header-line-format`，在 OPEN 变为 nil 或组件卸载时完整恢复。
+
+**返回。** 一个 View。
+
+**错误。** TARGET 未注册、NAME 非符号、Z-INDEX 非整数或 ON-CLOSE 非法时报 `error→ etaf-component-call-error`。
+
+**示例。**
+
+```elisp
+(etaf-view
+ (etaf-portal :target 'in-buffer :open t :name 'demo-banner
+   (text "Root overlay content")))
+```
+
+**参见。** `etaf-runtime-set-overlay`、`etaf-portal-register-host`、`etaf-portal-host`。

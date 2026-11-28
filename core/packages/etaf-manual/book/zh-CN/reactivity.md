@@ -427,6 +427,100 @@ X 是 `etaf-computed` 创建的计算值时返回非 nil。
 
 **错误。** 渲染期间 `error→ etaf-render-side-effect-error`，数据为 `(next-tick)`。FUNCTION 不是函数时 `error→ wrong-type-argument`，数据为 `(functionp FUNCTION)`。队列中的函数报错时，其余函数照样运行，之后抛出其中第一个错误。排空和队列中的函数都失败时，抛出的是队列函数的错误。
 
+#### Function: etaf-start-transition (function &key pending on-complete)
+
+把非紧急状态更新 FUNCTION 排到下一轮事件循环并在单个响应式批处理中执行，返回一个无参取消函数。
+
+**参数。** FUNCTION 是执行状态写入的无参函数。PENDING 非 nil 时是一个可写 ref，过渡排队期间为 t，结算完成或取消后归 nil。ON-COMPLETE 非 nil 时是在 FUNCTION 结算后调用的无参函数。
+
+**语义。** 调用 `etaf-start-transition` 会立即递增全局待处理计数，使 `etaf-transition-pending-p` 立刻返回非 nil，同时把 PENDING 设为 t，并通过零延迟定时器安排 FUNCTION。定时器触发时，FUNCTION 在 `etaf-batch` 中运行，随后递减计数、清零 PENDING 并在提供时调用 ON-COMPLETE。在定时器触发前调用返回的取消函数，会取消执行并恢复待处理状态，且不调用 ON-COMPLETE。
+
+**错误。** FUNCTION 不是函数、PENDING 非 nil 且不是 ref，或 ON-COMPLETE 非 nil 且不是函数时抛出 `wrong-type-argument`。
+
+#### Function: etaf-transition-pending-p ()
+
+响应式读取函数：只要存在由 `etaf-start-transition` 安排且尚未完成或取消的过渡更新，就返回非 nil。在 View、计算值或副作用中读取它会订阅过渡状态，而不牵连无关更新。
+
+## 路径级状态仓库
+
+<!-- index: 状态仓库; 路径级响应; 嵌套状态 -->
+
+路径级状态仓库持有嵌套关键字 plist 状态树，并按关键字路径追踪订阅。写入 `(:ui :notice)` 只通知读取 `(:ui :notice)` 及其祖先路径（`(:ui)` 和 `()`）与后代路径的观察者，读取兄弟路径（例如 `(:filters :query)`）的观察者不会重跑。
+
+#### Function: etaf-store-create (initial-state &key name)
+
+从关键字 plist INITIAL-STATE 创建路径级细粒度响应式状态仓库并返回。
+
+**参数。** INITIAL-STATE 可以是 nil 或任意层嵌套的关键字 plist；创建时会深拷贝，避免调用方原地修改绕过追踪。NAME 可选，用于诊断与报错标识。
+
+**错误。** INITIAL-STATE 不是合法关键字 plist 时抛出 `etaf-store-error`。
+
+#### Function: etaf-store-p (x)
+
+当 X 是 `etaf-store-create` 创建的状态仓库时返回非 nil。
+
+#### Function: etaf-store-get (store &rest path)
+
+读取 STORE 中关键字路径 PATH 处的值，并让当前活动观察者只订阅这一条路径。
+
+**参数。** STORE 为 `etaf-store-create` 创建的状态仓库。PATH 可以是零个或多个关键字（`:user :name`），也可以是单个关键字列表（`'(:user :name)`）。空路径读取根 plist。
+
+**语义。** 首次读取会惰性分配路径单元，且不触发 `etaf-render-side-effect-error`，组件可以在渲染阶段直接调用 `etaf-store-get`。不存在的路径返回 nil，但仍会追踪该路径后续的写入。
+
+**错误。** STORE 不是状态仓库或 PATH 含非关键字元素时抛出 `etaf-store-error`。
+
+#### Function: etaf-store-set (store path value)
+
+在单个响应式批处理内把 STORE 中关键字路径 PATH 设为 VALUE，只通知 PATH 及其祖先与后代路径的订阅者，并返回 VALUE。
+
+**语义。** 新值与当前值在 `equal` 下相等时不触发任何通知。向 PATH 写入嵌套 plist 会递归更新后代路径单元，并保持兄弟分支不动。
+
+**错误。** STORE 非法或 PATH 为空、含非关键字元素时抛出 `etaf-store-error`。渲染期间抛出 `etaf-render-side-effect-error`。
+
+#### Function: etaf-store-update (store path function &rest arguments)
+
+把 STORE 中 PATH 处的值替换为 `(apply FUNCTION CURRENT ARGUMENTS)` 并返回新值。CURRENT 在调用 FUNCTION 前以不追踪方式读取，结果经 `etaf-store-set` 写回。
+
+**错误。** FUNCTION 不是函数时抛出 `wrong-type-argument`；其余错误同 `etaf-store-set`。
+
+#### Function: etaf-store-patch (store &rest pairs)
+
+在单个响应式批处理内把交替排列的 `PATH VALUE` 对 PAIRS 应用到 STORE，使观察者一次看到所有路径的更新，并返回 STORE。
+
+**错误。** PAIRS 长度为奇数或任意路径非法时抛出 `etaf-store-error`。渲染期间抛出 `etaf-render-side-effect-error`。
+
+#### Function: etaf-store-select (store path &optional projector)
+
+返回一个归属当前 Scope 的 `etaf-computed`，读取 STORE 中 PATH 的值，可选经单参数函数 PROJECTOR 投影，并以 `equal` 比较派生结果。
+
+**错误。** STORE 或 PATH 非法时抛出 `etaf-store-error`。PROJECTOR 非 nil 且不是函数时抛出 `wrong-type-argument`。
+
+#### Function: etaf-store-snapshot (store)
+
+返回 STORE 当前根 plist 的无追踪深拷贝。读取快照不记录任何响应式依赖，也无法修改 STORE 内部状态。
+
+**错误。** STORE 不是状态仓库时抛出 `etaf-store-error`。
+
+#### Function: etaf-store-reset (store &optional new-state)
+
+在单个响应式批处理内把 STORE 重置为 NEW-STATE（省略或为 nil 时回到初始状态），只通知值真正发生变化的路径，并返回 STORE。
+
+**错误。** STORE 非法或 NEW-STATE 不是关键字 plist 时抛出 `etaf-store-error`。渲染期间抛出 `etaf-render-side-effect-error`。
+
+**示例。**
+
+```elisp
+(let* ((store (etaf-store-create '(:ui (:notice nil) :count 0)))
+       (count-runs 0)
+       (stop (etaf-watch-effect
+              (lambda () (etaf-store-get store :count) (setq count-runs (1+ count-runs))))))
+  (etaf-store-set store '(:ui :notice) "已保存")
+  (etaf-store-update store '(:count) #'1+)
+  (funcall stop)
+  (list count-runs (etaf-store-get store :ui :notice)))
+;; ⇒ (2 "已保存")
+```
+
 ## Scope
 
 <!-- index: Scope; 归属; 释放 -->
@@ -606,6 +700,10 @@ Scope 是响应式归属的单位。*活动 Scope* 拥有它活动期间创建�
 #### Error: etaf-render-side-effect-error
 
 渲染期间尝试了会改变响应式图的操作。数据是操作名，列在[渲染不产生副作用](#渲染不产生副作用)中。它的父条件是 `etaf-reactive-error`，所以 `etaf-reactive-error` 的处理器也能捕获它。
+
+#### Error: etaf-store-error
+
+路径级状态仓库拒绝了某个操作，例如传入非状态仓库参数、非关键字路径段、空写入路径、奇数长度的 `etaf-store-patch` 参数表，或非关键字 plist 状态树。它的父条件是 `etaf-reactive-error`。
 
 ### 恢复
 

@@ -292,11 +292,18 @@ in-buffer dialog stands out cleanly against its dimmed backdrop."
           (max 0 (1- (line-number-at-pos (window-start win)))))
       0)))
 
+(defun etaf-ui--modal-host-fn ()
+  "Return the active modal child-frame host function, or nil."
+  (or (and (functionp etaf-ui-modal-host-function)
+           etaf-ui-modal-host-function)
+      (and (fboundp 'etaf-portal-host)
+           (etaf-portal-host 'child-frame))))
+
 (defun etaf-ui--portal-eligible-p (modal center anchor side)
   "Return non-nil when a surface may project into a modal child frame."
   (and modal center (not anchor) (not side)
        etaf-ui-modal-use-child-frame
-       (functionp etaf-ui-modal-host-function)
+       (functionp (etaf-ui--modal-host-fn))
        (not noninteractive)
        (display-graphic-p)))
 
@@ -373,7 +380,7 @@ in-buffer dialog stands out cleanly against its dimmed backdrop."
                       (let ((win (and (buffer-live-p buffer)
                                       (get-buffer-window buffer t))))
                         (if (window-live-p win)
-                            (when (functionp etaf-ui-modal-host-function)
+                            (when-let* ((host-fn (etaf-ui--modal-host-fn)))
                               (setq portal-retries 0
                                     portal-opening t
                                     portal-dirty nil)
@@ -382,7 +389,7 @@ in-buffer dialog stands out cleanly against its dimmed backdrop."
                                                    portal-state portal-theme portal-appearance))
                                          (handle
                                           (funcall
-                                           etaf-ui-modal-host-function
+                                           host-fn
                                            (list :key (cons buffer panel)
                                                  :parent-buffer buffer
                                                  :parent-window win

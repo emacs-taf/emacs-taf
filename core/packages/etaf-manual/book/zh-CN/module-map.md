@@ -55,7 +55,8 @@ ETAF 的模块集最大。核心是作者模型；Runtime 是把模型接到 Ebo
 | --- | --- | --- |
 | `lisp/etaf-view.el` | Host 与 Component 共用的结构 View 语言 | Ebox |
 | `lisp/etaf-compiler.el` | 把受支持的结构拓扑编译成内嵌蓝图 | `lisp/etaf-view.el` |
-| `lisp/etaf-reactive.el` | 响应式图：ref、computed、effect 与 Scope | — |
+| `lisp/etaf-reactive.el` | 响应式图：ref、computed、effect、延迟过渡与 Scope | — |
+| `lisp/etaf-store.el` | 路径级细粒度响应式 store | `lisp/etaf-reactive.el` |
 | `lisp/etaf-component.el` | 组件定义、实例、bindings 与 setup | `lisp/etaf-view.el`、`lisp/etaf-compiler.el`、`lisp/etaf-reactive.el`、ECSS |
 | `lisp/etaf-context.el` | 继承式的 provide/inject 环境 | `lisp/etaf-reactive.el` |
 | `lisp/etaf-behavior.el` | 可复用的 Behavior 包：语义属性与 setup | `lisp/etaf-reactive.el` |
@@ -67,6 +68,8 @@ ETAF 的模块集最大。核心是作者模型；Runtime 是把模型接到 Ebo
 | `lisp/etaf-presentation.el` | Host 呈现层、树内省、Runtime 元数据与命名根浮层 | `lisp/etaf-txn.el`、`lisp/etaf-host-bridge.el`、`lisp/etaf-reconcile.el` |
 | `lisp/etaf-runtime.el` | 根挂载、提交生命周期、Runtime 查找、粘性 Host、观察与视口适配 | `lisp/etaf-txn.el`、`lisp/etaf-host-bridge.el`、`lisp/etaf-reconcile.el`、`lisp/etaf-presentation.el` |
 | `lisp/etaf-error-boundary.el` | 声明式 `etaf-error-boundary` 错误边界隔离、捕获与重置恢复 | `lisp/etaf-runtime.el`、`lisp/etaf-component.el`、`lisp/etaf-reactive.el` |
+| `lisp/etaf-portal.el` | 统一声明式 `etaf-portal`（`in-buffer`、`child-frame`、`header-line`）与宿主注册表 | `lisp/etaf-runtime.el`、`lisp/etaf-presentation.el`、`lisp/etaf-component.el` |
+| `lisp/etaf-suspense.el` | 带防闪烁延迟的声明式 `etaf-suspense` 异步聚合边界 | `lisp/etaf-resource.el`、`lisp/etaf-data.el`、`lisp/etaf-runtime.el`、`lisp/etaf-component.el` |
 | `lisp/etaf-app.el` | 应用缓冲区：画布、主题 face、适配、声明式注册表与单次关闭 | `lisp/etaf-runtime.el`、`lisp/etaf-reactive.el`、Ebox |
 | `lisp/etaf-fullscreen.el` | 窗口级与系统帧级两档全屏生命周期 | `lisp/etaf-runtime.el`、`lisp/etaf-viewport.el`、`lisp/etaf-reactive.el` |
 | `lisp/etaf-pip.el` | 悬浮画中画子 frame 宿主与拖拽缩放 | `lisp/etaf-runtime.el`、`lisp/etaf-viewport.el`、`lisp/etaf-reactive.el`、Ebox |

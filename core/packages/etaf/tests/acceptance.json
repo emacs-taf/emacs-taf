@@ -1317,6 +1317,31 @@
       "name": "etaf-error-boundary-propagates-quit-and-fallback-errors",
       "file": "tests/etaf-error-boundary-tests.el",
       "purpose": "Verify etaf-error-boundary never swallows quit interrupts and lets errors raised by its own :fallback bubble to an enclosing boundary."
+    },
+    {
+      "name": "etaf-view-declarative-when-unless-cond-and-let",
+      "file": "tests/etaf-m6-primitives-tests.el",
+      "purpose": "Verify native when/unless/cond/let/let* declarative control flow and inline text/attribute expressions in etaf-view update reactively."
+    },
+    {
+      "name": "etaf-store-path-isolation-and-updates",
+      "file": "tests/etaf-m6-primitives-tests.el",
+      "purpose": "Verify etaf-store path-level fine-grained subscriptions isolate sibling branches while notifying ancestors and supporting update, patch, select, snapshot and reset."
+    },
+    {
+      "name": "etaf-start-transition-defers-updates-and-tracks-pending",
+      "file": "tests/etaf-m6-primitives-tests.el",
+      "purpose": "Verify etaf-start-transition defers state writes to the next turn, tracks pending state reactively and supports cancellation."
+    },
+    {
+      "name": "etaf-portal-in-buffer-header-line-and-host-registry",
+      "file": "tests/etaf-m6-primitives-tests.el",
+      "purpose": "Verify etaf-portal mounts in-buffer overlays, projects and restores header-line-format, and supports pluggable target host registration."
+    },
+    {
+      "name": "etaf-suspense-aggregates-resources-delay-and-errors",
+      "file": "tests/etaf-m6-primitives-tests.el",
+      "purpose": "Verify etaf-suspense aggregates multiple Resources, honors anti-flicker delay, renders error-fallback on failure and projects slot children once settled."
     }
   ]
 }

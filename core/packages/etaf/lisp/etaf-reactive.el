@@ -829,6 +829,79 @@ After stopping, SCOPE cannot be entered or accept effects or cleanup."
               (delq scope (etaf-effect-scope-children parent))))
       (nreverse errors))))
 
+(defvar etaf--transition-count 0
+  "Number of deferred non-urgent transitions currently pending.")
+
+(defvar etaf--transition-pending-ref nil
+  "Shared reactive boolean ref tracking whether any transition is pending.")
+
+(defun etaf--transition-pending-cell ()
+  "Return the shared pending transition ref, creating it lazily."
+  (or etaf--transition-pending-ref
+      (setq etaf--transition-pending-ref
+            (etaf--ref-create :value (> etaf--transition-count 0)
+                              :name 'etaf-transition-pending))))
+
+;;;###autoload
+(defun etaf-transition-pending-p ()
+  "Return non-nil while any deferred transition is pending.
+Reads reactively so Views and effects update when deferred work settles."
+  (etaf-value (etaf--transition-pending-cell)))
+
+;;;###autoload
+(cl-defun etaf-start-transition (function &key pending on-complete)
+  "Schedule non-urgent state update FUNCTION on the next event-loop turn.
+Keeps high-priority input responsive while signaling pending state through
+`etaf-transition-pending-p' and optional writable ref PENDING.  When FUNCTION
+completes inside one reactive batch, clears pending state and invokes optional
+zero-argument ON-COMPLETE.  Return a zero-argument cancel function."
+  (etaf--assert-not-rendering 'start-transition)
+  (unless (functionp function)
+    (signal 'wrong-type-argument (list 'functionp function)))
+  (when (and pending (not (etaf-ref-p pending)))
+    (signal 'wrong-type-argument (list 'etaf-ref-p pending)))
+  (when (and on-complete (not (functionp on-complete)))
+    (signal 'wrong-type-argument (list 'functionp on-complete)))
+  (let* ((wrapped-fn (etaf--effect-environment function))
+         (wrapped-done (and on-complete (etaf--effect-environment on-complete)))
+         (cell (etaf--transition-pending-cell))
+         (done nil)
+         (timer nil)
+         (finish
+          (lambda ()
+            (unless done
+              (setq done t)
+              (setq etaf--transition-count (max 0 (1- etaf--transition-count)))
+              (etaf-batch
+                (when pending
+                  (etaf-set-value pending nil))
+                (when (= etaf--transition-count 0)
+                  (etaf-set-value cell nil)))))))
+    (cl-incf etaf--transition-count)
+    (etaf-batch
+      (etaf-set-value cell t)
+      (when pending
+        (etaf-set-value pending t)))
+    (setq timer
+          (run-with-timer
+           0 nil
+           (lambda ()
+             (unless done
+               (setq timer nil)
+               (let ((ok nil))
+                 (unwind-protect
+                     (progn
+                       (etaf-call-with-batch wrapped-fn)
+                       (setq ok t))
+                   (funcall finish))
+                 (when (and ok wrapped-done)
+                   (funcall wrapped-done)))))))
+    (lambda ()
+      (when (timerp timer)
+        (cancel-timer timer)
+        (setq timer nil))
+      (funcall finish))))
+
 (provide 'etaf-reactive)
 
 ;;; etaf-reactive.el ends here

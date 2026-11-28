@@ -15,6 +15,7 @@
 | [`etaf-renderer-error`](views.md#error-etaf-renderer-error) | `error` | 规范化 View 无法显示，或需要已挂载的 Runtime 而不可得。 |
 | [`etaf-reactive-error`](reactivity.md#error-etaf-reactive-error) | `error` | 响应式图拒绝了操作，例如在计算期间写入或响应式值非法。 |
 | [`etaf-render-side-effect-error`](reactivity.md#error-etaf-render-side-effect-error) | `etaf-reactive-error` | 渲染期间尝试了会改变响应式图的操作；数据给出操作名。 |
+| [`etaf-store-error`](reactivity.md#error-etaf-store-error) | `etaf-reactive-error` | 路径级状态仓库拒绝了非法仓库对象、路径、批更新参数或状态树。 |
 | [`etaf-runtime-error`](runtime.md#error-etaf-runtime-error) | `error` | Runtime 操作无法完成：未挂载就使用、挂载选项畸形或保留更新失败。 |
 | [`etaf-observer-error`](incremental-updates-and-publication.md#error-etaf-observer-error) | `error` | 观察者上下文状态以非法值构造或使用，例如不是函数的 sink。 |
 | [`etaf-context-error`](context.md#error-etaf-context-error) | `error` | Context 操作格式错误，或必需依赖缺失。 |

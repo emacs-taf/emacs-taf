@@ -15,6 +15,7 @@ The error conditions are part of the public API: a program that calls the framew
 | [`etaf-renderer-error`](views.md#error-etaf-renderer-error) | `error` | A normalized View cannot be shown, or a mounted Runtime is required but absent. |
 | [`etaf-reactive-error`](reactivity.md#error-etaf-reactive-error) | `error` | The reactive graph rejected an operation, such as a write during a computation or an invalid reactive value. |
 | [`etaf-render-side-effect-error`](reactivity.md#error-etaf-render-side-effect-error) | `etaf-reactive-error` | An operation that would change the reactive graph was attempted during rendering; the data names the operation. |
+| [`etaf-store-error`](reactivity.md#error-etaf-store-error) | `etaf-reactive-error` | A path-level store rejected an invalid store object, path, patch list or state tree. |
 | [`etaf-runtime-error`](runtime.md#error-etaf-runtime-error) | `error` | A Runtime operation cannot complete: use without a mount, malformed mount options or a failed retained update. |
 | [`etaf-observer-error`](incremental-updates-and-publication.md#error-etaf-observer-error) | `error` | Observer context state is built or used with an invalid value, such as a non-function sink. |
 | [`etaf-context-error`](context.md#error-etaf-context-error) | `error` | A Context operation is malformed or a required dependency is missing. |

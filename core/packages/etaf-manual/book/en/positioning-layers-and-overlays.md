@@ -88,3 +88,39 @@ A malformed `:position`, `:layer`, `:anchor` or `:placement` value, a non-intege
 A missing anchor target is not an error: the overlay is simply not placed. The usual causes are a misspelled id, a target that is hidden, a target inside the overlay itself, and duplicate ids, where only the first node in document order is followed. An unplaced overlay is silent, so when a dropdown does not appear it is worth checking the target id and whether the target is painted.
 
 An overlay that is placed but invisible is usually clipped or covered. A host with no explicit height has no lines below its flow, so an overlay placed past the flow is cut away; the recovery is to give the host the height the design needs. A lower z value hides an overlay under a sibling, and an overlay of a nested host hides under the overlays of its ancestor host no matter how high its z is. A covered node reports no buffer position and cannot be focused, which is the intended occlusion behavior, not a defect.
+
+## Unified declarative Portal (`etaf-portal`)
+
+<!-- index: etaf-portal; etaf-portal-register-host; etaf-portal-host; child-frame; header-line -->
+
+`etaf-portal` projects slot children out of their local layout ancestor into one of three targets: the owning Runtime's root overlay (`in-buffer`), a pluggable child-frame host (`child-frame`, registered automatically by `etaf-posframe`), or buffer-local `header-line-format` (`header-line`).
+
+#### Function: etaf-portal-register-host (target host-function)
+
+Register HOST-FUNCTION as the Portal host adapter for symbol TARGET (such as `child-frame`), or unregister TARGET when HOST-FUNCTION is nil. HOST-FUNCTION receives a spec plist (`:key`, `:parent-buffer`, `:parent-window`, `:panel`, `:title`, `:width-px`, `:height-rows`, `:max-height-rows`, `:theme`, `:appearance`, `:view`, `:on-close`) and returns a handle plist (`:update`, `:close`, `:frame`, `:runtime-fn`) or nil to fall back to `in-buffer`.
+
+#### Function: etaf-portal-host (target)
+
+Return the registered Portal host adapter function for symbol TARGET, or nil when none is registered.
+
+#### Component: etaf-portal (&key (target 'in-buffer) (open t) name title width height max-height (z-index 1000) backdrop on-close header-format)
+
+Project default slot children into TARGET (`in-buffer`, `child-frame`, `header-line`, or a registered target symbol) while OPEN is non-nil.
+
+**Arguments.** TARGET selects the projection target (default `in-buffer`). OPEN is a boolean, ref, computed or zero-argument function controlling visibility (default `t`). NAME optionally names the overlay symbol key. TITLE, WIDTH, HEIGHT and MAX-HEIGHT size external frame targets. Z-INDEX (default `1000`) and BACKDROP control the root overlay layer and optional dimmed scrim. ON-CLOSE runs on dismissal. HEADER-FORMAT overrides the `header-line-format` value for `header-line` portals (string, ref, computed or function; defaults to the slot's plain text).
+
+**Semantics.** `in-buffer` mounts slot content through `etaf-runtime-set-overlay`, escaping ancestor clipping and scroll containers. `child-frame` delegates to `(etaf-portal-host 'child-frame)` on graphical interactive frames and falls back seamlessly to `in-buffer` in terminals, batch runs, or when no host is registered. `header-line` saves the buffer's previous `header-line-format` and restores it when OPEN becomes nil or the portal unmounts.
+
+**Returns.** A View.
+
+**Errors.** `error→ etaf-component-call-error` for an unknown unregistered TARGET, non-symbol NAME, non-integer Z-INDEX, or invalid ON-CLOSE.
+
+**Example.**
+
+```elisp
+(etaf-view
+ (etaf-portal :target 'in-buffer :open t :name 'demo-banner
+   (text "Root overlay content")))
+```
+
+**See also.** `etaf-runtime-set-overlay`, `etaf-portal-register-host`, `etaf-portal-host`.

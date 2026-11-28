@@ -458,5 +458,9 @@ buffer."
 (unless etaf-ui-modal-host-function
   (setq etaf-ui-modal-host-function #'etaf-posframe--open-modal))
 
+(when (and (fboundp 'etaf-portal-register-host)
+           (null (etaf-portal-host 'child-frame)))
+  (etaf-portal-register-host 'child-frame #'etaf-posframe--open-modal))
+
 (provide 'etaf-posframe-modal)
 ;;; etaf-posframe-modal.el ends here

@@ -173,6 +173,34 @@ Component 可以直接持有 Resource 并渲染它的读取函数；由于状态
 
 **参见。** `etaf-resource`、`etaf-resource-load`。
 
+## 聚合异步加载边界（`etaf-suspense`）
+
+<!-- index: etaf-suspense; Suspense; 异步聚合; 防闪烁延迟 -->
+
+#### Component: etaf-suspense (&key resources fallback (delay 0) error-fallback)
+
+聚合一个或多个 `etaf-resource` 或 `etaf-data-controller` 源的异步加载状态，在任一源未就绪时渲染 FALLBACK。
+
+**参数。** RESOURCES 是单个 `etaf-resource`、`etaf-data-controller`、它们的列表，或返回它们的响应式源/零参函数。FALLBACK 是 View、字符串或零参函数，在任一源处于 `loading` 或 `idle` 时显示。DELAY 是非负秒数（默认 `0`）：大于 0 时延迟该时间后再展示 FALLBACK，避免快速命中缓存时骨架闪烁。ERROR-FALLBACK 可选，当任一源进入 `error` 状态时渲染（为函数时接收失败条件列表）。
+
+**语义。** 处于 `refreshing` 的源继续保留已就绪的默认 slot 内容而不回退到 FALLBACK。所有源均稳定后投影默认 slot 子节点。组件卸载或提前就绪时自动取消尚未触发的延迟定时器。
+
+**返回。** 一个 View。
+
+**错误。** DELAY 为负数或非数字，或 RESOURCES 含不受支持的项时报 `error→ etaf-component-call-error`。
+
+**示例。**
+
+```elisp
+(etaf-view
+ (etaf-suspense :resources (list profile-res posts-res)
+                :delay 0.05
+                :fallback (text "Loading…")
+   (text (format "%s" (etaf-resource-value profile-res)))))
+```
+
+**参见。** `etaf-resource`、`etaf-data-controller`、`etaf-start-transition`。
+
 ## 随附示例
 
 <!-- index: etaf-resource-example-open; etaf-resource-example-close -->

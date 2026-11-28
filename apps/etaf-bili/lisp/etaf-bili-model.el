@@ -29,7 +29,7 @@
   ;; Gallery reactive refs
   mode-ref status-ref items-ref selected-ref loading-ref playback-ref
   theme-ref layout-ref query-ref error-ref play-loading-ref
-  details-ref visible-row-ref toast-ref
+  details-ref visible-row-ref toast-ref ui-store
   ;; View routing & navigation filters
   view-mode-ref ranking-rid-ref search-order-ref
   space-mid space-name
@@ -114,6 +114,7 @@ Nil factory selects the default curl client.  Creation sends no requests."
      :error-ref (etaf-ref nil) :play-loading-ref (etaf-ref nil)
      :details-ref (etaf-ref nil) :visible-row-ref (etaf-ref 0)
      :toast-ref (etaf-ref nil)
+     :ui-store (etaf-store-create '(:toast nil) :name 'etaf-bili-ui)
      :view-mode-ref (etaf-ref 'gallery)
      :ranking-rid-ref (etaf-ref 0)
      :search-order-ref (etaf-ref "totalrank")
@@ -181,16 +182,21 @@ Nil factory selects the default curl client.  Creation sends no requests."
   (when-let* ((old (etaf-bili--session-toast-timer session)))
     (cancel-timer old)
     (setf (etaf-bili--session-toast-timer session) nil))
-  (etaf-set-value (etaf-bili--session-toast-ref session)
-                  (list :kind (or kind 'info)
-                        :message message
-                        :action-label action-label
-                        :action-fn action-fn))
+  (let ((payload (list :kind (or kind 'info)
+                       :message message
+                       :action-label action-label
+                       :action-fn action-fn)))
+    (etaf-batch
+      (etaf-set-value (etaf-bili--session-toast-ref session) payload)
+      (etaf-store-set (etaf-bili--session-ui-store session) '(:toast) payload)))
   (setf (etaf-bili--session-toast-timer session)
         (run-at-time 5 nil
                      (lambda ()
                        (unless (etaf-bili--session-disposed session)
-                         (etaf-set-value (etaf-bili--session-toast-ref session) nil)))))
+                         (etaf-batch
+                           (etaf-set-value (etaf-bili--session-toast-ref session) nil)
+                           (etaf-store-set (etaf-bili--session-ui-store session)
+                                           '(:toast) nil))))))
   nil)
 
 (defun etaf-bili--toast-clear (session)
@@ -198,7 +204,9 @@ Nil factory selects the default curl client.  Creation sends no requests."
   (when-let* ((old (etaf-bili--session-toast-timer session)))
     (cancel-timer old)
     (setf (etaf-bili--session-toast-timer session) nil))
-  (etaf-set-value (etaf-bili--session-toast-ref session) nil))
+  (etaf-batch
+    (etaf-set-value (etaf-bili--session-toast-ref session) nil)
+    (etaf-store-set (etaf-bili--session-ui-store session) '(:toast) nil)))
 
 (defun etaf-bili--invalidate-play-cache (session)
   "Clear cached stream URLs in SESSION (e.g. after login or logout)."

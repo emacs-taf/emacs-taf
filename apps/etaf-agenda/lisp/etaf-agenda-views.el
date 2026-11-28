@@ -68,155 +68,136 @@
 
 (etaf-define-component etaf-agenda-tab (&key title view current compact on-switch)
   "Render a clean topbar tab with invariant box geometry across states."
-  :render
+  :view
   (let ((trim (list '(px 1) 'solid (etaf-agenda-color :bg))))
-    (etaf-view
-     (box :flex-shrink 0 :height '(lh 1)
-          :padding (if compact '((lh 0) (ch 1)) '((lh 0) (ch 1)))
-          :background-color (when current (etaf-agenda-color :accent-soft))
-          :border-top trim
-          :border-bottom trim
-          :font-weight (if current 'bold 'normal)
-          :color (if current (etaf-agenda-color :accent) (etaf-agenda-color :muted))
-          :hover-style (unless current
-                         (list :background-color (etaf-agenda-color :hover)
-                               :color (etaf-agenda-color :ink)))
-          :role 'tab :aria-selected (and current t) :tab-index 0
-          :pointer (unless current 'hand)
-          :on-press (lambda () (when (and on-switch (not current))
-                                 (funcall on-switch view)))
-       (text (expr title))))))
+    (box :flex-shrink 0 :height '(lh 1)
+         :padding (if compact '((lh 0) (ch 1)) '((lh 0) (ch 1)))
+         :background-color (when current (etaf-agenda-color :accent-soft))
+         :border-top trim
+         :border-bottom trim
+         :font-weight (if current 'bold 'normal)
+         :color (if current (etaf-agenda-color :accent) (etaf-agenda-color :muted))
+         :hover-style (unless current
+                        (list :background-color (etaf-agenda-color :hover)
+                              :color (etaf-agenda-color :ink)))
+         :role 'tab :aria-selected (and current t) :tab-index 0
+         :pointer (unless current 'hand)
+         :on-press (lambda () (when (and on-switch (not current))
+                                (funcall on-switch view)))
+      (text title))))
 
 (etaf-define-component etaf-agenda-topbar
     (&key plan on-switch-view on-switch-scope on-search-change on-search-submit
           on-search-clear on-new on-help)
   "Render the responsive topbar with brand/scope, tabs, search, new and help."
-  :render
+  :view
   (let* ((layout (plist-get plan :layout))
          (tier (plist-get layout :tier))
          (short-p (plist-get layout :short))
          (narrow (eq tier 'narrow))
          (view (plist-get plan :view))
          (search-val (plist-get plan :search-input)))
-    (etaf-view
-     (column :width 'stretch :flex-shrink 0 :item-gap '(lh 0)
-             :border-bottom (etaf-agenda-views--border :line)
-             :region '(:id search :label "搜索与顶栏" :key "f"
-                           :enter etaf-agenda-search :neighbors (:down main))
-       ;; One clean empty breathing row above the topbar below the frame tab-bar
-       (box :if (not short-p) :height '(lh 1))
-       (expr
-        (if (not narrow)
-            ;; Wide & Medium: single crisp row resting on the bottom hairline
-            (etaf-view
-             (flex :flex-direction 'row :align-items 'center
-                   :width 'stretch :min-height '(lh 1)
-                   :padding '((lh 0) (ch 2)) :gap '((lh 0) (ch 2))
-               ;; Brand or scope trigger (when sidebar is hidden in medium)
-               (expr
-                (if (eq tier 'wide)
-                    (etaf-view
-                     (flex :flex-direction 'row :align-items 'center :flex-shrink 0
-                           :gap '((lh 0) (ch 1))
-                       (box :color (etaf-agenda-color :accent) :font-weight 'bold (text "◈"))
-                       (box :color (etaf-agenda-color :ink) :font-weight 'bold (text "Agenda"))))
-                  (etaf-view
-                   (flex :flex-direction 'row :align-items 'center :flex-shrink 0
-                         :gap '((lh 0) (ch 1)) :role 'button :tab-index 0 :pointer 'hand
-                         :help-echo "切换领域或项目筛选"
-                         :on-press on-switch-scope
-                     (box :color (etaf-agenda-color :accent) (text "☰"))
-                     (box :color (etaf-agenda-color :ink) :font-weight 'bold
-                          :hover-style (etaf-agenda-views--hover-text :accent)
-                       (text (expr (plist-get plan :area-label))))
-                     (box :color (etaf-agenda-color :muted) (text "▾"))))))
-               ;; Tabs (clean, no ugly 1 2 3 prefixes)
-               (flex :flex-direction 'row :align-items 'center :flex-shrink 0
-                     :gap '((lh 0) (ch 1))
-                 (expr
-                  (mapcar (lambda (spec)
-                            (etaf-view
-                             (etaf-agenda-tab :title (cadr spec) :view (car spec)
-                                              :current (eq (car spec) view)
-                                              :on-switch on-switch-view)))
-                          etaf-agenda-views)))
-               ;; Flexible search box
-               (box :flex-grow 1 :flex-basis '(ch 0) :min-width '(ch 14)
-                 (etaf-agenda-search-box
-                  :value search-val
-                  :placeholder (if (eq tier 'wide) "搜索任务、标签或项目…" "搜索…")
-                  :on-change on-search-change
-                  :on-submit on-search-submit
-                  :on-clear on-search-clear))
-               ;; + 新建 primary button (crisp accent tint + 1px accent border;
-               ;; keep its semantic accent fill intact rather than washing to grey)
-               (box :flex-shrink 0 :height '(lh 1)
-                    :padding '((lh 0) (ch 1))
-                    :background-color (etaf-agenda-color :accent-soft)
-                    :border (etaf-agenda-views--border :accent)
-                    :color (etaf-agenda-color :accent) :font-weight 'bold
-                    :role 'button :tab-index 0 :pointer 'hand
-                    :help-echo "原位新建条目（a）"
-                    :on-press on-new
-                 (text "+ 新建"))
-               ;; ? Help button (crisp 1px border on plain Emacs background)
-               (box :flex-shrink 0 :height '(lh 1)
-                    :padding '((lh 0) (ch 1))
-                    :border (etaf-agenda-views--border :line)
-                    :color (etaf-agenda-color :muted) :font-weight 'bold
-                    :hover-style (etaf-agenda-views--hover)
-                    :role 'button :tab-index 0 :pointer 'hand
-                    :help-echo "查看快捷键帮助（?）"
-                    :on-press on-help
-                 (text "?"))))
-          ;; Narrow: clean 2-row compact bar (zero clipped controls, aligned to ch 2!)
-          (etaf-view
-           (column :width 'stretch :item-gap '(lh 0)
-             (flex :flex-direction 'row :align-items 'center
-                   :width 'stretch :height '(lh 1)
-                   :padding '((lh 0) (ch 2)) :gap '((lh 0) (ch 1))
-               (flex :flex-direction 'row :align-items 'center :flex-shrink 0
-                     :role 'button :tab-index 0 :pointer 'hand
-                     :on-press on-switch-scope
-                 (box :color (etaf-agenda-color :ink) :font-weight 'bold
-                      :hover-style (etaf-agenda-views--hover-text :accent)
-                   (text (expr (format "☰ %s ▾"
-                                       (etaf-agenda-clip-text (plist-get plan :area-label) 8))))))
-               (box :flex-grow 1 :flex-basis '(px 0) "")
-               (flex :flex-direction 'row :align-items 'center :flex-shrink 0
-                 (expr
-                  (mapcar (lambda (spec)
-                            (etaf-view
-                             (etaf-agenda-tab :title (cadr spec) :view (car spec)
-                                              :current (eq (car spec) view)
-                                              :compact t
-                                              :on-switch on-switch-view)))
-                          etaf-agenda-views))))
-             (flex :flex-direction 'row :align-items 'center
-                   :width 'stretch :height '(lh 1)
-                   :padding '((lh 0) (ch 2)) :gap '((lh 0) (ch 1))
-               (box :flex-grow 1 :flex-basis '(ch 0) :min-width '(ch 10)
-                 (etaf-agenda-search-box :value search-val
-                                         :placeholder "搜索任务或标签…"
-                                         :on-change on-search-change
-                                         :on-submit on-search-submit
-                                         :on-clear on-search-clear))
-               (box :flex-shrink 0 :height '(lh 1) :padding '((lh 0) (ch 1))
-                    :background-color (etaf-agenda-color :accent-soft)
-                    :border (etaf-agenda-views--border :accent)
-                    :color (etaf-agenda-color :accent) :font-weight 'bold
-                    :role 'button :tab-index 0 :pointer 'hand
-                    :on-press on-new
-                 (text "+ 新建"))
-               (box :flex-shrink 0 :height '(lh 1) :padding '((lh 0) (ch 1))
-                    :border (etaf-agenda-views--border :line)
-                    :color (etaf-agenda-color :muted)
-                    :hover-style (etaf-agenda-views--hover)
-                    :role 'button :tab-index 0 :pointer 'hand
-                    :on-press on-help
-                 (text "?")))))))
-       ;; Clean bottom breathing row so control borders & tab underline never collide with bottom hairline
-       (box :height '(lh 1))))))
+    (column :width 'stretch :flex-shrink 0 :item-gap '(lh 0)
+            :border-bottom (etaf-agenda-views--border :line)
+            :region '(:id search :label "搜索与顶栏" :key "f"
+                          :enter etaf-agenda-search :neighbors (:down main))
+      (unless short-p
+        (box :height '(lh 1)))
+      (cond
+       ((not narrow)
+        (flex :flex-direction 'row :align-items 'center
+              :width 'stretch :min-height '(lh 1)
+              :padding '((lh 0) (ch 2)) :gap '((lh 0) (ch 2))
+          (cond
+           ((eq tier 'wide)
+            (flex :flex-direction 'row :align-items 'center :flex-shrink 0
+                  :gap '((lh 0) (ch 1))
+              (box :color (etaf-agenda-color :accent) :font-weight 'bold (text "◈"))
+              (box :color (etaf-agenda-color :ink) :font-weight 'bold (text "Agenda"))))
+           (t
+            (flex :flex-direction 'row :align-items 'center :flex-shrink 0
+                  :gap '((lh 0) (ch 1)) :role 'button :tab-index 0 :pointer 'hand
+                  :help-echo "切换领域或项目筛选"
+                  :on-press on-switch-scope
+              (box :color (etaf-agenda-color :accent) (text "☰"))
+              (box :color (etaf-agenda-color :ink) :font-weight 'bold
+                   :hover-style (etaf-agenda-views--hover-text :accent)
+                (text (plist-get plan :area-label)))
+              (box :color (etaf-agenda-color :muted) (text "▾")))))
+          (flex :flex-direction 'row :align-items 'center :flex-shrink 0
+                :gap '((lh 0) (ch 1))
+            (etaf-agenda-tab :for (spec etaf-agenda-views) :key (car spec)
+                             :title (cadr spec) :view (car spec)
+                             :current (eq (car spec) view)
+                             :on-switch on-switch-view))
+          (box :flex-grow 1 :flex-basis '(ch 0) :min-width '(ch 14)
+            (etaf-agenda-search-box
+             :value search-val
+             :placeholder (if (eq tier 'wide) "搜索任务、标签或项目…" "搜索…")
+             :on-change on-search-change
+             :on-submit on-search-submit
+             :on-clear on-search-clear))
+          (box :flex-shrink 0 :height '(lh 1)
+               :padding '((lh 0) (ch 1))
+               :background-color (etaf-agenda-color :accent-soft)
+               :border (etaf-agenda-views--border :accent)
+               :color (etaf-agenda-color :accent) :font-weight 'bold
+               :role 'button :tab-index 0 :pointer 'hand
+               :help-echo "原位新建条目（a）"
+               :on-press on-new
+            (text "+ 新建"))
+          (box :flex-shrink 0 :height '(lh 1)
+               :padding '((lh 0) (ch 1))
+               :border (etaf-agenda-views--border :line)
+               :color (etaf-agenda-color :muted) :font-weight 'bold
+               :hover-style (etaf-agenda-views--hover)
+               :role 'button :tab-index 0 :pointer 'hand
+               :help-echo "查看快捷键帮助（?）"
+               :on-press on-help
+            (text "?"))))
+       (t
+        (column :width 'stretch :item-gap '(lh 0)
+          (flex :flex-direction 'row :align-items 'center
+                :width 'stretch :height '(lh 1)
+                :padding '((lh 0) (ch 2)) :gap '((lh 0) (ch 1))
+            (flex :flex-direction 'row :align-items 'center :flex-shrink 0
+                  :role 'button :tab-index 0 :pointer 'hand
+                  :on-press on-switch-scope
+              (box :color (etaf-agenda-color :ink) :font-weight 'bold
+                   :hover-style (etaf-agenda-views--hover-text :accent)
+                (text (format "☰ %s ▾"
+                              (etaf-agenda-clip-text (plist-get plan :area-label) 8)))))
+            (box :flex-grow 1 :flex-basis '(px 0) "")
+            (flex :flex-direction 'row :align-items 'center :flex-shrink 0
+              (etaf-agenda-tab :for (spec etaf-agenda-views) :key (car spec)
+                               :title (cadr spec) :view (car spec)
+                               :current (eq (car spec) view)
+                               :compact t
+                               :on-switch on-switch-view)))
+          (flex :flex-direction 'row :align-items 'center
+                :width 'stretch :height '(lh 1)
+                :padding '((lh 0) (ch 2)) :gap '((lh 0) (ch 1))
+            (box :flex-grow 1 :flex-basis '(ch 0) :min-width '(ch 10)
+              (etaf-agenda-search-box :value search-val
+                                      :placeholder "搜索任务或标签…"
+                                      :on-change on-search-change
+                                      :on-submit on-search-submit
+                                      :on-clear on-search-clear))
+            (box :flex-shrink 0 :height '(lh 1) :padding '((lh 0) (ch 1))
+                 :background-color (etaf-agenda-color :accent-soft)
+                 :border (etaf-agenda-views--border :accent)
+                 :color (etaf-agenda-color :accent) :font-weight 'bold
+                 :role 'button :tab-index 0 :pointer 'hand
+                 :on-press on-new
+              (text "+ 新建"))
+            (box :flex-shrink 0 :height '(lh 1) :padding '((lh 0) (ch 1))
+                 :border (etaf-agenda-views--border :line)
+                 :color (etaf-agenda-color :muted)
+                 :hover-style (etaf-agenda-views--hover)
+                 :role 'button :tab-index 0 :pointer 'hand
+                 :on-press on-help
+              (text "?"))))))
+      (box :height '(lh 1)))))
 
 ;;; ---------------------------------------------------------------------------
 ;;; Left Sidebar (Areas & Projects on subtle :surface)
@@ -1106,21 +1087,22 @@ own tint; only plain editable value text takes hover highlight."
 
 (etaf-define-component etaf-agenda-hint (&key caps label)
   "Render one quiet KEY + LABEL pair in the bottom bar."
-  :render
-  (etaf-view
-   (flex :flex-direction 'row :flex-shrink 0 :height '(lh 1) :align-items 'center
-         :gap '((lh 0) (ch 0.5))
-     (box :height '(lh 1) :font-weight 'bold :color (etaf-agenda-color :accent)
-       (text (expr caps)))
-     (box :height '(lh 1) :color (etaf-agenda-color :muted)
-       (text (expr label))))))
+  :view
+  (flex :flex-direction 'row :flex-shrink 0 :height '(lh 1) :align-items 'center
+        :gap '((lh 0) (ch 0.5))
+    (box :height '(lh 1) :font-weight 'bold :color (etaf-agenda-color :accent)
+      (text caps))
+    (box :height '(lh 1) :color (etaf-agenda-color :muted)
+      (text label))))
 
-(etaf-define-component etaf-agenda-footer (&key plan)
+(etaf-define-component etaf-agenda-footer (&key plan ui-store)
   "Render the single-line bottom status and contextual key hint bar."
-  :render
+  :view
   (let* ((cols (plist-get plan :width))
          (view (plist-get plan :view))
-         (msg (plist-get plan :message))
+         (msg (if ui-store
+                  (etaf-store-get ui-store :notice :message)
+                (plist-get plan :message)))
          (counts (plist-get plan :counts))
          (status-left
           (cond
@@ -1182,21 +1164,18 @@ own tint; only plain editable value text takes hover highlight."
                   ("RET" . "详情") ("m" . "迁移") ("u" . "撤销") ("/" . "搜索")
                   ("M-g" . "切区") ("?" . "帮助"))
               '(("j/k" . "移") ("x" . "完") ("a" . "建") ("RET" . "详") ("?" . "帮助")))))))
-    (etaf-view
-     (flex :flex-direction 'row :align-items 'center
-           :width 'stretch :height '(lh 1) :flex-shrink 0
-           :padding '((lh 0) (ch 2)) :gap '((lh 0) (ch 2))
-           :border-top (etaf-agenda-views--border :line)
-       (box :flex-grow 1 :flex-basis '(ch 0) :min-width '(ch 8)
-            :height '(lh 1) :wrap-mode 'none :overflow 'hidden
-            :color (if msg (etaf-agenda-color :accent) (etaf-agenda-color :muted))
-         (text (expr status-left)))
-       (flex :flex-direction 'row :align-items 'center :flex-shrink 0
-             :gap '((lh 0) (ch 1)) :overflow 'hidden
-         (expr
-          (mapcar (lambda (pair)
-                    (etaf-view (etaf-agenda-hint :caps (car pair) :label (cdr pair))))
-                  hints)))))))
+    (flex :flex-direction 'row :align-items 'center
+          :width 'stretch :height '(lh 1) :flex-shrink 0
+          :padding '((lh 0) (ch 2)) :gap '((lh 0) (ch 2))
+          :border-top (etaf-agenda-views--border :line)
+      (box :flex-grow 1 :flex-basis '(ch 0) :min-width '(ch 8)
+           :height '(lh 1) :wrap-mode 'none :overflow 'hidden
+           :color (if msg (etaf-agenda-color :accent) (etaf-agenda-color :muted))
+        (text status-left))
+      (flex :flex-direction 'row :align-items 'center :flex-shrink 0
+            :gap '((lh 0) (ch 1)) :overflow 'hidden
+        (etaf-agenda-hint :for (pair hints) :key (car pair)
+                          :caps (car pair) :label (cdr pair))))))
 
 ;;; ---------------------------------------------------------------------------
 ;;; Root Application Shell
@@ -1441,7 +1420,7 @@ own tint; only plain editable value text takes hover highlight."
                 :on-open (plist-get actions :on-open)
                 :on-new (plist-get actions :on-new)))))))
        ;; 3. Quiet bottom status + key hint bar
-       (etaf-agenda-footer :plan plan)))))
+       (etaf-agenda-footer :plan plan :ui-store (plist-get model :ui-store))))))
 
 (defun etaf-agenda-view (model keys help actions)
   "Return the single-canvas root View of MODEL."
