@@ -22,6 +22,10 @@ load: compile
 		--eval '(princ "etaf-posframe load OK\n")'
 
 acceptance:
+	@test -f ../../scripts/run-acceptance.py || { \
+	  echo "This is a read-only package projection; run shared checks from the emacs-taf monorepo:"; \
+	  echo "  make -C packages/$(notdir $(CURDIR)) check"; \
+	  exit 2; }
 	EMACSLOADPATH="$(POSFRAME_DIR):$(EMACSLOADPATH)" \
 		python3 ../../scripts/run-acceptance.py --root . --emacs "$(EMACS)"
 
@@ -32,7 +36,7 @@ tty-test:
 
 structure-check:
 	@test -f ../../scripts/check-repository.py || { \
-	  echo "This is a published package checkout; run the shared checks from the etaf-mono workspace:"; \
+	  echo "This is a read-only package projection; run shared checks from the emacs-taf monorepo:"; \
 	  echo "  make -C packages/$(notdir $(CURDIR)) check"; \
 	  exit 2; }
 	python3 ../../scripts/check-repository.py --root . --skip-api
@@ -41,6 +45,10 @@ setup-hooks:
 	@echo "jj does not run Git hooks; the container's 'make setup-hooks' explains what to check."
 
 api-check:
+	@test -f ../../scripts/check-api.el || { \
+	  echo "This is a read-only package projection; run shared checks from the emacs-taf monorepo:"; \
+	  echo "  make -C packages/$(notdir $(CURDIR)) check"; \
+	  exit 2; }
 	$(EMACS) -Q --batch $(LOAD_PATH) --eval '(setq load-prefer-newer t)' -l ../../scripts/check-api.el
 
 check: structure-check compile acceptance api-check

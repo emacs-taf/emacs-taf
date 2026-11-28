@@ -54,12 +54,14 @@ def bookmark_state():
     return state
 
 
-def publish(package, remotes, environment):
-    """Push PACKAGE to REMOTES; return (package, [(remote, error)])."""
+def publish(package, remotes, environment, *, rev='main', allow_backwards=False):
+    """Push PACKAGE to REMOTES from REV (default: main); return (package, [(remote, error)])."""
     failures = []
+    set_cmd = ['jjosh', 'bookmark', 'set', f'main#{package}', '-r', rev]
+    if allow_backwards:
+        set_cmd.append('--allow-backwards')
     for remote in remotes:
-        moved = subprocess.run(['jjosh', 'bookmark', 'set', f'main#{package}',
-                                '-r', '@-', '--allow-backwards'],
+        moved = subprocess.run(set_cmd,
                                cwd=ROOT, capture_output=True, text=True, timeout=180,
                                env=environment)
         if moved.returncode:
@@ -80,6 +82,10 @@ def main():
                         help='remote to publish to; repeatable, default all three')
     parser.add_argument('--package', action='append', default=[],
                         help='publish only this package; repeatable')
+    parser.add_argument('--rev', default='main',
+                        help='monorepo revision to project (default: main)')
+    parser.add_argument('--allow-backwards', action='store_true',
+                        help='allow moving main#<pkg> backwards (unsafe; disabled by default)')
     parser.add_argument('--dry-run', action='store_true',
                         help='report what would be pushed')
     args = parser.parse_args()
@@ -91,7 +97,7 @@ def main():
     if unknown:
         raise SystemExit(f'publish-packages: unknown package {", ".join(unknown)}')
     for package in selected:
-        print(f'{"would push" if args.dry_run else "push"} {package} to '
+        print(f'{"would push" if args.dry_run else "push"} {package} ({args.rev}) to '
               f'{", ".join(remotes)}')
     if args.dry_run:
         return 0
@@ -102,7 +108,8 @@ def main():
                                             str(ROOT / 'scripts' / 'askpass.sh')))
     failures = []
     for package in selected:
-        _, problems = publish(package, remotes, environment)
+        _, problems = publish(package, remotes, environment,
+                              rev=args.rev, allow_backwards=args.allow_backwards)
         if problems:
             failures.extend((package, remote, note) for remote, note in problems)
             print(f'FAIL {package}', flush=True)

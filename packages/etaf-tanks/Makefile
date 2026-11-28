@@ -14,13 +14,21 @@ compile: clean
 	$(EMACS) -Q --batch $(LOAD_PATH) --eval '(setq load-prefer-newer t byte-compile-error-on-warn t)' --eval '(require (quote cl-lib))' --eval '(unless (cl-every (function byte-compile-file) (quote ($(foreach file,$(SOURCES),"$(file)")))) (kill-emacs 1))'
 structure-check:
 	@test -f ../../scripts/check-repository.py || { \
-	  echo "This is a published package checkout; run the shared checks from the etaf-mono workspace:"; \
+	  echo "This is a read-only package projection; run shared checks from the emacs-taf monorepo:"; \
 	  echo "  make -C packages/$(notdir $(CURDIR)) check"; \
 	  exit 2; }
 	python3 ../../scripts/check-repository.py --root . --skip-api
 acceptance:
+	@test -f ../../scripts/run-acceptance.py || { \
+	  echo "This is a read-only package projection; run shared checks from the emacs-taf monorepo:"; \
+	  echo "  make -C packages/$(notdir $(CURDIR)) check"; \
+	  exit 2; }
 	python3 ../../scripts/run-acceptance.py --root . --emacs "$(EMACS)"
 api-check:
+	@test -f ../../scripts/check-api.el || { \
+	  echo "This is a read-only package projection; run shared checks from the emacs-taf monorepo:"; \
+	  echo "  make -C packages/$(notdir $(CURDIR)) check"; \
+	  exit 2; }
 	$(EMACS) -Q --batch $(LOAD_PATH) --eval '(setq load-prefer-newer t)' -l ../../scripts/check-api.el
 test: acceptance
 check: structure-check native-check compile acceptance api-check

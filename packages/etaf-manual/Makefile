@@ -45,7 +45,7 @@ clean:
 .PHONY: structure-check setup-hooks
 structure-check:
 	@test -f ../../scripts/check-repository.py || { \
-	  echo "This is a published package checkout; run the shared checks from the etaf-mono workspace:"; \
+	  echo "This is a read-only package projection; run shared checks from the emacs-taf monorepo:"; \
 	  echo "  make -C packages/$(notdir $(CURDIR)) check"; \
 	  exit 2; }
 	python3 ../../scripts/check-repository.py --root . --skip-api
@@ -64,10 +64,18 @@ site-publish:
 
 .PHONY: acceptance
 acceptance:
+	@test -f ../../scripts/run-acceptance.py || { \
+	  echo "This is a read-only package projection; run shared checks from the emacs-taf monorepo:"; \
+	  echo "  make -C packages/$(notdir $(CURDIR)) check"; \
+	  exit 2; }
 	python3 ../../scripts/run-acceptance.py --root . --emacs "$(EMACS)"
 
 .PHONY: api-check
 api-check:
+	@test -f ../../scripts/check-api.el || { \
+	  echo "This is a read-only package projection; run shared checks from the emacs-taf monorepo:"; \
+	  echo "  make -C packages/$(notdir $(CURDIR)) check"; \
+	  exit 2; }
 	$(EMACS) -Q --batch -L . -L lisp $(API_PROVIDER_PATH) --eval '(setq load-prefer-newer t)' -l ../../scripts/check-api.el
 API_PROVIDER_PATH = -L ../ecss -L ../ekp -L ../ebox -L ../etaf -L ../etaf-ui -L ../etaf-db -L ../ebox-playground -L ../etaf-playground
 

@@ -29,6 +29,10 @@ load: compile
 		--eval '(princ "maillist load OK\n")'
 
 acceptance:
+	@test -f ../../scripts/run-acceptance.py || { \
+	  echo "This is a read-only package projection; run shared checks from the emacs-taf monorepo:"; \
+	  echo "  make -C packages/$(notdir $(CURDIR)) check"; \
+	  exit 2; }
 	python3 ../../scripts/run-acceptance.py --root . --emacs "$(EMACS)"
 
 test: acceptance
@@ -37,7 +41,7 @@ check: structure-check compile acceptance api-check
 
 structure-check:
 	@test -f ../../scripts/check-repository.py || { \
-	  echo "This is a published package checkout; run the shared checks from the etaf-mono workspace:"; \
+	  echo "This is a read-only package projection; run shared checks from the emacs-taf monorepo:"; \
 	  echo "  make -C packages/$(notdir $(CURDIR)) check"; \
 	  exit 2; }
 	@test -f maillist.el || { echo "缺少入口 maillist.el"; exit 1; }
@@ -46,6 +50,10 @@ structure-check:
 	python3 ../../scripts/check-repository.py --root . --skip-api
 
 api-check:
+	@test -f ../../scripts/check-api.el || { \
+	  echo "This is a read-only package projection; run shared checks from the emacs-taf monorepo:"; \
+	  echo "  make -C packages/$(notdir $(CURDIR)) check"; \
+	  exit 2; }
 	$(EMACS) -Q --batch $(LOAD_PATH) \
 		--eval '(setq load-prefer-newer t)' \
 		-l ../../scripts/check-api.el

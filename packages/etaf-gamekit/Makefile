@@ -10,7 +10,7 @@ compile: clean
 	$(EMACS) -Q --batch $(LOAD_PATH) --eval '(setq load-prefer-newer t byte-compile-error-on-warn t)' --eval '(require (quote cl-lib))' --eval '(unless (cl-every (function byte-compile-file) (quote ($(foreach file,$(SOURCES),"$(file)")))) (kill-emacs 1))'
 structure-check:
 	@test -f ../../scripts/check-repository.py || { \
-	  echo "This is a published package checkout; run the shared checks from the etaf-mono workspace:"; \
+	  echo "This is a read-only package projection; run shared checks from the emacs-taf monorepo:"; \
 	  echo "  make -C packages/$(notdir $(CURDIR)) check"; \
 	  exit 2; }
 	python3 ../../scripts/check-repository.py --root . --skip-api
@@ -26,10 +26,18 @@ engine-check:
 	node native/boardgame-io/bridge.cjs --version
 	"$(GAMEKIT_CACHE)/openspiel/bin/python" native/openspiel/bridge.py --version
 acceptance: engine-check
+	@test -f ../../scripts/run-acceptance.py || { \
+	  echo "This is a read-only package projection; run shared checks from the emacs-taf monorepo:"; \
+	  echo "  make -C packages/$(notdir $(CURDIR)) check"; \
+	  exit 2; }
 	python3 ../../scripts/run-acceptance.py --root . --emacs "$(EMACS)"
 tool-test: engine-check
 	python3 -m unittest discover -s tests/tools -p 'test_*.py'
 api-check:
+	@test -f ../../scripts/check-api.el || { \
+	  echo "This is a read-only package projection; run shared checks from the emacs-taf monorepo:"; \
+	  echo "  make -C packages/$(notdir $(CURDIR)) check"; \
+	  exit 2; }
 	$(EMACS) -Q --batch $(LOAD_PATH) --eval '(setq load-prefer-newer t)' -l ../../scripts/check-api.el
 test: acceptance tool-test
 check: structure-check compile acceptance tool-test api-check
