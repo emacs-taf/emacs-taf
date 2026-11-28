@@ -71,6 +71,60 @@ prop 就是普通 Component prop，[Component](components.md) 的调用规则原
                                  :border "#2B3A4E" :accent "#356BB2"))))
 ```
 
+### 宿主自适应主题
+
+需要跟随当前 Emacs 主题、或希望在统一对比度与表面层级推导之上维护品牌配色的应用，可以直接使用宿主主题引擎，不必在每个应用里重复编写 face 采样、色彩混合与主题切换钩子。
+
+#### Function: etaf-ui-host-theme-palette (&rest options)
+
+返回从当前 Emacs frame 的 face 或显式种子推导出的语义调色板 plist。
+
+**参数。** OPTIONS 是关键字 plist。`:mode` 可取 `auto`（默认，采样当前 frame 的 face）、`appearance`（跟随 `etaf-appearance`）、`dark` 或 `light`。`:frame` 指定要采样的 frame。可选颜色种子（`:bg`、`:fg`、`:accent`、`:surface-1`、`:surface-2`、`:surface-3`、`:sunken`、`:ink-2`、`:ink-3`、`:border`、`:border-subtle`、`:border-strong`、`:select`、`:hover`、`:track`、`:accent-fg`、`:accent-soft`、`:accent-border`，以及状态角色 `:ok`、`:warn`、`:danger`、`:info`、`:important` 及其 `-soft`、`-border` 变体）覆盖对应槽位。`:curated` 为非 nil 时原样保留显式品牌色种子并仅推导缺省层级；`:calm-dark`（未设 `:curated` 时默认非 nil）在 OKLCH 色彩空间里压低暗色霓虹强调色的过饱和度；`:aliases` 附加常用短别名（`:bg`、`:ink`、`:muted`、`:dim`、`:panel`、`:panel2`、`:panel3`、`:line`、`:selected` 等）；`:extras` 把应用私有键值前置到结果中。
+
+**语义。** face 属性按 frame 安全读取并在批处理与 GUI 会话中确定性归一化为 `#RRGGBB`，正文与语义色在主表面和凸起表面上都满足 WCAG AA 对比度下限，结果按 frame 与主题签名缓存，并由统一的 `enable-theme-functions` 与 `disable-theme-functions` 钩子自动失效。
+
+**返回。** 包含 `:mode`、`:dark-p`、`:surface-0`、`:surface-1`、`:surface-2`、`:surface-3`、`:sunken`、`:ink-1`、`:ink-2`、`:ink-3`、`:border`、`:border-subtle`、`:border-strong`、`:select`、`:hover`、`:track`、`:accent`、`:accent-fg`、`:accent-soft`、`:accent-border`，以及 `:ok`、`:warn`、`:danger`、`:info`、`:important` 五组状态三件套（含 `-soft` 与 `-border`）和 `:extras` 的 plist。
+
+**错误。** OPTIONS 不是 plist、出现未知关键字、`:mode` 非法或颜色种子无法解析时，发出 `wrong-type-argument`。
+
+#### Function: etaf-ui-host-theme-tokens (&rest options)
+
+基于 `etaf-ui-host-theme-palette` 返回完整的目录 Theme token plist。
+
+**参数。** 接受 `etaf-ui-host-theme-palette` 的全部 OPTIONS，并额外支持 `:palette`（复用已算好的调色板 plist）和 `:overrides`（放在最前面、优先覆盖目录默认值的 Theme plist）。
+
+**语义。** 把语义调色板映射到 `etaf-ui-theme-tokens`，使全部官方目录组件与当前 Emacs 主题或品牌种子保持一致。由于 ETAF Theme 中同一个键取第一个值，`:overrides` 里的条目始终优先。
+
+**返回。** 可直接交给 `etaf-theme-provide` 的 Theme plist。
+
+#### Function: etaf-ui-host-theme-css-vars (&rest options)
+
+返回宿主自适应或种子调色板对应的 `--etaf-*` ECSS 自定义属性声明 plist。
+
+**参数。** 接受 `:palette` 或 `etaf-ui-host-theme-palette` 支持的任意关键字选项。
+
+**语义。** 把语义调色板键映射为 `--etaf-surface-0`、`--etaf-surface-1`、`--etaf-surface-2`、`--etaf-surface-3`、`--etaf-sunken`、`--etaf-ink-1`、`--etaf-ink-2`、`--etaf-ink-3`、`--etaf-border`、`--etaf-border-subtle`、`--etaf-border-strong`、`--etaf-accent`、`--etaf-accent-fg`、`--etaf-accent-soft`、`--etaf-ok`、`--etaf-ok-soft`、`--etaf-warn`、`--etaf-warn-soft`、`--etaf-danger`、`--etaf-danger-soft`、`--etaf-info`、`--etaf-info-soft`、`--etaf-important`、`--etaf-important-soft`、`--etaf-select`、`--etaf-hover` 与 `--etaf-track`。
+
+**返回。** 以 `--etaf-*` 符号为键的扁平声明 plist，可直接交给 `ecss-compute-style` 或根 ECSS 规则。
+
+#### Function: etaf-ui-host-theme-ref (&rest options)
+
+返回持有宿主自适应 Theme token 的响应式 `etaf-computed`。
+
+**参数。** 接受 `etaf-ui-host-theme-tokens` 的全部 OPTIONS，并额外支持 `:mode-ref`（提供实时 `:mode` 的 ref 或 computed）、`:transform`（形如 `(palette tokens)` 的变换函数，返回最终 Theme plist）与 `:name`（可选调试名）。
+
+**语义。** 自动订阅 Emacs 主题切换与 `:mode-ref`，仅在解析出的 token 发生变化时重算（`:test #'equal`）。
+
+**返回。** 可直接传给 `etaf-theme-provide` 的 `etaf-computed`。
+
+**错误。** `:transform` 既不是 nil 也不是函数时，发出 `wrong-type-argument`。
+
+```elisp
+(etaf-define-component demo-host-themed ()
+  :setup (etaf-theme-provide (etaf-ui-host-theme-ref :name 'demo-theme))
+  :view (etaf-panel (etaf-label :text "Follows Emacs theme")))
+```
+
 ### 派生状态色
 
 应用要从自己的调色板派生出悬停底色、选中底色或表面层级时，需要的是一套 `#RRGGBB` 上的算术，而不是第二份调色板。

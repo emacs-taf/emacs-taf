@@ -71,6 +71,60 @@ Return the catalog Theme tokens for application PALETTE.
                                  :border "#2B3A4E" :accent "#356BB2"))))
 ```
 
+### Host-adaptive themes
+
+Applications that follow the active Emacs theme — or maintain curated light and dark palettes with shared contrast and surface derivation — use the host-theme engine instead of duplicating face sampling, color math and theme-switch hooks.
+
+#### Function: etaf-ui-host-theme-palette (&rest options)
+
+Return a semantic color palette plist derived from the active Emacs frame faces or explicit seeds.
+
+**Arguments.** OPTIONS is a keyword plist. `:mode` is `auto` (default, sample the active frame faces), `appearance` (follow `etaf-appearance`), `dark` or `light`. `:frame` names the frame to sample. Optional color seeds (`:bg`, `:fg`, `:accent`, `:surface-1`, `:surface-2`, `:surface-3`, `:sunken`, `:ink-2`, `:ink-3`, `:border`, `:border-subtle`, `:border-strong`, `:select`, `:hover`, `:track`, `:accent-fg`, `:accent-soft`, `:accent-border`, and status roles `:ok`, `:warn`, `:danger`, `:info`, `:important` with `-soft` and `-border` variants) override individual roles. `:curated` keeps explicit seeds verbatim while deriving omitted roles; `:calm-dark` (default non-nil unless `:curated` is set) calms neon dark-mode accents in OKLCH space; `:aliases` adds short lookup aliases (`:bg`, `:ink`, `:muted`, `:dim`, `:panel`, `:panel2`, `:panel3`, `:line`, `:selected`, etc.); `:extras` prepends application-specific keys.
+
+**Semantics.** Face attributes are read frame-safely, normalized to `#RRGGBB` deterministically across batch and GUI sessions, checked for WCAG AA contrast on both base and raised surfaces, and cached per frame and theme signature with automatic invalidation on `enable-theme-functions` and `disable-theme-functions`.
+
+**Returns.** A plist containing `:mode`, `:dark-p`, `:surface-0`, `:surface-1`, `:surface-2`, `:surface-3`, `:sunken`, `:ink-1`, `:ink-2`, `:ink-3`, `:border`, `:border-subtle`, `:border-strong`, `:select`, `:hover`, `:track`, `:accent`, `:accent-fg`, `:accent-soft`, `:accent-border`, and the status trios `:ok`, `:warn`, `:danger`, `:info` and `:important` (each with `-soft` and `-border`), plus any `:extras`.
+
+**Errors.** `wrong-type-argument` when OPTIONS is not a plist, contains an unknown option keyword, passes an invalid `:mode`, or supplies an unparseable color seed.
+
+#### Function: etaf-ui-host-theme-tokens (&rest options)
+
+Return a complete catalog Theme token plist built from `etaf-ui-host-theme-palette`.
+
+**Arguments.** Accepts all OPTIONS of `etaf-ui-host-theme-palette`, plus `:palette` to reuse an already derived palette plist and `:overrides` for a Theme plist prepended ahead of the derived catalog tokens.
+
+**Semantics.** Projects the semantic palette onto `etaf-ui-theme-tokens` so all official catalog components follow the active Emacs theme or curated seeds cohesively. Keys in `:overrides` win because the first value of a key takes precedence in an ETAF Theme.
+
+**Returns.** A Theme plist suitable for `etaf-theme-provide`.
+
+#### Function: etaf-ui-host-theme-css-vars (&rest options)
+
+Return an ECSS `--etaf-*` custom-property declaration plist for a host-adaptive or seeded palette.
+
+**Arguments.** Accepts `:palette` or any keyword option supported by `etaf-ui-host-theme-palette`.
+
+**Semantics.** Maps the semantic palette keys onto `--etaf-surface-0`, `--etaf-surface-1`, `--etaf-surface-2`, `--etaf-surface-3`, `--etaf-sunken`, `--etaf-ink-1`, `--etaf-ink-2`, `--etaf-ink-3`, `--etaf-border`, `--etaf-border-subtle`, `--etaf-border-strong`, `--etaf-accent`, `--etaf-accent-fg`, `--etaf-accent-soft`, `--etaf-ok`, `--etaf-ok-soft`, `--etaf-warn`, `--etaf-warn-soft`, `--etaf-danger`, `--etaf-danger-soft`, `--etaf-info`, `--etaf-info-soft`, `--etaf-important`, `--etaf-important-soft`, `--etaf-select`, `--etaf-hover` and `--etaf-track`.
+
+**Returns.** A flat declaration plist keyed by `--etaf-*` symbols for `ecss-compute-style` or root ECSS rules.
+
+#### Function: etaf-ui-host-theme-ref (&rest options)
+
+Return a reactive `etaf-computed` holding host-adaptive Theme tokens.
+
+**Arguments.** Accepts all OPTIONS of `etaf-ui-host-theme-tokens`, plus `:mode-ref` (optional ref or computed supplying `:mode`), `:transform` (optional function `(palette tokens)` returning the final Theme plist) and `:name` (optional debug symbol).
+
+**Semantics.** Subscribes to Emacs theme switches and `:mode-ref`, recomputing the Theme plist only when the resolved tokens change (`:test #'equal`).
+
+**Returns.** An `etaf-computed` ready to pass directly to `etaf-theme-provide`.
+
+**Errors.** `wrong-type-argument` when `:transform` is neither nil nor a function.
+
+```elisp
+(etaf-define-component demo-host-themed ()
+  :setup (etaf-theme-provide (etaf-ui-host-theme-ref :name 'demo-theme))
+  :view (etaf-panel (etaf-label :text "Follows Emacs theme")))
+```
+
 ### Deriving state colors
 
 An application that derives a hover fill, a selection tint or a surface step from its own palette needs one arithmetic on `#RRGGBB` values, not a second palette.

@@ -1472,6 +1472,21 @@
       "name": "etaf-ui-pane-resizer-and-splitter-fit-one-cell-on-text-displays",
       "file": "tests/etaf-ui-desktop-tests.el",
       "purpose": "Pane resizer and horizontal splitter dividers occupy a single cell width on text displays instead of multiple blank columns."
+    },
+    {
+      "name": "etaf-ui-host-theme-wcag-and-oklch-calming",
+      "file": "tests/etaf-ui-host-theme-tests.el",
+      "purpose": "Host-adaptive theme palettes enforce WCAG AA legibility on base and raised surfaces and calm neon dark-mode accents in OKLCH space."
+    },
+    {
+      "name": "etaf-ui-host-theme-curated-seeds-and-css-vars",
+      "file": "tests/etaf-ui-host-theme-tests.el",
+      "purpose": "Curated seeds stay exact while omitted tiers derive coherently, project onto catalog Theme tokens and resolve via ECSS `--etaf-*' custom properties."
+    },
+    {
+      "name": "etaf-ui-host-theme-ref-reacts-to-mode-and-theme-switch",
+      "file": "tests/etaf-ui-host-theme-tests.el",
+      "purpose": "Reactive host theme refs update on mode-ref writes and reject malformed options and transforms cleanly."
     }
   ]
 }

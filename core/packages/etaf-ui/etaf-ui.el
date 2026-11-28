@@ -67,6 +67,39 @@
 ;; the first value of a key wins.  An unknown role, a non-string value or a
 ;; missing `:bg' or `:fg' signals `wrong-type-argument'.
 ;;
+;; Function: etaf-ui-host-theme-palette (&rest options)
+;;;###autoload (autoload 'etaf-ui-host-theme-palette "etaf-ui" nil nil)
+;; Return a semantic color palette plist derived from the active Emacs frame
+;; faces or explicit curated seeds.  OPTIONS accepts `:mode' (`auto',
+;; `appearance', `dark' or `light'), `:frame', `:curated', `:calm-dark',
+;; `:aliases', `:extras' and explicit color seeds (`:bg', `:fg', `:accent', `:surface-1',
+;; `:surface-2', `:surface-3', `:sunken', `:ink-2', `:ink-3', `:border',
+;; `:border-subtle', `:border-strong', `:select', `:hover', `:track', `:ok',
+;; `:warn', `:danger', `:info', `:important' and their `-soft'/`-border'
+;; variants).  Calms neon dark-mode accents in OKLCH space, enforces WCAG AA
+;; legibility, and caches results with shared `enable-theme-functions'
+;; invalidation.
+;;
+;; Function: etaf-ui-host-theme-tokens (&rest options)
+;;;###autoload (autoload 'etaf-ui-host-theme-tokens "etaf-ui" nil nil)
+;; Return a complete catalog Theme token plist built from
+;; `etaf-ui-host-theme-palette' and projected through `etaf-ui-theme-tokens'.
+;; Accepts all palette OPTIONS plus `:palette' (reuse a precomputed palette)
+;; and `:overrides' (a Theme plist prepended so application keys win).
+;;
+;; Function: etaf-ui-host-theme-css-vars (&rest options)
+;;;###autoload (autoload 'etaf-ui-host-theme-css-vars "etaf-ui" nil nil)
+;; Return an ECSS `--etaf-*' custom-property declaration plist derived from
+;; `etaf-ui-host-theme-palette' (or a precomputed `:palette'), suitable for
+;; `ecss-compute-style' `:declarations' or root Component `:styles' rules.
+;;
+;; Function: etaf-ui-host-theme-ref (&rest options)
+;;;###autoload (autoload 'etaf-ui-host-theme-ref "etaf-ui" nil nil)
+;; Return a reactive `etaf-computed' holding host-adaptive Theme tokens from
+;; `etaf-ui-host-theme-tokens'.  Accepts `:mode-ref' (reactive mode source),
+;; `:transform' (function of `(palette tokens)' returning the final Theme
+;; plist) and `:name', updating automatically on Emacs theme switches.
+;;
 ;; Component: etaf-button (&key label on-press disabled id ref class color bgcolor border padding font-size font-weight tab-index aria-label aria-selected help-echo hover-content hover-group pointer use variant)
 ;; Parameters:
 ;; :label — Display value/ref/computed; default nil (empty). Supply a useful name.
@@ -2157,6 +2190,7 @@
 Native-compiled entries live in `eln-cache', so their location says
 nothing about where the package directory is.")
 
+(require 'etaf-ui-host-theme)
 (require 'etaf-ui-basic)
 (require 'etaf-ui-drop)
 (require 'etaf-ui-edge)
