@@ -727,6 +727,17 @@ class PackageReleaseRequiresSyncTests(unittest.TestCase):
         # Subsequent --check passes cleanly.
         self.run_cli("sync-requires", "--package", "etaf-md", "--check", success=True)
 
+    def test_sync_requires_write_json_stays_pure_json_when_doc_sync_prints(self):
+        # A real monorepo has scripts/sync-generated-docs.py that prints human text on stdout;
+        # sync-requires --write --json must keep stdout valid JSON.
+        doc_sync = self.root / "scripts" / "sync-generated-docs.py"
+        doc_sync.parent.mkdir(parents=True, exist_ok=True)
+        doc_sync.write_text('print("Updated 2 generated doc file(s): README.md")\n', encoding="utf-8")
+        write_res = self.run_cli("sync-requires", "--package", "etaf-md", "--write", "--json")
+        write_data = json.loads(write_res.stdout)
+        self.assertEqual(write_data["updated_packages"], ["etaf-md"])
+        self.assertTrue(write_data["ok"])
+
     def test_sync_requires_changed_only_targets_only_drifted_packages(self):
         # Build a "live" archive matching the initial workspace, then modify only etaf-md.
         sys.path.insert(0, str(ROOT / "scripts"))
