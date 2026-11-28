@@ -604,5 +604,73 @@ class PolicyTests(unittest.TestCase):
                    '| [etaf-other](https://github.com/emacs-taf/etaf-other) | Other |\n')
         self.assertEqual([], POLICY.workspace_readme_errors(self.root))
 
+    def test_lisp_module_rejects_sibling_package_prefix(self):
+        self.write('workspace.json', json.dumps({
+            'schema': 2,
+            'packages': {
+                'etaf': {'path': 'core/packages/etaf', 'role': 'framework'},
+                'etaf-ui': {'path': 'core/packages/etaf-ui', 'role': 'framework'},
+                'etaf-doc': {'path': 'core/packages/etaf-doc', 'role': 'framework'},
+                'etaf-db': {'path': 'core/packages/etaf-db', 'role': 'framework'},
+            },
+        }))
+        makefile = (
+            'compile:\n\t@true\n'
+            'acceptance:\n\t@true\n'
+            'test: acceptance\n'
+            'clean:\n\t@true\n'
+            'setup-hooks:\n\t@true\n'
+            'structure-check:\n\t@true\n'
+            'api-check:\n\t@true\n'
+            'check: structure-check compile acceptance api-check\n'
+        )
+        doc_root = self.root / 'core/packages/etaf-doc'
+        for rel, body in (
+            ('README.md', '# etaf-doc\n'),
+            ('Makefile', makefile),
+            ('tests/acceptance.json', json.dumps({'schema': 1, 'load_path': ['.'], 'cases': [
+                {'name': 'etaf-doc-ok-test', 'file': 'tests/etaf-doc-tests.el', 'purpose': 'Ok.'},
+            ]}) + '\n'),
+            ('tests/etaf-doc-tests.el', ';;; etaf-doc-tests.el --- Tests -*- lexical-binding: t; -*-\n(ert-deftest etaf-doc-ok-test () (should t))\n'),
+            ('etaf-doc.el',
+             ';;; etaf-doc.el --- Doc -*- lexical-binding: t; -*-\n'
+             ';; Version: 0.1.0\n;; Package-Requires: ((emacs "29.1"))\n'
+             ';;; Commentary:\n;; Function: etaf-doc-ok ()\n;; Ok.\n;;; Code:\n'
+             '(defun etaf-doc-ok () "Ok." t)\n(provide \'etaf-doc)\n'),
+            ('lisp/etaf-doc-markdown.el', ';;; etaf-doc-markdown.el --- Ok -*- lexical-binding: t; -*-\n(provide \'etaf-doc-markdown)\n'),
+            ('lisp/etaf-ui-markdown.el', ';;; etaf-ui-markdown.el --- Bad -*- lexical-binding: t; -*-\n(provide \'etaf-ui-markdown)\n'),
+        ):
+            p = doc_root / rel
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(body)
+        errors = '\n'.join(POLICY.check(doc_root))
+        self.assertIn("lisp/etaf-ui-markdown.el: lisp module borrows sibling package prefix 'etaf-ui'", errors)
+        self.assertNotIn('etaf-doc-markdown.el', errors)
+
+        # Removing the offending sibling-prefixed file makes the package clean.
+        (doc_root / 'lisp/etaf-ui-markdown.el').unlink()
+        self.assertEqual([], POLICY.check(doc_root))
+
+        # A parent namespace prefix (e.g. `etaf` for `etaf-db`) is allowed for domain modules.
+        db_root = self.root / 'core/packages/etaf-db'
+        for rel, body in (
+            ('README.md', '# etaf-db\n'),
+            ('Makefile', makefile),
+            ('tests/acceptance.json', json.dumps({'schema': 1, 'load_path': ['.'], 'cases': [
+                {'name': 'etaf-db-ok-test', 'file': 'tests/etaf-db-tests.el', 'purpose': 'Ok.'},
+            ]}) + '\n'),
+            ('tests/etaf-db-tests.el', ';;; etaf-db-tests.el --- Tests -*- lexical-binding: t; -*-\n(ert-deftest etaf-db-ok-test () (should t))\n'),
+            ('etaf-db.el',
+             ';;; etaf-db.el --- DB -*- lexical-binding: t; -*-\n'
+             ';; Version: 0.1.0\n;; Package-Requires: ((emacs "29.1"))\n'
+             ';;; Commentary:\n;; Function: etaf-db-ok ()\n;; Ok.\n;;; Code:\n'
+             '(defun etaf-db-ok () "Ok." t)\n(provide \'etaf-db)\n'),
+            ('lisp/etaf-sqlite-store.el', ';;; etaf-sqlite-store.el --- Ok -*- lexical-binding: t; -*-\n(provide \'etaf-sqlite-store)\n'),
+        ):
+            p = db_root / rel
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(body)
+        self.assertEqual([], POLICY.check(db_root))
+
 
 if __name__ == '__main__':unittest.main()

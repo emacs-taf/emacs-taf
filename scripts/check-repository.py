@@ -87,6 +87,20 @@ def _mentions_symbol(text, symbol):
     return bool(re.search(rf'(?<![A-Za-z0-9_-]){re.escape(symbol)}(?![A-Za-z0-9_-])', text))
 
 
+def _sibling_package_names(root):
+    """Return registered package names from the enclosing workspace.json, if any."""
+    for ancestor in root.resolve().parents:
+        ws = ancestor / 'workspace.json'
+        if ws.is_file():
+            try:
+                data = json.loads(ws.read_text(encoding='utf-8'))
+            except (OSError, ValueError):
+                return set()
+            pkgs = data.get('packages')
+            return set(pkgs.keys()) if isinstance(pkgs, dict) else set()
+    return set()
+
+
 def _public_defcustoms(root, files):
     found = []
     seen = set()
@@ -331,6 +345,20 @@ def check(root, files=None, notices=None):
     for entry in root_lisp:
         if 'lisp/' + entry in files:
             fail(entry, 'entry must not be duplicated under lisp/')
+    if not workspace and len(root_lisp) == 1:
+        pkg_name = PurePosixPath(root_lisp[0]).stem
+        siblings = _sibling_package_names(root)
+        for f in files:
+            if f.startswith('lisp/') and f.endswith('.el'):
+                stem = PurePosixPath(f).stem
+                if stem.startswith(pkg_name + '-'):
+                    continue
+                for other in sorted(siblings):
+                    if other == pkg_name or pkg_name.startswith(other + '-'):
+                        continue
+                    if stem == other or stem.startswith(other + '-'):
+                        fail(f, f'lisp module borrows sibling package prefix {other!r}; rename under {pkg_name}-*')
+                        break
     spellings = {}
     for f in files:
         parts = PurePosixPath(f).parts
