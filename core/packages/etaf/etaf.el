@@ -2412,182 +2412,30 @@
 ;; the application write, as with `etaf-set-value'.  Existing shallow equality,
 ;; reactive tracking and event batching apply; there is no implicit deep copy.
 ;;
-;; Component: etaf-video (&key src (columns 100) (rows 30) (mode 'image) (ramp etaf-video-density-ramp) (audio etaf-video-audio) (volume etaf-video-audio-volume) (speed 1) (autoplay t) handle device-pixel-ratio display-fps position left top z-index)
-;; Render a live video source in a fixed COLUMNS by ROWS canvas.
+;; Function: etaf-host-ref-row-spans (runtime host-ref)
+;;;###autoload (autoload 'etaf-host-ref-row-spans "etaf" nil nil)
+;; Return the committed Ebox `(ROW BEG END)' row spans of HOST-REF in mounted
+;; RUNTIME, or nil when HOST-REF is absent or not laid out.
 ;;
-;; SRC is nil for the built-in demo, a local file name, an HTTP(S) URL, or a
-;; plist accepted by the video source normalizer.  A plist may name separate
-;; video and audio streams with `:audio-url' and carry `:headers' and
-;; `:proxy' for authenticated playback; `etaf-video-source-info' documents
-;; the normalized keys.  MODE is `image' (one scaled
-;; JPEG per frame, graphical frames only, falling back to `ascii' elsewhere),
-;; `ascii' (one density-ramp character per pixel) or `color' (two full-color
-;; pixels per `▀' half-block cell).  RAMP defaults to
-;; `etaf-video-density-ramp', AUDIO/VOLUME/SPEED configure playback, and
-;; AUTOPLAY starts it at mount; without AUTOPLAY the first frame is shown
-;; paused.  DEVICE-PIXEL-RATIO overrides the display's device pixel ratio for
-;; `image' frames so Retina screens stay sharp.  DISPLAY-FPS is nil (use
-;; `etaf-video-display-fps') or a positive integer presentation-rate cap.
-;; `etaf-video-render-backend' selects how a graphical frame reaches the
-;; screen: `auto' (the default) prefers the native hardware `gpu' video layer
-;; (macOS `CAOpenGLLayer', Windows Win32/WGL, Linux X11/Wayland EGL) when
-;; `libmpv' and the platform GPU surface are available in a live graphical
-;; frame (giving browser-grade low-CPU playback without recompiling Emacs),
-;; then `canvas' if the `canvas' image type and `native/etaf-video-canvas' are
-;; built, and falls back to `image'.  `gpu', `canvas' and `image' select a
-;; specific backend; missing capabilities silently keep the `image' path, so an
-;; application runs unchanged on released Emacs versions.  `ascii' and `color'
-;; modes ignore this setting.
-;; Image frames share one image across row-height slices so adjacent content
-;; and controls below the canvas retain their normal line heights.  POSITION,
-;; LEFT, TOP and Z-INDEX place the canvas; they are declared on the canvas node
-;; itself so the retained content route can prove an inline placement winner
-;; even when the canvas sits deep in an application layout.
-;; AUDIO, VOLUME and SPEED also accept refs/computed sources; the Component
-;; reads them in its playback effect, not its View. Live volume must stay
-;; within 0..100 and speed must remain positive. Their identity can stay fixed
-;; while a shared UI control updates the value without rebuilding the shell.
+;; Function: etaf-runtime-overlay-active-p (&optional runtime)
+;;;###autoload (autoload 'etaf-runtime-overlay-active-p "etaf" nil nil)
+;; Return non-nil when RUNTIME (default current mounted Runtime) has an active
+;; root surface or named root overlay.
 ;;
-;; HANDLE is a symbol registered while mounted for the `etaf-video-play'
-;; family of control functions; a video without a handle still plays itself.
+;; Hook: etaf-overlay-sync-functions
+;; Abnormal hook run with no arguments after fullscreen or floating viewport
+;; transitions so external native overlay layers (such as `etaf-media') can
+;; resynchronize without coupling into `etaf'.
 ;;
-;; Function: etaf-video-play (handle)
-;;;###autoload (autoload 'etaf-video-play "etaf" nil nil)
-;; Start or resume the mounted video identified by HANDLE.
+;; Variable: etaf-pip-frame-backend
+;; Optional child-frame host backend plist used by `etaf-pip' on graphical
+;; displays (`:acquire', `:park', `:paint-border', `:focus').  `etaf-posframe'
+;; installs its unified graphical child-frame pool here on load.
 ;;
-;; Function: etaf-video-pause (handle)
-;;;###autoload (autoload 'etaf-video-pause "etaf" nil nil)
-;; Pause the mounted video identified by HANDLE, keeping the last picture.
-;;
-;; Function: etaf-video-toggle-playback (handle)
-;;;###autoload (autoload 'etaf-video-toggle-playback "etaf" nil nil)
-;; Toggle the mounted video identified by HANDLE between play and pause.
-;;
-;; Function: etaf-video-step (handle)
-;;;###autoload (autoload 'etaf-video-step "etaf" nil nil)
-;; Pause the mounted video identified by HANDLE and present one more frame.
-;;
-;; Function: etaf-video-step-back (handle)
-;;;###autoload (autoload 'etaf-video-step-back "etaf" nil nil)
-;; Pause the mounted video identified by HANDLE and step backward one frame.
-;; On libmpv this steps backward frame-accurately; on ffmpeg it seeks back 1s.
-;;
-;; Function: etaf-video-seek (handle seconds)
-;;;###autoload (autoload 'etaf-video-seek "etaf" nil nil)
-;; Move the mounted video identified by HANDLE to SECONDS.  A playing video
-;; continues from there; a paused video presents that frame and stays paused.
-;;
-;; Function: etaf-video-set-speed (handle speed)
-;;;###autoload (autoload 'etaf-video-set-speed "etaf" nil nil)
-;; Set the playback rate of the mounted video identified by HANDLE.
-;;
-;; Function: etaf-video-set-volume (handle volume)
-;;;###autoload (autoload 'etaf-video-set-volume "etaf" nil nil)
-;; Set the audio volume of the mounted video identified by HANDLE, 0 to 100.
-;;
-;; Function: etaf-video-set-audio (handle audio)
-;;;###autoload (autoload 'etaf-video-set-audio "etaf" nil nil)
-;; Turn the audio sidecar of the mounted video identified by HANDLE on or off.
-;;
-;; Function: etaf-video-set-property (handle name value)
-;;;###autoload (autoload 'etaf-video-set-property "etaf" nil nil)
-;; Set playback engine property NAME to VALUE on mounted video HANDLE.
-;; Supported on the libmpv engine; returns nil on engines without properties.
-;;
-;; Function: etaf-video-get-property (handle name &optional type)
-;;;###autoload (autoload 'etaf-video-get-property "etaf" nil nil)
-;; Read playback engine property NAME from mounted video HANDLE.
-;; TYPE is `node' (default), `string', `bool', `int' or `float'.
-;;
-;; Function: etaf-video-command (handle &rest args)
-;;;###autoload (autoload 'etaf-video-command "etaf" nil nil)
-;; Send engine command ARGS to mounted video HANDLE (libmpv engine).
-;;
-;; Function: etaf-video-mpv-available-p ()
-;;;###autoload (autoload 'etaf-video-mpv-available-p "etaf" nil nil)
-;; Return non-nil when the cross-platform libmpv native backend is available.
-;;
-;; Function: etaf-video-gpu-available-p ()
-;;;###autoload (autoload 'etaf-video-gpu-available-p "etaf" nil nil)
-;; Return non-nil when the native hardware GPU video layer is available.
-;;
-;; Function: etaf-video-source-info (source)
-;;;###autoload (autoload 'etaf-video-source-info "etaf" nil nil)
-;; Return SOURCE's normalized playback metadata as a plist.
-;;
-;; SOURCE is nil for the built-in demo, a local file name, an HTTP(S) URL, or
-;; a plist accepted by the `etaf-video' Component.  A local file name may
-;; start with `~' or be relative to `default-directory'; it is expanded to an
-;; absolute `:file' and `:target' before the decoders run.  The result holds
-;; `:kind', `:file', `:url', `:target', `:audio-url', `:audio-target',
-;; `:headers', `:proxy', `:width', `:height', `:duration', `:fps' and
-;; `:audio'.  A source
-;; whose video and audio are separate HTTP(S) streams describes them with
-;; `:audio-url'; `:headers' (an alist, a hash table or one `Name: value'
-;; string) and `:proxy' apply to every request both decoders make.  A present
-;; `:audio-url' implies `:audio'.  Values come from ffprobe when it runs; a
-;; missing ffprobe keeps documented defaults.  The result is authoritative
-;; metadata and can be passed back as the Component's `:src' without another
-;; probe, so an application that resizes or restarts a video keeps them.
-;; Unsupported sources, unreadable files and malformed network options signal
-;; `user-error'.
-;;
-;; Function: etaf-video-state (handle)
-;;;###autoload (autoload 'etaf-video-state "etaf" nil nil)
-;; Return the mounted video identified by HANDLE as a detached plist.
-;; Keys are `:handle', `:engine', `:render-backend', `:mode', `:source',
-;; `:playing', `:position', `:duration', `:speed', `:format', `:width',
-;; `:height', `:display-fps', `:source-fps', `:received', `:presented',
-;; `:dropped', `:audio', `:buffering', `:error' and `:ended'.  A handle with
-;; no mounted video signals `user-error'.
-;;
-;; Variable: etaf-video-audio
-;; Whether new videos play their source's audio track by default.
-;; A `etaf-video' Component's `:audio' property overrides it per instance.
-;;
-;; Variable: etaf-video-audio-volume
-;; Default audio volume for new videos, from 0 to 100.
-;;
-;; Variable: etaf-video-density-ramp
-;; Characters used for one video pixel in the `ascii' render mode,
-;; from darkest to lightest; must be nonempty and single-line.
-;;
-;; Variable: etaf-video-display-fps
-;; Display timer rate in frames per second for new video playback.
-;; It caps the presented frame rate; values below 1 are raised to 1.
-;;
-;; Variable: etaf-video-render-backend
-;; Rendering backend for `etaf-video' playback: `auto' (default), `gpu',
-;; `canvas', `kitty' or `image'.
-;; `auto' prefers the native hardware `gpu' video layer when `libmpv' and the
-;; platform GPU surface are ready on a live graphical frame (macOS
-;; `CAOpenGLLayer', Windows Win32/WGL, Linux X11/Wayland EGL), then `canvas'
-;; when Emacs supports canvas images and `native/etaf-video-canvas' is built,
-;; and falls back to `image'; on compliant 24-bit text terminals `auto' uses
-;; `kitty' Unicode placeholder streaming in `image' mode.  `gpu' requests the
-;; native GPU overlay and falls back to `image' when unavailable.  `canvas'
-;; reads BGRA frames into one Emacs canvas image in place.  `kitty' requests
-;; Kitty terminal graphics on text frames.  `image' forces the pure-Emacs
-;; image frame pipeline (file-backed TIFF ring under `libmpv', JPEG under
-;; `ffmpeg').  Missing capabilities fall back cleanly.  `ascii' and `color'
-;; modes ignore this setting.
-;;
-;; Variable: etaf-video-engine
-;; Playback engine for `etaf-video': `auto' (default), `mpv' or `ffmpeg'.
-;; `auto' uses the optional cross-platform libmpv native module on graphical
-;; frames in `image' mode and falls back to `ffmpeg' otherwise.
-;;
-;; Variable: etaf-video-mpv-library
-;; Optional explicit path to the libmpv shared library (`dylib', `so' or `dll').
-;;
-;; Variable: etaf-video-ffmpeg-program
-;; Name or absolute path of the ffmpeg executable used to decode video.
-;;
-;; Variable: etaf-video-ffplay-program
-;; Name or absolute path of the ffplay executable used for audio.
-;;
-;; Variable: etaf-video-ffprobe-program
-;; Name or absolute path of the ffprobe executable used for metadata.
+;; Variable: etaf-video-driver
+;; Optional video playback driver plist registered by `etaf-media' so UI
+;; consumers such as `etaf-ui' can embed video playback without depending on
+;; `etaf-media'.
 ;;
 ;; Macro: etaf-view (form &optional _environment)
 ;;;###autoload (autoload 'etaf-view "etaf" nil nil 'macro)
@@ -2967,7 +2815,6 @@
 (require 'etaf-fullscreen)
 (require 'etaf-pip)
 (require 'etaf-process)
-(require 'etaf-video-component)
 (require 'etaf-projection)
 (require 'etaf-inspect)
 (require 'etaf-activity)

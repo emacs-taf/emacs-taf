@@ -16,6 +16,7 @@
 (require 'cl-lib)
 (require 'subr-x)
 (require 'etaf)
+(require 'etaf-media)
 (require 'etaf-ui)
 (require 'etaf-youtube-service)
 (require 'etaf-youtube-model)

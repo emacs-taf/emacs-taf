@@ -83,12 +83,27 @@ When nil, the native module searches standard system library paths.")
                   (expand-file-name "~/.cache"))))))
     (expand-file-name
      (format "etaf-video-mpv.%s" (etaf-video-mpv--module-extension))
+     (expand-file-name (concat "etaf-media/" etaf-video-mpv--native-version)
+                       cache-root))))
+
+(defun etaf-video-mpv--legacy-native-cache-path ()
+  "Return the legacy `etaf/' user-cache path for already-downloaded binaries."
+  (let ((cache-root
+         (or (and (boundp 'etaf-install-native-directory)
+                  etaf-install-native-directory)
+             (expand-file-name
+              "emacs-taf/native"
+              (or (let ((xdg (getenv "XDG_CACHE_HOME")))
+                    (and xdg (not (string-empty-p xdg)) xdg))
+                  (expand-file-name "~/.cache"))))))
+    (expand-file-name
+     (format "etaf-video-mpv.%s" (etaf-video-mpv--module-extension))
      (expand-file-name (concat "etaf/" etaf-video-mpv--native-version)
                        cache-root))))
 
 (defun etaf-video-mpv--module-path ()
   "Return the `etaf-video-mpv' dynamic module path if present in checkout or cache."
-  (let* ((root (or (let ((lib (ignore-errors (locate-library "etaf"))))
+  (let* ((root (or (let ((lib (ignore-errors (locate-library "etaf-media"))))
                      (and lib (not (string-suffix-p ".eln" lib))
                           (file-name-directory lib)))
                    (and load-file-name
@@ -99,7 +114,8 @@ When nil, the native module searches standard system library paths.")
                            (list (and root
                                       (expand-file-name
                                        (format "native/etaf-video-mpv.%s" ext) root))
-                                 (etaf-video-mpv--native-cache-path)))))
+                                 (etaf-video-mpv--native-cache-path)
+                                 (etaf-video-mpv--legacy-native-cache-path)))))
     (cl-find-if #'file-exists-p candidates)))
 
 (defun etaf-video-mpv--load-module ()

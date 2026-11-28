@@ -76,7 +76,7 @@ git clone https://github.com/emacs-taf/etaf-telega.git
 ```
 
 ```elisp
-(dolist (pkg '("ecss" "ebox" "etaf" "etaf-ui"))
+(dolist (pkg '("ecss" "ebox" "etaf" "etaf-media" "etaf-ui"))
   (add-to-list 'load-path (expand-file-name pkg "/path/to/etaf/packages")))
 (add-to-list 'load-path "/path/to/etaf-telega")
 (require 'etaf-telega)

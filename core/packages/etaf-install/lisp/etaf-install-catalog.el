@@ -58,6 +58,7 @@ When nil, uses the pinned HTTPS mirrors declared in each package's
     (etaf-posframe "Floating panel host" framework nil melpa)
     (etaf-ext "Universal extension engine and manager" framework etaf-ext-manage melpa)
     (etaf "ETAF framework" framework nil)
+    (etaf-media "Native video playback (libmpv/ffmpeg)" framework nil)
     (etaf-db "ETAF SQLite backend" framework nil sqlite)
     (ekp "Knuth-Plass paragraph layout" framework nil)
     (etaf-hints "Quick jump hints extension" extension nil melpa)

@@ -18,8 +18,7 @@
 (defvar etaf--observer-context)
 
 (declare-function etaf-runtime-observer "etaf-runtime" (runtime))
-(declare-function etaf-runtime-call-operation
-                  "etaf-runtime" (runtime kind label function))
+(declare-function etaf-runtime-call-operation "etaf-runtime" (runtime kind label function))
 
 (define-error 'etaf-action-error "Invalid ETAF Action")
 

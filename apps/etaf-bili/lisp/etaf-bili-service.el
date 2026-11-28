@@ -32,6 +32,7 @@
 (require 'url-util)
 (require 'xml)
 (require 'etaf)
+(require 'etaf-media)
 
 (define-error 'etaf-bili-error "Bilibili client error")
 

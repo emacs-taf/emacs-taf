@@ -3,15 +3,15 @@
 EMACS ?= emacs
 POSFRAME_DIR ?= $(lastword $(sort $(wildcard $(HOME)/.emacs.d/elpa/posframe-*)))
 PROVIDERS = -L ../etaf -L ../etaf-ui -L ../ebox -L ../ecss -L ../ekp
-LOAD_PATH = -L . -L tests $(PROVIDERS) $(if $(POSFRAME_DIR),-L $(POSFRAME_DIR))
-SOURCES = etaf-posframe.el examples/etaf-symbol-card.el tests/etaf-posframe-tests.el
+LOAD_PATH = -L . -L lisp -L tests $(PROVIDERS) $(if $(POSFRAME_DIR),-L $(POSFRAME_DIR))
+SOURCES = lisp/etaf-posframe-pool.el lisp/etaf-posframe-panel.el lisp/etaf-posframe-layout.el lisp/etaf-posframe-app.el lisp/etaf-posframe-modal.el etaf-posframe.el examples/etaf-symbol-card.el tests/etaf-posframe-tests.el
 
 .PHONY: all compile load test tty-test check clean structure-check setup-hooks acceptance api-check
 
 all: check
 
 compile:
-	rm -f *.elc examples/*.elc tests/*.elc
+	rm -f *.elc lisp/*.elc examples/*.elc tests/*.elc
 	$(EMACS) -Q --batch $(LOAD_PATH) \
 		--eval '(setq load-prefer-newer t byte-compile-error-on-warn t)' \
 		--eval '(require (quote cl-lib))' \
@@ -54,4 +54,4 @@ api-check:
 check: structure-check compile acceptance api-check
 
 clean:
-	rm -f *.elc examples/*.elc tests/*.elc
+	rm -f *.elc lisp/*.elc examples/*.elc tests/*.elc

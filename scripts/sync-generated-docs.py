@@ -46,6 +46,7 @@ CORE_LOAD_ORDER = (
     "ekp",
     "ebox",
     "etaf",
+    "etaf-media",
     "etaf-ui",
     "etaf-db",
     "etaf-posframe",

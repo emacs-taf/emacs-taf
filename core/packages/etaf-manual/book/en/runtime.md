@@ -348,6 +348,26 @@ Return committed semantic ancestries for HOST-REFS in RUNTIME.
 
 **See also.** [Hosts](hosts.md#host-references).
 
+#### Function: etaf-host-ref-row-spans (runtime host-ref)
+
+Return the committed Ebox `(ROW BEG END)` row spans of HOST-REF in RUNTIME.
+
+**Arguments.** RUNTIME is a mounted Runtime object. HOST-REF is a committed Host reference.
+
+**Semantics.** Looks up HOST-REF's retained Ebox node and returns its committed row-span list, or nil when HOST-REF is absent or not yet laid out. Native overlay consumers such as `etaf-media` use this to measure visible rows and occlusion without reaching into internal Runtime slots.
+
+**Returns.** A list of `(ROW BEG END)` entries, or nil.
+
+#### Function: etaf-runtime-overlay-active-p (&optional runtime)
+
+Return non-nil when RUNTIME has an active root surface or named root overlay.
+
+**Arguments.** RUNTIME defaults to the current mounted Runtime.
+
+**Semantics.** Returns `t` when RUNTIME currently hosts a modal surface or any named root overlay, and nil otherwise. Native overlays use this to hide or pause hardware surfaces while a modal or overlay covers the canvas.
+
+**Returns.** `t` or nil.
+
 #### Function: etaf-runtime-instances (x)
 
 Access slot "instances" of Runtime object X.

@@ -44,17 +44,17 @@ WORKFLOW_BADGE_RE = re.compile(
 )
 RETIRED_CORE_CLONE_RE = re.compile(
     r"git\s+clone\s+https://github\.com/emacs-taf/"
-    r"(?:ecss|ekp|ebox|etaf-ui|etaf-db|etaf-posframe|etaf-ext|etaf-gamekit|"
+    r"(?:ecss|ekp|ebox|etaf-media|etaf-ui|etaf-db|etaf-posframe|etaf-ext|etaf-gamekit|"
     r"etaf-hints|etaf-highlight|etaf-translate|etaf-export|etaf-install|etaf-manual)(?:\.git)?\b"
 )
 RETIRED_MONO_SCRIPTS_RE = re.compile(
-    r"(?<!core/)packages/(?:ecss|ekp|ebox|etaf|etaf-ui|etaf-db|etaf-posframe|etaf-ext|etaf-gamekit)/scripts/"
+    r"(?<!core/)packages/(?:ecss|ekp|ebox|etaf|etaf-media|etaf-ui|etaf-db|etaf-posframe|etaf-ext|etaf-gamekit)/scripts/"
 )
 RETIRED_MONO_BLOB_RE = re.compile(
     r"https://github\.com/emacs-taf/emacs-taf/(?:blob|tree)/main/packages/"
 )
 RETIRED_APP_LOAD_PATH_RE = re.compile(
-    r"(?:^|\s)-L\s+\.\./(?:ecss|ekp|ebox|etaf|etaf-ui|etaf-db|etaf-posframe|etaf-ext|etaf-gamekit)(?=\s|$)"
+    r"(?:^|\s)-L\s+\.\./(?:ecss|ekp|ebox|etaf|etaf-media|etaf-ui|etaf-db|etaf-posframe|etaf-ext|etaf-gamekit)(?=\s|$)"
 )
 
 

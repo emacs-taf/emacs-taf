@@ -39,7 +39,7 @@ git clone https://github.com/emacs-taf/etaf-youtube.git
 ```
 
 ```elisp
-(dolist (pkg '("ecss" "ebox" "etaf" "etaf-ui" "etaf-db"))
+(dolist (pkg '("ecss" "ebox" "etaf" "etaf-media" "etaf-ui" "etaf-db"))
   (add-to-list 'load-path (expand-file-name pkg "/path/to/etaf/packages")))
 (add-to-list 'load-path "/path/to/etaf-youtube")
 (require 'etaf-youtube)

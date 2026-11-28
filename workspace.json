@@ -142,6 +142,13 @@
       "repo": "emacs-taf/etaf-md",
       "url": "https://github.com/emacs-taf/etaf-md.git"
     },
+    "etaf-media": {
+      "path": "core/packages/etaf-media",
+      "role": "framework",
+      "projection": "etaf",
+      "url": "https://github.com/emacs-taf/etaf.git",
+      "branch": "main"
+    },
     "etaf-ncm": {
       "path": "apps/etaf-ncm",
       "role": "application",

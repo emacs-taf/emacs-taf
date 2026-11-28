@@ -4,6 +4,7 @@
     ".",
     "tests",
     "../etaf",
+    "../etaf-media",
     "../etaf-ui",
     "../ebox",
     "../ecss"
@@ -88,7 +89,7 @@
     {
       "name": "etaf-md-tests-a-document-names-its-own-dialect",
       "file": "tests/etaf-md-tests.el",
-      "purpose": "文档 front matter 里的 flavor: 行决定该文件用哪个方言解析；会话的 :flavor 参数优先，缺省用最宽的预设。"
+      "purpose": "\u6587\u6863 front matter \u91cc\u7684 flavor: \u884c\u51b3\u5b9a\u8be5\u6587\u4ef6\u7528\u54ea\u4e2a\u65b9\u8a00\u89e3\u6790\uff1b\u4f1a\u8bdd\u7684 :flavor \u53c2\u6570\u4f18\u5148\uff0c\u7f3a\u7701\u7528\u6700\u5bbd\u7684\u9884\u8bbe\u3002"
     },
     {
       "name": "etaf-md-tests-render-inline-styles-and-links",
@@ -233,7 +234,7 @@
     {
       "name": "etaf-md-tests-a-file-opened-later-is-followed",
       "file": "tests/etaf-md-tests.el",
-      "purpose": "先开预览、后打开 markdown 文件时，文件里的编辑（未保存）照样实时重画预览。"
+      "purpose": "\u5148\u5f00\u9884\u89c8\u3001\u540e\u6253\u5f00 markdown \u6587\u4ef6\u65f6\uff0c\u6587\u4ef6\u91cc\u7684\u7f16\u8f91\uff08\u672a\u4fdd\u5b58\uff09\u7167\u6837\u5b9e\u65f6\u91cd\u753b\u9884\u89c8\u3002"
     },
     {
       "name": "etaf-md-tests-one-edit-repaints-one-block",
@@ -423,17 +424,17 @@
     {
       "name": "etaf-md-tests-a-panel-carries-its-title-on-the-edge",
       "file": "tests/etaf-md-tests.el",
-      "purpose": "面板容器的标题、状态和正文都画出来，标题落在顶边那一行。"
+      "purpose": "\u9762\u677f\u5bb9\u5668\u7684\u6807\u9898\u3001\u72b6\u6001\u548c\u6b63\u6587\u90fd\u753b\u51fa\u6765\uff0c\u6807\u9898\u843d\u5728\u9876\u8fb9\u90a3\u4e00\u884c\u3002"
     },
     {
       "name": "etaf-md-tests-a-tab-panel-shows-one-page",
       "file": "tests/etaf-md-tests.el",
-      "purpose": "标签页面板画出一行标签，只显示选中那一页的正文。"
+      "purpose": "\u6807\u7b7e\u9875\u9762\u677f\u753b\u51fa\u4e00\u884c\u6807\u7b7e\uff0c\u53ea\u663e\u793a\u9009\u4e2d\u90a3\u4e00\u9875\u7684\u6b63\u6587\u3002"
     },
     {
       "name": "etaf-md-tests-a-form-lines-up-labels-and-values",
       "file": "tests/etaf-md-tests.el",
-      "purpose": "表单容器把每一行的名称与值按上下两行画出。"
+      "purpose": "\u8868\u5355\u5bb9\u5668\u628a\u6bcf\u4e00\u884c\u7684\u540d\u79f0\u4e0e\u503c\u6309\u4e0a\u4e0b\u4e24\u884c\u753b\u51fa\u3002"
     },
     {
       "name": "etaf-md-tests-a-chat-groups-its-marked-messages",
@@ -458,7 +459,7 @@
     {
       "name": "etaf-md-tests-doctor-names-each-optional-program",
       "file": "tests/etaf-md-tests.el",
-      "purpose": "`etaf-md-doctor` names every optional capability a block can use — typeset-native, ffmpeg, qrencode and git — with a remedy, so a reader whose block kept its source text learns why."
+      "purpose": "`etaf-md-doctor` names every optional capability a block can use \u2014 typeset-native, ffmpeg, qrencode and git \u2014 with a remedy, so a reader whose block kept its source text learns why."
     },
     {
       "name": "etaf-md-tests-a-mailto-link-goes-to-the-browser",
@@ -573,7 +574,7 @@
     {
       "name": "etaf-md-tests-footnote-jump-lands-on-definition-and-returns",
       "file": "tests/etaf-md-tests.el",
-      "purpose": "Activating a footnote reference jumps to the bottom definition, pushes mark, and activating the `↩' back-link returns point to the reference."
+      "purpose": "Activating a footnote reference jumps to the bottom definition, pushes mark, and activating the `\u21a9' back-link returns point to the reference."
     },
     {
       "name": "etaf-md-tests-container-state-isolated-and-survives-edits-above",

@@ -90,12 +90,12 @@ NATIVE_PACKAGES = {
             '(when (fboundp (quote etaf-md--native-shutdown)) (etaf-md--native-shutdown)))'
         ),
     },
-    "etaf": {
+    "etaf-media": {
         "module": "etaf-video-mpv",
         "version": "2",
         "description": "Cross-platform libmpv dynamic module with native GPU video layers (macOS Metal/CAOpenGL, Windows Win32/WGL, Linux X11/Wayland EGL).",
-        "min_package_version": "0.3.14",
-        "used_by": ("etaf-video-player", "etaf-bili", "etaf-youtube"),
+        "min_package_version": "0.1.0",
+        "used_by": ("etaf-video-player", "etaf-bili", "etaf-youtube", "etaf-telega", "etaf-md", "etaf-org"),
         "version_summary": "Adds Windows and Linux native GPU layers plus bundled Windows libmpv-2.dll.",
         "released": "2026-11-26T17:16:50Z",
         "platforms": ("darwin-arm64", "darwin-x86_64", "linux-x86_64", "linux-arm64", "windows-x86_64"),
@@ -495,7 +495,7 @@ def build_package(package: str, output: Path, emacs: str,
             if arch and sys.platform == "darwin":
                 cmd.append(f"ARCH={arch}")
             built = work / f"{module_name}{suffix}"
-        elif package == "etaf":
+        elif package == "etaf-media":
             script = work / "build-video-mpv-module.sh"
             if arch and sys.platform == "darwin":
                 env["ARCH"] = arch
@@ -628,7 +628,12 @@ def register_library(package: str, plat: str, name: str, module: str,
 def _index_artifact_from_record(rec: dict) -> dict:
     """Build one validated hosted index artifact entry from a build/staging record."""
     pkg = rec["package"]
-    spec = NATIVE_PACKAGES.get(pkg) or {}
+    spec = NATIVE_PACKAGES.get(pkg) or next(
+        (s for s in NATIVE_PACKAGES.values()
+         if rec["module"] == s.get("module")
+         or rec["module"] in (s.get("libraries") or {})),
+        {},
+    )
     is_lib = rec.get("role") == "library" or rec.get("kind") == "library"
     if not is_lib and spec and rec["module"] != spec.get("module") and rec["module"] in (spec.get("libraries") or {}):
         is_lib = True

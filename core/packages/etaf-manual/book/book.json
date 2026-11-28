@@ -12,6 +12,7 @@
     "ekp",
     "ebox",
     "etaf",
+    "etaf-media",
     "etaf-ui",
     "etaf-db",
     "etaf-posframe"
@@ -30,6 +31,7 @@
     "ecss",
     "ekp",
     "etaf",
+    "etaf-media",
     "etaf-posframe"
   ],
   "parts": [

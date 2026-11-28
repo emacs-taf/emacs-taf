@@ -15,8 +15,28 @@
 ;; Source dimensions are probed only when native images are available.
 (declare-function image-size "image.c" (spec &optional pixels frame))
 
-(defvar etaf-video-ffplay-program)
-(defvar etaf-video-audio-volume)
+(defun etaf-ui--media-video-driver (&optional ensure)
+  "Return the registered `etaf-video-driver' plist, loading `etaf-media' if ENSURE."
+  (when (and ensure (null etaf-video-driver) (locate-library "etaf-media"))
+    (ignore-errors (load "etaf-media" t t)))
+  etaf-video-driver)
+
+(defun etaf-ui--media-ffplay-program ()
+  "Return the configured ffplay executable name."
+  (let ((fn (plist-get (etaf-ui--media-video-driver) :ffplay-program)))
+    (or (and (functionp fn) (ignore-errors (funcall fn)))
+        "ffplay")))
+
+(defun etaf-ui--media-audio-default ()
+  "Return whether media playback defaults to audio enabled."
+  (let ((fn (plist-get (etaf-ui--media-video-driver) :audio-default)))
+    (if (functionp fn) (and (ignore-errors (funcall fn)) t) t)))
+
+(defun etaf-ui--media-volume-default ()
+  "Return the default media playback volume (0..100)."
+  (let ((fn (plist-get (etaf-ui--media-video-driver) :volume-default)))
+    (or (and (functionp fn) (ignore-errors (funcall fn)))
+        100)))
 
 (defconst etaf-ui--media-colors
   '(:scrim "#0E1116" :fg "#E8ECF1" :muted "#8E99A8" :control "#C9D1DB"
@@ -44,7 +64,7 @@
   "Start an ffplay process for audio SRC at POSITION, SPEED and VOLUME.
 ON-EXIT receives the process when it stops.  Return the process, or nil
 when ffplay is unavailable or the process cannot start."
-  (when-let* ((program (executable-find etaf-video-ffplay-program)))
+  (when-let* ((program (executable-find (etaf-ui--media-ffplay-program))))
     (let ((buffer (generate-new-buffer " *etaf-ui audio*")))
       (condition-case nil
           (make-process
@@ -79,7 +99,9 @@ when ffplay is unavailable or the process cannot start."
              (image-size (if (stringp src) (create-image src) src) t))))
         ('video
          (ignore-errors
-           (let ((info (etaf-video-source-info src)))
+           (when-let* ((drv (etaf-ui--media-video-driver t))
+                       (fn (plist-get drv :source-info))
+                       (info (funcall fn src)))
              (when (and (numberp (plist-get info :width))
                         (numberp (plist-get info :height)))
                (cons (plist-get info :width) (plist-get info :height)))))))
@@ -141,9 +163,9 @@ Keep the aspect ratio; enlarge beyond the natural size only when UPSCALE."
    (position (etaf-ref 0 :name "media-position"))
    (total-time (etaf-ref 0 :name "media-duration"))
    (speed (etaf-ref 1 :name "media-speed"))
-   (audio-ref (etaf-ref (if (eq audio :default) etaf-video-audio (and audio t))
+   (audio-ref (etaf-ref (if (eq audio :default) (etaf-ui--media-audio-default) (and audio t))
                         :name "media-audio"))
-   (volume-ref (etaf-ref (max 0 (min 100 (round (or volume etaf-video-audio-volume))))
+   (volume-ref (etaf-ref (max 0 (min 100 (round (or volume (etaf-ui--media-volume-default)))))
                          :name "media-volume"))
    (ended-seen nil)
    (ended-src nil)
@@ -220,7 +242,8 @@ Keep the aspect ratio; enlarge beyond the natural size only when UPSCALE."
              (let ((cur-src (etaf-value src-input)))
                (unless (equal cur-src ended-src)
                  (setq ended-src cur-src ended-seen nil)))
-             (when-let* ((state (ignore-errors (etaf-video-state handle))))
+             (when-let* ((state-fn (plist-get (etaf-ui--media-video-driver) :state))
+                         (state (ignore-errors (funcall state-fn handle))))
                (etaf-set-value playing (and (plist-get state :playing) t))
                (etaf-set-value position (or (plist-get state :position) 0))
                (etaf-set-value total-time (or (plist-get state :duration) 0))
@@ -243,7 +266,8 @@ Keep the aspect ratio; enlarge beyond the natural size only when UPSCALE."
                       (ignore-errors (continue-process audio-process))
                       (etaf-set-value playing t))
                      (t (funcall audio-start (etaf-value position)))))
-              (t (funcall control #'etaf-video-toggle-playback)))
+              (t (when-let* ((fn (plist-get (etaf-ui--media-video-driver t) :toggle)))
+                   (funcall control fn))))
              (funcall poll)))
    (seek-to-seconds (lambda (seconds)
                       (let ((target (max 0 (if (> (funcall duration-value) 0)
@@ -256,7 +280,8 @@ Keep the aspect ratio; enlarge beyond the natural size only when UPSCALE."
                               (etaf-set-value position target)
                               (if was-playing (funcall audio-start target)
                                 (etaf-set-value playing nil)))
-                          (funcall control #'etaf-video-seek target)
+                          (when-let* ((fn (plist-get (etaf-ui--media-video-driver t) :seek)))
+                            (funcall control fn target))
                           (etaf-set-value position target)))))
    (seek-by (lambda (delta)
               (funcall seek-to-seconds (+ (etaf-value position) delta))))
@@ -447,11 +472,19 @@ Keep the aspect ratio; enlarge beyond the natural size only when UPSCALE."
              (list
               (cond
                (video
-                (etaf-node 'etaf-video
-                           (list :src src :columns (car grid) :rows (cdr grid)
-                                 :handle handle :autoplay autoplay
-                                 :audio audio-ref :volume volume-ref :speed speed)
-                           nil))
+                (let ((comp (plist-get (etaf-ui--media-video-driver t) :component)))
+                  (if comp
+                      (etaf-node comp
+                                 (list :src src :columns (car grid) :rows (cdr grid)
+                                       :handle handle :autoplay autoplay
+                                       :audio audio-ref :volume volume-ref :speed speed)
+                                 nil)
+                    (etaf-node 'flex
+                               (list :justify-content 'center :align-items 'center
+                                     :width 'stretch :height (list 'lh stage-rows)
+                                     :background-color (etaf-ui--media-color :track))
+                               (list (etaf-node 'text (list :color muted)
+                                                (list "Video playback requires `etaf-media'.")))))))
                ((eq kind 'audio)
                 (etaf-node 'flex (list :flex-direction 'column :justify-content 'center
                                        :align-items 'center :width 'stretch

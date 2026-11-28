@@ -388,6 +388,24 @@ View 只绘制它画出的单元格。窗口其余部分（例如短 View 下面
 
 **返回。** ID 存活时返回 `t`，否则返回 nil。
 
+#### Variable: etaf-pip-frame-backend
+
+图形环境下供 `etaf-pip-open` 使用的可选子 frame 宿主后端 plist。
+
+**语义。** 非 nil 时，`:acquire`、`:park`、`:paint-border` 与 `:focus` 回调会把图形子 frame 复用池、发丝边框与 macOS 安全焦点恢复委托给共享浮动宿主。加载 `etaf-posframe` 时会自动把其统一子 frame 池注册到此处，使面板、模态框与画中画共用同一套复用池；为 nil 时 `etaf-pip-open` 退回独立子 frame。
+
+#### Hook: etaf-overlay-sync-functions
+
+全屏或悬浮视口几何变化完成后零参运行的钩子。
+
+**语义。** `etaf-media` 的硬件 GPU 视频层等外部原生浮层后端把同步回调注册到这里，让 `etaf-fullscreen-enter` 与 `etaf-pip-open` 与媒体包彻底解耦。单个回调的错误会被隔离。
+
+#### Variable: etaf-video-driver
+
+由 `etaf-media` 注册的可选视频播放驱动 plist。
+
+**语义。** 保存 `etaf-media` 加载时安装的 `:component`、`:source-info`、`:state`、`:toggle`、`:seek`、`:audio-default`、`:volume-default` 与 `:ffplay-program` 回调。`etaf-ui` 中的 `etaf-media-viewer` 等组件通过该驱动接入视频播放，从而避免非媒体应用依赖 `etaf-media`。
+
 ## 两档全屏管理
 
 <!-- index: etaf-fullscreen-mode; etaf-fullscreen-enter; etaf-fullscreen-exit; etaf-fullscreen-toggle; 全屏 -->

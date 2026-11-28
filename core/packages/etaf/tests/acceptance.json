@@ -664,111 +664,6 @@
       "purpose": "Disposed scopes cannot acquire unreachable cleanup during a still-active call."
     },
     {
-      "name": "etaf-video-tests-renders-ascii-ramp-frames",
-      "file": "tests/etaf-video-tests.el",
-      "purpose": "Every canvas pixel is the ramp character of its grayscale byte, and the producer receives the documented gray scale and read rate."
-    },
-    {
-      "name": "etaf-video-tests-renders-color-half-blocks",
-      "file": "tests/etaf-video-tests.el",
-      "purpose": "Color mode maps two full-color pixels into one half-block cell with the fixture's foreground and background colors at double-height RGB24."
-    },
-    {
-      "name": "etaf-video-tests-image-canvas-uses-one-line-per-row",
-      "file": "tests/etaf-video-tests.el",
-      "purpose": "An image-mode canvas publishes one display slice per declared row, so chrome placed under the canvas stays inside the window instead of being pushed off by one tall image line."
-    },
-    {
-      "name": "etaf-video-tests-live-control-sources-survive-resize",
-      "file": "tests/etaf-video-tests.el",
-      "purpose": "Shared reactive volume, sound and speed sources retune a playing canvas and survive a size rebuild with its presentation-rate setting."
-    },
-    {
-      "name": "etaf-video-tests-image-mode-falls-back-on-terminal",
-      "file": "tests/etaf-video-tests.el",
-      "purpose": "Image mode renders ASCII when the buffer is not in a graphical frame and reports the effective mode and grayscale format."
-    },
-    {
-      "name": "etaf-video-tests-controls-pause-step-seek-speed",
-      "file": "tests/etaf-video-tests.el",
-      "purpose": "Pause freezes the position, step presents one more frame, a paused seek presents its target frame, and seek, playback and speed restart the producer with the documented arguments."
-    },
-    {
-      "name": "etaf-video-tests-finishes-and-restarts",
-      "file": "tests/etaf-video-tests.el",
-      "purpose": "A producer that runs out of frames ends the video, keeps its last picture, and plays again from the start."
-    },
-    {
-      "name": "etaf-video-tests-audio-sidecar-follows-playback",
-      "file": "tests/etaf-video-tests.el",
-      "purpose": "An audio source starts one ffplay sidecar with the documented arguments while playing and releases it on pause."
-    },
-    {
-      "name": "etaf-video-tests-streams-http-url",
-      "file": "tests/etaf-video-tests.el",
-      "purpose": "An HTTP URL reaches ffmpeg with reconnect options and presents a paused first frame while a non-HTTP scheme is rejected."
-    },
-    {
-      "name": "etaf-video-tests-normalizes-separate-audio-stream",
-      "file": "tests/etaf-video-tests.el",
-      "purpose": "A split audio stream keeps its URL as the audio target, a present audio URL implies audio, and ffprobe receives the source headers and proxy without probing the audio URL."
-    },
-    {
-      "name": "etaf-video-tests-streams-separate-audio-with-network-options",
-      "file": "tests/etaf-video-tests.el",
-      "purpose": "A split HTTP(S) source sends video to ffmpeg and audio to ffplay, both with the same User-Agent, headers and proxy, while the producer never opens the audio URL."
-    },
-    {
-      "name": "etaf-video-tests-restarts-on-input-change",
-      "file": "tests/etaf-video-tests.el",
-      "purpose": "A canvas size change republishes the canvas and rebuilds the session with the new scale at the same paused position."
-    },
-    {
-      "name": "etaf-video-tests-ended-video-redraws-at-new-size",
-      "file": "tests/etaf-video-tests.el",
-      "purpose": "Resizing an ended video presents its last frame at the new canvas size instead of keeping the old picture."
-    },
-    {
-      "name": "etaf-video-tests-unmount-releases-runtime-and-handle",
-      "file": "tests/etaf-video-tests.el",
-      "purpose": "Unmounting stops producer processes and makes the released handle unaddressable."
-    },
-    {
-      "name": "etaf-video-tests-expands-local-file-names",
-      "file": "tests/etaf-video-tests.el",
-      "purpose": "A local source named with ~ or relative to the default directory reaches ffprobe as an absolute file name."
-    },
-    {
-      "name": "etaf-video-tests-normalized-source-skips-second-probe",
-      "file": "tests/etaf-video-tests.el",
-      "purpose": "A metadata plist from etaf-video-source-info mounts with its values and without another ffprobe call."
-    },
-    {
-      "name": "etaf-video-tests-embeds-in-a-layout-and-drives-by-interaction",
-      "file": "tests/etaf-video-tests.el",
-      "purpose": "A video sits in a layout as one fixed box next to ordinary siblings, and the consumer's on-press gesture toggles playback through the handle."
-    },
-    {
-      "name": "etaf-video-tests-rejects-invalid-inputs",
-      "file": "tests/etaf-video-tests.el",
-      "purpose": "Invalid render props report a Component call error and unknown handles report a user error."
-    },
-    {
-      "name": "etaf-video-tests-seek-and-speed-stop-playing-audio",
-      "file": "tests/etaf-video-tests.el",
-      "purpose": "Seeking or changing speed while playing immediately stops the old ffplay sidecar before starting the new aligned audio stream."
-    },
-    {
-      "name": "etaf-video-tests-normalized-source-honors-start-offset",
-      "file": "tests/etaf-video-tests.el",
-      "purpose": "A pre-normalized source plist with :start starts ffmpeg directly at that offset without calling ffprobe."
-    },
-    {
-      "name": "etaf-video-tests-engine-controls-and-mpv-backend",
-      "file": "tests/etaf-video-tests.el",
-      "purpose": "Public engine controls degrade cleanly on ffmpeg and drive real libmpv properties and backward stepping when available."
-    },
-    {
       "name": "etaf-view-mounts-static-and-expression-text",
       "file": "tests/etaf-view-tests.el",
       "purpose": "A mounted View paints static text and updates an expression in place."
@@ -1344,26 +1239,6 @@
       "purpose": "`etaf-runtime-inspect-focus' reports focused Host identity, Tab stop order, declared regions and effective key help data."
     },
     {
-      "name": "etaf-video-tests-master-clock-holds-video-until-audio-ready",
-      "file": "tests/etaf-video-tests.el",
-      "purpose": "The ffmpeg video backend shows Frame 0 immediately, holds while ffplay reports nan during startup, and locks frame presentation to ffplay's live audio clock."
-    },
-    {
-      "name": "etaf-video-tests-mpv-loads-split-audio-url-and-headers",
-      "file": "tests/etaf-video-tests.el",
-      "purpose": "When libmpv is available, split HTTP video and audio URLs load both tracks without delimiter splitting and forward custom headers containing commas to both requests."
-    },
-    {
-      "name": "etaf-video-tests-mpv-async-tiff-file-ring-and-cleanup",
-      "file": "tests/etaf-video-tests.el",
-      "purpose": "When libmpv is available in graphical image mode, frames render into a file-backed TIFF ring honoring display-fps and remove all temporary ring files on unmount."
-    },
-    {
-      "name": "etaf-video-tests-render-backend-and-gpu-probe",
-      "file": "tests/etaf-video-tests.el",
-      "purpose": "`etaf-video-state' reports `:render-backend' and `etaf-video-gpu-available-p' probes safely without signaling."
-    },
-    {
       "name": "etaf-pip-lifecycle-presets-corners-and-reactive-bounds",
       "file": "tests/etaf-pip-tests.el",
       "purpose": "`etaf-pip-open' mounts a reactive PiP host, cycles S/M/L presets and corners, refreshes header chrome and cleans up cleanly on close."
@@ -1412,11 +1287,6 @@
       "name": "etaf-image-test-kitty-adapter-accepted-and-degrades-in-batch",
       "file": "tests/etaf-image-tests.el",
       "purpose": "The ETAF `image' Host accepts `:adapter kitty' and degrades to a placeholder when Kitty terminal graphics are unavailable."
-    },
-    {
-      "name": "etaf-video-kitty-backend-falls-back-cleanly-in-batch",
-      "file": "tests/etaf-video-tests.el",
-      "purpose": "Requesting the `kitty' video render backend falls back cleanly to `image'/`ascii' in batch sessions without a Kitty terminal."
     },
     {
       "name": "etaf-app-registry-defines-filters-validates-and-launches",

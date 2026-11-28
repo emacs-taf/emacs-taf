@@ -78,11 +78,13 @@ Every documented variable, grouped by the chapter that defines it. Each row link
 | [`etaf-video-ffmpeg-program`](native-video.md#variable-etaf-video-ffmpeg-program) | Name or absolute path of the ffmpeg executable used to decode video. |
 | [`etaf-video-ffplay-program`](native-video.md#variable-etaf-video-ffplay-program) | Name or absolute path of the ffplay executable used for audio. |
 | [`etaf-video-ffprobe-program`](native-video.md#variable-etaf-video-ffprobe-program) | Name or absolute path of the ffprobe executable used for metadata. |
+| [`etaf-video-driver`](applications.md#variable-etaf-video-driver) | Optional video playback driver plist registered by `etaf-media` for decoupled UI consumers. |
 
 ## Overlays
 
 | Variable | Purpose |
 | --- | --- |
+| [`etaf-pip-frame-backend`](applications.md#variable-etaf-pip-frame-backend) | Optional graphical child-frame host backend plist used by `etaf-pip-open`; `etaf-posframe` installs its unified pool automatically. |
 | [`etaf-ui-modal-host-function`](ui-overlays.md#variable-etaf-ui-modal-host-function) | Optional child-frame modal host callback for centered `etaf-dialog` modals; `etaf-posframe` installs it automatically. |
 | [`etaf-ui-modal-use-child-frame`](ui-overlays.md#variable-etaf-ui-modal-use-child-frame) | Whether centered `etaf-dialog` modals project into a floating child frame on graphical displays; default nil (in-buffer rendering). |
 

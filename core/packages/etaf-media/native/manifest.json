@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "package": "etaf",
+  "package": "etaf-media",
   "modules": [
     {
       "name": "etaf-video-mpv",

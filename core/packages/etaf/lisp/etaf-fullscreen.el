@@ -23,9 +23,9 @@
 (require 'cl-lib)
 (require 'etaf-reactive)
 (require 'etaf-runtime)
+(require 'etaf-viewport)
 
 (declare-function etaf-app--fit "etaf-app" (buffer window))
-(declare-function etaf-video--sync-all-gpu-instances "etaf-video-component" ())
 
 (cl-defstruct (etaf-fullscreen--state (:constructor etaf-fullscreen--state--make))
   "Buffer-local fullscreen ownership state."
@@ -81,9 +81,8 @@ unchanged viewport, avoiding spurious layout churn on settled timers."
           (setq changed (not (equal before after)))
           (when (and (or force-fit changed) (fboundp 'etaf-app--fit))
             (ignore-errors (etaf-app--fit buffer win)))))
-      (when (and (or force-fit changed)
-                 (fboundp 'etaf-video--sync-all-gpu-instances))
-        (ignore-errors (etaf-video--sync-all-gpu-instances))))))
+      (when (or force-fit changed)
+        (etaf--sync-overlays)))))
 
 (defun etaf-fullscreen--commit (buffer state target prev &optional frame-transition)
   "Atomically commit fullscreen mode TARGET (from PREV) for BUFFER and STATE.
@@ -102,8 +101,7 @@ final post-mode-line row count with zero intermediate 1-row bounce."
         (etaf-fullscreen--notify state target))
       (when (and mounted (fboundp 'etaf-app--fit))
         (ignore-errors (etaf-app--fit buffer win)))))
-  (when (fboundp 'etaf-video--sync-all-gpu-instances)
-    (ignore-errors (etaf-video--sync-all-gpu-instances)))
+  (etaf--sync-overlays)
   (unless noninteractive
     ;; Delayed safety passes are no-ops once viewport settles; they only run
     ;; app fit when a custom mode-line or animated OS fullscreen changes size.

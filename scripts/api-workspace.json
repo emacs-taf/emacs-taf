@@ -39,6 +39,10 @@
     "entry": "etaf-manual",
     "url": "https://github.com/emacs-taf/etaf-manual.git"
   },
+  "etaf-media": {
+    "entry": "etaf-media",
+    "url": "https://github.com/emacs-taf/etaf.git"
+  },
   "etaf-playground": {
     "entry": "etaf-playground",
     "url": "https://github.com/emacs-taf/etaf-playground.git"

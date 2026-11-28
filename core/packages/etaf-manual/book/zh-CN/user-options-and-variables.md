@@ -78,11 +78,13 @@
 | [`etaf-video-ffmpeg-program`](native-video.md#variable-etaf-video-ffmpeg-program) | 用于解码视频的 ffmpeg 可执行文件的名字或绝对路径。 |
 | [`etaf-video-ffplay-program`](native-video.md#variable-etaf-video-ffplay-program) | 用于音频的 ffplay 可执行文件的名字或绝对路径。 |
 | [`etaf-video-ffprobe-program`](native-video.md#variable-etaf-video-ffprobe-program) | 用于元数据的 ffprobe 可执行文件的名字或绝对路径。 |
+| [`etaf-video-driver`](applications.md#variable-etaf-video-driver) | 由 `etaf-media` 注册的可选视频播放驱动 plist，供 `etaf-ui` 等解耦消费者读取。 |
 
 ## 浮层
 
 | 变量 | 用途 |
 | --- | --- |
+| [`etaf-pip-frame-backend`](applications.md#variable-etaf-pip-frame-backend) | 供 `etaf-pip-open` 使用的可选子 frame 宿主后端 plist；加载 `etaf-posframe` 时自动安装统一池。 |
 | [`etaf-ui-modal-host-function`](ui-overlays.md#variable-etaf-ui-modal-host-function) | 可选的居中模态子 frame 宿主回调；加载 `etaf-posframe` 时自动安装。 |
 | [`etaf-ui-modal-use-child-frame`](ui-overlays.md#variable-etaf-ui-modal-use-child-frame) | 图形显示下居中的 `etaf-dialog` 是否投射到真实浮动子 frame；默认 nil（buffer 内渲染）。 |
 

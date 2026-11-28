@@ -61,14 +61,21 @@ ETAF has the largest module set. Its core is the authoring model; the Runtime is
 | `lisp/etaf-behavior.el` | Reusable Behavior bundles of semantic attributes and setup | `lisp/etaf-reactive.el` |
 | `lisp/etaf-controlled-behavior.el` | Controlled Behavior variants for application-owned geometry | `lisp/etaf-behavior.el` |
 | `lisp/etaf-observer.el` | The observation port scoped to one dynamic operation | — |
-| `lisp/etaf-runtime.el` | Mounting, the retained segment tree, commits and Host maps | `lisp/etaf-view.el`, `lisp/etaf-component.el`, `lisp/etaf-reactive.el`, `lisp/etaf-behavior.el`, `lisp/etaf-context.el`, `lisp/etaf-observer.el`, Ebox |
-| `lisp/etaf-app.el` | Application buffers: canvas, theme face, fitting and single close | `lisp/etaf-runtime.el`, `lisp/etaf-reactive.el`, Ebox |
+| `lisp/etaf-txn.el` | Retained Runtime records, dynamic evaluation state and rollback transactions | `lisp/etaf-view.el`, `lisp/etaf-component.el`, `lisp/etaf-reactive.el`, `lisp/etaf-context.el`, `lisp/etaf-observer.el`, `lisp/etaf-behavior.el`, Ebox |
+| `lisp/etaf-host-bridge.el` | Host property resolution, Theme/style application, Ebox node bridge and Host queries | `lisp/etaf-txn.el`, Ebox |
+| `lisp/etaf-reconcile.el` | Segment tree building, branch and keyed-list patching, slots, Components and disposal | `lisp/etaf-txn.el`, `lisp/etaf-host-bridge.el` |
+| `lisp/etaf-presentation.el` | Host presentations, tree inspection, Runtime metadata and named root overlays | `lisp/etaf-txn.el`, `lisp/etaf-host-bridge.el`, `lisp/etaf-reconcile.el` |
+| `lisp/etaf-runtime.el` | Root mounting, commit lifecycle, Runtime lookup, sticky Hosts, observation and viewport refit | `lisp/etaf-txn.el`, `lisp/etaf-host-bridge.el`, `lisp/etaf-reconcile.el`, `lisp/etaf-presentation.el` |
+| `lisp/etaf-error-boundary.el` | Declarative `etaf-error-boundary` isolation, error capture and reset recovery | `lisp/etaf-runtime.el`, `lisp/etaf-component.el`, `lisp/etaf-reactive.el` |
+| `lisp/etaf-app.el` | Application buffers: canvas, theme face, fitting, registry and single close | `lisp/etaf-runtime.el`, `lisp/etaf-reactive.el`, Ebox |
+| `lisp/etaf-fullscreen.el` | Two-tier window and OS frame fullscreen lifecycle | `lisp/etaf-runtime.el`, `lisp/etaf-viewport.el`, `lisp/etaf-reactive.el` |
+| `lisp/etaf-pip.el` | Floating Picture-in-Picture child-frame host and drag-resize | `lisp/etaf-runtime.el`, `lisp/etaf-viewport.el`, `lisp/etaf-reactive.el`, Ebox |
 | `lisp/etaf-activity.el` | Cross-application live activities and notifications | `lisp/etaf-reactive.el`, `lisp/etaf-runtime.el` |
 | `lisp/etaf-events.el` | Runtime event entry points into Host callbacks | `lisp/etaf-runtime.el`, `lisp/etaf-reactive.el`, Ebox |
 | `lisp/etaf-actions.el` | Named Actions and their dispatch | `lisp/etaf-runtime.el`, `lisp/etaf-reactive.el` |
 | `lisp/etaf-keys.el` | Host key tables, help and hint keys | `lisp/etaf-runtime.el`, `lisp/etaf-events.el`, `lisp/etaf-regions.el`, `lisp/etaf-reactive.el`, Ebox |
 | `lisp/etaf-regions.el` | Region declarations and region navigation | `lisp/etaf-runtime.el`, `lisp/etaf-events.el`, Ebox |
-| `lisp/etaf-viewport.el` | Nested viewport regions and settled refit | `lisp/etaf-runtime.el`, `lisp/etaf-component.el`, `lisp/etaf-events.el` |
+| `lisp/etaf-viewport.el` | Nested viewport regions, overlay sync hook and video driver extension point | `lisp/etaf-runtime.el`, `lisp/etaf-component.el`, `lisp/etaf-events.el` |
 | `lisp/etaf-async.el` | The asynchronous operation shared by Resource and Data | `lisp/etaf-reactive.el` |
 | `lisp/etaf-process.el` | Run-to-completion subprocesses for command-line backends | — |
 | `lisp/etaf-resource.el` | Loaded resource values and their cleanup | `lisp/etaf-async.el`, `lisp/etaf-observer.el`, `lisp/etaf-reactive.el` |
@@ -76,13 +83,27 @@ ETAF has the largest module set. Its core is the authoring model; the Runtime is
 | `lisp/etaf-list-cache.el` | The stale-while-revalidate list cache | — |
 | `lisp/etaf-animation.el` | Time-driven refs for transitions and animations | `lisp/etaf-reactive.el` |
 | `lisp/etaf-performance.el` | The optional performance recorder | `lisp/etaf-runtime.el` |
-| `lisp/etaf-video-source.el` | Video source normalization, probing and frame filtering | — |
-| `lisp/etaf-video-audio.el` | The audio sidecar of a playback session | `lisp/etaf-video-source.el` |
-| `lisp/etaf-video-mpv.el` | Optional cross-platform libmpv playback backend | `lisp/etaf-video-source.el` |
-| `lisp/etaf-video-session.el` | The playback session: frame producer, sidecar and timer | `lisp/etaf-video-source.el`, `lisp/etaf-video-audio.el` |
-| `lisp/etaf-video-component.el` | The `etaf-video` Component | `lisp/etaf-video-source.el`, `lisp/etaf-video-session.el`, `lisp/etaf-video-audio.el`, `lisp/etaf-video-mpv.el`, `lisp/etaf-component.el`, `lisp/etaf-reactive.el`, `lisp/etaf-runtime.el` |
 
-The Runtime is required by every capability module and requires none of them, which is what makes Actions, keys, regions, viewport regions and the performance recorder optional layers rather than parts of the core. The video modules form their own small stack: source, audio sidecar, session and finally the Component. The entry loads all of them, so requiring `etaf` loads the whole framework.
+The Runtime is split into five focused modules (`lisp/etaf-txn.el`, `lisp/etaf-host-bridge.el`, `lisp/etaf-reconcile.el`, `lisp/etaf-presentation.el`, `lisp/etaf-runtime.el`) and required by every capability module while requiring none of them, keeping Actions, keys, regions, viewport regions and the performance recorder cleanly layered above the core.
+
+## The `etaf-media` and `etaf-posframe` modules
+
+<!-- index: etaf-media; etaf-posframe; etaf-video-component.el; etaf-posframe-pool.el -->
+
+Native video playback lives in `etaf-media`, keeping multimedia subprocesses and native C/Objective-C modules out of `etaf`. Floating panels and the shared child-frame reuse pool live in `etaf-posframe`.
+
+| Module | Responsibility | Depends on |
+| --- | --- | --- |
+| `etaf-media/lisp/etaf-video-source.el` | Video source normalization, probing and frame filtering | — |
+| `etaf-media/lisp/etaf-video-audio.el` | The audio sidecar of a playback session | `etaf-video-source.el` |
+| `etaf-media/lisp/etaf-video-mpv.el` | Optional cross-platform `libmpv` playback backend and native module loader | `etaf-video-source.el` |
+| `etaf-media/lisp/etaf-video-session.el` | The playback session: frame producer, sidecar and timer | `etaf-video-source.el`, `etaf-video-audio.el`, `etaf-video-mpv.el` |
+| `etaf-media/lisp/etaf-video-component.el` | The `etaf-video` Component, handle registry and ETAF hook registration | `etaf-video-source.el`, `etaf-video-session.el`, `etaf-video-audio.el`, `etaf-video-mpv.el`, ETAF, Ebox |
+| `etaf-posframe/lisp/etaf-posframe-pool.el` | Shared graphical child-frame reuse pool (serving both panels and `etaf-pip-open`), Theme derivation and options | ETAF, ETAF UI, Posframe |
+| `etaf-posframe/lisp/etaf-posframe-panel.el` | Panel rendering, borders, hover/focus tracking and lifecycle | `etaf-posframe-pool.el` |
+| `etaf-posframe/lisp/etaf-posframe-layout.el` | Live resize, anchor/offset placement, stacking and dragging | `etaf-posframe-pool.el`, `etaf-posframe-panel.el` |
+| `etaf-posframe/lisp/etaf-posframe-app.el` | Key forwarding, focus cycling and floating application registry | `etaf-posframe-layout.el` |
+| `etaf-posframe/lisp/etaf-posframe-modal.el` | Centered child-frame modal host registered into `etaf-ui-modal-host-function` | `etaf-posframe-app.el` |
 
 ## The EKP modules
 

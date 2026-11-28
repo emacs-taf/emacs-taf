@@ -13,7 +13,7 @@
 **Emacs TAF（ETAF）** 是面向 Emacs 的声明式文本应用框架，提供 CSS 风格选择器与层叠、盒模型 / Flex / Grid 布局、响应式组件与增量 buffer 渲染能力。
 
 <!-- BEGIN:GENERATED:root-overview-zh -->
-本仓库（`https://github.com/emacs-taf/emacs-taf`）是 **Emacs TAF 官方 Monorepo**，也是整个生态全部 36 个包统一的源码、Pull Request 与 CI 入口。各包按产品边界分为三层：`core/packages/`（15 个核心框架、通用扩展、安装器与参考手册包及 1 个孵化包，整目录自动投影到 [emacs-taf/etaf](https://github.com/emacs-taf/etaf)）、`apps/`（16 个应用及 1 个孵化应用）与 `games/`（2 款游戏及 1 款孵化游戏），已对外发布的应用与游戏各自自动投影到 `https://github.com/emacs-taf/<包名>`。
+本仓库（`https://github.com/emacs-taf/emacs-taf`）是 **Emacs TAF 官方 Monorepo**，也是整个生态全部 37 个包统一的源码、Pull Request 与 CI 入口。各包按产品边界分为三层：`core/packages/`（16 个核心框架、通用扩展、安装器与参考手册包及 1 个孵化包，整目录自动投影到 [emacs-taf/etaf](https://github.com/emacs-taf/etaf)）、`apps/`（16 个应用及 1 个孵化应用）与 `games/`（2 款游戏及 1 款孵化游戏），已对外发布的应用与游戏各自自动投影到 `https://github.com/emacs-taf/<包名>`。
 <!-- END:GENERATED:root-overview-zh -->
 
 ![Emacs 中的 ETAF 应用界面](https://etaf.top/media/site/shots/etaf-ncm.webp)
@@ -58,13 +58,14 @@
 | [ekp](core/packages/ekp) | Knuth–Plass 段落排版 | 无 |
 | [ebox](core/packages/ebox) | Box 布局、渲染与增量发布 | ecss；可选 ekp |
 | [etaf](core/packages/etaf) | 组件、响应式状态与应用运行时 | ebox、ecss |
+| [etaf-media](core/packages/etaf-media) | 原生视频播放引擎（libmpv / GPU 硬件层、ffmpeg、Kitty / 图像 / ASCII）与 `etaf-video` 组件 | etaf、ebox |
 | [etaf-ui](core/packages/etaf-ui) | 通用 UI 组件库与主题 token | etaf |
 | [etaf-gamekit](core/packages/etaf-gamekit) | 游戏定义、独立实例、动作与后端适配器 | etaf、etaf-ui |
 | [etaf-posframe](core/packages/etaf-posframe) | 任意 ETAF View 的浮动子框面板 | etaf、etaf-ui |
 | [etaf-ext](core/packages/etaf-ext) | 通用扩展引擎、生命周期管理与宿主钩子 | etaf、etaf-ui、etaf-posframe |
 | [etaf-db](core/packages/etaf-db) | ETAF 数据库后端（目前支持 SQLite） | etaf |
 | [etaf-install](core/packages/etaf-install) | 官方 `package.el` 安装入口、能力诊断、预编译原生模块下载与包管理界面 | 无 |
-| [etaf-manual](core/packages/etaf-manual) | 核心包中英双语《ETAF 参考手册》，对照公共接口校验并发布于 <https://etaf.top> | etaf、etaf-ui；门禁同时校验 ecss、ekp、ebox、etaf-db |
+| [etaf-manual](core/packages/etaf-manual) | 核心包中英双语《ETAF 参考手册》，对照公共接口校验并发布于 <https://etaf.top> | etaf、etaf-ui；门禁同时校验 ecss、ekp、ebox、etaf-media、etaf-db |
 | [etaf-devtools](core/packages/etaf-devtools) | ETAF buffer 实时盒树检查器、悬浮拾取器与诊断浮层（孵化中） | etaf、etaf-ui、etaf-posframe |
 
 ### 通用扩展（`core/packages/` → [emacs-taf/etaf](https://github.com/emacs-taf/etaf)）
@@ -85,16 +86,16 @@
 | [etaf-desktop](https://github.com/emacs-taf/etaf-desktop) | 基于 ETAF 与 ETAF UI 的 Emacs 桌面窗口管理应用 | etaf、etaf-ui |
 | [etaf-ncm](https://github.com/emacs-taf/etaf-ncm) | 网易云音乐播放器：曲库浏览、播放控制、歌词与队列 | etaf、etaf-ui、ebox、etaf-db |
 | [etaf-weread](https://github.com/emacs-taf/etaf-weread) | 微信读书客户端：书架、笔记本、划线、书店搜索与统计 | etaf、etaf-ui、etaf-db |
-| [etaf-md](https://github.com/emacs-taf/etaf-md) | 原生 Markdown 全语法渲染器：居中版心、完整网格表格、35+ `:::` 拓展容器、内置 QuickJS 零浏览器 Mermaid/MathJax 矢量图、双栏实时对照预览 | etaf、etaf-ui |
-| [etaf-org](https://github.com/emacs-taf/etaf-org) | Org 阅读视图与活文档引擎：完整 Org 语法、可扩展节点与样式规则、活文档组件、Mermaid/KaTeX 渲染、独立大纲侧窗与 O(Δ) 双栏实时预览 | etaf、etaf-ui |
+| [etaf-md](https://github.com/emacs-taf/etaf-md) | 原生 Markdown 全语法渲染器：居中版心、完整网格表格、35+ `:::` 拓展容器、内置 QuickJS 零浏览器 Mermaid/MathJax 矢量图、双栏实时对照预览 | etaf、etaf-media、etaf-ui |
+| [etaf-org](https://github.com/emacs-taf/etaf-org) | Org 阅读视图与活文档引擎：完整 Org 语法、可扩展节点与样式规则、活文档组件、Mermaid/KaTeX 渲染、独立大纲侧窗与 O(Δ) 双栏实时预览 | etaf、etaf-media、etaf-ui |
 | [etaf-rss](https://github.com/emacs-taf/etaf-rss) | RSS 阅读器：订阅、分组、未读与收藏、阅读栏、搜索与 OPML（本地 JSON 或 Miniflux） | etaf、etaf-ui |
 | [maillist](https://github.com/emacs-taf/maillist) | 邮件列表客户端：public-inbox 主题列表、未读与星标、固定顶栏阅读、本地状态与 smtpmail 回复 | etaf、etaf-ui、etaf-db |
 | [etaf-reader](https://github.com/emacs-taf/etaf-reader) | 本地电子书阅读器：EPUB/TXT/Markdown/HTML/FB2/PDF 导入、翻页阅读、标注与进度 | etaf、etaf-ui、etaf-db |
 | [etaf-pomodoro](https://github.com/emacs-taf/etaf-pomodoro) | 专注计时器（独立应用与浮动面板）：响应式倒计时、三种样式与跟随宿主调色板 | etaf、etaf-ui |
-| [etaf-telega](https://github.com/emacs-taf/etaf-telega) | 基于 Telega TDLib 的 Telegram 客户端：会话、实时消息、就地编辑与消息操作 | etaf、etaf-ui |
-| [etaf-video-player](https://github.com/emacs-taf/etaf-video-player) | 在 Emacs 内播放本地视频与流：图像帧、密度字符或真彩半块，带同步声音 | etaf、etaf-ui、etaf-db |
-| [etaf-bili](https://github.com/emacs-taf/etaf-bili) | B 站客户端：热门、排行榜与搜索，支持 buffer 内直接播放 | etaf、etaf-ui、etaf-db |
-| [etaf-youtube](https://github.com/emacs-taf/etaf-youtube) | YouTube 客户端：账号订阅流、搜索、频道、播放列表与画布内播放 | etaf、etaf-ui、etaf-db |
+| [etaf-telega](https://github.com/emacs-taf/etaf-telega) | 基于 Telega TDLib 的 Telegram 客户端：会话、实时消息、就地编辑与消息操作 | etaf、etaf-media、etaf-ui |
+| [etaf-video-player](https://github.com/emacs-taf/etaf-video-player) | 在 Emacs 内播放本地视频与流：图像帧、密度字符或真彩半块，带同步声音 | etaf、etaf-media、etaf-ui、etaf-db |
+| [etaf-bili](https://github.com/emacs-taf/etaf-bili) | B 站客户端：热门、排行榜与搜索，支持 buffer 内直接播放 | etaf、etaf-media、etaf-ui、etaf-db |
+| [etaf-youtube](https://github.com/emacs-taf/etaf-youtube) | YouTube 客户端：账号订阅流、搜索、频道、播放列表与画布内播放 | etaf、etaf-media、etaf-ui、etaf-db |
 | [etaf-screensaver](https://github.com/emacs-taf/etaf-screensaver) | 空闲屏保：纯画布动画、输入唤回、组合播放与录制动画适配 | etaf |
 | [etaf-web](apps/etaf-web) | 网页文章阅读器：将 HTML 编译为 `etaf-md` 中间语言并做本地缓存 | etaf、etaf-ui、etaf-md |
 | [etaf-agenda](https://github.com/emacs-taf/etaf-agenda) | 个人日程与任务工作台：今日、日历（年 / 月 / 周）、清单、项目、习惯与月度回顾（SQLite） | etaf、etaf-ui、etaf-db |
@@ -137,7 +138,7 @@
 <!-- BEGIN:GENERATED:root-layout-zh -->
 ```text
 emacs-taf/
-├── core/                     # 核心投影目录（→ emacs-taf/etaf）：README + packages/<16 个框架/扩展/手册包>
+├── core/                     # 核心投影目录（→ emacs-taf/etaf）：README + packages/<17 个框架/扩展/手册包>
 ├── apps/                     # 17 个终端应用（已发布应用各自投影 → emacs-taf/<app>）
 ├── games/                    # 3 款游戏（已发布游戏各自投影 → emacs-taf/<game>）
 ├── scripts/                  # 共用构建、结构/API/文档门禁、影响面分析（refscope）、发布与媒体托管脚本

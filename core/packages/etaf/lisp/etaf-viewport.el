@@ -25,6 +25,22 @@
 (require 'etaf-events)
 (require 'etaf-runtime)
 
+(defvar etaf-overlay-sync-functions nil
+  "Hook run with no arguments after fullscreen or floating viewport transitions.
+Native overlay backends (such as hardware video layers in `etaf-media') add
+functions here so viewport hosts stay decoupled from media packages.")
+
+(defun etaf--sync-overlays ()
+  "Invoke every function in `etaf-overlay-sync-functions', isolating errors."
+  (dolist (fn etaf-overlay-sync-functions)
+    (ignore-errors (funcall fn))))
+
+(defvar etaf-video-driver nil
+  "Optional video playback driver plist registered by `etaf-media'.
+Keys: `:component', `:source-info', `:state', `:toggle', `:seek',
+`:audio-default', `:volume-default' and `:ffplay-program'.  Consumers such as
+`etaf-ui' read this driver so non-media packages do not depend on `etaf-media'.")
+
 (defvar etaf--viewport-region-cells (make-hash-table :test #'eq :weakness 'key)
   "Reactive viewport cell of each region, keyed by its Component instance.")
 

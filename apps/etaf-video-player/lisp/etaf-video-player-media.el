@@ -16,6 +16,7 @@
 (require 'json)
 (require 'subr-x)
 (require 'etaf)
+(require 'etaf-media)
 (require 'etaf-video-player-subtitle)
 
 (defvar etaf-video-player--media-cache (make-hash-table :test #'equal)

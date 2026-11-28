@@ -22,6 +22,7 @@
 | [`etaf-activity-change-functions`](applications.md#hook-etaf-activity-change-functions) | 跨应用实时活动被发布、更新或移除时。 | EVENT（`publish` 或 `remove`）、活动 ID 与独立活动 plist（或 nil） | 单个函数的错误被隔离。 |
 | [`etaf-notify-functions`](applications.md#hook-etaf-notify-functions) | `etaf-notify` 记录一条新通知或分组聚合通知时。 | 独立通知 plist | 单个函数的错误被隔离。 |
 | [`etaf-app-change-functions`](applications.md#hook-etaf-app-change-functions) | 经由 `etaf-app-register` 或 `etaf-app-unregister` 注册、更新或注销应用声明时。 | EVENT（`register` 或 `unregister`）、应用 ID 与独立声明 plist（或 nil） | 单个函数的错误被隔离。 |
+| [`etaf-overlay-sync-functions`](applications.md#hook-etaf-overlay-sync-functions) | 全屏或悬浮画中画视口几何变化完成后。 | 无参数 | 单个函数的错误被隔离。 |
 
 ## 说明
 

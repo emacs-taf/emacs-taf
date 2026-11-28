@@ -8,7 +8,7 @@ EMACS ?= emacs
 PROVIDER_ROOT ?= $(if $(wildcard ../../core/packages/etaf),../../core/packages,$(if $(wildcard ../etaf/etaf.el),..,../..))
 
 LOAD_PATH = -L . -L lisp -L tests \
-            -L $(PROVIDER_ROOT)/etaf -L $(PROVIDER_ROOT)/etaf-ui \
+            -L $(PROVIDER_ROOT)/etaf -L $(PROVIDER_ROOT)/etaf-media -L $(PROVIDER_ROOT)/etaf-ui \
             -L $(PROVIDER_ROOT)/etaf-db -L $(PROVIDER_ROOT)/ebox -L $(PROVIDER_ROOT)/ecss
 
 SOURCES = lisp/etaf-bili-theme.el lisp/etaf-bili-service.el lisp/etaf-bili-store.el \

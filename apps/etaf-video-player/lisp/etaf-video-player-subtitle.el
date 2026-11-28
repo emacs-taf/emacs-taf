@@ -16,6 +16,7 @@
 
 ;;; Code:
 
+(require 'etaf-media)
 (require 'cl-lib)
 (require 'subr-x)
 

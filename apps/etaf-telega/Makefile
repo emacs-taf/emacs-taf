@@ -7,7 +7,7 @@ EMACS ?= emacs
 # override PROVIDER_ROOT to pin another checkout.
 PROVIDER_ROOT ?= $(if $(wildcard ../../core/packages/etaf),../../core/packages,$(if $(wildcard ../etaf/etaf.el),..,../..))
 
-LOAD_PATH = -L . -L lisp -L tests -L $(PROVIDER_ROOT)/etaf -L $(PROVIDER_ROOT)/etaf-ui \
+LOAD_PATH = -L . -L lisp -L tests -L $(PROVIDER_ROOT)/etaf -L $(PROVIDER_ROOT)/etaf-media -L $(PROVIDER_ROOT)/etaf-ui \
             -L $(PROVIDER_ROOT)/ebox -L $(PROVIDER_ROOT)/ecss
 
 SOURCES = $(wildcard lisp/*.el) etaf-telega.el

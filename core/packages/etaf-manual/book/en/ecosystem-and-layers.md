@@ -1,6 +1,6 @@
 # Ecosystem and Layers
 
-ETAF consists of seven packages, layered so that each kind of fact has exactly one owner. This chapter describes what a text application is, what each package provides, how the packages depend on each other, where the public interface of each package ends, which package owns which facts, and the path that a change of state takes to the buffer. Later chapters describe each of these subjects in detail.
+ETAF consists of eight core packages, layered so that each kind of fact has exactly one owner. This chapter describes what a text application is, what each package provides, how the packages depend on each other, where the public interface of each package ends, which package owns which facts, and the path that a change of state takes to the buffer. Later chapters describe each of these subjects in detail.
 
 ## Text applications
 
@@ -23,6 +23,7 @@ The same buffer works in graphical and in terminal frames. A terminal frame draw
 | `ecss` | Selectors and specificity, stylesheets, origins and importance, cascade layers, CSS-wide values, custom properties and `var()`, inheritance, computed styles and the provenance of each computed value | Text properties, layout, reactive updates and buffers |
 | `ebox` | The retained tree of text, box, row, column, flex, grid and image nodes; computed styles through ECSS; text measurement; box, flex and grid layout; scrolling and the viewport; line composition and direct buffer updates; focus, pointer targets, keymaps, dragging and text input sessions | Components, application state and reactivity |
 | `etaf` | View and Component syntax, reactive state and bindings, the lifetime of Runtimes, Context, Themes, Behaviors, Actions, Data and Resources, the scoped keyboard layer, and queries about committed Hosts | Layout, hit testing, focus order and buffer writes, which it delegates to Ebox |
+| `etaf-media` | Native video playback: `etaf-video` Component, source metadata probing, `libmpv` / `ffmpeg` playback sessions, hardware GPU overlays and audio sidecars | General UI controls, which live in `etaf-ui`; non-media applications stay free of native video modules |
 | `etaf-ui` | The official component catalog: reusable components with their keyboard behavior, and the theme tokens they read | Layout, focus and hit testing: its components are ordinary ETAF components |
 | `etaf-db` | Database backends for the Data Source contract of ETAF; currently SQLite | Data Controllers, which belong to ETAF |
 | `etaf-posframe` | Floating panels: a child frame per panel, its placement, title bar, theme toggle, border and its application registry | Panel content, which is an ordinary ETAF View; frame creation, which Posframe owns |
@@ -40,6 +41,7 @@ The dependencies point in one direction. In the following figure, an arrow point
 
 ```text
 ecss ──▶ ebox ──▶ etaf ──┬──▶ etaf-ui ──▶ etaf-posframe
+                         ├──▶ etaf-media
                          └──▶ etaf-db
 ekp
 ```

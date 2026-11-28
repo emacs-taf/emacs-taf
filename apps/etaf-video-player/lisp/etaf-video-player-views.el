@@ -28,6 +28,7 @@
 (require 'seq)
 (require 'subr-x)
 (require 'etaf)
+(require 'etaf-media)
 (require 'etaf-ui)
 (require 'etaf-video-player-theme)
 (require 'etaf-video-player-media)

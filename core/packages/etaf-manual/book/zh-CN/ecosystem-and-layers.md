@@ -1,6 +1,6 @@
 # 生态与分层
 
-ETAF 由七个包组成，分层的原则是每一类事实只有一个所有者。本章说明什么是文本应用、每个包提供什么、包之间怎样依赖、每个包的公共接口到哪里为止、哪个包拥有哪些事实，以及一次状态变化走到 buffer 的路径。后面各章再分别详述这些主题。
+ETAF 由八个核心包组成，分层的原则是每一类事实只有一个所有者。本章说明什么是文本应用、每个包提供什么、包之间怎样依赖、每个包的公共接口到哪里为止、哪个包拥有哪些事实，以及一次状态变化走到 buffer 的路径。后面各章再分别详述这些主题。
 
 ## 文本应用
 
@@ -23,6 +23,7 @@ ETAF 由七个包组成，分层的原则是每一类事实只有一个所有者
 | `ecss` | 选择器与优先级、样式表、来源与 important、层叠层、CSS 全局值、自定义属性与 `var()`、继承、计算样式，以及每个计算值的来源追溯 | 文本属性、布局、响应式更新和 buffer |
 | `ebox` | 由 text、box、row、column、flex、grid、image 节点组成的保留树；经 ECSS 得到的计算样式；文字测量；盒、flex 与 grid 布局；滚动与视口；行合成与直接的 buffer 更新；焦点、指针目标、keymap、拖拽与文字输入会话 | 组件、应用状态和响应式 |
 | `etaf` | View 与 Component 语法、响应式状态与绑定、Runtime 的生命周期、Context、Theme、Behavior、Action、Data 与 Resource、分作用域的键盘层，以及对已提交 Host 的查询 | 布局、命中测试、焦点顺序和 buffer 写入，这些都委托给 Ebox |
+| `etaf-media` | 原生视频播放：`etaf-video` 组件、源元数据探测、`libmpv` / `ffmpeg` 播放会话、硬件 GPU 视频层与音频侧车 | 通用 UI 控件（位于 `etaf-ui`）；非媒体应用无需引入原生视频模块 |
 | `etaf-ui` | 官方组件目录：带键盘行为的可复用组件，以及它们读取的主题 token | 布局、焦点和命中测试：它的组件都是普通的 ETAF 组件 |
 | `etaf-db` | ETAF Data Source 契约的数据库后端；目前是 SQLite | Data Controller，它属于 ETAF |
 | `etaf-posframe` | 浮动面板：每块面板一个子 frame，以及它的落位、标题栏、主题开关、边框与应用注册表 | 面板内容，就是普通的 ETAF View；frame 的创建归 Posframe |
@@ -40,6 +41,7 @@ ECSS 和 Ebox 可以脱离上层的包单独使用。需要布局和 buffer 渲�
 
 ```text
 ecss ──▶ ebox ──▶ etaf ──┬──▶ etaf-ui ──▶ etaf-posframe
+                         ├──▶ etaf-media
                          └──▶ etaf-db
 ekp
 ```

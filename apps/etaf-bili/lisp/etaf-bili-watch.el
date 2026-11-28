@@ -20,6 +20,7 @@
 (require 'seq)
 (require 'subr-x)
 (require 'etaf)
+(require 'etaf-media)
 (require 'etaf-ui)
 (require 'etaf-bili-theme)
 (require 'etaf-bili-views)

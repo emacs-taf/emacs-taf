@@ -3,6 +3,7 @@
 ;;; Code:
 
 (require 'etaf)
+(require 'etaf-media)
 (require 'etaf-ui)
 
 (defgroup etaf-video-player nil "Native video player built with ETAF and Ebox." :group 'multimedia)

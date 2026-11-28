@@ -5,12 +5,12 @@
 ;;; Commentary:
 ;;
 ;; Shared floating Picture-in-Picture (PiP) host for ETAF applications.
-;; Owns the recycled graphical child frame (avoiding macOS `NSTextInputContext'
-;; crashes on `delete-frame'), 4px draggable resize border, native-draggable
-;; adaptive `header-line-format', focus-reactive frame border, 4-corner docking,
-;; S/M/L size presets, and zero-pin live viewport synchronization so manual
-;; edge/corner drag-resizing dynamically adapts both the mounted View and any
-;; embedded native GPU `etaf-video' layer.
+;; Delegates graphical child-frame pooling, hairline border painting and
+;; macOS-safe focus restoration to `etaf-pip-frame-backend' (registered by
+;; `etaf-posframe'), and provides draggable resize borders, native-draggable
+;; adaptive `header-line-format', 4-corner docking, S/M/L size presets, and
+;; zero-pin live viewport synchronization so manual edge/corner drag-resizing
+;; dynamically adapts both the mounted View and any registered native overlays.
 
 ;;; Code:
 
@@ -21,7 +21,13 @@
 (require 'etaf-runtime)
 (require 'etaf-viewport)
 
-(declare-function etaf-video--sync-all-gpu-instances "etaf-video-component" ())
+(defvar etaf-pip-frame-backend nil
+  "Optional child-frame host backend plist used by `etaf-pip'.
+When non-nil, keys `:acquire' (fn PARENT GEO BG FG -> FRAME), `:park'
+\(fn FRAME PARENT RESTORE-FOCUS -> non-nil), `:paint-border' (fn FRAME COLOR)
+and `:focus' (fn FRAME) delegate graphical child-frame pooling, hairline
+borders and macOS-safe focus restoration to a shared floating host such as
+`etaf-posframe'.")
 
 (defconst etaf-pip--presets
   '((small  :label "小" :cols 42)
@@ -35,9 +41,6 @@
 
 (defvar etaf-pip--entries (make-hash-table :test #'eq)
   "Active PiP host records keyed by symbol ID.")
-
-(defvar etaf-pip--frame-pool nil
-  "Parked graphical child frames awaiting reuse across PiP sessions.")
 
 (defvar etaf-pip--syncing nil
   "Non-nil while programmatically resizing a PiP child frame.")
@@ -272,6 +275,13 @@
                              'help-echo "按住标题栏拖动窗口；拖拽四边或四角可自由缩放")))
     (concat grip title-part spacer right)))
 
+(defun etaf-pip--ensure-backend ()
+  "Ensure a registered child-frame backend is loaded when available."
+  (unless etaf-pip-frame-backend
+    (when (locate-library "etaf-posframe")
+      (ignore-errors (load "etaf-posframe" t t))))
+  etaf-pip-frame-backend)
+
 (defun etaf-pip--paint-border (entry)
   "Update ENTRY's 1px child-frame hairline border for focused vs resting state."
   (when-let* ((fr (etaf-pip--entry-frame entry))
@@ -284,18 +294,19 @@
                                          (plist-get colors :accent)
                                          strength)
                   (plist-get colors :border-inactive)))
-           (face (if (facep 'child-frame-border) 'child-frame-border 'internal-border)))
-      (unless (equal col (face-attribute face :background fr))
-        (set-face-background face col fr)))))
+           (painter (plist-get etaf-pip-frame-backend :paint-border)))
+      (if (functionp painter)
+          (ignore-errors (funcall painter fr col))
+        (let ((face (if (facep 'child-frame-border) 'child-frame-border 'internal-border)))
+          (unless (equal col (face-attribute face :background fr))
+            (set-face-background face col fr)))))))
 
 (defun etaf-pip--schedule-gpu-sync ()
-  "Synchronize native GPU video overlays now and after Emacs settles redisplay."
-  (when (fboundp 'etaf-video--sync-all-gpu-instances)
-    (ignore-errors (etaf-video--sync-all-gpu-instances))
+  "Synchronize registered native overlays now and after Emacs settles redisplay."
+  (when etaf-overlay-sync-functions
+    (etaf--sync-overlays)
     (dolist (delay '(0.02 0.09))
-      (run-at-time delay nil
-                   (lambda ()
-                     (ignore-errors (etaf-video--sync-all-gpu-instances)))))))
+      (run-at-time delay nil #'etaf--sync-overlays))))
 
 (defun etaf-pip--sync-bounds (entry &optional force)
   "Measure ENTRY's live window pixels and adapt bounds, refit, header and GPU."
@@ -406,56 +417,40 @@
       (etaf-pip--schedule-gpu-sync))))
 
 (defun etaf-pip--acquire-frame (parent geo bg fg)
-  "Acquire a recycled graphical child frame for PARENT, or create one."
-  (setq etaf-pip--frame-pool
-        (cl-remove-if-not (lambda (f)
-                            (and (frame-live-p f)
-                                 (display-graphic-p f)
-                                 (frame-parent f)))
-                          etaf-pip--frame-pool))
-  (let* ((params `((parent-frame . ,parent)
-                   (minibuffer . nil)
-                   (undecorated . t)
-                   (tab-bar-lines . 0)
-                   (tool-bar-lines . 0)
-                   (menu-bar-lines . 0)
-                   (left-fringe . 0)
-                   (right-fringe . 0)
-                   (vertical-scroll-bars . nil)
-                   (horizontal-scroll-bars . nil)
-                   (border-width . 0)
-                   (internal-border-width . 1)
-                   (child-frame-border-width . 1)
-                   (line-spacing . 0)
-                   (drag-with-header-line . t)
-                   (drag-internal-border . t)
-                   (top-visible . 24)
-                   (snap-width . 12)
-                   (z-group . above)
-                   (no-other-frame . t)
-                   (no-accept-focus . nil)
-                   (background-color . ,bg)
-                   (foreground-color . ,fg)))
-         (pooled (cl-find-if (lambda (f) (eq (frame-parent f) parent))
-                             etaf-pip--frame-pool)))
-    (if pooled
-        (progn
-          (setq etaf-pip--frame-pool (delq pooled etaf-pip--frame-pool))
-          (modify-frame-parameters pooled params)
-          (let ((frame-resize-pixelwise t))
-            (set-frame-size pooled
-                            (plist-get geo :frame-px-w)
-                            (plist-get geo :frame-px-h) t))
-          (set-frame-position pooled (plist-get geo :left) (plist-get geo :top))
-          (unless (frame-visible-p pooled)
-            (make-frame-visible pooled))
-          pooled)
+  "Acquire a graphical child frame for PARENT using `etaf-pip-frame-backend'.
+GEO provides pixel size and coordinates; BG and FG set surface colors."
+  (let* ((backend (etaf-pip--ensure-backend))
+         (acquire (plist-get backend :acquire)))
+    (if (functionp acquire)
+        (funcall acquire parent geo bg fg)
       (make-frame
-       (append params
-               `((width . (text-pixels . ,(plist-get geo :frame-px-w)))
-                 (height . (text-pixels . ,(plist-get geo :frame-px-h)))
-                 (left . ,(plist-get geo :left))
-                 (top . ,(plist-get geo :top))))))))
+       `((parent-frame . ,parent)
+         (minibuffer . nil)
+         (undecorated . t)
+         (tab-bar-lines . 0)
+         (tool-bar-lines . 0)
+         (menu-bar-lines . 0)
+         (left-fringe . 0)
+         (right-fringe . 0)
+         (vertical-scroll-bars . nil)
+         (horizontal-scroll-bars . nil)
+         (border-width . 0)
+         (internal-border-width . 1)
+         (child-frame-border-width . 1)
+         (line-spacing . 0)
+         (drag-with-header-line . t)
+         (drag-internal-border . t)
+         (top-visible . 24)
+         (snap-width . 12)
+         (z-group . above)
+         (no-other-frame . t)
+         (no-accept-focus . nil)
+         (background-color . ,bg)
+         (foreground-color . ,fg)
+         (width . (text-pixels . ,(plist-get geo :frame-px-w)))
+         (height . (text-pixels . ,(plist-get geo :frame-px-h)))
+         (left . ,(plist-get geo :left))
+         (top . ,(plist-get geo :top)))))))
 
 ;;;###autoload
 (cl-defun etaf-pip-open
@@ -622,28 +617,28 @@ With RESTORE-FOCUS non-nil, return input focus to the parent frame."
       (let ((fr (etaf-pip--entry-frame entry))
             (parent (etaf-pip--entry-parent-frame entry))
             (buf (etaf-pip--entry-buffer entry))
-            (had-focus nil))
+            (park-fn (plist-get etaf-pip-frame-backend :park))
+            (focus-fn (plist-get etaf-pip-frame-backend :focus))
+            (had-focus nil)
+            (parked nil))
         (when (and fr (frame-live-p fr))
           (setq had-focus (eq (selected-frame) fr))
           (when (and (or restore-focus had-focus) parent (frame-live-p parent))
-            (ignore-errors (select-frame-set-input-focus parent)))
-          (when (frame-visible-p fr)
-            (ignore-errors (make-frame-invisible fr)))
-          (when-let* ((win (frame-root-window fr)))
-            (when (window-live-p win)
-              (ignore-errors (set-window-dedicated-p win nil))
-              (ignore-errors (set-window-buffer win (get-buffer-create " *etaf-pip-park*"))))))
+            (if (functionp focus-fn)
+                (ignore-errors (funcall focus-fn parent))
+              (ignore-errors (select-frame-set-input-focus parent))))
+          (when (functionp park-fn)
+            (setq parked (ignore-errors
+                           (funcall park-fn fr parent (or restore-focus had-focus)))))
+          (unless parked
+            (when (frame-visible-p fr)
+              (ignore-errors (make-frame-invisible fr)))))
         (when (and buf (buffer-live-p buf))
           (when-let* ((rt (etaf-runtime-for-buffer buf)))
             (ignore-errors (etaf-unmount rt)))
           (ignore-errors (kill-buffer buf)))
-        (when (and fr (frame-live-p fr))
-          (if (and (display-graphic-p fr) (frame-parent fr))
-              (progn
-                (ignore-errors (set-frame-parameter fr 'no-accept-focus t))
-                (setq etaf-pip--frame-pool
-                      (cons fr (delq fr etaf-pip--frame-pool))))
-            (ignore-errors (delete-frame fr))))))
+        (when (and fr (frame-live-p fr) (not parked))
+          (ignore-errors (delete-frame fr)))))
     t))
 
 ;;;###autoload

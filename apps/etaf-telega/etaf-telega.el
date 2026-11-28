@@ -3,7 +3,7 @@
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 ;; Author: ETAF contributors
 ;; Version: 0.1.13
-;; Package-Requires: ((emacs "29.1") (etaf "0.3.19") (etaf-ui "0.3.14") (telega "0.8.0"))
+;; Package-Requires: ((emacs "29.1") (etaf "0.3.19") (etaf-media "0.1.0") (etaf-ui "0.3.14") (telega "0.8.0"))
 ;; Keywords: convenience
 ;; URL: https://github.com/emacs-taf/etaf-telega
 
@@ -426,6 +426,7 @@
                    (throw 'found sub))))))))
     (when lisp-dir
       (add-to-list 'load-path lisp-dir))))
+(require 'etaf-media)
 (require 'etaf-telega-account)
 (require 'etaf-telega-app)
 (require 'etaf-telega-backend)

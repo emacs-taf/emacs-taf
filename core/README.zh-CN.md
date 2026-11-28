@@ -3,7 +3,7 @@
 [English](README.md) · [在线文档](https://etaf.top/zh-cn/) · [Monorepo 主仓](https://github.com/emacs-taf/emacs-taf) · [官方包源](https://etaf.top/packages/)
 
 <!-- BEGIN:GENERATED:core-overview-zh -->
-> **只读核心聚合投影仓。** 本仓库由 **[Emacs TAF Monorepo](https://github.com/emacs-taf/emacs-taf)** 的 [`core/`](https://github.com/emacs-taf/emacs-taf/tree/main/core) 目录自动同步生成，汇集全部 15 个已发布的核心框架包、通用扩展、官方安装器与中英双语参考手册（另含 1 个孵化包）。
+> **只读核心聚合投影仓。** 本仓库由 **[Emacs TAF Monorepo](https://github.com/emacs-taf/emacs-taf)** 的 [`core/`](https://github.com/emacs-taf/emacs-taf/tree/main/core) 目录自动同步生成，汇集全部 16 个已发布的核心框架包、通用扩展、官方安装器与中英双语参考手册（另含 1 个孵化包）。
 >
 > 提交代码与 Pull Request 请统一前往 **[emacs-taf/emacs-taf](https://github.com/emacs-taf/emacs-taf/pulls)**。
 <!-- END:GENERATED:core-overview-zh -->
@@ -41,6 +41,7 @@
 | [`ekp`](packages/ekp) | Knuth–Plass 段落断行引擎，支持可选预编译 C 动态模块 |
 | [`ebox`](packages/ebox) | Box / Flex / Grid 布局、渲染与增量 buffer 发布引擎 |
 | [`etaf`](packages/etaf) | 声明式组件、响应式状态、宿主与应用生命周期 |
+| [`etaf-media`](packages/etaf-media) | 原生视频播放引擎（`etaf-video`、libmpv 硬件 GPU 层、ffmpeg 与音频伴随） |
 | [`etaf-ui`](packages/etaf-ui) | 通用 UI 组件库：按钮、表单、面板、表格、导航与窗口壳 |
 | [`etaf-gamekit`](packages/etaf-gamekit) | 游戏定义、多实例与 Godot / OpenSpiel 桥接 |
 | [`etaf-posframe`](packages/etaf-posframe) | 任意 ETAF View 的浮动子 frame 面板宿主 |

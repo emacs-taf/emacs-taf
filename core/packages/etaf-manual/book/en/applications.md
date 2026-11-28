@@ -388,6 +388,24 @@ Repaint Picture-in-Picture window ID's surface, border and header bar.
 
 **Returns.** `t` when ID is active, nil otherwise.
 
+#### Variable: etaf-pip-frame-backend
+
+Optional child-frame host backend plist used by `etaf-pip-open` on graphical displays.
+
+**Semantics.** When non-nil, `:acquire`, `:park`, `:paint-border` and `:focus` callbacks delegate graphical child-frame pooling, hairline borders and macOS-safe focus restoration to a shared floating host. Loading `etaf-posframe` installs its unified child-frame pool here automatically so panels, modals and PiP windows share one pool; when nil, `etaf-pip-open` falls back to standalone child frames.
+
+#### Hook: etaf-overlay-sync-functions
+
+Hook run with no arguments after fullscreen or floating viewport geometry transitions.
+
+**Semantics.** External native overlay backends (such as `etaf-media`'s hardware GPU video layer) register synchronization callbacks here so `etaf-fullscreen-enter` and `etaf-pip-open` stay decoupled from media packages. Individual callback errors are isolated.
+
+#### Variable: etaf-video-driver
+
+Optional video playback driver plist registered by `etaf-media`.
+
+**Semantics.** Holds `:component`, `:source-info`, `:state`, `:toggle`, `:seek`, `:audio-default`, `:volume-default` and `:ffplay-program` callbacks installed when `etaf-media` loads. UI components such as `etaf-media-viewer` in `etaf-ui` consult this driver so non-media applications do not depend on `etaf-media`.
+
 ## Two-Tier Fullscreen
 
 <!-- index: etaf-fullscreen-mode; etaf-fullscreen-enter; etaf-fullscreen-exit; etaf-fullscreen-toggle; fullscreen -->

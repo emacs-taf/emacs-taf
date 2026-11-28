@@ -61,14 +61,21 @@ ETAF 的模块集最大。核心是作者模型；Runtime 是把模型接到 Ebo
 | `lisp/etaf-behavior.el` | 可复用的 Behavior 包：语义属性与 setup | `lisp/etaf-reactive.el` |
 | `lisp/etaf-controlled-behavior.el` | 给应用所拥有的几何用的受控 Behavior 变体 | `lisp/etaf-behavior.el` |
 | `lisp/etaf-observer.el` | 作用域限于一次动态操作的观察口 | — |
-| `lisp/etaf-runtime.el` | 挂载、保留段树、提交与 Host 映射 | `lisp/etaf-view.el`、`lisp/etaf-component.el`、`lisp/etaf-reactive.el`、`lisp/etaf-behavior.el`、`lisp/etaf-context.el`、`lisp/etaf-observer.el`、Ebox |
-| `lisp/etaf-app.el` | 应用缓冲区：画布、主题 face、适配与单次关闭 | `lisp/etaf-runtime.el`、`lisp/etaf-reactive.el`、Ebox |
+| `lisp/etaf-txn.el` | 保留 Runtime 记录、动态求值状态与回滚事务日志 | `lisp/etaf-view.el`、`lisp/etaf-component.el`、`lisp/etaf-reactive.el`、`lisp/etaf-context.el`、`lisp/etaf-observer.el`、`lisp/etaf-behavior.el`、Ebox |
+| `lisp/etaf-host-bridge.el` | Host 属性解析、Theme 与样式应用、Ebox 节点桥接与 Host 查询 | `lisp/etaf-txn.el`、Ebox |
+| `lisp/etaf-reconcile.el` | 段树构建、分支与键控列表修补、槽位、组件实例与释放 | `lisp/etaf-txn.el`、`lisp/etaf-host-bridge.el` |
+| `lisp/etaf-presentation.el` | Host 呈现层、树内省、Runtime 元数据与命名根浮层 | `lisp/etaf-txn.el`、`lisp/etaf-host-bridge.el`、`lisp/etaf-reconcile.el` |
+| `lisp/etaf-runtime.el` | 根挂载、提交生命周期、Runtime 查找、粘性 Host、观察与视口适配 | `lisp/etaf-txn.el`、`lisp/etaf-host-bridge.el`、`lisp/etaf-reconcile.el`、`lisp/etaf-presentation.el` |
+| `lisp/etaf-error-boundary.el` | 声明式 `etaf-error-boundary` 错误边界隔离、捕获与重置恢复 | `lisp/etaf-runtime.el`、`lisp/etaf-component.el`、`lisp/etaf-reactive.el` |
+| `lisp/etaf-app.el` | 应用缓冲区：画布、主题 face、适配、声明式注册表与单次关闭 | `lisp/etaf-runtime.el`、`lisp/etaf-reactive.el`、Ebox |
+| `lisp/etaf-fullscreen.el` | 窗口级与系统帧级两档全屏生命周期 | `lisp/etaf-runtime.el`、`lisp/etaf-viewport.el`、`lisp/etaf-reactive.el` |
+| `lisp/etaf-pip.el` | 悬浮画中画子 frame 宿主与拖拽缩放 | `lisp/etaf-runtime.el`、`lisp/etaf-viewport.el`、`lisp/etaf-reactive.el`、Ebox |
 | `lisp/etaf-activity.el` | 跨应用实时活动与通知协议 | `lisp/etaf-reactive.el`、`lisp/etaf-runtime.el` |
 | `lisp/etaf-events.el` | 进入 Host 回调的 Runtime 事件入口 | `lisp/etaf-runtime.el`、`lisp/etaf-reactive.el`、Ebox |
 | `lisp/etaf-actions.el` | 命名 Action 与其派发 | `lisp/etaf-runtime.el`、`lisp/etaf-reactive.el` |
 | `lisp/etaf-keys.el` | Host 键位表、帮助与提示键 | `lisp/etaf-runtime.el`、`lisp/etaf-events.el`、`lisp/etaf-regions.el`、`lisp/etaf-reactive.el`、Ebox |
 | `lisp/etaf-regions.el` | region 声明与 region 导航 | `lisp/etaf-runtime.el`、`lisp/etaf-events.el`、Ebox |
-| `lisp/etaf-viewport.el` | 嵌套视口 region 与静息后的 refit | `lisp/etaf-runtime.el`、`lisp/etaf-component.el`、`lisp/etaf-events.el` |
+| `lisp/etaf-viewport.el` | 嵌套视口 region、浮层同步钩子与视频驱动扩展点 | `lisp/etaf-runtime.el`、`lisp/etaf-component.el`、`lisp/etaf-events.el` |
 | `lisp/etaf-async.el` | Resource 与 Data 共用的异步操作 | `lisp/etaf-reactive.el` |
 | `lisp/etaf-process.el` | 为命令行后端运行到结束的子进程 | — |
 | `lisp/etaf-resource.el` | 已加载的 Resource 值与清理 | `lisp/etaf-async.el`、`lisp/etaf-observer.el`、`lisp/etaf-reactive.el` |
@@ -76,13 +83,27 @@ ETAF 的模块集最大。核心是作者模型；Runtime 是把模型接到 Ebo
 | `lisp/etaf-list-cache.el` | stale-while-revalidate 列表缓存 | — |
 | `lisp/etaf-animation.el` | 为过渡与动画提供的时间驱动 ref | `lisp/etaf-reactive.el` |
 | `lisp/etaf-performance.el` | 可选的性能记录器 | `lisp/etaf-runtime.el` |
-| `lisp/etaf-video-source.el` | 视频源归一化、探测与帧过滤 | — |
-| `lisp/etaf-video-audio.el` | 播放会话的音频侧车 | `lisp/etaf-video-source.el` |
-| `lisp/etaf-video-mpv.el` | 可选的跨平台 libmpv 播放后端 | `lisp/etaf-video-source.el` |
-| `lisp/etaf-video-session.el` | 播放会话：帧生产者、侧车与定时器 | `lisp/etaf-video-source.el`、`lisp/etaf-video-audio.el` |
-| `lisp/etaf-video-component.el` | `etaf-video` Component | `lisp/etaf-video-source.el`、`lisp/etaf-video-session.el`、`lisp/etaf-video-audio.el`、`lisp/etaf-video-mpv.el`、`lisp/etaf-component.el`、`lisp/etaf-reactive.el`、`lisp/etaf-runtime.el` |
 
-每个能力模块都 require Runtime，而 Runtime 不 require 其中任何一个，这正是 Action、键位、region、视口 region 与性能记录器是可选的层、而不是核心一部分的原因。视频四个模块自成一个小栈：源、音频侧车、会话，最后是 Component。入口把它们全部加载，因此 require `etaf` 就加载整个框架。
+Runtime 按职责拆分为五个内聚模块（`lisp/etaf-txn.el`、`lisp/etaf-host-bridge.el`、`lisp/etaf-reconcile.el`、`lisp/etaf-presentation.el`、`lisp/etaf-runtime.el`）；每个能力模块都 require Runtime，而 Runtime 不 require 其中任何一个，使 Action、键位、region、视口 region 与性能记录器保持清晰分层。
+
+## `etaf-media` 与 `etaf-posframe` 的模块
+
+<!-- index: etaf-media; etaf-posframe; etaf-video-component.el; etaf-posframe-pool.el -->
+
+原生视频播放独立在 `etaf-media` 中，将多媒体子进程与平台 C/Objective-C 动态模块隔离在 `etaf` 核心之外；浮动面板与统一的子 frame 复用池位于 `etaf-posframe`。
+
+| 模块 | 职责 | 依赖 |
+| --- | --- | --- |
+| `etaf-media/lisp/etaf-video-source.el` | 视频源归一化、探测与帧过滤 | — |
+| `etaf-media/lisp/etaf-video-audio.el` | 播放会话的音频侧车 | `etaf-video-source.el` |
+| `etaf-media/lisp/etaf-video-mpv.el` | 可选的跨平台 `libmpv` 播放后端与原生模块加载器 | `etaf-video-source.el` |
+| `etaf-media/lisp/etaf-video-session.el` | 播放会话：帧生产者、侧车与定时器 | `etaf-video-source.el`、`etaf-video-audio.el`、`etaf-video-mpv.el` |
+| `etaf-media/lisp/etaf-video-component.el` | `etaf-video` 组件、句柄表与 ETAF 钩子注册 | `etaf-video-source.el`、`etaf-video-session.el`、`etaf-video-audio.el`、`etaf-video-mpv.el`、ETAF、Ebox |
+| `etaf-posframe/lisp/etaf-posframe-pool.el` | 共享图形子 frame 复用池（同时服务面板与 `etaf-pip-open`）、主题派生与选项 | ETAF、ETAF UI、Posframe |
+| `etaf-posframe/lisp/etaf-posframe-panel.el` | 面板渲染、边框、悬停/焦点追踪与生命周期 | `etaf-posframe-pool.el` |
+| `etaf-posframe/lisp/etaf-posframe-layout.el` | 实时缩放、锚点与偏移落位、堆叠与拖拽 | `etaf-posframe-pool.el`、`etaf-posframe-panel.el` |
+| `etaf-posframe/lisp/etaf-posframe-app.el` | 按键转发、焦点循环与浮动应用注册表 | `etaf-posframe-layout.el` |
+| `etaf-posframe/lisp/etaf-posframe-modal.el` | 注册到 `etaf-ui-modal-host-function` 的居中模态子 frame 宿主 | `etaf-posframe-app.el` |
 
 ## EKP 的模块
 

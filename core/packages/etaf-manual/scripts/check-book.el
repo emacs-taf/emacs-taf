@@ -145,9 +145,12 @@ header, and the :host, :property, :style and :token vocabularies."
           :property (delete-dups
                      (append (let ((props (gethash 'etaf--semantic-props constants)))
                                (and (listp props) props))
-                             ;; Event props are Host props the ETAF Runtime reads.
+                             ;; Event props are Host/Component props ETAF and etaf-media read.
                              (etaf-manual-check--matches "\\(:on-[a-z]+\\(?:-[a-z]+\\)*\\)\\_>"
-                                                         (gethash "etaf" texts "") 1)
+                                                         (concat (gethash "etaf" texts "")
+                                                                 "\n"
+                                                                 (gethash "etaf-media" texts ""))
+                                                         1)
                              (list (intern ":aria-*"))))
           :style (etaf-manual-check--matches
                   "(:name \\(:[a-z0-9-]+\\) :id ebox/" (gethash "ebox" texts "") 1)

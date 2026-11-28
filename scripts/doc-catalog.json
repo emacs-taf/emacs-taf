@@ -68,8 +68,8 @@
       "zh": "核心包中英双语《ETAF 参考手册》，对照公共接口校验并发布于 <https://etaf.top>",
       "core_en": "Bilingual ETAF Reference Manual (`M-x etaf-manual-open`) and `https://etaf.top` site source",
       "core_zh": "中英双语 ETAF 参考手册（`M-x etaf-manual-open`）与 `https://etaf.top` 官网源码",
-      "deps_en": "etaf, etaf-ui; gate also reads ecss, ekp, ebox, etaf-db",
-      "deps_zh": "etaf、etaf-ui；门禁同时校验 ecss、ekp、ebox、etaf-db"
+      "deps_en": "etaf, etaf-ui; gate also reads ecss, ekp, ebox, etaf-media, etaf-db",
+      "deps_zh": "etaf、etaf-ui；门禁同时校验 ecss、ekp、ebox、etaf-media、etaf-db"
     },
     "etaf-devtools": {
       "en": "Live DOM/box-tree inspector, hover picker and diagnostic overlay for ETAF buffers (incubating)",
@@ -183,6 +183,12 @@
       "en": "Balatro-inspired text deck-building and scoring roguelike (incubating)",
       "zh": "受 Balatro 启发的纯文本牌组构筑计分 Roguelike（孵化中）",
       "backend": "Pure Elisp"
+    },
+    "etaf-media": {
+      "en": "Native video playback engine (libmpv/GPU overlay, ffmpeg, Kitty/image/ASCII) and `etaf-video` Component",
+      "zh": "原生视频播放引擎（libmpv / GPU 硬件层、ffmpeg、Kitty / 图像 / ASCII）与 `etaf-video` 组件",
+      "core_en": "Native video playback engine (`etaf-video`, libmpv GPU overlay, ffmpeg, audio sidecar)",
+      "core_zh": "原生视频播放引擎（`etaf-video`、libmpv 硬件 GPU 层、ffmpeg 与音频伴随）"
     }
   },
   "core_order": [
@@ -190,6 +196,7 @@
     "ekp",
     "ebox",
     "etaf",
+    "etaf-media",
     "etaf-ui",
     "etaf-gamekit",
     "etaf-posframe",

@@ -467,7 +467,7 @@ def check(root, files=None, notices=None):
             elif rel_pkg.startswith(('apps/', 'games/')):
                 if re.search(r'^PROVIDER_ROOT\s*\?=\s*\.\.\s*$', text, re.M):
                     fail('Makefile', 'apps/ and games/ Makefiles must resolve providers from ../../core/packages, not ..')
-                if re.search(r'(?:^|\s)-L\s+\.\./(?:ecss|ekp|ebox|etaf|etaf-ui|etaf-db|etaf-posframe|etaf-ext|etaf-gamekit)(?=\s|$)', text):
+                if re.search(r'(?:^|\s)-L\s+\.\./(?:ecss|ekp|ebox|etaf|etaf-media|etaf-ui|etaf-db|etaf-posframe|etaf-ext|etaf-gamekit)(?=\s|$)', text):
                     fail('Makefile', 'apps/ and games/ Makefiles must not use legacy flat -L ../<core-pkg> paths')
     if not workspace:
         customs = _public_defcustoms(root, files)

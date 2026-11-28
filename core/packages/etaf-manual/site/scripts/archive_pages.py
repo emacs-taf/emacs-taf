@@ -41,7 +41,7 @@ CORE_REPO = "emacs-taf/etaf"
 # `emacs-taf/etaf` under `packages/<name>` (and `core/packages/<name>` in the
 # canonical monorepo).
 CORE_PACKAGES = {
-    "ecss", "ekp", "ebox", "etaf", "etaf-ui", "etaf-posframe", "etaf-ext",
+    "ecss", "ekp", "ebox", "etaf", "etaf-media", "etaf-ui", "etaf-posframe", "etaf-ext",
     "etaf-db", "etaf-gamekit", "etaf-install", "etaf-manual", "etaf-devtools",
     "etaf-translate", "etaf-highlight", "etaf-hints", "etaf-export",
 }

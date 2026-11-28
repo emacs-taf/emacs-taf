@@ -22,6 +22,7 @@
 (declare-function image-size "image.c" (spec &optional pixels frame))
 (declare-function clear-image-cache "image.c" (&optional filter))
 (require 'etaf)
+(require 'etaf-media)
 (require 'etaf-ui)
 (require 'etaf-md-cache)
 (require 'etaf-md-theme)

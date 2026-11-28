@@ -15,7 +15,12 @@
     "etaf": {
       "resources": [
         "docs",
-        "examples",
+        "examples"
+      ]
+    },
+    "etaf-media": {
+      "resources": [
+        "docs",
         "native"
       ]
     },
@@ -161,6 +166,7 @@
     "etaf-posframe",
     "etaf-ext",
     "etaf",
+    "etaf-media",
     "etaf-manual",
     "etaf-db",
     "ekp",

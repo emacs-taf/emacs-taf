@@ -17,6 +17,7 @@
 (require 'seq)
 (require 'subr-x)
 (require 'etaf)
+(require 'etaf-media)
 (require 'etaf-youtube-theme)
 (require 'etaf-youtube-images)
 (require 'etaf-youtube-service)

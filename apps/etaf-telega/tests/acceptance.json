@@ -5,6 +5,7 @@
     "lisp",
     "tests",
     "../etaf",
+    "../etaf-media",
     "../etaf-ui",
     "../ebox",
     "../ecss"
@@ -199,7 +200,7 @@
     {
       "name": "etaf-telega-tests-day-separators-label-each-date",
       "file": "tests/etaf-telega-tests.el",
-      "purpose": "Each new date opens with a day label; today reads as 今天."
+      "purpose": "Each new date opens with a day label; today reads as \u4eca\u5929."
     },
     {
       "name": "etaf-telega-tests-activate-opens-media-or-composes",

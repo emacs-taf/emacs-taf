@@ -3,7 +3,7 @@
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 ;; Author: ETAF contributors
 ;; Version: 0.3.15
-;; Package-Requires: ((emacs "29.1") (etaf "0.3.19") (etaf-ui "0.3.14"))
+;; Package-Requires: ((emacs "29.1") (etaf "0.3.19") (etaf-media "0.1.0") (etaf-ui "0.3.14"))
 ;; Keywords: hypermedia, docs
 ;; URL: https://github.com/emacs-taf/etaf-md
 
@@ -435,6 +435,7 @@
     (when lisp-dir
       (add-to-list 'load-path lisp-dir))))
 
+(require 'etaf-media)
 (require 'etaf-ui)
 (require 'etaf-md-cache)
 (require 'etaf-md-theme)

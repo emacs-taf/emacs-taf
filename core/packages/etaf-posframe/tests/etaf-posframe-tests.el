@@ -2125,5 +2125,13 @@ leapfrogged a top-right stacked panel down below itself and back."
       (setq etaf-posframe-apps saved-apps
             etaf-posframe-app-map saved-map))))
 
+(ert-deftest etaf-posframe-registers-pip-frame-backend ()
+  "Loading `etaf-posframe' installs the unified child-frame backend for `etaf-pip'."
+  (should (listp etaf-pip-frame-backend))
+  (should (functionp (plist-get etaf-pip-frame-backend :acquire)))
+  (should (functionp (plist-get etaf-pip-frame-backend :park)))
+  (should (functionp (plist-get etaf-pip-frame-backend :paint-border)))
+  (should (functionp (plist-get etaf-pip-frame-backend :focus))))
+
 (provide 'etaf-posframe-tests)
 ;;; etaf-posframe-tests.el ends here

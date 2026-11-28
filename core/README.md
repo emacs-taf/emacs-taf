@@ -3,7 +3,7 @@
 [中文说明](README.zh-CN.md) · [Documentation](https://etaf.top) · [Monorepo](https://github.com/emacs-taf/emacs-taf) · [Package Archive](https://etaf.top/packages/)
 
 <!-- BEGIN:GENERATED:core-overview-en -->
-> **Read-only core projection.** This repository aggregates all 15 published ETAF core framework packages, universal extensions, the official installer and the bilingual reference manual (plus 1 incubating package(s) in `packages/`) from [`core/`](https://github.com/emacs-taf/emacs-taf/tree/main/core) in the **[Emacs TAF Monorepo](https://github.com/emacs-taf/emacs-taf)**.
+> **Read-only core projection.** This repository aggregates all 16 published ETAF core framework packages, universal extensions, the official installer and the bilingual reference manual (plus 1 incubating package(s) in `packages/`) from [`core/`](https://github.com/emacs-taf/emacs-taf/tree/main/core) in the **[Emacs TAF Monorepo](https://github.com/emacs-taf/emacs-taf)**.
 >
 > Please submit all pull requests to **[emacs-taf/emacs-taf](https://github.com/emacs-taf/emacs-taf/pulls)**.
 <!-- END:GENERATED:core-overview-en -->
@@ -41,6 +41,7 @@ Or add the subdirectories under `packages/` of this checkout directly to `load-p
 | [`ekp`](packages/ekp) | Knuth–Plass paragraph line breaking, with optional prebuilt C module |
 | [`ebox`](packages/ebox) | Box/Flex/Grid layout, rendering and incremental buffer publication |
 | [`etaf`](packages/etaf) | Declarative components, reactive state, hosts and application lifecycle |
+| [`etaf-media`](packages/etaf-media) | Native video playback engine (`etaf-video`, libmpv GPU overlay, ffmpeg, audio sidecar) |
 | [`etaf-ui`](packages/etaf-ui) | Reusable UI components: buttons, forms, panels, tables, navigation and window shells |
 | [`etaf-gamekit`](packages/etaf-gamekit) | Game definitions, independent instances and Godot / OpenSpiel bridges |
 | [`etaf-posframe`](packages/etaf-posframe) | Floating child-frame panels for any ETAF View |

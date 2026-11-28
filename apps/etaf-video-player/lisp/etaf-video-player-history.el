@@ -12,6 +12,7 @@
 
 ;;; Code:
 
+(require 'etaf-media)
 (require 'cl-lib)
 (require 'seq)
 (require 'subr-x)

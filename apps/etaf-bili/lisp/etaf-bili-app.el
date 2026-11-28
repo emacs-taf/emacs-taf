@@ -19,6 +19,7 @@
 (require 'subr-x)
 (require 'browse-url)
 (require 'etaf)
+(require 'etaf-media)
 (require 'etaf-ui)
 (require 'etaf-bili-model)
 (require 'etaf-bili-views)

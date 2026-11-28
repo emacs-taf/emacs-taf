@@ -348,6 +348,26 @@ Host 查询看到的是至少带一个非空语义属性（例如 `:ref`、`:rol
 
 **参见。** [Host](hosts.md#host-引用)。
 
+#### Function: etaf-host-ref-row-spans (runtime host-ref)
+
+返回 RUNTIME 中 HOST-REF 已提交的 Ebox `(ROW BEG END)` 行跨度列表。
+
+**参数。** RUNTIME 是已挂载 Runtime 对象。HOST-REF 是已提交的 Host 引用。
+
+**语义。** 查找 HOST-REF 对应的保留 Ebox 节点并返回其已提交的行跨度列表；当 HOST-REF 不存在或尚未布局时返回 nil。`etaf-media` 等原生浮层消费者通过该接口测量可见行与遮挡状态，而不必接触 Runtime 内部槽位。
+
+**返回。** `(ROW BEG END)` 条目列表，或 nil。
+
+#### Function: etaf-runtime-overlay-active-p (&optional runtime)
+
+当 RUNTIME 当前存在活动根 surface 或命名根浮层时返回非 nil。
+
+**参数。** RUNTIME 默认为当前已挂载 Runtime。
+
+**语义。** 当 RUNTIME 当前承载模态 surface 或任意命名根浮层时返回 `t`，否则返回 nil。原生浮层可据此在模态或浮层盖住画布时隐藏或避让硬件表面。
+
+**返回。** `t` 或 nil。
+
 #### Function: etaf-runtime-instances (x)
 
 访问 Runtime 对象 X 的槽 "instances"。

@@ -4,6 +4,7 @@
     ".",
     "tests",
     "../etaf",
+    "../etaf-media",
     "../etaf-ui",
     "../ebox",
     "../ecss"

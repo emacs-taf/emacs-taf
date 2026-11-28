@@ -41,7 +41,7 @@ class NativeReleaseTests(unittest.TestCase):
         import sys
         sys.path.insert(0, str(ROOT / "scripts"))
         import workspace_layout
-        for pkg in ("etaf-md", "etaf", "ekp"):
+        for pkg in ("etaf-md", "etaf-media", "ekp"):
             self.assertTrue((workspace_layout.package_path(ROOT, pkg) / "native" / "manifest.json").is_file(), pkg)
 
     def test_validate_manifest_rejects_non_https_bad_sha_and_unsafe_filenames(self):
@@ -109,13 +109,13 @@ class NativeReleaseTests(unittest.TestCase):
             lib_src.write_bytes(lib_payload)
 
             inp = base / "builds"
-            NATIVE.register_module("etaf", "windows-x86_64", mod_src, inp)
-            NATIVE.register_library("etaf", "windows-x86_64", "libmpv-2.dll", "libmpv-2", lib_src, inp)
+            NATIVE.register_module("etaf-media", "windows-x86_64", mod_src, inp)
+            NATIVE.register_library("etaf-media", "windows-x86_64", "libmpv-2.dll", "libmpv-2", lib_src, inp)
 
             stage = base / "stage"
             result = NATIVE.assemble_manifests(inp, write_packages=False, stage=stage, replace=True)
-            manifest = result["manifests"]["etaf"]
-            self.assertEqual([], NATIVE.validate_manifest(manifest, expected_package="etaf"))
+            manifest = result["manifests"]["etaf-media"]
+            self.assertEqual([], NATIVE.validate_manifest(manifest, expected_package="etaf-media"))
             win_entry = manifest["modules"][0]["platforms"]["windows-x86_64"]
             self.assertIn("libraries", win_entry)
             self.assertEqual(1, len(win_entry["libraries"]))
@@ -125,7 +125,7 @@ class NativeReleaseTests(unittest.TestCase):
             self.assertEqual(len(lib_payload), lib_entry["size"])
             self.assertEqual([], NATIVE.validate_index_manifest(result["index"], stage))
             self.assertEqual(2, len(result["index"]["artifacts"]))
-            self.assertEqual(lib_payload, (stage / "etaf/2/libmpv-2-v2-windows-x86_64.dll").read_bytes())
+            self.assertEqual(lib_payload, (stage / "etaf-media/2/libmpv-2-v2-windows-x86_64.dll").read_bytes())
 
             # Invalid companion library filename must be rejected.
             bad = json.loads(json.dumps(manifest))
@@ -138,7 +138,7 @@ class NativeReleaseTests(unittest.TestCase):
             self.assertEqual("2", idx["modules"]["etaf-video-mpv"]["current_version"])
             self.assertEqual("current", idx["modules"]["etaf-video-mpv"]["versions"]["2"]["status"])
             by_path = {a["path"]: a for a in idx["artifacts"]}
-            lib_rec = by_path["etaf/2/libmpv-2-v2-windows-x86_64.dll"]
+            lib_rec = by_path["etaf-media/2/libmpv-2-v2-windows-x86_64.dll"]
             self.assertEqual("library", lib_rec["role"])
             self.assertEqual("etaf-video-mpv", lib_rec["owner_module"])
             self.assertEqual("libmpv-2.dll", lib_rec["runtime_name"])
@@ -182,7 +182,7 @@ class NativeReleaseTests(unittest.TestCase):
         mod = enriched["modules"]["etaf-video-mpv"]
         self.assertEqual("2", mod["current_version"])
         self.assertEqual("current", mod["versions"]["2"]["status"])
-        self.assertEqual("0.3.14", mod["versions"]["2"]["min_package_version"])
+        self.assertEqual("0.1.0", mod["versions"]["2"]["min_package_version"])
         self.assertEqual("archived", mod["versions"]["1"]["status"])
         self.assertEqual("0.3.13", mod["versions"]["1"]["max_package_version"])
         by_path = {a["path"]: a for a in enriched["artifacts"]}

@@ -30,9 +30,7 @@
 
 (require 'cl-lib)
 (require 'ebox)
-(require 'etaf-component)
-(require 'etaf-reactive)
-(require 'etaf-runtime)
+(require 'etaf)
 (require 'etaf-video-audio)
 (require 'etaf-video-mpv)
 (require 'etaf-video-session)
@@ -305,7 +303,7 @@ backend instead of breaking video playback."
   (unless etaf-video--canvas-module-failed
     (or etaf-video-canvas-module-file
         (let* ((root (ignore-errors
-                       (file-name-directory (locate-library "etaf"))))
+                       (file-name-directory (locate-library "etaf-media"))))
                (file (and root
                           (expand-file-name
                            (format "native/etaf-video-canvas.%s"
@@ -825,8 +823,7 @@ frame does not pay for an ordinary ETAF publication."
 A canvas whose bottom rows are clipped by a shorter container still has
 contiguous rendered row spans and remains visible (clamped to its rendered
 spans) rather than falsely treated as occluded."
-  (or (etaf-runtime-surface runtime)
-      (etaf-runtime-overlay-entries runtime)
+  (or (etaf-runtime-overlay-active-p runtime)
       (null spans)
       (let ((prev nil)
             (gap nil))
@@ -916,10 +913,9 @@ spans) rather than falsely treated as occluded."
              session nil 0 0 0 0 nil 0 0 0 0 nil)
           (let* ((applied (etaf-video--instance-applied instance))
                  (rows (max 1 (or (plist-get applied :rows) 1)))
-                 (node (ignore-errors
-                         (etaf-runtime-host-node
-                          runtime (etaf-video--instance-ref instance))))
-                 (spans (and node (ignore-errors (ebox-node-row-spans node))))
+                 (spans (ignore-errors
+                          (etaf-host-ref-row-spans
+                           runtime (etaf-video--instance-ref instance))))
                  (occluded (etaf-video--instance-gpu-occluded-p
                             instance runtime buffer spans rows)))
             (cond
@@ -933,7 +929,7 @@ spans) rather than falsely treated as occluded."
               (when (etaf-video--instance-gpu-occluded instance)
                 (setf (etaf-video--instance-gpu-occluded instance) nil)
                 (etaf-video--instance-gpu-leave-occluded instance)
-                (setq spans (and node (ignore-errors (ebox-node-row-spans node)))))
+                (setq spans (ignore-errors (etaf-host-ref-row-spans runtime (etaf-video--instance-ref instance)))))
               (let* ((first-beg (and spans (cadr (car spans))))
                      (posn (and first-beg (posn-at-point first-beg window)))
                      (xy (and posn (posn-x-y posn))))
@@ -1508,6 +1504,18 @@ Keys include `:handle', `:engine', `:render-backend', `:mode', `:source',
                   :mode (etaf-video--instance-effective-mode instance)
                   :render-backend (etaf-video--instance-effective-backend instance))
             (etaf-video--session-state-any (etaf-video--session-for handle)))))
+
+(add-hook 'etaf-overlay-sync-functions #'etaf-video--sync-all-gpu-instances)
+
+(setq etaf-video-driver
+      (list :component 'etaf-video
+            :source-info #'etaf-video-source-info
+            :state #'etaf-video-state
+            :toggle #'etaf-video-toggle-playback
+            :seek #'etaf-video-seek
+            :audio-default (lambda () etaf-video-audio)
+            :volume-default (lambda () etaf-video-audio-volume)
+            :ffplay-program (lambda () etaf-video-ffplay-program)))
 
 (provide 'etaf-video-component)
 ;;; etaf-video-component.el ends here

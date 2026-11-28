@@ -370,6 +370,11 @@
    "name": "etaf-posframe-binds-apps-from-etaf-app-registry",
    "file": "tests/etaf-posframe-tests.el",
    "purpose": "etaf-posframe-bind-app and etaf-posframe-bind-apps inherit manifest defaults from etaf-app, apply caller overrides, bind shortcuts, and skip unregistered apps."
+  },
+  {
+   "name": "etaf-posframe-registers-pip-frame-backend",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "Loading etaf-posframe registers its unified child-frame pool, hairline border and focus backend into etaf-pip-frame-backend."
   }
  ]
 }

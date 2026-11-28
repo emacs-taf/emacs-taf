@@ -15,6 +15,7 @@
 (require 'cl-lib)
 (require 'json)
 (require 'etaf)
+(require 'etaf-media)
 
 (defconst etaf-video-tests--fixtures
   (expand-file-name "fixtures"
