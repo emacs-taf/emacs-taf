@@ -383,7 +383,7 @@ def media_assets(directory, *, partial=False):
             raise ValueError(f"Non-public media symlink: {path.relative_to(directory)}")
         if path.is_file():
             rel = path.relative_to(directory).as_posix()
-            if rel != "manifest.json":
+            if rel not in ("manifest.json", "index.html"):
                 present.add(rel)
     if not (present <= set(indexed)) or (not partial and set(indexed) != present):
         raise ValueError("A media payload may contain only its indexed assets")
@@ -404,11 +404,15 @@ def preserve_media(previous, candidate, mode):
     incoming = media_assets(new, partial=True)
     merged = {item["path"]: dict(item) for item in incoming["assets"]}
     shipped = {"media/manifest.json"}
+    if (new / "index.html").is_file():
+        shipped.add("media/index.html")
     for item in incoming["assets"]:
         if (new / item["path"]).is_file():
             shipped.add("media/" + item["path"])
     if old and old.exists():
         prior = media_assets(old)
+        if not (new / "index.html").is_file() and (old / "index.html").is_file():
+            shutil.copyfile(old / "index.html", new / "index.html")
         for item in prior["assets"]:
             rel = item["path"]
             old_file = old / rel

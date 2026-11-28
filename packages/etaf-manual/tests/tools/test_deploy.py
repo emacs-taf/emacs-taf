@@ -328,7 +328,7 @@ class DeploymentTests(unittest.TestCase):
         self.assertIn("Immutable native artifact differs", result.stderr)
         self.assertEqual((self.base / "current").readlink(), previous)
 
-    def media_payload(self, assets):
+    def media_payload(self, assets, index_html=None):
         """Build a media-only payload from {relpath: (namespace, bytes)}."""
         import hashlib
         self.sequence += 1
@@ -349,6 +349,11 @@ class DeploymentTests(unittest.TestCase):
             member = tarfile.TarInfo("media/manifest.json")
             member.size = len(manifest_bytes)
             archive.addfile(member, io.BytesIO(manifest_bytes))
+            if index_html is not None:
+                index_bytes = index_html.encode()
+                member = tarfile.TarInfo("media/index.html")
+                member.size = len(index_bytes)
+                archive.addfile(member, io.BytesIO(index_bytes))
         return output
 
     def test_media_assets_publish_merge_update_and_preserve(self):
@@ -357,22 +362,26 @@ class DeploymentTests(unittest.TestCase):
         shot_b = "site/shots/etaf-ncm.webp"
         self.deploy(self.media_payload({
             shot_a: ("etaf-bili", b"webp-v1"),
-        }), "media")
+        }, index_html="<h1>Media v1</h1>"), "media")
         self.assertEqual((self.base / "current/media" / shot_a).read_bytes(), b"webp-v1")
+        self.assertEqual((self.base / "current/media/index.html").read_text(), "<h1>Media v1</h1>")
 
-        # Incremental upload merges new asset and allows updating an existing screenshot.
+        # Incremental upload merges new asset, allows updating an existing screenshot,
+        # and inherits index.html when omitted.
         self.deploy(self.media_payload({
             shot_a: ("etaf-bili", b"webp-v2"),
             shot_b: ("site", b"site-shot-bytes"),
         }), "media")
         self.assertEqual((self.base / "current/media" / shot_a).read_bytes(), b"webp-v2")
         self.assertEqual((self.base / "current/media" / shot_b).read_bytes(), b"site-shot-bytes")
+        self.assertEqual((self.base / "current/media/index.html").read_text(), "<h1>Media v1</h1>")
 
-        # Subsequent site and package deploys preserve media/ intact.
+        # Subsequent site and package deploys preserve media/ and index.html intact.
         self.deploy(self.payload(page="site two"), "site")
         self.deploy(self.payload(packages=self.package("1.1.0")), "packages")
         self.assertEqual((self.base / "current/media" / shot_a).read_bytes(), b"webp-v2")
         self.assertEqual((self.base / "current/media" / shot_b).read_bytes(), b"site-shot-bytes")
+        self.assertEqual((self.base / "current/media/index.html").read_text(), "<h1>Media v1</h1>")
         manifest = json.loads((self.base / "current/media/manifest.json").read_text())
         self.assertEqual([a["path"] for a in manifest["assets"]], [shot_a, shot_b])
 

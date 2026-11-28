@@ -148,7 +148,7 @@ def check_native(base):
 
 
 def check_media(base):
-    """Verify the served /media/manifest.json is valid and non-empty."""
+    """Verify the served /media/ page matches /media/manifest.json."""
     manifest = json.loads(fetch(base.rstrip("/") + "/manifest.json"))
     assets = manifest.get("assets", [])
     problems = []
@@ -161,6 +161,19 @@ def check_media(base):
             problems.append(f"invalid or duplicate media path: {path!r}")
         else:
             seen.add(path)
+    page = fetch(base.rstrip("/") + "/")
+    listed = re.findall(r'data-media-path="([^"]+)"', page)
+    expected_paths = sorted(seen)
+    if sorted(listed) != expected_paths:
+        missing = sorted(set(expected_paths) - set(listed))
+        extra = sorted(set(listed) - set(expected_paths))
+        duplicates = sorted({p for p in listed if listed.count(p) > 1})
+        if missing:
+            problems.append(f"missing from media index page: {missing}")
+        if extra:
+            problems.append(f"unexpected on media index page: {extra}")
+        if duplicates:
+            problems.append(f"listed twice on media index page: {duplicates}")
     print(f"media={base}\nassets={len(assets)}")
     for problem in problems:
         print(problem)

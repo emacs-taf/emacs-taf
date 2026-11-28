@@ -133,15 +133,20 @@ def published_native_digests(url="https://etaf.top/native/manifest.json", timeou
     return {item["path"]: item["sha256"] for item in manifest.get("artifacts", ())}
 
 
-def published_media_digests(url="https://etaf.top/media/manifest.json", timeout=30):
-    """Return {relpath: sha256} for hosted media assets, or {} when unreadable."""
+def published_media_manifest(url="https://etaf.top/media/manifest.json", timeout=30):
+    """Return the currently published media manifest dict, or None when unreadable."""
     from urllib.request import ProxyHandler, build_opener
     try:
         opener = build_opener(ProxyHandler({}))
         with opener.open(url, timeout=timeout) as response:
-            manifest = json.loads(response.read())
+            return json.loads(response.read())
     except Exception:
-        return {}
+        return None
+
+
+def published_media_digests(url="https://etaf.top/media/manifest.json", timeout=30):
+    """Return {relpath: sha256} for hosted media assets, or {} when unreadable."""
+    manifest = published_media_manifest(url=url, timeout=timeout)
     if not isinstance(manifest, dict):
         return {}
     return {item["path"]: item["sha256"] for item in manifest.get("assets", ())}
@@ -176,7 +181,8 @@ def publish(args):
     native_pages_only = args.native_pages_only
     native_mode = bool(native_input or native_pages_only)
     media_input = args.media_only
-    media_mode = bool(media_input)
+    media_pages_only = args.media_pages_only
+    media_mode = bool(media_input or media_pages_only)
     archive_input = package_input or pages_input
     mode = ("native" if native_mode else
             "media" if media_mode else
@@ -234,14 +240,35 @@ def publish(args):
             native_report = archive_pages.native_pages(work / "native", manifest=page_manifest)
             print(f"Native index page for {native_report['modules']} module(s), "
                   f"{native_report['artifacts']} artifact(s)")
+        elif media_pages_only:
+            remote_manifest = published_media_manifest()
+            if not isinstance(remote_manifest, dict) or not isinstance(remote_manifest.get("assets"), list):
+                raise ValueError("Could not read currently published https://etaf.top/media/manifest.json")
+            (work / "media").mkdir()
+            (work / "media" / "manifest.json").write_text(
+                json.dumps(remote_manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            media_report = archive_pages.media_pages(work / "media", manifest=remote_manifest)
+            print(f"Media index page for {media_report['namespaces']} namespace(s), "
+                  f"{media_report['assets']} asset(s) (page only)")
         elif media_input:
             import importlib.util
             deploy_spec = importlib.util.spec_from_file_location("deploy_release", SITE / "scripts/deploy-release.py")
             deploy_mod = importlib.util.module_from_spec(deploy_spec)
             sys.path.insert(0, str(TOOLS))
             deploy_spec.loader.exec_module(deploy_mod)
-            deploy_mod.media_assets(media_input.resolve())
+            local_manifest = deploy_mod.media_assets(media_input.resolve())
             shutil.copytree(media_input.resolve(), work / "media")
+            remote_manifest = published_media_manifest()
+            merged_assets = {}
+            if isinstance(remote_manifest, dict):
+                for item in remote_manifest.get("assets", ()):
+                    merged_assets[item["path"]] = dict(item)
+            for item in local_manifest.get("assets", ()):
+                merged_assets[item["path"]] = dict(item)
+            page_manifest = {"schema": 1, "assets": sorted(merged_assets.values(), key=lambda a: a["path"])}
+            media_report = archive_pages.media_pages(work / "media", manifest=page_manifest)
+            print(f"Media index page for {media_report['namespaces']} namespace(s), "
+                  f"{media_report['assets']} asset(s)")
         elif package_input:
             # This command rejects partial/stale evidence and developer archives,
             # then copies an explicit public allowlist. Logs stay on this host.
@@ -381,9 +408,12 @@ def main():
                           help="Enrich published native/manifest.json metadata and regenerate native/index.html without re-uploading binaries")
     packages.add_argument("--media-only", type=Path,
                           help="Publish verified showcase media under media/ without changing site, packages or native")
+    packages.add_argument("--media-pages-only", action="store_true",
+                          help="Regenerate media/index.html from published media/manifest.json without re-uploading assets")
     args = parser.parse_args()
     if args.build_only and (args.packages or args.packages_only or args.pages_only
-                            or args.native_only or args.native_pages_only or args.media_only):
+                            or args.native_only or args.native_pages_only
+                            or args.media_only or args.media_pages_only):
         parser.error("--build-only cannot publish packages, archive pages, native artifacts or media")
     publish(args)
 

@@ -1775,6 +1775,272 @@ Older versions stay hosted under <em>Archived versions</em> so existing ELPA rel
     }
 
 
+MEDIA_STYLE = NATIVE_STYLE + """
+.media-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
+  gap: 1rem; padding: 1.15rem; }
+.media-card { display: flex; flex-direction: column; border: 1px solid var(--rule);
+  border-radius: 3px; background: var(--paper-2); overflow: hidden; }
+.media-card:hover { border-color: var(--rule-strong); }
+.media-thumb-link { display: flex; align-items: center; justify-content: center;
+  aspect-ratio: 16 / 10; background: var(--paper-3); border-bottom: 1px solid var(--rule);
+  overflow: hidden; text-decoration: none; }
+.media-thumb-link img { width: 100%; height: 100%; object-fit: cover; display: block;
+  transition: transform .18s ease; }
+.media-thumb-link:hover img { transform: scale(1.02); }
+.media-thumb-badge { font-family: var(--font-mono); font-size: .82rem; font-weight: 600;
+  color: var(--ink-2); padding: .35rem .7rem; border: 1px solid var(--rule-strong);
+  border-radius: 3px; background: var(--paper); }
+.media-meta { padding: .75rem .85rem .85rem; display: flex; flex-direction: column; gap: .45rem;
+  flex: 1 1 auto; }
+.media-name { font-family: var(--font-mono); font-size: .78rem; font-weight: 600; color: var(--ink);
+  text-decoration: none; overflow-wrap: anywhere; }
+.media-name:hover { color: var(--accent); text-decoration: underline; }
+.media-facts { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem .55rem;
+  font-family: var(--font-mono); font-size: .7rem; color: var(--ink-3); }
+.media-actions { margin-top: auto; padding-top: .35rem; display: flex; flex-wrap: wrap; gap: .4rem; }
+@media (max-width: 760px) {
+  .media-grid { grid-template-columns: 1fr; padding: .85rem; }
+}
+"""
+
+MEDIA_SCRIPT = """
+(() => {
+  const controls = document.querySelector('[data-media-controls]');
+  const filterInput = document.getElementById('media-filter');
+  const emptyBanner = document.querySelector('[data-media-empty]');
+  const sections = Array.from(document.querySelectorAll('section.mod-card[data-namespace]'));
+  if (controls) controls.hidden = false;
+
+  const state = { namespace: 'all', query: '' };
+
+  const apply = () => {
+    const terms = state.query.trim().toLowerCase().split(/\\s+/).filter(Boolean);
+    let visibleTotal = 0;
+    for (const sec of sections) {
+      const ns = sec.dataset.namespace;
+      const cards = Array.from(sec.querySelectorAll('[data-media-path]'));
+      let nsVisible = 0;
+      const nsOk = state.namespace === 'all' || ns === state.namespace;
+      for (const card of cards) {
+        const hay = card.dataset.search || '';
+        const show = nsOk && (!terms.length || terms.every((t) => hay.includes(t)));
+        card.hidden = !show;
+        if (show) nsVisible += 1;
+      }
+      sec.hidden = nsVisible === 0;
+      const badge = sec.querySelector('[data-ns-count]');
+      if (badge) {
+        badge.textContent = nsVisible === cards.length
+          ? `${cards.length} ${cards.length === 1 ? 'asset' : 'assets'}`
+          : `${nsVisible} of ${cards.length}`;
+      }
+      visibleTotal += nsVisible;
+    }
+    if (emptyBanner) emptyBanner.hidden = visibleTotal > 0;
+    document.querySelectorAll('[data-ns-tab]').forEach((btn) => {
+      btn.setAttribute('aria-selected', btn.dataset.nsTab === state.namespace ? 'true' : 'false');
+    });
+  };
+
+  document.addEventListener('click', (event) => {
+    const tab = event.target.closest('[data-ns-tab]');
+    if (tab) {
+      state.namespace = tab.dataset.nsTab || 'all';
+      apply();
+      return;
+    }
+    if (event.target.closest('[data-reset-media]')) {
+      state.namespace = 'all';
+      state.query = '';
+      if (filterInput) filterInput.value = '';
+      apply();
+      return;
+    }
+    const copyBtn = event.target.closest('[data-copy-text]');
+    if (copyBtn) {
+      const text = copyBtn.dataset.copyText || '';
+      const orig = copyBtn.textContent;
+      const finish = () => {
+        copyBtn.textContent = 'Copied';
+        copyBtn.classList.add('done');
+        setTimeout(() => { copyBtn.textContent = orig; copyBtn.classList.remove('done'); }, 1500);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(finish, finish);
+      } else {
+        finish();
+      }
+    }
+  });
+
+  if (filterInput) {
+    filterInput.addEventListener('input', () => {
+      state.query = filterInput.value;
+      apply();
+    });
+  }
+  document.addEventListener('keydown', (event) => {
+    if (event.key === '/' && document.activeElement !== filterInput
+        && !event.metaKey && !event.ctrlKey && !event.altKey) {
+      event.preventDefault();
+      if (filterInput) filterInput.focus();
+    }
+  });
+  apply();
+})();
+"""
+
+
+def _format_bytes(size):
+    if size >= 1024 * 1024:
+        return f"{size / (1024 * 1024):.2f} MB"
+    if size >= 1024:
+        return f"{size / 1024:.1f} KB"
+    return f"{size} B"
+
+
+def media_pages(media_dir, manifest=None):
+    """Write a browsable, data-driven index.html gallery for https://etaf.top/media/."""
+    if manifest is None:
+        manifest = json.loads((media_dir / "manifest.json").read_text(encoding="utf-8"))
+    assets = sorted(manifest.get("assets", []), key=lambda item: item["path"])
+
+    by_ns = {}
+    for item in assets:
+        by_ns.setdefault(item["namespace"], []).append(item)
+
+    namespaces = sorted(by_ns, key=lambda n: (0 if n == "site" else 1, n))
+    total_bytes = sum(int(item.get("size", 0)) for item in assets)
+    img_exts = {".webp", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".avif"}
+
+    ns_tabs = [
+        f'<button class="plat-tab" type="button" role="tab" aria-selected="true" data-ns-tab="all">'
+        f'<span>All</span><span class="cnt">{len(assets)}</span></button>'
+    ]
+    sections = []
+    for ns in namespaces:
+        items = by_ns[ns]
+        safe_ns = html.escape(ns)
+        ns_bytes = sum(int(i.get("size", 0)) for i in items)
+        ns_tabs.append(
+            f'<button class="plat-tab" type="button" role="tab" aria-selected="false"'
+            f' data-ns-tab="{html.escape(ns, quote=True)}">'
+            f'<span>{safe_ns}</span><span class="cnt">{len(items)}</span></button>'
+        )
+        pkg_link = (
+            f'<a class="pill pkg-link" href="../packages/{safe_ns}/">package: {safe_ns} ↗</a>'
+            if ns != "site" else '<span class="pill current">website assets</span>'
+        )
+        cards = []
+        for item in items:
+            rel = item["path"]
+            safe_rel = html.escape(rel, quote=True)
+            name = rel.split("/", 1)[1] if "/" in rel else rel
+            safe_name = html.escape(name)
+            ext = Path(rel).suffix.lower()
+            fmt = html.escape(ext.lstrip(".").upper() or "FILE")
+            size_str = html.escape(_format_bytes(int(item.get("size", 0))))
+            sha_short = html.escape(str(item.get("sha256", ""))[:12])
+            full_url = f"https://etaf.top/media/{rel}"
+            stem = Path(name).stem
+            md_snippet = f"![{stem}]({full_url})"
+            search_hay = html.escape(f"{ns} {rel} {ext} {sha_short}".lower(), quote=True)
+            if ext in img_exts:
+                thumb = f'<img src="{safe_rel}" alt="{safe_name}" loading="lazy">'
+            else:
+                thumb = f'<span class="media-thumb-badge">{fmt}</span>'
+            cards.append(
+                f'<article class="media-card" data-media-path="{safe_rel}" data-search="{search_hay}">'
+                f'<a class="media-thumb-link" href="{safe_rel}" target="_blank" rel="noopener">{thumb}</a>'
+                f'<div class="media-meta">'
+                f'<a class="media-name" href="{safe_rel}" target="_blank" rel="noopener">{safe_name}</a>'
+                f'<div class="media-facts">'
+                f'<span class="pill">{fmt}</span>'
+                f'<span>{size_str}</span>'
+                f'<span title="{html.escape(str(item.get("sha256", "")), quote=True)}">{sha_short}</span>'
+                f'</div>'
+                f'<div class="media-actions">'
+                f'<button class="copy-mini" type="button" data-copy-text="{html.escape(full_url, quote=True)}">Copy URL</button>'
+                f'<button class="copy-mini" type="button" data-copy-text="{html.escape(md_snippet, quote=True)}">Copy MD</button>'
+                f'</div>'
+                f'</div></article>'
+            )
+        noun = "asset" if len(items) == 1 else "assets"
+        sections.append(f"""<section class="mod-card" id="ns-{safe_ns}" data-namespace="{html.escape(ns, quote=True)}">
+<div class="mod-head">
+<div class="mod-head-top">
+<div class="mod-title-group">
+<h2>{safe_ns}</h2>
+{pkg_link}
+<span class="pill">{html.escape(_format_bytes(ns_bytes))}</span>
+</div>
+<span class="tag" data-ns-count>{len(items)} {noun}</span>
+</div>
+</div>
+<div class="media-grid">
+{chr(10).join(cards)}
+</div>
+</section>""")
+
+    body = f"""<main class="wrap">
+<nav class="crumbs" aria-label="Breadcrumb"><a href="/">ETAF</a>
+<span aria-hidden="true">/</span><a href="/packages/">Packages</a>
+<span aria-hidden="true">/</span><span>Media</span></nav>
+<section class="native-hero">
+<div class="native-hero-grid">
+<div class="native-hero-copy">
+<p class="eyebrow">Hosted documentation &amp; showcase assets</p>
+<h1>ETAF media library</h1>
+<p class="lead">Checksum-verified showcase screenshots, OpenGraph cards and demo media for the ETAF
+ecosystem. Hosted externally so Git repositories stay lean; publish new assets with
+<code>python3 scripts/media-publish.py publish</code>. Machine-readable index:
+<a href="manifest.json">manifest.json</a>.</p>
+</div>
+<div class="native-kpis" aria-label="Summary counts">
+<div class="kpi"><span class="kpi-label">Namespaces</span><span class="kpi-val">{len(namespaces)}</span></div>
+<div class="kpi"><span class="kpi-label">Assets</span><span class="kpi-val">{len(assets)}</span></div>
+<div class="kpi"><span class="kpi-label">Total size</span><span class="kpi-val">{html.escape(_format_bytes(total_bytes))}</span></div>
+</div>
+</div>
+</section>
+<section class="controls-bar" data-media-controls hidden aria-label="Filter media assets">
+<div class="controls-top">
+<div class="plat-tabs" role="tablist" aria-label="Filter by namespace">
+{"".join(ns_tabs)}
+</div>
+</div>
+<div class="controls-search">
+<div class="filter">
+<label class="visually-hidden" for="media-filter">Filter media assets</label>
+<input id="media-filter" type="search" autocomplete="off" spellcheck="false"
+ placeholder="Filter by package, filename, format (webp, png) or SHA-256">
+<kbd>/</kbd>
+</div>
+</div>
+</section>
+<div class="empty-banner" data-media-empty hidden>
+<p>No media asset matches the current filter.</p>
+<button class="copy" type="button" data-reset-media>Reset filters</button>
+</div>
+{chr(10).join(sections)}
+<footer class="site-footer">
+<p>Generated deterministically from <a href="manifest.json">manifest.json</a> on every media publication.</p>
+</footer>
+</main>"""
+    (media_dir / "index.html").write_text(page(
+        "ETAF media library", body, "",
+        canonical="https://etaf.top/media/",
+        description="Hosted showcase screenshots and media assets for the Emacs TAF ecosystem.",
+        extra_style=MEDIA_STYLE,
+        script=MEDIA_SCRIPT),
+        encoding="utf-8")
+    return {
+        "namespaces": len(namespaces),
+        "assets": len(assets),
+        "bytes": total_bytes,
+    }
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     command = parser.add_subparsers(dest="command")
@@ -1782,6 +2048,8 @@ def main():
     write_parser.add_argument("--directory", type=Path, required=True)
     native_parser = command.add_parser("write-native", help="Write native binary index page from a native directory")
     native_parser.add_argument("--directory", type=Path, required=True)
+    media_parser = command.add_parser("write-media", help="Write media gallery index page from a media directory")
+    media_parser.add_argument("--directory", type=Path, required=True)
     args_list = sys.argv[1:]
     if not args_list or args_list == ["help"]:
         parser.print_help()
@@ -1792,6 +2060,8 @@ def main():
     directory = args.directory.resolve()
     if args.command == "write-native":
         report = native_pages(directory)
+    elif args.command == "write-media":
+        report = media_pages(directory)
     else:
         report = archive_pages(directory)
     print(json.dumps({"directory": str(directory), **report}, indent=2))
