@@ -15,6 +15,7 @@
 ;;; Code:
 
 (require 'cl-lib)
+(require 'json)
 (require 'etaf-manual-book)
 
 (defconst export-site--locales
@@ -25,11 +26,19 @@
   '(("en" . (:runnable "Runnable example"
              :figure "Inline figure"
              :appendices "Appendices"
-             :indices "Indices"))
+             :indices "Indices"
+             :manual "Reference Manual"
+             :appendix "Appendix"
+             :index "Index"
+             :fallback-desc "ETAF Reference Manual: concepts and public interfaces for building text applications in Emacs."))
     ("zh-CN" . (:runnable "可运行示例"
                 :figure "插图"
                 :appendices "附录"
-                :indices "索引")))
+                :indices "索引"
+                :manual "参考手册"
+                :appendix "附录"
+                :index "索引"
+                :fallback-desc "《ETAF 参考手册》：在 Emacs 中构建文本应用的概念模型与公共接口。")))
   "Labels the exporter inserts around special content.")
 
 (defun export-site--ui (language key)
@@ -108,10 +117,73 @@ chapter links become site routes."
     (let ((body (string-join (nreverse out) "\n")))
       (string-trim body))))
 
+(defun export-site--yaml-string (text)
+  "Return TEXT escaped for a double-quoted YAML scalar."
+  (let ((s (or text "")))
+    (setq s (replace-regexp-in-string "\\\\" "\\\\" s t t))
+    (setq s (replace-regexp-in-string "\"" "\\\"" s t t))
+    (setq s (replace-regexp-in-string "[\r\n]+" " " s t t))
+    s))
+
+(defun export-site--strip-markdown (text)
+  "Return TEXT with inline Markdown syntax flattened to plain prose."
+  (let ((s (or text "")))
+    (setq s (replace-regexp-in-string "!\\[\\([^]]*\\)\\]([^)]*)" "\\1" s))
+    (setq s (replace-regexp-in-string "\\[\\([^]]*\\)\\]([^)]*)" "\\1" s))
+    (setq s (replace-regexp-in-string "`+\\([^`]+\\)`+" "\\1" s))
+    (setq s (replace-regexp-in-string "\\*\\*\\([^*]+\\)\\*\\*" "\\1" s))
+    (setq s (replace-regexp-in-string "\\*\\([^*]+\\)\\*" "\\1" s))
+    (setq s (replace-regexp-in-string "[ \t\r\n]+" " " s))
+    (string-trim s)))
+
+(defun export-site--trim-description (text language)
+  "Shorten TEXT to a clean preview description appropriate for LANGUAGE."
+  (let* ((limit (if (equal language "zh-CN") 110 185))
+         (s (export-site--strip-markdown text)))
+    (if (<= (length s) limit)
+        s
+      (let* ((cut (substring s 0 limit))
+             (sentence-end
+              (if (equal language "zh-CN")
+                  (and (string-match "\\`\\(.\\{32,\\}[。！？]\\)" cut)
+                       (match-string 1 cut))
+                (and (string-match "\\`\\(.\\{60,\\}[.!?]\\)\\(?: \\|\\'\\)" cut)
+                     (match-string 1 cut)))))
+        (cond
+         (sentence-end sentence-end)
+         ((equal language "zh-CN")
+          (concat (string-trim-right cut "[ ，、；：！？（([「『]+") "…"))
+         ((string-match "\\`\\(.+\\) [^ ]*\\'" cut)
+          (concat (string-trim-right (match-string 1 cut) "[ ,.;:!?-]+") "…"))
+         (t (concat (string-trim-right cut) "…")))))))
+
+(defun export-site--chapter-description (chapter language)
+  "Extract a clean single-paragraph preview description from CHAPTER."
+  (let* ((raw (export-site--chapter-text chapter))
+         (lines (split-string raw "\n"))
+         (title-seen nil)
+         (para nil)
+         (done nil))
+    (while (and lines (not done))
+      (let ((line (string-trim (pop lines))))
+        (cond
+         ((and (not title-seen) (string-match-p "\\`# [^#]" line))
+          (setq title-seen t))
+         ((not title-seen) nil)
+         ((string-empty-p line)
+          (when para (setq done t)))
+         ((string-match-p "\\`\\(?:#\\|```\\|~~~\\||\\|<!--\\|[-*+] \\|[0-9]+\\. \\)" line)
+          (setq done t))
+         (t
+          (push line para)))))
+    (let ((joined (string-trim (string-join (nreverse para) " "))))
+      (if (string-empty-p joined)
+          (export-site--ui language :fallback-desc)
+        (export-site--trim-description joined language)))))
+
 (defun export-site--chapter-title (chapter)
   "Return CHAPTER's title for frontmatter."
-  (let ((title (or (plist-get chapter :title) "")))
-    (replace-regexp-in-string "\"" "\\\\\"" title t t)))
+  (export-site--yaml-string (or (plist-get chapter :title) "")))
 
 (defun export-site--chapter-text (chapter)
   "Return CHAPTER's Markdown source."
@@ -128,10 +200,48 @@ chapter links become site routes."
 
 (defun export-site--page (chapter language locale ids)
   "Return the page text of CHAPTER in LANGUAGE and LOCALE; IDS are chapter ids."
-  (format "---\ntitle: \"%s\"\n---\n\n%s\n"
+  (format "---\ntitle: \"%s\"\ndescription: \"%s\"\n---\n\n%s\n"
           (export-site--chapter-title chapter)
+          (export-site--yaml-string (export-site--chapter-description chapter language))
           (export-site--transform (export-site--chapter-text chapter)
                                   language locale ids)))
+
+(defun export-site--og-manifest ()
+  "Return the section-level OG card manifest vector for landing and manual pages."
+  (vconcat
+   (list
+    '((key . "landing-en")
+      (output . "landing.png")
+      (url_label . "etaf.top")
+      (title . "Emacs Text Application Framework")
+      (subtitle . "Build complete text applications in Emacs with declarative components, cascade styling and incremental updates.")
+      (footer_left . "EMACS TEXT APPLICATION FRAMEWORK")
+      (footer_right . "EMACS 29.1+")
+      (lang . "en"))
+    '((key . "landing-zh")
+      (output . "zh-cn.png")
+      (url_label . "etaf.top/zh-cn")
+      (title . "Emacs 文本应用框架")
+      (subtitle . "用 Web 的方式在 Emacs 里构建完整的文本应用：声明式组件、级联样式与增量更新。")
+      (footer_left . "EMACS TEXT APPLICATION FRAMEWORK")
+      (footer_right . "EMACS 29.1+")
+      (lang . "zh-CN"))
+    '((key . "manual-en")
+      (output . "manual.png")
+      (url_label . "etaf.top/introduction")
+      (title . "Reference Manual")
+      (subtitle . "How the framework works, and what every public interface does.")
+      (footer_left . "EMACS TEXT APPLICATION FRAMEWORK")
+      (footer_right . "EMACS 29.1+")
+      (lang . "en"))
+    '((key . "manual-zh")
+      (output . "manual-zh.png")
+      (url_label . "etaf.top/zh-cn/introduction")
+      (title . "ETAF 参考手册")
+      (subtitle . "系统阐述框架工作机制，收录每个核心包的全部公共接口。")
+      (footer_left . "EMACS TEXT APPLICATION FRAMEWORK")
+      (footer_right . "EMACS 29.1+")
+      (lang . "zh-CN")))))
 
 (defun export-site--js (value)
   "Return VALUE as a double-quoted JavaScript string."
@@ -212,6 +322,7 @@ chapter links become site routes."
     (export-site--write
      (expand-file-name "404.md" docs)
      (concat "---\ntitle: Page not found / 未找到页面\n"
+             "description: \"This address is not a reference page. Browse the ETAF Reference Manual or installation guide.\"\n"
              "template: splash\npagefind: false\n---\n\n"
              "This address is not a reference page. "
              "[Install ETAF](/introduction/#installation) or "
@@ -222,7 +333,12 @@ chapter links become site routes."
      (expand-file-name "src/sidebar.mjs" site)
      (concat "// Generated by scripts/export-site.el; do not edit.\nexport default [\n"
              (export-site--sidebar books)
-             "\n];\n"))))
+             "\n];\n"))
+    (export-site--write
+     (expand-file-name "src/og-manifest.json" site)
+     (concat (let ((json-encoding-pretty-print t))
+               (json-encode (export-site--og-manifest)))
+             "\n"))))
 
 (defun export-site--arguments ()
   "Parse command line arguments."

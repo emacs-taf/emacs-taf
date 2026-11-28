@@ -3,9 +3,12 @@ node_modules/
 dist/
 .astro/
 
-# Generated from book/ by scripts/export-site.el
+# Generated from book/ by scripts/export-site.el and scripts/og_cards.py
 src/content/docs/
 src/sidebar.mjs
+src/og-manifest.json
+src/og-hashes.json
+public/og/
 
 # Logs and environment
 npm-debug.log*

@@ -8,10 +8,11 @@ file count and newest changelog entries. No checkout, network access or release
 workspace is involved, which is what lets a published archive regenerate its
 pages alone.
 
-`write --directory DIR` creates `DIR/index.html` and `DIR/<name>/index.html` and
-nothing else, because the deployer accepts only those files next to the indexed
-tarballs. Download counts are filled from `downloads.json` by the browser; the
-markup keeps its placeholder so the archive still reads without JavaScript.
+`write --directory DIR` creates `DIR/index.html`, `DIR/og.png` and
+`DIR/<name>/index.html` and nothing else, because the deployer accepts only
+those files next to the indexed tarballs. Download counts are filled from
+`downloads.json` by the browser; the markup keeps its placeholder so the archive
+still reads without JavaScript.
 """
 from __future__ import annotations
 
@@ -24,6 +25,9 @@ import re
 import sys
 import tarfile
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import og_cards
+
 MONTHS = ("January", "February", "March", "April", "May", "June", "July",
           "August", "September", "October", "November", "December")
 
@@ -31,7 +35,20 @@ MONTHS = ("January", "February", "March", "April", "May", "June", "July",
 # has to guess a time zone or re-derive a date from an ambiguous string.
 STAMP = re.compile(r"([0-9]{4}-[0-9]{2}-[0-9]{2})T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:[+-][0-9]{2}:[0-9]{2}|Z)\Z")
 
-REPOSITORIES = {"etaf-install": "emacs-taf/emacs-taf"}
+MONOREPO = "emacs-taf/emacs-taf"
+CORE_REPO = "emacs-taf/etaf"
+# Core framework, extension, installer and manual packages live together in
+# `emacs-taf/etaf` under `packages/<name>` (and `core/packages/<name>` in the
+# canonical monorepo).
+CORE_PACKAGES = {
+    "ecss", "ekp", "ebox", "etaf", "etaf-ui", "etaf-posframe", "etaf-ext",
+    "etaf-db", "etaf-gamekit", "etaf-install", "etaf-manual", "etaf-devtools",
+    "etaf-translate", "etaf-highlight", "etaf-hints", "etaf-export",
+}
+GAME_PACKAGES = {
+    "etaf-balatro", "etaf-solitaire", "etaf-xiangqi", "etaf-tanks", "etaf-salvage",
+}
+REPOSITORIES = {"etaf-web": MONOREPO}
 
 # Where the page files each package this project publishes.  A new archive
 # package must be placed here: the writer refuses to publish pages while a
@@ -383,10 +400,12 @@ th.src, td.src { width: 1%; text-align: right; white-space: nowrap; }
 
 
 def page(title, body, downloads="downloads.json", *, canonical, description,
-         extra_style="", script=None):
+         og_image, og_image_alt=None, extra_style="", script=None):
     title = html.escape(title)
     description = html.escape(description)
     canonical = html.escape(canonical)
+    og_image_esc = html.escape(og_image)
+    og_alt_esc = html.escape(og_image_alt or title)
     page_script = PAGE_SCRIPT if script is None else script
     style = STYLE + ("\n" + extra_style if extra_style else "")
     return f"""<!doctype html>
@@ -403,14 +422,14 @@ def page(title, body, downloads="downloads.json", *, canonical, description,
 <meta property="og:title" content="{title}">
 <meta property="og:description" content="{description}">
 <meta property="og:url" content="{canonical}">
-<meta property="og:image" content="https://etaf.top/media/site/og/archive.png">
+<meta property="og:image" content="{og_image_esc}">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="ETAF package archive">
+<meta property="og:image:alt" content="{og_alt_esc}">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="{title}">
 <meta name="twitter:description" content="{description}">
-<meta name="twitter:image" content="https://etaf.top/media/site/og/archive.png">
+<meta name="twitter:image" content="{og_image_esc}">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <style>{style}</style>
 <script>{THEME_SCRIPT}</script>
@@ -716,24 +735,43 @@ versioned file never changes bytes.</p>
 <p class="asof" data-downloads-asof hidden></p>
 </footer>
 </main>"""
+    pkg_noun = "PACKAGE" if len(packages) == 1 else "PACKAGES"
+    archive_og_hash = og_cards.render_card(
+        og_cards.CardSpec(
+            title="Package archive",
+            subtitle="Framework, extensions, applications and games. One package.el entry installs everything.",
+            url_label="etaf.top/packages",
+            footer_left="PACKAGE.EL ARCHIVE",
+            footer_right=f"{len(packages)} {pkg_noun}",
+            lang="en",
+        ),
+        package_dir / "og.png",
+    )
+    archive_og_url = f"https://etaf.top/packages/og.png?v={archive_og_hash}"
+
     (package_dir / "index.html").write_text(page(
         "ETAF package archive", body,
         canonical="https://etaf.top/packages/",
         description="ETAF package archive: framework, extensions, applications and games for Emacs 29.1 "
-                    "and newer. One package.el entry installs everything."))
+                    "and newer. One package.el entry installs everything.",
+        og_image=archive_og_url,
+        og_image_alt="ETAF package archive"))
     used_by = {name: [] for name in names}
     for item in packages:
         for dependency, _minimum in item["requirements"]:
             if dependency in used_by and dependency != item["name"]:
                 used_by[dependency].append(item["name"])
+    workspace = manifest.get("workspace", "")
     for item in packages:
         package_page(item, sources, updated, rows_by_name, used_by,
-                     package_dir / item["name"], community.get(item["name"]))
+                     package_dir / item["name"], community.get(item["name"]),
+                     og_image=archive_og_url, workspace=workspace)
     return {"packages": len(packages), "updated": str(newest) if newest else None,
             "unplaced": unplaced(packages, community, catalog)}
 
 
-def package_page(item, sources, updated, rows_by_name, used_by, directory, origin=None):
+def package_page(item, sources, updated, rows_by_name, used_by, directory, origin=None, *,
+                 og_image="https://etaf.top/packages/og.png", workspace=""):
     """Write one package's detail page.
 
     ORIGIN names the author of a community package: the page links their
@@ -745,15 +783,46 @@ def package_page(item, sources, updated, rows_by_name, used_by, directory, origi
     display = html.escape(source_name(item, origin))
     version = html.escape(item["version"])
     home = (origin or {}).get("url", "")
-    repo = home or f"https://github.com/{REPOSITORIES.get(name, f'emacs-taf/{name}')}"
-    label = repo.removeprefix("https://").removeprefix("http://")
     community = bool(origin)
     revision = sources.get(name, "")
+    if community:
+        repo = home
+        label = repo.removeprefix("https://").removeprefix("http://")
+        commit_url = f"{repo}/commit/{revision}" if revision else ""
+        changelog_url = f"{repo}/blob/{revision}/CHANGELOG.md" if revision else ""
+    elif name in CORE_PACKAGES:
+        repo = (f"https://github.com/{CORE_REPO}" if name == "etaf"
+                else f"https://github.com/{CORE_REPO}/tree/main/packages/{name}")
+        label = (CORE_REPO if name == "etaf"
+                 else f"{CORE_REPO} · packages/{name}")
+        if revision and workspace and revision == workspace:
+            commit_url = f"https://github.com/{MONOREPO}/commit/{revision}"
+            changelog_url = f"https://github.com/{MONOREPO}/blob/{revision}/core/packages/{name}/CHANGELOG.md"
+        elif revision:
+            commit_url = f"https://github.com/{CORE_REPO}/commit/{revision}"
+            changelog_url = f"https://github.com/{CORE_REPO}/blob/{revision}/packages/{name}/CHANGELOG.md"
+        else:
+            commit_url = ""
+            changelog_url = ""
+    else:
+        slug = REPOSITORIES.get(name, f"emacs-taf/{name}")
+        repo = f"https://github.com/{slug}"
+        label = slug
+        layer = "games" if name in GAME_PACKAGES else "apps"
+        if revision and workspace and revision == workspace:
+            commit_url = f"https://github.com/{MONOREPO}/commit/{revision}"
+            changelog_url = f"https://github.com/{MONOREPO}/blob/{revision}/{layer}/{name}/CHANGELOG.md"
+        elif revision:
+            commit_url = f"{repo}/commit/{revision}"
+            changelog_url = f"{repo}/blob/{revision}/CHANGELOG.md"
+        else:
+            commit_url = ""
+            changelog_url = ""
     facts = inspect_archive(directory.parent / item["file"])
     day = stamp_date(updated.get(name))
     source_line = (
-        f'<a href="{html.escape(repo)}/commit/{revision}"><code>{html.escape(revision[:12])}</code></a>'
-        if revision else "not recorded")
+        f'<a href="{html.escape(commit_url)}"><code>{html.escape(revision[:12])}</code></a>'
+        if revision and commit_url else "not recorded")
     if day:
         commit_note = (f'<span class="fact-note">newest commit that changed the files this '
                        f"package ships{' — ' + html.escape(revision[:12]) if revision else ''}</span>")
@@ -775,7 +844,6 @@ def package_page(item, sources, updated, rows_by_name, used_by, directory, origi
     used_by_fact = (", ".join(f'<a href="../{html.escape(other)}/">{html.escape(other)}</a>'
                               for other in users) if users else "nothing else in this archive")
     changes = latest_changes(facts["changelog"])
-    changelog_url = f"{repo}/blob/{revision}/CHANGELOG.md" if revision else ""
     changed = ""
     if changes:
         entries = "\n".join(f"<li>{html.escape(text)}</li>" for text in changes)
@@ -843,10 +911,13 @@ The archive is built from the commit above; rebuild it from that commit to compa
 </main>"""
     target = directory / "index.html"
     target.parent.mkdir(parents=True, exist_ok=True)
+    page_title = f"{source_name(item, origin)} — ETAF package archive"
     target.write_text(page(
-        f"{source_name(item, origin)} — ETAF package archive", body, "../downloads.json",
+        page_title, body, "../downloads.json",
         canonical=f"https://etaf.top/packages/{name}/",
-        description=item.get("summary", "")))
+        description=item.get("summary", ""),
+        og_image=og_image,
+        og_image_alt=page_title))
 
 
 NATIVE_PLATFORMS = (
@@ -1759,10 +1830,25 @@ Older versions stay hosted under <em>Archived versions</em> so existing ELPA rel
 <p>Generated deterministically from <a href="manifest.json">manifest.json</a> on every native release.</p>
 </footer>
 </main>"""
+    mod_noun = "MODULE" if len(module_names) == 1 else "MODULES"
+    bin_noun = "BINARY" if len(artifacts) == 1 else "BINARIES"
+    native_og_hash = og_cards.render_card(
+        og_cards.CardSpec(
+            title="Prebuilt native modules",
+            subtitle="Checksum-verified prebuilt Emacs dynamic modules for ETAF packages (macOS, Linux, Windows).",
+            url_label="etaf.top/native",
+            footer_left="NATIVE DYNAMIC MODULES",
+            footer_right=f"{len(module_names)} {mod_noun} · {len(artifacts)} {bin_noun}",
+            lang="en",
+        ),
+        native_dir / "og.png",
+    )
     (native_dir / "index.html").write_text(page(
         "ETAF prebuilt native modules", body, "",
         canonical="https://etaf.top/native/",
         description="Checksum-verified prebuilt Emacs dynamic modules for ETAF packages (macOS, Linux, Windows).",
+        og_image=f"https://etaf.top/native/og.png?v={native_og_hash}",
+        og_image_alt="ETAF prebuilt native modules",
         extra_style=NATIVE_STYLE,
         script=NATIVE_SCRIPT),
         encoding="utf-8")
@@ -2027,10 +2113,25 @@ ecosystem. Hosted externally so Git repositories stay lean; publish new assets w
 <p>Generated deterministically from <a href="manifest.json">manifest.json</a> on every media publication.</p>
 </footer>
 </main>"""
+    ns_noun = "NAMESPACE" if len(namespaces) == 1 else "NAMESPACES"
+    asset_noun = "ASSET" if len(assets) == 1 else "ASSETS"
+    media_og_hash = og_cards.render_card(
+        og_cards.CardSpec(
+            title="Media library",
+            subtitle="Checksum-verified showcase screenshots, OpenGraph cards and demo assets for the ETAF ecosystem.",
+            url_label="etaf.top/media",
+            footer_left="HOSTED MEDIA ASSETS",
+            footer_right=f"{len(namespaces)} {ns_noun} · {len(assets)} {asset_noun}",
+            lang="en",
+        ),
+        media_dir / "og.png",
+    )
     (media_dir / "index.html").write_text(page(
         "ETAF media library", body, "",
         canonical="https://etaf.top/media/",
         description="Hosted showcase screenshots and media assets for the Emacs TAF ecosystem.",
+        og_image=f"https://etaf.top/media/og.png?v={media_og_hash}",
+        og_image_alt="ETAF media library",
         extra_style=MEDIA_STYLE,
         script=MEDIA_SCRIPT),
         encoding="utf-8")

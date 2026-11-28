@@ -130,14 +130,14 @@ def packages(directory, *, historical=False, partial=False):
                 raise ValueError(f"Non-public package directory: {path.name}")
             continue
         if (not path.is_file()
-                or path.name not in ("manifest.json", "archive-contents", "index.html")
+                or path.name not in ("manifest.json", "archive-contents", "index.html", "og.png")
                 and not PACKAGE.fullmatch(path.name)):
             raise ValueError(f"Non-public package file: {path.name}")
-    allowed = {"manifest.json", "archive-contents", "index.html",
+    allowed = {"manifest.json", "archive-contents", "index.html", "og.png",
                *(item["file"] for item in manifest["packages"])}
     required = {"manifest.json", "archive-contents",
                 *(item["file"] for item in manifest["packages"])}
-    optional = {"index.html"}
+    optional = {"index.html", "og.png"}
     present = {path.name for path in directory.iterdir()
                if not path.is_dir()}
     pages = {path.name for path in directory.iterdir() if path.is_dir()}
@@ -255,7 +255,7 @@ def native_artifacts(directory, *, partial=False):
             raise ValueError(f"Non-public native symlink: {path.relative_to(directory)}")
         if path.is_file():
             rel = path.relative_to(directory).as_posix()
-            if rel not in ("manifest.json", "index.html"):
+            if rel not in ("manifest.json", "index.html", "og.png"):
                 present.add(rel)
     if not (present <= set(indexed)) or (not partial and set(indexed) != present):
         raise ValueError("A native payload may contain only its indexed artifacts")
@@ -306,6 +306,8 @@ def preserve_native(previous, candidate, mode):
     shipped = {"native/manifest.json"}
     if (new / "index.html").is_file():
         shipped.add("native/index.html")
+    if (new / "og.png").is_file():
+        shipped.add("native/og.png")
     for item in incoming["artifacts"]:
         if (new / item["path"]).is_file():
             shipped.add("native/" + item["path"])
@@ -313,6 +315,8 @@ def preserve_native(previous, candidate, mode):
         prior = native_artifacts(old)
         if not (new / "index.html").is_file() and (old / "index.html").is_file():
             shutil.copyfile(old / "index.html", new / "index.html")
+        if not (new / "og.png").is_file() and (old / "og.png").is_file():
+            shutil.copyfile(old / "og.png", new / "og.png")
         for item in prior["artifacts"]:
             rel = item["path"]
             old_file = old / rel
@@ -383,7 +387,7 @@ def media_assets(directory, *, partial=False):
             raise ValueError(f"Non-public media symlink: {path.relative_to(directory)}")
         if path.is_file():
             rel = path.relative_to(directory).as_posix()
-            if rel not in ("manifest.json", "index.html"):
+            if rel not in ("manifest.json", "index.html", "og.png"):
                 present.add(rel)
     if not (present <= set(indexed)) or (not partial and set(indexed) != present):
         raise ValueError("A media payload may contain only its indexed assets")
@@ -406,6 +410,8 @@ def preserve_media(previous, candidate, mode):
     shipped = {"media/manifest.json"}
     if (new / "index.html").is_file():
         shipped.add("media/index.html")
+    if (new / "og.png").is_file():
+        shipped.add("media/og.png")
     for item in incoming["assets"]:
         if (new / item["path"]).is_file():
             shipped.add("media/" + item["path"])
@@ -413,6 +419,8 @@ def preserve_media(previous, candidate, mode):
         prior = media_assets(old)
         if not (new / "index.html").is_file() and (old / "index.html").is_file():
             shutil.copyfile(old / "index.html", new / "index.html")
+        if not (new / "og.png").is_file() and (old / "og.png").is_file():
+            shutil.copyfile(old / "og.png", new / "og.png")
         for item in prior["assets"]:
             rel = item["path"]
             old_file = old / rel
@@ -474,8 +482,17 @@ def preserve_packages(previous, candidate, mode):
                 shutil.copyfile(path, target)
     # Validate only once NEW is the complete archive a client would read.
     packages(new, historical=True)
-    return {item["file"] for item in shipped["packages"]} | {"archive-contents",
-                                                            "manifest.json"}
+    shipped_paths = {item["file"] for item in shipped["packages"]} | {
+        "archive-contents",
+        "manifest.json",
+    }
+    for extra in ("index.html", "og.png"):
+        if (new / extra).is_file():
+            shipped_paths.add("packages/" + extra)
+    for item in shipped["packages"]:
+        if (new / item["name"] / "index.html").is_file():
+            shipped_paths.add(f"packages/{item['name']}/index.html")
+    return shipped_paths
 
 
 def verify_http(release, url, stamp, complete=()):
@@ -489,6 +506,10 @@ def verify_http(release, url, stamp, complete=()):
     """
     complete = set(complete)
     paths = [Path(page) for page in SITE_PAGES]
+    if (release / "og").is_dir():
+        for card in ("og/landing.png", "og/zh-cn.png", "og/manual.png", "og/manual-zh.png"):
+            if (release / card).is_file():
+                paths.append(Path(card))
     if (release / "packages").is_dir():
         paths.extend(path.relative_to(release)
                      for path in sorted((release / "packages").rglob("*")) if path.is_file())

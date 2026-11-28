@@ -6,12 +6,18 @@
 // (`starlight-theme`), so switching on either side carries over.
 import '../styles/brand.css';
 import { landing } from '../data/landing.mjs';
+import ogHashes from '../og-hashes.json';
 import mark from '../assets/etaf-icon.svg';
 
 interface Props { language: 'en' | 'zh' }
 const { language } = Astro.props;
 const t = landing(language);
 const hero = t.apps.find((app) => app.name === 'etaf-ncm')!;
+const ogKey = language === 'zh' ? 'landing-zh' : 'landing-en';
+const ogPath = language === 'zh' ? '/og/zh-cn.png' : '/og/landing.png';
+const ogHash = (ogHashes as Record<string, string>)[ogKey];
+const ogImage = `https://etaf.top${ogPath}${ogHash ? `?v=${ogHash}` : ''}`;
+const ogTitle = `${t.title} — ${t.gloss || t.fullName}`;
 // Games keep their own proportions: each row's columns follow the images'
 // aspect ratios, so a row shares one height without cropping or bars.
 const gameRows = [t.games.slice(0, 2), t.games.slice(2, 4)];
@@ -26,27 +32,28 @@ const number = (index: number) => String(index + 1).padStart(2, '0');
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>{t.title} — {t.gloss || t.fullName}</title>
+  <title>{ogTitle}</title>
   <meta name="description" content={t.description} />
+  <link rel="canonical" href={`https://etaf.top${t.base}`} />
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <link rel="alternate" hreflang="en" href="https://etaf.top/" />
   <link rel="alternate" hreflang="zh-CN" href="https://etaf.top/zh-cn/" />
-  {/* Link previews: the hero capture is the page's own subject, and its real
-      pixel size lets Telegram draw a large card instead of guessing a crop. */}
+  {/* Link previews: each locale gets its own 1200x630 editorial card generated
+      at build time, versioned by content hash so crawlers pick up updates. */}
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="ETAF" />
-  <meta property="og:title" content={`${t.title} — ${t.fullName}`} />
+  <meta property="og:title" content={ogTitle} />
   <meta property="og:description" content={t.description} />
   <meta property="og:url" content={`https://etaf.top${t.base}`} />
   <meta property="og:locale" content={t.lang === 'zh-CN' ? 'zh_CN' : 'en_US'} />
-  <meta property="og:image" content="https://etaf.top/media/site/og/landing.png" />
-  <meta property="og:image:width" content={String(hero.width)} />
-  <meta property="og:image:height" content={String(hero.height)} />
-  <meta property="og:image:alt" content={hero.alt} />
+  <meta property="og:image" content={ogImage} />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content={ogTitle} />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content={`${t.title} — ${t.fullName}`} />
+  <meta name="twitter:title" content={ogTitle} />
   <meta name="twitter:description" content={t.description} />
-  <meta name="twitter:image" content="https://etaf.top/media/site/og/landing.png" />
+  <meta name="twitter:image" content={ogImage} />
   {t.lang === 'zh-CN' && <link rel="stylesheet" href={`${wenkai}/lxgwwenkai-regular.css`} />}
   <script is:inline>
     (() => {

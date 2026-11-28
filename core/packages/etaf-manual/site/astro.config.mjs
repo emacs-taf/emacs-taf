@@ -24,24 +24,17 @@ export default defineConfig({
       logo: { src: './src/assets/etaf-icon.svg' },
       customCss: ['./src/styles/custom.css'],
       components: {
+        Head: './src/components/Head.astro',
         ThemeSelect: './src/components/ThemeSelect.astro',
         LanguageSelect: './src/components/LanguageSelect.astro',
       },
       // Chinese text and code render in LXGW WenKai, subset by unicode-range,
-      // so a page fetches only the glyph files it uses.
+      // so a page fetches only the glyph files it uses.  Per-page OpenGraph
+      // images and descriptions come from export-site.el + Head.astro.
       head: [
         { tag: 'link', attrs: { rel: 'stylesheet', href: `${wenkai}/lxgwwenkai-regular.css` } },
         { tag: 'link', attrs: { rel: 'stylesheet', href: `${wenkai}/lxgwwenkai-bold.css` } },
         { tag: 'link', attrs: { rel: 'stylesheet', href: `${wenkai}/lxgwwenkaimono-regular.css` } },
-        // Link previews for the manual: Starlight supplies the title and URL,
-        // but no image or description, so a shared card fills both gaps.
-        { tag: 'meta', attrs: { property: 'og:image', content: 'https://etaf.top/media/site/og/manual.png' } },
-        { tag: 'meta', attrs: { property: 'og:image:width', content: '1200' } },
-        { tag: 'meta', attrs: { property: 'og:image:height', content: '630' } },
-        { tag: 'meta', attrs: { property: 'og:image:alt', content: 'ETAF Reference Manual' } },
-        { tag: 'meta', attrs: { name: 'twitter:image', content: 'https://etaf.top/media/site/og/manual.png' } },
-        { tag: 'meta', attrs: { name: 'description', content: 'ETAF Reference Manual: concepts and public interfaces for building text applications in Emacs.' } },
-        { tag: 'meta', attrs: { property: 'og:description', content: 'ETAF Reference Manual: concepts and public interfaces for building text applications in Emacs.' } },
       ],
       locales: {
         root: { label: 'English', lang: 'en' },

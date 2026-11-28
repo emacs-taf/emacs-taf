@@ -4,7 +4,7 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "export": "emacs -Q --batch -L .. -L ../lisp -l scripts/export-site.el -- --site .",
+    "export": "emacs -Q --batch -L .. -L ../lisp -l scripts/export-site.el -- --site . && python3 scripts/og_cards.py site --site .",
     "dev": "npm run export && astro dev",
     "build": "npm run export && astro build",
     "preview": "astro preview",

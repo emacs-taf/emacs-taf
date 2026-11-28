@@ -13,8 +13,8 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 # The archive primitives belong to the container that owns them.
-CONTAINER = ROOT.parents[1]
-ARCHIVE_TOOL = ROOT.parents[1] / "scripts/package_archive.py"
+CONTAINER = next((p for p in ROOT.parents if (p / "workspace.json").is_file()), ROOT.parents[1])
+ARCHIVE_TOOL = CONTAINER / "scripts/package_archive.py"
 PAGES_TOOL = ROOT / "site/scripts/archive_pages.py"
 
 
@@ -105,12 +105,34 @@ class ArchivePageTests(unittest.TestCase):
             self.assertEqual(self.index().count(f'<a href="{name}/"><strong>'), 1)
             self.assertTrue((self.archive / name / "index.html").is_file())
         written = {path.name for path in self.archive.iterdir() if path.is_file()}
-        self.assertEqual(written - before, {"index.html"})
+        self.assertEqual(written - before, {"index.html", "og.png"})
         self.assertEqual(sorted(path.name for path in self.archive.iterdir() if path.is_dir()),
                          ["alpha", "beta", "gamma"])
         for directory in ("alpha", "beta", "gamma"):
             self.assertEqual(sorted(path.name for path in (self.archive / directory).iterdir()),
                              ["index.html"])
+
+    def test_archive_and_package_pages_emit_section_og_card_with_page_metadata(self):
+        self.pages()
+        index_html = self.index()
+        self.assertRegex(
+            index_html,
+            r'<meta property="og:image" content="https://etaf\.top/packages/og\.png\?v=[0-9a-f]{8}">',
+        )
+        self.assertIn('<meta property="og:image:alt" content="ETAF package archive">', index_html)
+        index_png = (self.archive / "og.png").read_bytes()
+        self.assertTrue(index_png.startswith(b"\x89PNG\r\n\x1a\n"))
+
+        for name in ("alpha", "beta", "gamma"):
+            detail_html = self.page(name)
+            self.assertRegex(
+                detail_html,
+                r'<meta property="og:image" content="https://etaf\.top/packages/og\.png\?v=[0-9a-f]{8}">',
+            )
+            self.assertIn(
+                f'<meta property="og:image:alt" content="{name} — ETAF package archive">',
+                detail_html,
+            )
 
     def test_index_shows_the_newest_shipped_change_of_each_package(self):
         self.pages()
@@ -240,6 +262,34 @@ class ArchivePageTests(unittest.TestCase):
         self.assertEqual(index.count('<tr data-search='), 3)
         self.assertIn("Updated", index)
 
+    def test_core_packages_link_unified_etaf_repo_and_monorepo_commits(self):
+        import shutil
+        rename = {"alpha": "ebox", "beta": "etaf-tanks"}
+        for old, new in rename.items():
+            shutil.copyfile(self.archive / f"{old}-1.0.0.tar", self.archive / f"{new}-1.0.0.tar")
+        for package in self.manifest["packages"]:
+            if package["name"] in rename:
+                new = rename[package["name"]]
+                package["name"] = new
+                package["file"] = f"{new}-1.0.0.tar"
+        commit = "d" * 40
+        document = dict(self.manifest)
+        document["workspace"] = commit
+        document["sources"] = {"ebox": commit, "etaf-tanks": commit, "gamma": commit}
+        document["updated"] = {"ebox": "2026-10-20T22:40:00+08:00",
+                               "etaf-tanks": "2026-09-01T09:00:00+08:00",
+                               "gamma": "2026-09-02T10:00:00+08:00"}
+        (self.archive / "manifest.json").write_text(
+            json.dumps(document, indent=2, sort_keys=True) + "\n")
+        self.pages()
+        ebox_page = self.page("ebox")
+        self.assertIn('href="https://github.com/emacs-taf/etaf/tree/main/packages/ebox"', ebox_page)
+        self.assertIn(f'href="https://github.com/emacs-taf/emacs-taf/commit/{commit}"', ebox_page)
+        self.assertIn(f'href="https://github.com/emacs-taf/emacs-taf/blob/{commit}/core/packages/ebox/CHANGELOG.md"', ebox_page)
+        tanks_page = self.page("etaf-tanks")
+        self.assertIn('href="https://github.com/emacs-taf/etaf-tanks"', tanks_page)
+        self.assertIn(f'href="https://github.com/emacs-taf/emacs-taf/commit/{commit}"', tanks_page)
+
 
 class NativePageTests(unittest.TestCase):
     def setUp(self):
@@ -366,6 +416,13 @@ class NativePageTests(unittest.TestCase):
         # View switch supports By Module and By Platform.
         self.assertIn('data-view-mode="module"', html_text)
         self.assertIn('data-view-mode="platform"', html_text)
+        # Native page emits its own dedicated OpenGraph card instead of reusing archive.png.
+        self.assertRegex(
+            html_text,
+            r'<meta property="og:image" content="https://etaf\.top/native/og\.png\?v=[0-9a-f]{8}">',
+        )
+        self.assertIn('<meta property="og:image:alt" content="ETAF prebuilt native modules">', html_text)
+        self.assertTrue((self.native_dir / "og.png").read_bytes().startswith(b"\x89PNG\r\n\x1a\n"))
 
         # Verify check-archive.py --native passes against a real local HTTP server.
         import functools
@@ -419,6 +476,46 @@ class NativePageTests(unittest.TestCase):
         self.assertIn(':root[data-theme="light"] .theme .sun { display: block; }', html_text)
         self.assertIn("window.addEventListener('pageshow'", html_text)
         self.assertIn("window.addEventListener('storage'", html_text)
+
+
+class MediaPageTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.media_dir = Path(self.temp.name) / "media"
+        self.media_dir.mkdir()
+
+    def test_media_page_emits_dedicated_og_card(self):
+        manifest = {
+            "schema": 1,
+            "assets": [
+                {
+                    "namespace": "site",
+                    "path": "site/shots/etaf-ncm.webp",
+                    "sha256": "a" * 64,
+                    "size": 12345,
+                },
+                {
+                    "namespace": "etaf-md",
+                    "path": "etaf-md/etaf-md-wide.webp",
+                    "sha256": "b" * 64,
+                    "size": 23456,
+                },
+            ],
+        }
+        (self.media_dir / "manifest.json").write_text(
+            json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        result = subprocess.run(
+            [sys.executable, str(PAGES_TOOL), "write-media", "--directory", str(self.media_dir)],
+            capture_output=True, text=True, timeout=60)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        html_text = (self.media_dir / "index.html").read_text(encoding="utf-8")
+        self.assertRegex(
+            html_text,
+            r'<meta property="og:image" content="https://etaf\.top/media/og\.png\?v=[0-9a-f]{8}">',
+        )
+        self.assertIn('<meta property="og:image:alt" content="ETAF media library">', html_text)
+        self.assertTrue((self.media_dir / "og.png").read_bytes().startswith(b"\x89PNG\r\n\x1a\n"))
 
 
 if __name__ == "__main__":

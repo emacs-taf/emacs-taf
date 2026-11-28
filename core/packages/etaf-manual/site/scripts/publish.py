@@ -347,8 +347,10 @@ def publish(args):
             for name, source in files.items():
                 with source.open("rb") as stream:
                     remote("cat > " + shlex.quote(staging + "/" + name), stdin=stream)
+            verify_url = os.environ.get("ETAF_TOP_VERIFY_URL", "https://cn.etaf.top")
             command = ["python3", staging + "/deploy-release.py", "--archive", staging + "/payload.tgz",
-                       "--release", stamp, "--mode", mode, "--keep", str(keep)]
+                       "--release", stamp, "--mode", mode, "--keep", str(keep),
+                       "--verify-url", verify_url]
             try:
                 remote(shlex.join(command))
             except (subprocess.CalledProcessError, subprocess.TimeoutExpired):

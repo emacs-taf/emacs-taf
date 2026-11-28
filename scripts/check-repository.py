@@ -133,6 +133,16 @@ def git_checkout_p(root):
         return False
 
 
+def git_worktree_p(root):
+    """Whether ROOT sits inside a Git work tree whose ignore rules apply."""
+    try:
+        out = subprocess.check_output(['git', '-C', str(root), 'rev-parse', '--is-inside-work-tree'],
+                                      stderr=subprocess.DEVNULL, text=True).strip()
+        return out == 'true'
+    except (subprocess.CalledProcessError, OSError):
+        return False
+
+
 def owner_binary(root):
     """Return the change graph binary that owns ROOT's checkout.
 
@@ -163,7 +173,7 @@ def package_of_container(root):
 
 def inventory(root):
     """Include new nonignored files, and exclude deleted or generated files."""
-    if git_checkout_p(root):
+    if git_checkout_p(root) or (package_of_container(root) and git_worktree_p(root)):
         raw = subprocess.check_output(['git', '-C', str(root), 'ls-files', '-z',
                                        '--cached', '--others', '--exclude-standard'])
         return sorted({s for s in raw.decode().split('\0') if s and (root / s).is_file()})

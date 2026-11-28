@@ -1,0 +1,37 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "etaf-edge",
+  "main": "index.js",
+  "compatibility_date": "2026-11-28",
+  "observability": {
+    "enabled": true,
+    "traces": {
+      "enabled": true
+    }
+  },
+  "vars": {
+    "ORIGIN_HOST": "cn.etaf.top",
+    "CN_REDIRECT_HOST": "cn.etaf.top",
+    "CN_REDIRECT_ENABLED": "true"
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "DOWNLOAD_STATS",
+        "class_name": "DownloadStatsDO"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["DownloadStatsDO"]
+    }
+  ],
+  "routes": [
+    {
+      "pattern": "etaf.top/*",
+      "zone_name": "etaf.top"
+    }
+  ]
+}

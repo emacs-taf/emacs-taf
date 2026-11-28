@@ -54,7 +54,7 @@ make site-publish PUBLISH_ARGS='--packages /path/to/release'
 
 归档页还会显示每个包的下载次数。服务端的 `site/scripts/download-stats.py` 由 systemd 定时器（`etaf-download-stats`，每十分钟）运行，统计的是「安装」而不是「取文件」：版本化 tar 包只有同一客户端在一分钟内也请求它的 `.tar.sig` 才计数——package.el 会这么做，爬虫或手工 `curl` 不会；同一客户端每个包每个 UTC 日只算一次，所以反复跑测试不会把数字抬高；部署校验带 `?deployment=` 的请求直接跳过。它把 `packages/downloads.json` 写在不可变版本目录之外。页面在浏览器里读取该文件，文件缺失时保留破折号，所以没有 JavaScript 或定时器时归档仍可阅读。访问日志、定时器与 `/srv/etaf.top/stats` 服务路径属于主机配置，发布过程不改动它们。
 
-链接预览复用同一套生成页面。手册页头提供 `https://etaf.top/og/manual.png` 和统一描述；归档的每个页面输出自己的 canonical、标题和描述，并指向 `https://etaf.top/og/archive.png`。首页预览用 `/shots/etaf-ncm.png`。卡片是 `site/public/og/` 下的 1200×630 PNG；保持路径稳定，已有链接的预览才不会失效。Telegram 按 URL 缓存预览：换图后把链接发给 `@WebpageBot`，或用带版本参数的 URL 分享一次，强制重新抓取。
+链接预览按大栏目在构建或发布阶段由 `site/scripts/og_cards.py`（经 `rsvg-convert`）生成 7 张 1200×630 PNG 卡片，生成的图片不进版本库。每个页面输出自己的 canonical、标题、描述与带 8 位内容摘要参数（`?v=<hash>`）的 `og:image`：中英文首页指向 `/og/landing.png` 与 `/og/zh-cn.png`，中英文参考手册分别指向 `/og/manual.png` 与 `/og/manual-zh.png`（同时每章导出各自导语作为 `description`），包归档首页与各包详情页指向 `/packages/og.png`（带实时包数），`/native/` 与 `/media/` 各自输出 `/native/og.png` 与 `/media/og.png`。Telegram 按 URL 缓存预览：更新页面后把链接发给 `@WebpageBot`，或用带版本参数的 URL 分享一次，即可强制重新抓取。
 
 切换后，部署器经 HTTPS 回读页面入口和包文件字节。检查失败则恢复上一条 `current`，再检查恢复后的服务；恢复检查遇到网络错误会明确标记为未验证，不声称回滚验证成功。客户端也回读 `current`。传输中断后应先查看该软链，再决定是否重试；SSH 响应丢失不等于发布没有发生。
 

@@ -15,7 +15,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 # The archive primitives belong to the container that owns them.
-CONTAINER = ROOT.parents[1]
+CONTAINER = next((p for p in ROOT.parents if (p / "workspace.json").is_file()), ROOT.parents[1])
 
 
 @unittest.skipIf(os.name == "nt", "Deployment runs on the POSIX web host")
@@ -453,6 +453,68 @@ class DeploymentTests(unittest.TestCase):
         }, metadata_only=True), "native", success=False)
         self.assertIn("Invalid native artifact record", bad.stderr)
         self.assertEqual((self.base / "current").readlink(), previous)
+
+    def test_og_cards_deploy_verify_and_preserve_across_packages_native_and_media(self):
+        archive = self.package()
+        (archive / "index.html").write_text("<h1>Packages</h1>")
+        (archive / "og.png").write_bytes(b"\x89PNG\r\n\x1a\npackages-og")
+        (archive / "example").mkdir()
+        (archive / "example/index.html").write_text("<h1>example</h1>")
+        self.deploy(self.payload(page="site", packages=archive), "combined")
+        self.assertEqual((self.base / "current/packages/og.png").read_bytes(), b"\x89PNG\r\n\x1a\npackages-og")
+
+        # Native and media payloads accept unindexed og.png alongside index.html and preserve it.
+        native_tgz = self.work / "native-og.tgz"
+        bin_bytes = b"native-bin"
+        import hashlib
+        native_manifest = {
+            "schema": 1,
+            "artifacts": [{
+                "package": "ekp", "module": "ekp", "version": "1",
+                "platform": "darwin-arm64", "path": "ekp/1/ekp-v1-darwin-arm64.dylib",
+                "sha256": hashlib.sha256(bin_bytes).hexdigest(), "size": len(bin_bytes),
+            }],
+        }
+        with tarfile.open(native_tgz, "w:gz") as tar:
+            for name, raw in (
+                ("native/ekp/1/ekp-v1-darwin-arm64.dylib", bin_bytes),
+                ("native/manifest.json", (json.dumps(native_manifest) + "\n").encode()),
+                ("native/index.html", b"<h1>Native</h1>"),
+                ("native/og.png", b"\x89PNG\r\n\x1a\nnative-og"),
+            ):
+                m = tarfile.TarInfo(name)
+                m.size = len(raw)
+                tar.addfile(m, io.BytesIO(raw))
+        self.deploy(native_tgz, "native")
+        self.assertEqual((self.base / "current/native/og.png").read_bytes(), b"\x89PNG\r\n\x1a\nnative-og")
+
+        media_tgz = self.work / "media-og.tgz"
+        shot_bytes = b"webp-shot"
+        media_manifest = {
+            "schema": 1,
+            "assets": [{
+                "namespace": "site", "path": "site/shots/demo.webp",
+                "sha256": hashlib.sha256(shot_bytes).hexdigest(), "size": len(shot_bytes),
+            }],
+        }
+        with tarfile.open(media_tgz, "w:gz") as tar:
+            for name, raw in (
+                ("media/site/shots/demo.webp", shot_bytes),
+                ("media/manifest.json", (json.dumps(media_manifest) + "\n").encode()),
+                ("media/index.html", b"<h1>Media</h1>"),
+                ("media/og.png", b"\x89PNG\r\n\x1a\nmedia-og"),
+            ):
+                m = tarfile.TarInfo(name)
+                m.size = len(raw)
+                tar.addfile(m, io.BytesIO(raw))
+        self.deploy(media_tgz, "media")
+        self.assertEqual((self.base / "current/media/og.png").read_bytes(), b"\x89PNG\r\n\x1a\nmedia-og")
+
+        # Subsequent site-only deploy preserves all three og.png cards intact.
+        self.deploy(self.payload(page="site v2"), "site")
+        self.assertEqual((self.base / "current/packages/og.png").read_bytes(), b"\x89PNG\r\n\x1a\npackages-og")
+        self.assertEqual((self.base / "current/native/og.png").read_bytes(), b"\x89PNG\r\n\x1a\nnative-og")
+        self.assertEqual((self.base / "current/media/og.png").read_bytes(), b"\x89PNG\r\n\x1a\nmedia-og")
 
 
 if __name__ == "__main__":
