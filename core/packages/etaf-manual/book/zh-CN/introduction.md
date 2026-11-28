@@ -203,7 +203,7 @@
 ## 版本
 
 <!-- BEGIN:GENERATED:manual-versions-zh -->
-本版描述 `ecss 0.1.4`、`ekp 1.0.8`、`ebox 3.1.15`、`etaf 0.3.19`、`etaf-media 0.1.0`、`etaf-ui 0.3.14`、`etaf-doc 0.1.0`、`etaf-db 0.1.4` 和 `etaf-posframe 0.3.5`。本书与代码一同维护：本书已覆盖的包有公共接口缺少条目、签名与代码不符、正文点名了非公共符号，或上面的版本与包不符时，构建检查都会失败。
+本版描述 `ecss 0.1.4`、`ekp 1.0.9`、`ebox 3.1.15`、`etaf 0.3.20`、`etaf-media 0.1.0`、`etaf-ui 0.3.15`、`etaf-doc 0.1.0`、`etaf-db 0.1.5` 和 `etaf-posframe 0.3.6`。本书与代码一同维护：本书已覆盖的包有公共接口缺少条目、签名与代码不符、正文点名了非公共符号，或上面的版本与包不符时，构建检查都会失败。
 <!-- END:GENERATED:manual-versions-zh -->
 
 ## 在 Emacs 中阅读本手册

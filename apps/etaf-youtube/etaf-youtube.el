@@ -2,8 +2,8 @@
 
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 ;; Author: ETAF contributors
-;; Version: 0.2.2
-;; Package-Requires: ((emacs "29.1") (etaf "0.3.15") (etaf-media "0.1.0") (etaf-ui "0.3.8") (etaf-db "0.1.0"))
+;; Version: 0.2.3
+;; Package-Requires: ((emacs "29.1") (etaf "0.3.20") (etaf-media "0.1.0") (etaf-ui "0.3.15") (etaf-db "0.1.5"))
 ;; Keywords: multimedia, hypermedia, ui
 ;; URL: https://github.com/emacs-taf/etaf-youtube
 

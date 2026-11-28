@@ -10,15 +10,15 @@ The manual documents the version combination in the table below. Except for EKP 
 | Package | Version | Documented with |
 | --- | --- | --- |
 | `ecss` | 0.1.4 | Emacs 28.1 |
-| `ekp` | 1.0.8 | Emacs 29.1 |
+| `ekp` | 1.0.9 | Emacs 29.1 |
 | `ebox` | 3.1.15 | Emacs 29.1, `ecss 0.1.4` |
-| `etaf` | 0.3.19 | Emacs 29.1, `ebox 3.1.15`, `ecss 0.1.4` |
-| `etaf-media` | 0.1.0 | Emacs 29.1, `etaf 0.3.19`, `ebox 3.1.15` |
-| `etaf-ui` | 0.3.14 | Emacs 29.1, `etaf 0.3.19` |
-| `etaf-doc` | 0.1.0 | Emacs 29.1, `etaf 0.3.19`, `etaf-ui 0.3.14` |
-| `etaf-db` | 0.1.4 | Emacs 29.1, `etaf 0.3.19` |
-| `etaf-posframe` | 0.3.5 | Emacs 29.1, `etaf 0.3.19`, `etaf-ui 0.3.14`, Posframe 0.9.0 |
-| `etaf-manual` | 0.1.27 | Emacs 29.1, `etaf 0.3.19`, `etaf-ui 0.3.14`, `etaf-doc 0.1.0` |
+| `etaf` | 0.3.20 | Emacs 29.1, `ebox 3.1.15`, `ecss 0.1.4` |
+| `etaf-media` | 0.1.0 | Emacs 29.1, `etaf 0.3.20`, `ebox 3.1.15` |
+| `etaf-ui` | 0.3.15 | Emacs 29.1, `etaf 0.3.20` |
+| `etaf-doc` | 0.1.0 | Emacs 29.1, `etaf 0.3.20`, `etaf-ui 0.3.15` |
+| `etaf-db` | 0.1.5 | Emacs 29.1, `etaf 0.3.20` |
+| `etaf-posframe` | 0.3.6 | Emacs 29.1, `etaf 0.3.20`, `etaf-ui 0.3.15`, Posframe 0.9.0 |
+| `etaf-manual` | 0.1.28 | Emacs 29.1, `etaf 0.3.20`, `etaf-ui 0.3.15`, `etaf-doc 0.1.0` |
 <!-- END:GENERATED:manual-version-table-en -->
 
 The third column is the combination this edition documents.  Each package's `Package-Requires` header states the minimum it installs with, which can be lower.

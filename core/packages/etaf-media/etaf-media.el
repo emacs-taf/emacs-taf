@@ -4,7 +4,7 @@
 
 ;; Author: ETAF contributors
 ;; Version: 0.1.0
-;; Package-Requires: ((emacs "29.1") (etaf "0.3.19") (ebox "3.1.15"))
+;; Package-Requires: ((emacs "29.1") (etaf "0.3.20") (ebox "3.1.15"))
 ;; Keywords: multimedia, ui, tools
 ;; URL: https://github.com/emacs-taf/etaf
 
