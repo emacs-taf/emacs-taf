@@ -6,15 +6,15 @@ An image reaches the screen only after it has been prepared. Preparation reads t
 
 <!-- index: image preparation; prepared image; source; adapter; inset -->
 
-`ebox-image-prepare` is the only I/O boundary of the image model. Its SOURCE is a local file name — expanded, with its truename, size, modification times and inode forming the cache identity — or an Emacs image descriptor that carries `:file` or `:data`. Remote files are rejected before reading. COLUMNS and ROWS are the character area the image must fill, and the adapter choice decides which path is tried: `auto` tries a graphical descriptor first, then the converter list, then a monochrome placeholder; `text` skips the graphical path; `placeholder` skips both.
+`ebox-image-prepare` is the only I/O boundary of the image model. Its SOURCE is a local file name — expanded, with its truename, size, modification times and inode forming the cache identity — or an Emacs image descriptor that carries `:file` or `:data`. Remote files are rejected before reading. COLUMNS and ROWS are the character area the image must fill, and the adapter choice decides which path is tried: `auto` tries a graphical descriptor first, then Kitty terminal graphics on compliant 24-bit text frames, then the converter list, then a monochrome placeholder; `kitty` tries only Kitty terminal graphics before falling back to the placeholder; `text` skips both graphics paths; `placeholder` skips all of them.
 
 #### Function: ebox-image-prepare (source columns rows &key (adapter 'auto) (frame (selected-frame)) inset (converters ebox-image-converters))
 
 Prepare SOURCE for an integer COLUMNS by ROWS character area.
 
-**Arguments.** SOURCE is a local file or an Emacs image descriptor containing `:file` or `:data`. COLUMNS and ROWS are positive integers. ADAPTER is `auto`, `text` or `placeholder`. FRAME supplies the font metrics a graphical desktop uses. CONVERTERS obeys `ebox-image-converters`. INSET is nil or `(TOP . BOTTOM)`, pixels below one line height that a graphics image leaves empty above and below it inside its rows.
+**Arguments.** SOURCE is a local file or an Emacs image descriptor containing `:file` or `:data`. COLUMNS and ROWS are positive integers. ADAPTER is `auto`, `kitty`, `text` or `placeholder`. FRAME supplies the font metrics a graphical desktop uses or the terminal tested for Kitty graphics. CONVERTERS obeys `ebox-image-converters`. INSET is nil or `(TOP . BOTTOM)`, pixels below one line height that a graphics image leaves empty above and below it inside its rows.
 
-**Semantics.** The call reads and decodes everything it needs and returns a detached value; nothing about layout or buffer writing touches the source again. Under `auto`, a graphical frame with usable font metrics and a usable image type produces a slice-based descriptor; otherwise the converters are tried in order; if all of them decline, a monochrome placeholder grid is produced. A missing or corrupt image ends in the placeholder rather than an error. Identical preparations are answered from the cache.
+**Semantics.** The call reads and decodes everything it needs and returns a detached value; nothing about layout or buffer writing touches the source again. Under `auto`, a graphical frame with usable font metrics and a usable image type produces a slice-based descriptor; on a compliant 24-bit text terminal Kitty Unicode placeholder graphics are tried next; otherwise the converters are tried in order; if all of them decline, a monochrome placeholder grid is produced. A missing or corrupt image ends in the placeholder rather than an error. Identical preparations are answered from the cache.
 
 **Returns.** An opaque reusable value for an image node or for `ebox-image-info` and `ebox-image-content`.
 
@@ -80,7 +80,7 @@ Return PREPARED's adapter, converter, columns and rows as a fresh plist.
 
 **Arguments.** PREPARED is a value returned by `ebox-image-prepare`.
 
-**Semantics.** The plist has the keys `:adapter` (`graphics`, `text` or `placeholder`), `:converter` (the name of the converter that produced a text grid, or nil), `:columns` and `:rows`. The value is fresh, so callers may keep or modify it.
+**Semantics.** The plist has the keys `:adapter` (`graphics`, `kitty`, `text` or `placeholder`), `:converter` (the name of the converter that produced a text grid, or nil), `:columns` and `:rows`. The value is fresh, so callers may keep or modify it.
 
 **Returns.** The plist.
 
@@ -98,31 +98,37 @@ Release cached preparations and paint composites without changing live images.
 
 **See also.** `ebox-image-converters`.
 
+## The one-glyph line
+
+<!-- index: image invariant; one glyph per line; image node -->
+
+The graphical adapter's defining invariant is that one image row is one glyph. Each row of the prepared grid is a single character whose display specification carries a full-width slice, so redisplay paints the row in one step; a design that put one slice per cell would multiply the cost of every repaint and scroll by the column count. The invariant is why a graphical image always has exactly ROWS lines, why its horizontal size is COLUMNS times the cell width, and why `:inset` is implemented as a shorter slice plus a raise instead of extra pixels or lines.
+
+An image node lays those rows out as they are: `ebox-node-create 'image` with the prepared value under the `:image` property produces an item whose height is the row count and whose width is the widest prepared line. A stretched image box fills the extra horizontal space with its background, and the grid never reflows — resizing the container does not re-prepare the image. To change an image in place, prepare the new value and call `ebox-node-set-image`; the node keeps its slot and the flush repaints it.
+
 ## Kitty terminal graphics
 
-<!-- index: Kitty graphics; terminal image; Unicode placeholder; live video stream -->
+<!-- index: kitty graphics protocol; unicode placeholder; terminal image; kitty stream -->
 
-On compliant 24-bit text terminals (`Kitty` 0.28+, `Ghostty`, `Ghostel` and `iTerm2` 3.6+), Ebox can render static images and stream live frames using Kitty graphics protocol virtual placements (`U=1`) and Unicode placeholder cells (`U+10EEEE` with row/column diacritics).
+On a 24-bit text terminal that implements the Kitty Graphics Protocol with Unicode placeholders (`U=1`, such as Kitty 0.28+, Ghostty, Ghostel and iTerm2 3.6+), Ebox transmits the image once under a process-scoped 24-bit image ID and paints a COLUMNS by ROWS grid of composed `U+10EEEE` placeholder cells whose `:foreground` face carries that ID. Because each cell is one text column carrying its own row, column and MSB combining diacritics, Ebox's normal text layout, line diffing, scrolling, horizontal clipping and modal overlays work without cursor-tracking hooks, transparent PNG or rasterized SVG pixels composite over the enclosing box's `:background`, and hover or backdrop dimming preserve the image ID foreground color. Local PNG files transfer directly with `t=f`; SVG and other raster formats convert to PNG when `rsvg-convert`, `ffmpeg`, ImageMagick or macOS `sips` is available, falling back to `ebox-image-converters` and placeholders when unavailable.
 
 #### Variable: ebox-image-kitty-protocol
 
 Control Kitty terminal graphics protocol use on text frames.
 
-**Semantics.** Defaults to `auto`, which probes the terminal once and enables Unicode placeholder graphics on compliant 24-bit terminals. Setting it to `t` enables transmission on any 24-bit text terminal acknowledging the Kitty query; `nil` disables the protocol so text frames fall back to `ebox-image-converters` or placeholders.
-
-**Returns.** Not applicable; the variable holds `auto`, `t` or `nil`.
+**Semantics.** The value defaults to `auto`, which probes each text terminal once with a single round-trip query and enables Unicode placeholder graphics on compliant 24-bit terminals (Kitty 0.28+, Ghostty, Ghostel and iTerm2 3.6+). Setting it to `t` enables transmission on any 24-bit text terminal that acknowledges the Kitty graphics query without checking the terminal name. Setting it to nil disables the protocol so text frames always fall back to `ebox-image-converters` or placeholders.
 
 **See also.** `ebox-image-kitty-available-p`, `ebox-image-prepare`.
 
 #### Function: ebox-image-kitty-available-p (&optional frame)
 
-Return a capability plist when FRAME supports Kitty Unicode placeholder graphics, or nil otherwise.
+Return a capability plist when FRAME supports Kitty terminal graphics, or nil.
 
-**Arguments.** FRAME is a live frame and defaults to `(selected-frame)`.
+**Arguments.** FRAME defaults to the selected frame.
 
-**Semantics.** Returns nil in batch sessions, on graphical frames, when `ebox-image-kitty-protocol` is nil, or when FRAME lacks 24-bit color or Kitty Unicode placeholder support. Otherwise returns a fresh plist with `:cell-width`, `:cell-height` and `:local`.
+**Semantics.** Returns nil in batch sessions, on graphical frames, when `ebox-image-kitty-protocol` is nil, or when FRAME's terminal lacks 24-bit color or Kitty Unicode placeholder support. Otherwise probes the terminal once (caching the result per terminal) and returns a fresh plist with `:cell-width`, `:cell-height` (pixel dimensions of one terminal cell) and `:local` (whether local file transfers are available).
 
-**Returns.** Capability plist or nil.
+**Returns.** A capability plist or nil.
 
 **See also.** `ebox-image-kitty-protocol`, `ebox-image-kitty-stream-create`.
 
@@ -130,13 +136,13 @@ Return a capability plist when FRAME supports Kitty Unicode placeholder graphics
 
 Create a Kitty virtual placement stream for COLUMNS by ROWS cells on FRAME.
 
-**Arguments.** COLUMNS and ROWS are positive integers within the Kitty diacritic table limit; FRAME defaults to `(selected-frame)`.
+**Arguments.** COLUMNS and ROWS are positive integers within the Kitty diacritic limit (297). FRAME defaults to the selected frame.
 
-**Semantics.** Allocates a terminal image ID and builds its reusable Unicode placeholder grid when FRAME supports Kitty graphics, returning an opaque stream handle or nil when unavailable.
+**Semantics.** Allocates a process-scoped image ID and prebuilds its static Unicode placeholder grid so live producers such as `etaf-video` can publish the grid once and push frame bytes in place without rewriting the buffer.
 
-**Returns.** Stream handle or nil.
+**Returns.** An opaque stream handle, or nil when FRAME does not support Kitty terminal graphics.
 
-**Errors.** Non-positive dimensions or grids exceeding the diacritic limit signal an error.
+**Errors.** Non-positive dimensions or dimensions exceeding the diacritic limit signal `error`.
 
 **See also.** `ebox-image-kitty-stream-grid`, `ebox-image-kitty-stream-present`, `ebox-image-kitty-stream-destroy`.
 
@@ -146,25 +152,23 @@ Return an owned Unicode placeholder grid string for Kitty STREAM.
 
 **Arguments.** STREAM is a handle returned by `ebox-image-kitty-stream-create`.
 
-**Semantics.** Returns a fresh copy of STREAM's placeholder grid string suitable for insertion into a canvas buffer once before pushing frames in place.
+**Returns.** A fresh copy of the COLUMNS by ROWS placeholder grid string.
 
-**Returns.** Propertized string.
-
-**Errors.** Invalid STREAM signals an error.
+**Errors.** A value that is not a Kitty stream signals `error`.
 
 **See also.** `ebox-image-kitty-stream-create`, `ebox-image-kitty-stream-present`.
 
 #### Function: ebox-image-kitty-stream-present (stream bytes width height &optional format)
 
-Present one unibyte frame of BYTES into Kitty STREAM in place without modifying buffers.
+Present one unibyte frame of BYTES (WIDTH by HEIGHT) into Kitty STREAM in place.
 
-**Arguments.** STREAM is a live stream handle; BYTES is a unibyte string of pixel data (WIDTH by HEIGHT); FORMAT is `rgb24` (default), `rgba32` or `png`.
+**Arguments.** STREAM is a Kitty stream handle. BYTES is a unibyte string. WIDTH and HEIGHT are positive integers. FORMAT is `rgb24` (default), `rgba32` or `png`.
 
-**Semantics.** Transmits the frame via auto-deleted temp file on local terminals or chunked direct transfer over remote links so the terminal updates already-displayed placeholder cells in place.
+**Semantics.** Transmits the frame under STREAM's image ID and virtual placement (`U=1`, `q=2`), using an auto-deleted temp file (`t=t`) on local terminals and 4096-byte chunked base64 (`t=d`) over remote connections. Already-displayed placeholder cells update in place without modifying Emacs buffers.
 
-**Returns.** Non-nil when transmitted, or nil when STREAM was destroyed or its terminal closed.
+**Returns.** `t` when transmitted, or nil after STREAM was destroyed or its terminal closed.
 
-**Errors.** Invalid STREAM, multibyte BYTES, non-positive dimensions, unsupported FORMAT or mismatched byte length signal an error.
+**Errors.** Invalid stream, multibyte payload, non-positive dimensions, unsupported format or mismatched raw byte count signal `error`.
 
 **See also.** `ebox-image-kitty-stream-create`, `ebox-image-kitty-stream-destroy`.
 
@@ -172,23 +176,15 @@ Present one unibyte frame of BYTES into Kitty STREAM in place without modifying 
 
 Destroy Kitty STREAM and release its image data on its terminal.
 
-**Arguments.** STREAM is a handle returned by `ebox-image-kitty-stream-create`.
+**Arguments.** STREAM is a Kitty stream handle.
 
-**Semantics.** Sends a quiet delete command for STREAM's image ID once and marks STREAM destroyed; repeated calls are safe no-ops.
+**Semantics.** Sends a quiet delete command (`a=d,d=I`) for STREAM's image ID when its terminal is still live and marks STREAM destroyed. Calling it more than once is a safe no-op.
 
 **Returns.** Nil.
 
-**Errors.** Invalid STREAM signals an error.
+**Errors.** A value that is not a Kitty stream signals `error`.
 
 **See also.** `ebox-image-kitty-stream-create`.
-
-## The one-glyph line
-
-<!-- index: image invariant; one glyph per line; image node -->
-
-The graphical adapter's defining invariant is that one image row is one glyph. Each row of the prepared grid is a single character whose display specification carries a full-width slice, so redisplay paints the row in one step; a design that put one slice per cell would multiply the cost of every repaint and scroll by the column count. The invariant is why a graphical image always has exactly ROWS lines, why its horizontal size is COLUMNS times the cell width, and why `:inset` is implemented as a shorter slice plus a raise instead of extra pixels or lines.
-
-An image node lays those rows out as they are: `ebox-node-create 'image` with the prepared value under the `:image` property produces an item whose height is the row count and whose width is the widest prepared line. A stretched image box fills the extra horizontal space with its background, and the grid never reflows — resizing the container does not re-prepare the image. To change an image in place, prepare the new value and call `ebox-node-set-image`; the node keeps its slot and the flush repaints it.
 
 ## Errors and recovery
 

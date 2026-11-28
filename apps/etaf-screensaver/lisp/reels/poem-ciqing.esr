@@ -1,2 +1,0 @@
-;;; -*- lisp-data -*-
-(:id poem-ciqing :title "此情追忆" :summary "李商隐《锦瑟》 · 逐字排印" :tags (imported ink poem) :provider tte :recording "poem-ciqing.tterec" :kind text :width 80 :height 24 :frame-rate 20 :frame-count 80 :source "ink: 此情可待成追忆" :license "MIT" :background "#F4F1EA")

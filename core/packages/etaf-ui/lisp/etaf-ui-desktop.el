@@ -647,6 +647,7 @@ a ratio or window/layout policy."
                   :use use :on-drag on-change
                   :z-index (etaf-ui--reactive-value z-index)
                   :background-color (etaf-ui--style-token :ui-divider-bg)))
+           (divider-w (if (> (car (etaf-ui--canvas-cell)) 1) '(px 3) '(px 1)))
            (divider
             (if overlay
                 (etaf-node
@@ -655,7 +656,7 @@ a ratio or window/layout policy."
                          (if (eq orientation 'horizontal)
                              (list :position 'absolute
                                    :left (list '% (round (* 100 ratio)))
-                                   :top '(lh 0) :width '(px 3)
+                                   :top '(lh 0) :width divider-w
                                    :height 'stretch)
                            (list :position 'absolute :left '(px 0)
                                  :top (list '% (round (* 100 ratio)))
@@ -667,7 +668,7 @@ a ratio or window/layout policy."
               (if (eq orientation 'horizontal)
                   (etaf-node 'box
                              (append divider-props
-                                     (list :width '(px 3) :height 'stretch)) nil)
+                                     (list :width divider-w :height 'stretch)) nil)
                 (etaf-node 'box
                            (append divider-props
                                    (list :width 'stretch :height '(lh 1))) nil))))
@@ -730,7 +731,8 @@ REF reaches the rendered divider so callers can focus or address it."
             :aria-label "Resize pane" :pointer 'hdrag
             :aria-orientation 'vertical
             :tab-index (when (or on-change on-end) 0)
-            :width '(px 5) :height 'stretch :flex-shrink 0
+            :width (if (> (car (etaf-ui--canvas-cell)) 1) '(px 5) '(px 1))
+            :height 'stretch :flex-shrink 0
             :background-color background
             :on-drag
             (lambda (gesture)

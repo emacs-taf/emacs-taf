@@ -4,7 +4,9 @@ EMACS ?= emacs
 JOBS ?= 1
 # Every package under core/packages/, apps/, games/ in dependency order (providers first).
 PACKAGE_PATHS = python3 scripts/refscope.py order --paths
-.PHONY: compile test check clean structure-check setup-hooks order plan-affected check-affected
+.PHONY: compile test check clean structure-check setup-hooks order plan-affected check-affected dev-autoloads
+dev-autoloads:
+	python3 scripts/dev-autoloads.py --emacs "$(EMACS)" $(if $(EXTRA),--extra "$(EXTRA)")
 structure-check:
 	python3 scripts/check-repository.py --exclude core/packages/ --exclude apps/ --exclude games/
 	@set -e; for pkg in $$(python3 scripts/workspace_layout.py list-paths); do python3 scripts/check-repository.py --root "$$pkg" --skip-api; done

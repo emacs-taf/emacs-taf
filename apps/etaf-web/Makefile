@@ -8,7 +8,7 @@ LOAD_PATH = -L . -L lisp -L tests -L ../etaf-md -L $(PROVIDER_ROOT)/etaf -L $(PR
 SOURCES = $(wildcard lisp/*.el)
 SOURCES += etaf-web.el
 
-.PHONY: compile load check clean structure-check setup-hooks acceptance api-check test
+.PHONY: compile load check clean structure-check setup-hooks acceptance api-check test corpus-check corpus-diff corpus-audit corpus-benchmark
 
 compile:
 	rm -f *.elc lisp/*.elc tests/*.elc
@@ -47,6 +47,18 @@ api-check:
 	$(EMACS) -Q --batch -L . $(LOAD_PATH) --eval '(setq load-prefer-newer t)' -l ../../scripts/check-api.el
 
 test: acceptance
+
+corpus-check:
+	python3 scripts/corpus.py --emacs "$(EMACS)" check-fixtures
+
+corpus-diff:
+	python3 scripts/corpus.py --emacs "$(EMACS)" diff --show-diff
+
+corpus-audit:
+	python3 scripts/corpus.py --emacs "$(EMACS)" audit-cache
+
+corpus-benchmark:
+	python3 scripts/corpus.py --emacs "$(EMACS)" benchmark
 
 clean:
 	rm -f *.elc lisp/*.elc tests/*.elc

@@ -2438,10 +2438,10 @@ requirementDiagram
 ## Git 图：分支与补丁
 
 `branch`、`checkout`、`merge`、`cherry-pick` 各画一种线；`tag` 标版本。
-
+[I[I]]
 ```mermaid
 gitGraph
-  commit id: "起点"
+  commit id: "起点"[I]
   commit id: "读配色" tag: "v1"
   branch fix
   checkout fix

@@ -4,7 +4,7 @@
 
 ;; Author: Kinney Zhang <vhkdzszh@gmail.com>
 ;; Maintainer: Kinney Zhang <vhkdzszh@gmail.com>
-;; URL: https://github.com/emacs-taf/ekp
+;; URL: https://github.com/emacs-taf/etaf
 ;; Keywords: wp, text, typesetting, CJK
 
 ;; This file is NOT part of GNU Emacs.
@@ -49,7 +49,7 @@
   "Knuth-Plass optimal line breaking with CJK support."
   :group 'text
   :prefix "ekp-"
-  :link '(url-link "https://github.com/emacs-taf/ekp"))
+  :link '(url-link "https://github.com/emacs-taf/etaf"))
 
 (defcustom ekp-inline-code-policy 'no-hyphen
   "Default break policy for automatic inline code spans.

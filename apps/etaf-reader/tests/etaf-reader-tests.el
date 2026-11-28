@@ -444,8 +444,10 @@ second block into a picture."
             (etaf-reader-refresh-library session)
             (etaf-reader-set-metrics session 40 14 1 'medium 'page)
             (should (= 6 (length (etaf-reader-filter-library session "甲" 'all 'title))))
-            (let (titles)
-              (dotimes (_ 3)
+            (let ((pages (plist-get (etaf-reader-library-page session) :pages))
+                  titles)
+              (should (> pages 1))
+              (dotimes (_ pages)
                 (setq titles (append titles (mapcar (lambda (book) (plist-get book :title))
                                                     (plist-get (etaf-reader-library-page session) :items))))
                 (etaf-reader-page-library session 1))
@@ -725,6 +727,128 @@ mode cell, so the paper repaints instead of only the frame chrome."
                 (etaf-reader-show-pane session nil)
                 (let ((open (etaf-help-close runtime)))
                   (should-not open)))))
+        (when (buffer-live-p buffer)
+          (with-current-buffer buffer (etaf-reader-close)))
+        (delete-directory folder t)))))
+
+(ert-deftest etaf-reader-tests-mode-line-preserved ()
+  "Opening the reader preserves Emacs's mode-line."
+  (etaf-reader-tests--with-environment
+    (let* ((folder (make-temp-file "reader-modeline-" t))
+           (session (etaf-reader-tests--open
+                     (etaf-reader-create :parser (etaf-reader-tests--parser folder))))
+           buffer)
+      (unwind-protect
+          (save-window-excursion
+            (setq buffer (etaf-reader-open session))
+            (let ((ml (with-current-buffer buffer mode-line-format)))
+              (should ml)))
+        (when (buffer-live-p buffer)
+          (with-current-buffer buffer (etaf-reader-close)))
+        (delete-directory folder t)))))
+
+(ert-deftest etaf-reader-tests-previous-page-lands-on-chapter-end ()
+  "Turning backward across a chapter boundary opens the previous chapter's last page."
+  (etaf-reader-tests--with-environment
+    (let* ((folder (make-temp-file "reader-prev-end-" t))
+           (session (etaf-reader-tests--open
+                     (etaf-reader-create :parser (etaf-reader-tests--parser folder)))))
+      (unwind-protect
+          (let* ((ch0-lines (length (etaf-reader-lines session)))
+                 (expected-last (* (/ (max 0 (1- ch0-lines)) 4) 4)))
+            (should (> expected-last 0))
+            (etaf-reader-open-chapter session 1 0)
+            (should (= 1 (plist-get (etaf-reader-state session) :chapter)))
+            (should (= 0 (plist-get (etaf-reader-state session) :line)))
+            (etaf-reader-previous-page session)
+            (should (= 0 (plist-get (etaf-reader-state session) :chapter)))
+            (should (= expected-last (plist-get (etaf-reader-state session) :line))))
+        (delete-directory folder t)))))
+
+(ert-deftest etaf-reader-tests-zero-length-selection-rejected-and-toolbar-edits-in-place ()
+  "Zero-length selection never creates corrupt annotations; Scheme A toolbar stays open to edit."
+  (etaf-reader-tests--with-environment
+    (let* ((folder (make-temp-file "reader-toolbar-" t))
+           (session (etaf-reader-tests--open
+                     (etaf-reader-create :parser (etaf-reader-tests--parser folder))))
+           buffer)
+      (unwind-protect
+          (save-window-excursion
+            ;; Zero-length selection produces nil and refuses annotation.
+            (etaf-reader-begin-selection session 0 2)
+            (etaf-reader-extend-selection session 0 2)
+            (should-not (etaf-reader-selection session))
+            (should-not (etaf-reader-annotate session "highlight" "yellow"))
+            (should-not (etaf-reader-annotations session))
+            (etaf-reader-clear-selection session)
+            ;; Mounted Scheme A workflow: select -> toolbar (no 删除) -> highlight -> stays open with 删除 -> switch to wavy -> delete.
+            (setq buffer (etaf-reader-open session))
+            (etaf-reader-set-metrics session 32 10 1 'medium 'page)
+            (with-current-buffer buffer
+              (execute-kbd-macro (kbd "v <right> <right> <right> <right> RET"))
+              (let ((text (buffer-substring-no-properties (point-min) (point-max))))
+                (should (string-match-p "高亮" text))
+                (should-not (string-match-p "删除" text)))
+              (let* ((runtime (etaf-runtime-for-buffer buffer))
+                     (btn (seq-find (lambda (e) (equal (plist-get (cdr e) :aria-label) "高亮"))
+                                    (etaf-runtime-host-props-entries runtime))))
+                (should btn)
+                (etaf-focus runtime (car btn))
+                (execute-kbd-macro (kbd "RET")))
+              ;; Annotation created and toolbar stays open in edit mode showing 删除.
+              (should (= 1 (length (etaf-reader-annotations session))))
+              (should (equal "highlight" (plist-get (car (etaf-reader-annotations session)) :kind)))
+              (let ((text (buffer-substring-no-properties (point-min) (point-max))))
+                (should (string-match-p "删除" text)))
+              ;; Switch style in-place to wavy without re-selecting.
+              (let* ((runtime (etaf-runtime-for-buffer buffer))
+                     (btn (seq-find (lambda (e) (equal (plist-get (cdr e) :aria-label) "波浪"))
+                                    (etaf-runtime-host-props-entries runtime))))
+                (should btn)
+                (etaf-focus runtime (car btn))
+                (execute-kbd-macro (kbd "RET")))
+              (should (equal "wavy" (plist-get (car (etaf-reader-annotations session)) :kind)))
+              ;; Delete annotation and dismiss toolbar.
+              (let* ((runtime (etaf-runtime-for-buffer buffer))
+                     (btn (seq-find (lambda (e) (equal (plist-get (cdr e) :aria-label) "删除"))
+                                    (etaf-runtime-host-props-entries runtime))))
+                (should btn)
+                (etaf-focus runtime (car btn))
+                (execute-kbd-macro (kbd "RET")))
+              (should-not (etaf-reader-annotations session))))
+        (when (buffer-live-p buffer)
+          (with-current-buffer buffer (etaf-reader-close)))
+        (delete-directory folder t)))))
+
+(ert-deftest etaf-reader-tests-scroll-mode-and-sidebar-controls ()
+  "Scroll mode renders a single column; sidebar lists all chapters and updates on page turns."
+  (etaf-reader-tests--with-environment
+    (let* ((folder (make-temp-file "reader-scroll-sb-" t))
+           (session (etaf-reader-tests--open
+                     (etaf-reader-create :parser (etaf-reader-tests--parser folder))))
+           buffer)
+      (unwind-protect
+          (save-window-excursion
+            (setq buffer (etaf-reader-open session))
+            (etaf-reader-set-metrics session 40 12 2 'wide 'page)
+            (with-current-buffer buffer
+              (let ((text (buffer-substring-no-properties (point-min) (point-max))))
+                ;; All three chapters appear in the sidebar.
+                (should (string-match-p "第一章 起点" text))
+                (should (string-match-p "第二章 途中" text))
+                (should (string-match-p "第三章 终点" text))
+                (should (string-match-p "全书进度" text)))
+              ;; Toggle to scroll mode: only one column Host is mounted.
+              (execute-kbd-macro (kbd "z"))
+              (should (eq 'scroll (plist-get (etaf-reader-state session) :mode)))
+              (let* ((runtime (etaf-runtime-for-buffer buffer))
+                     (col0 (etaf-runtime-host-props-for runtime 'reader-column-0))
+                     (col1 (etaf-runtime-host-props-for runtime 'reader-column-1)))
+                (should col0)
+                (should-not col1))
+              ;; Return to page mode.
+              (execute-kbd-macro (kbd "z"))
+              (should (eq 'page (plist-get (etaf-reader-state session) :mode)))))
         (when (buffer-live-p buffer)
           (with-current-buffer buffer (etaf-reader-close)))
         (delete-directory folder t)))))

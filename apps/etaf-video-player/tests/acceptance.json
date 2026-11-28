@@ -92,14 +92,14 @@
       "purpose": "A fitted color canvas stops at the configured column cap while its rows follow the video aspect, bounding the per-frame face properties."
     },
     {
-      "name": "etaf-video-player-tests-close-restores-frame-background",
+      "name": "etaf-video-player-tests-preserves-frame-background-and-mode-line",
       "file": "tests/etaf-video-player-tests.el",
-      "purpose": "A graphic frame takes the player's chrome color while it is open and gets its own background back when the player closes."
+      "purpose": "Opening the player and toggling theme preserves Emacs's mode line and frame background while keeping the buffer's own fringe aligned with its palette."
     },
     {
-      "name": "etaf-video-player-tests-open-interactively-shows-the-demo",
+      "name": "etaf-video-player-tests-open-interactively-shows-welcome",
       "file": "tests/etaf-video-player-tests.el",
-      "purpose": "The generic open command reads nothing from the minibuffer and plays the built-in demo, while open-file remains the command that prompts for a name."
+      "purpose": "The generic open command opens the Welcome / Continue Watching home screen without spawning a decoder or prompting, while pressing d launches the built-in demo."
     },
     {
       "name": "etaf-video-player-tests-plays-demo-with-real-ffmpeg",
@@ -140,6 +140,46 @@
       "name": "etaf-video-player-tests-screenshot-writes-a-png",
       "file": "tests/etaf-video-player-tests.el",
       "purpose": "The screenshot command decodes the current frame with a real ffmpeg into a readable PNG and returns the output path."
+    },
+    {
+      "name": "etaf-video-player-tests-opens-directory-and-lazy-probes",
+      "file": "tests/etaf-video-player-tests.el",
+      "purpose": "Opening a directory builds a sorted video playlist, probes non-active items lazily on selection, and refuses empty directories."
+    },
+    {
+      "name": "etaf-video-player-tests-quick-keys-subtitle-offset-and-doctor",
+      "file": "tests/etaf-video-player-tests.el",
+      "purpose": "Quick seek keys (C-f/C-b/0), single-dimension grid hints, subtitle timing offset (z/x), and doctor program checks behave as documented."
+    },
+    {
+      "name": "etaf-video-player-tests-canvas-click-and-decoder-error",
+      "file": "tests/etaf-video-player-tests.el",
+      "purpose": "Clicking the video canvas toggles playback immediately and a non-zero ffmpeg exit surfaces an error in both state and HUD."
+    },
+    {
+      "name": "etaf-video-player-tests-drawers-theater-ab-and-goto",
+      "file": "tests/etaf-video-player-tests.el",
+      "purpose": "Single-video theater default, Media/Controls drawer toggles, goto-time parsing, A-B loop lifecycle and queue reordering work through public interfaces."
+    },
+    {
+      "name": "etaf-video-player-tests-bookmarks-history-and-chapters",
+      "file": "tests/etaf-video-player-tests.el",
+      "purpose": "SQLite timestamp bookmarks, recent watch history queries and async ffprobe chapter navigation work end to end."
+    },
+    {
+      "name": "etaf-video-player-tests-m3u-siblings-sort-timestamp-stop-after",
+      "file": "tests/etaf-video-player-tests.el",
+      "purpose": "M3U playlist parsing, sibling video enqueuing, alphabetical queue sorting, percentage/relative goto-time, copy-timestamp and stop-after-current work through public interfaces."
+    },
+    {
+      "name": "etaf-video-player-tests-libmpv-multitrack-subtitles-and-transforms",
+      "file": "tests/etaf-video-player-tests.el",
+      "purpose": "When libmpv is available, multi-audio track switching, embedded and bilingual secondary subtitles, rotation, backward frame step, native A-B loop and PNG screenshots work end to end."
+    },
+    {
+      "name": "etaf-video-player-tests-fullscreen-modes-and-mode-line-restore",
+      "file": "tests/etaf-video-player-tests.el",
+      "purpose": "Video player supports window and frame Pure Fullscreen sharing the aligned cinema deck, temporarily hides and restores mode-line-format, and restores Studio chrome on exit."
     }
   ]
 }

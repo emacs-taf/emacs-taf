@@ -2701,7 +2701,13 @@ The surface hides the native cursor on images, preserving text navigation."
       ;; taskbar; status and app actions are projected by the desktop shell.
       (with-current-buffer buffer
         (setq-local mode-line-format nil
-                    header-line-format nil))
+                    header-line-format nil
+                    etaf-cursor-follows-input-modality t)
+        (add-hook 'kill-buffer-hook
+                  (lambda ()
+                    (when (fboundp 'etaf-desktop--close-all-instances)
+                      (etaf-desktop--close-all-instances desktop 'desktop-close)))
+                  nil t))
       (setf (etaf-desktop--controller-buffer desktop) buffer
             (etaf-desktop--controller-runtime desktop) runtime
             (etaf-desktop--controller-owns-runtime-p desktop) t
@@ -2737,6 +2743,8 @@ Runtime and buffer.  Closing is idempotent."
     (when-let* ((timer (etaf-desktop--controller-fit-timer desktop)))
       (cancel-timer timer)
       (setf (etaf-desktop--controller-fit-timer desktop) nil))
+    (when (fboundp 'etaf-desktop--close-all-instances)
+      (etaf-desktop--close-all-instances desktop 'desktop-close))
     (when owns-runtime
       (when runtime (etaf-unmount runtime))
       (when (and owns-buffer (buffer-live-p buffer))

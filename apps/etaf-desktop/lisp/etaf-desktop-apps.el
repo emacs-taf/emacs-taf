@@ -41,6 +41,101 @@
   (make-hash-table :test #'eq :weakness 'key)
   "Per-desktop application instance stores.")
 
+(defvar etaf-desktop--managed-sessions
+  (make-hash-table :test #'eq :weakness 'key)
+  "Per-desktop map of instance ID to session created from `etaf-app'.")
+
+(defun etaf-desktop--managed-session-table (desktop)
+  "Return DESKTOP's instance-id to managed session table."
+  (or (gethash desktop etaf-desktop--managed-sessions)
+      (puthash desktop (make-hash-table :test #'equal)
+               etaf-desktop--managed-sessions)))
+
+(defun etaf-desktop--manifest-from-etaf-app (spec)
+  "Build an `etaf-desktop--app' adapter from an `etaf-app' registry SPEC."
+  (let* ((id (plist-get spec :id))
+         (title (or (plist-get spec :title) (symbol-name id)))
+         (icon (plist-get spec :icon))
+         (feature (plist-get spec :feature))
+         (session-spec (plist-get spec :session))
+         (create-fn (plist-get session-spec :create))
+         (view-fn (plist-get session-spec :view))
+         (close-fn (plist-get session-spec :close))
+         (win-hints (plist-get spec :window))
+         (caps (append '(resizable)
+                       (and (plist-get session-spec :multiple-instances)
+                            '(multiple-instances)))))
+    (etaf-desktop--app-create
+     :id id
+     :title title
+     :icon icon
+     :capabilities caps
+     :default-window (copy-tree win-hints)
+     :open (lambda (context)
+             (when (and feature (not (featurep feature)))
+               (require feature))
+             (let* ((desktop (plist-get context :desktop))
+                    (instance-id (plist-get context :instance-id))
+                    (nested-p (eq create-fn 'etaf-desktop-create))
+                    (outer-state (and nested-p (etaf-desktop-state desktop)))
+                    (win-w (if nested-p
+                               (or (plist-get outer-state :canvas-width) 1000)
+                             (or (plist-get win-hints :width) 1024)))
+                    (win-h (if nested-p
+                               (or (plist-get outer-state :canvas-height) 30)
+                             (or (plist-get win-hints :height) 28)))
+                    (session (if nested-p
+                                 (etaf-desktop-create
+                                  :name (format " *ETAF Desktop %s*" instance-id)
+                                  :fit 'region
+                                  :canvas-width (max 320 (- win-w 2))
+                                  :canvas-height (max 8 (- win-h 3)))
+                               (funcall create-fn)))
+                    (view (funcall view-fn session)))
+               (puthash instance-id session
+                        (etaf-desktop--managed-session-table desktop))
+               (list :windows
+                     (list (list :id "main"
+                                 :title title
+                                 :view view
+                                 :x (if nested-p 0 (or (plist-get win-hints :x) 24))
+                                 :y (if nested-p 0 (or (plist-get win-hints :y) 1))
+                                 :width win-w
+                                 :height win-h
+                                 :min-width (or (plist-get win-hints :min-width) 320)
+                                 :min-height (or (plist-get win-hints :min-height) 12))))))
+     :close (lambda (context _reason)
+              (let* ((desktop (plist-get context :desktop))
+                     (instance-id (plist-get context :instance-id))
+                     (table (gethash desktop etaf-desktop--managed-sessions))
+                     (session (and table (gethash instance-id table))))
+                (when table (remhash instance-id table))
+                (when (and session close-fn)
+                  (when (and feature (not (featurep feature)))
+                    (require feature))
+                  (funcall close-fn session)))))))
+
+(defun etaf-desktop--resolve-app (id)
+  "Return `etaf-desktop--app' for ID from desktop or `etaf-app' registry."
+  (or (gethash id etaf-desktop--apps)
+      (when-let* (((symbolp id))
+                  (spec (etaf-app-get id))
+                  ((memq 'desktop (plist-get spec :hosts)))
+                  ((plist-get spec :session)))
+        (etaf-desktop--manifest-from-etaf-app spec))))
+
+(defun etaf-desktop--close-all-instances (desktop &optional reason)
+  "Close every live application instance owned by DESKTOP idempotently."
+  (when-let* ((store (gethash desktop etaf-desktop--app-stores)))
+    (let ((instances (etaf-desktop--app-store-instances store)))
+      (maphash
+       (lambda (id instance)
+         (unless (memq (etaf-desktop--instance-status instance) '(closing closed))
+           (ignore-errors
+             (etaf-desktop-close-instance desktop id (or reason 'desktop-close)))))
+       (copy-hash-table instances))))
+  (remhash desktop etaf-desktop--managed-sessions))
+
 (defun etaf-desktop--validate-app-id (id)
   "Validate and return stable application ID ID."
   (unless (or (and (symbolp id) (not (null id)))
@@ -107,8 +202,8 @@ the instance record."
                 ;; operation.  Keep callback failures isolated in the same
                 ;; way as `etaf-desktop-close-instance'.
                 (setf (etaf-desktop--instance-status instance) 'closing)
-                (let ((app (gethash (etaf-desktop--instance-app-id instance)
-                                    etaf-desktop--apps))
+                (let ((app (etaf-desktop--resolve-app
+                            (etaf-desktop--instance-app-id instance)))
                       (callback-error nil))
                   (when (and app (etaf-desktop--app-close app))
                     (condition-case err
@@ -363,19 +458,33 @@ When FORCE is nil, signal if any desktop still has a live instance of ID."
 
 (defun etaf-desktop-app (id)
   "Return a detached manifest plist for registered application ID."
-  (etaf-desktop--app-plist (etaf-desktop--app id)))
+  (let ((app (or (etaf-desktop--resolve-app id)
+                 (etaf-desktop--fail "Unknown ETAF application: %S" id))))
+    (etaf-desktop--app-plist app)))
 
 (defun etaf-desktop-apps ()
-  "Return detached manifests for all registered applications."
-  (let (result)
-    (maphash (lambda (_id app) (push (etaf-desktop--app-plist app) result))
+  "Return detached manifests for all registered and discovered applications."
+  (let ((seen (make-hash-table :test #'equal))
+        explicit discovered)
+    (maphash (lambda (id app)
+               (puthash id t seen)
+               (push (etaf-desktop--app-plist app) explicit))
              etaf-desktop--apps)
-    (sort result (lambda (a b) (string< (format "%s" (plist-get a :id))
-                                        (format "%s" (plist-get b :id)))))))
+    (dolist (spec (etaf-app-list 'desktop))
+      (let ((id (plist-get spec :id)))
+        (when (and (not (gethash id seen)) (plist-get spec :session))
+          (puthash id t seen)
+          (push (etaf-desktop--app-plist
+                 (etaf-desktop--manifest-from-etaf-app spec))
+                discovered))))
+    (let ((by-id (lambda (a b) (string< (format "%s" (plist-get a :id))
+                                        (format "%s" (plist-get b :id))))))
+      (append (sort explicit by-id)
+              (sort discovered by-id)))))
 
 (defun etaf-desktop-app-registered-p (id)
-  "Return non-nil when application ID is registered."
-  (and (gethash id etaf-desktop--apps) t))
+  "Return non-nil when application ID is registered or discovered."
+  (and (etaf-desktop--resolve-app id) t))
 
 (defun etaf-desktop--single-instance-app-p (app)
   "Return non-nil when APP declares no `multiple-instances' capability."
@@ -404,7 +513,8 @@ launch of an application without the `multiple-instances' capability focuses
 its running instance instead of starting a second one; session restore passes
 INSTANCE-ID and keeps creating every recorded instance."
   (let* ((desktop (etaf-desktop--controller desktop))
-         (app (etaf-desktop--app (etaf-desktop--validate-app-id app-id)))
+         (app (or (etaf-desktop--resolve-app (etaf-desktop--validate-app-id app-id))
+                  (etaf-desktop--fail "Unknown ETAF application: %S" app-id)))
          (store (etaf-desktop--app-store desktop))
          (running (and (null instance-id)
                        (etaf-desktop--single-instance-app-p app)
@@ -515,7 +625,7 @@ REASON is passed to the manifest close callback.  Callback failures are
 recorded on the instance while all desktop windows are still released."
   (let* ((desktop (etaf-desktop--controller desktop))
          (instance (etaf-desktop--instance desktop id))
-         (app (gethash (etaf-desktop--instance-app-id instance) etaf-desktop--apps))
+         (app (etaf-desktop--resolve-app (etaf-desktop--instance-app-id instance)))
          (callback-error nil))
     (unless (eq (etaf-desktop--instance-status instance) 'closed)
       (setf (etaf-desktop--instance-status instance) 'closing)
@@ -533,7 +643,7 @@ recorded on the instance while all desktop windows are still released."
 
 (defun etaf-desktop--serialize-instance (desktop instance)
   "Return serializable state for INSTANCE."
-  (let* ((app (gethash (etaf-desktop--instance-app-id instance) etaf-desktop--apps))
+  (let* ((app (etaf-desktop--resolve-app (etaf-desktop--instance-app-id instance)))
          (data (when (and app (etaf-desktop--app-serialize app))
                  (condition-case err
                      (funcall (etaf-desktop--app-serialize app)
@@ -680,7 +790,7 @@ other applications continue restoring."
       (let* ((id (plist-get saved :id))
              (app-id (plist-get saved :app-id))
              (data (plist-get saved :data))
-             (app (gethash app-id etaf-desktop--apps))
+             (app (etaf-desktop--resolve-app app-id))
              (saved-window-states (plist-get saved :window-states))
              (saved-workspace (plist-get (cdr (car saved-window-states))
                                          :workspace)))

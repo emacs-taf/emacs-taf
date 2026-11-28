@@ -273,5 +273,19 @@
 (require 'etaf-reader-views)
 (require 'etaf-reader-app)
 
+;;;###autoload
+(with-eval-after-load 'etaf
+  (etaf-app-register 'etaf-reader
+    :title "电子书阅读器"
+    :icon "R"
+    :category 'reading
+    :feature 'etaf-reader
+    :open 'etaf-reader-open
+    :file-extensions '("epub" "txt" "fb2" "pdf")
+    :hosts '(buffer desktop panel)
+    :session '(:create etaf-reader-create :view etaf-reader-view-for-session)
+    :window '(:width 1120 :height 30 :min-width 480 :min-height 14)
+    :panel '(:width 110 :height 26 :fill-height t :at frame-top-right :stack t)))
+
 (provide 'etaf-reader)
 ;;; etaf-reader.el ends here

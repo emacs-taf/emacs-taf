@@ -2531,8 +2531,8 @@ multiple lines inside the card width, and the image frame stays inside the card.
         (let ((joined (mapconcat #'identity para-lines " ")))
           (dolist (word body-words)
             (should (string-match-p (regexp-quote word) joined))))
-        ;; Image right border renders intact inside the card column.
-        (should (cl-some (lambda (l) (string-match-p "│▀+│" l)) lines))))))
+        ;; Image renders intact inside the card's own borders without clipping.
+        (should (cl-some (lambda (l) (string-match-p "│ *▀+ *│" l)) lines))))))
 
 (ert-deftest etaf-md-tests-html-img-declared-dimensions-bound-render-size ()
   "HTML `<img>' `width'/`height' attributes bound rendered grid size instead of intrinsic size.
@@ -2549,8 +2549,8 @@ proportionally below the unsized width."
               (etaf-md-tests--with-mount session
                 (let* ((text (buffer-substring-no-properties (point-min) (point-max)))
                        (lines (split-string text "\n"))
-                       (img-line (cl-find-if (lambda (l) (string-match-p "│▀+│" l)) lines)))
-                  (when (and img-line (string-match "^\\( *\\)│\\(▀+\\)│" img-line))
+                       (img-line (cl-find-if (lambda (l) (string-match-p "▀+" l)) lines)))
+                  (when (and img-line (string-match "^\\( *\\)\\(▀+\\)" img-line))
                     (setq indent (length (match-string 1 img-line))
                           width (length (match-string 2 img-line))))
                   (setq has-caption (and (string-match-p "▲" text) t))))

@@ -74,6 +74,16 @@ Close the application in BUFFER-OR-NAME, by default the current buffer, and retu
 
 **Errors.** `error→ user-error` when the buffer holds no open application. An error of the close function propagates after the buffer is gone; when the buffer is killed directly the same error is reported as a message instead, so `kill-buffer` itself never fails.
 
+#### Property: :on-close
+
+The teardown callback keyword of `etaf-app-open` and `etaf-pip-open`.
+
+**Arguments.** Nil or a zero-argument function.
+
+**Semantics.** Runs once with the application or PiP buffer current before the View unmounts and the buffer is killed, whether triggered by `etaf-app-close`, `etaf-pip-close`, killing the buffer or reopening the same name.
+
+**See also.** `etaf-app-open`, `etaf-app-close`, `etaf-pip-open`.
+
 ## Finding an application
 
 #### Function: etaf-app-state (&optional buffer-or-name)
@@ -87,6 +97,77 @@ Return the STATE of the open application in BUFFER-OR-NAME, by default the curre
 Return the buffer of the open application NAME, or nil.
 
 **Semantics.** An entry command that should return to an open application rather than reopen it checks this first and selects the buffer it returns.
+
+## Application declarations and registry
+
+<!-- index: application registry; etaf-app-define; etaf-app-register; etaf-app-launch -->
+
+Applications built on ETAF often run inside multiple hosts without knowing about any specific host: a standalone Emacs buffer (`etaf-app-open`), a desktop window manager, a floating child-frame panel or an interactive launcher. The application registry is a thin metadata and session-lifecycle contract that decouples applications from hosts: each application declares its identity, supported hosts, optional embeddable `:session` callbacks (`:create`, `:view`, `:close`) and layout hints, while hosts read the registry without hardcoding application names. Function fields accept unloaded symbols so packages can register manifests via `;;;###autoload` with `with-eval-after-load` at zero startup cost and load their `:feature` only when launched.
+
+#### Function: etaf-app-register (id &rest spec)
+
+Register or update ETAF application manifest ID from keyword plist SPEC.
+
+**Arguments.**
+
+- ID is a non-nil, non-keyword symbol identifying the application.
+- SPEC is a keyword plist carrying required nonempty string `:title`, optional `:feature` symbol (defaults to ID), `:icon` string, `:category` (`media`, `reading`, `productivity`, `communication`, `game`, `system`, `utility` or `other`, default `other`), `:description` string, `:hosts` nonempty subset of `(buffer desktop panel pip)` (defaults to `(buffer desktop panel)` when `:session` is present, else `(buffer)`), `:open` callable symbol or function, `:session` keyword plist (`:create` and `:view` required callable refs, optional `:close`, `:keep-alive` and `:multiple-instances`), `:window` desktop geometry hint plist, `:panel` floating-panel hint plist, `:file-extensions` list of strings, `:capabilities` list of symbols and `:doctor` callable ref.
+
+**Semantics.** Validates all keys and types eagerly, stores the normalized manifest in the global registry (replacing any previous registration for ID in place) and runs `etaf-app-change-functions` with `(register ID ENTRY)`. Declaring `desktop` or `panel` in `:hosts` requires a valid `:session` plist.
+
+**Returns.** A detached copy of the normalized manifest plist.
+
+**Errors.** `error→ etaf-runtime-error` on invalid ID, unknown keys, missing `:title`, unsupported `:hosts` or `:category`, missing `:session` for embedded hosts, or non-callable callbacks.
+
+#### Macro: etaf-app-define (id &rest spec)
+
+Declaratively register ETAF application ID with keyword manifest SPEC.
+
+**Semantics.** Expands to `(etaf-app-register 'ID SPEC...)` so packages can declare manifests concisely inside `with-eval-after-load 'etaf`.
+
+**Returns.** The detached manifest plist returned by `etaf-app-register`.
+
+#### Function: etaf-app-unregister (id)
+
+Remove registered ETAF application ID from the registry.
+
+**Semantics.** Removes ID when present and notifies `etaf-app-change-functions` with `(unregister ID nil)`.
+
+**Returns.** t when ID was registered, nil otherwise.
+
+**Errors.** `error→ etaf-runtime-error` when ID is not a valid application symbol.
+
+#### Function: etaf-app-get (id)
+
+Return a detached manifest plist for registered application ID, or nil.
+
+**Returns.** A detached manifest plist or nil.
+
+#### Function: etaf-app-list (&optional host category)
+
+Return detached manifests of registered ETAF applications sorted by ID.
+
+**Arguments.** Optional HOST filters by `:hosts` (`buffer`, `desktop`, `panel` or `pip`); optional CATEGORY filters by `:category`.
+
+**Returns.** A list of detached manifest plists sorted alphabetically by ID.
+
+**Errors.** `error→ etaf-runtime-error` when HOST or CATEGORY is non-nil and unrecognized.
+
+#### Function: etaf-app-launch (id)
+
+Launch registered ETAF application ID in a standalone buffer.
+
+**Semantics.** Interactively prompts among registered applications. Loads `:feature` lazily via `require` if not yet loaded, then calls `:open` when declared; otherwise creates a session via `:session`'s `:create`, mounts `:view` with `etaf-app-open` (`:mode-line t`), and wires `:close` into `:on-close`.
+
+**Returns.** The return value of `:open` or the opened application buffer.
+
+**Errors.** `error→ user-error` interactively when no applications are registered; `error→ etaf-runtime-error` when ID is unknown or declares neither `:open` nor `:session`.
+
+#### Hook: etaf-app-change-functions
+
+Abnormal hook run with `(EVENT ID ENTRY)` when the application registry changes.
+
+**Semantics.** EVENT is `register` or `unregister`, ID is the application symbol and ENTRY is a detached manifest plist (or nil on removal). Individual observer errors are isolated.
 
 ## Fitting to the window
 

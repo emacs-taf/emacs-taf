@@ -28,11 +28,15 @@
 
 (require 'cl-lib)
 (require 'color)
+(require 'image)
 (require 'subr-x)
 (require 'etaf)
 (require 'etaf-ui)
 (require 'etaf-md)
 (require 'etaf-web-cache)
+(require 'etaf-web-adapter)
+
+(declare-function image-size "image.c" (spec &optional pixels frame))
 
 (defconst etaf-web--narrow-breakpoint 72
   "Viewport width in columns below which header actions fold compactly.")
@@ -58,13 +62,23 @@
                        '(2)))
       fg)))
 
+(defun etaf-web--hex-color (color)
+  "Convert COLOR (hex or Emacs named color) to `#RRGGBB', or return COLOR."
+  (if (and (stringp color)
+           (string-match-p "\\`#[0-9a-fA-F]\\{6\\}\\'" color))
+      color
+    (let ((rgb (and (stringp color) (ignore-errors (color-name-to-rgb color)))))
+      (if rgb
+          (apply #'color-rgb-to-hex (append rgb '(2)))
+        color))))
+
 (defun etaf-web--face-color (face attr fallback)
-  "Return valid color string for FACE ATTR on the selected frame, or FALLBACK."
+  "Return valid `#RRGGBB' color for FACE ATTR on the selected frame, or FALLBACK."
   (let ((val (ignore-errors (face-attribute face attr nil 'default))))
     (if (and (stringp val)
              (not (string-empty-p val))
              (not (string-prefix-p "unspecified" val)))
-        val
+        (etaf-web--hex-color val)
       fallback)))
 
 (defun etaf-web--palette (mode)
@@ -132,8 +146,512 @@ so the shell blends seamlessly with the user's frame background."
                :info accent :info-bg bg :info-border accent))))))
 
 (defun etaf-web--theme-tokens (mode)
-  "Return `etaf-ui-theme-tokens' plist for browser MODE."
-  (etaf-ui-theme-tokens (etaf-web--palette mode)))
+  "Return `etaf-ui-theme-tokens' plist for browser MODE.
+Explicitly derives input, search, hover, selection, soft-border, divider and
+sidebar surface tokens from the active palette so controls stay legible and
+harmonious in both light and dark themes."
+  (let* ((pal (etaf-web--palette mode))
+         (bg (plist-get pal :bg))
+         (fg (plist-get pal :fg))
+         (accent (plist-get pal :accent))
+         (border (plist-get pal :border))
+         (dark-p (pcase mode
+                   ('dark t)
+                   ((or 'light 'sepia) nil)
+                   (_ (eq (etaf-appearance) 'dark))))
+         (sidebar-bg (if dark-p
+                         (etaf-web--blend-color "#000000" bg 0.16)
+                       (etaf-web--blend-color fg bg 0.03)))
+         (code-bg (if dark-p
+                      (etaf-web--blend-color "#000000" bg 0.16)
+                    (etaf-web--blend-color fg bg 0.04)))
+         (hover-bg (if dark-p
+                       (etaf-web--blend-color "#ffffff" bg 0.055)
+                     (etaf-web--blend-color fg bg 0.045)))
+         (selected-bg (if dark-p
+                          (etaf-web--blend-color accent bg 0.18)
+                        (etaf-web--blend-color accent bg 0.10)))
+         (op-bg (if dark-p
+                    (etaf-web--blend-color "#000000" bg 0.15)
+                  (etaf-web--blend-color accent bg 0.045)))
+         (border-soft (if dark-p
+                          (etaf-web--blend-color fg bg 0.11)
+                        (etaf-web--blend-color fg bg 0.09)))
+         (dot-purple (if dark-p "#b48ead" "#8250df"))
+         (dot-teal (if dark-p "#56b6c2" "#1b7c83")))
+    (append
+     (list :ui-input-bg bg
+           :ui-input-border border
+           :ui-search-bg bg
+           :ui-search-fg fg
+           :ui-divider-bg border
+           :ui-accent-soft-bg selected-bg
+           :web-sidebar-bg sidebar-bg
+           :web-code-bg code-bg
+           :web-hover-bg hover-bg
+           :web-selected-bg selected-bg
+           :web-op-bg op-bg
+           :web-border-soft border-soft
+           :web-dot-purple dot-purple
+           :web-dot-teal dot-teal)
+     (etaf-ui-theme-tokens pal))))
+
+;;; ---------------------------------------------------------------------------
+;;; Shared ordinary flat input & embedded Markdown block renderer
+;;; ---------------------------------------------------------------------------
+
+(cl-defun etaf-web--plain-input-view
+    (&key bind value on-change ref key (label "输入") (placeholder "")
+          (width 'stretch) (rows 1) disabled on-submit on-clear on-cancel
+          keymap icon)
+  "Render an ordinary flat outlined text input aligned with frame theme.
+When ICON (an `etaf-ui-icon' symbol such as `search') is given for a single-line
+field, wraps a quiet leading icon, plain input and optional inline clear icon
+inside one crisp 1px outlined box matching the active frame canvas."
+  (let* ((cur (or (if bind (etaf-value bind) value) ""))
+         (non-empty (and (stringp cur) (not (string-empty-p cur))))
+         (can-clear (and (eql rows 1) non-empty (not disabled)
+                         (or on-clear bind on-change)))
+         (use-shell (and icon (eql rows 1)))
+         (muted-tok (etaf-theme-token :ui-muted-fg "#8b99a4"))
+         (dim-tok (etaf-theme-token :ui-disabled-fg "#6e7681"))
+         (border-tok (etaf-theme-token :ui-border "#36444c"
+                                       (lambda (c) (list '(px 1) 'solid c))))
+         (do-clear (lambda ()
+                     (cond
+                      (bind (etaf-set-value bind ""))
+                      ((functionp on-change) (funcall on-change "")))
+                     (when (functionp on-clear)
+                       (funcall on-clear))))
+         (field-props
+          (append
+           (list :label label
+                 :hide-label t
+                 :placeholder placeholder
+                 :rows rows
+                 :width 'stretch
+                 :variant (if use-shell 'plain 'outlined)
+                 :submit-on-return (eql rows 1))
+           (when disabled (list :disabled t))
+           (if bind
+               (list :bind bind)
+             (append (list :value cur)
+                     (when on-change (list :on-change on-change))))
+           (when ref (list :ref ref))
+           (when on-submit (list :on-submit on-submit))
+           (when on-cancel (list :on-cancel on-cancel))
+           (when keymap (list :keymap keymap))))
+         (input-node (etaf-node 'etaf-text-input field-props nil))
+         (key-prop (when key (list :key key))))
+    (cond
+     (use-shell
+      (etaf-node
+       'flex (append key-prop
+                     (list :width width
+                           :align-items 'center
+                           :column-gap '(ch 1)
+                           :padding '((lh 0) (ch 1))
+                           :border border-tok))
+       (delq
+        nil
+        (list
+         (etaf-node 'box (list :key 'icon :flex-shrink 0)
+                    (list (etaf-ui-icon icon :set 'svg :min-width 1
+                                        :color dim-tok)))
+         (etaf-node 'box (list :key 'field :flex-grow 1 :flex-basis '(ch 0) :min-width '(ch 6))
+                    (list input-node))
+         (when can-clear
+           (etaf-node 'box (list :key 'clear :flex-shrink 0)
+                      (list (etaf-ui-icon 'close :set 'svg :min-width 1
+                                          :color muted-tok
+                                          :aria-label "清空"
+                                          :help-echo "清空输入"
+                                          :on-press do-clear))))))))
+     ((eql rows 1)
+      ;; Keep a stable flex wrapper whether empty or non-empty so toggling the
+      ;; trailing clear button never unmounts `etaf-text-input' mid-edit.
+      (etaf-node
+       'flex (append key-prop
+                     (list :width width :align-items 'center :column-gap '(ch 1)))
+       (delq
+        nil
+        (list
+         (etaf-node 'box (list :key 'field :flex-grow 1 :flex-basis '(ch 0) :min-width '(ch 6))
+                    (list input-node))
+         (when can-clear
+           (etaf-node
+            'box (list :key 'clear :flex-shrink 0)
+            (list
+             (etaf-view
+              (etaf-button
+               :label "×"
+               :variant 'ghost
+               :color muted-tok
+               :padding '((lh 0) (ch 0))
+               :aria-label "清空"
+               :help-echo "清空输入"
+               :on-press do-clear)))))))))
+     ((and (eq width 'stretch) (null key))
+      input-node)
+     (t
+      (etaf-node 'box (append key-prop (list :width width)) (list input-node))))))
+
+(defun etaf-web--markdown-palette (mode)
+  "Build `etaf-ui-markdown' semantic color alist derived from browser MODE."
+  (let* ((pal (etaf-web--palette mode))
+         (bg (plist-get pal :bg))
+         (fg (plist-get pal :fg))
+         (dark-p (pcase mode
+                   ('dark t)
+                   ((or 'light 'sepia) nil)
+                   (_ (eq (etaf-appearance) 'dark))))
+         (panel (if dark-p
+                    (etaf-ui-color-mix bg "#000000" 0.14)
+                  (etaf-ui-color-mix bg fg 0.04)))
+         (panel2 (if dark-p
+                     (etaf-ui-color-mix bg fg 0.07)
+                   (etaf-ui-color-mix bg fg 0.07)))
+         (quote-bg (if dark-p
+                       (etaf-ui-color-mix bg "#000000" 0.08)
+                     (etaf-ui-color-mix bg fg 0.02)))
+         (accent (plist-get pal :accent))
+         (accent-soft (if dark-p
+                          (etaf-ui-color-mix bg accent 0.18)
+                        (plist-get pal :accent-soft)))
+         (border (plist-get pal :border))
+         (ok (plist-get pal :success))
+         (warn (plist-get pal :warning))
+         (danger (plist-get pal :danger))
+         (important (if dark-p "#a371f7" "#8250df")))
+    (list (cons :bg bg)
+          (cons :ink fg)
+          (cons :muted (plist-get pal :muted))
+          (cons :faint (plist-get pal :dim))
+          (cons :heading (if dark-p (etaf-ui-color-mix fg "#ffffff" 0.18) fg))
+          (cons :accent accent)
+          (cons :accent-soft accent-soft)
+          (cons :panel panel)
+          (cons :panel2 panel2)
+          (cons :code-bg panel)
+          (cons :border border)
+          (cons :quote-bg quote-bg)
+          (cons :quote-bar (etaf-ui-color-mix border accent 0.45))
+          (cons :table-header panel)
+          (cons :table-stripe quote-bg)
+          (cons :heading-rule border)
+          (cons :ok ok)
+          (cons :ok-soft (etaf-ui-color-mix bg ok 0.14))
+          (cons :warn warn)
+          (cons :warn-soft (etaf-ui-color-mix bg warn 0.14))
+          (cons :danger danger)
+          (cons :danger-soft (etaf-ui-color-mix bg danger 0.14))
+          (cons :important important)
+          (cons :important-soft (etaf-ui-color-mix bg important 0.14)))))
+
+(defun etaf-web--inline-plain-text (inlines)
+  "Extract plain text from parsed `etaf-ui-markdown-parse' INLINES."
+  (mapconcat
+   (lambda (n)
+     (cond
+      ((stringp n) n)
+      ((listp n)
+       (or (and (stringp (plist-get n :text)) (plist-get n :text))
+           (and (listp (plist-get n :children))
+                (etaf-web--inline-plain-text (plist-get n :children)))
+           ""))
+      (t "")))
+   inlines ""))
+
+(defun etaf-web--markdown-outline (doc)
+  "Return outline list of `(LEVEL TEXT ID)' entries from parsed DOC."
+  (let ((out nil))
+    (dolist (blk (plist-get doc :children))
+      (when (eq (plist-get blk :type) 'heading)
+        (let ((lvl (or (plist-get blk :level) 1))
+              (txt (string-trim (etaf-web--inline-plain-text (plist-get blk :children))))
+              (id (plist-get blk :id)))
+          (unless (string-empty-p txt)
+            (push (list lvl txt id) out)))))
+    (nreverse out)))
+
+(defun etaf-web--embedded-media-view (kind node dir open-link max-cols)
+  "Render embedded media NODE of KIND inside a sub-pane capped at MAX-COLS.
+Resolves both relative paths under DIR and cached remote URLs inside
+DIR/assets/, preserving natural or declared aspect ratios without distortion."
+  (let* ((raw-url (or (plist-get node :url) ""))
+         (raw-alt (string-trim (or (plist-get node :alt) "")))
+         (alt (if (string-empty-p raw-alt) "图片" raw-alt))
+         (decl-w (and (numberp (plist-get node :width))
+                      (> (plist-get node :width) 0)
+                      (plist-get node :width)))
+         (decl-h (and (numberp (plist-get node :height))
+                      (> (plist-get node :height) 0)
+                      (plist-get node :height)))
+         (remote (string-match-p "\\`[a-zA-Z][a-zA-Z0-9+.-]*://" raw-url))
+         (local-path
+          (cond
+           ((and (not remote) dir (not (string-empty-p raw-url)))
+            (expand-file-name raw-url dir))
+           ((and (string-prefix-p "file://" raw-url))
+            (expand-file-name (substring raw-url 7)))
+           ((and remote dir (etaf-web--http-url-p raw-url))
+            (when-let* ((rel (etaf-web--existing-asset-for-url
+                              raw-url (expand-file-name "assets" dir))))
+              (expand-file-name rel dir)))
+           (t nil)))
+         (accent-tok (etaf-theme-token :ui-accent "#61afef"))
+         (muted-tok (etaf-theme-token :ui-muted-fg "#8b99a4"))
+         (border-tok (etaf-theme-token :web-border-soft "#eaeef2"
+                                       (lambda (c) (list '(px 1) 'solid c)))))
+    (cond
+     ((and (not (eq kind 'inline-image))
+           local-path (file-readable-p local-path)
+           (display-graphic-p))
+      (let* ((natural (ignore-errors (image-size (create-image local-path) t)))
+             (nat-w (and natural (numberp (car natural)) (> (car natural) 0)
+                         (float (car natural))))
+             (nat-h (and natural (numberp (cdr natural)) (> (cdr natural) 0)
+                         (float (cdr natural))))
+             (tgt-w (cond
+                     ((and decl-w nat-w) (min (float decl-w) nat-w))
+                     (decl-w (float decl-w))
+                     (nat-w nat-w)
+                     (t 360.0)))
+             (tgt-h (cond
+                     ((and decl-h nat-h) (min (float decl-h) nat-h))
+                     ((and decl-w nat-w nat-h) (* tgt-w (/ nat-h nat-w)))
+                     (decl-h (float decl-h))
+                     (nat-h nat-h)
+                     (t 200.0)))
+             (cell (etaf-web--cell-metrics))
+             (cw (max 1.0 (float (car cell))))
+             (ch (max 1.0 (float (cdr cell))))
+             (cap-cols (max 16 (- (or max-cols 76) 2)))
+             (cap-rows 26)
+             (cols (max 8 (min cap-cols (round (/ tgt-w cw)))))
+             (rows (max 2 (round (/ (* cols cw tgt-h) (max 1.0 (* tgt-w ch)))))))
+        (when (> rows cap-rows)
+          (setq rows cap-rows
+                cols (max 8 (min cap-cols
+                                 (round (/ (* rows ch tgt-w)
+                                           (max 1.0 (* tgt-h cw))))))))
+        (etaf-node
+         'column (list :width 'stretch :item-gap '(lh 0))
+         (delq nil
+               (list
+                (etaf-node
+                 'box (append
+                       (list :border border-tok)
+                       (when (and open-link (not (string-empty-p raw-url)))
+                         (list :role 'button :tab-index 0 :pointer 'hand
+                               :help-echo (format "%s（按 RET 打开原图）" alt)
+                               :on-press (lambda () (funcall open-link raw-url)))))
+                 (list
+                  (etaf-node 'image
+                             (list :src local-path
+                                   :columns cols
+                                   :rows rows
+                                   :adapter 'auto)
+                             nil)))
+                (unless (or (string-empty-p alt) (equal alt "图片"))
+                  (etaf-node 'text (list :color muted-tok) (list alt))))))))
+     (t
+      (etaf-node
+       'text
+       (append (list :color accent-tok)
+               (when (and open-link (not (string-empty-p raw-url)))
+                 (list :role 'link :tab-index 0 :pointer 'hand
+                       :help-echo raw-url
+                       :on-press (lambda () (funcall open-link raw-url)))))
+       (list (format "[图: %s]" alt)))))))
+
+(defun etaf-web--container-attr (attrs key)
+  "Extract double-quoted KEY attribute value from container ATTRS string."
+  (when (and (stringp attrs)
+             (string-match
+              (format "\\(?:\\`\\|[ \t]\\)%s=\"\\(\\(?:\\\\.\\|[^\"\\\\]\\)*\\)\""
+                      (regexp-quote key))
+              attrs))
+    (replace-regexp-in-string
+     "\\\\\\(.\\)" "\\1" (match-string 1 attrs) t)))
+
+(defun etaf-web--normalize-embedded-containers (markdown)
+  "Convert `:::' container blocks in MARKDOWN for `etaf-ui-markdown-parse'.
+Normalizes callouts (`:::note|tip|important|warning|caution'), `:::details',
+`:::columns'/`:::col'/`:::card', `:::tabs' (`@tab'), `:::steps'/`:::step', and
+`:::timeline'/`:::event' into native GFM alerts, blockquotes, and headings so
+raw `:::' fences never leak inside Tier 2 Docs or Discourse split panes."
+  (let ((lines (split-string (or markdown "") "\n"))
+        (out nil)
+        (in-code nil)
+        (stack nil))
+    (cl-labels
+        ((quoted-p ()
+           (cl-some (lambda (f) (plist-get f :quote)) stack))
+         (emit-line (s)
+           (if (quoted-p)
+               (push (if (string-empty-p s) ">" (concat "> " s)) out)
+             (push s out))))
+      (dolist (line lines)
+        (cond
+         ((string-match-p "^[ \t]*\\(?:```\\|~~~\\)" line)
+          (setq in-code (not in-code))
+          (emit-line line))
+         ((and (not in-code)
+               (string-match
+                "^:::\\([a-z]+\\)\\(?:[ \t]+{\\(.*\\)}\\)?[ \t]*$"
+                line))
+          (let* ((kind (downcase (match-string 1 line)))
+                 (attrs (match-string 2 line))
+                 (title (etaf-web--container-attr attrs "title"))
+                 (href (etaf-web--container-attr attrs "href"))
+                 (date (etaf-web--container-attr attrs "date")))
+            (pcase kind
+              ((or "note" "tip" "important" "warning" "caution")
+               (push (list :kind 'alert :quote t) stack)
+               (push (format "> [!%s]" (upcase kind)) out)
+               (when (and title (not (string-empty-p title)))
+                 (push (format "> **%s**" title) out)
+                 (push ">" out)))
+              ("details"
+               (push (list :kind 'details :quote t) stack)
+               (push (format "> **▸ %s**"
+                             (if (and title (not (string-empty-p title)))
+                                 title
+                               "详情"))
+                     out)
+               (push ">" out))
+              ((or "columns" "col" "timeline")
+               (push (list :kind (intern kind) :quote nil) stack))
+              ("tabs"
+               (push (list :kind 'tabs :quote nil) stack))
+              ("steps"
+               (push (list :kind 'steps :quote nil :step-n 0) stack))
+              ("step"
+               (let* ((parent (cl-find-if (lambda (f) (eq (plist-get f :kind) 'steps))
+                                          stack))
+                      (n (if parent
+                             (let ((next (1+ (or (plist-get parent :step-n) 0))))
+                               (plist-put parent :step-n next)
+                               next)
+                           1)))
+                 (push (list :kind 'step :quote nil) stack)
+                 (push "" out)
+                 (emit-line (if (and title (not (string-empty-p title)))
+                                (format "#### %d. %s" n title)
+                              (format "#### Step %d" n)))
+                 (push "" out)))
+              ("card"
+               (push (list :kind 'card :quote t) stack)
+               (when (and title (not (string-empty-p title)))
+                 (push (if (and href (not (string-empty-p href)))
+                           (format "> **[%s](%s)**" title href)
+                         (format "> **%s**" title))
+                       out)
+                 (push ">" out)))
+              ("event"
+               (push (list :kind 'event :quote t) stack)
+               (let ((hdr (cond
+                           ((and date (not (string-empty-p date))
+                                 title (not (string-empty-p title)))
+                            (format "%s · %s" date title))
+                           ((and title (not (string-empty-p title))) title)
+                           ((and date (not (string-empty-p date))) date)
+                           (t nil))))
+                 (when hdr
+                   (push (format "> **%s**" hdr) out)
+                   (push ">" out))))
+              (_
+               (push (list :kind 'other :quote nil) stack)))))
+         ((and (not in-code)
+               (eq (plist-get (car stack) :kind) 'tabs)
+               (string-match "^@tab[ \t]+\\(.+\\)$" line))
+          (let ((label (string-trim (match-string 1 line))))
+            (push "" out)
+            (emit-line (format "#### %s" label))
+            (push "" out)))
+         ((and (not in-code) stack (string-match-p "^:::[ \t]*$" line))
+          (let ((popped (pop stack)))
+            (when (plist-get popped :quote)
+              (push "" out))))
+         (t
+          (emit-line line)))))
+    (mapconcat #'identity (nreverse out) "\n")))
+
+(defun etaf-web--parse-embedded-markdown (markdown)
+  "Parse MARKDOWN for embedded Docs/Discourse views using the `etaf' dialect."
+  (etaf-ui-markdown-parse (etaf-web--normalize-embedded-containers markdown) 'etaf))
+
+(cl-defun etaf-web--render-markdown-blocks
+    (doc &key theme-mode dir open-link (line-grid t) (max-cols 80) show-title)
+  "Render parsed `etaf-ui-markdown-parse' DOC into an embedded column View.
+Unlike `etaf-md-view', carries zero `:width (vw 100)' assumption so it fits
+cleanly inside split panes and cards with exact parent-column symmetry."
+  (let* ((mode (or theme-mode 'auto))
+         (pal (etaf-web--markdown-palette mode))
+         (bg (unless (eq mode 'auto) (cdr (assq :bg pal))))
+         (env (list :palette pal
+                    :background bg
+                    :width max-cols
+                    :line-grid (and line-grid t)
+                    :link-hover nil
+                    :heading-underline nil
+                    :open-link (or open-link #'ignore)
+                    :render-media (lambda (kind node _e)
+                                    (etaf-web--embedded-media-view
+                                     kind node dir open-link max-cols))
+                    :alert-labels '((note . "笔记") (tip . "提示")
+                                    (important . "重要") (warning . "警告")
+                                    (caution . "小心"))
+                    :features (plist-get doc :features)))
+         (meta (plist-get doc :meta))
+         (meta-title (cdr (assoc "title" meta)))
+         (blocks (plist-get doc :children))
+         (footnotes (plist-get doc :footnotes))
+         (first-is-h1 (and blocks
+                           (eq (plist-get (car blocks) :type) 'heading)
+                           (eql (plist-get (car blocks) :level) 1)))
+         (accent-tok (cdr (assq :accent pal)))
+         (border-line (list '(px 1) 'solid (cdr (assq :border pal))))
+         (rendered-blocks
+          (delq nil
+                (mapcar
+                 (lambda (blk)
+                   (when-let* ((v (etaf-ui-markdown-view-block blk env)))
+                     (let ((id (and (eq (plist-get blk :type) 'heading)
+                                    (plist-get blk :id))))
+                       (if (and (stringp id) (not (string-empty-p id)))
+                           (etaf-node 'box
+                                      (list :ref (intern (format "etaf-md-heading-%s" id))
+                                            :width 'stretch)
+                                      (list v))
+                         v))))
+                 blocks)))
+         (footnote-views
+          (when footnotes
+            (append
+             (list (etaf-node 'etaf-divider (list :orientation 'horizontal :label "脚注") nil))
+             (etaf-ui-markdown-view-blocks footnotes env t)))))
+    (etaf-node
+     'column (list :width 'stretch :item-gap '(lh 1) :color (cdr (assq :ink pal)))
+     (append
+      (when (and show-title meta-title (not (string-empty-p meta-title))
+                 (not first-is-h1))
+        (list (etaf-node 'box
+                         (list :width 'stretch
+                               :border-bottom border-line
+                               :padding '((lh 0) (ch 0)))
+                         (list (etaf-node 'text
+                                          (list :font-weight 'bold :color accent-tok)
+                                          (list meta-title))))))
+      rendered-blocks
+      footnote-views))))
+
+(defun etaf-web--cell-metrics ()
+  "Return `(CHAR-WIDTH . LINE-HEIGHT)' of the active ETAF canvas."
+  (let ((m (ignore-errors (etaf-display-metrics))))
+    (cons (max 1 (or (plist-get m :char-width) 8))
+          (max 1 (or (plist-get m :line-height) 16)))))
 
 (defun etaf-web--border-token (key fallback &optional px)
   "Return a solid border token of width PX (default 1) from Theme KEY."
@@ -161,7 +679,7 @@ so the shell blends seamlessly with the user's frame background."
         (concat head "…" tail))))))
 
 (defun etaf-web--status-text (phase stage-label elapsed progress cached narrow
-                                    &optional _spin-idx)
+                                    &optional _spin-idx mode-label)
   "Format right-hand status string (pure text, zero graphic progress bar)."
   (pcase phase
     ('loading
@@ -177,7 +695,11 @@ so the shell blends seamlessly with the user's frame background."
     (_
      (if narrow
          ""
-       (if cached "缓存" "")))))
+       (cond
+        ((and (stringp mode-label) (not (string-empty-p mode-label)))
+         mode-label)
+        (cached "缓存")
+        (t ""))))))
 
 ;;; ---------------------------------------------------------------------------
 ;;; Constant-height 1lh top bar, loading skeleton & error block
@@ -191,7 +713,7 @@ Narrow (<72ch): [‹ › ⟳/×] │ [https://host/…tail] [38%]."
          (phase (etaf-value (plist-get session :phase)))
          (loading-p (eq phase 'loading))
          (stage-label (etaf-value (plist-get session :stage-label)))
-         (progress (etaf-value (plist-get session :progress-display)))
+         (progress (or (plist-get session :progress-display) 0.0))
          (cached (etaf-value (plist-get session :cached)))
          (can-back (etaf-value (plist-get session :can-back)))
          (can-forward (etaf-value (plist-get session :can-forward)))
@@ -218,8 +740,11 @@ Narrow (<72ch): [‹ › ⟳/×] │ [https://host/…tail] [38%]."
          (elapsed (if (and loading-p (plist-get session :started-at))
                       (- (float-time) (plist-get session :started-at))
                     0.0))
+         (page (etaf-value (plist-get session :page)))
+         (mode-label (and (listp page) (plist-get page :mode-label)))
          (status-str (etaf-web--status-text
-                      phase stage-label elapsed progress cached narrow))
+                      phase stage-label elapsed progress cached narrow
+                      nil mode-label))
          (status-color (pcase phase
                          ('loading (etaf-theme-token :ui-accent "#61afef"))
                          ('error (etaf-theme-token :ui-danger-fg "#e06c75"))
@@ -234,6 +759,7 @@ Narrow (<72ch): [‹ › ⟳/×] │ [https://host/…tail] [38%]."
      'flex
      (list :ref 'web-header :id "web-header"
            :width 'stretch
+           :flex-shrink 0
            :align-items 'center
            :column-gap '(ch 1)
            :padding '((lh 0) (ch 1))
@@ -330,20 +856,37 @@ Narrow (<72ch): [‹ › ⟳/×] │ [https://host/…tail] [38%]."
                 (etaf-node 'box (list :flex-grow 1 :flex-basis '(ch 0) :min-width '(ch 0))
                            (list (etaf-node 'text (list :color muted-tok)
                                             (list path-shown))))))))
-      ;; Right: same-row pure-text status slot (retained Host updated in-place).
+      ;; Right: pure text status slot or specialized mode selector.
       (etaf-node
-       'box
-       (list :flex-shrink 0)
+       'box (list :flex-shrink 0)
        (list
-        (if editing
-            (etaf-node 'text (list :color muted-tok)
-                       (list (if narrow
-                                 "RET · ESC"
-                               "RET 打开 · TAB 补全 · ESC 取消")))
+        (cond
+         (editing
+          (etaf-node 'text (list :color muted-tok)
+                     (list (if narrow
+                               "RET · ESC"
+                             "RET 打开 · TAB 补全 · ESC 取消"))))
+         ((and (eq phase 'ready)
+               (not narrow)
+               (stringp mode-label)
+               (not (string-empty-p mode-label))
+               (functionp (plist-get callbacks :set-mode)))
+          (etaf-view
+           (etaf-button
+            :label (format "%s ▾" mode-label)
+            :variant 'ghost
+            :ref 'web-mode-button
+            :color muted-tok
+            :pointer 'hand
+            :padding '((lh 0) (ch 0))
+            :aria-label (format "渲染模式 %s" mode-label)
+            :help-echo "切换渲染模式 (m)"
+            :on-press (plist-get callbacks :set-mode))))
+         (t
           (etaf-node 'text
                      (list :ref 'web-status :id "web-status"
                            :color status-color)
-                     (list status-str)))))))))
+                     (list status-str))))))))))
 
 (defun etaf-web--loading-skeleton-view (session measure)
   "Render fresh-page loading skeleton centered inside MEASURE on frame bg."
@@ -447,12 +990,13 @@ Narrow (<72ch): [‹ › ⟳/×] │ [https://host/…tail] [38%]."
 
 (defun etaf-web--body-viewport (child)
   "Return CHILD as the scrollable page viewport.
-The toolbar is a sibling above it, so scrolling the page cannot move the
+The toolbar is a fixed sibling above it, so scrolling the page cannot move the
 toolbar, and no scroll hook or per-frame repaint is involved."
   (etaf-node 'box
              (list :ref 'web-scroll :id "web-scroll"
                    :width 'stretch
-                   :height 'stretch
+                   :flex-grow 1
+                   :flex-basis '(lh 0)
                    :min-height '(lh 0)
                    :overflow 'scroll
                    :role 'region
@@ -461,35 +1005,79 @@ toolbar, and no scroll hook or per-frame repaint is involved."
              (list (etaf-node 'column (list :width 'stretch :height 'auto)
                               (list child)))))
 
-(defun etaf-web--body-view (session measure)
-  "Render main content area for SESSION inside MEASURE columns.
-Wraps `etaf-md-view' under a `:key' tied to `:md-gen' so installing a new
-document cleanly remounts `etaf-md-app' with fresh `:bindings' (never stuck on
-the previous page), while in-tab loading keeps the previous key and stays
-in-place with zero vertical jitter."
-  (let ((phase (etaf-value (plist-get session :phase)))
-        (md-session (etaf-value (plist-get session :md-session)))
-        (md-gen (etaf-value (plist-get session :md-gen))))
-    (etaf-web--body-viewport
-     (pcase phase
-       ('error
-        (etaf-web--error-card-view session measure))
-       ('loading
-        (if md-session
-            (etaf-node 'box (list :key md-gen :width 'stretch)
-                       (list (etaf-md-view md-session)))
-          (etaf-web--loading-skeleton-view session measure)))
-       (_
-        (if md-session
-            (etaf-node 'box (list :key md-gen :width 'stretch)
-                       (list (etaf-md-view md-session)))
-          (etaf-web--loading-skeleton-view session measure)))))))
+(defun etaf-web--render-page-content (session page md-session md-gen ctx)
+  "Render active PAGE controller or fallback MD-SESSION under key MD-GEN."
+  (cond
+   ((and (listp page) (functionp (plist-get page :render)))
+    (etaf-node 'box (list :key md-gen :width 'stretch)
+               (list (funcall (plist-get page :render) ctx))))
+   (md-session
+    (etaf-node 'box (list :key md-gen :width 'stretch)
+               (list (etaf-md-view md-session))))
+   (t
+    (etaf-web--loading-skeleton-view session (plist-get ctx :measure)))))
+
+(defun etaf-web--body-view (session width height width-px char-width measure narrow theme-mode)
+  "Render main content area for SESSION at current viewport metrics.
+Delegates to the active Page Controller's `:render' function (or `etaf-md-view')
+under a `:key' tied to `:md-gen'.  Page Controllers declaring `:own-scroll t'
+receive the full fixed body viewport so multi-pane views can scroll each pane
+independently and paint full-height dividers."
+  (let* ((phase (etaf-value (plist-get session :phase)))
+         (page (etaf-value (plist-get session :page)))
+         (md-session (etaf-value (plist-get session :md-session)))
+         (md-gen (etaf-value (plist-get session :md-gen)))
+         (own-scroll (and (not (eq phase 'error))
+                          (listp page)
+                          (plist-get page :own-scroll)
+                          (functionp (plist-get page :render))))
+         (ctx (list :width width
+                    :height height
+                    :width-px width-px
+                    :char-width char-width
+                    :measure measure
+                    :narrow narrow
+                    :theme theme-mode
+                    :session session)))
+    (if own-scroll
+        (etaf-node
+         'flex
+         (list :flex-direction 'column
+               :width 'stretch
+               :flex-grow 1
+               :flex-basis '(lh 0)
+               :min-height '(lh 0)
+               :overflow 'hidden)
+         (list
+          (etaf-node 'flex
+                     (list :key md-gen
+                           :flex-direction 'column
+                           :width 'stretch
+                           :height 'stretch
+                           :flex-grow 1
+                           :flex-basis '(lh 0)
+                           :min-height '(lh 0)
+                           :overflow 'hidden)
+                     (list (funcall (plist-get page :render) ctx)))))
+      (etaf-web--body-viewport
+       (pcase phase
+         ('error
+          (etaf-web--error-card-view session measure))
+         ('loading
+          (if (or page md-session)
+              (etaf-web--render-page-content session page md-session md-gen ctx)
+            (etaf-web--loading-skeleton-view session measure)))
+         (_
+          (etaf-web--render-page-content session page md-session md-gen ctx)))))))
 
 (etaf-define-component etaf-web--browser-app (&key session keys)
   "Root Component of an `etaf-web' browser buffer."
   :bindings ((mode (plist-get session :theme-mode))
+             (rev (plist-get session :theme-rev))
              (tokens (etaf-computed
-                      (lambda () (etaf-web--theme-tokens (etaf-value mode)))
+                      (lambda ()
+                        (when rev (etaf-value rev))
+                        (etaf-web--theme-tokens (etaf-value mode)))
                       :name 'etaf-web-theme-tokens)))
   :setup
   (progn
@@ -500,20 +1088,31 @@ in-place with zero vertical jitter."
                                      (dark . "暗") (sepia . "纸")))))
   :render
   (let* ((vw (max 44 (or (etaf-value (plist-get session :viewport-width)) 96)))
+         (vh (max 8 (or (etaf-value (plist-get session :viewport-height)) 24)))
+         (cw (max 1.0 (float (or (etaf-value (plist-get session :char-width))
+                                 (car (etaf-web--cell-metrics))))))
+         (vw-px (or (etaf-value (plist-get session :viewport-px))
+                    (round (* vw cw))))
          (narrow (< vw etaf-web--narrow-breakpoint))
          (measure (min etaf-web--max-measure (max etaf-web--min-measure (- vw 4))))
          (editing (etaf-value (plist-get session :address-editing)))
          (callbacks (plist-get session :callbacks))
+         (page (etaf-value (plist-get session :page)))
+         (page-keys (and (listp page) (plist-get page :keys)))
+         (all-keys (if page-keys (append page-keys keys) keys))
          (cur-mode (etaf-value mode))
          (bg-tok (unless (eq cur-mode 'auto)
                    (etaf-theme-token :ui-bg "#191a1c")))
          (fg-tok (etaf-theme-token :ui-fg "#dcdfe4")))
     (etaf-node
-     'column
-     (append (list :width '(vw 100)
-                   :height '(vh 100)
+     'flex
+     (append (list :flex-direction 'column
+                   :width '(vw 100)
+                   :height (list 'lh vh)
                    :min-height '(lh 0)
-                   :keys keys
+                   :overflow 'hidden
+                   :keys all-keys
+                   :on-direction (plist-get callbacks :direction)
                    :color fg-tok
                    :aria-label "ETAF Web 浏览器")
              (when bg-tok
@@ -522,7 +1121,7 @@ in-place with zero vertical jitter."
                (list :on-dismiss (plist-get callbacks :address-dismiss))))
      (list
       (etaf-web--header-view session vw narrow)
-      (etaf-web--body-view session measure)))))
+      (etaf-web--body-view session vw (max 4 (1- vh)) vw-px cw measure narrow cur-mode)))))
 
 (provide 'etaf-web-views)
 ;;; etaf-web-views.el ends here

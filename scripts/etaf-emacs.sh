@@ -130,6 +130,53 @@ elisp=$(cat <<ELISP
   ;; profile, so it runs the byte-code the install already produced; delete this
   ;; line to compile natively.
   (setq native-comp-jit-compilation nil)
+  ;; Match the preferred Latin/CJK and symbol fonts when installed; each list
+  ;; falls back silently when a font is missing on another machine.
+  (defun etaf-trial--first-font (families)
+    (catch 'found
+      (dolist (family families)
+        (when (find-font (font-spec :family family))
+          (throw 'found family)))))
+  (when (display-graphic-p)
+    (setq inhibit-compacting-font-caches t)
+    (let ((latin (etaf-trial--first-font
+                  '("PragmataPro"
+                    "JetBrains Mono"
+                    "Source Code Pro for Powerline"))))
+      (when latin
+        (set-face-attribute 'default nil
+                            :family latin
+                            :height (cond ((eq system-type 'darwin) 135)
+                                          ((eq system-type 'windows-nt) 110)
+                                          (t 110)))))
+    (let ((unicode (etaf-trial--first-font
+                    '("Symbola" "Apple Color Emoji" "Symbol"))))
+      (when unicode
+        (set-fontset-font t 'unicode (font-spec :family unicode) nil 'append)))
+    (let ((cjk (etaf-trial--first-font '("LXGW WenKai Mono"))))
+      (when cjk
+        (dolist (charset '(kana han hangul cjk-misc bopomofo))
+          (set-fontset-font t charset (font-spec :family cjk)))))
+    (dolist (entry
+             '((emoji "Apple Color Emoji" "Noto Color Emoji")
+               ((#xe000 . #xf8ff)
+                "DejaVuSansMono Nerd Font" "DroidSansMono Nerd Font"
+                "Symbols Nerd Font Mono")
+               ((#xf0000 . #xfffff)
+                "DejaVuSansMono Nerd Font" "DroidSansMono Nerd Font"
+                "Symbols Nerd Font Mono")
+               ((#x2500 . #x257f) "Sarasa Mono SC" "Menlo" "Monaco")
+               ((#x25a0 . #x25ff) "Sarasa Mono SC" "Menlo" "Monaco")
+               ((#x3400 . #x4dbf) "HanaMinA" "HanaMinB")
+               ((#x20000 . #x2a6df) "HanaMinB" "HanaMinA")
+               ((#x2a700 . #x2ebef) "HanaMinB" "HanaMinA")))
+      (let ((font (etaf-trial--first-font (cdr entry))))
+        (when font
+          (set-fontset-font t (car entry) (font-spec :family font)))))
+    ;; Fill the screen workarea on startup without entering macOS native
+    ;; full-screen Space; applied after fonts so metrics do not resize it away,
+    ;; and scoped to the initial frame so child frames (e.g. posframe) stay sized.
+    (set-frame-parameter nil 'fullscreen 'maximized))
   ;; Install the installer and show its manager once the archives are down, or
   ;; once the fallback deadline passes with whatever arrived.  This happens once:
   ;; the hook removes itself afterwards, because a later refresh, such as the

@@ -74,6 +74,16 @@
 
 **错误。** 缓冲区里没有已打开的应用时 `error→ user-error`。关闭函数的错误在缓冲区消失之后向外传播；直接杀掉缓冲区时，同一个错误改为以消息报告，所以 `kill-buffer` 本身从不失败。
 
+#### Property: :on-close
+
+`etaf-app-open` 与 `etaf-pip-open` 的关闭回调关键字。
+
+**参数。** nil 或零参函数。
+
+**语义。** 无论经由 `etaf-app-close`、`etaf-pip-close`、直接杀掉缓冲区还是以同名重新打开，在 View 卸载与缓冲区销毁前都会以当前缓冲区运行一次该回调。
+
+**参见。** `etaf-app-open`、`etaf-app-close`、`etaf-pip-open`。
+
 ## 查找应用
 
 #### Function: etaf-app-state (&optional buffer-or-name)
@@ -87,6 +97,77 @@
 返回已打开应用 NAME 的缓冲区，没有则返回 nil。
 
 **语义。** 入口命令若应回到已打开的应用而不是重新打开，就先检查它，再选中它返回的缓冲区。
+
+## 应用声明与注册表
+
+<!-- index: 应用注册表; etaf-app-define; etaf-app-register; etaf-app-launch -->
+
+基于 ETAF 的应用往往需要运行在多种宿主中而不必感知任何具体宿主：独立 Emacs 缓冲区（`etaf-app-open`）、桌面窗口管理器、浮动子框面板或统一启动器。应用注册表是一层极薄的元数据与会话生命周期契约，把应用和宿主解耦：每个应用只声明自己的身份、支持的宿主、可选的可嵌入 `:session` 回调（`:create`、`:view`、`:close`）与默认布局建议，各宿主直接读取注册表而不硬编码任何应用名。函数字段接受尚未加载的符号，因此各包可以通过 `;;;###autoload` 配合 `with-eval-after-load` 零启动开销地注册清单，直到真正打开时才加载 `:feature`。
+
+#### Function: etaf-app-register (id &rest spec)
+
+用关键字 plist SPEC 注册或更新 ETAF 应用清单 ID。
+
+**参数。**
+
+- ID 是标识应用的非 nil、非关键字符号。
+- SPEC 是关键字 plist，包含必填非空字符串 `:title`，可选 `:feature` 符号（默认与 ID 相同）、`:icon` 字符串、`:category`（`media`、`reading`、`productivity`、`communication`、`game`、`system`、`utility` 或 `other`，默认 `other`）、`:description` 字符串、`:hosts`（`(buffer desktop panel pip)` 的非空子集；带 `:session` 时默认为 `(buffer desktop panel)`，否则为 `(buffer)`）、`:open` 可调用符号或函数、`:session` 关键字 plist（必填可调用引用 `:create` 与 `:view`，可选 `:close`、`:keep-alive` 与 `:multiple-instances`）、`:window` 桌面窗口建议 plist、`:panel` 浮动面板建议 plist、`:file-extensions` 字符串列表、`:capabilities` 符号列表及 `:doctor` 可调用引用。
+
+**语义。** 注册时立即校验所有键名与类型，把归一化后的清单写入全局注册表（重复注册同一 ID 原地替换），并以 `(register ID ENTRY)` 运行 `etaf-app-change-functions`。在 `:hosts` 中声明 `desktop` 或 `panel` 时必须提供合法的 `:session`。
+
+**返回。** 归一化应用清单的独立副本。
+
+**错误。** 非法 ID、未知键、缺少 `:title`、不支持的 `:hosts` 或 `:category`、声明嵌入宿主却缺 `:session`、或回调不可调用时触发 `error→ etaf-runtime-error`。
+
+#### Macro: etaf-app-define (id &rest spec)
+
+以声明式语法注册 ETAF 应用 ID 及其关键字清单 SPEC。
+
+**语义。** 展开为 `(etaf-app-register 'ID SPEC...)`，方便各包在 `with-eval-after-load 'etaf` 中简洁声明自身。
+
+**返回。** `etaf-app-register` 返回的独立清单副本。
+
+#### Function: etaf-app-unregister (id)
+
+从注册表中移除已注册的 ETAF 应用 ID。
+
+**语义。** ID 存在时将其移除，并以 `(unregister ID nil)` 通知 `etaf-app-change-functions`。
+
+**返回。** ID 原先存在返回 t，否则返回 nil。
+
+**错误。** ID 不是合法应用符号时触发 `error→ etaf-runtime-error`。
+
+#### Function: etaf-app-get (id)
+
+返回已注册应用 ID 的独立清单 plist，不存在则返回 nil。
+
+**返回。** 独立清单 plist 或 nil。
+
+#### Function: etaf-app-list (&optional host category)
+
+返回按 ID 排序的全部已注册 ETAF 应用独立清单。
+
+**参数。** 可选 HOST 按 `:hosts` 过滤（`buffer`、`desktop`、`panel` 或 `pip`）；可选 CATEGORY 按 `:category` 过滤。
+
+**返回。** 按 ID 字母序排列的独立清单 plist 列表。
+
+**错误。** HOST 或 CATEGORY 非 nil 且不受支持时触发 `error→ etaf-runtime-error`。
+
+#### Function: etaf-app-launch (id)
+
+在独立缓冲区中启动已注册的 ETAF 应用 ID。
+
+**语义。** 交互调用时在已注册应用中补全选择。若 `:feature` 尚未加载则按需 `require`；若声明了 `:open` 则调用它，否则调用 `:session` 的 `:create` 与 `:view` 并经 `etaf-app-open`（`:mode-line t`）打开，同时把 `:close` 接入 `:on-close`。
+
+**返回。** `:open` 的返回值或新打开的应用缓冲区。
+
+**错误。** 交互调用且无已注册应用时触发 `error→ user-error`；ID 未知或既未声明 `:open` 也未声明 `:session` 时触发 `error→ etaf-runtime-error`。
+
+#### Hook: etaf-app-change-functions
+
+应用注册表变化时以 `(EVENT ID ENTRY)` 运行的钩子。
+
+**语义。** EVENT 为 `register` 或 `unregister`，ID 为应用符号，ENTRY 为独立清单 plist（移除时为 nil）。单个观察者的错误被隔离。
 
 ## 适配窗口
 

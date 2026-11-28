@@ -118,6 +118,29 @@ Appends an ellipsis when truncated."
             (concat (string-trim-right (apply #'string (nreverse chars))) "…")
           str)))))
 
+(defun etaf-agenda-layout-year-columns (cal-inner-w &optional char-px)
+  "Return the number of month cards per row (4, 3 or 2) for CAL-INNER-W.
+On text terminals where CHAR-PX is 1, each 1px card border occupies a full
+character cell so four cards need slightly more horizontal room to keep
+day numbers separated cleanly."
+  (let ((tty-p (<= (or char-px 8) 1)))
+    (cond ((>= cal-inner-w (if tty-p 102 86)) 4)
+          ((>= cal-inner-w (if tty-p 76 64)) 3)
+          (t 2))))
+
+(defun etaf-agenda-plan-char-px (plan &optional runtime)
+  "Return effective pixels per character cell for PLAN and RUNTIME.
+Distinguishes graphical/pixel viewports from text-cell viewports even in batch."
+  (let* ((w-px (plist-get plan :width-px))
+         (cols (plist-get plan :width))
+         (plan-px (if (and (numberp w-px) (numberp cols) (> cols 0))
+                      (max 1 (/ w-px cols))
+                    1))
+         (rt-px (or (when-let* ((m (and runtime (ignore-errors (etaf-display-metrics runtime)))))
+                      (plist-get m :char-width))
+                    1)))
+    (max rt-px plan-px)))
+
 (defun etaf-agenda-char-pixel-width (runtime &optional window)
   "Return the effective pixel width of one character cell on RUNTIME or WINDOW.
 Reads `etaf-display-metrics' so text scaling is respected."

@@ -895,5 +895,65 @@ When MAX-X is non-nil, skip matches at or beyond pixel MAX-X."
       (set-face-attribute 'warning frame :foreground orig-warn)
       (set-face-attribute 'link frame :foreground orig-link))))
 
+(defun etaf-agenda-tests--max-rendered-line-width (buffer)
+  "Return the maximum rendered pixel/cell width across all lines in BUFFER."
+  (with-current-buffer buffer
+    (save-excursion
+      (goto-char (point-min))
+      (let ((cw (max 1 (frame-char-width)))
+            (best 0))
+        (while (not (eobp))
+          (let ((p (line-beginning-position))
+                (eol (line-end-position))
+                (px 0))
+            (while (< p eol)
+              (let ((disp (get-text-property p 'display)))
+                (if (and (consp disp) (eq (car disp) 'space))
+                    (let ((w (plist-get (cdr disp) :width))
+                          (nxt (or (next-single-property-change p 'display nil eol) eol)))
+                      (setq px (+ px (cond ((and (consp w) (numberp (car w))) (car w))
+                                           ((numberp w) (* w cw))
+                                           (t 0)))
+                            p nxt))
+                  (setq px (+ px (* (char-width (char-after p)) cw))
+                        p (1+ p)))))
+            (setq best (max best px)))
+          (forward-line 1))
+        best))))
+
+(ert-deftest etaf-agenda-tests-tty-viewport-adapts-across-widths ()
+  "Text-cell viewports fit wide, medium and narrow widths without right-edge clipping."
+  (dolist (case '((177 42 wide) (104 32 medium) (80 26 narrow)))
+    (pcase-let ((`(,vw ,vh ,tier) case))
+      (let ((file (make-temp-file "etaf-agenda-tty" nil ".sqlite3")))
+        (unwind-protect
+            (let ((buffer (etaf-agenda-open file (list :viewport-width vw :viewport-height vh))))
+              (unwind-protect
+                  (with-current-buffer buffer
+                    (etaf-agenda-capture "终端自适应测试任务")
+                    (should (<= (etaf-agenda-tests--max-rendered-line-width buffer) vw))
+                    (should (etaf-agenda-tests--has-p buffer "+ 新建"))
+                    (should (etaf-agenda-tests--has-p buffer "?"))
+                    (if (eq tier 'wide)
+                        (progn
+                          (should (etaf-agenda-tests--has-p buffer "◈Agenda"))
+                          (should-not (etaf-agenda-tests--has-p buffer "☰")))
+                      (should (etaf-agenda-tests--has-p buffer "☰")))
+                    (etaf-agenda-view-calendar)
+                    (should (<= (etaf-agenda-tests--max-rendered-line-width buffer) vw))
+                    (etaf-agenda-tests--keys buffer "w")
+                    (should (<= (etaf-agenda-tests--max-rendered-line-width buffer) vw))
+                    (etaf-agenda-tests--keys buffer "w")
+                    (should (<= (etaf-agenda-tests--max-rendered-line-width buffer) vw))
+                    (should (etaf-agenda-tests--has-p buffer "1 月"))
+                    (when (eq tier 'wide)
+                      (should (etaf-agenda-tests--has-p buffer "12 月"))
+                      (should (etaf-agenda-tests--has-p buffer "下年 ›"))
+                      (should (< (etaf-agenda-tests--rendered-x-of buffer "+ 新建") vw))
+                      (should (< (etaf-agenda-tests--rendered-x-of buffer "下年 ›") vw))))
+                (when (buffer-live-p buffer)
+                  (with-current-buffer buffer (etaf-agenda-close)))))
+          (ignore-errors (delete-file file)))))))
+
 (provide 'etaf-agenda-tests)
 ;;; etaf-agenda-tests.el ends here

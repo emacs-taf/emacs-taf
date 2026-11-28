@@ -464,5 +464,22 @@
 
 (autoload 'etaf-desktop-demo-open "examples/etaf-desktop-demo" nil t)
 
+;;;###autoload
+(with-eval-after-load 'etaf
+  (etaf-app-register 'etaf-desktop
+    :title "ETAF 桌面"
+    :icon "D"
+    :category 'system
+    :feature 'etaf-desktop
+    :open 'etaf-desktop-open
+    :hosts '(buffer desktop panel)
+    :session '(:create etaf-desktop-create
+               :view etaf-desktop-view
+               :close etaf-desktop-close
+               :multiple-instances t)
+    :window '(:x 0 :y 0 :width 1000 :height 30 :min-width 240 :min-height 10)
+    :panel '(:width (fraction 0.9) :height (fraction 0.9) :fill-height t
+             :at frame-center :stack t)))
+
 (provide 'etaf-desktop)
 ;;; etaf-desktop.el ends here

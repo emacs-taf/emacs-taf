@@ -26,6 +26,10 @@
 (require 'etaf-ncm-theme)
 (require 'etaf-ncm-layout)
 
+(declare-function etaf-ncm-open "etaf-ncm" (&optional model))
+(declare-function etaf-ncm-meter-live-p "etaf-ncm-meter" ())
+(declare-function etaf-ncm-meter-levels "etaf-ncm-meter" (columns))
+
 (defconst etaf-ncm-sections
   '((推荐
      (:daily "每日推荐" star)
@@ -320,10 +324,72 @@ that left the backend before the user's last command."
   "Return APP's displayed playback position in seconds."
   (or (plist-get app :clock) 0))
 
+(defun etaf-ncm--sync-activity (app)
+  "Publish APP's current playback state to the ETAF Live Activity protocol."
+  (let* ((status (etaf-ncm--read app :status))
+         (state (etaf-ncm--flag-value app :state))
+         (title (string-trim (or (plist-get status :title) "")))
+         (artist (string-trim (or (plist-get status :artist) "")))
+         (elapsed (max 0 (floor (or (etaf-ncm--clock app) 0))))
+         (duration (max 0 (floor (or (plist-get status :duration) 0))))
+         (liked (and (etaf-ncm--flag-value app :liked) t)))
+    (if (or (null status)
+            (string-empty-p title)
+            (memq state '(nil idle stopped)))
+        (when (etaf-activity-get 'etaf-ncm)
+          (etaf-activity-remove 'etaf-ncm))
+      (let* ((playing-p (eq state 'playing))
+             (lyric-lines (plist-get (etaf-ncm--read app :lyric) :lines))
+             (lyric-line (when lyric-lines
+                           (let ((raw (cdr (nth (etaf-ncm--lyric-index lyric-lines elapsed)
+                                                lyric-lines))))
+                             (and (stringp raw) (string-trim raw)))))
+             (sub-parts (delq nil
+                              (list (unless (string-empty-p artist) artist)
+                                    (unless (or (null lyric-line) (string-empty-p lyric-line))
+                                      lyric-line))))
+             (subtitle (mapconcat #'identity sub-parts " · "))
+             (meter-fn (when (and playing-p (fboundp 'etaf-ncm-meter-levels))
+                         (lambda (bars)
+                           (when (and (fboundp 'etaf-ncm-meter-live-p)
+                                      (etaf-ncm-meter-live-p))
+                             (append (etaf-ncm-meter-levels bars) nil))))))
+        (etaf-activity-publish
+         'etaf-ncm
+         (list
+          :app 'etaf-ncm
+          :kind 'media
+          :priority 85
+          :state (if playing-p 'active 'paused)
+          :icon (if playing-p "♪" "⏸")
+          :title title
+          :subtitle (unless (string-empty-p subtitle) subtitle)
+          :compact title
+          :progress (when (> duration 0)
+                      (list :value elapsed :max duration :unit 'seconds))
+          :meter meter-fn
+          :open (lambda ()
+                  (when (fboundp 'etaf-ncm-open)
+                    (etaf-ncm-open app)))
+          :actions
+          (list (list :id 'prev :label "⏮"
+                      :fn (lambda () (etaf-ncm-previous-track app)))
+                (list :id 'toggle :label (if playing-p "⏸" "▶")
+                      :fn (lambda () (etaf-ncm-toggle-playback app)))
+                (list :id 'next :label "⏭"
+                      :fn (lambda () (etaf-ncm-next-track app)))
+                (list :id 'like :label (if liked "♥" "♡")
+                      :fn (lambda () (etaf-ncm-like app liked))))))))))
+
 (defun etaf-ncm--set-clock (app seconds)
   "Store SECONDS and publish the retained position source, not the whole status."
-  (setf (plist-get app :clock) seconds)
-  (etaf-ncm--write app :position-ref seconds))
+  (let ((prev-sec (floor (or (plist-get app :clock) 0)))
+        (next-sec (floor (or seconds 0))))
+    (setf (plist-get app :clock) seconds)
+    (etaf-ncm--write app :position-ref seconds)
+    (when (and (/= prev-sec next-sec)
+               (etaf-ncm--read app :status))
+      (etaf-ncm--sync-activity app))))
 
 (defconst etaf-ncm--reply-volatile-keys '(:elapsed :as-of :state :liked :shuffle :repeat :volume)
   "Status fields that move with every backend reply, not with the track.
@@ -921,6 +987,8 @@ app still reading a pending session never starts a library item instead."
 
 (defun etaf-ncm-stop (app)
   "Stop playback in APP and keep the queue."
+  (when (etaf-activity-get 'etaf-ncm)
+    (etaf-activity-remove 'etaf-ncm))
   (etaf-ncm--command app (list :op :stop) "已停止播放"))
 
 (defun etaf-ncm-set-volume (app volume)
@@ -1003,6 +1071,7 @@ previous state back, and the reply reconciles it with measured facts."
         (puthash song-id t (plist-get app :liked-ids))))
     (etaf-ncm--optimistic-command-begin app '(:liked))
     (etaf-ncm--write app :liked-ref (not unlike))
+    (etaf-ncm--sync-activity app)
     (etaf-ncm--call app (list :op (if unlike :unlike :like))
                     :on-ok (lambda (_data)
                              (etaf-ncm--optimistic-command-settle app)
@@ -1513,6 +1582,7 @@ still-unsettled command published when that request was sent."
     ;; A song change moves the list's play marker; the status stays the source
     ;; of truth, so publish the new id even when no list reply arrives.
     (etaf-ncm--sync-playing app)
+    (etaf-ncm--sync-activity app)
     ;; Queue metadata often arrives before status, and its position can lag
     ;; playback.  Select the art again from playback truth without waiting for
     ;; another queue round trip (including the first status of a session).
@@ -1726,6 +1796,8 @@ second for the same second."
   (when-let* ((timer (plist-get app :timer)))
     (cancel-timer timer)
     (setf (plist-get app :timer) nil))
+  (when (etaf-activity-get 'etaf-ncm)
+    (etaf-activity-remove 'etaf-ncm))
   (etaf-ncm-cancel (etaf-ncm--client app)))
 
 ;;; ---------------------------------------------------------------------------

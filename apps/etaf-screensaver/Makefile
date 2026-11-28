@@ -1,18 +1,11 @@
 .DEFAULT_GOAL := check
 .NOTPARALLEL:
 EMACS ?= emacs
-# Windows Python defaults to the ANSI code page; the policy tools read and
-# write UTF-8 sources and spawn each other, so export UTF-8 mode to every
-# child process on every platform.
 export PYTHONUTF8 := 1
 PYTHON ?= python3
-NODE ?= node
 EMACSCLIENT ?= emacsclient
-GALLERY ?= $(HOME)/.emacs.d/etaf-screensaver/scenes/gallery/gallery.el
-PRESENTATION ?= full
 
-# Providers live beside the application (standalone) or two levels up (workspace).
-# Providers are siblings in the workspace and in a standalone clone;
+# Providers live beside the application in the workspace or standalone clones;
 # override PROVIDER_ROOT to pin another checkout.
 PROVIDER_ROOT ?= $(if $(wildcard ../../core/packages/etaf),../../core/packages,$(if $(wildcard ../etaf/etaf.el),..,../..))
 
@@ -23,7 +16,7 @@ SOURCES = $(wildcard lisp/*.el) etaf-screensaver.el
 SOURCES += scripts/etaf-screensaver-gui-scenarios.el
 SOURCES += $(wildcard benchmarks/*.el) $(wildcard tests/*.el)
 
-.PHONY: all compile load test check structure-check setup-hooks acceptance api-check tools-test gui gui-gallery gui-transition clean
+.PHONY: all compile load test check structure-check setup-hooks acceptance api-check gui clean
 
 all: check
 
@@ -41,10 +34,7 @@ load: compile
 
 test: acceptance
 
-check: structure-check compile acceptance api-check tools-test
-
-tools-test:
-	$(NODE) --test tests/tools/*.test.mjs
+check: structure-check compile acceptance api-check
 
 structure-check:
 	@test -f ../../scripts/check-repository.py || { \
@@ -74,12 +64,6 @@ api-check:
 # evidence directory; pass SERVER=<name> for a dedicated verification instance.
 gui:
 	$(EMACSCLIENT) $(if $(SERVER),--socket-name "$(SERVER)",) --eval '(progn (require (quote etaf-screensaver)) (add-to-list (quote load-path) (expand-file-name "scripts" (file-name-directory (locate-library "etaf")))) (add-to-list (quote load-path) "$(CURDIR)/scripts") (load "$(CURDIR)/scripts/etaf-screensaver-gui-scenarios.el" nil t) (let ((directory (make-temp-file "etaf-screensaver-gui-" t))) (run-at-time 0.05 nil (function etaf-screensaver-gui-run) directory) directory))'
-
-gui-gallery:
-	$(EMACSCLIENT) $(if $(SERVER),--socket-name "$(SERVER)",) --eval '(progn (require (quote etaf-screensaver)) (add-to-list (quote load-path) (expand-file-name "scripts" (file-name-directory (locate-library "etaf")))) (load "$(CURDIR)/scripts/etaf-screensaver-gui-scenarios.el" nil t) (let ((directory (make-temp-file "etaf-screensaver-gallery-gui-" t))) (run-at-time 0.05 nil (function etaf-screensaver-gui-run-gallery) directory "$(GALLERY)") directory))'
-
-gui-transition:
-	$(EMACSCLIENT) $(if $(SERVER),--socket-name "$(SERVER)",) --eval '(progn (require (quote etaf-screensaver)) (add-to-list (quote load-path) (expand-file-name "scripts" (file-name-directory (locate-library "etaf")))) (load "$(CURDIR)/scripts/etaf-screensaver-gui-scenarios.el" nil t) (let ((directory (make-temp-file "etaf-screensaver-transition-gui-" t))) (run-at-time 0.05 nil (function etaf-screensaver-gui-run-transition) directory "$(GALLERY)" (quote $(PRESENTATION))) directory))'
 
 clean:
 	rm -f *.elc lisp/*.elc tests/*.elc scripts/*.elc benchmarks/*.elc

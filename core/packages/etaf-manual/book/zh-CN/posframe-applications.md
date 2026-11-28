@@ -53,6 +53,28 @@
  :focusable t :draggable t)
 ```
 
+#### Function: etaf-posframe-bind-app (id &optional shortcut &rest overrides)
+
+从 ETAF 的 `etaf-app-get` 注册表直接把应用 ID 绑定为浮动面板。
+
+**参数。** ID 是已通过 `etaf-app-define` 或 `etaf-app-register` 注册且声明了 `:session` 的应用符号。可选 SHORTCUT 为写入 `etaf-posframe-app-map` 的快捷键字符串；关键字 OVERRIDES 覆盖应用清单里的 `:panel` 或生命周期默认值。
+
+**语义。** 从 `etaf-app-get` 读取 `:title`、`:feature`（作为 `:require`）、`:session`（`:create`、`:view`、`:close` 对应 `:on-stop`、`:keep-alive`）与 `:panel` 默认选项，按调用方 OVERRIDES 优先的顺序合并后交给 `etaf-posframe-register-app`。
+
+**返回。** 已绑定的应用 ID。
+
+**错误。** ID 未在 `etaf-app-get` 注册或未声明 `:session` 时触发 `error→ etaf-posframe-error`。
+
+#### Function: etaf-posframe-bind-apps (specs)
+
+一次性从 ETAF 的 `etaf-app-get` 注册表绑定多个应用为浮动面板。
+
+**参数。** SPECS 为列表，每项可写为 `ID`、`(ID . SHORTCUT)` 或 `(ID SHORTCUT . OVERRIDES)`。
+
+**语义。** 对每个已在应用注册表登记且带 `:session` 的条目调用 `etaf-posframe-bind-app`，自动跳过未安装或不支持面板的条目，让同一份用户配置在不同环境下都不报错。
+
+**返回。** 按顺序返回实际绑定的应用 ID 列表。
+
 ## 打开与关闭
 
 <!-- index: etaf-posframe-app; etaf-posframe-app-quit; 应用开关 -->

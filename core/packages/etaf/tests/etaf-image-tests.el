@@ -78,5 +78,15 @@
    (etaf-render (etaf-view (image :src "/tmp/x.png" :columns 4 :rows 2 "child")))
    :type 'etaf-renderer-error))
 
+(ert-deftest etaf-image-test-kitty-adapter-accepted-and-degrades-in-batch ()
+  "The image Host accepts `:adapter kitty' and degrades to a placeholder in batch."
+  (let ((text (substring-no-properties
+               (ebox-render
+                (etaf-render
+                 (etaf-view
+                  (image :src "/nonexistent/etaf-image-tests.png"
+                         :columns 4 :rows 2 :adapter 'kitty)))))))
+    (should (equal "....\n...." text))))
+
 (provide 'etaf-image-tests)
 ;;; etaf-image-tests.el ends here

@@ -73,8 +73,10 @@ skips rendering, and a string names the executable to run."
   "Maximum number of image downloads kept in flight concurrently.")
 
 (defconst etaf-web--user-agent
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-  "User-Agent header sent for HTTP(S) fetches.")
+  "etaf-web/0.1 (Emacs; +https://etaf.top)"
+  "Honest User-Agent header sent for HTTP(S) fetches.
+Identifying honestly avoids TLS-fingerprint impersonation rejections on
+standards and documentation sites such as W3C and Cloudflare-fronted hosts.")
 
 ;;; ---------------------------------------------------------------------------
 ;;; URL normalization & cache paths
@@ -257,9 +259,19 @@ Signals `etaf-web-error' on non-string/empty input or unreadable local files."
       "http_proxy=" "https_proxy=" "all_proxy="
       "NO_PROXY=*" "no_proxy=*")))
 
+(defun etaf-web--parse-header-lines (header-text)
+  "Parse raw HTTP HEADER-TEXT block into a lowercased `(NAME . VALUE)' alist."
+  (let ((acc nil))
+    (dolist (line (cdr (split-string (or header-text "") "\r?\n" t)))
+      (when (string-match "\\`\\([^: \t]+\\)[ \t]*:[ \t]*\\(.*\\)\\'" line)
+        (push (cons (downcase (match-string 1 line))
+                    (string-trim (match-string 2 line)))
+              acc)))
+    (nreverse acc)))
+
 (defun etaf-web--parse-http-raw (raw-bytes url)
   "Parse raw unibyte HTTP response RAW-BYTES (including redirects) for URL.
-Returns plist `(:status :content-type :content-length :etag :body-bytes)'
+Returns `(:status :content-type :content-length :etag :headers :body-bytes)'
 or signals `etaf-web-error' on empty response or status >= 400."
   (when (or (not (stringp raw-bytes)) (zerop (length raw-bytes)))
     (signal 'etaf-web-error
@@ -277,6 +289,7 @@ or signals `etaf-web-error' on empty response or status >= 400."
           (content-type nil)
           (content-length nil)
           (etag nil)
+          (headers nil)
           (body-start (point-min))
           (more t))
       ;; Advance past 1xx/3xx redirect header blocks emitted by `curl -L -i'.
@@ -290,7 +303,8 @@ or signals `etaf-web-error' on empty response or status >= 400."
             (setq body-start next-start
                   content-type nil
                   content-length nil
-                  etag nil)
+                  etag nil
+                  headers (etaf-web--parse-header-lines header-text))
             (when (string-match
                    "\\`HTTP/[0-9.]+[ \t]+\\([0-9]\\{3\\}\\)\\(?:[ \t]+\\([^\r\n]+\\)\\)?"
                    header-text)
@@ -310,14 +324,30 @@ or signals `etaf-web-error' on empty response or status >= 400."
                        (looking-at "HTTP/[0-9.]+[ \t]+[0-9]\\{3\\}"))
               (setq more t)))))
       (when (>= status 400)
-        (signal 'etaf-web-error
-                (list (if (and reason (not (string-empty-p reason)))
-                          (format "HTTP %d %s while fetching %s" status reason url)
-                        (format "HTTP %d while fetching %s" status url)))))
+        (let* ((cf-mit (downcase (or (cdr (assoc "cf-mitigated" headers)) "")))
+               (body-head (downcase
+                           (buffer-substring-no-properties
+                            body-start (min (point-max) (+ body-start 2048)))))
+               (is-challenge
+                (or (string-match-p "challenge" cf-mit)
+                    (and (memq status '(403 405 503))
+                         (string-match-p
+                          "just a moment\\.\\.\\.\\|attention required!\\|enable javascript and cookies to continue"
+                          body-head)))))
+          (signal 'etaf-web-error
+                  (list (cond
+                         (is-challenge
+                          (format "HTTP %d Challenge: 该站点要求浏览器安全验证 (%s)，请按 o 在外部浏览器打开"
+                                  status url))
+                         ((and reason (not (string-empty-p reason)))
+                          (format "HTTP %d %s while fetching %s" status reason url))
+                         (t
+                          (format "HTTP %d while fetching %s" status url)))))))
       (list :status status
             :content-type content-type
             :content-length content-length
             :etag etag
+            :headers headers
             :body-bytes (buffer-substring-no-properties body-start (point-max)))))))
 
 (defun etaf-web--fetch-via-curl-async (url callback timeout &optional referer)
@@ -327,7 +357,9 @@ When REFERER is non-nil, sends it as the HTTP Referer header."
                 (list "curl" "-sS" "-L" "-i" "--compressed"
                       "--max-time" (format "%s" timeout)
                       "--connect-timeout" (format "%s" (min timeout 15))
-                      "-A" etaf-web--user-agent)
+                      "-A" etaf-web--user-agent
+                      "-H" "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+                      "-H" "Accept-Language: zh-CN,zh;q=0.9,en;q=0.8")
                 (when (and (stringp referer) (not (string-empty-p referer)))
                   (list "-e" referer))
                 (when (null url-proxy-services)
@@ -648,6 +680,73 @@ Returns a canceller."
           (dolist (fn cancels) (ignore-errors (funcall fn)))
           (setq cancels nil))))))
 
+(defun etaf-web--download-images-async (page-dir urls on-update &optional referer)
+  "Asynchronously download remote image URLS into PAGE-DIR/assets/.
+Honors `etaf-web-download-images', 5 MB per image and 30 cached images per page.
+Calls ON-UPDATE (zero arguments) progressively as images finish saving and once
+on completion if any image landed.  Returns a zero-argument canceller."
+  (let* ((assets-dir (expand-file-name "assets" page-dir))
+         (unique (delete-dups
+                  (cl-remove-if-not #'etaf-web--http-url-p (copy-sequence urls))))
+         (missing (cl-remove-if
+                   (lambda (u) (etaf-web--existing-asset-for-url u assets-dir))
+                   unique))
+         (existing-count (etaf-web--cached-asset-count assets-dir))
+         (budget (max 0 (- etaf-web--max-images-per-page existing-count)))
+         (queue (and etaf-web-download-images (seq-take missing budget))))
+    (if (null queue)
+        (lambda () nil)
+      (let ((in-flight 0)
+            (cancels nil)
+            (cancelled nil)
+            (pending-notify nil)
+            (notify-timer nil))
+        (cl-labels
+            ((emit-now ()
+               (when (timerp notify-timer)
+                 (cancel-timer notify-timer)
+                 (setq notify-timer nil))
+               (when (and pending-notify (not cancelled) on-update)
+                 (setq pending-notify nil)
+                 (funcall on-update)))
+             (schedule-notify ()
+               (setq pending-notify t)
+               (unless (or cancelled (timerp notify-timer))
+                 (setq notify-timer
+                       (run-at-time 0.35 nil #'emit-now))))
+             (pump ()
+               (unless cancelled
+                 (while (and queue (< in-flight etaf-web--max-concurrent-images))
+                   (let ((u (pop queue)))
+                     (unless (etaf-web--existing-asset-for-url u assets-dir)
+                       (setq in-flight (1+ in-flight))
+                       (let ((cancel nil))
+                         (setq cancel
+                               (etaf-web--fetch-raw-async
+                                u
+                                (lambda (resp _err)
+                                  (setq cancels (delq cancel cancels)
+                                        in-flight (1- in-flight))
+                                  (unless cancelled
+                                    (when (and resp
+                                               (etaf-web--save-downloaded-image
+                                                u resp assets-dir))
+                                      (schedule-notify))
+                                    (pump)))
+                                (min (etaf-web--effective-timeout) 15)
+                                referer))
+                         (push cancel cancels)))))
+                 (when (and (null queue) (zerop in-flight))
+                   (emit-now)))))
+          (pump))
+        (lambda ()
+          (setq cancelled t)
+          (when (timerp notify-timer)
+            (cancel-timer notify-timer)
+            (setq notify-timer nil))
+          (dolist (fn cancels) (ignore-errors (funcall fn)))
+          (setq cancels nil))))))
+
 ;;; ---------------------------------------------------------------------------
 ;;; Cache metadata & script-shell detection
 ;;; ---------------------------------------------------------------------------
@@ -705,14 +804,59 @@ Returns a canceller."
      ((stringp configured) nil)
      (t (cl-find-if #'executable-find etaf-web--browser-candidates)))))
 
+(defun etaf-web--site-prefs-file ()
+  "Return path to persisted per-host rendering mode preferences JSON file."
+  (expand-file-name "site-prefs.json"
+                    (expand-file-name etaf-web-cache-directory)))
+
+(defun etaf-web--read-site-prefs ()
+  "Return alist of `(HOST . MODE-SYMBOL)' from `site-prefs.json', or nil."
+  (let ((file (etaf-web--site-prefs-file)))
+    (when (file-readable-p file)
+      (condition-case nil
+          (let* ((raw (string-trim (or (etaf-web--read-utf8 file) "")))
+                 (parsed (unless (string-empty-p raw)
+                           (json-parse-string raw :object-type 'alist))))
+            (cl-loop for (k . v) in parsed
+                     for host = (if (symbolp k) (symbol-name k) (format "%s" k))
+                     for mode = (and (stringp v) (intern v))
+                     when (memq mode '(auto reader adapter live))
+                     collect (cons host mode)))
+        (error nil)))))
+
+(defun etaf-web--site-pref-get (host)
+  "Return saved rendering mode symbol for HOST, or `auto'."
+  (if (and (stringp host) (not (string-empty-p host)))
+      (or (cdr (assoc (downcase host) (etaf-web--read-site-prefs))) 'auto)
+    'auto))
+
+(defun etaf-web--site-pref-set (host mode)
+  "Persist rendering MODE symbol for HOST under `etaf-web-cache-directory'."
+  (when (and (stringp host) (not (string-empty-p host))
+             (memq mode '(auto reader adapter live)))
+    (let* ((key (downcase host))
+           (prefs (cl-remove-if (lambda (cell) (equal (car cell) key))
+                                (etaf-web--read-site-prefs)))
+           (updated (if (eq mode 'auto)
+                        prefs
+                      (cons (cons key mode) prefs)))
+           (json-pairs (mapcar (lambda (cell)
+                                 (cons (car cell) (symbol-name (cdr cell))))
+                               updated))
+           (payload (if json-pairs (json-encode json-pairs) "{}")))
+      (etaf-web--write-utf8 (etaf-web--site-prefs-file)
+                            (concat payload "\n")))))
+
 (defun etaf-web--render-dom-async (url callback)
   "Render URL headlessly via `etaf-process-run' without blocking Emacs.
-Calls CALLBACK with rendered DOM string or nil.  Returns a canceller that
-terminates Chromium and cleans up its private profile directory."
+Calls CALLBACK with `(RENDERED-HTML REASON)' where RENDERED-HTML is a string
+or nil, and REASON is nil on success or a diagnostic symbol (`no-browser',
+`timeout', `failed', `empty').  Returns a canceller that terminates Chromium
+and cleans up its private profile directory."
   (let ((program (and (stringp url) (etaf-web--browser-program))))
     (if (not program)
         (progn
-          (run-at-time 0 nil callback nil)
+          (run-at-time 0 nil callback nil 'no-browser)
           (lambda () nil))
       (let* ((timeout (if (and (numberp etaf-web-render-timeout)
                                (> etaf-web-render-timeout 0))
@@ -731,8 +875,7 @@ terminates Chromium and cleans up its private profile directory."
                           "--disable-default-apps" "--mute-audio"
                           "--blink-settings=imagesEnabled=false"
                           (concat "--user-data-dir=" profile)
-                          (concat "--disk-cache-dir=" disk-cache)
-                          "--virtual-time-budget=3000")
+                          (concat "--disk-cache-dir=" disk-cache))
                     (when (null url-proxy-services)
                       (list "--no-proxy-server"))
                     (list "--dump-dom" url)))
@@ -752,40 +895,37 @@ terminates Chromium and cleans up its private profile directory."
                  (lambda (res)
                    (cleanup)
                    (unless cancelled
-                     (let ((text (and (eq (plist-get res :status) 'exit)
+                     (let ((status (plist-get res :status))
+                           (text (and (eq (plist-get res :status) 'exit)
                                       (plist-get res :output))))
-                       (if (and (stringp text)
-                                (> (length text) 500)
-                                (string-match-p "<html" (downcase text)))
-                           (funcall callback text)
-                         (funcall callback nil)))))))
+                       (cond
+                        ((and (stringp text)
+                              (> (length text) 500)
+                              (string-match-p "<html" (downcase text)))
+                         (funcall callback text nil))
+                        ((eq status 'timeout)
+                         (funcall callback nil 'timeout))
+                        ((not (eq status 'exit))
+                         (funcall callback nil 'failed))
+                        (t
+                         (funcall callback nil 'empty))))))))
           (lambda ()
             (setq cancelled t)
             (when job (etaf-process-cancel job))
             (cleanup)))))))
 
-(defun etaf-web--prose-text (markdown)
-  "Return MARKDOWN's readable prose, without syntax, targets or front matter."
-  (let* ((text (or markdown ""))
-         (body (if (string-match "\\`---\n\\(?:.\|\n\\)*?\n---\n" text)
-                   (substring text (match-end 0))
-                 text))
-         (plain (replace-regexp-in-string "\\]([^)]*)" "]" body))
-         (plain (replace-regexp-in-string "<[^>]*>" " " plain))
-         (plain (replace-regexp-in-string "\\(?:https?\\|browser\\):[^[:space:]]+" " " plain)))
-    (string-trim (replace-regexp-in-string "[`*_#>|:~\\[\\]()!-]" " " plain))))
-
-(defun etaf-web--markdown-thin-p (markdown)
-  "Return non-nil when MARKDOWN carries no sentence of its own.
-A page shell keeps its navigation words but no prose, so a long line is the
-signal that a page has something to read.  Link targets, image URLs and front
-matter do not count."
-  (let* ((prose (etaf-web--prose-text markdown))
-         (chars (length (replace-regexp-in-string "[ \t\n]+" " " prose)))
-         (longest (apply #'max 0
-                         (mapcar (lambda (line) (length (string-trim line)))
-                                 (split-string prose "\n")))))
-    (and (< longest 40) (< chars 400))))
+(defun etaf-web--render-failure-reason (reason)
+  "Return user-readable Chinese diagnostic text for headless render REASON."
+  (let ((timeout (if (and (numberp etaf-web-render-timeout)
+                          (> etaf-web-render-timeout 0))
+                     etaf-web-render-timeout
+                   25)))
+    (pcase reason
+      ('no-browser "这页的正文由 JavaScript 生成，本机没有找到可用的无头浏览器。")
+      ('timeout (format "这页的正文由 JavaScript 生成，无头浏览器在 %ss 内超时未返回内容。"
+                        timeout))
+      ('failed "这页的正文由 JavaScript 生成，无头浏览器进程启动或执行失败。")
+      (_ "这页的正文由 JavaScript 生成，浏览器渲染后仍没有拿到正文内容。"))))
 
 (defun etaf-web--script-shell-p (html markdown)
   "Return non-nil when HTML runs a script and MARKDOWN has no prose.
@@ -860,12 +1000,17 @@ it also loads scripts."
               (funcall on-images index-file)))
           canonical))))))
 
-(cl-defun etaf-web--load-page-async (source &key force on-stage on-ready on-images on-error)
+(cl-defun etaf-web--load-page-async (source &key force on-html on-script-shell on-stage on-ready on-images on-error)
   "Load SOURCE asynchronously, returning an `etaf-web--load-job' handle.
-FORCE bypasses any cached `index.md'.  ON-STAGE receives `(STAGE LABEL
-PROGRESS)'.  ON-READY receives a plist `(:index-file :page-dir :url :title
-:cached)'.  ON-IMAGES receives INDEX-FILE when background image downloads
-update it.  ON-ERROR receives `(:kind :message :url :has-cache)'.
+FORCE bypasses any cached `index.md'.  Optional ON-HTML receives
+`(HEADERS HTML CANONICAL JOB)' after decoding HTML (or from cached HTML);
+when it returns non-nil, the caller has claimed the page and Tier 1 stops.
+Optional ON-SCRIPT-SHELL receives `(CANONICAL JOB)' when HTML is a JS shell;
+returning non-nil lets Tier 3 live mode claim the page.
+ON-STAGE receives `(STAGE LABEL PROGRESS)'.
+ON-READY receives a plist `(:index-file :page-dir :url :title :cached)'.
+ON-IMAGES receives INDEX-FILE when background image downloads update it.
+ON-ERROR receives `(:kind :message :url :has-cache)'.
 Signals `etaf-web-error' synchronously only on invalid SOURCE or unreadable
 local HTML files."
   (let* ((validated (etaf-web--validate-source source))
@@ -877,112 +1022,122 @@ local HTML files."
     (if (eq kind 'file)
         (let* ((local-path (plist-get validated :local-path))
                (raw-bytes (etaf-web--read-file-bytes local-path))
-               (html (etaf-web--decode-html raw-bytes nil))
-               (rewriter (etaf-web--make-local-image-rewriter page-dir))
-               (compiled (etaf-web--compile html :base-url canonical
-                                            :image-rewriter rewriter))
-               (markdown (plist-get compiled :markdown))
-               (title (plist-get compiled :title)))
-          (etaf-web--write-and-finish job canonical page-dir html markdown title nil
-                                      on-stage on-ready on-images))
+               (html (etaf-web--decode-html raw-bytes nil)))
+          (unless (and on-html (funcall on-html nil html canonical job))
+            (let* ((rewriter (etaf-web--make-local-image-rewriter page-dir))
+                   (compiled (etaf-web--compile html :base-url canonical
+                                                :image-rewriter rewriter))
+                   (markdown (plist-get compiled :markdown))
+                   (title (plist-get compiled :title)))
+              (etaf-web--write-and-finish job canonical page-dir html markdown title nil
+                                          on-stage on-ready on-images))))
       ;; HTTP(S) page: check cache first unless FORCE is non-nil.
-      (let ((use-cache nil))
-        (when (and (not force) (file-readable-p index-file))
-          (let ((cached (etaf-web--read-utf8 index-file)))
-            (cond
-             ((etaf-web--notice-page-p cached)
-              ;; Retry notice once a headless browser is available.
-              (unless (etaf-web--browser-program)
-                (setq use-cache t)))
-             ((etaf-web--script-shell-p
-               (or (etaf-web--read-utf8 (expand-file-name "source.html" page-dir)) "")
-               cached)
-              (setq use-cache nil))
-             (t (setq use-cache t)))))
-        (if use-cache
-            (progn
-              (when on-stage (funcall on-stage 'done "缓存" 1.0))
-              (when on-ready
-                (funcall on-ready
-                         (list :index-file index-file
-                               :page-dir page-dir
-                               :url canonical
-                               :title (etaf-web--read-meta-title page-dir)
-                               :cached t)))
-              (when (and (not (etaf-web--load-job-cancelled job))
-                         etaf-web-download-images)
-                (etaf-web--job-add-cancel
-                 job
-                 (etaf-web--backfill-images-async
-                  page-dir index-file
-                  (lambda (changed)
-                    (when (and changed (not (etaf-web--load-job-cancelled job))
-                               on-images)
-                      (funcall on-images index-file)))
-                  canonical))))
-          ;; Fresh async HTTP fetch -> optional async Chrome render -> compile.
-          (when on-stage (funcall on-stage 'fetching "抓取中" 0.15))
-          (etaf-web--job-add-cancel
-           job
-           (etaf-web--fetch-raw-async
-            canonical
-            (lambda (resp err)
-              (unless (etaf-web--load-job-cancelled job)
-                (if err
-                    (when on-error
-                      (funcall on-error
-                               (list :kind (plist-get err :kind)
-                                     :message (plist-get err :message)
-                                     :url canonical
-                                     :has-cache (and (file-readable-p index-file) t))))
-                  (let* ((etag (plist-get resp :etag))
-                         (html (etaf-web--decode-html
-                                (plist-get resp :body-bytes)
-                                (plist-get resp :content-type)))
-                         (rewriter (etaf-web--make-local-image-rewriter page-dir)))
-                    (when on-stage (funcall on-stage 'compiling "编译中" 0.55))
-                    (let* ((compiled (etaf-web--compile html :base-url canonical
-                                                        :image-rewriter rewriter))
-                           (markdown (plist-get compiled :markdown))
-                           (title (plist-get compiled :title)))
-                      (if (not (etaf-web--script-shell-p html markdown))
-                          (etaf-web--write-and-finish
-                           job canonical page-dir html markdown title etag
-                           on-stage on-ready on-images)
-                        ;; Script-driven shell: render asynchronously if browser exists.
-                        (if (not (etaf-web--browser-program))
-                            (etaf-web--write-and-finish
-                             job canonical page-dir html
-                             (etaf-web--notice-markdown
-                              canonical
-                              "这页的正文由 JavaScript 生成，本机没有找到可用的无头浏览器。")
-                             title etag on-stage on-ready on-images)
-                          (when on-stage (funcall on-stage 'rendering "渲染中" 0.35))
-                          (etaf-web--job-add-cancel
-                           job
-                           (etaf-web--render-dom-async
-                            canonical
-                            (lambda (rendered)
-                              (unless (etaf-web--load-job-cancelled job)
-                                (when on-stage (funcall on-stage 'compiling "编译中" 0.85))
-                                (let* ((r-rewriter (and rendered
-                                                        (etaf-web--make-local-image-rewriter page-dir)))
-                                       (r-comp (and rendered
-                                                    (etaf-web--compile rendered
-                                                                       :base-url canonical
-                                                                       :image-rewriter r-rewriter)))
-                                       (r-md (and r-comp (plist-get r-comp :markdown)))
-                                       (r-title (or (and r-comp (plist-get r-comp :title)) title)))
-                                  (if (and r-md (not (etaf-web--markdown-thin-p r-md)))
-                                      (etaf-web--write-and-finish
-                                       job canonical page-dir rendered r-md r-title etag
-                                       on-stage on-ready on-images)
+      (let ((use-cache nil)
+            (cached-source (and (not force)
+                                (etaf-web--read-utf8
+                                 (expand-file-name "source.html" page-dir)))))
+        (unless (and on-html cached-source
+                     (funcall on-html nil cached-source canonical job))
+          (when (and (not force) (file-readable-p index-file))
+            (let ((cached (etaf-web--read-utf8 index-file)))
+              (cond
+               ((etaf-web--notice-page-p cached)
+                ;; Retry notice once a headless browser is available.
+                (unless (etaf-web--browser-program)
+                  (setq use-cache t)))
+               ((etaf-web--script-shell-p (or cached-source "") cached)
+                (setq use-cache nil))
+               (t (setq use-cache t)))))
+          (if use-cache
+              (progn
+                (when on-stage (funcall on-stage 'done "缓存" 1.0))
+                (when on-ready
+                  (funcall on-ready
+                           (list :index-file index-file
+                                 :page-dir page-dir
+                                 :url canonical
+                                 :title (etaf-web--read-meta-title page-dir)
+                                 :cached t)))
+                (when (and (not (etaf-web--load-job-cancelled job))
+                           etaf-web-download-images)
+                  (etaf-web--job-add-cancel
+                   job
+                   (etaf-web--backfill-images-async
+                    page-dir index-file
+                    (lambda (changed)
+                      (when (and changed (not (etaf-web--load-job-cancelled job))
+                                 on-images)
+                        (funcall on-images index-file)))
+                    canonical))))
+            ;; Fresh async HTTP fetch -> optional T2 claim -> optional Chrome render -> compile.
+            (when on-stage (funcall on-stage 'fetching "抓取中" 0.15))
+            (etaf-web--job-add-cancel
+             job
+             (etaf-web--fetch-raw-async
+              canonical
+              (lambda (resp err)
+                (unless (etaf-web--load-job-cancelled job)
+                  (if err
+                      (when on-error
+                        (funcall on-error
+                                 (list :kind (plist-get err :kind)
+                                       :message (plist-get err :message)
+                                       :url canonical
+                                       :has-cache (and (file-readable-p index-file) t))))
+                    (let* ((etag (plist-get resp :etag))
+                           (headers (plist-get resp :headers))
+                           (html (etaf-web--decode-html
+                                  (plist-get resp :body-bytes)
+                                  (plist-get resp :content-type))))
+                      (unless (and on-html (funcall on-html headers html canonical job))
+                        (let ((rewriter (etaf-web--make-local-image-rewriter page-dir)))
+                          (when on-stage (funcall on-stage 'compiling "编译中" 0.55))
+                          (let* ((compiled (etaf-web--compile html :base-url canonical
+                                                              :image-rewriter rewriter))
+                                 (markdown (plist-get compiled :markdown))
+                                 (title (plist-get compiled :title)))
+                            (if (not (etaf-web--script-shell-p html markdown))
+                                (etaf-web--write-and-finish
+                                 job canonical page-dir html markdown title etag
+                                 on-stage on-ready on-images)
+                              ;; Script-driven shell: let Tier 3 claim if available,
+                              ;; otherwise fall back to headless DOM snapshot.
+                              (unless (and on-script-shell
+                                           (funcall on-script-shell canonical job))
+                                (if (not (etaf-web--browser-program))
                                     (etaf-web--write-and-finish
                                      job canonical page-dir html
                                      (etaf-web--notice-markdown
                                       canonical
-                                      "这页的正文由 JavaScript 生成，浏览器渲染也没有拿到内容。")
-                                    title etag on-stage on-ready on-images)))))))))))))))))))
+                                      (etaf-web--render-failure-reason 'no-browser))
+                                     title etag on-stage on-ready on-images)
+                                  (when on-stage (funcall on-stage 'rendering "渲染中" 0.35))
+                                  (etaf-web--job-add-cancel
+                                   job
+                                   (etaf-web--render-dom-async
+                                    canonical
+                                    (lambda (rendered render-reason)
+                                      (unless (etaf-web--load-job-cancelled job)
+                                        (when on-stage (funcall on-stage 'compiling "编译中" 0.85))
+                                        (let* ((r-rewriter (and rendered
+                                                                (etaf-web--make-local-image-rewriter page-dir)))
+                                               (r-comp (and rendered
+                                                            (etaf-web--compile rendered
+                                                                               :base-url canonical
+                                                                               :image-rewriter r-rewriter)))
+                                               (r-md (and r-comp (plist-get r-comp :markdown)))
+                                               (r-title (or (and r-comp (plist-get r-comp :title)) title)))
+                                          (if (and r-md (not (etaf-web--markdown-thin-p r-md)))
+                                              (etaf-web--write-and-finish
+                                               job canonical page-dir rendered r-md r-title etag
+                                               on-stage on-ready on-images)
+                                            (etaf-web--write-and-finish
+                                             job canonical page-dir html
+                                             (etaf-web--notice-markdown
+                                              canonical
+                                              (etaf-web--render-failure-reason
+                                               (or render-reason 'empty)))
+                                             title etag on-stage on-ready on-images)))))))))))))))))))))))
     job))
 
 (provide 'etaf-web-cache)

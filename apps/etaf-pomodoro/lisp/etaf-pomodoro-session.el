@@ -72,11 +72,51 @@ started with), `:running' (non-nil while counting) and `:style'."
         :running (etaf-value (etaf-pomodoro--session-running session))
         :style (etaf-value (etaf-pomodoro--session-style session))))
 
+(defun etaf-pomodoro--sync-activity (session)
+  "Publish SESSION's current countdown to ETAF's live activity protocol."
+  (when (etaf-pomodoro--session-p session)
+    (let* ((rem (max 0 (etaf-untracked
+                        (etaf-value (etaf-pomodoro--session-remaining session)))))
+           (tot (max 1 (etaf-untracked
+                        (etaf-value (etaf-pomodoro--session-total session)))))
+           (running (etaf-untracked
+                     (etaf-value (etaf-pomodoro--session-running session))))
+           (done (max 0 (- tot rem)))
+           (clock (format "%02d:%02d" (/ rem 60) (% rem 60)))
+           (total-clock (format "%02d:%02d" (/ tot 60) (% tot 60))))
+      (if (and (not running) (= rem tot))
+          (etaf-activity-remove 'etaf-pomodoro)
+        (etaf-activity-publish
+         'etaf-pomodoro
+         (list :app 'etaf-pomodoro
+               :kind 'timer
+               :state (if running 'active 'paused)
+               :priority 90
+               :icon "●"
+               :tone (if running 'success 'warning)
+               :title "深度专注"
+               :subtitle (format "本轮 %s · %s" total-clock
+                                 (if running "专注进行中" "已暂停"))
+               :compact (format "专注 %s" clock)
+               :progress (list :value done :max tot)
+               :open (lambda ()
+                       (when (fboundp 'etaf-pomodoro-open)
+                         (etaf-pomodoro-open)))
+               :actions (list (list :id 'toggle
+                                    :label (if running "暂停" "继续")
+                                    :primary t
+                                    :fn (lambda () (etaf-pomodoro-toggle session)))
+                              (list :id 'extend :label "+5 分"
+                                    :fn (lambda () (etaf-pomodoro-extend session 5)))
+                              (list :id 'reset :label "重置"
+                                    :fn (lambda () (etaf-pomodoro-reset session))))))))))
+
 (defun etaf-pomodoro-toggle (session)
   "Start or pause SESSION's countdown and return its new running state."
   (etaf-pomodoro--session-check session)
   (let ((running (etaf-pomodoro--session-running session)))
     (etaf-batch (setf (etaf-value running) (not (etaf-value running))))
+    (etaf-pomodoro--sync-activity session)
     (etaf-value running)))
 
 (defun etaf-pomodoro-reset (session)
@@ -86,6 +126,7 @@ started with), `:running' (non-nil while counting) and `:style'."
     (setf (etaf-value (etaf-pomodoro--session-remaining session))
           (etaf-value (etaf-pomodoro--session-total session)))
     (setf (etaf-value (etaf-pomodoro--session-running session)) nil))
+  (etaf-pomodoro--sync-activity session)
   (etaf-pomodoro-state session))
 
 (defun etaf-pomodoro-extend (session &optional minutes)
@@ -103,6 +144,7 @@ keeps measuring the whole countdown."
             (+ (etaf-value (etaf-pomodoro--session-remaining session)) seconds))
       (setf (etaf-value (etaf-pomodoro--session-total session))
             (+ (etaf-value (etaf-pomodoro--session-total session)) seconds)))
+    (etaf-pomodoro--sync-activity session)
     (etaf-pomodoro-state session)))
 
 (defun etaf-pomodoro-next-style (session)
@@ -116,16 +158,30 @@ keeps measuring the whole countdown."
 
 (defun etaf-pomodoro--tick (session)
   "Advance SESSION's countdown by one second while it runs.
-The countdown stops at zero and reports the finished focus through the echo
-area; the timer itself keeps ticking so the next start needs no new timer."
+The countdown stops at zero and publishes a completion alert through
+`etaf-notify'; the timer keeps ticking so the next start needs no new timer."
   (when (etaf-value (etaf-pomodoro--session-running session))
     (let ((left (1- (etaf-value (etaf-pomodoro--session-remaining session)))))
       (if (> left 0)
-          (etaf-batch
-            (setf (etaf-value (etaf-pomodoro--session-remaining session)) left))
+          (progn
+            (etaf-batch
+              (setf (etaf-value (etaf-pomodoro--session-remaining session)) left))
+            (etaf-pomodoro--sync-activity session))
         (etaf-batch
           (setf (etaf-value (etaf-pomodoro--session-remaining session)) 0)
           (setf (etaf-value (etaf-pomodoro--session-running session)) nil))
+        (etaf-activity-remove 'etaf-pomodoro)
+        (etaf-notify
+         "番茄专注完成"
+         :app 'etaf-pomodoro
+         :detail "本轮专注已结束，起来走走休息 5 分钟"
+         :variant 'success
+         :group 'etaf-pomodoro
+         :ttl 8.0
+         :actions (list (list :id 'restart :label "再来一轮" :primary t
+                              :fn (lambda ()
+                                    (etaf-pomodoro-reset session)
+                                    (etaf-pomodoro-toggle session)))))
         (message "番茄完成，起来走走")))))
 
 (defun etaf-pomodoro--start (session)
@@ -142,7 +198,8 @@ where it stopped."
   (when (etaf-pomodoro--session-p session)
     (when (timerp (etaf-pomodoro--session-timer session))
       (cancel-timer (etaf-pomodoro--session-timer session)))
-    (setf (etaf-pomodoro--session-timer session) nil))
+    (setf (etaf-pomodoro--session-timer session) nil)
+    (etaf-activity-remove 'etaf-pomodoro))
   session)
 
 (provide 'etaf-pomodoro-session)

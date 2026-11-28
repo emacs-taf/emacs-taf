@@ -9,7 +9,7 @@ Every documented variable, grouped by the chapter that defines it. Each row link
 | Variable | Purpose |
 | --- | --- |
 | [`ebox-image-converters`](images.md#variable-ebox-image-converters) | Ordered (NAME . FUNCTION) image converters, called only by preparation. |
-| [`ebox-image-kitty-protocol`](images.md#variable-ebox-image-kitty-protocol) | Control Kitty terminal graphics protocol use on text frames. |
+| [`ebox-image-kitty-protocol`](images.md#variable-ebox-image-kitty-protocol) | Control Kitty terminal graphics protocol use on text frames (`auto`, `t` or nil). |
 
 ## Viewport
 

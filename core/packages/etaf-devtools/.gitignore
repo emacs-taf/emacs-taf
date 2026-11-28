@@ -1,0 +1,9 @@
+# Generated files and local editor state.
+*.elc
+*.eln
+*.pyc
+__pycache__/
+.DS_Store
+*~
+\#*\#
+.#*

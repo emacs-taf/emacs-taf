@@ -239,11 +239,10 @@ ETAF's spatial region navigation can move to adjacent regions."
     (pcase view
       ('calendar
        (if (eq (etaf-value (plist-get model :calendar-mode)) 'year)
-           (let* ((cols (let ((cal-w (plist-get (plist-get (etaf-agenda-plan model) :layout)
-                                                :cal-inner-cols)))
-                          (cond ((>= cal-w 86) 4)
-                                ((>= cal-w 64) 3)
-                                (t 2)))))
+           (let* ((plan (etaf-agenda-plan model))
+                  (cal-w (plist-get (plist-get plan :layout) :cal-inner-cols))
+                  (cols (etaf-agenda-layout-year-columns
+                         cal-w (etaf-agenda-plan-char-px plan (etaf-agenda--runtime)))))
              (pcase direction
                ('left (etaf-agenda-shift-month model -1) 'handled)
                ('right (etaf-agenda-shift-month model 1) 'handled)
@@ -476,7 +475,12 @@ ETAF's spatial region navigation can move to adjacent regions."
            (lh (max 1 (or (plist-get metrics :line-height)
                           (/ (window-body-height window t)
                              (max 1 (window-body-height window))))))
-           (w-px (window-body-width window t))
+           (vp (and rt (ignore-errors (etaf-runtime-window-viewport rt))))
+           (w-px (or (car-safe vp)
+                     (let ((body (window-body-width window t)))
+                       (if (zerop (or (nth 1 (window-fringes window)) 0))
+                           (max cw (- body cw))
+                         body))))
            (h-px (window-body-height window t))
            (cols (max 40 (/ w-px cw)))
            (rows (max 12 (floor h-px lh))))
@@ -497,7 +501,7 @@ MOUNT-OPTIONS overrides automatic window fitting when provided (for tests)."
     (when (consp mount-options)
       (when-let* ((vw (plist-get mount-options :viewport-width)))
         (etaf-set-value (plist-get model :width-px) vw)
-        (etaf-set-value (plist-get model :width) (max 40 (/ vw 8))))
+        (etaf-set-value (plist-get model :width) (max 40 (if (>= vw 320) (/ vw 8) vw))))
       (when-let* ((vh (plist-get mount-options :viewport-height)))
         (etaf-set-value (plist-get model :height) (max 12 (if (> vh 120) (/ vh 16) vh)))))
     (let ((buffer

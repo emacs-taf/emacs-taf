@@ -188,15 +188,27 @@ Host 也是 View 里的身份单位：和解按名字和 `:key` 匹配 Host 子�
 **语义。**
 
 - `:src` 是本地文件路径，或 Emacs 图片描述符 `(image ... :type TYPE :file FILE)` / `:data DATA`。`:columns` 和 `:rows` 是图片的正整数字符格大小。
-- `:adapter` 选择图片如何变成字符格：`auto`（初值）先尝试当前 frame 的图形图片，再尝试注册的转换器，最后是单色 ASCII 占位图；`text` 跳过图形；`placeholder` 总是生成 ASCII 形式。来源缺失或无法解码时生成占位图，而不是报错。
+- `:adapter` 选择图片如何变成字符格：`auto`（初值）先尝试图形 frame 的图形图片，再在支持的 24-bit 文本终端上尝试 Kitty 终端图形，再尝试注册的转换器，最后是单色 ASCII 占位图；`kitty` 只尝试 Kitty 终端图形并回退到占位图；`text` 跳过两种图形路径；`placeholder` 总是生成 ASCII 形式。来源缺失或无法解码时生成占位图，而不是报错。
 - `:inset` 是 nil 或 `(TOP . BOTTOM)`，即图形图片在行内上下各留空的像素数。
 - image Host 不接受子节点；它是叶节点，`:padding`、`:color` 这类样式属性会被忽略，因为图片填满自己的格子。
 
-**错误。** `:src` 不是路径或带 `:type` 与 `:file`/`:data` 的描述符、`:columns` 或 `:rows` 不是正整数、`:adapter` 不是 `auto`/`text`/`placeholder`、`:inset` 不是 nil 或非负的 pair、或给了子节点时，`error→ etaf-renderer-error`。
+**错误。** `:src` 不是路径或带 `:type` 与 `:file`/`:data` 的描述符、`:columns` 或 `:rows` 不是正整数、`:adapter` 不是 `auto`/`kitty`/`text`/`placeholder`、`:inset` 不是 nil 或非负的 pair、或给了子节点时，`error→ etaf-renderer-error`。
 
 **示例。** `(image :src "/tmp/chart.png" :columns 40 :rows 10 :adapter 'placeholder)`
 
 **参见。** [图像](images.md)。
+
+#### Function: etaf-image-kitty-available-p (&optional frame)
+
+在 FRAME 支持 Kitty 终端图形时返回能力 plist，否则返回 nil。
+
+**参数。** FRAME 默认为当前选中的 frame。
+
+**语义。** 转发到 `ebox-image-kitty-available-p`，供 ETAF 应用在支持 Kitty 图形的文本终端上读取 `:cell-width`、`:cell-height` 与 `:local`（用于按真实单元格比例计算 `image` Host 的行列数），无需直接依赖 Ebox。
+
+**返回。** 新的能力 plist `(:cell-width W :cell-height H :local BOOL)`，或 nil。
+
+**参见。** [图像](images.md)章的 `ebox-image-kitty-available-p`。
 
 ## 语义属性
 

@@ -286,7 +286,7 @@
 
 视频帧到达屏幕所用的渲染后端。
 
-**语义。** 值默认 `auto`：在实时图形 frame 中，当 `libmpv` 与平台原生 GPU 渲染层就绪时优先使用 `gpu` 硬件视频层（macOS 上基于 `CAOpenGLLayer` + VideoToolbox、Windows 上基于透明透传子 `HWND` + WGL OpenGL、Linux 上基于 X11 `XShape` + EGL/GLX 或 Wayland `wl_subsurface` + EGL，均无需重新编译 Emacs），否则在具备 `canvas` 图像类型与 `native/etaf-video-canvas` 模块时使用 `canvas`，再否则回退到 `image`。`gpu` 请求原生硬件 GPU 层（鼠标与键盘事件全部透传给 Emacs；遇到同 Buffer 弹窗或遮罩覆盖画布时自动抓取单帧铺底并暂时让位）。`canvas` 把 BGRA 帧读进一张 Emacs canvas 图像并原地刷新像素缓冲；在包根目录执行 `sh native/build-video-canvas-module.sh` 可编译该模块。`image` 强制走纯 Emacs 图像管线（`libmpv` 下使用异步 TIFF 文件环，`ffmpeg` 下使用缩放 JPEG），任何能显示图像的 Emacs 都能工作。能力不满足或非图形 frame 会静默回退 `image`。`ascii` 与 `color` 模式不受影响。
+**语义。** 值默认 `auto`：在实时图形 frame 中，当 `libmpv` 与平台原生 GPU 渲染层就绪时优先使用 `gpu` 硬件视频层（macOS 上基于 `CAOpenGLLayer` + VideoToolbox、Windows 上基于透明透传子 `HWND` + WGL OpenGL、Linux 上基于 X11 `XShape` + EGL/GLX 或 Wayland `wl_subsurface` + EGL，均无需重新编译 Emacs），否则在具备 `canvas` 图像类型与 `native/etaf-video-canvas` 模块时使用 `canvas`，再否则回退到 `image`；在支持 Kitty 图形的 24-bit 文本终端上，`auto` 于 `image` 模式下自动选择 `kitty` Unicode placeholder 流式渲染。`gpu` 请求原生硬件 GPU 层（鼠标与键盘事件全部透传给 Emacs；遇到同 Buffer 弹窗或遮罩覆盖画布时自动抓取单帧铺底并暂时让位）。`canvas` 把 BGRA 帧读进一张 Emacs canvas 图像并原地刷新像素缓冲；在包根目录执行 `sh native/build-video-canvas-module.sh` 可编译该模块。`kitty` 请求在文本 frame 上通过 Kitty 协议原地推送原始 RGB24 帧，无需重绘 buffer。`image` 强制走纯 Emacs 图像管线（`libmpv` 下使用异步 TIFF 文件环，`ffmpeg` 下使用缩放 JPEG），任何能显示图像的 Emacs 都能工作。能力不满足时静默回退。`ascii` 与 `color` 模式不受影响。
 
 **性能。** canvas 缓冲保持在逻辑分辨率：macOS 的 NS 后端在每次刷新时逐像素上传，设备分辨率的缓冲会让每帧成本翻四倍而画布上没有可见收益。
 

@@ -78,6 +78,7 @@ A changed query resets the displayed library page. Return matching books."
     (when filter (etaf-reader--write session :filter filter))
     (when sort (etaf-reader--write session :shelf-sort sort))
     (etaf-reader--write session :shelf-page 0))
+  (etaf-reader--sync-shelf-cursor session)
   (etaf-reader-books session))
 
 (defconst etaf-reader--cell-columns 12
@@ -87,10 +88,11 @@ A changed query resets the displayed library page. Return matching books."
   "Character columns between two shelf cells.")
 
 (defun etaf-reader--shelf-grid (session)
-  "Return (:columns :rows :page-size) of SESSION's shelf grid.
-The grid follows the mounted window: wider windows fit more cells per shelf,
-and the page size is exactly the cells that fit, so a page never leaves a
-hole. Sidebar and detail width come from what the shelf actually shows."
+  "Return shelf grid geometry plist for SESSION's current window.
+Keys are `:columns', `:rows', `:page-size', `:list-size', `:cover-rows' and
+`:sidebar-shown'.  Below 92 columns the shelf sidebar collapses so the book
+list never starves the title column; short windows use compact covers so an
+entire row including title and author fits without clipping."
   (let* ((metrics (etaf-reader--read session :metrics))
          (shown-width (etaf-reader--read session :window-columns))
          (shown-height (etaf-reader--read session :window-rows))
@@ -100,14 +102,23 @@ hole. Sidebar and detail width come from what the shelf actually shows."
                        8)))
          (height (or (and shown-height (> shown-height 0) shown-height)
                      (plist-get metrics :rows) 30))
-         (sidebar (if (etaf-reader--read session :sidebar) 27 0))
-         (detail (if (and (etaf-reader--read session :detail) (>= width 130)) 39 0))
+         (sidebar-shown (and (etaf-reader--read session :sidebar) (>= width 92)))
+         (sidebar (if sidebar-shown 26 0))
+         (detail (if (and (etaf-reader--read session :detail) (>= width 130)) 38 0))
          (content (max 24 (- width sidebar detail 4)))
          (columns (max 2 (min 12 (/ (+ content etaf-reader--cell-gap)
                                     (+ etaf-reader--cell-columns etaf-reader--cell-gap)))))
-         (rows (max 1 (min 4 (/ (- height 8) 14)))))
+         (short (< height 22))
+         (cover-rows (if short 5 7))
+         ;; One shelf row is (+ cover-rows 1) cover+lift + 1 ledge + 2 labels.
+         (row-height (+ cover-rows 4))
+         ;; Chrome is 3lh toolbar + 1lh chips + 2lh footer = 6lh.
+         (grid-inner (max 4 (- height 6)))
+         (rows (max 1 (min 4 (/ (+ grid-inner 1) (+ row-height 1)))))
+         (list-size (max 3 (- height 11))))
     (list :columns columns :rows rows :page-size (max 1 (* columns rows))
-          :list-size (max 3 (- height 10)))))
+          :list-size list-size :cover-rows cover-rows
+          :sidebar-shown sidebar-shown)))
 
 (defun etaf-reader-library-page (session)
   "Return SESSION's library page as :items, :index, :pages and :total.
@@ -124,12 +135,28 @@ page size is the shelf grid's capacity for the current window."
     (list :items (seq-subseq books (* page size) (min (length books) (* (1+ page) size)))
           :index page :pages pages :total (length books))))
 
+(defun etaf-reader--sync-shelf-cursor (session)
+  "Keep SESSION's `:shelf-cursor' and cached `:shelf-notes' aligned with page."
+  (let* ((items (plist-get (etaf-reader-library-page session) :items))
+         (current (etaf-reader--read session :shelf-cursor))
+         (book (or (and current
+                        (seq-find (lambda (row) (equal current (plist-get row :id))) items))
+                   (car items)))
+         (id (and book (plist-get book :id)))
+         (etaf-reader-store-file (plist-get session :store-file)))
+    (etaf-batch
+      (etaf-reader--write session :shelf-cursor id)
+      (etaf-reader--write session :shelf-notes
+                          (and id (etaf-reader-store-annotations id))))
+    book))
+
 (defun etaf-reader-page-library (session delta)
   "Move SESSION's library by DELTA pages and return its resulting page."
   (let* ((page (etaf-reader-library-page session))
          (next (max 0 (min (1- (plist-get page :pages))
                            (+ (plist-get page :index) delta)))))
     (etaf-reader--write session :shelf-page next)
+    (etaf-reader--sync-shelf-cursor session)
     (etaf-reader-library-page session)))
 
 (defun etaf-reader--library-facets (session)
@@ -195,22 +222,31 @@ outside the render pass, and cached for the View."
     book))
 
 (defun etaf-reader--shelf-move (session dx dy)
-  "Move SESSION's shelf cursor by DX cells and DY shelves."
-  (let* ((grid (etaf-reader--shelf-grid session))
-         (columns (max 1 (plist-get grid :columns)))
+  "Move SESSION's shelf cursor by DX cells and DY rows."
+  (let* ((list-p (eq (etaf-reader--read session :shelf-view) 'list))
+         (grid (etaf-reader--shelf-grid session))
+         (stride (if list-p 1 (max 1 (plist-get grid :columns))))
          (page (etaf-reader-library-page session))
          (items (plist-get page :items))
+         (page-idx (plist-get page :index))
+         (pages (plist-get page :pages))
          (index (or (etaf-reader--shelf-cursor-index session) 0))
-         (target (+ index (* dx 1) (* dy columns))))
+         (target (+ index dx (* dy stride))))
     (cond
      ((null items) nil)
-     ((and (< target 0) (or (< dy 0) (< dx 0)))
-      (etaf-reader-page-library session -1)
-      (let ((moved (plist-get (etaf-reader-library-page session) :items)))
-        (etaf-reader--set-shelf-cursor session (1- (length moved)))))
+     ((< target 0)
+      (if (> page-idx 0)
+          (progn
+            (etaf-reader-page-library session -1)
+            (let ((moved (plist-get (etaf-reader-library-page session) :items)))
+              (etaf-reader--set-shelf-cursor session (1- (length moved)))))
+        (etaf-reader--set-shelf-cursor session 0)))
      ((>= target (length items))
-      (etaf-reader-page-library session 1)
-      (etaf-reader--set-shelf-cursor session 0))
+      (if (< (1+ page-idx) pages)
+          (progn
+            (etaf-reader-page-library session 1)
+            (etaf-reader--set-shelf-cursor session 0))
+        (etaf-reader--set-shelf-cursor session (1- (length items)))))
      (t (etaf-reader--set-shelf-cursor session target)))))
 
 (defun etaf-reader--press-book (session book)
@@ -236,6 +272,7 @@ returns to its first page so the change is visible."
     (etaf-reader--write session (if (eq kind 'format) :facet-format :facet-author)
                         (and value (not (string-empty-p value)) value))
     (etaf-reader--write session :shelf-page 0))
+  (etaf-reader--sync-shelf-cursor session)
   (etaf-reader-books session))
 
 (defun etaf-reader--toggle-detail (session)
@@ -243,8 +280,10 @@ returns to its first page so the change is visible."
   (etaf-reader--write session :detail (not (etaf-reader--read session :detail))))
 
 (defun etaf-reader--toggle-sidebar (session)
-  "Show or hide SESSION's sidebar."
-  (etaf-reader--write session :sidebar (not (etaf-reader--read session :sidebar))))
+  "Show or hide SESSION's sidebar and refit the reading layout."
+  (etaf-batch
+    (etaf-reader--write session :sidebar (not (etaf-reader--read session :sidebar)))
+    (etaf-reader-sync-metrics session)))
 
 (defun etaf-reader-show-pane (session pane)
   "Show PANE in SESSION, or close it when nil or already open.
@@ -314,36 +353,57 @@ Nil also closes help."
   (pcase (etaf-reader--read session :pane)
     ('toc
      (mapcar (lambda (chapter)
-               (list :key (plist-get chapter :idx)
-                     :title (or (plist-get chapter :title) "未命名章节")
-                     :description (format "第 %d 章" (1+ (plist-get chapter :idx)))))
+               (let ((title (etaf-reader--single-line (plist-get chapter :title))))
+                 (list :key (plist-get chapter :idx)
+                       :title (truncate-string-to-width
+                               (if (string-empty-p title) "未命名章节" title)
+                               36 nil nil "…")
+                       :description (format "第 %d 章" (1+ (plist-get chapter :idx))))))
              (etaf-reader--read session :chapters)))
     ('notes
      (mapcar (lambda (note)
-               (list :key (plist-get note :id)
-                     :title (truncate-string-to-width (or (plist-get note :quote) "") 44 nil nil "…")
-                     :description (if (string-empty-p (or (plist-get note :note) ""))
-                                      (format "第 %d 章 · %s" (1+ (plist-get note :chapter))
-                                              (pcase (plist-get note :kind)
-                                                ("wavy" "波浪线") ("underline" "下划线") (_ "划线")))
-                                    (truncate-string-to-width (plist-get note :note) 44 nil nil "…"))))
+               (let* ((quote (etaf-reader--single-line (plist-get note :quote)))
+                      (thought (etaf-reader--single-line (plist-get note :note)))
+                      (ch (1+ (or (plist-get note :chapter) 0)))
+                      (kind-lbl (pcase (plist-get note :kind)
+                                  ("wavy" "波浪") ("underline" "直线")
+                                  ("note" "想法") (_ "高亮")))
+                      (title (cond ((not (string-empty-p quote)) quote)
+                                   ((not (string-empty-p thought)) thought)
+                                   (t (format "第 %d 章的一处%s" ch kind-lbl)))))
+                 (list :key (plist-get note :id)
+                       :title (truncate-string-to-width title 30 nil nil "…")
+                       :description (if (string-empty-p thought)
+                                        (format "第 %d 章 · %s" ch kind-lbl)
+                                      (truncate-string-to-width thought 22 nil nil "…")))))
              (etaf-reader--read session :book-notes)))
     ('bookmarks
      (mapcar (lambda (row)
-               (list :key (plist-get row :id)
-                     :title (format "第 %d 章" (1+ (plist-get row :chapter)))
-                     :description (truncate-string-to-width (or (plist-get row :label) "") 44 nil nil "…")))
+               (let ((label (etaf-reader--single-line (plist-get row :label)))
+                     (ch (1+ (or (plist-get row :chapter) 0))))
+                 (list :key (plist-get row :id)
+                       :title (format "第 %d 章" ch)
+                       :description (truncate-string-to-width
+                                     (if (string-empty-p label) "书签位置" label)
+                                     38 nil nil "…"))))
              (etaf-reader--read session :bookmarks)))
     ('search
      (cl-loop for match in (plist-get (etaf-reader--read session :search) :matches)
               for index from 0
               collect (list :key index
-                            :title (format "第 %d 章 · 结果 %d" (1+ (plist-get match :chapter)) (1+ index))
-                            :description (truncate-string-to-width (or (plist-get match :context) "") 44 nil nil "…"))))))
+                            :title (format "第 %d 章 · %d"
+                                           (1+ (plist-get match :chapter)) (1+ index))
+                            :description (truncate-string-to-width
+                                          (etaf-reader--single-line (plist-get match :context))
+                                          34 nil nil "…"))))))
 
 (defun etaf-reader--pane-page-size (session)
   "Return the bounded navigation list size for SESSION's viewport."
-  (max 1 (min 4 (/ (max 0 (- (or (plist-get (etaf-reader--read session :metrics) :rows) 20) 8)) 3))))
+  (let* ((win-rows (or (etaf-reader--read session :window-rows) 0))
+         (rows (if (> win-rows 0)
+                   win-rows
+                 (+ 7 (or (plist-get (etaf-reader--read session :metrics) :rows) 20)))))
+    (max 3 (min 10 (- rows 14)))))
 
 (defun etaf-reader--step-pane (session delta)
   "Move the current navigation list by DELTA pages."

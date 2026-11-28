@@ -1,0 +1,41 @@
+{
+  "schema": 1,
+  "load_path": [
+    ".",
+    "tests",
+    "../ebox",
+    "../ecss",
+    "../ekp",
+    "../etaf",
+    "../etaf-ui",
+    "../etaf-posframe"
+  ],
+  "support": [],
+  "cases": [
+    {
+      "name": "etaf-devtools-open-renders-target-and-excludes-self",
+      "file": "tests/etaf-devtools-tests.el",
+      "purpose": "Opening `etaf-devtools' attaches to a mounted ETAF target, renders Component/Host tree, Box Model and ECSS provenance, and excludes DevTools' own Runtime from target discovery."
+    },
+    {
+      "name": "etaf-devtools-tabs-and-responsive-viewports-render-cleanly",
+      "file": "tests/etaf-devtools-tests.el",
+      "purpose": "All six panels (Tree, Styles, State, Perf, Keys, Runtime) render across wide, medium and narrow viewports via documented keyboard navigation."
+    },
+    {
+      "name": "etaf-devtools-highlight-updates-is-zero-distortion-and-cleans-up",
+      "file": "tests/etaf-devtools-tests.el",
+      "purpose": "Highlight Updates flashes changed lines via read-only overlays without advancing target Runtime revision or mutating buffer text, and cleans up every overlay on disable or close."
+    },
+    {
+      "name": "etaf-devtools-live-ref-edit-and-viewport-qa-drive-target",
+      "file": "tests/etaf-devtools-tests.el",
+      "purpose": "Live State editing updates a target Component's writable `etaf-ref' in place, and Runtime QA viewport presets refit the target Runtime cleanly."
+    },
+    {
+      "name": "etaf-devtools-headless-session-survives-target-unmount-and-doctor",
+      "file": "tests/etaf-devtools-tests.el",
+      "purpose": "Headless `etaf-devtools-create'/`etaf-devtools-view'/`etaf-devtools-dispose' handles target unmount cleanly, and `etaf-devtools-doctor' reports required and optional capabilities."
+    }
+  ]
+}

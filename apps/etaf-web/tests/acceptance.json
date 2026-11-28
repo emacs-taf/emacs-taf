@@ -245,6 +245,106 @@
       "name": "etaf-web-tests-bounds-image-dimensions-and-tightens-card-grid-gate",
       "file": "tests/etaf-web-tests.el",
       "purpose": "Images with declared pixel dimensions exceeding 480 px or CSS percentages emit responsive Markdown instead of fixed oversized HTML dimensions, and heterogeneous or large-image+prose grids degrade to sequential blocks instead of `:::columns'."
+    },
+    {
+      "name": "etaf-web-tests-noscript-fallback-extracts-ssr-and-rejects-js-stub",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "Substantive `<noscript>' server-rendered fallbacks compile and sanitize safely when the main body is a script shell, while short JavaScript-required warning notices inside `<noscript>' are rejected."
+    },
+    {
+      "name": "etaf-web-tests-adapter-registry-routing-and-mode-override",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "Tier 2 adapters registered through `etaf-web-register-adapter' claim matching pages, render custom ETAF views with `:tier'/`adapter' state and status labels, and yield cleanly when `etaf-web-set-mode' switches to `reader' and back."
+    },
+    {
+      "name": "etaf-web-tests-external-browser-function-handoff",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "Configuring `etaf-web-external-browser-function' routes `etaf-web-open-external' handoffs to the custom browser function."
+    },
+    {
+      "name": "etaf-web-tests-render-timeout-reports-clear-reason",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "When a headless browser exceeds `etaf-web-render-timeout', the rendered notice reports a timeout diagnostic cleanly without leaving orphan processes."
+    },
+    {
+      "name": "etaf-web-tests-loading-progress-patches-toolbar-without-root-rerender",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "During asynchronous loading animation ticks, only the retained `web-status' toolbar Host updates in place with zero root component rerenders while toolbar text reflects advancing progress at constant 1lh height."
+    },
+    {
+      "name": "etaf-web-tests-history-viewport-offset-and-goto-heading",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "Navigating from a mid-page scroll offset resets the new page to offset 0, Back restores the exact `web-scroll' viewport offset, and `etaf-web-goto-heading' scrolls an off-screen heading into view while keeping the fixed line-1 toolbar intact."
+    },
+    {
+      "name": "etaf-web-tests-discourse-adapter-list-search-and-thread",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "Built-in Discourse Tier 2 adapter detects Discourse forums via generator meta, renders native topic lists with normalized object/string tags, opens thread views via Stage 0 URL fast-path, and incrementally loads remaining floors."
+    },
+    {
+      "name": "etaf-web-tests-docs-adapter-sidebar-tree-drawer-and-prev-next",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "Built-in Docs Tier 2 adapter detects Starlight/VitePress-style documentation pages, extracts nested sidebar chapter trees and breadcrumbs, and supports `H'/`L' prev/next chapter navigation."
+    },
+    {
+      "name": "etaf-web-tests-live-cdp-auto-escalates-spa-and-handles-interaction",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "Pure JavaScript SPAs with no static or `<noscript>' prose automatically escalate to Tier 3 Live CDP mode, project interactive controls into ETAF/etaf-ui, and reflect real in-page JS state updates when controls are activated."
+    },
+    {
+      "name": "etaf-web-tests-embedded-article-and-lightbox-images-preserved",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "Embedded `<aside><article>` preview cards never hijack main-content extraction and lightbox image anchors unwrap cleanly into standalone block images."
+    },
+    {
+      "name": "etaf-web-tests-hydrated-content-spa-routes-to-reader-tier",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "JavaScript-hydrated blog and article pages with no dominant interactive application controls inside `<main>` route post-hydration to Tier 1 `etaf-md` reading view instead of Tier 3 live projection."
+    },
+    {
+      "name": "etaf-web-tests-block-anchors-wrapper-cards-and-inline-boundaries",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "HTML5 block-level anchors compile into card grids or structured heading+body blocks without collapsing into giant inline links, leading eyebrow+duplicate h1 deduplicates cleanly, CJK entry streams preserve hierarchy under section headings, and visible inline CJK/Latin boundaries keep single-space separation."
+    },
+    {
+      "name": "etaf-web-tests-structural-docs-sidebar-without-framework-meta",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "Documentation sites with a structural `<aside><nav>` multi-group chapter tree outside `<main>` route to the Tier 2 Docs workspace even without framework generator metadata or `sidebar` class names."
+    },
+    {
+      "name": "etaf-web-tests-custom-element-tables-article-lists-and-docs-sidebars",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "Custom-element block wrappers preserve nested GFM tables, primary `<article>` link lists are kept, sparse headerless layout tables unwrap cleanly, MediaWiki `cite_note` footnotes resolve to GFM footnotes, and VitePress/MkDocs nested sidebar trees extract all chapters."
+    },
+    {
+      "name": "etaf-web-tests-mathml-editsection-discussion-and-nextra-docs",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "MathML equations compile to native LaTeX without duplication, MediaWiki editsection chrome drops while preserving section headings, dedicated discussion comment trees survive, multi-class docs sidebars route to Tier 2 Docs with native callout alerts while metadata sidebars stay Tier 1."
+    },
+    {
+      "name": "etaf-web-tests-live-cdp-input-stability-and-custom-checkbox",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "JavaScript-required notices escalate to Tier 3 Live CDP, single-line text inputs retain focus across multi-character edits and reconcile cleared live DOM values after submission, enclosing app-shell header/footer siblings remain visible, and opacity:0 CSS custom checkboxes toggle cleanly without duplicating sibling labels."
+    },
+    {
+      "name": "etaf-web-tests-wave2-extraction-routing-and-http-negotiation",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "HTML `<select>` controls are stripped, CSS-Modules `shared__*` and `<main>` discussion comments survive pruning, MediaWiki references deduplicate into footnotes without leaving an empty References heading, block-anchor `<article><h2>` titles keep clickable links while long prose anchors stay bounded, forum OP+replies survive Readability, news header navigation never false-positives as Tier 2 Docs, and HTTP 403 challenge responses surface a clear verification diagnostic."
+    },
+    {
+      "name": "etaf-web-tests-four-layer-code-language-detection",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "Four-layer code language identification resolves ancestor DOM wrappers, aliases, deterministic content anchors and margin-gated language scoring while honoring explicit plain-text locks and rejecting non-code snippets."
+    },
+    {
+      "name": "etaf-web-tests-visible-cursor-movement-selection-and-copy",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "Rendered web pages keep a visible cursor across pointer events, land initially in page prose, support character/line/page cursor motion with viewport auto-scroll, allow native mark/region selection and clean property-free copy, support URL copy via `w', and activate links at point safely with `RET'."
+    },
+    {
+      "name": "etaf-web-tests-heading-anchor-wrappers-and-hint-containers",
+      "file": "tests/etaf-web-tests.el",
+      "purpose": "Heading-wrapping `.header-anchor' links (such as VuePress/Theme-Plume) compile to clean Markdown headings while icon-only/sr-only permalink markers are stripped, and `.hint-container' blocks compile into callout containers."
     }
   ]
 }

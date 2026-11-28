@@ -73,9 +73,22 @@
 ;; Focus and edit the inline address bar (with history completion) in the
 ;; current ETAF Web buffer.
 ;;
+;; Function: etaf-web-goto-heading ()
+;;;###autoload (autoload 'etaf-web-goto-heading "etaf-web" nil t)
+;; Prompt for an outline heading in the current ETAF Web page and scroll the
+;; page viewport so that heading is visible with point on it.
+;;
 ;; Function: etaf-web-open-external ()
 ;;;###autoload (autoload 'etaf-web-open-external "etaf-web" nil t)
-;; Open the current ETAF Web page's URL in the external system browser.
+;; Open the current ETAF Web page's URL in the external system browser (or
+;; through `etaf-web-external-browser-function' when configured).
+;;
+;; Function: etaf-web-set-mode (mode)
+;;;###autoload (autoload 'etaf-web-set-mode "etaf-web" nil t)
+;; Switch the current ETAF Web buffer's rendering MODE (`auto', `reader',
+;; `adapter' or `live'), persist the preference per host under
+;; `etaf-web-cache-directory', and reload the page.  Signals `etaf-web-error'
+;; on an unsupported MODE.
 ;;
 ;; Function: etaf-web-close ()
 ;;;###autoload (autoload 'etaf-web-close "etaf-web" nil t)
@@ -86,7 +99,35 @@
 ;; Return a detached state plist snapshot for ETAF Web BUFFER (default current).
 ;; Keys include `:url', `:title', `:phase' (`loading', `ready' or `error'),
 ;; `:stage', `:progress', `:cached', `:error', `:can-back', `:can-forward',
-;; `:history-length', `:address-editing', `:narrow' and `:width'.
+;; `:history-length', `:address-editing', `:narrow', `:width', `:tier',
+;; `:mode' and `:adapter'.
+;;
+;; Function: etaf-web-register-adapter (&key name label priority match-url match-html open)
+;;;###autoload (autoload 'etaf-web-register-adapter "etaf-web" nil nil)
+;; Register or replace a Tier 2 site-archetype adapter named NAME.  LABEL names
+;; the mode in the status slot, PRIORITY orders matching (smaller runs first),
+;; MATCH-URL and MATCH-HTML detect matching pages, and OPEN receives a context
+;; plist and commits a Page Controller via `:on-ready' (or returns `fallback').
+;; Signals `etaf-web-error' on invalid arguments.
+;;
+;; Function: etaf-web-unregister-adapter (name)
+;;;###autoload (autoload 'etaf-web-unregister-adapter "etaf-web" nil nil)
+;; Remove the registered Tier 2 adapter named NAME; return non-nil if removed.
+;;
+;; Function: etaf-web-adapters ()
+;;;###autoload (autoload 'etaf-web-adapters "etaf-web" nil nil)
+;; Return a detached list of registered Tier 2 adapter descriptors
+;; `(:name SYMBOL :label STRING :priority INTEGER)' sorted by priority.
+;;
+;; Function: etaf-web-cdp-available-p ()
+;;;###autoload (autoload 'etaf-web-cdp-available-p "etaf-web" nil nil)
+;; Return non-nil when Tier 3 live CDP interactive rendering is available
+;; (`etaf-web-live-enabled' is non-nil, Node.js 22+ and a Chromium browser are
+;; found, and the bundled bridge script is readable).
+;;
+;; Function: etaf-web-cdp-shutdown ()
+;;;###autoload (autoload 'etaf-web-cdp-shutdown "etaf-web" nil t)
+;; Stop the shared Tier 3 CDP bridge subprocess and its Chromium instance.
 ;;
 ;; Variable: etaf-web-cache-directory (default "~/.cache/etaf-web/")
 ;; Root directory where cached pages, `index.md', `source.html', `meta.json'
@@ -111,6 +152,18 @@
 ;; Variable: etaf-web-render-timeout (default 25)
 ;; Seconds to wait for that headless render before the page shows its notice.
 ;;
+;; Variable: etaf-web-external-browser-function (default nil)
+;; Function called with a URL when handing a page off to an external or pixel
+;; browser via `etaf-web-open-external' or `browser:' links.  When nil, falls
+;; back to `browse-url'.
+;;
+;; Variable: etaf-web-live-enabled (default t)
+;; Whether Tier 3 live CDP interactive rendering is enabled when Node.js 22+
+;; and a Chromium-based browser are available.
+;;
+;; Variable: etaf-web-node-program (default "node")
+;; Node.js executable (version 22+) used to launch the Tier 3 CDP bridge.
+;;
 ;; Error: etaf-web-error
 ;; Invalid HTML input, missing libxml support, unreadable source file or HTTP
 ;; fetch failure.  Catch this condition with `condition-case'.
@@ -123,20 +176,49 @@
 
 ;;;###autoload
 (eval-and-compile
-  (add-to-list 'load-path
-               (expand-file-name "lisp"
-                                 (file-name-directory
-                                  (or load-file-name
-                                      (bound-and-true-p byte-compile-current-file)
-                                      buffer-file-name)))))
+  (let ((lisp-dir
+         (catch 'found
+           (dolist (file (list (bound-and-true-p byte-compile-current-file)
+                               (and load-file-name
+                                    (not (string-suffix-p ".eln" load-file-name))
+                                    load-file-name)
+                               (locate-library "etaf-web")
+                               buffer-file-name))
+             (when (stringp file)
+               (let* ((dir (file-name-directory file))
+                      (sub (and dir (expand-file-name "lisp" dir))))
+                 (when (and sub
+                            (file-directory-p sub)
+                            (or (file-exists-p (expand-file-name "etaf-web.el" dir))
+                                (file-exists-p (expand-file-name "etaf-web.elc" dir))))
+                   (throw 'found sub))))))))
+    (when lisp-dir
+      (add-to-list 'load-path lisp-dir))))
 
 (require 'etaf)
 (require 'etaf-ui)
 (require 'etaf-md)
+(require 'etaf-web-lang)
 (require 'etaf-web-compile)
 (require 'etaf-web-cache)
+(require 'etaf-web-adapter)
+(require 'etaf-web-router)
+(require 'etaf-web-cdp)
+(require 'etaf-web-live)
 (require 'etaf-web-views)
 (require 'etaf-web-app)
+(require 'etaf-web-adapter-discourse)
+(require 'etaf-web-adapter-docs)
+
+;;;###autoload
+(with-eval-after-load 'etaf
+  (etaf-app-register 'etaf-web
+    :title "网页阅读"
+    :icon "W"
+    :category 'reading
+    :feature 'etaf-web
+    :open 'etaf-web-open
+    :hosts '(buffer)))
 
 (provide 'etaf-web)
 ;;; etaf-web.el ends here

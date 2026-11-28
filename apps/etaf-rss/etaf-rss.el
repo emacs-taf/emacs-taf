@@ -495,5 +495,18 @@
 (require 'etaf-rss-views)
 (require 'etaf-rss-app)
 
+;;;###autoload
+(with-eval-after-load 'etaf
+  (etaf-app-register 'etaf-rss
+    :title "RSS 阅读"
+    :icon "R"
+    :category 'reading
+    :feature 'etaf-rss
+    :open 'etaf-rss-open
+    :hosts '(buffer desktop panel)
+    :session '(:create etaf-rss-create :view etaf-rss-view)
+    :window '(:width 1120 :height 30 :min-width 480 :min-height 14)
+    :panel '(:width 100 :height 24 :fill-height t :at frame-top-right :stack t)))
+
 (provide 'etaf-rss)
 ;;; etaf-rss.el ends here

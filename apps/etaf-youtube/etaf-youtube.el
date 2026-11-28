@@ -375,5 +375,21 @@
 (require 'etaf-youtube-views)
 (require 'etaf-youtube-app)
 
+;;;###autoload
+(with-eval-after-load 'etaf
+  (etaf-app-register 'etaf-youtube
+    :title "YouTube"
+    :icon "YT"
+    :category 'media
+    :feature 'etaf-youtube
+    :open 'etaf-youtube-open
+    :doctor 'etaf-youtube-doctor
+    :hosts '(buffer desktop panel)
+    :session '(:create etaf-youtube-create
+               :view etaf-youtube-view
+               :close etaf-youtube-destroy)
+    :window '(:width 1120 :height 30 :min-width 480 :min-height 14)
+    :panel '(:width 100 :height 24 :fill-height t :at frame-top-right :stack t)))
+
 (provide 'etaf-youtube)
 ;;; etaf-youtube.el ends here

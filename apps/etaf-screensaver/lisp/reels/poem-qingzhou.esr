@@ -1,2 +1,0 @@
-;;; -*- lisp-data -*-
-(:id poem-qingzhou :title "轻舟万山" :summary "李白《早发白帝城》 · 逐字排印" :tags (imported ink poem) :provider tte :recording "poem-qingzhou.tterec" :kind text :width 80 :height 24 :frame-rate 20 :frame-count 80 :source "ink: 轻舟已过万重山" :license "MIT" :background "#F4F1EA")

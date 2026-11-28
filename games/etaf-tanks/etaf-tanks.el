@@ -206,5 +206,23 @@ The shape matches `etaf-install-doctor': :required and :optional lists of
   (require 'etaf-tanks-editor)
   (require 'etaf-tanks-views)
   (require 'etaf-tanks-app))
+;;;###autoload
+(with-eval-after-load 'etaf
+  (etaf-app-register 'etaf-tanks
+    :title "坦克大战"
+    :icon "T"
+    :category 'game
+    :feature 'etaf-tanks
+    :open 'etaf-tanks-open
+    :doctor 'etaf-tanks-doctor
+    :hosts '(buffer desktop panel)
+    :session '(:create etaf-tanks-create
+               :view etaf-tanks-view
+               :close etaf-gamekit-dispose
+               :keep-alive t)
+    :window '(:width 1120 :height 30 :min-width 480 :min-height 14)
+    :panel '(:width 126 :height 32 :fill-height t
+             :at (frame-center -3 0) :stack nil :draggable t)))
+
 (provide 'etaf-tanks)
 ;;; etaf-tanks.el ends here

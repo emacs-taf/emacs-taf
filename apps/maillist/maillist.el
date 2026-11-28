@@ -434,5 +434,15 @@
 (require 'maillist-nntp)
 (require 'maillist-service)
 
+;;;###autoload
+(with-eval-after-load 'etaf
+  (etaf-app-register 'maillist
+    :title "邮件列表"
+    :icon "@"
+    :category 'communication
+    :feature 'maillist
+    :open 'maillist-open
+    :hosts '(buffer)))
+
 (provide 'maillist)
 ;;; maillist.el ends here

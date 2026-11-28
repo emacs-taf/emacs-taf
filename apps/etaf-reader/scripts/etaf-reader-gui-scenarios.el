@@ -102,7 +102,8 @@ bookmark/annotation. It never changes FILE. No application focus is requested."
         (list "library-search" (lambda (c) (etaf-reader-gui--input c "s" query)) title)
         (list "resume-book" (lambda (c) (etaf-reader-gui--activate c title)) title)
         (list "selection" (lambda (c) (etaf-reader-gui--keys c "v <right> <right> <right> RET")) "高亮")
-        (list "highlight" (lambda (c) (etaf-reader-gui--activate c "高亮")) title)
+        (list "highlight" (lambda (c) (etaf-reader-gui--activate c "高亮")) "删除")
+        (list "close-toolbar" (lambda (c) (etaf-reader-gui--keys c "<escape>")) title)
         (list "notes" (lambda (c) (etaf-reader-gui--keys c "a")) "笔记与划线")
         (list "close-notes" (lambda (c) (etaf-reader-gui--keys c "<escape>")) title)
         (list "export"
@@ -145,7 +146,7 @@ original size even after a failed checkpoint; do not change application focus."
                                 (* 2 (frame-char-width frame)))))
                      (string-match-p
                       (pcase kind ('contents "目录") ('settings "阅读设置")
-                             ('shelf "本地书库") (_ "书库"))
+                             ('shelf "上一页") (_ "书库"))
                       (etaf-reader-gui--text context))))
               :assertions
               (lambda (context)

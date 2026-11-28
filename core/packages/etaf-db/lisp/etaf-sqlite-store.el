@@ -2,7 +2,7 @@
 
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 ;; Author: ETAF contributors
-;; URL: https://github.com/emacs-taf/etaf-db
+;; URL: https://github.com/emacs-taf/etaf
 
 ;;; Commentary:
 

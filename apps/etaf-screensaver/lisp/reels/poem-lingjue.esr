@@ -1,2 +1,0 @@
-;;; -*- lisp-data -*-
-(:id poem-lingjue :title "凌绝顶" :summary "杜甫《望岳》 · 逐字排印" :tags (imported ink poem) :provider tte :recording "poem-lingjue.tterec" :kind text :width 80 :height 24 :frame-rate 20 :frame-count 78 :source "ink: 会当凌绝顶" :license "MIT" :background "#F4F1EA")

@@ -11,10 +11,11 @@
 ;; styled segments (annotation fill, underline, wavy, selection, caret) and
 ;; paints them with the session's palette.
 ;;
-;; The selection toolbar is an `etaf-popover' anchored to the line node the
-;; selection starts on, which is the WeChat Reading interaction adapted to a
-;; keyboard text application: drag or `v' selects, the toolbar floats above or
-;; below the line.
+;; The selection toolbar is an `etaf-popover' anchored cleanly below the last
+;; selected line (or above the first line near the bottom of a column).  On a
+;; new selection, choosing a color or style applies the annotation immediately
+;; and keeps the toolbar open in edit mode (Scheme A) so the user can adjust
+;; color, style, or attach a thought without re-selecting.
 
 ;;; Code:
 
@@ -29,16 +30,39 @@
 (declare-function etaf-reader-search-command "etaf-reader-app")
 (declare-function etaf-reader--direction "etaf-reader-app" (direction))
 (declare-function etaf-reader-export-command "etaf-reader-app" ())
+(declare-function etaf-reader--export-book-interactive "etaf-reader-app" (session book))
+(declare-function etaf-reader-wheel-down-command "etaf-reader-app" ())
+(declare-function etaf-reader-wheel-up-command "etaf-reader-app" ())
 (declare-function etaf-reader-refresh-library "etaf-reader-model" (session))
 (declare-function etaf-reader-open-book "etaf-reader-model" (session book &optional parser))
 
+(defconst etaf-reader--wheel-keys
+  '(("<wheel-down>" etaf-reader-wheel-down-command "向下阅读")
+    ("<wheel-up>" etaf-reader-wheel-up-command "向上阅读")
+    ("<mouse-5>" etaf-reader-wheel-down-command "向下阅读")
+    ("<mouse-4>" etaf-reader-wheel-up-command "向上阅读"))
+  "Wheel bindings attached to the main reading and shelf columns.
+Keeping wheel keys off the root lets scrollable sidebars and the detail
+panel retain Ebox's native smooth scrolling.")
+
+(defconst etaf-reader--valid-color-keys
+  '(:red :orange :yellow :green :blue :purple)
+  "Valid palette keywords for annotation colors.")
+
 (defun etaf-reader--color-key (color)
-  "Return COLOR (a string like \"red\") as a palette keyword."
-  (intern (format ":%s" color)))
+  "Return COLOR (a string like \"red\") as a valid palette keyword."
+  (let ((key (and (stringp color) (not (string-empty-p color))
+                  (intern (format ":%s" color)))))
+    (if (memq key etaf-reader--valid-color-keys) key :yellow)))
 
 (defun etaf-reader--fill-key (color)
   "Return the soft fill keyword of annotation COLOR."
-  (intern (format ":%s-soft" color)))
+  (let ((key (etaf-reader--color-key color)))
+    (intern (format "%s-soft" (symbol-name key)))))
+
+(defun etaf-reader--clip (string cells)
+  "Return STRING clipped to CELLS character cells, ending in an ellipsis."
+  (truncate-string-to-width (or string "") (max 1 cells) nil nil "…"))
 
 ;;; ---------------------------------------------------------------------------
 ;;; Line segments
@@ -86,8 +110,8 @@
             (add (+ shift (- s-start start)) (+ shift (- s-end start))
                  :selection t))))
       (when (and cursor (equal (plist-get cursor :line) (plist-get line :key)))
-        (let ((position (max 0 (min (1- (max 1 length))
-                                    (or (plist-get cursor :char) 0)))))
+        (let* ((caret-pos (+ shift (or (plist-get cursor :char) 0)))
+               (position (max 0 (min (1- (max 1 length)) caret-pos))))
           (add position (min length (1+ position)) :caret t)))
       (let* ((sorted (sort (delete-dups (copy-sequence boundaries)) #'<))
              (segments nil)
@@ -104,6 +128,9 @@
                                        covering))
                  (kind (and annotation (or (plist-get annotation :kind) "highlight")))
                  (color (and annotation (or (plist-get annotation :color) "yellow")))
+                 (has-note (and annotation
+                                (not (string-empty-p
+                                      (string-trim (or (plist-get annotation :note) ""))))))
                  (style (etaf-reader--segment-style styles from to))
                  (caret (seq-some (lambda (span) (plist-get span :caret)) covering))
                  (selection-p (seq-some (lambda (span) (plist-get span :selection))
@@ -114,12 +141,17 @@
                               (etaf-reader--fill-key color))))
                  (decoration (cond ((equal kind "underline") (etaf-reader--color-key color))
                                    ((equal kind "wavy") (etaf-reader--color-key color))
-                                   ((equal kind "note") :accent)))
+                                   ((equal kind "note") (etaf-reader--color-key color))
+                                   ((and has-note (equal kind "highlight"))
+                                    (etaf-reader--color-key color))))
                  (decoration-style (cond ((equal kind "wavy") 'wavy)
-                                         ((equal kind "note") 'dotted)))
+                                         ((or (equal kind "note")
+                                              (and has-note (equal kind "highlight")))
+                                          'dotted)))
                  (segment (list :text (substring text from to)
                                 :bold (string-match-p "bold" style)
                                 :italic (string-match-p "italic" style)
+                                :caret caret
                                 :fill fill
                                 :decoration decoration
                                 :decoration-style decoration-style
@@ -137,6 +169,7 @@
       (let ((previous (car result)))
         (if (and previous
                  (equal (plist-get previous :fill) (plist-get segment :fill))
+                 (equal (plist-get previous :caret) (plist-get segment :caret))
                  (equal (plist-get previous :decoration) (plist-get segment :decoration))
                  (equal (plist-get previous :decoration-style)
                         (plist-get segment :decoration-style))
@@ -156,16 +189,25 @@ no buffer writes or separate paint layer are involved.  One nonempty Text
 Host per slot also keeps blank and final-page slots addressable."
   (let ((kind (plist-get line :kind)) pieces)
     (dolist (segment (etaf-reader--line-segments session line theme))
-      (let ((text (copy-sequence (plist-get segment :text))) face)
+      ;; Replace U+3000 ideographic spaces with regular spaces at display time:
+      ;; preserves 1:1 character length/offsets while avoiding missing-glyph
+      ;; cyan underlines on fonts that omit U+3000.
+      (let ((text (subst-char-in-string ?\u3000 ?\s
+                                        (copy-sequence (plist-get segment :text))))
+            face)
         (when (or (eq kind 'heading) (plist-get segment :bold))
           (setq face (plist-put face :weight 'bold)))
         (when (plist-get segment :italic)
           (setq face (plist-put face :slant 'italic)))
         (when-let* ((fill (plist-get segment :fill)))
           (setq face (plist-put face :background (etaf-reader-color fill theme))))
-        (when-let* ((color (or (plist-get segment :color)
-                              (and (eq kind 'hr) :dim))))
-          (setq face (plist-put face :foreground (etaf-reader-color color theme))))
+        (cond
+         ((plist-get segment :caret)
+          (setq face (plist-put face :foreground "#FFFFFF")))
+         ((or (plist-get segment :color) (eq kind 'hr))
+          (setq face (plist-put face :foreground
+                                (etaf-reader-color (or (plist-get segment :color) :dim)
+                                                   theme)))))
         (when-let* ((decoration (plist-get segment :decoration)))
           (setq face
                 (plist-put face :underline
@@ -174,9 +216,15 @@ Host per slot also keeps blank and final-page slots addressable."
                                           ('wavy 'wave) ('dotted 'dots) (_ 'line))))))
         (when face (put-text-property 0 (length text) 'face face text))
         (when-let* ((annotation (plist-get segment :annotation)))
-          (add-text-properties 0 (length text)
-                               (list 'reader-annotation (plist-get annotation :id)
-                                     'help-echo "点击查看或编辑标注") text))
+          (let* ((note (string-trim (or (plist-get annotation :note) "")))
+                 (tip (if (string-empty-p note)
+                          "点击查看或编辑标注"
+                        (format "想法：%s（点击编辑）"
+                                (etaf-reader--clip (etaf-reader--single-line note) 48)))))
+            (add-text-properties 0 (length text)
+                                 (list 'reader-annotation (plist-get annotation :id)
+                                       'help-echo tip)
+                                 text)))
         (push text pieces)))
     (let ((text (apply #'concat (nreverse pieces))))
       (when (string-empty-p text) (setq text " "))
@@ -194,9 +242,9 @@ is a path inside the book's cache directory."
          (path (and src id
                     (expand-file-name src (etaf-reader--cache-book-directory id)))))
     (when (and path (file-readable-p path))
-      (let* ((columns (min 40 (max 16 (or (plist-get (etaf-reader--read session :metrics)
-                                                     :columns)
-                                          40))))
+      (let* ((metrics (etaf-reader--read session :metrics))
+             (columns (min 40 (max 16 (or (plist-get metrics :columns) 40))))
+             (max-rows (max 4 (min 24 (- (or (plist-get metrics :rows) 20) 2))))
              (pixels (ignore-errors (image-size (create-image path) t)))
              ;; The cover's cell is the canvas's: the `ch' and `lh' sizes
              ;; below resolve against it, so the art keeps its aspect there.
@@ -207,9 +255,9 @@ is a path inside the book's cache directory."
                                                 :line-height)
                                      (frame-char-height))))
              (rows (if pixels
-                       (max 1 (min 24 (round (/ (* columns char-width (cdr pixels))
-                                                (* (car pixels) char-height)))))
-                     8)))
+                       (max 1 (min max-rows (round (/ (* columns char-width (cdr pixels))
+                                                      (* (car pixels) char-height)))))
+                     (min max-rows 8))))
         (list :src path :columns columns :rows rows)))))
 
 (defun etaf-reader--view-line (session line theme)
@@ -238,34 +286,68 @@ rebuilding."
        (list (etaf-node 'text (list :ref (intern id) :id id)
                         (list (etaf-reader--line-content session line theme))))))))
 
+(defun etaf-reader--sidebar-bar-text (theme percent &optional columns)
+  "Return a single-line propertized progress bar for THEME at PERCENT.
+COLUMNS defaults to 22 cells.  Used by both the initial sidebar view and
+the retained fast-path page-turn updater."
+  (let* ((width (max 4 (or columns 22)))
+         (clamped (max 0.0 (min 100.0 (float (or percent 0)))))
+         (filled (round (* clamped width 0.01)))
+         (rest (- width filled))
+         (left (make-string filled ?━))
+         (right (make-string rest ?─)))
+    (when (> filled 0)
+      (put-text-property 0 filled 'face
+                         (list :foreground (etaf-reader-color :accent theme))
+                         left))
+    (when (> rest 0)
+      (put-text-property 0 rest 'face
+                         (list :foreground (etaf-reader-color :line theme))
+                         right))
+    (concat left right)))
+
 ;;; ---------------------------------------------------------------------------
-;;; Selection toolbar
+;;; Selection toolbar (Scheme A: immediate apply + stay in edit mode)
 ;;; ---------------------------------------------------------------------------
 
 (defun etaf-reader--toolbar-line (session)
-  "Return the toolbar's line index, or nil."
+  "Return the toolbar's start line index, or nil."
   (let ((toolbar (etaf-reader--read session :toolbar)))
     (and toolbar (plist-get toolbar :line))))
 
-(defun etaf-reader--toolbar-button (label color help on-press)
-  "Return one ghost button of the annotation toolbar."
+(defun etaf-reader--toolbar-button (label color help on-press
+                                          &optional selected aria-label)
+  "Return one compact button of the annotation toolbar."
   (etaf-view
    (etaf-button :label label :variant 'ghost :pointer 'hand
-                :color color :help-echo help :on-press on-press)))
+                :padding '((lh 0) (ch 0))
+                :color color :aria-label (or aria-label label)
+                :aria-selected (and selected t)
+                :help-echo help :on-press on-press)))
 
 (defun etaf-reader--view-toolbar (session)
-  "Return the selection toolbar popover, or nil."
+  "Return the compact floating selection/annotation toolbar popover, or nil."
   (let* ((toolbar (etaf-reader--read session :toolbar))
          (theme (etaf-reader--read session :theme)))
     (when toolbar
-      (let* ((line (plist-get toolbar :line))
+      (let* ((start-line (plist-get toolbar :line))
+             (end-line (max start-line (or (plist-get toolbar :end-line) start-line)))
              (top (etaf-reader--read session :line))
              (metrics (etaf-reader--read session :metrics))
              (rows (max 1 (or (plist-get metrics :rows) 20)))
-             (page-size (* rows (or (plist-get metrics :spread) 1)))
+             (visible-count (max 1 (etaf-reader--visible-line-count session top)))
              (annotation (plist-get toolbar :annotation))
-             (closing (lambda () (etaf-reader--write session :toolbar nil)))
-             (mark
+             (active-color (or (and annotation (plist-get annotation :color))
+                               (etaf-reader--read session :last-color)
+                               "yellow"))
+             (active-kind (or (and annotation (plist-get annotation :kind))
+                              (etaf-reader--read session :last-kind)
+                              "highlight"))
+             (closing (lambda () (etaf-reader-clear-selection session)))
+             ;; Scheme A: applying a color or style on a new selection creates
+             ;; the annotation immediately and keeps the toolbar open in edit
+             ;; mode so the user can adjust color/style or write a thought.
+             (apply-mark
               (lambda (kind color)
                 (etaf-reader-guard
                  session
@@ -273,13 +355,15 @@ rebuilding."
                    (if annotation
                        (etaf-reader-mark-annotation session (plist-get annotation :id)
                                                     kind color)
-                     (etaf-reader-annotate session kind color))
-                   (funcall closing)))))
+                     (let ((id (etaf-reader-annotate session kind color)))
+                       (when id
+                         (etaf-reader-show-annotation-toolbar session id))))))))
              (choose-color
               (lambda (color)
-                (funcall mark (if annotation
-                                  (or (plist-get annotation :kind) "highlight")
-                                "highlight")
+                (funcall apply-mark
+                         (if annotation
+                             (or (plist-get annotation :kind) "highlight")
+                           (or (etaf-reader--read session :last-kind) "highlight"))
                          color)))
              (copy
               (lambda ()
@@ -312,274 +396,335 @@ rebuilding."
                 (etaf-reader-guard
                  session
                  (lambda ()
-                   (etaf-reader-annotation-delete session (plist-get annotation :id)))))))
-        (when (and (>= line top) (< (- line top) page-size))
-          (etaf-view
-           (etaf-popover
-               :open t
-               :anchor (format "reader-line-%d" (- line top))
-               :placement (if (< (% (- line top) rows) (/ rows 2)) 'bottom-start 'top-start)
-               :width '(ch 46)
-               :on-close closing
-             (column :width 'stretch :item-gap '(lh 0) :padding '((lh 0) (ch 1))
-               (flex :width 'stretch :align-items 'center :height '(lh 2)
-                 (expr (mapcar
-                        (lambda (color)
-                          (etaf-reader--toolbar-button
-                           "●"
-                           (etaf-reader-color (etaf-reader--color-key color) theme)
-                           (format "用 %s 色标注" color)
-                           (lambda () (funcall choose-color color))))
-                        (etaf-reader-annotation-color-keys))))
-               (flex :width 'stretch :gap '((lh 0) (ch 1)) :align-items 'center
-                     :height '(lh 2)
-                 (expr (etaf-reader--toolbar-button
-                        "高亮" (etaf-reader-color :ink theme) "高亮显示"
-                        (lambda ()
-                          (funcall mark "highlight"
-                                   (or (and annotation (plist-get annotation :color))
-                                       "yellow")))))
-                 (expr (etaf-reader--toolbar-button
-                        "直线" (etaf-reader-color :ink theme) "直线下划线"
-                        (lambda ()
-                          (funcall mark "underline"
-                                   (or (and annotation (plist-get annotation :color))
-                                       "blue")))))
-                 (expr (etaf-reader--toolbar-button
-                        "波浪" (etaf-reader-color :ink theme) "波浪下划线"
-                        (lambda ()
-                          (funcall mark "wavy"
-                                   (or (and annotation (plist-get annotation :color))
-                                       "red"))))))
-               (flex :width 'stretch :gap '((lh 0) (ch 1)) :align-items 'center
-                     :height '(lh 2)
-                 (expr (etaf-reader--toolbar-button
-                        "复制" (etaf-reader-color :ink theme) "复制选中文字" copy))
-                 (expr (etaf-reader--toolbar-button
-                        "写想法" (etaf-reader-color :ink theme) "为这段写想法" note))
-                 (expr (etaf-reader--toolbar-button
-                        "搜索" (etaf-reader-color :ink theme) "在本书中搜索" search))
-                 (expr (etaf-reader--toolbar-button
-                        "删除" (etaf-reader-color :red theme) "删除这条标注" remove)))))))))))
+                   (when annotation
+                     (etaf-reader-annotation-delete session (plist-get annotation :id))))))))
+        (when (and (>= start-line top) (< (- start-line top) visible-count))
+          (let* ((start-slot (- start-line top))
+                 (end-slot (min (1- visible-count) (max start-slot (- end-line top))))
+                 (end-row (% end-slot rows))
+                 ;; Open below the LAST selected line whenever 6+ rows remain
+                 ;; below it, else open above the FIRST selected line so the
+                 ;; toolbar never obscures multi-line selections.
+                 (below-p (< (+ end-row 6) rows))
+                 (anchor-slot (if below-p end-slot start-slot))
+                 (placement (if below-p 'bottom-start 'top-start))
+                 (pop-width (min 38 (max 30 (- (or (etaf-reader--read session :window-columns) 80) 4)))))
+            (etaf-view
+             (etaf-popover
+                 :open t
+                 :anchor (format "reader-line-%d" anchor-slot)
+                 :placement placement
+                 :width (list 'ch pop-width)
+                 :on-close closing
+               (column :width 'stretch :item-gap '(lh 0)
+                 ;; Row 1: 6 color dots + 3 styles
+                 (flex :width 'stretch :height '(lh 1) :align-items 'center
+                       :gap '((lh 0) (ch 1))
+                   (flex :align-items 'center :gap '((lh 0) (ch 1))
+                     (expr (mapcar
+                            (lambda (color-sym)
+                              (let* ((color (symbol-name color-sym))
+                                     (selected (equal color active-color)))
+                                (etaf-reader--toolbar-button
+                                 (if selected "◉" "●")
+                                 (etaf-reader-color (etaf-reader--color-key color) theme)
+                                 (format "用 %s 色标注" color)
+                                 (lambda () (funcall choose-color color))
+                                 selected
+                                 (format "用 %s 色标注" color))))
+                            (etaf-reader-annotation-color-keys))))
+                   (box :flex-grow 1)
+                   (expr (etaf-reader--toolbar-button
+                          "高亮"
+                          (if (and annotation (equal active-kind "highlight"))
+                              (etaf-reader-color :accent-text theme)
+                            (etaf-reader-color :ink theme))
+                          "高亮显示"
+                          (lambda () (funcall apply-mark "highlight" active-color))
+                          (and annotation (equal active-kind "highlight"))))
+                   (expr (etaf-reader--toolbar-button
+                          "直线"
+                          (if (and annotation (equal active-kind "underline"))
+                              (etaf-reader-color :accent-text theme)
+                            (etaf-reader-color :ink theme))
+                          "直线下划线"
+                          (lambda () (funcall apply-mark "underline" active-color))
+                          (and annotation (equal active-kind "underline"))))
+                   (expr (etaf-reader--toolbar-button
+                          "波浪"
+                          (if (and annotation (equal active-kind "wavy"))
+                              (etaf-reader-color :accent-text theme)
+                            (etaf-reader-color :ink theme))
+                          "波浪下划线"
+                          (lambda () (funcall apply-mark "wavy" active-color))
+                          (and annotation (equal active-kind "wavy")))))
+                 ;; Hairline divider
+                 (box :width 'stretch :height '(lh 1)
+                      :border-bottom (etaf-reader--line theme :line))
+                 ;; Row 2: actions
+                 (flex :width 'stretch :height '(lh 1) :align-items 'center
+                       :gap '((lh 0) (ch 2))
+                   (expr (etaf-reader--toolbar-button
+                          "复制" (etaf-reader-color :ink theme) "复制选中文字" copy))
+                   (expr (etaf-reader--toolbar-button
+                          "写想法" (etaf-reader-color :ink theme) "为这段写想法" note))
+                   (expr (etaf-reader--toolbar-button
+                          "搜索" (etaf-reader-color :ink theme) "在本书中搜索" search))
+                   (expr (etaf-reader--toolbar-button
+                          "取消" (etaf-reader-color :muted theme) "关闭标注工具条" closing))
+                   (box :flex-grow 1)
+                   (expr (when annotation
+                           (etaf-reader--toolbar-button
+                            "删除" (etaf-reader-color :red theme)
+                            "删除这条标注" remove)))))))))))))
 
 ;;; ---------------------------------------------------------------------------
 ;;; Reader
 ;;; ---------------------------------------------------------------------------
 
-(defun etaf-reader--column-slices (lines rows spread)
-  "Divide LINES into SPREAD columns of ROWS lines each (column-major)."
-  (cl-loop for column from 0 below (max 1 spread)
-           for from = (* column (max 1 rows))
-           for to = (min (length lines) (+ from (max 1 rows)))
-           when (< from to)
-           collect (seq-subseq lines from to)))
+(defun etaf-reader--view-reader-chapter (session theme row offset current)
+  "Return SESSION's sidebar entry for chapter ROW at OFFSET, CURRENT or not."
+  (let* ((title (etaf-reader--single-line (or (plist-get row :title) "未命名")))
+         (label (format "第 %d 章 %s" (1+ offset) title)))
+    (etaf-view
+     (etaf-button :key offset
+                  :ref (when current 'reader-toc-current)
+                  :variant 'ghost :width 'stretch :height '(lh 1)
+                  :padding '((lh 0) (ch 0))
+                  :label label
+                  :aria-label label
+                  :aria-selected (and current t)
+                  :on-press (lambda () (etaf-reader-open-chapter session offset 0))
+       (flex :width 'stretch :height '(lh 1) :align-items 'center :gap '((lh 0) (ch 1))
+         (box :width '(px 2) :height '(lh 1) :flex-shrink 0
+              :background-color (if current
+                                    (etaf-reader-color :accent theme)
+                                  (etaf-reader-color :sidebar theme)))
+         (box :flex-grow 1 :flex-basis '(ch 0) :min-width '(ch 0)
+              :overflow 'hidden :wrap-mode 'none
+              (text :font-weight (if current 'bold 'normal)
+                    :color (if current (etaf-reader-color :accent-text theme)
+                             (etaf-reader-color :muted theme))
+                    (expr (etaf-reader--clip title 21)))))))))
 
-(defun etaf-reader--view-reader-sidebar (session theme chapter rows)
-  "Return SESSION's reading sidebar: the book card, chapters and progress.
-ROWS bounds how many chapter entries fit under the card."
+(defun etaf-reader--view-reader-sidebar (session theme chapter)
+  "Return SESSION's full-height scrollable reading sidebar for CHAPTER."
   (let* ((book (etaf-reader--read session :book))
          (chapters (etaf-reader--read session :chapters))
          (title (or (plist-get book :title) "未命名"))
-         (author (or (plist-get book :author) "未知作者"))
+         (author (etaf-reader--book-author book))
          (total (length chapters))
          (index (or (plist-get chapter :index) 0))
-         (slots (max 4 (min 14 (- rows 18))))
-         (start (max 0 (min (max 0 (- total slots)) (- index (/ slots 2)))))
-         (shown (seq-take (nthcdr start chapters) slots))
-         (lines (etaf-reader--read session :lines))
-         (top (etaf-reader--read session :line))
-         (percent (if (> (length lines) 0)
-                      (max 0 (min 100 (* 100.0 (/ (float top) (length lines)))))
-                    0)))
+         (suffix (format " · 共 %d 章" total))
+         (author-line (concat (etaf-reader--clip
+                               author (max 4 (- 22 (string-width suffix))))
+                              suffix))
+         (percent (etaf-reader-percent session))
+         (percent-str (etaf-reader-percent-text session)))
     (etaf-view
-     (column :width (list 'ch 26) :height 'stretch :flex-shrink 0 :overflow 'hidden
-             :background-color (etaf-reader-color :sidebar theme)
-             :border-right (etaf-reader--line theme :line)
-             :padding '((lh 1) (ch 1) (lh 0) (ch 1)) :item-gap '(lh 0)
-       (column :width 'stretch :padding '((lh 0) (ch 1)) :item-gap '(lh 0)
-         (text :font-weight 'bold (expr (etaf-reader--clip title 21)))
-         (text :color (etaf-reader-color :muted theme)
-               (expr (etaf-reader--clip (format "%s · %d 章" author total) 21))))
-       (box :width 'stretch :height '(lh 1))
-       (box :width 'stretch :height '(lh 1)
-            :border-bottom (etaf-reader--line theme :line))
-       (box :width 'stretch :height '(lh 1))
-       (flex :width 'stretch :height '(lh 1) :align-items 'center
+     (flex :flex-direction 'column :width '(ch 26) :height 'stretch
+           :flex-shrink 0 :overflow 'hidden
+           :background-color (etaf-reader-color :sidebar theme)
+           :border-right (etaf-reader--line theme :line)
+           :padding '((lh 1) (ch 1) (lh 1) (ch 1)) :gap '((lh 0) (ch 0))
+       ;; Book header (pinned; bottom border aligns flush with running head)
+       (flex :flex-direction 'column :width 'stretch :height '(lh 2) :flex-shrink 0
+             :padding '((lh 0) (ch 1)) :gap '((lh 0) (ch 0))
+             :border-bottom (etaf-reader--line theme :line)
+         (box :height '(lh 1) :overflow 'hidden :wrap-mode 'none
+              (text :font-weight 'bold (expr (etaf-reader--clip title 22))))
+         (box :height '(lh 1) :overflow 'hidden :wrap-mode 'none
+              (text :color (etaf-reader-color :muted theme)
+                    (expr author-line))))
+       (box :height '(lh 1) :flex-shrink 0)
+       ;; TOC heading (pinned)
+       (flex :width 'stretch :height '(lh 1) :flex-shrink 0
+             :align-items 'center :padding '((lh 0) (ch 1))
          (text :font-weight 'bold :color (etaf-reader-color :dim theme) "目录")
          (box :flex-grow 1)
          (text :color (etaf-reader-color :dim theme)
                (expr (format "%d/%d" (1+ index) total))))
-       (expr (cl-loop for row in shown
-                      for offset from start
-                      collect (etaf-reader--view-reader-chapter
-                               session theme row offset (= offset index))))
-       (box :flex-grow 1 :height '(lh 1))
-       (box :width 'stretch :height '(lh 1)
-            :border-bottom (etaf-reader--line theme :line))
-       (text :font-weight 'bold :color (etaf-reader-color :dim theme) "阅读进度")
-       (flex :width 'stretch :height '(lh 1) :align-items 'center :gap '((lh 0) (ch 1))
-         (expr (etaf-reader--meter theme percent 16))
-         (text :color (etaf-reader-color :muted theme)
-               (expr (format "%d%%" (round percent)))))
-       (box :width 'stretch :height '(lh 1))
-       (etaf-button :label "全部目录" :variant 'ghost :width 'stretch
-                    :on-press (lambda () (etaf-reader-show-pane session 'toc)))))))
-
-(defun etaf-reader--view-reader-chapter (session theme row offset current)
-  "Return SESSION's sidebar entry for chapter ROW at OFFSET, CURRENT or not."
-  (let ((title (or (plist-get row :title) "未命名")))
-    (etaf-view
-     (etaf-button :variant 'ghost :width 'stretch :height '(lh 1)
-                  :padding '((lh 0) (ch 0)) :label "第 %d 章"
-                  :aria-label (format "第 %d 章 %s" (1+ offset) title)
-                  :aria-selected (and current t)
-                  :on-press (lambda () (etaf-reader-open-chapter session offset 0))
-       (flex :width 'stretch :height '(lh 1) :align-items 'center :gap '((lh 0) (ch 1))
-         (box :width '(ch 1) :height '(lh 1)
-              (text :color (etaf-reader-color :accent theme)
-                    (expr (if current "▌" " "))))
-         (box :flex-grow 1 :flex-basis '(ch 0) :min-width '(ch 0) :overflow 'hidden
-              (text :font-weight (if current 'bold 'normal)
-                    :color (if current (etaf-reader-color :ink theme)
-                             (etaf-reader-color :muted theme))
-                    (expr (etaf-reader--clip title 19)))))))))
+       ;; Full-height scrollable chapter list (non-shrinking inner column)
+       (flex :flex-direction 'column :ref 'reader-toc-scroll :id "reader-toc-scroll"
+             :width 'stretch :flex-grow 1 :flex-basis '(lh 0) :min-height '(lh 0)
+             :overflow 'scroll :gap '((lh 0) (ch 0))
+             :aria-label "章节目录"
+         (column :width 'stretch :flex-shrink 0 :item-gap '(lh 0)
+           (expr (cl-loop for row in chapters
+                          for offset from 0
+                          collect (etaf-reader--view-reader-chapter
+                                   session theme row offset (= offset index))))))
+       ;; Progress & full TOC footer (pinned to bottom)
+       (flex :flex-direction 'column :width 'stretch :flex-shrink 0
+             :gap '((lh 0) (ch 0))
+         (box :width 'stretch :height '(lh 1)
+              :border-bottom (etaf-reader--line theme :line))
+         (flex :width 'stretch :height '(lh 1) :align-items 'center
+               :padding '((lh 0) (ch 1))
+           (text :font-weight 'bold :color (etaf-reader-color :dim theme) "全书进度")
+           (box :flex-grow 1)
+           (text :ref 'reader-sidebar-pct :id "reader-sidebar-pct"
+                 :color (etaf-reader-color :muted theme)
+                 (expr percent-str)))
+         (box :width 'stretch :height '(lh 1) :overflow 'hidden :wrap-mode 'none
+              :padding '((lh 0) (ch 1))
+           (text :ref 'reader-sidebar-bar :id "reader-sidebar-bar"
+                 (expr (etaf-reader--sidebar-bar-text theme percent 22))))
+         (etaf-button :label "全部目录" :variant 'secondary :width 'stretch
+                      :on-press (lambda () (etaf-reader-show-pane session 'toc))
+           (box :width 'stretch :text-align 'center (text "全部目录"))))))))
 
 (defun etaf-reader--view-reader (session)
   "Return the reading View of SESSION."
   (let* ((theme (etaf-reader--read session :theme))
          (metrics (etaf-reader--read session :metrics))
          (layout (plist-get metrics :layout))
-         (spread (or (plist-get metrics :spread) 1))
+         (spread (max 1 (or (plist-get metrics :spread) 1)))
          (rows (max 1 (or (plist-get metrics :rows) 20)))
          (columns (max 16 (or (plist-get metrics :columns) 40)))
          (lines (etaf-reader--read session :lines))
          (total (length lines))
          (top (min (etaf-reader--read session :line) (max 0 total)))
-         (page-size (* rows spread))
-         ;; Slots give every rendered line a stable identity across page
-         ;; turns, so Ebox reuses the nodes and only patches their text.
-         (remaining (nthcdr top lines))
-         (visible (cl-loop for slot below page-size
-                           for line = (pop remaining)
-                           collect (plist-put (copy-sequence line) :slot slot)))
-         (slices (etaf-reader--column-slices visible rows spread))
+         (packed (etaf-reader--pack-columns session lines top rows spread))
+         (slices (plist-get packed :slices))
+         (sidebar-shown (and (etaf-reader--read session :sidebar)
+                             (not (eq layout 'narrow))))
+         ;; Reserve 2ch display-safe slack so margins never trigger overflow.
          (available (- (or (etaf-reader--read session :window-columns) 160)
-                       (if (and (etaf-reader--read session :sidebar)
-                                (not (eq layout 'narrow)))
-                           26 0)))
+                       (if sidebar-shown 26 0)
+                       2))
          (body-columns (+ (* spread (+ columns 5)) (* (1- spread) 2)))
-         (body-margin (max 1 (/ (- available body-columns) 2)))
+         (body-margin (max 0 (/ (- available body-columns) 2)))
          (chapter (etaf-reader--read session :chapter))
-         (book (etaf-reader--read session :book)))
+         (chapter-title (etaf-reader--single-line (or (plist-get chapter :title) "")))
+         (chapter-index (1+ (or (plist-get chapter :index) 0)))
+         (chapter-count (length (etaf-reader--read session :chapters)))
+         (book (etaf-reader--read session :book))
+         (toolbar-open (not (null (etaf-reader--read session :toolbar)))))
     (etaf-view
      ;; Arrows reach the page wherever point rests, not only inside the body.
      (flex :flex-direction 'row :width 'stretch :height 'stretch
            :on-direction #'etaf-reader--direction
            :background-color (etaf-reader-color :bg theme)
            :color (etaf-reader-color :ink theme) :gap '((lh 0) (ch 0))
-       (expr (when (and (etaf-reader--read session :sidebar)
-                        (not (eq layout 'narrow)))
-               (etaf-reader--view-reader-sidebar session theme chapter rows)))
+       (expr (when sidebar-shown
+               (etaf-reader--view-reader-sidebar session theme chapter)))
        (flex :flex-direction 'column :flex-grow 1 :flex-basis '(ch 0) :min-width '(ch 0)
              :height 'stretch :gap '((lh 0) (ch 0))
-       ;; Running head
-       (flex :width 'stretch :height '(lh 3) :flex-shrink 0
-             :padding '((lh 0) (ch 2)) :align-items 'center :gap '((lh 0) (ch 1))
-             :border-bottom (etaf-reader--line theme :line)
-         (etaf-button :label "书库" :variant 'ghost
-                      :on-press (lambda () (etaf-reader-show-shelf session)))
-         (column :flex-grow 1 :flex-basis '(ch 0) :min-width '(ch 0)
-                 :item-gap '(lh 0)
-           (box :height '(lh 1) :overflow 'hidden :font-weight 'bold
-             (text (expr (or (plist-get book :title) ""))))
-           (box :height '(lh 1) :overflow 'hidden :color (etaf-reader-color :muted theme)
-             (text (expr (format "%s · 第 %d/%d 章"
-                                 (or (plist-get chapter :title) "")
-                                 (1+ (or (plist-get chapter :index) 0))
-                                 (length (etaf-reader--read session :chapters)))))))
-         (etaf-button :label "目录" :variant 'ghost
-                      :on-press (lambda () (etaf-reader-show-pane session 'toc)))
-         (etaf-button :if (not (eq layout 'narrow)) :label "笔记" :variant 'ghost
-                      :on-press (lambda () (etaf-reader-show-pane session 'notes)))
-         (etaf-button :if (eq layout 'wide) :label "搜索" :variant 'ghost
-                      :on-press
-                      (lambda ()
-                        (let ((query (etaf-call-with-input (lambda () (read-string "搜索全书：")))))
-                          (unless (string-empty-p (string-trim query))
-                            (etaf-reader--remember-position session)
-                            (etaf-reader-search-book session (string-trim query))
-                            (etaf-reader-show-pane session 'search)))))
-         (etaf-menu :label "更多"
-                    :items '((:key settings :label "阅读设置")
-                             (:key notes :label "笔记与划线")
-                             (:key bookmarks :label "书签列表")
-                             (:key add-bookmark :label "收藏这一页")
-                             (:key search :label "搜索结果")
-                             (:key back :label "返回跳转前")
-                             (:key help :label "快捷键"))
-                    :on-select (lambda (key)
-                                 (pcase key
-                                   ('add-bookmark (etaf-reader-add-bookmark session))
-                                   ('back (etaf-reader-jump-back session))
-                                   (_ (etaf-reader-show-pane session key))))))
-       ;; Body
-       (flex :ref 'reader-body :id "reader-body"
-             :width 'stretch :flex-grow 1 :flex-basis '(lh 0)
-             :min-height '(lh 0) :align-items 'stretch
-             :pointer 'text :on-drag (plist-get session :drag-handler)
-             :gap (list '(lh 0) (list 'ch 2))
-         ;; Fixed margins centre the text block: a growing spacer hands all
-         ;; the free space to one side, which put the page against the sidebar.
-         (box :width (list 'ch (if (> spread 1) body-margin 0)) :flex-shrink 0)
-         (column :for (slice slices) :key (plist-get (car slice) :slot)
-                 ;; One cell of slack absorbs sub-cell rounding.
-                 :width (list 'ch (+ columns 5)) :flex-shrink 0
-                 :item-gap '(lh 0) :padding '((lh 1) (ch 2))
+             :keys etaf-reader--wheel-keys
+         ;; Running head (row 1 aligns baseline-to-baseline with sidebar title)
+         (flex :width 'stretch :height '(lh 3) :flex-shrink 0
+               :padding '((lh 1) (ch 2) (lh 0) (ch 2))
+               :align-items 'flex-start :gap '((lh 0) (ch 1))
+               :border-bottom (etaf-reader--line theme :line)
+           (etaf-button :label "书库" :variant 'ghost
+                        :on-press (lambda () (etaf-reader-show-shelf session)))
+           (flex :flex-direction 'column :flex-grow 1 :flex-basis '(ch 0)
+                 :min-width '(ch 0) :justify-content 'center :gap '((lh 0) (ch 0))
+             (box :height '(lh 1) :overflow 'hidden :wrap-mode 'none :font-weight 'bold
+               (text (expr (or (plist-get book :title) ""))))
+             (flex :width 'stretch :height '(lh 1) :align-items 'center
+                   :gap '((lh 0) (ch 0))
+               (box :flex-shrink 1 :min-width '(ch 0) :overflow 'hidden :wrap-mode 'none
+                 (text :color (etaf-reader-color :muted theme)
+                       (expr chapter-title)))
+               (box :flex-shrink 0
+                 (text :color (etaf-reader-color :dim theme)
+                       (expr (format "%s第 %d/%d 章"
+                                     (if (string-empty-p chapter-title) "" " · ")
+                                     chapter-index chapter-count))))))
+           (etaf-button :if (and (not (eq layout 'narrow)) (>= available 76))
+                        :label "侧栏" :variant 'ghost
+                        :aria-selected (and sidebar-shown t)
+                        :on-press (lambda () (etaf-reader--toggle-sidebar session)))
+           (etaf-button :label "目录" :variant 'ghost
+                        :on-press (lambda () (etaf-reader-show-pane session 'toc)))
+           (etaf-button :if (and (not (eq layout 'narrow)) (>= available 76))
+                        :label "笔记" :variant 'ghost
+                        :on-press (lambda () (etaf-reader-show-pane session 'notes)))
+           (etaf-button :if (and (eq layout 'wide) (>= available 96))
+                        :label "搜索" :variant 'ghost
+                        :on-press
+                        (lambda ()
+                          (let ((query (etaf-call-with-input
+                                        (lambda () (read-string "搜索全书：")))))
+                            (unless (string-empty-p (string-trim query))
+                              (etaf-reader--remember-position session)
+                              (etaf-reader-search-book session (string-trim query))
+                              (etaf-reader-show-pane session 'search)))))
+           (etaf-menu :label "更多"
+                      :items '((:key settings :label "阅读设置")
+                               (:key notes :label "笔记与划线")
+                               (:key bookmarks :label "书签列表")
+                               (:key add-bookmark :label "收藏这一页")
+                               (:key search :label "搜索结果")
+                               (:key back :label "返回跳转前")
+                               (:key sidebar :label "切换侧栏")
+                               (:key help :label "快捷键"))
+                      :on-select (lambda (key)
+                                   (pcase key
+                                     ('add-bookmark (etaf-reader-add-bookmark session))
+                                     ('back (etaf-reader-jump-back session))
+                                     ('sidebar (etaf-reader--toggle-sidebar session))
+                                     (_ (etaf-reader-show-pane session key))))))
+         ;; Body (horizontally centered for both 1-column and 2-column layouts)
+         (flex :ref 'reader-body :id "reader-body"
+               :width 'stretch :flex-grow 1 :flex-basis '(lh 0)
+               :min-height '(lh 0) :align-items 'stretch
+               :pointer 'text :on-drag (plist-get session :drag-handler)
+               :gap (list '(lh 0) (list 'ch (if (> spread 1) 2 0)))
+           (box :width (list 'ch body-margin) :flex-shrink 0)
            (expr
-            (if (or (etaf-reader--read session :toolbar)
-                    (cl-some (lambda (line) (eq (plist-get line :kind) 'img)) slice))
-                ;; Line anchors exist only while the nearby toolbar needs one.
-                (mapcar (lambda (line)
-                          (etaf-reader--view-line session line theme)) slice)
-              (let ((id (format "reader-column-%d"
-                                (/ (plist-get (car slice) :slot) rows))))
-                (etaf-node
-                 'box (list :width 'stretch :height (list 'lh rows)
-                            :overflow 'hidden :wrap-mode 'none)
-                 (list (etaf-node
-                        'text (list :ref (intern id) :id id)
-                        (list (mapconcat
-                               (lambda (line)
-                                 (etaf-reader--line-content session line theme))
-                               slice "\n")))))))))
-         (box :width (list 'ch (if (> spread 1) body-margin 0)) :flex-shrink 0))
-       ;; Status line
-       (flex :width 'stretch :height '(lh 2) :flex-shrink 0
-             :padding '((lh 0) (ch 2))
-             :align-items 'center :gap '((lh 0) (ch 2))
-             :border-top (list '(px 1) 'solid (etaf-reader-color :line theme))
-         (box :height '(lh 1) :flex-shrink 0 :color (etaf-reader-color :muted theme)
-           (text :ref 'reader-page :id "reader-page"
-                 (expr (concat (etaf-reader--page-label session) " · "
-                               (etaf-reader-percent-text session)))))
-         (box :flex-grow 1 :flex-basis '(ch 0) :min-width '(ch 0) :height '(lh 1)
-              :overflow 'hidden :text-align 'center
-              :color (etaf-reader-color :dim theme)
-           (text (expr (or (etaf-reader--read session :message)
-                           (if (eq layout 'wide)
-                               "空格 翻页 · v 选择 · s 搜索 · c 目录 · a 笔记 · o 设置"
-                             "空格 翻页 · o 设置")))))))))))
+            (cl-loop
+             for slice in slices
+             for col-index from 0
+             collect
+             (etaf-node
+              'column
+              (list :key (or (plist-get (car slice) :slot) col-index)
+                    :width (list 'ch (+ columns 5)) :flex-shrink 0
+                    :item-gap '(lh 0) :padding '((lh 1) (ch 2)))
+              (if (or toolbar-open
+                      (cl-some (lambda (line) (eq (plist-get line :kind) 'img)) slice))
+                  ;; Individual line anchors exist while a toolbar or picture needs them.
+                  (mapcar (lambda (line)
+                            (etaf-reader--view-line session line theme))
+                          slice)
+                (let ((id (format "reader-column-%d" col-index)))
+                  (list
+                   (etaf-node
+                    'box (list :width 'stretch :height (list 'lh rows)
+                               :overflow 'hidden :wrap-mode 'none)
+                    (list (etaf-node
+                           'text (list :ref (intern id) :id id)
+                           (list (mapconcat
+                                  (lambda (line)
+                                    (etaf-reader--line-content session line theme))
+                                  slice "\n")))))))))))
+           (box :width (list 'ch body-margin) :flex-shrink 0))
+         ;; Status line
+         (flex :width 'stretch :height '(lh 2) :flex-shrink 0
+               :padding '((lh 0) (ch 2))
+               :align-items 'center :gap '((lh 0) (ch 2))
+               :border-top (list '(px 1) 'solid (etaf-reader-color :line theme))
+           (box :height '(lh 1) :flex-shrink 0 :color (etaf-reader-color :muted theme)
+             (text :ref 'reader-page :id "reader-page"
+                   (expr (concat (etaf-reader--page-label session) " · "
+                                 (etaf-reader-percent-text session)))))
+           (box :flex-grow 1 :flex-basis '(ch 0) :min-width '(ch 0) :height '(lh 1)
+                :overflow 'hidden :wrap-mode 'none :text-align 'center
+                :color (etaf-reader-color :dim theme)
+             (text (expr (or (etaf-reader--read session :message)
+                             (if (eq layout 'wide)
+                                 "空格 翻页 · 拖拽 / v 选择 · s 搜索 · c 目录 · a 笔记 · o 设置 · d 侧栏"
+                               "空格 翻页 · v 选择 · o 设置")))))))))))
 
 ;;; ---------------------------------------------------------------------------
-;;; Shelf
+;;; Shelf & Library shell (Dalibre-inspired native Emacs layout)
 ;;; ---------------------------------------------------------------------------
 
-;;; ---------------------------------------------------------------------------
-;;; Library shell
-;;; ---------------------------------------------------------------------------
-
-(defconst etaf-reader--cover-rows 8
-  "Text lines a shelf cover occupies.")
+(defconst etaf-reader--cover-rows 7
+  "Default text lines a shelf cover occupies.")
 
 (defconst etaf-reader--cover-columns 12
   "Character columns a shelf cover occupies.")
@@ -627,138 +772,184 @@ placeholder, not a render-time disk check."
                ('reading "在读") ('unread "未读") ('finished "已读")
                (_ "全部书籍"))))))
 
-;;; Sidebar
+;;; Shelf Sidebar
 
-(defun etaf-reader--view-sidebar-item (theme key label count selected on-press)
-  "Return one sidebar row: KEY, LABEL, COUNT and the selected marker."
+(defun etaf-reader--view-sidebar-item (theme key label count selected on-press
+                                             &optional icon badge-colors)
+  "Return one sidebar row: KEY, LABEL, COUNT, optional ICON or BADGE-COLORS."
   (etaf-view
-   (etaf-button :key key :variant 'ghost :width 'stretch :padding '((lh 0) (ch 1))
+   (etaf-button :key key :variant 'ghost :width 'stretch :height '(lh 1)
+                :padding '((lh 0) (ch 1))
                 :label label :aria-selected (and selected t)
                 :on-press on-press
      (flex :width 'stretch :height '(lh 1) :align-items 'center
            :gap '((lh 0) (ch 1))
-       (box :width '(px 2) :height '(lh 1)
+       (box :width '(px 2) :height '(lh 1) :flex-shrink 0
             :background-color (if selected
                                   (etaf-reader-color :accent theme)
                                 (etaf-reader-color :sidebar theme)))
-       (box :flex-grow 1 :overflow 'hidden
-         (text :font-weight (if selected 'bold 'normal)
-               :color (if selected (etaf-reader-color :accent-text theme)
-                        (etaf-reader-color :ink theme))
-               (expr label)))
+       (expr (when icon
+               (etaf-ui-icon icon :min-width 1
+                             :color (if selected
+                                        (etaf-reader-color :accent-text theme)
+                                      (etaf-reader-color :dim theme)))))
+       (expr
+        (if badge-colors
+            (etaf-view
+             (box :flex-grow 1 :flex-basis '(ch 0) :min-width '(ch 0)
+                  :height '(lh 1) :overflow 'hidden
+               (flex :height '(lh 1) :align-items 'center
+                 (box :padding '((lh 0) (ch 1)) :height '(lh 1)
+                      :background-color (cdr badge-colors)
+                   (text :font-weight 'bold :color (car badge-colors)
+                         (expr label))))))
+          (etaf-view
+           (box :flex-grow 1 :flex-basis '(ch 0) :min-width '(ch 0)
+                :overflow 'hidden :wrap-mode 'none
+             (text :font-weight (if selected 'bold 'normal)
+                   :color (if selected (etaf-reader-color :accent-text theme)
+                            (etaf-reader-color :ink theme))
+                   (expr (etaf-reader--clip label (if icon 14 16))))))))
        (expr (when count
                (etaf-view
-                (text :color (if selected (etaf-reader-color :accent-text theme)
-                               (etaf-reader-color :dim theme))
-                      (expr (number-to-string count))))))))))
+                (box :flex-shrink 0
+                  (text :color (if selected (etaf-reader-color :accent-text theme)
+                                 (etaf-reader-color :dim theme))
+                        (expr (number-to-string count)))))))))))
 
 (defun etaf-reader--view-sidebar-section (theme title count)
   "Return a sidebar group heading with TITLE and COUNT."
   (etaf-view
    (flex :height '(lh 1) :width 'stretch :align-items 'center
          :padding '((lh 0) (ch 1))
-     (box :flex-grow 1 (text :color (etaf-reader-color :dim theme) (expr title)))
+     (box :flex-grow 1 (text :font-weight 'bold
+                             :color (etaf-reader-color :dim theme) (expr title)))
      (expr (when count
              (etaf-view
               (text :color (etaf-reader-color :faint theme)
                     (expr (number-to-string count)))))))))
 
 (defun etaf-reader--view-shelf-sidebar (session theme facets)
-  "Return SESSION's shelf sidebar with navigation, formats and authors."
+  "Return SESSION's full-height scrollable shelf sidebar."
   (let* ((filter (etaf-reader--read session :filter))
          (format-facet (etaf-reader--read session :facet-format))
          (author-facet (etaf-reader--read session :facet-author))
-         (formats (seq-take (plist-get facets :formats) 5))
-         (authors (seq-take (plist-get facets :authors) 6)))
+         (formats (plist-get facets :formats))
+         (authors (plist-get facets :authors))
+         (total (or (plist-get facets :total) 0))
+         (dir-label (if (and (listp etaf-reader-library-directories)
+                             (cdr etaf-reader-library-directories))
+                        "多个目录"
+                      (abbreviate-file-name
+                       (or (car etaf-reader-library-directories) "~/ebooks"))))
+         (suffix (format " · %d 本" total))
+         (subtitle (concat (etaf-reader--clip
+                            dir-label (max 4 (- 22 (string-width suffix))))
+                           suffix)))
     (etaf-view
-     (column :width '(ch 26) :height 'stretch :flex-shrink 0 :overflow 'hidden
-             :background-color (etaf-reader-color :sidebar theme)
-             :border-right (etaf-reader--line theme :line)
-             :item-gap '(lh 0)
-             :padding '((lh 1) (ch 1) (lh 1) (ch 1))
-       ;; The library header is type and a hairline, not a box: a border at
-       ;; this size reads as a button that does nothing.
-       (column :width 'stretch :padding '((lh 0) (ch 1)) :item-gap '(lh 0)
-         (text :font-weight 'bold (expr "本地书库"))
-         (text :color (etaf-reader-color :muted theme)
-               (expr (etaf-reader--clip
-                      (if (and (listp etaf-reader-library-directories)
-                               (cdr etaf-reader-library-directories))
-                          "多个目录"
-                        (abbreviate-file-name
-                         (or (car etaf-reader-library-directories) "~/ebooks")))
-                      23))))
-       (box :height '(lh 1))
-       (box :width 'stretch :height '(lh 1)
-            :border-bottom (etaf-reader--line theme :line))
-       (box :height '(lh 1))
-       (expr (etaf-reader--view-sidebar-item
-              theme 'all "全部书籍" (plist-get facets :total)
-              (eq filter 'all)
-              (lambda () (etaf-reader-filter-library
-                          session (etaf-reader--read session :shelf-query) 'all))))
-       (expr (etaf-reader--view-sidebar-item
-              theme 'reading "在读" (plist-get facets :reading)
-              (eq filter 'reading)
-              (lambda () (etaf-reader-filter-library
-                          session (etaf-reader--read session :shelf-query) 'reading))))
-       (expr (etaf-reader--view-sidebar-item
-              theme 'unread "未读" (plist-get facets :unread)
-              (eq filter 'unread)
-              (lambda () (etaf-reader-filter-library
-                          session (etaf-reader--read session :shelf-query) 'unread))))
-       (expr (etaf-reader--view-sidebar-item
-              theme 'finished "已读" (plist-get facets :finished)
-              (eq filter 'finished)
-              (lambda () (etaf-reader-filter-library
-                          session (etaf-reader--read session :shelf-query) 'finished))))
-       (box :height '(lh 2))
-       (expr (etaf-reader--view-sidebar-section theme "格式" (length formats)))
-       (expr (mapcar
-              (lambda (row)
-                (etaf-reader--view-sidebar-item
-                 theme (format "format:%s" (car row)) (car row) (cdr row)
-                 (equal (car row) format-facet)
-                 (lambda () (etaf-reader-set-facet
-                             session 'format
-                             (unless (equal (car row) (etaf-reader--read session :facet-format))
-                               (car row))))))
-              formats))
-       (box :height '(lh 2))
-       (expr (etaf-reader--view-sidebar-section theme "作者" (length authors)))
-       (expr (mapcar
-              (lambda (row)
-                (etaf-reader--view-sidebar-item
-                 theme (format "author:%s" (car row)) (car row) (cdr row)
-                 (equal (car row) author-facet)
-                 (lambda () (etaf-reader-set-facet
-                             session 'author
-                             (unless (equal (car row) (etaf-reader--read session :facet-author))
-                               (car row))))))
-              authors))
-       (box :flex-grow 1)
-       (column :item-gap '(lh 0) :width 'stretch
+     (flex :flex-direction 'column :width '(ch 26) :height 'stretch
+           :flex-shrink 0 :overflow 'hidden
+           :background-color (etaf-reader-color :sidebar theme)
+           :border-right (etaf-reader--line theme :line)
+           :padding '((lh 1) (ch 1) (lh 1) (ch 1)) :gap '((lh 0) (ch 0))
+       ;; Pinned library header (aligns with toolbar bottom edge)
+       (flex :flex-direction 'column :width 'stretch :height '(lh 2) :flex-shrink 0
+             :padding '((lh 0) (ch 1)) :gap '((lh 0) (ch 0))
+             :border-bottom (etaf-reader--line theme :line)
+         (text :font-weight 'bold "本地书库")
+         (box :height '(lh 1) :overflow 'hidden :wrap-mode 'none
+              (text :color (etaf-reader-color :muted theme) (expr subtitle))))
+       (box :height '(lh 1) :flex-shrink 0)
+       ;; Scrollable middle: non-shrinking inner column preserves section headings
+       (flex :flex-direction 'column :ref 'shelf-sidebar-scroll :id "shelf-sidebar-scroll"
+             :width 'stretch :flex-grow 1 :flex-basis '(lh 0) :min-height '(lh 0)
+             :overflow 'scroll :gap '((lh 0) (ch 0))
+             :aria-label "书库导航"
+         (column :width 'stretch :flex-shrink 0 :item-gap '(lh 0)
+           (expr (etaf-reader--view-sidebar-item
+                  theme 'all "全部书籍" total (eq filter 'all)
+                  (lambda () (etaf-reader-filter-library
+                              session (etaf-reader--read session :shelf-query) 'all))
+                  'list))
+           (expr (etaf-reader--view-sidebar-item
+                  theme 'reading "在读" (plist-get facets :reading) (eq filter 'reading)
+                  (lambda () (etaf-reader-filter-library
+                              session (etaf-reader--read session :shelf-query) 'reading))
+                  'clock))
+           (expr (etaf-reader--view-sidebar-item
+                  theme 'unread "未读" (plist-get facets :unread) (eq filter 'unread)
+                  (lambda () (etaf-reader-filter-library
+                              session (etaf-reader--read session :shelf-query) 'unread))
+                  'eye))
+           (expr (etaf-reader--view-sidebar-item
+                  theme 'finished "已读" (plist-get facets :finished) (eq filter 'finished)
+                  (lambda () (etaf-reader-filter-library
+                              session (etaf-reader--read session :shelf-query) 'finished))
+                  'check))
+           (box :height '(lh 1))
+           (expr (etaf-reader--view-sidebar-section theme "格式" (length formats)))
+           (expr (mapcar
+                  (lambda (row)
+                    (etaf-reader--view-sidebar-item
+                     theme (format "format:%s" (car row)) (car row) (cdr row)
+                     (equal (car row) format-facet)
+                     (lambda () (etaf-reader-set-facet
+                                 session 'format
+                                 (unless (equal (car row) (etaf-reader--read session :facet-format))
+                                   (car row))))
+                     nil (etaf-reader-format-colors (car row) theme)))
+                  formats))
+           (box :height '(lh 1))
+           (expr (etaf-reader--view-sidebar-section theme "作者" (length authors)))
+           (expr (mapcar
+                  (lambda (row)
+                    (etaf-reader--view-sidebar-item
+                     theme (format "author:%s" (car row)) (car row) (cdr row)
+                     (equal (car row) author-facet)
+                     (lambda () (etaf-reader-set-facet
+                                 session 'author
+                                 (unless (equal (car row) (etaf-reader--read session :facet-author))
+                                   (car row))))))
+                  authors))))
+       ;; Pinned bottom actions
+       (flex :flex-direction 'column :width 'stretch :flex-shrink 0
+             :gap '((lh 0) (ch 0))
          (box :height '(lh 1) :width 'stretch
               :border-bottom (etaf-reader--line theme :line))
-         (etaf-button :label "扫描书库" :variant 'ghost :width 'stretch
+         (etaf-button :label "扫描书库" :variant 'ghost :width 'stretch :height '(lh 1)
                       :padding '((lh 0) (ch 1))
-                      :on-press (lambda () (etaf-reader-refresh-library session)))
-         (etaf-button :label "阅读设置" :variant 'ghost :width 'stretch
+                      :on-press (lambda () (etaf-reader-refresh-library session))
+           (flex :width 'stretch :height '(lh 1) :align-items 'center :gap '((lh 0) (ch 1))
+             (expr (etaf-ui-icon 'refresh :min-width 1
+                                 :color (etaf-reader-color :muted theme)))
+             (text :color (etaf-reader-color :muted theme) "扫描书库")))
+         (etaf-button :label "阅读设置" :variant 'ghost :width 'stretch :height '(lh 1)
                       :padding '((lh 0) (ch 1))
-                      :on-press (lambda () (etaf-reader-show-pane session 'settings))))))))
+                      :on-press (lambda () (etaf-reader-show-pane session 'settings))
+           (flex :width 'stretch :height '(lh 1) :align-items 'center :gap '((lh 0) (ch 1))
+             (expr (etaf-ui-icon 'settings :min-width 1
+                                 :color (etaf-reader-color :muted theme)))
+             (text :color (etaf-reader-color :muted theme) "阅读设置"))))))))
 
-;;; Toolbar, grid, footer
+;;; Toolbar, chips, grid, list, footer
 
-(defun etaf-reader--view-shelf-chips (session)
-  "Return the shelf's facet chips: reading state, format and author."
+(defun etaf-reader--view-shelf-chips (session theme width)
+  "Return the shelf's facet chips: reading state, format, author and sort."
   (let* ((filter (etaf-reader--read session :filter))
          (format (etaf-reader--read session :facet-format))
          (author (etaf-reader--read session :facet-author))
          (facets (etaf-reader--library-facets session))
          (query (etaf-reader--read session :shelf-query))
+         (sort-key (etaf-reader--read session :shelf-sort))
          (state-label (pcase filter
                         ('reading "在读") ('unread "未读") ('finished "已读")
                         (_ "全部")))
+         (sort-caption (pcase sort-key
+                         ('title "按书名") ('author "按作者")
+                         (_ "按最近阅读 ↓")))
+         (has-filter (or format author
+                         (not (string-empty-p query))
+                         (not (eq filter 'all))))
          (format-items (cons (list :key "all" :label "全部格式")
                              (mapcar (lambda (row)
                                        (list :key (car row)
@@ -770,8 +961,9 @@ placeholder, not a render-time disk check."
                                              :label (format "%s · %d" (car row) (cdr row))))
                                      (plist-get facets :authors)))))
     (etaf-view
-     (flex :height '(lh 1) :width 'stretch :align-items 'center
-           :padding '((lh 0) (ch 2)) :gap '((lh 0) (ch 1))
+     (flex :height '(lh 1) :width 'stretch :flex-shrink 0 :align-items 'center
+           :padding (if (< width 92) '((lh 0) (ch 1)) '((lh 0) (ch 2)))
+           :gap '((lh 0) (ch 1))
        (etaf-menu
         :label (format "状态 · %s" state-label)
         :items (list (list :key 'all :label "全部状态")
@@ -789,84 +981,104 @@ placeholder, not a render-time disk check."
                      (etaf-reader-set-facet session 'format
                                             (unless (equal key "all") key))))
        (etaf-menu
-        :label (format "作者 · %s" (or author "全部"))
+        :label (format "作者 · %s" (etaf-reader--clip (or author "全部") 12))
         :items author-items
         :on-select (lambda (key)
                      (etaf-reader-set-facet session 'author
                                             (unless (equal key "all") key))))
        (box :flex-grow 1)
-       (expr (when (or format author (not (string-empty-p query)))
-               (etaf-view
-                (etaf-button :label "清除筛选" :variant 'ghost
-                             :on-press (lambda ()
-                                         (etaf-reader-set-facet session 'format nil)
-                                         (etaf-reader-set-facet session 'author nil)
-                                         (etaf-reader-filter-library session "" 'all))))))))))
+       (expr (if has-filter
+                 (etaf-view
+                  (etaf-button :label "清除筛选" :variant 'ghost
+                               :on-press (lambda ()
+                                           (etaf-reader-set-facet session 'format nil)
+                                           (etaf-reader-set-facet session 'author nil)
+                                           (etaf-reader-filter-library session "" 'all))))
+               (when (>= width 92)
+                 (etaf-view
+                  (text :color (etaf-reader-color :dim theme) (expr sort-caption))))))))))
 
-(defun etaf-reader--view-shelf-toolbar (session theme page)
-  "Return SESSION's shelf toolbar for PAGE."
-  (etaf-view
-   (flex :height '(lh 3) :width 'stretch :align-items 'center
-         :padding '((lh 0) (ch 2)) :gap '((lh 0) (ch 1))
-     (text :font-weight 'bold (expr (etaf-reader--shelf-title session)))
-     (text :color (etaf-reader-color :dim theme)
-           (expr (format "%d 本" (plist-get page :total))))
-     (box :flex-grow 1)
-     (etaf-search-field :if (>= (or (etaf-reader--read session :window-columns) 160) 150)
-                        :value (etaf-reader--read session :shelf-query)
-                        :placeholder "搜索书名、作者" :width '(ch 24)
-                        :on-change (lambda (value)
-                                     (etaf-reader-filter-library
-                                      session value
-                                      (etaf-reader--read session :filter))))
-     (etaf-segmented :options '((grid . "网格") (list . "列表"))
-                     :bind (etaf-reader--ref session :shelf-view))
-     (etaf-menu :label "排序"
-                :items '((:key recent :label "最近阅读") (:key title :label "书名")
-                         (:key author :label "作者"))
-                :on-select (lambda (key)
-                             (etaf-reader-filter-library
-                              session (etaf-reader--read session :shelf-query)
-                              (etaf-reader--read session :filter) key)))
-     (etaf-button :label "详情" :variant 'ghost
-                  :aria-selected (and (etaf-reader--read session :detail) t)
-                  :on-press (lambda () (etaf-reader--toggle-detail session)))
-     (etaf-button :label "扫描书籍" :variant 'primary
-                  :on-press (lambda () (etaf-reader-refresh-library session))))))
+(defun etaf-reader--view-shelf-toolbar (session theme page width)
+  "Return SESSION's shelf toolbar for PAGE at viewport WIDTH."
+  (let ((narrow (< width 92)))
+    (etaf-view
+     (flex :height '(lh 3) :width 'stretch :flex-shrink 0 :align-items 'center
+           :padding (if narrow '((lh 0) (ch 1)) '((lh 0) (ch 2)))
+           :gap '((lh 0) (ch 1))
+       (box :overflow 'hidden :wrap-mode 'none :flex-shrink 1 :min-width '(ch 4)
+         (text :font-weight 'bold
+               (expr (etaf-reader--clip (etaf-reader--shelf-title session)
+                                        (if narrow 10 20)))))
+       (box :flex-shrink 0
+         (text :color (etaf-reader-color :dim theme)
+               (expr (format "%d 本" (plist-get page :total)))))
+       (box :flex-grow 1)
+       (etaf-search-field :if (>= width 136)
+                          :value (etaf-reader--read session :shelf-query)
+                          :placeholder "搜索书名、作者" :icon t :width '(ch 24)
+                          :on-change (lambda (value)
+                                       (etaf-reader-filter-library
+                                        session value
+                                        (etaf-reader--read session :filter))))
+       (etaf-segmented :options '((grid . "网格") (list . "列表"))
+                       :bind (etaf-reader--ref session :shelf-view))
+       (etaf-menu :label "排序"
+                  :items '((:key recent :label "最近阅读") (:key title :label "书名")
+                           (:key author :label "作者"))
+                  :on-select (lambda (key)
+                               (etaf-reader-filter-library
+                                session (etaf-reader--read session :shelf-query)
+                                (etaf-reader--read session :filter) key)))
+       (etaf-button :if (>= width 130) :label "详情" :variant 'ghost
+                    :aria-selected (and (etaf-reader--read session :detail) t)
+                    :on-press (lambda () (etaf-reader--toggle-detail session)))
+       (etaf-button :label (if narrow "扫描" "扫描书库") :variant 'primary
+                    :on-press (lambda () (etaf-reader-refresh-library session)))))))
 
-(defun etaf-reader--view-shelf-cover (session theme book)
-  "Return one book standing in the shelf, the way the design lifts a book."
+(defun etaf-reader--view-shelf-cover (session theme book cover-rows)
+  "Return one book standing flush on the shelf board, lifting when selected."
   (let* ((title (or (plist-get book :title) "未命名"))
+         (author (etaf-reader--book-author book))
          (selected (equal (plist-get book :id) (etaf-reader--read session :shelf-cursor)))
          (path (etaf-reader--cover-path book))
-         (tint (etaf-reader--cover-tint theme title)))
+         (tint (etaf-reader--cover-tint theme title))
+         (slot-rows (1+ cover-rows)))
     (etaf-view
      (etaf-button :key (plist-get book :id) :variant 'ghost :pointer 'hand
                   :width (list 'ch etaf-reader--cover-columns)
-                  :height '(lh 9) :padding '((lh 0) (ch 0))
+                  :height (list 'lh slot-rows) :padding '((lh 0) (ch 0))
                   :label (format "《%s》" title)
-                  :aria-label (format "《%s》，%s" title (or (plist-get book :author) "未知作者"))
+                  :aria-label (format "《%s》，%s" title author)
                   :help-echo (if selected "再按一次打开这本书" "选中这本书")
                   :on-press (lambda () (etaf-reader-guard
                                         session (lambda () (etaf-reader--press-book session book))))
-       (flex :flex-direction 'column :width 'stretch :height '(lh 9) :gap '((lh 0) (ch 0))
+       (flex :flex-direction 'column :width 'stretch :height (list 'lh slot-rows)
+             :gap '((lh 0) (ch 0))
              :justify-content (if selected 'flex-start 'flex-end)
-         (box :width 'stretch :height (list 'lh etaf-reader--cover-rows)
+         (box :width 'stretch :height (list 'lh cover-rows)
               :overflow 'hidden :background-color (car tint)
-              :border (etaf-reader--line theme :line)
+              :border (etaf-reader--line theme (if selected :accent :line))
            (expr (when path
                    (etaf-node 'image
                               (list :src path
                                     :columns etaf-reader--cover-columns
-                                    :rows etaf-reader--cover-rows)
+                                    :rows cover-rows)
                               nil)))
            (expr (unless path
                    (etaf-view
                     (flex :flex-direction 'column :width 'stretch
-                          :height (list 'lh etaf-reader--cover-rows)
-                          :overflow 'hidden :justify-content 'flex-end
-                          :padding '((lh 1) (ch 1))
-                      (text :font-weight 'bold :color (cdr tint) (expr title))))))))))))
+                          :height (list 'lh cover-rows)
+                          :overflow 'hidden
+                          :padding (if (>= cover-rows 7) '((lh 1) (ch 1)) '((lh 0) (ch 1)))
+                          :gap '((lh 0) (ch 0))
+                      (box :if (>= cover-rows 7) :height '(lh 1)
+                           :overflow 'hidden :wrap-mode 'none
+                        (text :color (etaf-reader-color :muted theme)
+                              (expr (etaf-reader--clip author (- etaf-reader--cover-columns 2)))))
+                      (box :flex-grow 1)
+                      (box :width 'stretch :overflow 'hidden
+                        (text :font-weight 'bold :color (cdr tint)
+                              (expr (etaf-reader--clip title 20))))))))))))))
 
 (defun etaf-reader--meter (theme percent columns)
   "Return a COLUMNS wide two tone line meter at PERCENT."
@@ -885,97 +1097,109 @@ placeholder, not a render-time disk check."
                                                            (etaf-reader-color :line theme)))
                                 nil)))))
 
-(defun etaf-reader--view-shelf-progress (session theme book)
-  "Return BOOK's reading meter: a three pixel line under its cover."
-  (etaf-view
-   (expr (etaf-reader--meter theme (etaf-reader--book-percent session book)
-                            etaf-reader--cover-columns))))
-
 (defun etaf-reader--view-shelf-label (session theme book)
   "Return BOOK's title and author under the shelf board."
   (let* ((selected (equal (plist-get book :id) (etaf-reader--read session :shelf-cursor)))
-         (title (or (plist-get book :title) "未命名")))
+         (title (or (plist-get book :title) "未命名"))
+         (author (etaf-reader--book-author book)))
     (etaf-view
      (column :width (list 'ch etaf-reader--cover-columns) :height '(lh 2)
              :item-gap '(lh 0) :overflow 'hidden
-       (box :height '(lh 1) :overflow 'hidden
+       (box :height '(lh 1) :overflow 'hidden :wrap-mode 'none
          (text :font-weight (if selected 'bold 'normal)
                :color (if selected (etaf-reader-color :accent-text theme)
                         (etaf-reader-color :ink theme))
-               (expr title)))
-       (box :height '(lh 1) :overflow 'hidden
+               (expr (etaf-reader--clip title etaf-reader--cover-columns))))
+       (box :height '(lh 1) :overflow 'hidden :wrap-mode 'none
          (text :color (etaf-reader-color :dim theme)
-               (expr (or (plist-get book :author) "未知作者"))))))))
+               (expr (etaf-reader--clip author etaf-reader--cover-columns))))))))
 
 (defun etaf-reader--view-shelf-board (session theme books)
-  "Return the board the shelf's books stand on, with the selected marker."
-  (etaf-view
-   (flex :width 'stretch :height '(lh 1) :align-items 'stretch
-     (expr (mapcar
-            (lambda (book)
-              (let ((selected (equal (plist-get book :id)
-                                     (etaf-reader--read session :shelf-cursor))))
-                (etaf-view
-                 (box :width (list 'ch (+ etaf-reader--cover-columns etaf-reader--cell-gap))
-                      :height '(lh 1)
-                      :background-color (etaf-reader-color :plank-face theme)
-                      :border-top (etaf-reader--line theme :plank-top)
-                      :border-bottom (etaf-reader--line theme :plank-edge)
-                   (expr (when selected
-                           (etaf-view
-                            (box :width '(ch 4) :height '(lh 1)
-                                 :margin-left '(ch 4)
-                                 :border-bottom (list '(px 1) 'solid
-                                                      (etaf-reader-color :accent theme))))))))))
-            books))
-     (box :flex-grow 1 :height '(lh 1)
-          :background-color (etaf-reader-color :plank-face theme)
-          :border-top (etaf-reader--line theme :plank-top)
-          :border-bottom (etaf-reader--line theme :plank-edge)))))
+  "Return the shelf ledge BOOKS stand flush on, with integrated progress rails."
+  (let ((count (length books)))
+    (etaf-view
+     (flex :width 'stretch :height '(lh 1) :align-items 'stretch :gap '((lh 0) (ch 0))
+       (expr
+        (cl-loop
+         for book in books
+         for idx from 0
+         for last = (= idx (1- count))
+         for selected = (equal (plist-get book :id)
+                               (etaf-reader--read session :shelf-cursor))
+         for percent = (max 0 (min 100 (etaf-reader--book-percent session book)))
+         for filled = (if (> percent 0)
+                          (max 1 (round (* percent etaf-reader--cover-columns 0.01)))
+                        0)
+         for rest = (- etaf-reader--cover-columns filled)
+         collect
+         (etaf-view
+          (flex :width (list 'ch (+ etaf-reader--cover-columns
+                                    (if last 0 etaf-reader--cell-gap)))
+                :height '(lh 1) :flex-shrink 0 :gap '((lh 0) (ch 0))
+                :background-color (etaf-reader-color :plank-face theme)
+            (box :if (> filled 0) :width (list 'ch filled) :height '(lh 1)
+                 :border-top (etaf-reader--line theme :accent)
+                 :border-bottom (etaf-reader--line theme (if selected :accent :plank-edge)))
+            (box :if (> rest 0) :width (list 'ch rest) :height '(lh 1)
+                 :border-top (etaf-reader--line theme :plank-top)
+                 :border-bottom (etaf-reader--line theme (if selected :accent :plank-edge)))
+            (box :if (not last) :width (list 'ch etaf-reader--cell-gap) :height '(lh 1)
+                 :border-top (etaf-reader--line theme :plank-top)
+                 :border-bottom (etaf-reader--line theme :plank-edge))))))
+       (box :flex-grow 1 :height '(lh 1)
+            :background-color (etaf-reader-color :plank-face theme)
+            :border-top (etaf-reader--line theme :plank-top)
+            :border-bottom (etaf-reader--line theme :plank-edge))))))
 
-(defun etaf-reader--view-shelf-row (session theme books)
-  "Return one shelf of BOOKS: covers, meters, board and labels."
-  (etaf-view
-   (column :width 'stretch :item-gap '(lh 0)
-     (flex :width 'stretch :height '(lh 9) :align-items 'flex-end
-           :gap (list '(lh 0) (list 'ch etaf-reader--cell-gap))
-       (expr (mapcar (lambda (book) (etaf-reader--view-shelf-cover session theme book)) books)))
-     (flex :width 'stretch :height '(lh 1)
-           :gap (list '(lh 0) (list 'ch etaf-reader--cell-gap))
-       (expr (mapcar (lambda (book) (etaf-reader--view-shelf-progress session theme book))
-                     books)))
-     (expr (etaf-reader--view-shelf-board session theme books))
-     (flex :width 'stretch :height '(lh 2)
-           :gap (list '(lh 0) (list 'ch etaf-reader--cell-gap))
-       (expr (mapcar (lambda (book) (etaf-reader--view-shelf-label session theme book))
-                     books))))))
+(defun etaf-reader--view-shelf-row (session theme books cover-rows &optional row-key)
+  "Return one shelf of BOOKS: covers resting flush on the ledge, and labels."
+  (let ((slot-rows (1+ cover-rows)))
+    (etaf-view
+     (column :key row-key :width 'stretch :item-gap '(lh 0)
+       (flex :width 'stretch :height (list 'lh slot-rows) :align-items 'flex-end
+             :gap (list '(lh 0) (list 'ch etaf-reader--cell-gap))
+         (expr (mapcar (lambda (book)
+                         (etaf-reader--view-shelf-cover session theme book cover-rows))
+                       books)))
+       (expr (etaf-reader--view-shelf-board session theme books))
+       (flex :width 'stretch :height '(lh 2)
+             :gap (list '(lh 0) (list 'ch etaf-reader--cell-gap))
+         (expr (mapcar (lambda (book) (etaf-reader--view-shelf-label session theme book))
+                       books)))))))
 
-(defun etaf-reader--clip (string cells)
-  "Return STRING clipped to CELLS character cells, ending in an ellipsis."
-  (truncate-string-to-width (or string "") cells nil nil "…"))
+;;; List View (responsive column tiers so Title never collapses)
 
-(defun etaf-reader--view-shelf-list-header (theme)
-  "Return the list view's column headings."
+(defun etaf-reader--list-tier (main-columns)
+  "Return responsive column tier (`full', `medium', or `compact') for MAIN-COLUMNS."
+  (cond ((>= main-columns 84) 'full)
+        ((>= main-columns 58) 'medium)
+        (t 'compact)))
+
+(defun etaf-reader--view-shelf-list-header (theme tier)
+  "Return the list view's column headings for responsive TIER."
   (etaf-view
    (flex :height '(lh 1) :width 'stretch :align-items 'center
          :gap '((lh 0) (ch 1)) :padding '((lh 0) (px 2) (lh 0) (px 2))
      (box :flex-grow 1 :flex-basis '(ch 0) :min-width '(ch 0)
           (text :color (etaf-reader-color :dim theme) "标题"))
-     (box :width '(ch 14) :flex-shrink 0
+     (box :if (memq tier '(full medium)) :width (if (eq tier 'full) '(ch 14) '(ch 12))
+          :flex-shrink 0
           (text :color (etaf-reader-color :dim theme) "作者"))
      (box :width '(ch 5) :flex-shrink 0
           (text :color (etaf-reader-color :dim theme) "格式"))
-     (box :width '(ch 7) :flex-shrink 0 :text-align 'right
+     (box :if (eq tier 'full) :width '(ch 7) :flex-shrink 0 :text-align 'right
           (text :color (etaf-reader-color :dim theme) "章节"))
-     (box :width '(ch 15) :flex-shrink 0
+     (box :width (pcase tier ('full '(ch 14)) ('medium '(ch 12)) (_ '(ch 5)))
+          :flex-shrink 0 :text-align (if (eq tier 'compact) 'right 'left)
           (text :color (etaf-reader-color :dim theme) "进度"))
-     (box :width '(ch 14) :flex-shrink 0 :text-align 'right
+     (box :if (eq tier 'full) :width '(ch 12) :flex-shrink 0 :text-align 'right
           (text :color (etaf-reader-color :dim theme) "最近阅读")))))
 
-(defun etaf-reader--view-shelf-list-row (session theme book &optional title-columns)
-  "Return one line of the list view for BOOK, TITLE-COLUMNS wide."
+(defun etaf-reader--view-shelf-list-row (session theme book tier title-columns)
+  "Return one line of the list view for BOOK at TIER and TITLE-COLUMNS."
   (let* ((id (plist-get book :id))
          (title (or (plist-get book :title) "未命名"))
+         (author (etaf-reader--book-author book))
          (selected (equal id (etaf-reader--read session :shelf-cursor)))
          (percent (max 0 (min 100 (etaf-reader--book-percent session book))))
          (format (upcase (or (plist-get book :format) "")))
@@ -984,52 +1208,68 @@ placeholder, not a render-time disk check."
          (opened (plist-get state :last_read)))
     (etaf-view
      (etaf-button :key id :variant 'ghost :width 'stretch :height '(lh 1)
-                  :padding '((lh 0) (ch 0)) :label "打开这本书"
-                  :aria-label (format "《%s》，%s" title
-                                      (or (plist-get book :author) "未知作者"))
+                  :padding '((lh 0) (ch 0)) :label (format "《%s》" title)
+                  :aria-label (format "《%s》，%s" title author)
                   :aria-selected (and selected t)
                   :on-press (lambda () (etaf-reader-guard
                                         session (lambda () (etaf-reader--press-book session book))))
        (flex :width 'stretch :height '(lh 1) :align-items 'center
              :gap '((lh 0) (ch 1)) :padding '((lh 0) (px 2) (lh 0) (px 2))
-         (box :flex-grow 1 :flex-basis '(ch 0) :min-width '(ch 0) :overflow 'hidden
+         (box :flex-grow 1 :flex-basis '(ch 0) :min-width '(ch 0)
+              :overflow 'hidden :wrap-mode 'none
               (text :font-weight (if selected 'bold 'normal)
-                    :color (if selected (etaf-reader-color :ink theme)
-                             (etaf-reader-color :muted theme))
-                    (expr (etaf-reader--clip title (max 8 (or title-columns 40))))))
-         (box :width '(ch 14) :flex-shrink 0 :overflow 'hidden
+                    :color (if selected (etaf-reader-color :accent-text theme)
+                             (etaf-reader-color :ink theme))
+                    (expr (etaf-reader--clip title (max 10 title-columns)))))
+         (box :if (memq tier '(full medium))
+              :width (if (eq tier 'full) '(ch 14) '(ch 12))
+              :flex-shrink 0 :overflow 'hidden :wrap-mode 'none
               (text :color (etaf-reader-color :muted theme)
-                    (expr (etaf-reader--clip (or (plist-get book :author) "未知作者")
-                                             14))))
+                    (expr (etaf-reader--clip author (if (eq tier 'full) 14 12)))))
          (box :width '(ch 5) :flex-shrink 0 (text :color (car colors) (expr format)))
-         (box :width '(ch 7) :flex-shrink 0 :text-align 'right
+         (box :if (eq tier 'full) :width '(ch 7) :flex-shrink 0 :text-align 'right
               (text :color (etaf-reader-color :dim theme)
                     (expr (let ((chapters (plist-get book :chapters)))
                             (if (and chapters (> chapters 0))
                                 (format "%d 章" chapters) "—")))))
-         (flex :width '(ch 15) :flex-shrink 0 :height '(lh 1) :align-items 'center
-               :gap '((lh 0) (ch 1))
-           (expr (etaf-reader--meter theme percent 8))
-           (box :width '(ch 4) :flex-shrink 0 :text-align 'right
-                (text :color (etaf-reader-color :dim theme)
-                      (expr (if (> percent 0) (format "%d%%" (round percent)) "未读")))))
-         (box :width '(ch 14) :flex-shrink 0 :text-align 'right
+         (expr
+          (if (eq tier 'compact)
+              (etaf-view
+               (box :width '(ch 5) :flex-shrink 0 :text-align 'right
+                 (text :color (if (> percent 0) (etaf-reader-color :muted theme)
+                                (etaf-reader-color :dim theme))
+                       (expr (if (> percent 0) (format "%d%%" (round percent)) "未读")))))
+            (let ((bar-w (if (eq tier 'full) 7 5)))
+              (etaf-view
+               (flex :width (if (eq tier 'full) '(ch 14) '(ch 12))
+                     :flex-shrink 0 :height '(lh 1) :align-items 'center
+                     :gap '((lh 0) (ch 1))
+                 (expr (etaf-reader--meter theme percent bar-w))
+                 (box :width '(ch 5) :flex-shrink 0 :text-align 'right
+                      (text :color (if (> percent 0) (etaf-reader-color :muted theme)
+                                     (etaf-reader-color :dim theme))
+                            (expr (if (> percent 0) (format "%d%%" (round percent)) "未读")))))))))
+         (box :if (eq tier 'full) :width '(ch 12) :flex-shrink 0 :text-align 'right
               (text :color (etaf-reader-color :dim theme)
                     (expr (if (and opened (> opened 0))
                               (format-time-string "%m-%d %H:%M" (seconds-to-time opened))
                             "—")))))))))
 
-(defun etaf-reader--view-shelf-list (session theme items &optional title-columns)
-  "Return the list view of ITEMS, with TITLE-COLUMNS for each title."
-  (etaf-view
-   (column :width 'stretch :item-gap '(lh 0)
-     (expr (etaf-reader--view-shelf-list-header theme))
-     (box :width 'stretch :height '(lh 1)
-          :border-bottom (etaf-reader--line theme :line))
+(defun etaf-reader--view-shelf-list (session theme items main-columns)
+  "Return the responsive list view of ITEMS inside MAIN-COLUMNS."
+  (let* ((tier (etaf-reader--list-tier main-columns))
+         (fixed (pcase tier ('full 60) ('medium 36) (_ 16)))
+         (title-columns (max 12 (- main-columns fixed))))
+    (etaf-view
      (column :width 'stretch :item-gap '(lh 0)
-       (expr (mapcar (lambda (book)
-                       (etaf-reader--view-shelf-list-row session theme book title-columns))
-                     items))))))
+       (expr (etaf-reader--view-shelf-list-header theme tier))
+       (box :width 'stretch :height '(lh 1)
+            :border-bottom (etaf-reader--line theme :line))
+       (column :width 'stretch :item-gap '(lh 0)
+         (expr (mapcar (lambda (book)
+                         (etaf-reader--view-shelf-list-row
+                          session theme book tier title-columns))
+                       items)))))))
 
 (defun etaf-reader--shelf-groups (items columns)
   "Split ITEMS into rows of COLUMNS books."
@@ -1039,96 +1279,170 @@ placeholder, not a render-time disk check."
       (setq items (nthcdr columns items)))
     (nreverse rows)))
 
-(defun etaf-reader--view-shelf-footer (session theme page)
-  "Return SESSION's shelf footer for PAGE."
-  (etaf-view
-   (flex :height '(lh 3) :width 'stretch :align-items 'center
-         :padding '((lh 0) (ch 2))
-         :border-top (etaf-reader--line theme :line)
-     (etaf-button :label "上一页" :variant 'ghost
-                  :disabled (= (plist-get page :index) 0)
-                  :on-press (lambda () (etaf-reader-page-library session -1)))
-     (text :color (etaf-reader-color :muted theme)
-           (expr (format "第 %d / %d 页" (1+ (plist-get page :index))
-                         (plist-get page :pages))))
-     (etaf-button :label "下一页" :variant 'ghost
-                  :disabled (= (1+ (plist-get page :index)) (plist-get page :pages))
-                  :on-press (lambda () (etaf-reader-page-library session 1)))
-     (box :flex-grow 1)
-     (text :color (etaf-reader-color :dim theme)
-           (expr (format "共 %d 本" (plist-get page :total)))))))
+(defun etaf-reader--view-shelf-footer (session theme page book width)
+  "Return SESSION's shelf footer for PAGE, showing status messages or cursor hint."
+  (let* ((narrow (< width 92))
+         (msg (etaf-reader--read session :message))
+         (hint (cond ((>= width 132)
+                      (when book
+                        (format "选中《%s》 · 回车打开 · j/k/h/l 移动"
+                                (etaf-reader--clip (or (plist-get book :title) "") 18))))
+                     ((>= width 92) "回车打开 · j/k/h/l 移动")
+                     (t nil)))
+         (center (or msg hint)))
+    (etaf-view
+     (flex :height '(lh 2) :width 'stretch :flex-shrink 0 :align-items 'center
+           :padding (if narrow '((lh 0) (ch 1)) '((lh 0) (ch 2)))
+           :gap '((lh 0) (ch 1))
+           :border-top (etaf-reader--line theme :line)
+       (etaf-button :label "上一页" :variant 'ghost
+                    :disabled (= (plist-get page :index) 0)
+                    :on-press (lambda () (etaf-reader-page-library session -1)))
+       (box :flex-shrink 0
+         (text :color (etaf-reader-color :muted theme)
+               (expr (format "第 %d / %d 页" (1+ (plist-get page :index))
+                             (plist-get page :pages)))))
+       (etaf-button :label "下一页" :variant 'ghost
+                    :disabled (= (1+ (plist-get page :index)) (plist-get page :pages))
+                    :on-press (lambda () (etaf-reader-page-library session 1)))
+       (box :flex-grow 1 :flex-basis '(ch 0) :min-width '(ch 0) :height '(lh 1)
+            :overflow 'hidden :wrap-mode 'none :text-align 'center
+         (text :color (if msg (etaf-reader-color :muted theme)
+                        (etaf-reader-color :dim theme))
+               (expr (or center ""))))
+       (box :flex-shrink 0
+         (text :color (etaf-reader-color :dim theme)
+               (expr (format "共 %d 本" (plist-get page :total)))))))))
 
-;;; Detail panel
+;;; Detail panel (Dalibre-style tight grouping + scrollable body + pinned actions)
+
+(defun etaf-reader--format-chars (chars)
+  "Format character count CHARS concisely."
+  (cond ((or (null chars) (<= chars 0)) nil)
+        ((>= chars 10000) (format "%.1f 万字" (/ chars 10000.0)))
+        (t (format "%d 字" chars))))
 
 (defun etaf-reader--view-detail (session theme book)
   "Return SESSION's detail panel for BOOK."
   (let* ((title (or (plist-get book :title) "未命名"))
+         (author (etaf-reader--book-author book))
          (percent (etaf-reader--book-percent session book))
+         (state (etaf-reader-book-state session (plist-get book :id)))
+         (opened (plist-get state :last_read))
          (format (upcase (or (plist-get book :format) "")))
          (colors (etaf-reader-format-colors format theme))
          (path (etaf-reader--cover-path book))
          (tint (etaf-reader--cover-tint theme title))
          (chapters (plist-get book :chapters))
          (pages (plist-get book :pages))
-         (size (plist-get book :size)))
+         (chars-text (etaf-reader--format-chars (plist-get book :chars)))
+         (size (plist-get book :size))
+         (notes (etaf-reader--read session :shelf-notes))
+         (progress-line
+          (cond ((and (> percent 0) opened (> opened 0))
+                 (format "已读 %d%% · 上次 %s"
+                         (round percent)
+                         (format-time-string "%m-%d %H:%M" (seconds-to-time opened))))
+                ((> percent 0) (format "已读 %d%%" (round percent)))
+                (t "未读"))))
     (etaf-view
-     (column :width '(ch 38) :height 'stretch :flex-shrink 0 :overflow 'hidden
-             :background-color (etaf-reader-color :panel theme)
-             :border-left (etaf-reader--line theme :line)
-             :padding '((lh 1) (ch 2) (lh 1) (ch 2)) :item-gap '(lh 1)
-       (flex :flex-direction 'column :width 'stretch :height '(lh 14)
-             :justify-content 'center :align-items 'center :gap '((lh 0) (ch 0))
-             :background-color (etaf-reader-color :subtle theme)
-         (box :width '(ch 18) :height '(lh 12) :overflow 'hidden
-              :border (etaf-reader--line theme :line)
-              :background-color (car tint)
-           (expr (when path
-                   (etaf-node 'image (list :src path :columns 18 :rows 12) nil)))
-           (expr (unless path
-                   (etaf-view
-                    (flex :flex-direction 'column :width 'stretch :height 'stretch
-                          :overflow 'hidden :justify-content 'center :align-items 'stretch
-                          :wrap-mode 'word :padding '((lh 1) (ch 1))
-                      (box :width 'stretch :text-align 'center
-                        (text :font-weight 'bold :color (cdr tint) (expr title)))))))))
-       (box :width 'stretch :text-align 'center :overflow 'hidden
-         (text :font-weight 'bold (expr title)))
-       (box :width 'stretch :text-align 'center :overflow 'hidden
-         (text :color (etaf-reader-color :muted theme)
-               (expr (or (plist-get book :author) "未知作者"))))
-       (box :width 'stretch :text-align 'center
-         (text :color (etaf-reader-color :dim theme)
-               (expr (if (> percent 0) (format "已读 %d%%" (round percent)) "未读"))))
-       (box :width 'stretch :height '(lh 1) :border-bottom (etaf-reader--line theme :line))
-       (text :font-weight 'bold :color (etaf-reader-color :dim theme) "详情")
-       (expr (etaf-reader--view-detail-row theme "格式" format))
-       (expr (etaf-reader--view-detail-row
-              theme "页数" (if (and pages (> pages 0)) (format "%d 页" pages) "未分页")))
-       (expr (etaf-reader--view-detail-row
-              theme "章节" (if (and chapters (> chapters 0)) (format "%d 章" chapters) "—")))
-       (expr (etaf-reader--view-detail-row theme "大小" (etaf-reader--file-size size)))
-       (box :width 'stretch :height '(lh 1) :border-bottom (etaf-reader--line theme :line))
-       (text :font-weight 'bold :color (etaf-reader-color :dim theme) "文件")
-       (flex :width 'stretch :height '(lh 1) :align-items 'center
-             :gap '((lh 0) (ch 1))
-         (box :width '(ch 6) :flex-shrink 0 :height '(lh 1) :text-align 'center
-              :background-color (cdr colors)
-           (text :color (car colors) (expr format)))
-         (box :flex-grow 1 :overflow 'hidden
-           (text (expr (file-name-nondirectory (or (plist-get book :path) ""))))))
-       (expr (etaf-reader--view-detail-notes session theme))
-       (box :flex-grow 1)
-       (etaf-button :label (if (> percent 0) "继续阅读" "开始阅读") :variant 'primary
-                    :width 'stretch
-                    :on-press (lambda () (etaf-reader-guard
-                                          session (lambda () (etaf-reader-open-book session book)))))
-       (etaf-button :label "从头开始" :variant 'secondary :width 'stretch
-                    :on-press (lambda () (etaf-reader-guard
-                                          session (lambda ()
-                                                    (etaf-reader-open-book session book)
-                                                    (etaf-reader-goto-percent session 0)))))
-       (etaf-button :label "导出笔记" :variant 'ghost :width 'stretch
-                    :on-press (lambda () (etaf-reader-export-command)))))))
+     (flex :flex-direction 'column :width '(ch 38) :height 'stretch
+           :flex-shrink 0 :overflow 'hidden
+           :background-color (etaf-reader-color :panel theme)
+           :border-left (etaf-reader--line theme :line)
+           :padding '((lh 1) (ch 2) (lh 1) (ch 2)) :gap '((lh 0) (ch 0))
+       ;; Scrollable detail content (non-shrinking inner column)
+       (flex :flex-direction 'column :ref 'shelf-detail-scroll :id "shelf-detail-scroll"
+             :width 'stretch :flex-grow 1 :flex-basis '(lh 0) :min-height '(lh 0)
+             :overflow 'scroll :gap '((lh 0) (ch 0))
+             :aria-label "书籍详情"
+         (column :width 'stretch :flex-shrink 0 :item-gap '(lh 1)
+           ;; Cover + title/author/progress grouped tightly
+           (column :width 'stretch :item-gap '(lh 0)
+             (flex :flex-direction 'column :width 'stretch :height '(lh 13)
+                   :justify-content 'center :align-items 'center :gap '((lh 0) (ch 0))
+                   :background-color (etaf-reader-color :subtle theme)
+               (box :width '(ch 16) :height '(lh 11) :overflow 'hidden
+                    :border (etaf-reader--line theme :line)
+                    :background-color (car tint)
+                 (expr (when path
+                         (etaf-node 'image (list :src path :columns 16 :rows 11) nil)))
+                 (expr (unless path
+                         (etaf-view
+                          (flex :flex-direction 'column :width 'stretch :height 'stretch
+                                :overflow 'hidden :justify-content 'center :align-items 'stretch
+                                :wrap-mode 'word :padding '((lh 1) (ch 1))
+                            (box :width 'stretch :text-align 'center
+                              (text :font-weight 'bold :color (cdr tint)
+                                    (expr (etaf-reader--clip title 28))))))))))
+             (box :height '(lh 1))
+             (box :width 'stretch :text-align 'center :overflow 'hidden :wrap-mode 'none
+               (text :font-weight 'bold (expr (etaf-reader--clip title 32))))
+             (box :width 'stretch :text-align 'center :overflow 'hidden :wrap-mode 'none
+               (text :color (etaf-reader-color :accent-text theme)
+                     (expr (etaf-reader--clip author 32))))
+             (box :width 'stretch :text-align 'center :overflow 'hidden :wrap-mode 'none
+               (text :color (etaf-reader-color :dim theme) (expr progress-line))))
+           ;; Metadata section (tight rows)
+           (column :width 'stretch :item-gap '(lh 0)
+             (box :width 'stretch :height '(lh 1)
+                  :border-top (etaf-reader--line theme :line)
+               (text :font-weight 'bold :color (etaf-reader-color :dim theme) "详情"))
+             (expr (etaf-reader--view-detail-row theme "格式" format))
+             (expr (when (and chapters (> chapters 0))
+                     (etaf-reader--view-detail-row theme "章节" (format "%d 章" chapters))))
+             (expr (when (and pages (> pages 0))
+                     (etaf-reader--view-detail-row theme "页数" (format "%d 页" pages))))
+             (expr (when chars-text
+                     (etaf-reader--view-detail-row theme "字数" chars-text)))
+             (expr (etaf-reader--view-detail-row theme "大小" (etaf-reader--file-size size))))
+           ;; File section (tight)
+           (column :width 'stretch :item-gap '(lh 0)
+             (box :width 'stretch :height '(lh 1)
+                  :border-top (etaf-reader--line theme :line)
+               (text :font-weight 'bold :color (etaf-reader-color :dim theme) "文件"))
+             (flex :width 'stretch :height '(lh 1) :align-items 'center
+                   :gap '((lh 0) (ch 1))
+               (box :width '(ch 6) :flex-shrink 0 :height '(lh 1) :text-align 'center
+                    :background-color (cdr colors)
+                 (text :font-weight 'bold :color (car colors) (expr format)))
+               (box :flex-grow 1 :flex-basis '(ch 0) :min-width '(ch 0)
+                    :overflow 'hidden :wrap-mode 'none
+                 (text (expr (etaf-reader--clip
+                              (file-name-nondirectory (or (plist-get book :path) ""))
+                              26))))))
+           ;; Annotations preview
+           (expr (etaf-reader--view-detail-notes session theme))))
+       ;; Pinned action buttons (centered labels, clean hierarchy)
+       (flex :flex-direction 'column :width 'stretch :flex-shrink 0
+             :gap '((lh 0) (ch 0))
+         (box :width 'stretch :height '(lh 1)
+              :border-bottom (etaf-reader--line theme :line))
+         (etaf-button :label (if (> percent 0) "继续阅读" "开始阅读") :variant 'primary
+                      :width 'stretch
+                      :on-press (lambda () (etaf-reader-guard
+                                            session (lambda () (etaf-reader-open-book session book))))
+           (box :width 'stretch :text-align 'center
+             (text :font-weight 'bold (expr (if (> percent 0) "继续阅读" "开始阅读")))))
+         (etaf-button :label "从头开始" :variant 'secondary :width 'stretch
+                      :on-press (lambda () (etaf-reader-guard
+                                            session (lambda ()
+                                                      (etaf-reader-open-book session book)
+                                                      (etaf-reader-goto-percent session 0))))
+           (box :width 'stretch :text-align 'center (text "从头开始")))
+         (etaf-button :label (if notes
+                                 (format "导出笔记（%d 条）" (length notes))
+                               "导出笔记")
+                      :variant 'ghost :width 'stretch
+                      :on-press (lambda ()
+                                  (etaf-reader-guard
+                                   session
+                                   (lambda ()
+                                     (etaf-reader--export-book-interactive session book))))
+           (box :width 'stretch :text-align 'center
+             (text (expr (if notes
+                             (format "导出笔记（%d 条）" (length notes))
+                           "导出笔记"))))))))))
 
 (defconst etaf-reader--detail-note-limit 3
   "How many annotations the detail panel previews.")
@@ -1139,9 +1453,8 @@ placeholder, not a render-time disk check."
     (when notes
       (etaf-view
        (column :width 'stretch :item-gap '(lh 0)
-         (box :width 'stretch :height '(lh 1)
-              :border-bottom (etaf-reader--line theme :line))
          (flex :width 'stretch :height '(lh 1) :align-items 'center
+               :border-top (etaf-reader--line theme :line)
            (text :font-weight 'bold :color (etaf-reader-color :dim theme) "标注")
            (box :flex-grow 1)
            (text :color (etaf-reader-color :dim theme)
@@ -1157,31 +1470,41 @@ placeholder, not a render-time disk check."
 
 (defun etaf-reader--view-detail-note (theme row)
   "Return one annotation ROW of the detail panel as a quote line."
-  (let* ((kind (plist-get row :kind))
-         (text (or (let ((quote (plist-get row :quote))
-                         (note (plist-get row :note)))
-                     (cond ((and quote (not (string-empty-p quote))) quote)
-                           ((and note (not (string-empty-p note))) note)))
-                   (format "第 %d 章的一处标记" (1+ (or (plist-get row :chapter) 0)))))
-         (glyph (pcase kind ('highlight "▌") ('note "▪") (_ "·"))))
+  (let* ((kind (or (plist-get row :kind) "highlight"))
+         (color (etaf-reader--color-key (plist-get row :color)))
+         (quote-str (etaf-reader--single-line (plist-get row :quote)))
+         (note-str (etaf-reader--single-line (plist-get row :note)))
+         (text (cond ((not (string-empty-p note-str))
+                      (if (equal kind "note")
+                          (format "想法：%s" note-str)
+                        (if (string-empty-p quote-str) note-str quote-str)))
+                     ((not (string-empty-p quote-str)) quote-str)
+                     (t (format "第 %d 章的一处标记"
+                                (1+ (or (plist-get row :chapter) 0))))))
+         (glyph (pcase kind
+                  ("highlight" "▌")
+                  ("underline" "─")
+                  ("wavy" "~")
+                  ("note" "▪")
+                  (_ "·"))))
     (etaf-view
      (flex :width 'stretch :height '(lh 1) :align-items 'center :gap '((lh 0) (ch 1))
-       (text :color (pcase kind ('highlight (etaf-reader-color :accent theme))
-                      ('note (etaf-reader-color :accent-text theme))
-                      (_ (etaf-reader-color :muted theme)))
-             (expr glyph))
-       (box :flex-grow 1 :flex-basis '(ch 0) :min-width '(ch 0) :overflow 'hidden
+       (text :color (etaf-reader-color color theme) (expr glyph))
+       (box :flex-grow 1 :flex-basis '(ch 0) :min-width '(ch 0)
+            :overflow 'hidden :wrap-mode 'none
          (text :color (etaf-reader-color :muted theme)
-               (expr (etaf-reader--clip
-                      (replace-regexp-in-string "[\n\r\t ]+" " " text) 30))))))))
+               (expr (etaf-reader--clip text 30))))))))
 
 (defun etaf-reader--view-detail-row (theme label value)
   "Return one LABEL and VALUE row of the detail panel."
   (etaf-view
    (flex :width 'stretch :height '(lh 1) :align-items 'center
          :gap '((lh 0) (ch 1))
-     (box :width '(ch 8) (text :color (etaf-reader-color :dim theme) (expr label)))
-     (box :flex-grow 1 :overflow 'hidden (text (expr value))))))
+     (box :width '(ch 8) :flex-shrink 0
+          (text :color (etaf-reader-color :dim theme) (expr label)))
+     (box :flex-grow 1 :flex-basis '(ch 0) :min-width '(ch 0)
+          :overflow 'hidden :wrap-mode 'none
+          (text (expr (etaf-reader--clip value 24)))))))
 
 (defun etaf-reader--file-size (bytes)
   "Return BYTES as a short human readable size."
@@ -1193,7 +1516,7 @@ placeholder, not a render-time disk check."
 ;;; Whole shelf
 
 (defun etaf-reader--view-shelf (session)
-  "Return SESSION's shelf: sidebar, grid, detail panel.
+  "Return SESSION's shelf: sidebar, grid/list, detail panel.
 The grid reflows with the window, and the detail panel is the preview of the
 shelf cursor; pressing a cover selects it, pressing it again opens the book."
   (let* ((theme (etaf-reader--read session :theme))
@@ -1201,18 +1524,15 @@ shelf cursor; pressing a cover selects it, pressing it again opens the book."
          (items (plist-get page :items))
          (grid (etaf-reader--shelf-grid session))
          (columns (max 1 (plist-get grid :columns)))
+         (cover-rows (or (plist-get grid :cover-rows) etaf-reader--cover-rows))
          (facets (etaf-reader--library-facets session))
-         (sidebar (etaf-reader--read session :sidebar))
+         (sidebar (plist-get grid :sidebar-shown))
          (width (or (let ((shown (etaf-reader--read session :window-columns)))
                       (and shown (> shown 0) shown))
                     160))
          (detail (and (etaf-reader--read session :detail) (>= width 130)))
-         ;; The middle column is sized from the window instead of growing:
-         ;; a long list row would otherwise widen it past the detail panel.
-         (main-columns (max 24 (- width (if sidebar 26 0) (if detail 38 0))))
-         ;; The grid area spans the window minus the toolbar, the chips and the
-         ;; footer, so the footer stays at the bottom on every height.
-         (grid-rows (max 4 (- (or (etaf-reader--read session :window-rows) 24) 7)))
+         (list-p (eq (etaf-reader--read session :shelf-view) 'list))
+         (main-columns (max 24 (- width (if sidebar 26 0) (if detail 38 0) 4)))
          (book (or (let ((id (etaf-reader--read session :shelf-cursor)))
                      (when id (seq-find (lambda (row) (equal id (plist-get row :id))) items)))
                    (car items))))
@@ -1222,29 +1542,36 @@ shelf cursor; pressing a cover selects it, pressing it again opens the book."
            :color (etaf-reader-color :ink theme)
            :gap '((lh 0) (ch 0))
        (expr (when sidebar (etaf-reader--view-shelf-sidebar session theme facets)))
-       (column :flex-grow 1 :flex-basis '(ch 0) :min-width '(ch 0)
-               :height 'stretch :item-gap '(lh 0) :overflow 'hidden
-         (expr (etaf-reader--view-shelf-toolbar session theme page))
-         (expr (etaf-reader--view-shelf-chips session))
-         (column :height (list 'lh grid-rows) :flex-shrink 0 :overflow 'hidden
-                 :padding '((lh 1) (ch 2)) :item-gap '(lh 1)
+       (flex :flex-direction 'column :flex-grow 1 :flex-basis '(ch 0) :min-width '(ch 0)
+             :height 'stretch :overflow 'hidden :gap '((lh 0) (ch 0))
+             :keys etaf-reader--wheel-keys
+         (expr (etaf-reader--view-shelf-toolbar session theme page width))
+         (expr (etaf-reader--view-shelf-chips session theme width))
+         (flex :flex-direction 'column :flex-grow 1 :flex-basis '(lh 0) :min-height '(lh 0)
+               :overflow 'hidden
+               :padding (cond (list-p '((lh 1) (ch 2)))
+                              ((< width 92) '((lh 0) (ch 1)))
+                              (t '((lh 0) (ch 2))))
+               :gap '((lh 1) (ch 0))
            (etaf-empty :if (null items)
                        :title (if (and (string-empty-p (etaf-reader--read session :shelf-query))
-                                      (null (etaf-reader--read session :facet-format))
-                                      (null (etaf-reader--read session :facet-author))
-                                      (eq (etaf-reader--read session :filter) 'all))
+                                       (null (etaf-reader--read session :facet-format))
+                                       (null (etaf-reader--read session :facet-author))
+                                       (eq (etaf-reader--read session :filter) 'all))
                                   "书架是空的" "没有找到这本书")
                        :description (if (or (etaf-reader--read session :facet-format)
                                             (etaf-reader--read session :facet-author)
                                             (not (eq (etaf-reader--read session :filter) 'all)))
                                         "换个筛选条件，或按 清除筛选 回到全部书籍"
                                       "把电子书放进 ~/ebooks 后扫描，或换个书名、作者试试"))
-           (expr (if (eq (etaf-reader--read session :shelf-view) 'list)
-                     (etaf-reader--view-shelf-list
-                      session theme items (max 8 (- main-columns 72)))
-                   (mapcar (lambda (row) (etaf-reader--view-shelf-row session theme row))
-                           (etaf-reader--shelf-groups items columns)))))
-         (expr (etaf-reader--view-shelf-footer session theme page)))
+           (expr (when items
+                   (if list-p
+                       (etaf-reader--view-shelf-list session theme items main-columns)
+                     (cl-loop for row in (etaf-reader--shelf-groups items columns)
+                              for row-idx from 0
+                              collect (etaf-reader--view-shelf-row
+                                       session theme row cover-rows row-idx))))))
+         (expr (etaf-reader--view-shelf-footer session theme page book width)))
        (expr (when (and detail book)
                (etaf-reader--view-detail session theme book)))))))
 
@@ -1254,32 +1581,46 @@ shelf cursor; pressing a cover selects it, pressing it again opens the book."
 
 (defun etaf-reader--view-settings (session)
   "Return catalog controls for SESSION's persisted reading preferences."
-  (etaf-view
-   (column :width 'stretch :item-gap '(lh 1)
-     (etaf-select :label "外观" :presentation 'chips
-                  :value (etaf-reader--read session :theme)
-                  :options '((dark . "夜间") (light . "明亮") (sepia . "纸色"))
-                  :on-change (lambda (value) (etaf-reader-configure session :theme value)))
-     (etaf-select :label "阅读" :presentation 'chips
-                  :value (etaf-reader--read session :mode)
-                  :options '((page . "翻页") (scroll . "滚动"))
-                  :on-change (lambda (value) (etaf-reader-configure session :mode value)))
-     (etaf-select :label "段落" :presentation 'chips
-                  :value (etaf-reader--read session :density)
-                  :options '((comfortable . "舒适") (compact . "紧凑"))
-                  :on-change (lambda (value) (etaf-reader-configure session :density value)))
-     (etaf-menu :label "阅读栏宽"
-                :items '((:key auto :label "自适应窗口") (:key 32 :label "窄栏")
-                         (:key 40 :label "标准") (:key 48 :label "宽栏"))
-                :on-select (lambda (value) (etaf-reader-configure session :columns value)))
-     (text "设置会自动保存；调整窗口后继续原来的阅读位置。"))))
+  (let* ((metrics (etaf-reader--read session :metrics))
+         (col-val (if (plist-get metrics :manual)
+                      (or (plist-get metrics :requested-columns)
+                          (plist-get metrics :columns))
+                    'auto))
+         (col-options (let ((base '((auto . "自适应")
+                                    (32 . "窄 32")
+                                    (40 . "标准 40")
+                                    (48 . "宽 48"))))
+                        (if (assq col-val base)
+                            base
+                          (append base (list (cons col-val (format "%d 列" col-val))))))))
+    (etaf-view
+     (column :width 'stretch :item-gap '(lh 1)
+       (etaf-select :label "外观" :presentation 'chips
+                    :value (etaf-reader--read session :theme)
+                    :options '((dark . "夜间") (light . "明亮") (sepia . "纸色"))
+                    :on-change (lambda (value) (etaf-reader-configure session :theme value)))
+       (etaf-select :label "阅读" :presentation 'chips
+                    :value (etaf-reader--read session :mode)
+                    :options '((page . "翻页") (scroll . "滚动"))
+                    :on-change (lambda (value) (etaf-reader-configure session :mode value)))
+       (etaf-select :label "段落" :presentation 'chips
+                    :value (etaf-reader--read session :density)
+                    :options '((comfortable . "舒适") (compact . "紧凑"))
+                    :on-change (lambda (value) (etaf-reader-configure session :density value)))
+       (etaf-select :label "栏宽" :presentation 'chips
+                    :value col-val
+                    :options col-options
+                    :on-change (lambda (value) (etaf-reader-configure session :columns value)))
+       (text "设置会自动保存；调整窗口或切换侧栏后保持原来的阅读位置。")))))
 
 (defun etaf-reader--view-pane (session)
-  "Return a bounded, navigable dialog for SESSION's current pane."
+  "Return a compact, navigable dialog for SESSION's current pane."
   (let* ((pane (etaf-reader--read session :pane))
          (metrics (etaf-reader--read session :metrics))
+         (win-cols (or (etaf-reader--read session :window-columns) 80))
          (width (if (eq (plist-get metrics :layout) 'narrow)
-                    (max 28 (+ 2 (plist-get metrics :columns))) 60))
+                    (max 28 (min (- win-cols 4) (+ 2 (plist-get metrics :columns))))
+                  (min 62 (max 44 (- win-cols 8)))))
          (close (lambda () (etaf-reader--write session :pane nil))))
     (when pane
       (pcase pane
@@ -1294,41 +1635,54 @@ shelf cursor; pressing a cover selects it, pressing it again opens the book."
                 (pages (max 1 (ceiling (length items) size)))
                 (page (min (1- pages) (etaf-reader--read session :pane-page)))
                 (visible (seq-subseq items (* page size)
-                                    (min (length items) (* (1+ page) size)))))
+                                     (min (length items) (* (1+ page) size))))
+                (cur-ch (and (eq pane 'toc)
+                             (plist-get (etaf-reader--read session :chapter) :index)))
+                (selected (when (and cur-ch
+                                     (seq-some (lambda (row)
+                                                 (equal (plist-get row :key) cur-ch))
+                                               visible))
+                            cur-ch))
+                (bookmarks (and (eq pane 'bookmarks)
+                                (etaf-reader--read session :bookmarks))))
            (etaf-view
             (etaf-dialog :open t :width (list 'ch width)
-                         :height (list 'lh (+ 8 (* size 3)
-                                             (if (memq pane '(notes bookmarks)) 3 0)))
                          :close-label "关闭" :compact t :on-close close
                          :title (pcase pane ('toc "目录") ('notes "笔记与划线")
                                        ('bookmarks "书签") (_ "搜索结果"))
               (column :width 'stretch :item-gap '(lh 1)
                 (etaf-empty :if (null items) :title "这里还没有内容"
                             :description "阅读时可以添加书签、划线，或搜索全书。")
-                (etaf-list :items visible
+                (etaf-list :if (not (null visible))
+                           :items visible
+                           :selected selected
                            :on-select (lambda (key)
                                         (etaf-reader--choose-pane-item session key)))
-                (etaf-button :if (eq pane 'notes) :label "导出 Markdown" :variant 'ghost
+                (etaf-button :if (and (eq pane 'notes) items)
+                             :label "导出 Markdown" :variant 'ghost
                              :on-press
                              (lambda ()
                                (let ((file (etaf-call-with-input
                                             (lambda ()
                                               (read-file-name "导出笔记到：" nil nil nil "阅读笔记.md")))))
                                  (etaf-reader-export-notes session file))))
-                (etaf-menu :if (eq pane 'bookmarks) :label "删除书签"
-                           :items (cl-loop for row in (etaf-reader--read session :bookmarks)
+                (etaf-menu :if bookmarks :label "删除书签"
+                           :items (cl-loop for row in bookmarks
                                            for index from 1
                                            collect (list :key (plist-get row :id)
                                                          :label (format "%d. %s" index
-                                                                        (truncate-string-to-width
-                                                                         (or (plist-get row :label) "") 36 nil nil "…"))))
+                                                                        (etaf-reader--clip
+                                                                         (etaf-reader--single-line
+                                                                          (or (plist-get row :label) ""))
+                                                                         36))))
                            :on-select
                            (lambda (id)
                              (etaf-reader-store-delete-bookmark id)
                              (etaf-reader--write session :bookmarks
                                                  (etaf-reader-store-bookmarks
                                                   (plist-get (etaf-reader--read session :book) :id)))))
-                (flex :width 'stretch :gap '((lh 0) (ch 1)) :align-items 'center
+                (flex :if (> (length items) 0)
+                      :width 'stretch :gap '((lh 0) (ch 1)) :align-items 'center
                   (etaf-button :label "上一页" :variant 'ghost :disabled (= page 0)
                                :on-press (lambda () (etaf-reader--step-pane session -1)))
                   (text (expr (format "%d / %d · %d 项" (1+ page) pages (length items))))

@@ -474,5 +474,33 @@ tells which block keeps its source text without it."
                       "Optional: install git for git-log and git-diff living-doc blocks.")))))
 
 
+;;;###autoload
+(with-eval-after-load 'etaf
+  (etaf-app-register 'etaf-md
+    :title "Markdown 预览"
+    :icon "MD"
+    :category 'reading
+    :feature 'etaf-md
+    :open 'etaf-md-open
+    :doctor 'etaf-md-doctor
+    :file-extensions '("md" "markdown" "mdown" "mkd")
+    :hosts '(buffer desktop panel)
+    :session (list :create
+                   (lambda ()
+                     (let ((file (condition-case nil
+                                     (expand-file-name
+                                      (read-file-name
+                                       "Markdown 文件：" nil nil t nil
+                                       (lambda (name)
+                                         (or (file-directory-p name)
+                                             (string-match-p
+                                              "\\.\\(md\\|markdown\\|mdown\\|mkd\\)\\'"
+                                              name)))))
+                                   (quit (user-error "没有选择 Markdown 文件")))))
+                       (etaf-md-create :file file)))
+                   :view 'etaf-md-view)
+    :window '(:width 1024 :height 30 :min-width 360 :min-height 12)
+    :panel '(:width 110 :height 26 :fill-height t :at frame-top-right :stack t)))
+
 (provide 'etaf-md)
 ;;; etaf-md.el ends here

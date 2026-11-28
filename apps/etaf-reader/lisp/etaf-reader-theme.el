@@ -43,12 +43,12 @@ reading.")
           :line "#31312e" :border "#3b3a37" :border-strong "#62605b"
           :ink "#eeeeec" :muted "#b5b3ad" :dim "#6f6d66" :faint "#494844"
           :accent "#3e63dd" :accent-text "#9eb1ff" :accent-soft "#1d2e62"
-          :cover "#222221" :sel "#182449" :quote "#9eb1ff"
-          :plank-face "#2a2a28" :plank-top "#3b3a37" :plank-edge "#191918"
+          :cover "#222221" :sel "#263a75" :quote "#9eb1ff"
+          :plank-face "#252523" :plank-top "#3b3a37" :plank-edge "#161615"
           :gold "#f3d673"
           :red "#ff9592" :red-soft "#3b1219"
           :orange "#ff9d5c" :orange-soft "#3a2410"
-          :yellow "#f3d673" :yellow-soft "#37301a"
+          :yellow "#f3d673" :yellow-soft "#3f3618"
           :green "#3dd68c" :green-soft "#132d21"
           :blue "#9eb1ff" :blue-soft "#1d2e62"
           :purple "#baa7ff" :purple-soft "#291f43")
@@ -57,8 +57,8 @@ reading.")
            :line "#e2e1de" :border "#dad9d6" :border-strong "#bcbbb5"
            :ink "#21201c" :muted "#63635e" :dim "#8d8d86" :faint "#bcbbb5"
            :accent "#3e63dd" :accent-text "#3a5bc7" :accent-soft "#e1e9ff"
-           :cover "#f1f0ef" :sel "#edf2fe" :quote "#3a5bc7"
-           :plank-face "#e2e1de" :plank-top "#ffffff" :plank-edge "#cfceca"
+           :cover "#f1f0ef" :sel "#dce6ff" :quote "#3a5bc7"
+           :plank-face "#e6e5e2" :plank-top "#ffffff" :plank-edge "#cfceca"
            :gold "#b07a16"
            :red "#ce2c31" :red-soft "#feebec"
            :orange "#c46a16" :orange-soft "#fbead9"
@@ -71,12 +71,12 @@ reading.")
            :line "#e0d3b6" :border "#d6c6a4" :border-strong "#b7a37c"
            :ink "#3b3225" :muted "#6d5e47" :dim "#95846a" :faint "#b7a37c"
            :accent "#8a6a2f" :accent-text "#7a5c24" :accent-soft "#ece0c6"
-           :cover "#efe4cd" :sel "#ece0c6" :quote "#7a6440"
+           :cover "#efe4cd" :sel "#e2d2ae" :quote "#7a6440"
            :plank-face "#e8dcc3" :plank-top "#fbf6ea" :plank-edge "#d6c6a4"
            :gold "#8a6a2f"
            :red "#b0453a" :red-soft "#f0dcd4"
            :orange "#a2641f" :orange-soft "#efe0c8"
-           :yellow "#8f7517" :yellow-soft "#eee4c0"
+           :yellow "#8f7517" :yellow-soft "#e9db9f"
            :green "#4c7a54" :green-soft "#dfe8d4"
            :blue "#3f6293" :blue-soft "#dfe4ee"
            :purple "#6e5590" :purple-soft "#e7dff0"))
@@ -135,26 +135,29 @@ Components follow the reader's palette."
         (panel2 (etaf-reader-color :panel2 mode))
         (danger (etaf-reader-color :red mode)))
     ;; Disabled fills sit on the second panel tone, one step above the
-    ;; catalog's default of the first.
-    (cons :ui-disabled-bg
-          (cons panel2
-                (etaf-ui-theme-tokens
-                 (list :bg (etaf-reader-color :bg mode)
-                       :fg (etaf-reader-color :ink mode)
-                       :panel (etaf-reader-color :panel mode)
-                       :track panel2
-                       :border (etaf-reader-color :border mode)
-                       :muted (etaf-reader-color :muted mode)
-                       :dim (etaf-reader-color :dim mode)
-                       :accent (etaf-reader-color :accent mode)
-                       :accent-fg "#FFFFFF"
-                       :accent-soft (etaf-reader-color :accent-soft mode)
-                       :success (if dark "#4FBF8B" "#2E7D5B")
-                       :danger danger
-                       :danger-bg (etaf-reader-color :red-soft mode)
-                       :danger-border danger
-                       :warning (etaf-reader-color :gold mode)
-                       :warning-bg (etaf-reader-color :yellow-soft mode)))))))
+    ;; catalog's default of the first.  Search fields follow the same subtle
+    ;; surface so dark and sepia palettes never paint a stark white pill.
+    (append
+     (list :ui-disabled-bg panel2
+           :ui-search-bg (etaf-reader-color :subtle mode)
+           :ui-search-fg (etaf-reader-color :ink mode))
+     (etaf-ui-theme-tokens
+      (list :bg (etaf-reader-color :bg mode)
+            :fg (etaf-reader-color :ink mode)
+            :panel (etaf-reader-color :panel mode)
+            :track panel2
+            :border (etaf-reader-color :border mode)
+            :muted (etaf-reader-color :muted mode)
+            :dim (etaf-reader-color :dim mode)
+            :accent (etaf-reader-color :accent mode)
+            :accent-fg "#FFFFFF"
+            :accent-soft (etaf-reader-color :accent-soft mode)
+            :success (if dark "#4FBF8B" "#2E7D5B")
+            :danger danger
+            :danger-bg (etaf-reader-color :red-soft mode)
+            :danger-border danger
+            :warning (etaf-reader-color :gold mode)
+            :warning-bg (etaf-reader-color :yellow-soft mode))))))
 
 (provide 'etaf-reader-theme)
 ;;; etaf-reader-theme.el ends here

@@ -9,7 +9,7 @@
 | 变量 | 用途 |
 | --- | --- |
 | [`ebox-image-converters`](images.md#variable-ebox-image-converters) | 有序的 （NAME . FUNCTION） 图像转换器列表，只在准备阶段调用。 |
-| [`ebox-image-kitty-protocol`](images.md#variable-ebox-image-kitty-protocol) | 控制文本 frame 上 Kitty 终端图形协议的使用策略。 |
+| [`ebox-image-kitty-protocol`](images.md#variable-ebox-image-kitty-protocol) | 控制文本 frame 上是否启用 Kitty 终端图形协议（`auto`、`t` 或 nil）。 |
 
 ## 视口
 

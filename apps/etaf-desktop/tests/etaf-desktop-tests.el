@@ -1802,5 +1802,57 @@ with the desktop's theme instead of the Emacs frame's polarity."
           (should (> (length (delete-dups values)) 2)))
       (etaf-desktop-close desktop))))
 
+(ert-deftest etaf-desktop-discovers-etaf-app-and-closes-sessions-on-teardown ()
+  "Desktop discovers `etaf-app' declarations and invokes `:close' on teardown."
+  (let* ((app 'etaf-desktop-test-discovered-app)
+         (created 0)
+         (closed-sessions nil)
+         (create-fn (lambda () (cl-incf created) (list :tag created)))
+         (view-fn (lambda (session)
+                    (etaf-view (text (expr (format "discovered-%d" (plist-get session :tag)))))))
+         (close-fn (lambda (session) (push session closed-sessions))))
+    (unwind-protect
+        (progn
+          (etaf-app-register
+           app
+           :title "Discovered"
+           :icon "D"
+           :feature nil
+           :hosts '(desktop)
+           :session (list :create create-fn :view view-fn :close close-fn)
+           :window '(:x 4 :y 2 :width 240 :height 8 :min-width 120 :min-height 4))
+          (should (etaf-desktop-app-registered-p app))
+          (should (cl-find app (etaf-desktop-apps)
+                           :key (lambda (m) (plist-get m :id))))
+          ;; 1. Closing the window closes the session once.
+          (let ((desktop (etaf-desktop-create :name " *desktop-discovered-win*")))
+            (unwind-protect
+                (let* ((inst (etaf-desktop-launch desktop app))
+                       (win-id (car (plist-get inst :windows))))
+                  (should (= 1 created))
+                  (should (etaf-desktop-close-window desktop win-id))
+                  (should (= 1 (length closed-sessions)))
+                  (should (equal '(:tag 1) (car closed-sessions))))
+              (etaf-desktop-close desktop)))
+          ;; 2. Calling `etaf-desktop-close' closes remaining sessions once.
+          (let ((desktop (etaf-desktop-create :name " *desktop-discovered-close*")))
+            (etaf-desktop-launch desktop app)
+            (should (= 2 created))
+            (etaf-desktop-close desktop)
+            (should (= 2 (length closed-sessions)))
+            (should (equal '(:tag 2) (car closed-sessions))))
+          ;; 3. Killing the mounted desktop buffer closes remaining sessions once.
+          (let* ((desktop (etaf-desktop-create :name " *desktop-discovered-kill*"))
+                 (buffer (etaf-desktop-mount desktop)))
+            (unwind-protect
+                (progn
+                  (etaf-desktop-launch desktop app)
+                  (should (= 3 created))
+                  (kill-buffer buffer)
+                  (should (= 3 (length closed-sessions)))
+                  (should (equal '(:tag 3) (car closed-sessions))))
+              (etaf-desktop-close desktop))))
+      (etaf-app-unregister app))))
+
 (provide 'etaf-desktop-tests)
 ;;; etaf-desktop-tests.el ends here

@@ -370,5 +370,20 @@
 (require 'etaf-bili-account)
 (require 'etaf-bili-app)
 
+;;;###autoload
+(with-eval-after-load 'etaf
+  (etaf-app-register 'etaf-bili
+    :title "哔哩哔哩"
+    :icon "B"
+    :category 'media
+    :feature 'etaf-bili
+    :open 'etaf-bili-open
+    :doctor 'etaf-bili-doctor
+    :hosts '(buffer desktop panel)
+    :session '(:create etaf-bili-create :view etaf-bili-view)
+    :window '(:width 1120 :height 30 :min-width 480 :min-height 14)
+    :panel '(:width (fraction 0.75) :height (fraction 0.8) :fill-height t
+             :at frame-center :stack nil :draggable t)))
+
 (provide 'etaf-bili)
 ;;; etaf-bili.el ends here

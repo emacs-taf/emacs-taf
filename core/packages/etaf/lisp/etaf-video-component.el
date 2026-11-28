@@ -57,14 +57,16 @@ default affects canvases built afterwards and does not repaint a mounted one.")
 
 (defvar etaf-video-render-backend 'auto
   "Rendering backend for `etaf-video' Components.
-Supported values are `auto', `gpu', `canvas' and `image'.
+Supported values are `auto', `gpu', `canvas', `kitty' and `image'.
 `auto' (default) prefers the native hardware `gpu' video layer when `libmpv'
 and the platform GPU surface are available in a live graphical frame (giving
 browser-grade low-CPU playback without recompiling Emacs), then Emacs's
-`canvas' image type if built, and falls back to `image'.  `gpu' requests the
-native GPU layer (falling back to `image' when unavailable).  `canvas' draws
-into one Emacs canvas image in place.  `image' forces the pure-Emacs image
-frame pipeline.  Terminals always use text modes regardless of this value.")
+`canvas' image type if built, and falls back to `image'; on compliant 24-bit
+text terminals `auto' uses `kitty' Unicode placeholder streaming in `image'
+mode.  `gpu' requests the native GPU layer (falling back to `image' when
+unavailable).  `canvas' draws into one Emacs canvas image in place.  `kitty'
+requests Kitty terminal graphics on text frames.  `image' forces the
+pure-Emacs image frame pipeline.")
 
 (defun etaf-video--ramp-table (ramp)
   "Return RAMP's byte-to-character translation table.
@@ -180,11 +182,16 @@ Always keeps the immediately previous frame live during transition so
 `lookup_image' never reuses the displayed frame's image ID slot, and reduces
 full-frame garbage redraws by flushing several retired frames together.")
 
+(defconst etaf-video--kitty-max-pixels (* 640 360)
+  "Maximum pixel budget for Kitty terminal video frames.
+Keeps raw RGB24 frame transfers fast and smooth at 30 FPS in terminals.")
+
 (cl-defstruct (etaf-video--instance (:constructor etaf-video--instance--make))
   "Mounted state owned by one `etaf-video' Component instance."
   handle ref cell sources runtime session applied autoplay image-scale
   image-max-width image-max-height image-last image-retired
-  canvas-spec canvas-key gpu-occluded gpu-snapshot-image)
+  canvas-spec canvas-key gpu-occluded gpu-snapshot-image
+  kitty-stream kitty-width kitty-height)
 
 (defvar etaf-video--gpu-instances nil
   "Active `etaf-video' instances currently backed by a native GPU surface.")
@@ -260,12 +267,21 @@ restores the picture."
           :device-pixel-ratio (etaf-value (plist-get sources :device-pixel-ratio))
           :display-fps (etaf-value (plist-get sources :display-fps)))))
 
+(defun etaf-video--instance-kitty-caps (instance)
+  "Return Kitty capability plist when INSTANCE should stream via Kitty, or nil."
+  (when (and (memq etaf-video-render-backend '(kitty auto))
+             (not (etaf-video--instance-graphic-p instance))
+             (eq (plist-get (etaf-video--instance-applied instance) :mode) 'image))
+    (ebox-image-kitty-available-p (etaf-video--instance-frame instance))))
+
 (defun etaf-video--instance-effective-mode (instance)
   "Return INSTANCE's render mode after the graphic fallback.
-An `image' canvas falls back to `ascii' when its buffer is not shown in a
-graphical frame, so the same layout renders in terminals."
+An `image' canvas stays in `image' mode on graphical frames and on text
+terminals supporting Kitty graphics, falling back to `ascii' elsewhere."
   (let ((mode (plist-get (etaf-video--instance-applied instance) :mode)))
-    (if (and (eq mode 'image) (not (etaf-video--instance-graphic-p instance)))
+    (if (and (eq mode 'image)
+             (not (etaf-video--instance-graphic-p instance))
+             (not (etaf-video--instance-kitty-caps instance)))
         'ascii
       mode)))
 
@@ -327,7 +343,8 @@ backend instead of breaking video playback."
 (defun etaf-video--instance-effective-backend (instance)
   "Return INSTANCE's rendering backend after the capability fallback.
 `auto' prefers `gpu' when the native hardware GPU layer is available, then
-`canvas' when Emacs supports canvas images, and falls back to `image'."
+`canvas' when Emacs supports canvas images, `kitty' on compliant 24-bit
+text terminals in `image' mode, and falls back to `image'."
   (cond
    ((and (memq etaf-video-render-backend '(gpu auto))
          (etaf-video--instance-gpu-p instance))
@@ -335,6 +352,8 @@ backend instead of breaking video playback."
    ((and (memq etaf-video-render-backend '(canvas auto))
          (etaf-video--instance-canvas-p instance))
     'canvas)
+   ((etaf-video--instance-kitty-caps instance)
+    'kitty)
    (t 'image)))
 
 (defun etaf-video--instance-effective-engine (instance)
@@ -434,6 +453,36 @@ logical resolution."
           (if (> ratio 0) (/ 1.0 ratio) 1.0)
           width height)))
 
+(defun etaf-video--instance-kitty-frame-size (instance)
+  "Return `(rgb24 WIDTH HEIGHT 1.0 nil nil)' sized for Kitty terminal cells."
+  (let* ((applied (etaf-video--instance-applied instance))
+         (columns (plist-get applied :columns))
+         (rows (plist-get applied :rows))
+         (caps (etaf-video--instance-kitty-caps instance))
+         (cw (max 1 (or (plist-get caps :cell-width) 9)))
+         (ch (max 1 (or (plist-get caps :cell-height) 18)))
+         (box-w (max 2 (* columns cw)))
+         (box-h (max 2 (* rows ch)))
+         (src (plist-get applied :src))
+         (sw (and (consp src) (plist-get src :width)))
+         (sh (and (consp src) (plist-get src :height)))
+         (fit-w box-w)
+         (fit-h box-h))
+    (when (and (numberp sw) (numberp sh) (> sw 0) (> sh 0))
+      (let ((scale (min (/ (float box-w) sw) (/ (float box-h) sh))))
+        (setq fit-w (max 2 (round (* sw scale)))
+              fit-h (max 2 (round (* sh scale))))))
+    (let ((px (* (float fit-w) fit-h))
+          (budget (float etaf-video--kitty-max-pixels)))
+      (when (> px budget)
+        (let ((down (sqrt (/ budget px))))
+          (setq fit-w (max 2 (round (* fit-w down)))
+                fit-h (max 2 (round (* fit-h down)))))))
+    ;; Keep even dimensions for clean ffmpeg scaling.
+    (setq fit-w (max 2 (* 2 (/ fit-w 2)))
+          fit-h (max 2 (* 2 (/ fit-h 2))))
+    (list 'rgb24 fit-w fit-h 1.0 nil nil)))
+
 (defun etaf-video--instance-frame-size (instance)
   "Return INSTANCE's `(FORMAT WIDTH HEIGHT SCALE MAX-WIDTH MAX-HEIGHT)'.
 WIDTH and HEIGHT are producer pixels; SCALE maps device pixels back to
@@ -467,6 +516,8 @@ displayed image (nil for the raw modes)."
       ;; write exactly that many pixels; a device-resolution frame would
       ;; overflow the canvas and crash the module.
       (etaf-video--instance-pixel-frame-size instance 'bgra 1.0))
+     ((eq (etaf-video--instance-effective-backend instance) 'kitty)
+      (etaf-video--instance-kitty-frame-size instance))
      (t
       (pcase (etaf-video--instance-effective-mode instance)
         ('image (etaf-video--instance-pixel-frame-size instance 'mjpeg))
@@ -527,16 +578,43 @@ place chrome under it.  When OWNER is non-nil, tag every row with
       (put-text-property 0 (length text) 'etaf-video-canvas-owner owner text))
     text))
 
+(defun etaf-video--instance-destroy-kitty (instance)
+  "Release INSTANCE's Kitty video stream, if any."
+  (when-let* ((stream (etaf-video--instance-kitty-stream instance)))
+    (ignore-errors (ebox-image-kitty-stream-destroy stream))
+    (setf (etaf-video--instance-kitty-stream instance) nil
+          (etaf-video--instance-kitty-width instance) nil
+          (etaf-video--instance-kitty-height instance) nil)))
+
+(defun etaf-video--instance-present-kitty (instance frame)
+  "Present raw RGB24 FRAME into INSTANCE's Kitty stream in place."
+  (let ((stream (etaf-video--instance-kitty-stream instance))
+        (w (etaf-video--instance-kitty-width instance))
+        (h (etaf-video--instance-kitty-height instance))
+        (runtime (etaf-video--instance-runtime instance)))
+    (when (and stream w h (stringp frame)
+               runtime (etaf-runtime-mounted-p runtime))
+      (let* ((buf (etaf-runtime-buffer runtime))
+             (visible (and buf (buffer-live-p buf)
+                           (get-buffer-window buf t))))
+        (when visible
+          (ignore-errors
+            (ebox-image-kitty-stream-present stream frame w h 'rgb24)))))))
+
 (defun etaf-video--instance-present (instance frame)
   "Draw FRAME for INSTANCE through its effective backend."
-  (if (eq (etaf-video--instance-effective-backend instance) 'canvas)
-      (if (etaf-video-mpv--session-p (etaf-video--instance-session instance))
-          (when (and frame (etaf-video--instance-runtime instance)
-                     (etaf-runtime-mounted-p (etaf-video--instance-runtime instance)))
-            (canvas-refresh frame)
-            (redisplay))
-        (etaf-video--instance-present-canvas instance frame))
-    (etaf-video--instance-present-image instance frame)))
+  (pcase (etaf-video--instance-effective-backend instance)
+    ('canvas
+     (if (etaf-video-mpv--session-p (etaf-video--instance-session instance))
+         (when (and frame (etaf-video--instance-runtime instance)
+                    (etaf-runtime-mounted-p (etaf-video--instance-runtime instance)))
+           (canvas-refresh frame)
+           (redisplay))
+       (etaf-video--instance-present-canvas instance frame)))
+    ('kitty
+     (etaf-video--instance-present-kitty instance frame))
+    (_
+     (etaf-video--instance-present-image instance frame))))
 
 (defun etaf-video--display-canvas (display)
   "Return the canvas image spec nested in DISPLAY, or nil.
@@ -1016,6 +1094,22 @@ session starts playing; a paused session presents one frame instead."
           (etaf-video--instance-image-max-width instance) (nth 4 size)
           (etaf-video--instance-image-max-height instance) (nth 5 size)
           (etaf-video--instance-gpu-occluded instance) nil)
+    (when (eq (etaf-video--instance-effective-backend instance) 'kitty)
+      (etaf-video--instance-destroy-kitty instance)
+      (when-let* ((stream (ebox-image-kitty-stream-create
+                           (plist-get applied :columns)
+                           (plist-get applied :rows)
+                           (etaf-video--instance-frame instance))))
+        (let ((grid (ebox-image-kitty-stream-grid stream))
+              (runtime (etaf-video--instance-runtime instance)))
+          (setf (etaf-video--instance-kitty-stream instance) stream
+                (etaf-video--instance-kitty-width instance) (nth 1 size)
+                (etaf-video--instance-kitty-height instance) (nth 2 size))
+          (setcar (etaf-video--instance-cell instance) grid)
+          (when (and runtime (etaf-runtime-mounted-p runtime))
+            (ignore-errors
+              (etaf-runtime-update-host-content
+               runtime (etaf-video--instance-ref instance) grid))))))
     (when (and (etaf-video-mpv--session-p session)
                (etaf-video-mpv--session-gpu-p session))
       (etaf-video--gpu-register instance)
@@ -1062,6 +1156,7 @@ session starts playing; a paused session presents one frame instead."
   "Release INSTANCE's session and handle registration."
   (etaf-video--gpu-unregister instance)
   (etaf-video--instance-gpu-clear-snapshot instance)
+  (etaf-video--instance-destroy-kitty instance)
   (setf (etaf-video--instance-gpu-occluded instance) nil)
   (etaf-video--instance-flush-all-images instance)
   (setf (etaf-video--instance-canvas-spec instance) nil
@@ -1135,6 +1230,7 @@ at the current position.  Speed, volume and audio update in place."
               ;; frame files so adjacent layout columns never collapse.
               (etaf-video--gpu-unregister instance)
               (etaf-video--instance-gpu-clear-snapshot instance)
+              (etaf-video--instance-destroy-kitty instance)
               (setf (etaf-video--instance-gpu-occluded instance) nil)
               (etaf-video--instance-clear-canvas instance)
               (etaf-video--session-destroy-any session)

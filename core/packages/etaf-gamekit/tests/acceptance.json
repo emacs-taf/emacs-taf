@@ -118,6 +118,11 @@
    "name": "etaf-gamekit-install-godot-registers-an-existing-executable",
    "file": "tests/etaf-gamekit-tests.el",
    "purpose": "The setup script shipped in the package installs a runtime from an existing executable into the configured cache without network access."
+  },
+  {
+   "name": "etaf-gamekit-dispose-closes-session-and-kills-buffer",
+   "file": "tests/etaf-gamekit-tests.el",
+   "purpose": "etaf-gamekit-dispose closes a GameKit session and kills its backing buffer idempotently for hosted embed teardown."
   }
  ]
 }

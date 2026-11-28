@@ -444,5 +444,20 @@ The shape matches `etaf-install-doctor': :required and :optional lists of
         :optional nil))
 
 
+;;;###autoload
+(with-eval-after-load 'etaf
+  (etaf-app-register 'etaf-telega
+    :title "Telegram"
+    :icon "G"
+    :category 'communication
+    :feature 'etaf-telega
+    :open 'etaf-telega-open
+    :doctor 'etaf-telega-doctor
+    :hosts '(buffer desktop panel)
+    :session '(:create etaf-telega-create :view etaf-telega-view)
+    :window '(:width 1120 :height 30 :min-width 480 :min-height 14)
+    :panel '(:width 110 :height 34 :fill-height t
+             :at frame-center :stack nil :resizable t :draggable t)))
+
 (provide 'etaf-telega)
 ;;; etaf-telega.el ends here

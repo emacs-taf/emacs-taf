@@ -21,6 +21,7 @@ Hooks are the observation points the framework runs at defined moments. All are 
 | [`etaf-runtime-focus-change-functions`](runtime.md#hook-etaf-runtime-focus-change-functions) | Logical Host focus changes inside a mounted Runtime. | the Runtime, previous Host ID (or nil) and next Host ID (or nil) | An error in one function is isolated. |
 | [`etaf-activity-change-functions`](applications.md#hook-etaf-activity-change-functions) | A cross-application live activity is published, updated or removed. | EVENT (`publish` or `remove`), activity ID and detached activity plist (or nil) | An error in one function is isolated. |
 | [`etaf-notify-functions`](applications.md#hook-etaf-notify-functions) | `etaf-notify` records a new or grouped notification. | detached notification plist | An error in one function is isolated. |
+| [`etaf-app-change-functions`](applications.md#hook-etaf-app-change-functions) | An application manifest is registered, updated or unregistered through `etaf-app-register` or `etaf-app-unregister`. | EVENT (`register` or `unregister`), application ID and detached manifest plist (or nil) | An error in one function is isolated. |
 
 ## Notes
 

@@ -1,0 +1,36 @@
+{
+  "schema": 1,
+  "load_path": [
+    ".",
+    "lisp",
+    "tests",
+    "../etaf",
+    "../etaf-ui",
+    "../ebox",
+    "../ecss",
+    "../etaf-posframe"
+  ],
+  "support": [],
+  "cases": [
+    {
+      "name": "etaf-island-model-transitions-and-validation",
+      "file": "tests/etaf-island-tests.el",
+      "purpose": "Headless shell session validates arguments and projects live `etaf-activity-list' snapshots."
+    },
+    {
+      "name": "etaf-island-open-renders-protocol-activities-and-keeps-mode-line",
+      "file": "tests/etaf-island-tests.el",
+      "purpose": "Standalone buffer preserves Emacs mode-line, renders zero hardcoded demo content when idle, reflects live protocol activities and invokes publisher actions via keyboard."
+    },
+    {
+      "name": "etaf-island-notification-pulses-runs-action-and-auto-collapses",
+      "file": "tests/etaf-island-tests.el",
+      "purpose": "Protocol notifications pulse alert mode, run publisher actions and auto-collapse to compact mode once TTL finishes."
+    },
+    {
+      "name": "etaf-island-mode-connects-protocol-and-demand-driven-meter",
+      "file": "tests/etaf-island-tests.el",
+      "purpose": "`etaf-island-mode' hooks `etaf-notify-functions' cleanly and drives spectrum ticks on demand only when an active activity provides `:meter'."
+    }
+  ]
+}

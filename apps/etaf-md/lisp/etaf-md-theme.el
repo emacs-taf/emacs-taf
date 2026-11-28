@@ -279,6 +279,7 @@ Signal `etaf-md-error' when either is unknown."
       color)))
 
 (declare-function etaf-display-metrics "etaf-runtime" (&optional runtime))
+(declare-function etaf-image-kitty-available-p "etaf-runtime" (&optional frame))
 
 (defun etaf-md--cell-metrics ()
   "Return (CHAR-WIDTH . LINE-HEIGHT) in pixels of the page's own text.
@@ -287,24 +288,36 @@ page actually paints.  Text scaling changes them and a frame's default font
 does not follow it, so reading the frame placed a picture in cells the page no
 longer had and left it striped: slices cut for the old line height sat on
 taller lines.  `etaf-display-metrics' is a reactive read, so the block that
-placed a picture renders again when the scale settles.  On terminal or batch
-frames where character dimensions are reported in 1x1 character units rather
-than pixels, falls back to a standard 8x16 pixel monospace cell."
+placed a picture renders again when the scale settles.  On Kitty-capable text
+terminals, uses the probed terminal cell pixel dimensions so pictures match
+the terminal's real aspect ratio without letterboxing; on other terminal or
+batch frames where dimensions are 1x1 character units, falls back to 8x16."
   (let* ((metrics (ignore-errors (etaf-display-metrics)))
          (cw (or (and metrics (plist-get metrics :char-width))
                  (ignore-errors (frame-char-width))))
          (ch (or (and metrics (plist-get metrics :line-height))
                  (ignore-errors (frame-char-height)))))
-    (if (and (numberp cw) (> cw 1) (numberp ch) (> ch 1))
-        (cons cw ch)
-      (cons 8 16))))
+    (cond
+     ((and (numberp cw) (> cw 1) (numberp ch) (> ch 1))
+      (cons cw ch))
+     ((let* ((caps (and (fboundp 'etaf-image-kitty-available-p)
+                        (ignore-errors (etaf-image-kitty-available-p))))
+             (kw (and caps (plist-get caps :cell-width)))
+             (kh (and caps (plist-get caps :cell-height))))
+        (and (numberp kw) (> kw 0) (numberp kh) (> kh 0)
+             (cons kw kh))))
+     (t
+      (cons 8 16)))))
 
 (defun etaf-md--base-pixels ()
   "Return the pixel size the page draws its own text at.
 Text scaling changes it and a frame's default font does not follow the scale,
 so a formula or a diagram typeset from the frame came out the wrong size beside
-the text it stands in."
-  (cdr (etaf-md--cell-metrics)))
+the text it stands in.  On text terminals, keep a standard 16px typographic
+base rather than HiDPI physical cell heights."
+  (if (display-graphic-p)
+      (cdr (etaf-md--cell-metrics))
+    16))
 
 (defun etaf-md-theme-tokens (theme &optional palette)
   "Return the ETAF UI token plist for palette THEME.

@@ -462,5 +462,24 @@ The shape matches `etaf-install-doctor': :required and :optional lists of
                 (list "Account login" (and (file-readable-p state) t)
                       "Sign in once with the bundled backend's login --sms command.")))))
 
+;;;###autoload
+(with-eval-after-load 'etaf
+  (etaf-app-register 'etaf-ncm
+    :title "网易云音乐"
+    :icon "M"
+    :category 'media
+    :feature 'etaf-ncm
+    :open 'etaf-ncm-open
+    :doctor 'etaf-ncm-doctor
+    :hosts '(buffer desktop panel)
+    :session (list :create 'etaf-ncm-create
+                   :view 'etaf-ncm-view
+                   :close (lambda (session)
+                            (ignore-errors (etaf-ncm-stop session)))
+                   :keep-alive t)
+    :window '(:width 1120 :height 30 :min-width 320 :min-height 12)
+    :panel '(:width 40 :height 17 :fill-height t
+             :at frame-top-right :stack t :draggable t)))
+
 (provide 'etaf-ncm)
 ;;; etaf-ncm.el ends here

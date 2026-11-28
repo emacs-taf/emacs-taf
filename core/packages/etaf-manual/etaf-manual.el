@@ -322,5 +322,23 @@
 
 (require 'etaf-manual-reader)
 
+;;;###autoload
+(with-eval-after-load 'etaf
+  (etaf-app-register 'etaf-manual
+    :title "ETAF 手册"
+    :icon "?"
+    :category 'reading
+    :feature 'etaf-manual
+    :open 'etaf-manual-open
+    :hosts '(buffer desktop panel)
+    :session (list :create (lambda ()
+                             (let ((session (etaf-manual-reader-create)))
+                               (etaf-manual-reader-restore session)
+                               session))
+                   :view 'etaf-manual-reader-view
+                   :keep-alive t)
+    :window '(:width 1120 :height 30 :min-width 480 :min-height 14)
+    :panel '(:width 180 :height 40 :fill-height t :at frame-center :stack t)))
+
 (provide 'etaf-manual)
 ;;; etaf-manual.el ends here

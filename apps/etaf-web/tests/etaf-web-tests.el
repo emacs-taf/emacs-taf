@@ -1677,17 +1677,17 @@ test scrolls the same way a reader does."
                               (eq (plist-get st :phase) 'ready))))))
             ;; `C-v' scrolls the page inside its viewport and leaves the toolbar alone.
             (with-current-buffer buf
-              (let* ((chrome-before (with-current-buffer buf
-                                      (buffer-substring-no-properties
-                                       (point-min) (line-end-position))))
+              (let* ((row1 (lambda ()
+                             (save-excursion
+                               (goto-char (point-min))
+                               (buffer-substring-no-properties
+                                (line-beginning-position) (line-end-position)))))
+                     (chrome-before (funcall row1))
                      (before (etaf-scroll-offset (etaf-runtime-for-buffer buf) 'web-scroll)))
                 (execute-kbd-macro (kbd "C-v"))
                 (should (> (etaf-scroll-offset (etaf-runtime-for-buffer buf) 'web-scroll)
                            before))
-                (should (equal (with-current-buffer buf
-                                 (buffer-substring-no-properties
-                                  (point-min) (line-end-position)))
-                               chrome-before))))))
+                (should (equal (funcall row1) chrome-before))))))
       (when (and buf (buffer-live-p buf))
         (with-current-buffer buf (etaf-web-close)))
       (delete-directory cache t))))
@@ -1860,6 +1860,1387 @@ test scrolls the same way a reader does."
     (should (string-match-p "^### Tall Diagram & Prose$" md))
     (should (string-match-p "^### Heterogeneous Article$" md))
     (should (string-match-p "^### Heterogeneous Div$" md))))
+
+(ert-deftest etaf-web-tests-noscript-fallback-extracts-ssr-and-rejects-js-stub ()
+  "Substantive `<noscript>' SSR content compiles cleanly while JS stubs stay rejected."
+  (let* ((ssr-html
+          (concat
+           "<!DOCTYPE html><html><head><title>Emacs China</title>"
+           "<meta name=\"generator\" content=\"Discourse 3.5\"></head>"
+           "<body><section id=\"d-splash\"><div class=\"dots\"></div></section>"
+           "<script>window.boot = true;</script>"
+           "<noscript><div id=\"main-outlet\" role=\"main\">"
+           "<script>evilPayload()</script>"
+           "<table><thead><tr><th>话题</th><th>回复</th></tr></thead><tbody>"
+           "<tr><td><a href=\"/t/emacs-llm/101\">大家平时在 Emacs 里怎么搭配本地模型与知识库一起工作？</a></td><td>24</td></tr>"
+           "<tr><td><a href=\"/t/etaf-ui/102\">ETAF 文本应用框架在宽屏与窄屏下的响应式布局实践总结</a></td><td>18</td></tr>"
+           "<tr><td><a href=\"javascript:alert(1)\">Bad Link</a></td><td>0</td></tr>"
+           "</tbody></table></div></noscript></body></html>"))
+         (stub-html
+          (concat
+           "<!DOCTYPE html><html><head><title>SPA App</title></head>"
+           "<body><div id=\"root\"></div><script>boot()</script>"
+           "<noscript>Please enable JavaScript to run this application.</noscript>"
+           "</body></html>"))
+         (ssr-md (etaf-web-to-markdown ssr-html :base-url "https://emacs-china.org/"))
+         (stub-md (etaf-web-to-markdown stub-html :base-url "https://spa.example/")))
+    ;; Substantive `<noscript>' content compiles and resolves URLs while stripping scripts/javascript:.
+    (should (string-match-p "大家平时在 Emacs 里怎么搭配本地模型与知识库一起工作" ssr-md))
+    (should (string-match-p "https://emacs-china\\.org/t/emacs-llm/101" ssr-md))
+    (should-not (string-match-p "evilPayload" ssr-md))
+    (should-not (string-match-p "javascript:" ssr-md))
+    ;; JavaScript-required `<noscript>' warning stub is rejected.
+    (should-not (string-match-p "Please enable JavaScript" stub-md))))
+
+(ert-deftest etaf-web-tests-adapter-registry-routing-and-mode-override ()
+  "Tier 2 adapters claim matching HTML, render ETAF views, and honor mode overrides."
+  (let* ((cache (make-temp-file "etaf-web-adapter-" t))
+         (etaf-web-cache-directory cache)
+         (etaf-web-download-images nil)
+         (adapter-name 'test-forum-archetype)
+         (disposed nil)
+         (buf nil)
+         (html (concat
+                "<!DOCTYPE html><html><head><title>Community Hub</title>"
+                "<meta name=\"generator\" content=\"TestForum 2.0\"></head>"
+                "<body><article><h1>Community Hub</h1>"
+                "<p>This fallback article paragraph is long enough for Tier 1 reader compilation.</p>"
+                "</article></body></html>")))
+    (unwind-protect
+        (progn
+          ;; Validation rejects invalid registrations.
+          (should-error (etaf-web-register-adapter :name nil :match-url #'identity :open #'ignore)
+                        :type 'etaf-web-error)
+          (should-error (etaf-web-register-adapter :name adapter-name :open #'ignore)
+                        :type 'etaf-web-error)
+          ;; Register Tier 2 adapter matching HTML generator string.
+          (should (eq adapter-name
+                      (etaf-web-register-adapter
+                       :name adapter-name
+                       :label "TestForum"
+                       :priority 25
+                       :match-html (lambda (_url _headers raw _dom)
+                                     (and (stringp raw)
+                                          (string-match-p "TestForum 2\\.0" raw)))
+                       :open (lambda (ctx)
+                               (funcall
+                                (plist-get ctx :on-ready)
+                                (list :title "Community Hub (Adapter)"
+                                      :mode-label "TestForum"
+                                      :render (lambda (_rctx)
+                                                (etaf-node
+                                                 'column '(:width stretch :padding ((lh 1) (ch 2)))
+                                                 (list (etaf-node 'text nil
+                                                                  (list "Tier 2 Adapter Live View")))))
+                                      :dispose (lambda () (setq disposed t))))
+                               nil))))
+          (let ((listed (etaf-web-adapters)))
+            (should (cl-some (lambda (d)
+                               (and (eq (plist-get d :name) adapter-name)
+                                    (equal (plist-get d :label) "TestForum")
+                                    (eql (plist-get d :priority) 25)))
+                             listed)))
+          (etaf-web-tests--with-http base
+              (lambda (_m _p) (list :status "200 OK" :body html))
+            (setq buf (etaf-web-open (concat base "/forum/")))
+            (etaf-web-tests--wait-phase buf 'ready)
+            (let ((st (etaf-web-state buf))
+                  (txt (with-current-buffer buf
+                         (buffer-substring-no-properties (point-min) (point-max)))))
+              (should (eq (plist-get st :tier) 't2))
+              (should (eq (plist-get st :adapter) adapter-name))
+              (should (string-match-p "Tier 2 Adapter Live View" txt))
+              (should (string-match-p "TestForum" txt)))
+            ;; Switch to `reader' mode: disposes T2 page, persists preference, renders T1 Markdown.
+            (with-current-buffer buf
+              (should (eq 'reader (etaf-web-set-mode 'reader))))
+            (should (etaf-web-tests--wait-until
+                     (lambda ()
+                       (let ((st (etaf-web-state buf)))
+                         (and (eq (plist-get st :phase) 'ready)
+                              (eq (plist-get st :tier) 't1))))))
+            (let ((st (etaf-web-state buf))
+                  (txt (with-current-buffer buf
+                         (buffer-substring-no-properties (point-min) (point-max)))))
+              (should disposed)
+              (should (eq (plist-get st :mode) 'reader))
+              (should (null (plist-get st :adapter)))
+              (should (string-match-p "fallback article paragraph" txt)))
+            ;; Switch back to `auto': T2 adapter claims the page again.
+            (with-current-buffer buf
+              (should (eq 'auto (etaf-web-set-mode 'auto))))
+            (should (etaf-web-tests--wait-until
+                     (lambda ()
+                       (let ((st (etaf-web-state buf)))
+                         (and (eq (plist-get st :phase) 'ready)
+                              (eq (plist-get st :tier) 't2))))))
+            (let ((st (etaf-web-state buf)))
+              (should (eq (plist-get st :adapter) adapter-name)))
+            ;; Invalid mode signals `etaf-web-error'.
+            (with-current-buffer buf
+              (should-error (etaf-web-set-mode 'unknown-mode) :type 'etaf-web-error))))
+      (when (and buf (buffer-live-p buf))
+        (with-current-buffer buf (etaf-web-close)))
+      (should (etaf-web-unregister-adapter adapter-name))
+      (should-not (etaf-web-unregister-adapter adapter-name))
+      (delete-directory cache t))))
+
+(ert-deftest etaf-web-tests-external-browser-function-handoff ()
+  "Configured `etaf-web-external-browser-function' receives handed-off URLs."
+  (let* ((cache (make-temp-file "etaf-web-ext-" t))
+         (etaf-web-cache-directory cache)
+         (etaf-web-download-images nil)
+         (handed-off nil)
+         (etaf-web-external-browser-function (lambda (url) (push url handed-off)))
+         (buf nil))
+    (unwind-protect
+        (etaf-web-tests--with-http base
+            (lambda (_m _p)
+              (list :status "200 OK"
+                    :body "<html><head><title>Ext</title></head><body><article><p>A complete sentence for external handoff testing in ETAF Web.</p></article></body></html>"))
+          (let ((target (concat base "/handoff")))
+            (setq buf (etaf-web-open target))
+            (etaf-web-tests--wait-phase buf 'ready)
+            (with-current-buffer buf
+              (etaf-web-open-external))
+            (should (equal handed-off (list target)))))
+      (when (and buf (buffer-live-p buf))
+        (with-current-buffer buf (etaf-web-close)))
+      (delete-directory cache t))))
+
+(ert-deftest etaf-web-tests-render-timeout-reports-clear-reason ()
+  "A headless renderer that exceeds `etaf-web-render-timeout' reports a timeout reason."
+  (let* ((cache (make-temp-file "etaf-web-rto-" t))
+         (slow-browser (make-temp-file "etaf-web-slow-browser-" nil ".sh"))
+         (old-cmd etaf-web-render-command)
+         (old-timeout etaf-web-render-timeout)
+         (buf nil))
+    (unwind-protect
+        (progn
+          (with-temp-file slow-browser
+            (insert "#!/bin/sh\nsleep 5\n"))
+          (set-file-modes slow-browser #o755)
+          (setq etaf-web-render-command slow-browser
+                etaf-web-render-timeout 0.3)
+          (etaf-web-tests--with-cache cache
+            (etaf-web-tests--with-http base
+                (lambda (_m _p)
+                  (list :status "200 OK" :body (etaf-web-tests--short-shell)))
+              (setq buf (etaf-web-open (concat base "/slow-spa/")))
+              (etaf-web-tests--wait-phase buf 'ready 5.0)
+              (let ((txt (with-current-buffer buf
+                           (buffer-substring-no-properties (point-min) (point-max)))))
+                (should (string-match-p "需要脚本渲染" txt))
+                (should (string-match-p "超时" txt))))))
+      (when (and buf (buffer-live-p buf))
+        (with-current-buffer buf (etaf-web-close)))
+      (setq etaf-web-render-command old-cmd
+            etaf-web-render-timeout old-timeout)
+      (ignore-errors (delete-file slow-browser))
+      (delete-directory cache t))))
+
+(ert-deftest etaf-web-tests-loading-progress-patches-toolbar-without-root-rerender ()
+  "Loading progress animation ticks patch only `web-status' with zero root rerenders."
+  (let* ((cache (make-temp-file "etaf-web-anim-" t))
+         (etaf-web-cache-directory cache)
+         (etaf-web-download-images nil)
+         (buf nil))
+    (unwind-protect
+        (etaf-web-tests--with-http base
+            (lambda (_m _p)
+              (list :status "200 OK" :delay 5.0
+                    :body "<article><h1>Slow Page</h1><p>Eventual content.</p></article>"))
+          (setq buf (etaf-web-open (concat base "/slow-anim")))
+          (should (eq (plist-get (etaf-web-state buf) :phase) 'loading))
+          (let* ((rt (etaf-runtime-for-buffer buf))
+                 (orig-node (symbol-function 'etaf-node))
+                 (node-calls 0)
+                 (rev0 (etaf-runtime-revision rt))
+                 (prog0 (plist-get (etaf-web-state buf) :progress))
+                 (line0 (with-current-buffer buf
+                          (save-excursion
+                            (goto-char (point-min))
+                            (buffer-substring-no-properties
+                             (line-beginning-position) (line-end-position)))))
+                 (body-line0 (with-current-buffer buf
+                               (save-excursion
+                                 (goto-char (point-min))
+                                 (when (search-forward "正在加载" nil t)
+                                   (line-number-at-pos))))))
+            ;; Measure across ~5 animation ticks (60 ms interval).
+            (cl-letf (((symbol-function 'etaf-node)
+                       (lambda (&rest args)
+                         (setq node-calls (1+ node-calls))
+                         (apply orig-node args))))
+              (sleep-for 0.35))
+            (let* ((rev1 (etaf-runtime-revision rt))
+                   (prog1 (plist-get (etaf-web-state buf) :progress))
+                   (rep (etaf-runtime-update-report rt))
+                   (line1 (with-current-buffer buf
+                            (save-excursion
+                              (goto-char (point-min))
+                              (buffer-substring-no-properties
+                               (line-beginning-position) (line-end-position)))))
+                   (body-line1 (with-current-buffer buf
+                                 (save-excursion
+                                   (goto-char (point-min))
+                                   (when (search-forward "正在加载" nil t)
+                                     (line-number-at-pos))))))
+              ;; Zero root/View rerenders during progress animation ticks.
+              (should (= node-calls 0))
+              ;; Retained status Host actually updated and toolbar text advanced.
+              (should (> rev1 rev0))
+              (should (> prog1 prog0))
+              (should-not (equal line1 line0))
+              (should (string-match-p "[0-9]+%" line1))
+              ;; Single-line toolbar height and body start line stayed constant.
+              (should (= (cdr (etaf-host-ref-size rt 'web-header)) 1))
+              (should (equal body-line1 body-line0))
+              (should (eq 'lines (plist-get rep :strategy)))
+              (should (= (plist-get rep :edits) 1))
+              (should (= (plist-get rep :lines) 1)))))
+      (when (and buf (buffer-live-p buf))
+        (with-current-buffer buf (etaf-web-close)))
+      (delete-directory cache t))))
+
+(ert-deftest etaf-web-tests-history-viewport-offset-and-goto-heading ()
+  "History Back/Forward restore viewport scroll offset and `etaf-web-goto-heading' scrolls headings into view."
+  (let* ((cache (make-temp-file "etaf-web-scrollnav-" t))
+         (etaf-web-cache-directory cache)
+         (etaf-web-download-images nil)
+         (page1
+          (concat "<article><h1>Long Guide</h1>"
+                  "<h2 id=\"intro\">Intro Section</h2>"
+                  (mapconcat (lambda (i)
+                               (format "<p>Intro paragraph %d with enough text to scroll well below the fold.</p>" i))
+                             (number-sequence 1 18) "")
+                  "<h2 id=\"middle\">Middle Section</h2>"
+                  "<p>Continue reading at <a href=\"/p2\">Open Second Page</a> now.</p>"
+                  (mapconcat (lambda (i)
+                               (format "<p>Middle paragraph %d with enough text to push deep heading off screen.</p>" i))
+                             (number-sequence 1 26) "")
+                  "<h2 id=\"deep\">Deep Target Heading</h2>"
+                  (mapconcat (lambda (i)
+                               (format "<p>Deep paragraph %d with trailing prose below deep heading.</p>" i))
+                             (number-sequence 1 20) "")
+                  "</article>"))
+         (page2
+          (concat "<article><h1>Second Long Page</h1>"
+                  (mapconcat (lambda (i)
+                               (format "<p>Second page line %d with enough content to be scrollable.</p>" i))
+                             (number-sequence 1 35) "")
+                  "</article>"))
+         (buf nil))
+    (unwind-protect
+        (etaf-web-tests--with-http base
+            (lambda (_m path)
+              (pcase path
+                ("/p1" (list :status "200 OK" :body page1))
+                ("/p2" (list :status "200 OK" :body page2))
+                (_ (list :status "404 Not Found" :body "404"))))
+          (let ((u1 (concat base "/p1"))
+                (u2 (concat base "/p2")))
+            (setq buf (etaf-web-open u1))
+            (etaf-web-tests--wait-phase buf 'ready)
+            (switch-to-buffer buf)
+            (let ((rt (etaf-runtime-for-buffer buf))
+                  (mid-offset nil))
+              ;; 1. Scroll down to middle section and follow link to Page 2.
+              (should (= (etaf-scroll-offset rt 'web-scroll) 0))
+              (should (etaf-web-tests--reveal buf "Open Second Page"))
+              (setq mid-offset (etaf-scroll-offset rt 'web-scroll))
+              (should (> mid-offset 0))
+              (goto-char (match-beginning 0))
+              (call-interactively (key-binding (kbd "RET")))
+              (should (etaf-web-tests--wait-until
+                       (lambda ()
+                         (let ((st (etaf-web-state buf)))
+                           (and (equal (plist-get st :url) u2)
+                                (eq (plist-get st :phase) 'ready))))))
+              ;; Fresh navigation starts at top of Page 2 (offset 0).
+              (should (= (etaf-scroll-offset rt 'web-scroll) 0))
+              ;; 2. Back restores exact viewport scroll offset on Page 1.
+              (execute-kbd-macro (kbd "M-<left>"))
+              (should (etaf-web-tests--wait-until
+                       (lambda ()
+                         (let ((st (etaf-web-state buf)))
+                           (and (equal (plist-get st :url) u1)
+                                (eq (plist-get st :phase) 'ready))))))
+              (should (= (etaf-scroll-offset rt 'web-scroll) mid-offset))
+              (should (string-match-p "Open Second Page"
+                                      (buffer-substring-no-properties (point-min) (point-max))))
+              ;; 3. `M-x etaf-web-goto-heading' jumps to off-screen Deep Target Heading,
+              ;;    making it visible in viewport while keeping line-1 toolbar intact.
+              (etaf-scroll-to rt 'web-scroll 0)
+              (should-not (string-match-p "Deep Target Heading"
+                                          (buffer-substring-no-properties (point-min) (point-max))))
+              (cl-letf (((symbol-function 'completing-read)
+                         (lambda (_prompt cands &rest _)
+                           (should (assoc "Deep Target Heading" cands))
+                           "Deep Target Heading")))
+                (call-interactively #'etaf-web-goto-heading))
+              (should (> (etaf-scroll-offset rt 'web-scroll) mid-offset))
+              (should (looking-at-p "Deep Target Heading"))
+              (should (string-match-p "Deep Target Heading"
+                                      (buffer-substring-no-properties (point-min) (point-max))))
+              (should (string-match-p
+                       "后退"
+                       (save-excursion
+                         (goto-char (point-min))
+                         (buffer-substring-no-properties
+                          (line-beginning-position) (line-end-position))))))))
+      (when (and buf (buffer-live-p buf))
+        (with-current-buffer buf (etaf-web-close)))
+      (delete-directory cache t))))
+
+(ert-deftest etaf-web-tests-discourse-adapter-list-search-and-thread ()
+  "Built-in Discourse Tier 2 adapter renders topic list, handles object tags, and loads thread replies."
+  (let* ((cache (make-temp-file "etaf-web-discourse-" t))
+         (etaf-web-cache-directory cache)
+         (etaf-web-download-images nil)
+         (buf nil)
+         (shell-html
+          (concat
+           "<!DOCTYPE html><html><head><title>Emacs China</title>"
+           "<meta name=\"description\" content=\"可能是最好的 Emacs 中文论坛\">"
+           "<meta name=\"generator\" content=\"Discourse 2026.9.0\"></head>"
+           "<body><section id=\"d-splash\"></section><script>boot()</script></body></html>"))
+         (cats-json
+          (json-encode
+           '((category_list
+              . ((categories
+                  . [((id . 7) (name . "闲聊灌水") (slug . "chat") (topic_count . 120) (topics_week . 8)
+                      (description_text . "自由讨论"))
+                     ((id . 8) (name . "Org-mode") (slug . "org-mode") (topic_count . 95) (topics_week . 5)
+                      (description_text . "Org 笔记与大纲"))]))))))
+         (latest-json
+          (json-encode
+           '((users . [((id . 1) (username . "Jamie"))
+                       ((id . 2) (username . "dean-chen"))])
+             (topic_list
+              . ((more_topics_url . "/latest?page=1")
+                 (topics
+                  . [((id . 32183) (slug . "emacs-llm")
+                      (title . "2026 年 Emacs 与 LLM 配合最佳实践")
+                      (category_id . 7) (posts_count . 2) (views . 412)
+                      (last_poster_username . "Youmu")
+                      (last_posted_at . "2026-11-22T00:44:47Z")
+                      (posters . [((user_id . 1))])
+                      (tags . [((id . 151) (name . "llm") (slug . "llm"))]))
+                     ((id . 32179) (slug . "gptel-org")
+                      (title . "gptel 在 Org 里和模型交流")
+                      (category_id . 8) (posts_count . 5) (views . 337)
+                      (last_poster_username . "dean-chen")
+                      (last_posted_at . "2026-11-21T10:00:00Z")
+                      (posters . [((user_id . 2))])
+                      (tags . ["org"]))]))))))
+         (thread-json
+          (json-encode
+           '((id . 32183)
+             (title . "2026 年 Emacs 与 LLM 配合最佳实践")
+             (category_id . 7) (posts_count . 2) (views . 412)
+             (created_at . "2026-11-20T03:17:56Z")
+             (tags . [((id . 151) (name . "llm") (slug . "llm"))])
+             (post_stream
+              . ((stream . [1001 1002])
+                 (posts . [((id . 1001) (post_number . 1) (username . "Jamie")
+                            (created_at . "2026-11-20T03:17:56Z")
+                            (reply_count . 1)
+                            (actions_summary . [((id . 2) (count . 4))])
+                            (cooked . "<aside class=\"onebox\"><article class=\"onebox-body\"><h3><a href=\"https://github.com/emacs-taf\">emacs-taf</a></h3><p>Short embed summary.</p></article></aside><p>欢迎大家分享今年在 Emacs 中配合大模型的顺手工作流。</p><aside class=\"quote\"><blockquote><p>引用的前楼观点依然完整保留。</p></blockquote></aside><div class=\"lightbox-wrapper\"><a class=\"lightbox\" href=\"https://img.example/original.png\"><img src=\"https://img.example/opt_690x455.png\" alt=\"demo\" width=\"690\" height=\"455\"/><div class=\"meta\"><span class=\"filename\">demo.png</span><span class=\"informations\">1600×900 120 KB</span></div></a></div>"))]))))))
+         (more-posts-json
+          (json-encode
+           '((post_stream
+              . ((posts . [((id . 1002) (post_number . 2) (username . "Youmu")
+                            (created_at . "2026-11-20T04:00:00Z")
+                            (reply_count . 0)
+                            (actions_summary . [])
+                            (cooked . "<p>我把所有阅读与讨论都留在 ETAF buffer 中完成。</p>"))])))))))
+    (unwind-protect
+        (etaf-web-tests--with-http base
+            (lambda (_m path)
+              (cond
+               ((equal path "/") (list :status "200 OK" :body shell-html))
+               ((equal path "/categories.json")
+                (list :status "200 OK" :headers "Content-Type: application/json" :body cats-json))
+               ((string-prefix-p "/latest.json" path)
+                (list :status "200 OK" :headers "Content-Type: application/json" :body latest-json))
+               ((equal path "/t/32183.json")
+                (list :status "200 OK" :headers "Content-Type: application/json" :body thread-json))
+               ((string-prefix-p "/t/32183/posts.json" path)
+                (list :status "200 OK" :headers "Content-Type: application/json" :body more-posts-json))
+               (t (list :status "404 Not Found" :body "404"))))
+          ;; 1. Home page auto-routes to Discourse T2 list view.
+          (setq buf (etaf-web-open (concat base "/")))
+          (etaf-web-tests--wait-phase buf 'ready)
+          (let ((st (etaf-web-state buf))
+                (txt (with-current-buffer buf
+                       (buffer-substring-no-properties (point-min) (point-max)))))
+            (should (eq (plist-get st :tier) 't2))
+            (should (eq (plist-get st :adapter) 'discourse))
+            (should (string-match-p "Discourse" txt))
+            (should (string-match-p "2026 年 Emacs 与 LLM" txt))
+            (should (string-match-p "配合最佳实践" txt))
+            (should (string-match-p "#llm" txt))
+            (should-not (string-match-p "(id \\. 151)" txt)))
+          ;; 2. Activate first topic row -> opens Discourse Thread view with OP + Load More.
+          (with-current-buffer buf
+            (switch-to-buffer buf)
+            (let ((rt (etaf-runtime-for-buffer buf)))
+              (etaf-focus rt 'discourse-topic-0)
+              (execute-kbd-macro (kbd "RET"))))
+          (should (etaf-web-tests--wait-until
+                   (lambda ()
+                     (let ((st (etaf-web-state buf)))
+                       (and (string-match-p "/t/emacs-llm/32183" (or (plist-get st :url) ""))
+                            (eq (plist-get st :phase) 'ready))))))
+          (let ((txt (with-current-buffer buf
+                       (buffer-substring-no-properties (point-min) (point-max)))))
+            (should (string-match-p "@Jamie" txt))
+            (should (string-match-p "楼主" txt))
+            (should (string-match-p "顺手工作流" txt))
+            (should (string-match-p "引用的前楼观点依然完整保留" txt))
+            (should-not (string-match-p "1600×900" txt)))
+          ;; 3. Scroll to load-more button and load remaining floor.
+          (with-current-buffer buf
+            (let ((rt (etaf-runtime-for-buffer buf)))
+              (etaf-scroll-to rt 'web-scroll 10)
+              (etaf-runtime-flush rt)
+              (should (string-match-p
+                       "加载后续 1 楼"
+                       (buffer-substring-no-properties (point-min) (point-max))))
+              (etaf-focus rt 'discourse-load-more-posts)
+              (execute-kbd-macro (kbd "RET"))))
+          (should (etaf-web-tests--wait-until
+                   (lambda ()
+                     (with-current-buffer buf
+                       (let ((rt (etaf-runtime-for-buffer buf)))
+                         (etaf-scroll-to rt 'web-scroll 16)
+                         (etaf-runtime-flush rt)
+                         (string-match-p "@Youmu"
+                                         (buffer-substring-no-properties (point-min) (point-max)))))))))
+      (when (and buf (buffer-live-p buf))
+        (with-current-buffer buf (etaf-web-close)))
+      (delete-directory cache t))))
+
+(ert-deftest etaf-web-tests-docs-adapter-sidebar-tree-drawer-and-prev-next ()
+  "Built-in Docs Tier 2 adapter extracts sidebar tree, breadcrumb, and H/L chapter navigation."
+  (let* ((cache (make-temp-file "etaf-web-docs-" t))
+         (etaf-web-cache-directory cache)
+         (etaf-web-download-images nil)
+         (buf nil)
+         (make-doc
+          (lambda (title body)
+            (concat
+             "<!DOCTYPE html><html><head><title>" title "</title>"
+             "<meta name=\"generator\" content=\"Astro v7.3\"/>"
+             "<meta name=\"generator\" content=\"Starlight v0.42\"/></head>"
+             "<body>"
+             "<nav class=\"sidebar\" aria-label=\"Main\"><sl-sidebar-state-persist>"
+             "<ul><li><details open><summary>Ebox Engine</summary><ul>"
+             "<li><a href=\"/docs/intro/\">Introduction</a></li>"
+             "<li><a href=\"/docs/layout/\">Box Layout</a></li>"
+             "<li><a href=\"/docs/flex/\">Flex Layout</a></li>"
+             "<li><a href=\"/docs/flush/\">Incremental Flush</a></li>"
+             "</ul></details></li></ul>"
+             "</sl-sidebar-state-persist>"
+             "<div class=\"md:sl-hidden\"><div class=\"mobile-preferences\">"
+             "<a class=\"language-link\" href=\"/zh-cn/docs/intro/\" hreflang=\"zh-CN\">简体中文</a>"
+             "</div></div>"
+             "</nav>"
+             "<main><article><h1>" title "</h1><p>" body "</p>"
+             "<div class=\"sl-heading-wrapper level-h2\"><h2 id=\"model\">Model</h2>"
+             "<a class=\"sl-anchor-link\" href=\"#model\"><span class=\"sr-only\">Section titled \"Model\"</span></a></div>"
+             "<pre data-language=\"elisp\"><code>"
+             "<div class=\"ec-line\"><div class=\"code\">(etaf-view</div></div>"
+             "<div class=\"ec-line\"><div class=\"code\">  (text \"ok\"))</div></div>"
+             "</code></pre>"
+             "</article></main>"
+             "</body></html>"))))
+    (unwind-protect
+        (etaf-web-tests--with-http base
+            (lambda (_m path)
+              (pcase path
+                ("/docs/intro/"
+                 (list :status "200 OK"
+                       :body (funcall make-doc "Introduction"
+                                      "This introduction chapter explains the retained node tree model thoroughly.")))
+                ("/docs/layout/"
+                 (list :status "200 OK"
+                       :body (funcall make-doc "Box Layout"
+                                      "This box layout chapter describes horizontal pixel metrics and line heights.")))
+                (_ (list :status "404 Not Found" :body "404"))))
+          (setq buf (etaf-web-open (concat base "/docs/intro/")))
+          (etaf-web-tests--wait-phase buf 'ready)
+          (let ((st (etaf-web-state buf))
+                (txt (with-current-buffer buf
+                       (buffer-substring-no-properties (point-min) (point-max)))))
+            (should (eq (plist-get st :tier) 't2))
+            (should (eq (plist-get st :adapter) 'docs))
+            (should (string-match-p "Ebox Engine  /  Introduction" txt))
+            (should (string-match-p "retained node tree model" txt))
+            ;; Starlight sr-only heading anchor must not leak into prose.
+            (should-not (string-match-p "Section titled" txt))
+            ;; Expressive-code multi-line blocks preserve line breaks.
+            (should (string-match-p "(etaf-view" txt))
+            (should (string-match-p "(text \"ok\"))" txt))
+            (should (string-match-p "下一章" txt)))
+          ;; Press `L' to jump to the next chapter inferred from sidebar tree order.
+          (with-current-buffer buf
+            (switch-to-buffer buf)
+            (execute-kbd-macro "L"))
+          (should (etaf-web-tests--wait-until
+                   (lambda ()
+                     (let ((st (etaf-web-state buf)))
+                       (and (string-match-p "/docs/layout/" (or (plist-get st :url) ""))
+                            (eq (plist-get st :phase) 'ready))))))
+          (let ((txt (with-current-buffer buf
+                       (buffer-substring-no-properties (point-min) (point-max)))))
+            (should (string-match-p "Box Layout" txt))
+            (should (string-match-p "上一章" txt))))
+      (when (and buf (buffer-live-p buf))
+        (with-current-buffer buf (etaf-web-close)))
+      (delete-directory cache t))))
+
+(ert-deftest etaf-web-tests-live-cdp-auto-escalates-spa-and-handles-interaction ()
+  "Pure JS SPA escalates to Tier 3 Live CDP mode and reflects real in-page JS interactions."
+  (skip-unless (etaf-web-cdp-available-p))
+  (let* ((cache (make-temp-file "etaf-web-live-" t))
+         (etaf-web-cache-directory cache)
+         (etaf-web-download-images nil)
+         (etaf-web-render-command nil)
+         (etaf-web-live-enabled t)
+         (buf nil)
+         (spa-html
+          (concat
+           "<!doctype html><html><head><meta charset=\"utf-8\"><title>Acme Live SPA</title></head>"
+           "<body><div id=\"root\"></div>"
+           "<script>"
+           "const root = document.getElementById('root');"
+           "const rows = ["
+           "  {id:'#418', title:'Live CDP Sync Item', open:true},"
+           "  {id:'#390', title:'Closed Archived Item', open:false}"
+           "];"
+           "let cur = 'open';"
+           "function draw() {"
+           "  const visible = rows.filter(r => cur === 'open' ? r.open : !r.open);"
+           "  root.innerHTML = '<aside role=\"navigation\"><a href=\"#issues\">Issues</a></aside>'"
+           "    + '<main><h1>Acme Live SPA</h1>'"
+           "    + '<input type=\"search\" id=\"q\" placeholder=\"筛选 Issue…\" />'"
+           "    + '<div role=\"tablist\">'"
+           "    + '<button role=\"tab\" id=\"t-open\" aria-selected=\"' + (cur==='open') + '\">进行中</button>'"
+           "    + '<button role=\"tab\" id=\"t-done\" aria-selected=\"' + (cur==='done') + '\">已完成</button>'"
+           "    + '</div>'"
+           "    + '<table><thead><tr><th>ID</th><th>Title</th></tr></thead><tbody>'"
+           "    + visible.map(r => '<tr><td>' + r.id + '</td><td>' + r.title + '</td></tr>').join('')"
+           "    + '</tbody></table></main>';"
+           "  document.getElementById('t-open').onclick = () => { cur='open'; draw(); };"
+           "  document.getElementById('t-done').onclick = () => { cur='done'; draw(); };"
+           "}"
+           "draw();"
+           "</script></body></html>")))
+    (unwind-protect
+        (etaf-web-tests--with-http base
+            (lambda (_m _p) (list :status "200 OK" :body spa-html))
+          (setq buf (etaf-web-open (concat base "/")))
+          (etaf-web-tests--wait-phase buf 'ready 18.0)
+          (let ((st (etaf-web-state buf))
+                (txt (with-current-buffer buf
+                       (buffer-substring-no-properties (point-min) (point-max)))))
+            (should (eq (plist-get st :tier) 't3))
+            (should (string-match-p "Acme Live SPA" txt))
+            (should (string-match-p "Live CDP Sync Item" txt))
+            (should-not (string-match-p "Closed Archived Item" txt)))
+          ;; Activate the `已完成' tab inside the buffer -> real JS updates table to `#390'.
+          (with-current-buffer buf
+            (switch-to-buffer buf)
+            (goto-char (point-min))
+            (should (search-forward "已完成" nil t))
+            (goto-char (match-beginning 0))
+            (call-interactively (key-binding (kbd "RET"))))
+          (should (etaf-web-tests--wait-until
+                   (lambda ()
+                     (with-current-buffer buf
+                       (string-match-p "Closed Archived Item"
+                                       (buffer-substring-no-properties (point-min) (point-max)))))
+                   8.0)))
+      (when (and buf (buffer-live-p buf))
+        (with-current-buffer buf (etaf-web-close)))
+      (etaf-web-cdp-shutdown)
+      (ignore-errors (delete-directory cache t)))))
+
+(ert-deftest etaf-web-tests-embedded-article-and-lightbox-images-preserved ()
+  "Embedded `<aside><article>' cards never hijack extraction and lightbox anchors unwrap to block images."
+  (let* ((html
+          (concat
+           "<!doctype html><html><head><title>Framework Overview</title></head><body>"
+           "<aside class=\"onebox\"><article class=\"onebox-body\">"
+           "<h3><a href=\"https://github.com/emacs-taf\">emacs-taf</a></h3>"
+           "<p>Short repository link preview card.</p></article></aside>"
+           "<div class=\"post-body\">"
+           "<h1>Core Architecture</h1>"
+           "<p>ETAF renders interactive text applications inside standard Emacs buffers with incremental layout updates and full theme tokens.</p>"
+           "<div class=\"lightbox-wrapper\">"
+           "<a class=\"lightbox\" href=\"https://img.example/original/app.png\">"
+           "<img src=\"https://img.example/optimized/app_690x455.png\" alt=\"app-shot\" width=\"690\" height=\"455\"/>"
+           "</a></div>"
+           "<p>Second substantive paragraph confirming the remainder of the document stays intact after an embedded onebox article.</p>"
+           "</div></body></html>"))
+         (md (etaf-web-to-markdown html :base-url "https://example.org/post")))
+    (should (string-match-p "Core Architecture" md))
+    (should (string-match-p "incremental layout updates" md))
+    (should (string-match-p "Second substantive paragraph" md))
+    (should (string-match-p "^!\\[app-shot\\](https://img\\.example/optimized/app_690x455\\.png)$" md))
+    (should-not (string-match-p "\\[!\\[app-shot\\]" md))))
+
+(ert-deftest etaf-web-tests-hydrated-content-spa-routes-to-reader-tier ()
+  "JS-hydrated blog/content pages route post-hydration to Tier 1 reader instead of Tier 3 live projection."
+  (skip-unless (etaf-web-cdp-available-p))
+  (let* ((cache (make-temp-file "etaf-web-hyd-blog-" t))
+         (etaf-web-cache-directory cache)
+         (etaf-web-download-images nil)
+         (etaf-web-render-command nil)
+         (etaf-web-live-enabled t)
+         (buf nil)
+         (blog-html
+          (concat
+           "<!doctype html><html><head><meta charset=\"utf-8\">"
+           "<meta name=\"generator\" content=\"VuePress 2.0.0\">"
+           "<title>My Engineering Blog</title></head>"
+           "<body><header><nav><a href=\"/\">首页</a><a href=\"/about/\">关于</a>"
+           "<button type=\"button\">搜索文档</button></nav></header>"
+           "<div id=\"app\"><div class=\"vp-post-list\"></div></div>"
+           "<script>"
+           "const list = document.querySelector('.vp-post-list');"
+           "list.innerHTML = '"
+           "<div class=\"post-item\"><h2><a href=\"/p/1\">Deterministic Engineering With LLMs</a></h2>"
+           "<p>2026-03-16 · AI · 约 2095 字</p>"
+           "<p>Practical notes on structuring agent workflows with clear boundaries, repeatable validation gates and maintainable code architecture.</p></div>"
+           "<div class=\"post-item\"><h2><a href=\"/p/2\">Understanding Browser Rendering Pipelines</a></h2>"
+           "<p>2025-11-10 · 精读 · 约 9831 字</p>"
+           "<p>A walkthrough of the critical rendering path from parsed HTML and CSS rules through layout geometry and incremental paint invalidation.</p></div>';"
+           "</script></body></html>")))
+    (unwind-protect
+        (etaf-web-tests--with-http base
+            (lambda (_m _p) (list :status "200 OK" :body blog-html))
+          (setq buf (etaf-web-open (concat base "/")))
+          (etaf-web-tests--wait-phase buf 'ready 18.0)
+          (let ((st (etaf-web-state buf))
+                (txt (with-current-buffer buf
+                       (buffer-substring-no-properties (point-min) (point-max)))))
+            (should (eq (plist-get st :tier) 't1))
+            (should (string-match-p "Deterministic Engineering" txt))
+            (should (string-match-p "Understanding Browser" txt))
+            (should (string-match-p "Rendering Pipelines" txt))
+            (should (string-match-p "rendering path" txt))))
+      (when (and buf (buffer-live-p buf))
+        (with-current-buffer buf (etaf-web-close)))
+      (etaf-web-cdp-shutdown)
+      (ignore-errors (delete-directory cache t)))))
+
+(ert-deftest etaf-web-tests-block-anchors-wrapper-cards-and-inline-boundaries ()
+  "HTML5 block anchors, nested-div card headings, CJK streams and inline boundaries compile cleanly."
+  (let* ((landing-html
+          (concat
+           "<!doctype html><html><head><title>Claude 最佳实践 · 中文知识库</title></head>"
+           "<body><main>"
+           "<section class=\"hero\"><div class=\"eyebrow\">Anthropic Best Practices · 中文整理</div>"
+           "<h1>Claude<br><span>最佳实践</span></h1>"
+           "<p>231 条官方资源与 100 个概念构成的知识网。</p></section>"
+           "<section><h2>五个入口</h2><div class=\"grid\">"
+           "<a class=\"card\" href=\"/graph.html\"><div class=\"top\"></div>"
+           "<div><h3>交互式知识图谱</h3><p>11 个分类聚类，悬停高亮关联</p></div>"
+           "<div class=\"meta\"><span>GRAPH</span><span>/graph.html</span></div></a>"
+           "<a class=\"card\" href=\"/mindmap.html\"><div class=\"top\"></div>"
+           "<div><h3>思维导图</h3><p>按分类折叠展开的层级导图</p></div>"
+           "<div class=\"meta\"><span>MAP</span><span>/mindmap.html</span></div></a>"
+           "<a class=\"card\" href=\"/wiki/INDEX.html\"><div class=\"top\"></div>"
+           "<div><h3>概念维基</h3><p>100 个原子条目与来源账本</p></div>"
+           "<div class=\"meta\"><span>WIKI</span><span>/wiki/INDEX</span></div></a>"
+           "</div></section>"
+           ;; Standalone block-level anchor outside any grid must NEVER collapse into inline soup.
+           "<section><p>独立说明段落，前后夹住一个块级链接卡片。</p>"
+           "<a href=\"/deep-dive.html\"><div><h3>独立专题卡片</h3>"
+           "<p>即便未命中网格识别，块级链接也应保持标题与正文分行结构。</p></div></a>"
+           "</section></main></body></html>"))
+         (landing-md (etaf-web-to-markdown landing-html
+                                           :base-url "https://example.app/"))
+         (stream-html
+          (concat
+           "<!doctype html><html><head><title>概念索引</title></head><body><main>"
+           "<section class=\"cat-block\"><h3>智能体架构<span>13 个概念</span></h3>"
+           "<div class=\"idx-row\"><div class=\"t\"><a href=\"/wiki/a\">子代理</a>"
+           "<small>Subagents · 专注执行单元</small></div><div class=\"m\"><b>30</b> 篇</div></div>"
+           "<div class=\"idx-row\"><div class=\"t\"><a href=\"/wiki/b\">智能体</a>"
+           "<small>AI Agent · 自主规划系统</small></div><div class=\"m\"><b>18</b> 篇</div></div>"
+           "<div class=\"idx-row\"><div class=\"t\"><a href=\"/wiki/c\">记忆</a>"
+           "<small>Memory · 跨运行持久化存储</small></div><div class=\"m\"><b>12</b> 篇</div></div>"
+           "</section>"
+           "<p><a href=\"/read/1\">构建常驻智能体</a><small>Building always-on agents</small></p>"
+           "</main></body></html>"))
+         (stream-md (etaf-web-to-markdown stream-html
+                                          :base-url "https://example.app/wiki/")))
+    ;; Leading hero h1 after short eyebrow is deduplicated.
+    (should-not (string-match-p "^# Claude" landing-md))
+    ;; 3 block-anchor cards inside `.grid' compile into `:::columns' + `:::card'.
+    (should (string-match-p ":::columns {columns=\"3\"" landing-md))
+    (should (string-match-p ":::card {title=\"交互式知识图谱\" href=\"https://example\\.app/graph\\.html\"}" landing-md))
+    (should (string-match-p ":::card {title=\"概念维基\" href=\"https://example\\.app/wiki/INDEX\\.html\"}" landing-md))
+    ;; Standalone block-anchor fallback keeps heading + body block structure.
+    (should (string-match-p "^### \\[独立专题卡片\\](https://example\\.app/deep-dive\\.html)$" landing-md))
+    (should (string-match-p "^即便未命中网格识别，块级链接也应保持标题与正文分行结构。$" landing-md))
+    ;; Section heading + CJK short-title entry stream keeps clean hierarchy without duplicate links.
+    (should (string-match-p "^### 智能体架构 13 个概念$" stream-md))
+    (should (string-match-p "^#### \\[子代理\\](https://example\\.app/wiki/a)$" stream-md))
+    (should (string-match-p "^Subagents · 专注执行单元" stream-md))
+    (should-not (string-match-p "\\[子代理\\](https://example\\.app/wiki/a) Subagents" stream-md))
+    ;; Visible CJK/Latin boundary across `<a>` + `<small>` inserts a single space.
+    (should (string-match-p
+             "\\[构建常驻智能体\\](https://example\\.app/read/1) Building always-on agents"
+             stream-md))))
+
+(ert-deftest etaf-web-tests-structural-docs-sidebar-without-framework-meta ()
+  "Docs Tier 2 adapter recognizes structural `<aside><nav>' chapter trees without framework metadata."
+  (let* ((cache (make-temp-file "etaf-web-sdocs-" t))
+         (etaf-web-cache-directory cache)
+         (etaf-web-download-images nil)
+         (buf nil)
+         (html
+          (concat
+           "<!doctype html><html><head><title>概念索引 · 知识库</title></head><body>"
+           "<aside class=\"side\"><nav class=\"nav\">"
+           "<details open><summary>智能体架构</summary><ul>"
+           "<li><a href=\"/wiki/subagent.html\">子代理</a></li>"
+           "<li><a href=\"/wiki/agent.html\">智能体</a></li>"
+           "<li><a href=\"/wiki/memory.html\">记忆</a></li>"
+           "<li><a href=\"/wiki/loop.html\">循环</a></li>"
+           "</ul></details>"
+           "<details><summary>上下文工程</summary><ul>"
+           "<li><a href=\"/wiki/context.html\">上下文窗口</a></li>"
+           "<li><a href=\"/wiki/prompt.html\">提示工程</a></li>"
+           "<li><a href=\"/wiki/compact.html\">上下文压缩</a></li>"
+           "<li><a href=\"/wiki/cache.html\">提示缓存</a></li>"
+           "</ul></details>"
+           "</nav></aside>"
+           "<main><article><h1>概念索引</h1>"
+           "<p>这是手工编写的静态知识库文档页，没有使用 Starlight 或 VitePress 生成器标记，但具备清晰的双栏导航树与正文区域。</p>"
+           "</article></main></body></html>")))
+    (unwind-protect
+        (etaf-web-tests--with-http base
+            (lambda (_m _p) (list :status "200 OK" :body html))
+          (setq buf (etaf-web-open (concat base "/wiki/subagent.html")))
+          (etaf-web-tests--wait-phase buf 'ready)
+          (let ((st (etaf-web-state buf))
+                (txt (with-current-buffer buf
+                       (buffer-substring-no-properties (point-min) (point-max)))))
+            (should (eq (plist-get st :tier) 't2))
+            (should (eq (plist-get st :adapter) 'docs))
+            (should (string-match-p "智能体架构" txt))
+            (should (string-match-p "手工编写的静态知识库文档页" txt))))
+      (when (and buf (buffer-live-p buf))
+        (with-current-buffer buf (etaf-web-close)))
+      (delete-directory cache t))))
+
+(ert-deftest etaf-web-tests-custom-element-tables-article-lists-and-docs-sidebars ()
+  "Custom block wrappers keep tables intact, primary link lists survive, sparse layout tables unwrap, cite_note footnotes resolve, and nested VitePress/MkDocs sidebars extract all chapters."
+  (let* ((readme-html
+          (concat
+           "<!doctype html><html><head><title>Tool README</title></head><body>"
+           "<article><h2>Quick links</h2>"
+           "<ul><li><a href=\"/install\">Install</a></li>"
+           "<li><a href=\"/guide\">Guide</a></li>"
+           "<li><a href=\"/faq\">FAQ</a></li></ul>"
+           "<markdown-accessiblity-table><table><thead><tr><th>Tool</th><th>Time</th></tr></thead>"
+           "<tbody><tr><td>rg</td><td>0.08s</td></tr></tbody></table></markdown-accessiblity-table>"
+           "<p>History note.<sup class=\"reference\"><a href=\"#cite_note-1\">[1]</a></sup></p>"
+           "<ol><li id=\"cite_note-1\">Original archival reference.</li></ol>"
+           "</article></body></html>"))
+         (readme-md (etaf-web-to-markdown readme-html :base-url "https://example.org/repo"))
+         (hn-html
+          (concat
+           "<!doctype html><html><head><title>News Portal</title></head><body>"
+           "<table>"
+           "<tr><td>1.</td><td></td><td><a href=\"https://a.test\">Story One</a></td></tr>"
+           "<tr><td></td><td></td><td>100 points by alice</td></tr>"
+           "<tr><td></td><td></td><td></td></tr>"
+           "<tr><td>2.</td><td></td><td><a href=\"https://b.test\">Story Two</a></td></tr>"
+           "<tr><td></td><td></td><td>80 points by bob</td></tr>"
+           "<tr><td></td><td></td><td></td></tr>"
+           "</table></body></html>"))
+         (hn-md (etaf-web-to-markdown hn-html :base-url "https://news.example/"))
+         (cache (make-temp-file "etaf-web-vpdocs-" t))
+         (etaf-web-cache-directory cache)
+         (etaf-web-download-images nil)
+         (buf nil)
+         (vp-html
+          (concat
+           "<!doctype html><html><head><title>Guide | Docs</title></head><body>"
+           "<aside class=\"VPSidebar\"><nav id=\"VPSidebarNav\">"
+           "<section class=\"VPSidebarItem\"><div><h2>Introduction</h2></div>"
+           "<ul><li>"
+           "<div><a href=\"/guide/intro\">What is It?</a></div>"
+           "<div><a href=\"/guide/start\">Getting Started</a></div>"
+           "<div><a href=\"/guide/routing\">Routing</a></div>"
+           "<div><a href=\"/guide/deploy\">Deploy</a></div>"
+           "<div><a href=\"/guide/config\">Configuration</a></div>"
+           "</li></ul></section>"
+           "</nav></aside>"
+           "<main><article><h1>What is It?</h1>"
+           "<p>A thorough guide covering routing, deployment and configuration for static documentation sites.</p>"
+           "</article></main></body></html>")))
+    ;; Custom-element wrapped table stays a GFM pipe table, primary link list survives, cite_note resolves.
+    (should (string-match-p "^- \\[Install\\](https://example\\.org/install)$" readme-md))
+    (should (string-match-p "^| Tool | Time |$" readme-md))
+    (should (string-match-p "^| rg | 0\\.08s |$" readme-md))
+    (should (string-match-p "\\[\\^1\\]" readme-md))
+    (should (string-match-p "^\\[\\^1\\]: Original archival reference\\.$" readme-md))
+    ;; Sparse headerless layout table unwraps cleanly instead of emitting a sparse pipe table.
+    (should (string-match-p "^1\\. \\[Story One\\](https://a\\.test)$" hn-md))
+    (should-not (string-match-p "^| 1\\." hn-md))
+    ;; VitePress single-<li> multi-link section extracts all 5 chapters into Tier 2 Docs sidebar.
+    (unwind-protect
+        (etaf-web-tests--with-http base
+            (lambda (_m _p) (list :status "200 OK" :body vp-html))
+          (setq buf (etaf-web-open (concat base "/guide/intro")))
+          (etaf-web-tests--wait-phase buf 'ready)
+          (let ((st (etaf-web-state buf))
+                (txt (with-current-buffer buf
+                       (buffer-substring-no-properties (point-min) (point-max)))))
+            (should (eq (plist-get st :tier) 't2))
+            (should (eq (plist-get st :adapter) 'docs))
+            (should (string-match-p "Introduction" txt))
+            (should (string-match-p "Getting Started" txt))
+            (should (string-match-p "Configuration" txt))))
+      (when (and buf (buffer-live-p buf))
+        (with-current-buffer buf (etaf-web-close)))
+      (delete-directory cache t))))
+
+(ert-deftest etaf-web-tests-mathml-editsection-discussion-and-nextra-docs ()
+  "MathML compiles to LaTeX, MediaWiki editsection drops cleanly, discussion comment trees survive, multi-class docs sidebars route to Docs while PyPI metadata sidebars stay T1, and embedded `:::tip' renders as an alert."
+  (let* ((paper-html
+          (concat
+           "<!doctype html><html><head><title>Paper</title></head><body><article>"
+           "<div class=\"mw-heading\"><h2>History</h2>"
+           "<span class=\"mw-editsection\"><span class=\"mw-editsection-bracket\">[</span>"
+           "<a href=\"/edit\">edit</a><span class=\"mw-editsection-bracket\">]</span></span></div>"
+           "<p>Vectors of dimension <math display=\"inline\"><semantics>"
+           "<msub><mi>d</mi><mi>k</mi></msub>"
+           "<annotation encoding=\"application/x-tex\">d_{k}</annotation></semantics></math>.</p>"
+           "<math display=\"block\" alttext=\"Q K^{T}\"><mrow><mi>Q</mi></mrow></math>"
+           "<p><a href=\"/start\">Get started</a><button>Quick search</button><kbd>K</kbd></p>"
+           "</article></body></html>"))
+         (paper-md (etaf-web-to-markdown paper-html :base-url "https://example.org/paper"))
+         (thread-html
+          (concat
+           "<!doctype html><html><head><title>Discussion</title></head><body>"
+           "<table><tr><td><a href=\"https://app.test\">Launch App</a></td></tr></table>"
+           "<table class=\"comment-tree\"><tr><td class=\"commtext\">"
+           "<p>" (make-string 180 ?a) " first detailed community comment with substantial technical discussion about systems engineering and design tradeoffs.</p>"
+           "<p>" (make-string 180 ?b) " second detailed follow-up comment explaining edge cases, latency measurements and deployment architecture in full.</p>"
+           "</td></tr></table></body></html>"))
+         (thread-md (etaf-web-to-markdown thread-html :base-url "https://news.example/item?id=1"))
+         (cache (make-temp-file "etaf-web-nextra-" t))
+         (etaf-web-cache-directory cache)
+         (etaf-web-download-images nil)
+         (buf1 nil)
+         (buf2 nil)
+         (nextra-html
+          (concat
+           "<!doctype html><html><head><title>Nextra Guide</title></head><body>"
+           "<aside class=\"nextra-sidebar x:flex x:flex-col\"><ul>"
+           "<li><a href=\"/docs/intro\">Intro</a></li>"
+           "<li><a href=\"/docs/routing\">Routing</a></li>"
+           "<li><a href=\"/docs/mdx\">MDX</a></li>"
+           "<li><a href=\"/docs/themes\">Themes</a></li>"
+           "<li><a href=\"/docs/deploy\">Deploy</a></li>"
+           "</ul></aside>"
+           "<main><article><h1>Nextra Guide</h1>"
+           "<div class=\"callout tip\"><p>Skip ahead to the quickstart guide.</p></div>"
+           "<details><summary>Can I use MDX?</summary><p>Yes with Nextra 4.</p></details>"
+           "<p>Comprehensive static site documentation content explaining file-system routing and custom components.</p>"
+           "</article></main></body></html>"))
+         (pypi-html
+          (concat
+           "<!doctype html><html><head><title>pkg · PyPI</title></head><body>"
+           "<div class=\"project-description__sidebar\"><ul>"
+           "<li><a href=\"/search/?c=Python+3\">Python 3</a></li>"
+           "<li><a href=\"/search/?c=MIT\">MIT</a></li>"
+           "<li><a href=\"/search/?c=Web\">Web</a></li>"
+           "<li><a href=\"/search/?c=HTTP\">HTTP</a></li>"
+           "<li><a href=\"/search/?c=API\">API</a></li>"
+           "</ul></div>"
+           "<main><article><h1>pkg</h1>"
+           "<p>A concise Python HTTP library for humans with session pooling, TLS verification and streaming downloads.</p>"
+           "</article></main></body></html>")))
+    ;; MathML -> native LaTeX without doubled text, editsection stripped, button/kbd spaced.
+    (should (string-match-p "^## History$" paper-md))
+    (should-not (string-match-p "\\[edit\\]" paper-md))
+    (should (string-match-p "dimension \\$d_{k}\\$" paper-md))
+    (should-not (string-match-p "dkd_{k}" paper-md))
+    (should (string-match-p "^\\$\\$\nQ K\\^{T}\n\\$\\$$" paper-md))
+    (should (string-match-p "\\[Get started\\](https://example\\.org/start) Quick search :kbd\\[K\\]" paper-md))
+    ;; Dedicated comment-tree page preserves discussion comments.
+    (should (string-match-p "first detailed community comment" thread-md))
+    (should (string-match-p "second detailed follow-up comment" thread-md))
+    (unwind-protect
+        (etaf-web-tests--with-http base
+            (lambda (_m path)
+              (pcase path
+                ("/docs/intro" (list :status "200 OK" :body nextra-html))
+                ("/project/pkg/" (list :status "200 OK" :body pypi-html))
+                (_ (list :status "404 Not Found" :body "404"))))
+          ;; Multi-class `nextra-sidebar x:flex' routes to Tier 2 Docs and renders callout alert natively.
+          (setq buf1 (etaf-web-open (concat base "/docs/intro")))
+          (etaf-web-tests--wait-phase buf1 'ready)
+          (let ((st (etaf-web-state buf1))
+                (txt (with-current-buffer buf1
+                       (buffer-substring-no-properties (point-min) (point-max)))))
+            (should (eq (plist-get st :tier) 't2))
+            (should (eq (plist-get st :adapter) 'docs))
+            (should (string-match-p "提示" txt))
+            (should-not (string-match-p ":::tip" txt))
+            (should (string-match-p "Can I use MDX\\?" txt))
+            (should (string-match-p "Yes with Nextra 4\\." txt))
+            (should-not (string-match-p ":::details" txt)))
+          ;; PyPI metadata sidebar with `/search/?c=' links stays Tier 1 Reader.
+          (setq buf2 (etaf-web-open (concat base "/project/pkg/")))
+          (etaf-web-tests--wait-phase buf2 'ready)
+          (let ((st (etaf-web-state buf2)))
+            (should (eq (plist-get st :tier) 't1))
+            (should-not (plist-get st :adapter))))
+      (when (and buf1 (buffer-live-p buf1))
+        (with-current-buffer buf1 (etaf-web-close)))
+      (when (and buf2 (buffer-live-p buf2))
+        (with-current-buffer buf2 (etaf-web-close)))
+      (delete-directory cache t))))
+
+(ert-deftest etaf-web-tests-live-cdp-input-stability-and-custom-checkbox ()
+  "JS-required stub notices escalate to T3, multi-char input keeps focus, app-shell siblings survive, and opacity:0 checkboxes toggle live."
+  (skip-unless (etaf-web-cdp-available-p))
+  (let* ((cache (make-temp-file "etaf-web-t3todo-" t))
+         (etaf-web-cache-directory cache)
+         (etaf-web-download-images nil)
+         (etaf-web-render-command nil)
+         (etaf-web-live-enabled t)
+         (buf nil)
+         (todo-html
+          (concat
+           "<!doctype html><html><head><meta charset=\"utf-8\"><title>Mini Todo</title>"
+           "<style>.toggle{opacity:0;width:20px;height:20px;}</style></head><body>"
+           "<noscript>This page will only work with JavaScript enabled</noscript>"
+           "<div id=\"root\"></div>"
+           "<script>"
+           "const root = document.getElementById('root');"
+           "const items = [];"
+           "function draw() {"
+           "  root.innerHTML = '<section class=\"todoapp\">'"
+           "    + '<header><h1>todos</h1><input id=\"new\" placeholder=\"Add task\" /></header>'"
+           "    + (items.length ? '<main><ul>' + items.map((it,i) =>"
+           "        '<li><input class=\"toggle\" type=\"checkbox\" data-i=\"'+i+'\"'+(it.done?' checked':'')+'/><label>'+it.text+'</label></li>').join('') + '</ul></main>'"
+           "      + '<footer><span>' + items.filter(x=>!x.done).length + ' left</span></footer>' : '')"
+           "    + '</section>';"
+           "  const inp = document.getElementById('new');"
+           "  inp.addEventListener('keydown', (e) => {"
+           "    if (e.key === 'Enter' && inp.value.trim()) { items.push({text: inp.value.trim(), done: false}); draw(); }"
+           "  });"
+           "  root.querySelectorAll('.toggle').forEach((cb) => {"
+           "    cb.addEventListener('change', () => { items[Number(cb.dataset.i)].done = cb.checked; draw(); });"
+           "  });"
+           "}"
+           "draw();"
+           "</script></body></html>")))
+    (unwind-protect
+        (etaf-web-tests--with-http base
+            (lambda (_m _p) (list :status "200 OK" :body todo-html))
+          (setq buf (etaf-web-open (concat base "/")))
+          (etaf-web-tests--wait-phase buf 'ready 18.0)
+          (should (eq (plist-get (etaf-web-state buf) :tier) 't3))
+          ;; Multi-character typing must NOT lose focus on character 1 when clear button mounts.
+          (with-current-buffer buf
+            (switch-to-buffer buf)
+            (goto-char (point-min))
+            (should (search-forward "Add task" nil t))
+            (goto-char (match-beginning 0))
+            (execute-kbd-macro (kbd "RET"))
+            (execute-kbd-macro "Ship ETAF")
+            (execute-kbd-macro (kbd "RET")))
+          (should (etaf-web-tests--wait-until
+                   (lambda ()
+                     (with-current-buffer buf
+                       (let ((txt (buffer-substring-no-properties (point-min) (point-max))))
+                         (and (string-match-p "\\[ \\] Ship ETAF" txt)
+                              (string-match-p "1 left" txt)
+                              (string-match-p "Add task" txt)))))
+                   8.0))
+          ;; Second submission after `<main>' mounts must remain interactive (no ref collision).
+          (with-current-buffer buf
+            (goto-char (point-min))
+            (should (search-forward "Add task" nil t))
+            (goto-char (match-beginning 0))
+            (execute-kbd-macro (kbd "RET"))
+            (execute-kbd-macro "Second item")
+            (execute-kbd-macro (kbd "RET")))
+          (should (etaf-web-tests--wait-until
+                   (lambda ()
+                     (with-current-buffer buf
+                       (let ((txt (buffer-substring-no-properties (point-min) (point-max))))
+                         (and (string-match-p "\\[ \\] Second item" txt)
+                              (string-match-p "2 left" txt)))))
+                   8.0))
+          ;; Toggle opacity:0 custom checkbox -> live DOM updates to `1 left' and `[x] Ship ETAF'.
+          (with-current-buffer buf
+            (goto-char (point-min))
+            (should (search-forward "[ ] Ship ETAF" nil t))
+            (goto-char (match-beginning 0))
+            (execute-kbd-macro (kbd "RET")))
+          (should (etaf-web-tests--wait-until
+                   (lambda ()
+                     (with-current-buffer buf
+                       (let ((txt (buffer-substring-no-properties (point-min) (point-max))))
+                         (and (string-match-p "\\[x\\] Ship ETAF" txt)
+                              (string-match-p "1 left" txt)))))
+                   8.0)))
+      (when (and buf (buffer-live-p buf))
+        (with-current-buffer buf (etaf-web-close)))
+      (etaf-web-cdp-shutdown)
+      (ignore-errors (delete-directory cache t)))))
+
+(ert-deftest etaf-web-tests-wave2-extraction-routing-and-http-negotiation ()
+  "Wave-2 universal fixes: drop `<select>' options, preserve `shared__*' & `<main>' discussions, deduplicate MediaWiki references, bind block-anchor `<article><h2>' links, extract multi-article feeds & OP+replies, reject news/header nav from Tier 2 Docs, and report challenge HTTP 403 cleanly."
+  (let* (;; 1. `<select>` dropdowns drop cleanly so search results win Readability.
+         (ddg-html
+          (concat
+           "<!doctype html><html><head><title>Search</title></head><body>"
+           "<div id=\"header\"><form><select name=\"kl\">"
+           "<option>All Regions</option><option>Argentina</option><option>Australia</option>"
+           "<option>Austria</option><option>Belgium</option><option>Brazil</option>"
+           "<option>Canada</option><option>China</option><option>France</option>"
+           "<option>Germany</option><option>Japan</option></select></form></div>"
+           "<div id=\"links\"><div class=\"result\"><h2><a href=\"https://gnu.org/emacs\">GNU Emacs</a></h2>"
+           "<p>GNU Emacs is an extensible, customizable, self-documenting text editor with Lisp.</p></div>"
+           "<div class=\"result\"><h2><a href=\"https://etaf.top/\">ETAF Framework</a></h2>"
+           "<p>Text application framework for Emacs with reactive components and layout engine.</p></div></div>"
+           "</body></html>"))
+         (ddg-md (etaf-web-to-markdown ddg-html :base-url "https://search.example/?q=emacs"))
+         ;; 2. `<main>` GitHub-style issue preserves `shared__*` & `commentsContainer` comments.
+         (issue-html
+          (concat
+           "<!doctype html><html><head><title>Issue #1</title></head><body>"
+           "<main id=\"repo-main\"><h1>Add UTF-16 encoding support</h1>"
+           "<div class=\"commentsContainer__BJKxiK\">"
+           "<div class=\"shared__KSUE2D\"><p>"
+           (make-string 220 ?x) " opening issue description covering encoding auto-detection and BOM handling.</p></div>"
+           "<div class=\"shared__KSUE2D\"><p>"
+           (make-string 220 ?y) " follow-up maintainer reply explaining streaming decoder performance benchmarks.</p></div>"
+           "</div></main></body></html>"))
+         (issue-md (etaf-web-to-markdown issue-html :base-url "https://code.example/org/repo/issues/1"))
+         ;; 3. Wikipedia `<ol class="references">` moves to footnotes once and drops empty `## References`.
+         (wiki-html
+          (concat
+           "<!doctype html><html><head><title>Emacs Lisp</title></head><body><main>"
+           "<p>Emacs Lisp is a dialect of Lisp<sup class=\"reference\"><a href=\"#cite_note-1\">[1]</a></sup> used by GNU Emacs.</p>"
+           "<h2>References</h2>"
+           "<div class=\"mw-references-wrap\"><ol class=\"references\">"
+           "<li id=\"cite_note-1\"><a href=\"#cite_ref-1\">^</a> GNU Emacs Manual reference entry.</li>"
+           "</ol></div>"
+           "<h2>External links</h2><ul><li><a href=\"https://gnu.org\">Official website</a></li></ul>"
+           "</main></body></html>"))
+         (wiki-md (etaf-web-to-markdown wiki-html :base-url "https://en.wikipedia.org/wiki/Emacs_Lisp"))
+         ;; 4. Block-anchor `<a href><article><h2>` binds link + long prose anchor avoids giant link.
+         (blog-html
+          (concat
+           "<!doctype html><html><head><title>Blog</title></head><body><main>"
+           "<a href=\"/post-one/\"><article><h2>First Post Title</h2><p>Short summary of post one.</p></article></a>"
+           "<a href=\"/long-note/\"><div><p>"
+           (make-string 260 ?z) " long community note wrapped in a single block anchor.</p></div></a>"
+           "</main></body></html>"))
+         (blog-md (etaf-web-to-markdown blog-html :base-url "https://blog.example/"))
+         ;; 5. Forum OP `<h1>` + replies container keeps BOTH OP and replies.
+         (forum-html
+          (concat
+           "<!doctype html><html><head><title>Forum Topic</title></head><body>"
+           "<div id=\"Main\">"
+           "<div class=\"box\"><h1>如何从零构建编辑器</h1>"
+           "<p>想请教各位在架构设计与渲染性能方面的实战经验。</p></div>"
+           "<div id=\"topic-replies\">"
+           "<div class=\"cell\"><p>第一条详细中文回复，介绍数据结构和增量更新机制，非常实用。</p></div>"
+           "<div class=\"cell\"><p>第二条详细中文回复，补充测试基准与布局缓存策略，避免卡顿。</p></div>"
+           "<div class=\"cell\"><p>第三条详细中文回复，分析事件分发与焦点管理边界条件，值得参考。</p></div>"
+           "<div class=\"cell\"><p>第四条详细中文回复，对比不同渲染架构在长文档下的帧率与内存表现。</p></div>"
+           "</div></div></body></html>"))
+         (forum-md (etaf-web-to-markdown forum-html :base-url "https://forum.example/t/1"))
+         ;; 6. News site `<header><nav aria-label="Main navigation">` must NOT route to Tier 2 Docs.
+         (news-html
+          (concat
+           "<!doctype html><html><head><title>World News</title></head><body>"
+           "<header><nav id=\"main-navigation\" aria-label=\"Main navigation\"><ul>"
+           "<li><a href=\"/world\">World</a></li><li><a href=\"/tech\">Tech</a></li>"
+           "<li><a href=\"/science\">Science</a></li><li><a href=\"/business\">Business</a></li>"
+           "<li><a href=\"/culture\">Culture</a></li><li><a href=\"/sport\">Sport</a></li>"
+           "</ul></nav></header>"
+           "<main><article><h1>Breaking Tech Headline</h1>"
+           "<p>Full journalism story covering global technology developments with detailed analysis and interviews.</p>"
+           "</article></main></body></html>"))
+         (cache (make-temp-file "etaf-web-wave2-" t))
+         (etaf-web-cache-directory cache)
+         (etaf-web-download-images nil)
+         (buf-news nil)
+         (buf-chal nil))
+    ;; Assertions 1-5: compilation
+    (should-not (string-match-p "Argentina" ddg-md))
+    (should (string-match-p "GNU Emacs" ddg-md))
+    (should (string-match-p "ETAF Framework" ddg-md))
+    (should (string-match-p "opening issue description" issue-md))
+    (should (string-match-p "follow-up maintainer reply" issue-md))
+    (should (string-match-p "\\[\\^1\\]: GNU Emacs Manual reference entry\\." wiki-md))
+    (should-not (string-match-p "^## References$" wiki-md))
+    (should-not (string-match-p "^1\\. " wiki-md))
+    (should (string-match-p "^## \\[First Post Title\\](https://blog\\.example/post-one/)$" blog-md))
+    (should (string-match-p "\\[查看详情\\](https://blog\\.example/long-note/)" blog-md))
+    (should (string-match-p "如何从零构建编辑器" forum-md))
+    (should (string-match-p "第一条详细中文回复" forum-md))
+    (should (string-match-p "第四条详细中文回复" forum-md))
+    ;; Assertions 6-7: Docs false-positive guard & HTTP 403 Challenge diagnostic
+    (unwind-protect
+        (etaf-web-tests--with-http base
+            (lambda (_m path)
+              (pcase path
+                ("/news" (list :status "200 OK" :body news-html))
+                ("/blocked"
+                 (list :status "403 Forbidden"
+                       :headers '("cf-mitigated: challenge")
+                       :body "<!doctype html><html><head><title>Just a moment...</title></head><body>Enable JavaScript and cookies to continue</body></html>"))
+                (_ (list :status "404 Not Found" :body "404"))))
+          (setq buf-news (etaf-web-open (concat base "/news")))
+          (etaf-web-tests--wait-phase buf-news 'ready)
+          (let ((st (etaf-web-state buf-news)))
+            (should (eq (plist-get st :tier) 't1))
+            (should-not (plist-get st :adapter)))
+          (setq buf-chal (etaf-web-open (concat base "/blocked")))
+          (etaf-web-tests--wait-phase buf-chal 'error)
+          (let* ((err-obj (plist-get (etaf-web-state buf-chal) :error))
+                 (err-msg (or (and (listp err-obj) (plist-get err-obj :message))
+                              (and (stringp err-obj) err-obj)
+                              "")))
+            (should (string-match-p "Challenge\\|安全验证" err-msg))))
+      (when (and buf-news (buffer-live-p buf-news))
+        (with-current-buffer buf-news (etaf-web-close)))
+      (when (and buf-chal (buffer-live-p buf-chal))
+        (with-current-buffer buf-chal (etaf-web-close)))
+      (delete-directory cache t))))
+
+(ert-deftest etaf-web-tests-four-layer-code-language-detection ()
+  "Four-layer language identification covers DOM wrappers, aliases, deterministic anchors, margin-gated scoring and plain-text safety."
+  (let* ((html
+          (concat
+           "<!doctype html><html><head><title>Effective Go Guide</title></head><body><main><article>"
+           "<h1>Code Language Identification</h1>"
+           ;; Layer 1: Sphinx grandparent wrapper + Python3 normalization.
+           "<div class=\"highlight-python3 notranslate\"><div class=\"highlight\"><pre><span>x = 1</span></pre></div></div>"
+           ;; Layer 1: GitHub wrapper class `highlight-source-shell'.
+           "<div class=\"highlight highlight-source-shell\"><pre>echo hi</pre></div>"
+           ;; Layer 1: Rustdoc bare class `rust item-decl'.
+           "<pre class=\"rust item-decl\"><code>pub struct Demo;</code></pre>"
+           ;; Layer 1: PyPI HTML `lang' attribute.
+           "<pre lang=\"python\"><code>import requests</code></pre>"
+           ;; Layer 1: VitePress `language-template' -> `html'.
+           "<div class=\"language-template\"><pre><code>&lt;div id=\"app\"&gt;ok&lt;/div&gt;</code></pre></div>"
+           ;; Layer 1: Sibling filename caption `<figcaption>app.ts</figcaption>'.
+           "<figure><figcaption>app.ts</figcaption><pre><code>const n = 1</code></pre></figure>"
+           ;; Layer 1: Explicit plain-text / ASCII art lock (must stay `text').
+           "<div class=\"art-ascii-art\"><pre>GET / HTTP/1.1\nHost: example.com</pre></div>"
+           "<div class=\"language-text\"><pre><code>brew install ripgrep</code></pre></div>"
+           ;; Layer 3: Deterministic anchors on bare `<pre>'.
+           "<pre>#!/usr/bin/env python3\nprint('hi')</pre>"
+           "<pre>{\"name\": \"etaf\", \"count\": 3}</pre>"
+           "<pre>diff --git a/a.el b/a.el\n--- a/a.el\n+++ b/a.el\n@@ -1 +1 @@\n-old\n+new</pre>"
+           "<pre>GET /index.html HTTP/1.1\nHost: example.org\nAccept: text/html</pre>"
+           "<pre>SELECT id, name FROM users WHERE active = 1;</pre>"
+           "<pre>(add-hook 'prog-mode-hook #'display-line-numbers-mode)</pre>"
+           "<pre>$ git status -sb\nM README.md</pre>"
+           "<pre>brew install ripgrep</pre>"
+           "<pre>FROM alpine:3.20\nRUN apk add git</pre>"
+           ;; Layer 4: Margin-gated weighted scoring on bare `<pre>'.
+           "<pre>type Server struct {\n    addr string\n}\nfunc (s *Server) Start() error {\n    err := s.listen()\n    if err != nil {\n        return err\n    }\n    return nil\n}</pre>"
+           "<pre>function MyButton() {\n  const [count, setCount] = useState(0);\n  return (&lt;button onClick={() =&gt; setCount(count + 1)}&gt;Click&lt;/button&gt;);\n}</pre>"
+           "<pre>@theme {\n  --font-sans: \"Inter\", sans-serif;\n}\nbody {\n  display: flex;\n  margin: 1em;\n}</pre>"
+           ;; Non-code safety: Emacs keybinding, ASCII diagram, plain prose MUST stay `text'.
+           "<pre>C-x C-f /sudo::/etc/hosts</pre>"
+           "<pre>UA =========== A =========== B</pre>"
+           "<pre>Rust is installed now. Great!</pre>"
+           "</article></main></body></html>"))
+         (md (etaf-web-to-markdown html :base-url "https://go.dev/doc/effective_go")))
+    ;; Layer 1 & 2 expectations.
+    (should (string-match-p "```python\nx = 1\n```" md))
+    (should (string-match-p "```shell\necho hi\n```" md))
+    (should (string-match-p "```rust\npub struct Demo;\n```" md))
+    (should (string-match-p "```python\nimport requests\n```" md))
+    (should (string-match-p "```html\n<div id=\"app\">ok</div>\n```" md))
+    (should (string-match-p "```ts\nconst n = 1\n```" md))
+    ;; Explicit plain locks stay `text'.
+    (should (string-match-p "```text\nGET / HTTP/1\\.1\nHost: example\\.com\n```" md))
+    (should (string-match-p "```text\nbrew install ripgrep\n```" md))
+    ;; Layer 3 deterministic anchors.
+    (should (string-match-p "```python\n#!/usr/bin/env python3\nprint('hi')\n```" md))
+    (should (string-match-p "```json\n{\"name\": \"etaf\", \"count\": 3}\n```" md))
+    (should (string-match-p "```diff\ndiff --git a/a\\.el b/a\\.el" md))
+    (should (string-match-p "```http\nGET /index\\.html HTTP/1\\.1\nHost: example\\.org" md))
+    (should (string-match-p "```sql\nSELECT id, name FROM users WHERE active = 1;\n```" md))
+    (should (string-match-p "```elisp\n(add-hook 'prog-mode-hook #'display-line-numbers-mode)\n```" md))
+    (should (string-match-p "```sh\n\\$ git status -sb\nM README\\.md\n```" md))
+    (should (string-match-p "```sh\nbrew install ripgrep\n```" md))
+    (should (string-match-p "```dockerfile\nFROM alpine:3\\.20\nRUN apk add git\n```" md))
+    ;; Layer 4 scored detection.
+    (should (string-match-p "```go\ntype Server struct {" md))
+    (should (string-match-p "```jsx\nfunction MyButton()" md))
+    (should (string-match-p "```css\n@theme {" md))
+    ;; Non-code safety stays `text'.
+    (should (string-match-p "```text\nC-x C-f /sudo::/etc/hosts\n```" md))
+    (should (string-match-p "```text\nUA =========== A =========== B\n```" md))
+    (should (string-match-p "```text\nRust is installed now\\. Great!\n```" md))))
+
+(ert-deftest etaf-web-tests-visible-cursor-movement-selection-and-copy ()
+  "Rendered web pages keep a visible cursor, support normal cursor motion with viewport auto-scroll, allow native mark/copy, and preserve safe RET and URL copy."
+  (let* ((cache (make-temp-file "etaf-web-cursor-" t))
+         (etaf-web-cache-directory cache)
+         (etaf-web-download-images nil)
+         (transient-mark-mode t)
+         (paras (mapconcat
+                 (lambda (i)
+                   (format "<p>Paragraph %02d alpha beta gamma delta epsilon.</p>" i))
+                 (number-sequence 1 40) "\n"))
+         (page1 (concat "<!doctype html><html><head><title>Cursor Page</title></head><body>"
+                        "<main><article><h1>Cursor Navigation Heading</h1>"
+                        "<p>Visit <a href=\"/target\">Target Destination</a> right now.</p>"
+                        paras
+                        "</article></main></body></html>"))
+         (page2 (concat "<!doctype html><html><head><title>Target Page</title></head><body>"
+                        "<main><article><h1>Arrived At Target</h1>"
+                        "<p>Successfully navigated via RET at cursor.</p>"
+                        "</article></main></body></html>"))
+         (buf nil))
+    (unwind-protect
+        (etaf-web-tests--with-http base
+            (lambda (_m path)
+              (pcase path
+                ("/page1" (list :status "200 OK" :body page1))
+                ("/target" (list :status "200 OK" :body page2))
+                (_ (list :status "404 Not Found" :body "404"))))
+          (setq buf (etaf-web-open (concat base "/page1")))
+          (etaf-web-tests--wait-phase buf 'ready)
+          (with-current-buffer buf
+            (set-window-buffer (selected-window) buf)
+            ;; 1. Cursor stays visible and modality auto-hide is disabled.
+            (should (not etaf-cursor-follows-input-modality))
+            (should cursor-type)
+            (let ((last-command-event '(mouse-1)))
+              (run-hooks 'pre-command-hook))
+            (should cursor-type)
+            ;; 2. Initial cursor lands inside the rendered page body (> line 1).
+            (let ((init-line (line-number-at-pos (point))))
+              (should (> init-line 1)))
+            ;; 3. C-f / C-b and <right> / <left> move character-by-character.
+            (let ((p0 (point)))
+              (execute-kbd-macro (kbd "C-f C-f"))
+              (should (= (point) (+ p0 2)))
+              (execute-kbd-macro (kbd "C-b"))
+              (should (= (point) (+ p0 1)))
+              (execute-kbd-macro (kbd "<right>"))
+              (should (= (point) (+ p0 2)))
+              (execute-kbd-macro (kbd "<left> <left>"))
+              (should (= (point) p0)))
+            ;; 4. C-a / C-e jump to text start/end on the current line (C-a toggles to BOL).
+            (execute-kbd-macro (kbd "C-f C-f C-a"))
+            (let ((bol-text (point)))
+              (should (not (memq (char-after bol-text) '(?\s ?\t ?\n))))
+              (execute-kbd-macro (kbd "C-e"))
+              (let ((eol-text (point)))
+                (should (> eol-text bol-text))
+                (should (not (memq (char-before eol-text) '(?\s ?\t))))))
+            ;; 5. Native C-SPC + C-f + M-w selects & copies clean property-free text.
+            (execute-kbd-macro (kbd "C-a"))
+            (let ((start-pos (point)))
+              (execute-kbd-macro (kbd "C-SPC"))
+              (execute-kbd-macro (kbd "C-f C-f C-f C-f C-f C-f"))
+              (should (region-active-p))
+              (kill-ring-save (region-beginning) (region-end))
+              (let ((copied (car kill-ring)))
+                (should (equal copied "Cursor"))
+                (should-not (text-properties-at 0 copied)))
+              (deactivate-mark)
+              (goto-char start-pos))
+            ;; 6. Pressing C-n / <down> past viewport bottom auto-scrolls web-scroll.
+            (let* ((rt (etaf-runtime-for-buffer buf))
+                   (off0 (etaf-scroll-offset rt 'web-scroll))
+                   (total-lines (count-lines (point-min) (point-max))))
+              (dotimes (_ (+ total-lines 4))
+                (execute-kbd-macro (kbd "C-n")))
+              (let ((off1 (etaf-scroll-offset rt 'web-scroll)))
+                (should (> off1 off0)))
+              ;; M-< returns to top (offset 0); M-> jumps to bottom (> 0).
+              (execute-kbd-macro (kbd "M-<"))
+              (should (= (etaf-scroll-offset rt 'web-scroll) 0))
+              (execute-kbd-macro (kbd "M->"))
+              (should (> (etaf-scroll-offset rt 'web-scroll) 0))
+              (execute-kbd-macro (kbd "M-<"))
+              (should (= (etaf-scroll-offset rt 'web-scroll) 0)))
+            ;; 7. `w' copies current page URL cleanly.
+            (execute-kbd-macro (kbd "w"))
+            (should (equal (car kill-ring) (concat base "/page1")))
+            ;; 8. RET on plain heading text stays calmly on page1 without error.
+            (execute-kbd-macro (kbd "M-<"))
+            (execute-kbd-macro (kbd "RET"))
+            (should (equal (plist-get (etaf-web-state buf) :url)
+                           (concat base "/page1")))
+            ;; 9. Moving cursor onto link and pressing RET navigates to /target.
+            (let ((link-pos (save-excursion
+                              (goto-char (point-min))
+                              (search-forward "Target Destination")
+                              (match-beginning 0))))
+              (goto-char link-pos)
+              (execute-kbd-macro (kbd "RET"))))
+          (should (etaf-web-tests--wait-until
+                   (lambda ()
+                     (let ((st (etaf-web-state buf)))
+                       (and (string-suffix-p "/target" (or (plist-get st :url) ""))
+                            (eq (plist-get st :phase) 'ready)))))))
+      (when (and buf (buffer-live-p buf))
+        (with-current-buffer buf (etaf-web-close)))
+      (delete-directory cache t))))
+
+(ert-deftest etaf-web-tests-heading-anchor-wrappers-and-hint-containers ()
+  "Heading-wrapping `.header-anchor' links survive while decorative permalink icons are dropped.
+VuePress/Theme-Plume `<h2 id=...><a class=\"header-anchor\" href=\"#...\"><span>Title</span></a></h2>'
+headings compile to clean Markdown headings (unwrapping the self-link), while
+icon-only/sr-only permalink markers (`#', `¶', `.sl-anchor-link') stay stripped,
+and `.hint-container' callouts compile to `:::note' containers."
+  (let* ((html
+          (concat
+           "<!doctype html><html><head><title>搭建私有 docker 镜像仓库</title></head>"
+           "<body><main><div class=\"vp-doc plume-content\">"
+           "<h1 class=\"page-title\">搭建私有 docker 镜像仓库</h1>"
+           "<p>第一段正文说明搭建私有镜像仓库的背景与动机，提供充足的上下文内容。</p>"
+           "<h2 id=\"客户端和服务端\" tabindex=\"-1\">"
+           "<a class=\"header-anchor\" href=\"#客户端和服务端\"><span>客户端和服务端</span></a></h2>"
+           "<p>当我们提到一个应用程序，同时还提到它的仓库，那么大概率是有客户端和服务端的区分。</p>"
+           "<h3 id=\"sec-2\" tabindex=\"-1\">"
+           "修改镜像存储目录"
+           "<a class=\"header-anchor\" href=\"#sec-2\"><span class=\"sr-only\">Jump to heading</span><span aria-hidden=\"true\">#</span></a></h3>"
+           "<h3 id=\"sec-3\">Starlight Section"
+           "<a class=\"sl-anchor-link\" href=\"#sec-3\"><span aria-hidden=\"true\"><svg></svg></span><span class=\"sr-only\">Section titled Starlight Section</span></a></h3>"
+           "<div class=\"hint-container note\">"
+           "<p class=\"hint-container-title\">场景A：大型企业级应用</p>"
+           "<p>推荐策略：设计令牌作为单一事实来源。</p></div>"
+           "</div></main></body></html>"))
+         (md (etaf-web-to-markdown html :base-url "https://example.com/blog/docker/")))
+    (should (string-match-p "^## 客户端和服务端$" md))
+    (should (string-match-p "^### 修改镜像存储目录$" md))
+    (should (string-match-p "^### Starlight Section$" md))
+    (should-not (string-match-p "Jump to heading" md))
+    (should-not (string-match-p "Section titled" md))
+    (should-not (string-match-p "\\[客户端和服务端\\]" md))
+    (should (string-match-p "^:::note {title=\"场景A：大型企业级应用\"}$" md))
+    (should (string-match-p "设计令牌作为单一事实来源" md))))
 
 (provide 'etaf-web-tests)
 ;;; etaf-web-tests.el ends here

@@ -132,5 +132,22 @@ The shape matches `etaf-install-doctor': :required and :optional lists of
   (require 'etaf-xiangqi-model)
   (require 'etaf-xiangqi-views)
   (require 'etaf-xiangqi-app))
+;;;###autoload
+(with-eval-after-load 'etaf
+  (etaf-app-register 'etaf-xiangqi
+    :title "中国象棋"
+    :icon "X"
+    :category 'game
+    :feature 'etaf-xiangqi
+    :open 'etaf-xiangqi-open
+    :doctor 'etaf-xiangqi-doctor
+    :hosts '(buffer desktop panel)
+    :session '(:create etaf-xiangqi-create
+               :view etaf-xiangqi-view
+               :close etaf-gamekit-dispose)
+    :window '(:width 1120 :height 30 :min-width 480 :min-height 14)
+    :panel '(:width 75 :height 40 :fill-height t
+             :at frame-center :stack nil :resizable nil)))
+
 (provide 'etaf-xiangqi)
 ;;; etaf-xiangqi.el ends here

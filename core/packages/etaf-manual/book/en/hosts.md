@@ -188,15 +188,27 @@ A fixed-size local picture.
 **Semantics.**
 
 - `:src` is a local file path or an Emacs image descriptor `(image ... :type TYPE :file FILE)` or `:data DATA`. `:columns` and `:rows` are the positive integer character-cell size of the picture.
-- `:adapter` selects how the source becomes cells: `auto` (initial) tries a graphics image on the current frame, then the registered converters, then a monochrome ASCII placeholder; `text` skips graphics; `placeholder` always makes the ASCII form. A missing or undecodable source becomes a placeholder rather than an error.
+- `:adapter` selects how the source becomes cells: `auto` (initial) tries a graphics image on a graphical frame, then Kitty terminal graphics on compliant 24-bit text frames, then the registered converters, then a monochrome ASCII placeholder; `kitty` tries only Kitty terminal graphics before falling back to the placeholder; `text` skips both graphics paths; `placeholder` always makes the ASCII form. A missing or undecodable source becomes a placeholder rather than an error.
 - `:inset` is nil or `(TOP . BOTTOM)`, the pixels of vertical room a graphics image leaves empty inside its rows.
 - An image Host takes no children; it is a leaf, and style properties such as `:padding` or `:color` are disregarded because the picture fills its cell.
 
-**Errors.** `error→ etaf-renderer-error` when `:src` is not a path or a descriptor with `:type` and `:file`/`:data`, when `:columns` or `:rows` is not a positive integer, when `:adapter` is not `auto`, `text` or `placeholder`, when `:inset` is not nil or a non-negative pair, or when the Host is given children.
+**Errors.** `error→ etaf-renderer-error` when `:src` is not a path or a descriptor with `:type` and `:file`/`:data`, when `:columns` or `:rows` is not a positive integer, when `:adapter` is not `auto`, `kitty`, `text` or `placeholder`, when `:inset` is not nil or a non-negative pair, or when the Host is given children.
 
 **Example.** `(image :src "/tmp/chart.png" :columns 40 :rows 10 :adapter 'placeholder)`
 
 **See also.** [Images](images.md).
+
+#### Function: etaf-image-kitty-available-p (&optional frame)
+
+Return a capability plist when FRAME supports Kitty terminal graphics, or nil.
+
+**Arguments.** FRAME defaults to the selected frame.
+
+**Semantics.** Delegates to `ebox-image-kitty-available-p` so ETAF applications can query `:cell-width`, `:cell-height` and `:local` on Kitty-capable text terminals (for aspect-ratio grid sizing of `image` Hosts) without calling Ebox directly.
+
+**Returns.** A fresh capability plist `(:cell-width W :cell-height H :local BOOL)`, or nil.
+
+**See also.** `ebox-image-kitty-available-p` in [Images](images.md).
 
 ## Semantic properties
 

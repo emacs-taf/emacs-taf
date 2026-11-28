@@ -110,6 +110,26 @@
       "name": "etaf-reader-tests-shelf-filters-use-state",
       "file": "tests/etaf-reader-tests.el",
       "purpose": "Shelf filters read the stored reading state instead of a second copy."
+    },
+    {
+      "name": "etaf-reader-tests-mode-line-preserved",
+      "file": "tests/etaf-reader-tests.el",
+      "purpose": "Opening the reader preserves Emacs's mode-line in the reader buffer."
+    },
+    {
+      "name": "etaf-reader-tests-previous-page-lands-on-chapter-end",
+      "file": "tests/etaf-reader-tests.el",
+      "purpose": "Turning backward across a chapter boundary lands on the previous chapter's last page rather than its beginning."
+    },
+    {
+      "name": "etaf-reader-tests-zero-length-selection-rejected-and-toolbar-edits-in-place",
+      "file": "tests/etaf-reader-tests.el",
+      "purpose": "Zero-length selections never create corrupt annotations, and the Scheme A toolbar stays attached in edit mode for color/style switching and deletion."
+    },
+    {
+      "name": "etaf-reader-tests-scroll-mode-and-sidebar-controls",
+      "file": "tests/etaf-reader-tests.el",
+      "purpose": "Scroll mode always uses a single column, and the full-height reading sidebar lists every chapter with live whole-book progress."
     }
   ]
 }

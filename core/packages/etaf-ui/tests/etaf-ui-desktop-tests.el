@@ -571,4 +571,32 @@ each other."
                                   (etaf-runtime-host-props-entries runtime)))))))
       (etaf-ui-desktop-test--cleanup buffer))))
 
+(ert-deftest etaf-ui-pane-resizer-and-splitter-fit-one-cell-on-text-displays ()
+  "On text displays where one cell is one unit wide, dividers stay one cell wide."
+  (let ((buffer (generate-new-buffer "*etaf-ui-desktop-tty-dividers*")))
+    (unwind-protect
+        (progn
+          (etaf-mount
+           buffer
+           (etaf-view
+            (column :width '(ch 40) :height '(lh 4)
+              (row :width 'stretch :height '(lh 1)
+                (box :width '(ch 12) "left")
+                (etaf-pane-resizer :ref 'tty-resizer :size 12)
+                (box :flex-grow 1 :min-width '(ch 0) "right"))
+              (box :width 'stretch :height '(lh 2)
+                (etaf-splitter :orientation 'horizontal :ratio 0.5
+                  (slot :name 'first (box "a"))
+                  (slot :name 'second (box "b"))))))
+           '(:viewport-width 40 :viewport-height 4))
+          (let ((runtime (etaf-runtime-for-buffer buffer)))
+            (should (= 1 (car (etaf-host-ref-size runtime 'tty-resizer))))
+            (with-current-buffer buffer
+              (goto-char (point-min))
+              (should (<= (string-width (buffer-substring-no-properties
+                                         (line-beginning-position)
+                                         (line-end-position)))
+                          40)))))
+      (etaf-ui-desktop-test--cleanup buffer))))
+
 ;;; etaf-ui-desktop-tests.el ends here

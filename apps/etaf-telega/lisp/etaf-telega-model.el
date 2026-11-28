@@ -24,7 +24,10 @@
 
 (require 'cl-lib)
 (require 'seq)
+(require 'subr-x)
 (require 'etaf)
+
+(declare-function etaf-telega-open "etaf-telega" ())
 
 (defun etaf-telega-model ()
   "Create the application model."
@@ -54,7 +57,8 @@
         :send-at (etaf-ref nil :name 'etaf-telega-send-at)
         :send-markdown (etaf-ref nil :name 'etaf-telega-send-markdown)
         :upload (etaf-ref nil :name 'etaf-telega-upload)
-        :popover (etaf-ref nil :name 'etaf-telega-popover)))
+        :popover (etaf-ref nil :name 'etaf-telega-popover)
+        :last-unmuted-unread nil))
 
 (defun etaf-telega-model-screen (model)
   "Return MODEL's shown screen, `root' or `chat'."
@@ -130,6 +134,60 @@
   "Set MODEL's account projection ME."
   (setf (etaf-value (plist-get model :me)) me))
 
+(defun etaf-telega--sync-activity (model chats)
+  "Publish unread Telegram summary from CHATS to the ETAF Live Activity protocol."
+  (let ((total 0)
+        (unmuted 0)
+        (top nil)
+        (prev-unmuted (plist-get model :last-unmuted-unread)))
+    (dolist (chat chats)
+      (let ((count (or (plist-get chat :unread) 0)))
+        (when (and (> count 0) (not (plist-get chat :archived)))
+          (setq total (+ total count))
+          (unless (plist-get chat :muted)
+            (setq unmuted (+ unmuted count))
+            (unless top (setq top chat)))
+          (unless top (setq top chat)))))
+    (if (<= total 0)
+        (when (etaf-activity-get 'etaf-telega)
+          (etaf-activity-remove 'etaf-telega))
+      (let* ((raw-title (or (and top (plist-get top :title)) "Telegram"))
+             (raw-preview (or (and top (plist-get top :preview)) ""))
+             (top-title (string-trim (car (split-string (format "%s" raw-title) "\n"))))
+             (top-preview (string-trim (car (split-string (format "%s" raw-preview) "\n"))))
+             (subtitle (if (not (string-empty-p top-preview))
+                           (format "%s: %s" top-title top-preview)
+                         top-title)))
+        (etaf-activity-publish
+         'etaf-telega
+         (list
+          :app 'etaf-telega
+          :kind 'inbox
+          :priority 62
+          :state 'active
+          :icon "✉"
+          :title (format "Telegram · %d 条未读" total)
+          :subtitle subtitle
+          :compact (format "TG %d 未读" total)
+          :open (lambda ()
+                  (when (fboundp 'etaf-telega-open)
+                    (etaf-telega-open)))))
+        (when (and (integerp prev-unmuted) (> unmuted prev-unmuted))
+          (etaf-notify
+           top-title
+           :app 'etaf-telega
+           :group 'etaf-telega
+           :variant 'info
+           :detail (if (string-empty-p top-preview)
+                       (format "共 %d 条未读消息" total)
+                     top-preview)
+           :ttl 6.0
+           :actions (list (list :id 'open :label "查看消息" :primary t
+                                :fn (lambda ()
+                                      (when (fboundp 'etaf-telega-open)
+                                        (etaf-telega-open)))))))))
+    (setf (plist-get model :last-unmuted-unread) unmuted)))
+
 (defun etaf-telega-model-set-chats (model chats)
   "Replace MODEL's chats with CHATS.
 A chat whose projection is unchanged keeps its previous record, so only the
@@ -152,7 +210,8 @@ conversation when it is still present and falls back to the newest one."
                               :key (lambda (chat) (plist-get chat :id))
                               :test #'equal))
                 current
-              (and chats (plist-get (car chats) :id)))))))
+              (and chats (plist-get (car chats) :id)))))
+    (etaf-telega--sync-activity model chats)))
 
 (defun etaf-telega-model-select (model chat)
   "Select CHAT in MODEL.

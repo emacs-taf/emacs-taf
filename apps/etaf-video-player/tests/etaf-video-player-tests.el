@@ -193,6 +193,7 @@ strings for the fixtures."
   `(let ((process-environment
           (append (cons (concat "FAKE_FFMPEG_LOG=" ,log) ,settings)
                   process-environment))
+         (etaf-video-engine 'ffmpeg)
          (etaf-video-ffmpeg-program etaf-video-player-tests--ffmpeg)
          (etaf-video-ffprobe-program etaf-video-player-tests--ffprobe)
          (etaf-video-ffplay-program etaf-video-player-tests--ffplay))
@@ -377,6 +378,12 @@ survive every switch, and an unknown mode is refused."
                        19))
            (with-current-buffer buffer
              (execute-kbd-macro (kbd "C")))
+           ;; On a terminal `C' cycles directly between the two character modes.
+           (should (eq 'ascii (plist-get (etaf-video-player-tests--state) :mode)))
+           (should (eq 'ascii (plist-get (etaf-video-player-tests--state) :render-mode)))
+           ;; Explicitly requesting `image' on a terminal still falls back cleanly.
+           (with-current-buffer buffer
+             (etaf-video-player-set-render-mode 'image))
            (should (eq 'image (plist-get (etaf-video-player-tests--state) :mode)))
            (should (eq 'ascii (plist-get (etaf-video-player-tests--state) :render-mode)))
            (should-error (etaf-video-player-set-render-mode 'movie)
@@ -389,8 +396,7 @@ survive every switch, and an unknown mode is refused."
   "A color player stops at `etaf-video-player-color-columns' columns.
 True-color cells carry one face property each, so the fitted canvas keeps
 the property volume bounded while the row count follows the video aspect.
-The cap only limits color; the character and image modes use the whole
-stage."
+Switching into and out of `color' via `C' applies and lifts the cap."
   (etaf-video-player-tests--cleanup)
   (let ((log (etaf-video-player-tests--log))
         (video nil))
@@ -410,6 +416,15 @@ stage."
                             1))))
              (should (= 8 (plist-get (etaf-video-player-tests--state) :columns)))
              (should (>= (plist-get (etaf-video-player-tests--state) :rows) 1))
+             ;; Switching out of color expands back to the full stage.
+             (with-current-buffer "*Video Player*"
+               (execute-kbd-macro (kbd "C")))
+             (let ((ascii-cols (plist-get (etaf-video-player-tests--state) :columns)))
+               (should (> ascii-cols 8))
+               ;; Switching back into color re-applies the column cap.
+               (with-current-buffer "*Video Player*"
+                 (execute-kbd-macro (kbd "C")))
+               (should (= 8 (plist-get (etaf-video-player-tests--state) :columns))))
              (etaf-video-player-close))
            (let ((etaf-video-player-color-columns nil))
              (etaf-video-player-open
@@ -704,11 +719,11 @@ position the way `q' does."
                         (lambda ()
                           (>= (plist-get (etaf-video-player-tests--state) :presented)
                               1))))
-               (should (equal (funcall canvas buffer) "#25272b"))
+               (should (equal (funcall canvas buffer) "#111216"))
                (with-current-buffer buffer
                  (execute-kbd-macro (kbd "T")))
                (should (eq etaf-video-player-theme-mode 'light))
-               (should (equal (funcall canvas buffer) "#F5F6F9"))
+               (should (equal (funcall canvas buffer) "#F7F8FA"))
                (with-current-buffer buffer
                  (execute-kbd-macro (kbd "SPC"))
                  (should-not (plist-get (etaf-video-player-tests--state) :playing))
@@ -721,12 +736,10 @@ position the way `q' does."
       (etaf-video-player-tests--cleanup)
       (ignore-errors (delete-directory directory t)))))
 
-(ert-deftest etaf-video-player-tests-close-restores-frame-background ()
-  "Closing the player gives the frame its own background back.
-While open, the player paints the frame with its chrome color so the cells
-Emacs reserves at the window edges match the shell.  Graphic frames only:
-a terminal frame keeps its background throughout."
-  (skip-unless (display-graphic-p))
+(ert-deftest etaf-video-player-tests-preserves-frame-background-and-mode-line ()
+  "Opening the player keeps Emacs's mode line and frame background untouched.
+The player paints its own buffer canvas and buffer-local fringe in its
+palette so split windows and other buffers in the frame keep their theme."
   (etaf-video-player-tests--cleanup)
   (let* ((log (etaf-video-player-tests--log))
          (etaf-video-player-theme-mode 'dark)
@@ -737,30 +750,31 @@ a terminal frame keeps its background throughout."
          log (list "FAKE_FFMPEG_FRAMES=400" "FAKE_FFMPEG_INTERVAL=0.02"
                    "FAKE_FFPROBE_DURATION=8.0" "FAKE_FFPROBE_FPS=50/1")
          (save-window-excursion
-           (etaf-video-player-open
-            (list :file etaf-video-player-tests--input :columns 16 :rows 4
-                  :audio nil))
-           ;; The frame edges continue the cells the shell leaves unpainted.
-           (let ((chrome (with-current-buffer "*Video Player*"
-                           (plist-get (car (last (alist-get 'default
-                                                            face-remapping-alist)))
-                                      :background))))
-             (should (stringp chrome))
-             (should-not (equal original chrome))
-             (should (equal (frame-parameter frame 'background-color) chrome)))
-           (with-current-buffer "*Video Player*"
-             (execute-kbd-macro (kbd "q")))
-           (should (equal (frame-parameter frame 'background-color) original))
-           (should (equal (face-background 'default frame) original))))
+           (let ((buffer (etaf-video-player-open
+                          (list :file etaf-video-player-tests--input
+                                :columns 16 :rows 4 :audio nil))))
+             (with-current-buffer buffer
+               (should mode-line-format)
+               (let ((fringe-bg (plist-get (car (last (alist-get 'fringe
+                                                                 face-remapping-alist)))
+                                           :background)))
+                 (should (equal fringe-bg "#1B1D23")))
+               (should (equal (frame-parameter frame 'background-color) original))
+               (execute-kbd-macro (kbd "T"))
+               (should (equal (frame-parameter frame 'background-color) original))
+               (let ((fringe-bg (plist-get (car (last (alist-get 'fringe
+                                                                 face-remapping-alist)))
+                                           :background)))
+                 (should (equal fringe-bg "#FFFFFF")))
+               (execute-kbd-macro (kbd "q"))))
+           (should (equal (frame-parameter frame 'background-color) original))))
       (ignore-errors (delete-file log))
-      (etaf-video-player-tests--cleanup)
-      (set-face-background 'default original frame))))
+      (etaf-video-player-tests--cleanup))))
 
-(ert-deftest etaf-video-player-tests-open-interactively-shows-the-demo ()
-  "The generic entry opens the player without asking for a video file.
-`M-x etaf-video-player-open' plays the built-in demo, so it reads nothing
-from the minibuffer; `etaf-video-player-open-file' is the command that
-prompts for a name."
+(ert-deftest etaf-video-player-tests-open-interactively-shows-welcome ()
+  "The generic entry opens the Welcome / Continue Watching home screen.
+`M-x etaf-video-player-open' reads nothing from the minibuffer and spawns no
+decoder until the user picks a file, URL, history item or demo (`d')."
   (etaf-video-player-tests--cleanup)
   (let ((log (etaf-video-player-tests--log))
         prompted)
@@ -775,10 +789,19 @@ prompts for a name."
                     (lambda (&rest _) (setq prompted t) "")))
            (call-interactively #'etaf-video-player-open))
          (should-not prompted)
-         (should (eq 'demo (plist-get (etaf-video-player-tests--state) :source)))
-         (should (equal "内建演示"
-                        (plist-get (etaf-video-player-tests--state) :title)))
-         (should (plist-get (etaf-video-player-tests--state) :playing))
+         (let ((st (etaf-video-player-tests--state)))
+           (should (plist-get st :welcome))
+           (should-not (plist-get st :playing))
+           (should-not (etaf-video-player-tests--runs log)))
+         (with-current-buffer "*Video Player*"
+           (should-error (etaf-video-player-toggle-playback) :type 'user-error)
+           ;; Pressing `d' transitions explicitly to the built-in test pattern.
+           (execute-kbd-macro (kbd "d")))
+         (let ((st (etaf-video-player-tests--state)))
+           (should-not (plist-get st :welcome))
+           (should (eq 'demo (plist-get st :source)))
+           (should (equal "内建演示" (plist-get st :title)))
+           (should (plist-get st :playing)))
          (etaf-video-player-close))
       (ignore-errors (delete-file log))
       (etaf-video-player-tests--cleanup))))
@@ -887,10 +910,47 @@ and `none' stops on the last one."
          (should (= 1 (plist-get (etaf-video-player-tests--state) :index)))
          (etaf-video-player-close))
       (ignore-errors (delete-file log))
+      (etaf-video-player-tests--cleanup)))
+  ;; `one' repeats the same item from zero without advancing the index.
+  (etaf-video-player-tests--cleanup)
+  (let ((log (etaf-video-player-tests--log)))
+    (unwind-protect
+        (etaf-video-player-tests--with-fixture
+         log (list "FAKE_FFMPEG_FRAMES=2" "FAKE_FFMPEG_INTERVAL=0.01"
+                   "FAKE_FFPROBE_DURATION=1.0" "FAKE_FFPROBE_FPS=50/1")
+         (etaf-video-player-open
+          (list :file etaf-video-player-tests--input
+                :loop 'one :columns 8 :rows 2 :audio nil))
+         (should (etaf-video-player-tests--wait
+                  (lambda () (>= (plist-get (etaf-video-player-tests--state) :presented) 4))
+                  6))
+         (should (= 0 (plist-get (etaf-video-player-tests--state) :index)))
+         (etaf-video-player-close))
+      (ignore-errors (delete-file log))
+      (etaf-video-player-tests--cleanup)))
+  ;; `none' with shuffle still stops cleanly on a single-item queue.
+  (etaf-video-player-tests--cleanup)
+  (let ((log (etaf-video-player-tests--log)))
+    (unwind-protect
+        (etaf-video-player-tests--with-fixture
+         log (list "FAKE_FFMPEG_FRAMES=2" "FAKE_FFMPEG_INTERVAL=0.01"
+                   "FAKE_FFPROBE_DURATION=1.0" "FAKE_FFPROBE_FPS=50/1")
+         (etaf-video-player-open
+          (list :file etaf-video-player-tests--input
+                :loop 'none :shuffle t :columns 8 :rows 2 :audio nil))
+         (should (etaf-video-player-tests--wait
+                  (lambda () (plist-get (etaf-video-player-tests--state) :ended))
+                  6))
+         (let ((presented (plist-get (etaf-video-player-tests--state) :presented)))
+           (sleep-for 0.35)
+           (should (plist-get (etaf-video-player-tests--state) :ended))
+           (should (= presented (plist-get (etaf-video-player-tests--state) :presented))))
+         (etaf-video-player-close))
+      (ignore-errors (delete-file log))
       (etaf-video-player-tests--cleanup))))
 
 (ert-deftest etaf-video-player-tests-playlist-shuffle-stays-in-range ()
-  "Shuffle picks another item in the queue and reports the flag."
+  "Shuffle picks another item in the queue, returns on previous and reports its flag."
   (etaf-video-player-tests--cleanup)
   (let ((log (etaf-video-player-tests--log)))
     (unwind-protect
@@ -910,7 +970,10 @@ and `none' stops on the last one."
            (with-current-buffer "*Video Player*" (etaf-video-player-next))
            (let ((after (plist-get (etaf-video-player-tests--state) :index)))
              (should (and (>= after 0) (< after 3)))
-             (should-not (= before after))))
+             (should-not (= before after))
+             ;; Previous steps back along the same shuffle order.
+             (with-current-buffer "*Video Player*" (etaf-video-player-previous))
+             (should (= before (plist-get (etaf-video-player-tests--state) :index)))))
          (with-current-buffer "*Video Player*" (etaf-video-player-toggle-shuffle))
          (should-not (plist-get (etaf-video-player-tests--state) :shuffle))
          (etaf-video-player-close))
@@ -944,9 +1007,23 @@ the documented error and the beside probe prefers the language suffix."
             (should (equal "第三句" (etaf-video-player-subtitle-text-at cues 8.0)))
             (should-not (etaf-video-player-subtitle-text-at cues 9.5)))
           (with-temp-file webvtt
-            (insert "WEBVTT\n\n00:01.000 --> 00:02.000\nVTT 字幕\n"))
+            (insert "\ufeffWEBVTT\n\n"
+                    "NOTE comment 00:00:00,000 --> 00:00:10,000\nignored\n\n"
+                    "00:01.000 --> 00:02.000\nVTT 字幕\n\n"
+                    "00:00:03 --> 00:00:04.5\n可变小数\n\n"
+                    "5.500 --> 6,50\n纯秒数\n\n"
+                    "00:00:10,000 --> 00:00:20,000\n长字幕\n\n"
+                    "00:00:12,000 --> 00:00:14,000\n叠层短字幕\n"))
           (let ((cues (etaf-video-player-subtitle-parse webvtt)))
-            (should (equal "VTT 字幕" (etaf-video-player-subtitle-text-at cues 1.5))))
+            (should (equal "VTT 字幕" (etaf-video-player-subtitle-text-at cues 1.5)))
+            (should (equal "可变小数" (etaf-video-player-subtitle-text-at cues 3.2)))
+            (should (equal "可变小数" (etaf-video-player-subtitle-text-at cues 4.4)))
+            (should-not (etaf-video-player-subtitle-text-at cues 4.6))
+            (should (equal "纯秒数" (etaf-video-player-subtitle-text-at cues 6.0)))
+            (should (equal "长字幕 叠层短字幕"
+                           (etaf-video-player-subtitle-text-at cues 13.0)))
+            (should (equal "长字幕"
+                           (etaf-video-player-subtitle-text-at cues 16.0))))
           (should-error (etaf-video-player-subtitle-parse
                          (expand-file-name "missing.srt" directory))
                         :type 'etaf-video-player-subtitle-error)
@@ -1110,6 +1187,413 @@ not cover the decode-to-image path."
                     (should-not (string-match-p "快捷键 · 只读" text)))))))
         (etaf-video-player-tests--cleanup)
         (delete-file log)))))
+
+(ert-deftest etaf-video-player-tests-opens-directory-and-lazy-probes ()
+  "Opening a directory collects sorted video files and probes non-active items lazily.
+An empty directory signals `user-error' before any player opens."
+  (etaf-video-player-tests--cleanup)
+  (let ((log (etaf-video-player-tests--log))
+        (probe-log (etaf-video-player-tests--log))
+        (directory (make-temp-file "etaf-video-player-dir-" t))
+        (empty-dir (make-temp-file "etaf-video-player-empty-" t)))
+    (unwind-protect
+        (progn
+          (write-region "" nil (expand-file-name "01-alpha.mp4" directory))
+          (write-region "" nil (expand-file-name "02-beta.mkv" directory))
+          (write-region "" nil (expand-file-name "03-gamma.webm" directory))
+          (write-region "" nil (expand-file-name "notes.txt" directory))
+          (should-error (etaf-video-player-open empty-dir) :type 'user-error)
+          (etaf-video-player-tests--with-fixture
+           log (list "FAKE_FFMPEG_FRAMES=400" "FAKE_FFMPEG_INTERVAL=0.02"
+                     "FAKE_FFPROBE_DURATION=30.0" "FAKE_FFPROBE_FPS=50/1"
+                     (concat "FAKE_FFPROBE_LOG=" probe-log))
+           (etaf-video-player-open (list :file directory :columns 12 :rows 3 :audio nil))
+           (let* ((state (etaf-video-player-tests--state))
+                  (runs-at-open (etaf-video-player-tests--runs probe-log))
+                  (beta (expand-file-name "02-beta.mkv" directory))
+                  (gamma (expand-file-name "03-gamma.webm" directory)))
+             (should (= 3 (plist-get state :queue-length)))
+             (should (equal "01-alpha.mp4" (plist-get state :title)))
+             ;; Non-active items were NOT probed at open time.
+             (should-not (cl-some (lambda (r) (member beta r)) runs-at-open))
+             (should-not (cl-some (lambda (r) (member gamma r)) runs-at-open))
+             (with-current-buffer "*Video Player*" (etaf-video-player-next))
+             (let ((next-state (etaf-video-player-tests--state))
+                   (runs-after-next (etaf-video-player-tests--runs probe-log)))
+               (should (equal "02-beta.mkv" (plist-get next-state :title)))
+               (should (cl-some (lambda (r) (member beta r)) runs-after-next))
+               (should-not (cl-some (lambda (r) (member gamma r)) runs-after-next))))
+           (etaf-video-player-close)))
+      (ignore-errors (delete-file log))
+      (ignore-errors (delete-file probe-log))
+      (ignore-errors (delete-directory directory t))
+      (ignore-errors (delete-directory empty-dir t))
+      (etaf-video-player-tests--cleanup))))
+
+(ert-deftest etaf-video-player-tests-quick-keys-subtitle-offset-and-doctor ()
+  "Quick seek keys, single-dimension grid hints, subtitle offset and doctor work.
+`C-f'/`C-b' seek 30 seconds, `0' restarts from zero, `z'/`x' shift subtitles
+by 0.5 seconds, a single `:columns' hint derives `:rows', and doctor honors
+configured program variables."
+  (etaf-video-player-tests--cleanup)
+  (let ((log (etaf-video-player-tests--log))
+        (directory (make-temp-file "etaf-video-player-quick-" t)))
+    (unwind-protect
+        (let ((video (expand-file-name "clip.mp4" directory))
+              (track (expand-file-name "clip.srt" directory)))
+          (write-region "" nil video)
+          (write-region "1\n00:00:00,400 --> 00:00:01,000\n延迟字幕\n" nil track)
+          (etaf-video-player-tests--with-fixture
+           log (list "FAKE_FFMPEG_FRAMES=800" "FAKE_FFMPEG_INTERVAL=0.02"
+                     "FAKE_FFPROBE_DURATION=120.0" "FAKE_FFPROBE_FPS=50/1")
+           (let ((doctor (etaf-video-player-doctor)))
+             (should (= 1 (length (plist-get doctor :required))))
+             (should (nth 1 (car (plist-get doctor :required))))
+             (should (>= (length (plist-get doctor :optional)) 3)))
+           (etaf-video-player-open (list :file video :columns 64 :audio nil))
+           (let ((state (etaf-video-player-tests--state)))
+             (should (= 64 (plist-get state :columns)))
+             (should (> (plist-get state :rows) 1)))
+           (with-current-buffer "*Video Player*"
+             (etaf-video-player-toggle-playback)
+             (etaf-video-player-seek 0)
+             (execute-kbd-macro (kbd "C-f"))
+             (should (>= (plist-get (etaf-video-player-tests--state) :position) 29))
+             (execute-kbd-macro (kbd "C-b"))
+             (should (<= (plist-get (etaf-video-player-tests--state) :position) 1))
+             (etaf-video-player-seek 45)
+             (execute-kbd-macro (kbd "0"))
+             (should (= 0 (plist-get (etaf-video-player-tests--state) :position)))
+             ;; At t=0 the cue at 0.4..1.0 is hidden; `z' (+0.5s) brings it in.
+             (should-not (string-match-p "延迟字幕"
+                                         (buffer-substring-no-properties (point-min) (point-max))))
+             (execute-kbd-macro (kbd "z"))
+             (should (string-match-p "延迟字幕"
+                                     (buffer-substring-no-properties (point-min) (point-max))))
+             (execute-kbd-macro (kbd "x"))
+             (should-not (string-match-p "延迟字幕"
+                                         (buffer-substring-no-properties (point-min) (point-max)))))
+           (etaf-video-player-close)))
+      (ignore-errors (delete-file log))
+      (ignore-errors (delete-directory directory t))
+      (etaf-video-player-tests--cleanup))))
+
+(ert-deftest etaf-video-player-tests-canvas-click-and-decoder-error ()
+  "Clicking the video canvas toggles playback and decoder errors surface in state."
+  (etaf-video-player-tests--cleanup)
+  (let ((log (etaf-video-player-tests--log)))
+    (unwind-protect
+        (progn
+          (etaf-video-player-tests--with-fixture
+           log (list "FAKE_FFMPEG_FRAMES=400" "FAKE_FFMPEG_INTERVAL=0.02"
+                     "FAKE_FFPROBE_DURATION=8.0" "FAKE_FFPROBE_FPS=50/1")
+           (let* ((buffer (etaf-video-player-open
+                           (list :file etaf-video-player-tests--input
+                                 :columns 12 :rows 3 :audio nil)))
+                  (runtime (etaf-runtime-for-buffer buffer)))
+             (should (plist-get (etaf-video-player-tests--state) :playing))
+             (etaf-dispatch-event runtime 'video-canvas 'press)
+             (should-not (plist-get (etaf-video-player-tests--state) :playing))
+             (etaf-dispatch-event runtime 'video-canvas 'press)
+             (should (plist-get (etaf-video-player-tests--state) :playing))
+             (etaf-video-player-close)))
+          (etaf-video-player-tests--with-fixture
+           log (list "FAKE_FFMPEG_FRAMES=0" "FAKE_FFMPEG_STATUS=1"
+                     "FAKE_FFMPEG_ERROR=HTTP 404 Not Found"
+                     "FAKE_FFPROBE_DURATION=8.0")
+           (etaf-video-player-open
+            (list :file etaf-video-player-tests--input
+                  :columns 12 :rows 3 :audio nil))
+           (should (etaf-video-player-tests--wait
+                    (lambda () (plist-get (etaf-video-player-tests--state) :error))
+                    5))
+           (let ((err (plist-get (etaf-video-player-tests--state) :error)))
+             (should (string-match-p "404" err)))
+           (should (etaf-video-player-tests--wait
+                    (lambda ()
+                      (with-current-buffer "*Video Player*"
+                        (string-match-p "出错"
+                                        (buffer-substring-no-properties
+                                         (point-min) (point-max)))))
+                    5))
+           (etaf-video-player-close)))
+      (ignore-errors (delete-file log))
+      (etaf-video-player-tests--cleanup))))
+
+(ert-deftest etaf-video-player-tests-drawers-theater-ab-and-goto ()
+  "Theater/Studio drawers, goto-time, A-B loop and queue reordering work cleanly."
+  (etaf-video-player-tests--cleanup)
+  (let ((log (etaf-video-player-tests--log))
+        (dir (make-temp-file "etaf-video-player-studio-" t)))
+    (unwind-protect
+        (let ((a (expand-file-name "first.mp4" dir))
+              (b (expand-file-name "second.mp4" dir)))
+          (write-region "" nil a)
+          (write-region "" nil b)
+          (etaf-video-player-tests--with-fixture
+           log (list "FAKE_FFMPEG_FRAMES=400" "FAKE_FFMPEG_INTERVAL=0.02"
+                     "FAKE_FFPROBE_DURATION=120.0" "FAKE_FFPROBE_FPS=50/1")
+           ;; Single video opens in Cinema Theater mode by default.
+           (etaf-video-player-open (list :file a :columns 12 :rows 3 :audio nil))
+           (let ((st (etaf-video-player-tests--state)))
+             (should (plist-get st :theater))
+             (should-not (plist-get st :media-panel))
+             (should-not (plist-get st :inspector)))
+           (with-current-buffer "*Video Player*"
+             (execute-kbd-macro (kbd "p"))
+             (should (plist-get (etaf-video-player-tests--state) :media-panel))
+             (execute-kbd-macro (kbd "i"))
+             (should (plist-get (etaf-video-player-tests--state) :inspector))
+             (execute-kbd-macro (kbd "w"))
+             (should (plist-get (etaf-video-player-tests--state) :theater))
+             ;; Pressing `w' again restores previously open drawers.
+             (execute-kbd-macro (kbd "w"))
+             (should (plist-get (etaf-video-player-tests--state) :media-panel))
+             (should (plist-get (etaf-video-player-tests--state) :inspector))
+             ;; Goto time parses MM:SS and plain seconds.
+             (etaf-video-player-toggle-playback)
+             (etaf-video-player-goto-time "01:05")
+             (should (= 65 (plist-get (etaf-video-player-tests--state) :position)))
+             (etaf-video-player-goto-time "10")
+             (should (= 10 (plist-get (etaf-video-player-tests--state) :position)))
+             ;; A-B loop lifecycle.
+             (etaf-video-player-set-ab-start 10)
+             (etaf-video-player-set-ab-end 25)
+             (should (equal '(10.0 . 25.0)
+                            (plist-get (etaf-video-player-tests--state) :ab-loop)))
+             (etaf-video-player-clear-ab)
+             (should-not (plist-get (etaf-video-player-tests--state) :ab-loop))
+             ;; Enqueue and reorder current item with J / K.
+             (etaf-video-player-enqueue b)
+             (should (= 2 (plist-get (etaf-video-player-tests--state) :queue-length)))
+             (execute-kbd-macro (kbd "J"))
+             (should (= 1 (plist-get (etaf-video-player-tests--state) :index)))
+             (execute-kbd-macro (kbd "K"))
+             (should (= 0 (plist-get (etaf-video-player-tests--state) :index))))
+           (etaf-video-player-close)))
+      (ignore-errors (delete-file log))
+      (ignore-errors (delete-directory dir t))
+      (etaf-video-player-tests--cleanup))))
+
+(ert-deftest etaf-video-player-tests-bookmarks-history-and-chapters ()
+  "SQLite bookmarks, recent watch history and async chapter navigation work."
+  (etaf-video-player-tests--cleanup)
+  (let* ((log (etaf-video-player-tests--log))
+         (dir (make-temp-file "etaf-video-player-bm-" t))
+         (etaf-video-player-history-file (expand-file-name "player.sqlite3" dir))
+         (chapters-json
+          "[{\"start_time\":\"0.0\",\"end_time\":\"20.0\",\"tags\":{\"title\":\"Intro\"}},{\"start_time\":\"20.0\",\"end_time\":\"60.0\",\"tags\":{\"title\":\"Boss Fight\"}}]"))
+    (unwind-protect
+        (let ((clip (expand-file-name "zhongkui.mp4" dir)))
+          (write-region "" nil clip)
+          (etaf-video-player-tests--with-fixture
+           log (list "FAKE_FFMPEG_FRAMES=400" "FAKE_FFMPEG_INTERVAL=0.02"
+                     "FAKE_FFPROBE_DURATION=60.0" "FAKE_FFPROBE_FPS=50/1"
+                     (concat "FAKE_FFPROBE_CHAPTERS=" chapters-json))
+           (etaf-video-player-open (list :file clip :columns 12 :rows 3 :audio nil))
+           (should (etaf-video-player-tests--wait
+                    (lambda () (= 2 (plist-get (etaf-video-player-tests--state) :chapters)))
+                    5))
+           (with-current-buffer "*Video Player*"
+             (etaf-video-player-toggle-playback)
+             (etaf-video-player-seek 5)
+             (etaf-video-player-next-chapter)
+             (should (= 20 (plist-get (etaf-video-player-tests--state) :position)))
+             (etaf-video-player-previous-chapter)
+             (should (= 0 (plist-get (etaf-video-player-tests--state) :position)))
+             ;; SQLite bookmarks round-trip.
+             (etaf-video-player-seek 12)
+             (let ((bm (etaf-video-player-add-bookmark "雨中挥刃")))
+               (should bm)
+               (should (= 1 (plist-get (etaf-video-player-tests--state) :bookmarks)))
+               (should (equal "雨中挥刃"
+                              (plist-get (car (etaf-video-player-bookmarks clip)) :note)))
+               (etaf-video-player-bookmark-remove (plist-get bm :id))
+               (should (null (etaf-video-player-bookmarks clip)))))
+           (etaf-video-player-close)
+           ;; Recent watch history recorded on close and can be queried/deleted.
+           (let ((recent (etaf-video-player-history-recent 10)))
+             (should (= 1 (length recent)))
+             (should (equal (expand-file-name clip) (plist-get (car recent) :path)))
+             (etaf-video-player-history-delete clip)
+             (should (null (etaf-video-player-history-recent 10))))))
+      (ignore-errors (delete-file log))
+      (ignore-errors (delete-directory dir t))
+      (etaf-video-player-tests--cleanup))))
+
+(ert-deftest etaf-video-player-tests-m3u-siblings-sort-timestamp-stop-after ()
+  "M3U playlists, sibling enqueue, queue sort, goto %/relative, copy time and stop-after work."
+  (etaf-video-player-tests--cleanup)
+  (let* ((log (etaf-video-player-tests--log))
+         (dir (make-temp-file "etaf-video-player-m3u-" t))
+         (a (expand-file-name "01-alpha.mp4" dir))
+         (b (expand-file-name "02-beta.mp4" dir))
+         (c (expand-file-name "03-gamma.mp4" dir))
+         (m3u (expand-file-name "list.m3u" dir)))
+    (unwind-protect
+        (progn
+          (write-region "" nil a)
+          (write-region "" nil b)
+          (write-region "" nil c)
+          (with-temp-file m3u
+            (insert "#EXTM3U\n"
+                    "#EXTINF:100,Beta Clip\n"
+                    "02-beta.mp4\n"
+                    "#EXTINF:100,Alpha Clip\n"
+                    "01-alpha.mp4\n"))
+          (etaf-video-player-tests--with-fixture
+           log (list "FAKE_FFMPEG_FRAMES=400" "FAKE_FFMPEG_INTERVAL=0.02"
+                     "FAKE_FFPROBE_DURATION=100.0" "FAKE_FFPROBE_FPS=50/1")
+           (etaf-video-player-open (list :file m3u :columns 12 :rows 3 :audio nil))
+           (let ((st (etaf-video-player-tests--state)))
+             (should (= 2 (plist-get st :queue-length)))
+             (should (equal "Beta Clip" (plist-get st :title))))
+           (with-current-buffer "*Video Player*"
+             ;; Enqueue siblings adds only missing 03-gamma.mp4.
+             (should (= 1 (etaf-video-player-enqueue-siblings)))
+             (should (= 3 (plist-get (etaf-video-player-tests--state) :queue-length)))
+             ;; Sort alphabetically while preserving active Beta Clip.
+             (etaf-video-player-sort-queue)
+             (let ((st (etaf-video-player-tests--state)))
+               (should (equal "Beta Clip" (plist-get st :title)))
+               (should (= 2 (plist-get st :index))))
+             ;; Enhanced goto-time supports percentage and +/- relative jumps.
+             (etaf-video-player-toggle-playback)
+             (etaf-video-player-goto-time "50%")
+             (should (= 50.0 (plist-get (etaf-video-player-tests--state) :position)))
+             (etaf-video-player-goto-time "+15")
+             (should (= 65.0 (plist-get (etaf-video-player-tests--state) :position)))
+             (etaf-video-player-goto-time "-5")
+             (should (= 60.0 (plist-get (etaf-video-player-tests--state) :position)))
+             ;; Copy timestamp returns formatted clock and writes kill-ring.
+             (let ((stamp (etaf-video-player-copy-timestamp)))
+               (should (equal "01:00" stamp))
+               (should (equal "01:00" (car kill-ring)))))
+           (etaf-video-player-close))
+          ;; Stop-after-current halts instead of advancing even under :loop all.
+          (etaf-video-player-tests--with-fixture
+           log (list "FAKE_FFMPEG_FRAMES=2" "FAKE_FFMPEG_INTERVAL=0.01"
+                     "FAKE_FFPROBE_DURATION=1.0" "FAKE_FFPROBE_FPS=50/1")
+           (etaf-video-player-open
+            (list :playlist (list (list :file a) (list :file b))
+                  :loop 'all :columns 8 :rows 2 :audio nil))
+           (with-current-buffer "*Video Player*"
+             (should (etaf-video-player-toggle-stop-after-current)))
+           (should (etaf-video-player-tests--wait
+                    (lambda ()
+                      (let ((st (etaf-video-player-tests--state)))
+                        (and (plist-get st :ended)
+                             (not (plist-get st :stop-after-current)))))
+                    6))
+           (let ((st (etaf-video-player-tests--state)))
+             (should (= 0 (plist-get st :index)))
+             (should-not (plist-get st :stop-after-current)))
+           (etaf-video-player-close)))
+      (ignore-errors (delete-file log))
+      (ignore-errors (delete-directory dir t))
+      (etaf-video-player-tests--cleanup))))
+
+(ert-deftest etaf-video-player-tests-libmpv-multitrack-subtitles-and-transforms ()
+  "On libmpv, multi-audio, embedded/dual subtitles, rotation, step-back and screenshots work."
+  (skip-unless (and (etaf-video-mpv-available-p)
+                    (executable-find "ffmpeg")
+                    (fboundp 'font-info)))
+  (etaf-video-player-tests--cleanup)
+  (let* ((dir (make-temp-file "etaf-video-player-mpv-" t))
+         (sub-zh (expand-file-name "zh.srt" dir))
+         (sub-en (expand-file-name "en.srt" dir))
+         (mkv (expand-file-name "multi.mkv" dir))
+         (shot (expand-file-name "mpv-shot.png" dir)))
+    (unwind-protect
+        (progn
+          (with-temp-file sub-zh
+            (insert "1\n00:00:00,000 --> 00:00:03,000\n中文字幕测试\n"))
+          (with-temp-file sub-en
+            (insert "1\n00:00:00,000 --> 00:00:03,000\nEnglish subtitle test\n"))
+          (should
+           (zerop
+            (call-process
+             "ffmpeg" nil nil nil "-hide_banner" "-loglevel" "error" "-y"
+             "-f" "lavfi" "-i" "testsrc2=size=160x90:rate=15:duration=2.5"
+             "-f" "lavfi" "-i" "sine=frequency=440:duration=2.5"
+             "-f" "lavfi" "-i" "sine=frequency=660:duration=2.5"
+             "-i" sub-zh "-i" sub-en
+             "-map" "0:v" "-map" "1:a" "-map" "2:a" "-map" "3:s" "-map" "4:s"
+             "-c:v" "libx264" "-pix_fmt" "yuv420p" "-c:a" "aac" "-c:s" "srt"
+             "-metadata:s:a:0" "language=chi" "-metadata:s:a:0" "title=国语"
+             "-metadata:s:a:1" "language=eng" "-metadata:s:a:1" "title=English"
+             "-metadata:s:s:0" "language=chi" "-metadata:s:s:0" "title=中文"
+             "-metadata:s:s:1" "language=eng" "-metadata:s:s:1" "title=English"
+             mkv)))
+          (etaf-video-player-tests--with-graphics
+            (let ((etaf-video-engine 'mpv))
+              (etaf-video-player-open
+               (list :file mkv :columns 24 :rows 6 :audio nil))
+              (should (etaf-video-player-tests--wait
+                       (lambda ()
+                         (let ((st (etaf-video-player-tests--state)))
+                           (and (>= (or (plist-get st :presented) 0) 1)
+                                (>= (length (plist-get st :tracks)) 4))))
+                       8))
+              (let ((st (etaf-video-player-tests--state)))
+                (should (eq 'mpv (plist-get st :engine)))
+                (should (eq 'image (plist-get st :render-mode)))
+                (should (= 4 (length (plist-get st :tracks))))
+                (should (cl-every (lambda (tr) (memq (plist-get tr :type) '(audio sub)))
+                                  (plist-get st :tracks))))
+              (with-current-buffer "*Video Player*"
+                (etaf-video-player-cycle-audio-track)
+                (etaf-video-player-cycle-subtitle-track)
+                (should (= 2 (etaf-video-player-set-secondary-subtitle 2)))
+                (should (= 90 (etaf-video-player-rotate)))
+                (should (= 90 (plist-get (etaf-video-player-tests--state) :rotate)))
+                (should (= 180 (etaf-video-player-rotate)))
+                (etaf-video-player-set-ab-start 0.2)
+                (etaf-video-player-set-ab-end 1.8)
+                (should (equal '(0.2 . 1.8)
+                               (plist-get (etaf-video-player-tests--state) :ab-loop)))
+                (etaf-video-player-clear-ab)
+                (etaf-video-player-step-back)
+                (should-not (plist-get (etaf-video-player-tests--state) :playing))
+                (should (equal shot (etaf-video-player-save-screenshot shot)))
+                (should (etaf-video-player-tests--wait
+                         (lambda ()
+                           (and (file-readable-p shot)
+                                (> (file-attribute-size (file-attributes shot)) 0)))
+                         8)))
+              (etaf-video-player-close))))
+      (etaf-video-player-tests--cleanup)
+      (ignore-errors (delete-directory dir t)))))
+
+(ert-deftest etaf-video-player-tests-fullscreen-modes-and-mode-line-restore ()
+  "Pure Fullscreen toggles window and frame tiers, hides/restores mode-line and shares the cinema deck."
+  (unwind-protect
+      (let ((buf (etaf-video-player-open '(:demo :audio nil))))
+        (with-current-buffer buf
+          (let ((orig-ml mode-line-format)
+                (rt (etaf-runtime-for-buffer buf)))
+            (etaf-runtime-flush rt)
+            (let ((normal-text (buffer-substring-no-properties (point-min) (point-max))))
+              (should (string-match-p "全屏" normal-text)))
+            ;; Window fullscreen
+            (should (eq 'window (etaf-video-player-toggle-fullscreen)))
+            (etaf-runtime-flush rt)
+            (should (eq 'window (etaf-fullscreen-mode buf)))
+            (should (null mode-line-format))
+            (let ((fs-text (buffer-substring-no-properties (point-min) (point-max))))
+              (should (string-match-p "↩ 退出" fs-text))
+              (should (string-match-p "真全屏 Z" fs-text)))
+            ;; Frame fullscreen
+            (should (eq 'frame (etaf-video-player-toggle-frame-fullscreen)))
+            (etaf-runtime-flush rt)
+            (should (eq 'frame (etaf-fullscreen-mode buf)))
+            ;; Toggle frame fullscreen again exits and restores mode-line
+            (should-not (etaf-video-player-toggle-frame-fullscreen))
+            (etaf-runtime-flush rt)
+            (should-not (etaf-fullscreen-mode buf))
+            (should (equal mode-line-format orig-ml)))
+          (etaf-video-player-close)))
+    (etaf-video-player-tests--cleanup)))
 
 (provide 'etaf-video-player-tests)
 ;;; etaf-video-player-tests.el ends here

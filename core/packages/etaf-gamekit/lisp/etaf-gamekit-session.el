@@ -243,6 +243,14 @@
         (etaf-unmount runtime))))
   nil)
 
+(defun etaf-gamekit-dispose (session)
+  "Close SESSION idempotently and kill its backing buffer when live."
+  (etaf-gamekit-close session)
+  (when-let* ((buffer (etaf-gamekit-buffer session)))
+    (when (buffer-live-p buffer)
+      (kill-buffer buffer)))
+  nil)
+
 (defun etaf-gamekit--start (command buffer view validate game-info &optional display)
   "Create one game instance with COMMAND, BUFFER, VIEW, VALIDATE and GAME-INFO.
 DISPLAY non-nil mounts the presentation into BUFFER; a hosted session passes

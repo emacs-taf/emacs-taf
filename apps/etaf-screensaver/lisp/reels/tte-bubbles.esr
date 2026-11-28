@@ -1,2 +1,0 @@
-;;; -*- lisp-data -*-
-(:id tte-bubbles :title "Terminal Text Effects: bubbles" :summary "bubbles (Terminal Text Effects) text recording, 80×24, 160 frames at 20 fps, MIT license" :tags (imported) :provider tte :recording "bubbles.tterec" :kind text :width 80 :height 24 :frame-rate 20 :frame-count 160 :source "bubbles" :license "MIT")

@@ -21,32 +21,45 @@
 
 (define-error 'etaf-video-player-subtitle-error "Video player subtitle error")
 
-(defconst etaf-video-player-subtitle-extensions
+(defcustom etaf-video-player-subtitle-extensions
   '(".srt" ".vtt" ".zh.srt" ".zh-CN.srt" ".zh-Hans.srt" ".chs.srt" ".sc.srt")
   "File suffixes probed beside a video when it opens.
 The bare `.srt' and `.vtt' come first; the language suffixes cover the common
-Chinese naming (`movie.zh.srt') before falling back to a plain track.")
+Chinese naming (`movie.zh.srt') before falling back to a plain track."
+  :type '(repeat string)
+  :group 'etaf-video-player)
 
 (defconst etaf-video-player-subtitle--clock-regexp
-  "\\([0-9]+:[0-9]+:[0-9]+[,.]?[0-9]*\\|[0-9]+:[0-9]+[,.][0-9]+\\)"
+  (concat "\\([0-9]+:[0-9]+:[0-9]+\\(?:[,.][0-9]+\\)?"
+          "\\|[0-9]+:[0-9]+\\(?:[,.][0-9]+\\)?"
+          "\\|[0-9]+[,.][0-9]+\\)")
   "Regexp matching one subtitle clock token.")
 
 (defun etaf-video-player-subtitle--seconds (token)
   "Parse the subtitle clock TOKEN into seconds.
-TOKEN is `HH:MM:SS,mmm', `HH:MM:SS.mmm', `MM:SS.mmm' or `SS.mmm'; nil when
+TOKEN is `HH:MM:SS[.,frac]', `MM:SS[.,frac]' or `SS[.,frac]'; nil when
 it does not carry a clock.  The match data is preserved so callers can read
 other groups of their own match."
   (save-match-data
-    (let ((parts (and token (split-string token "[:,.]" t))))
-      (pcase (length parts)
-        (4 (+ (* (string-to-number (nth 0 parts)) 3600.0)
-              (* (string-to-number (nth 1 parts)) 60.0)
-              (string-to-number (nth 2 parts))
-              (/ (string-to-number (nth 3 parts)) 1000.0)))
-        (3 (+ (* (string-to-number (nth 0 parts)) 60.0)
-              (string-to-number (nth 1 parts))
-              (/ (string-to-number (nth 2 parts)) 1000.0)))
-        (_ nil)))))
+    (when (and (stringp token)
+               (string-match
+                "\\`\\([0-9]+\\(?::[0-9]+\\)*\\)\\(?:[,.]\\([0-9]+\\)\\)?\\'"
+                token))
+      ;; Capture both match groups before `split-string' overwrites match data.
+      (let* ((whole (match-string 1 token))
+             (frac (match-string 2 token))
+             (fields (mapcar #'string-to-number (split-string whole ":" t)))
+             (fraction (if frac (string-to-number (concat "0." frac)) 0.0)))
+        (pcase (length fields)
+          (3 (+ (* (nth 0 fields) 3600.0)
+                (* (nth 1 fields) 60.0)
+                (nth 2 fields)
+                fraction))
+          (2 (+ (* (nth 0 fields) 60.0)
+                (nth 1 fields)
+                fraction))
+          (1 (when frac (+ (nth 0 fields) fraction)))
+          (_ nil))))))
 
 (defun etaf-video-player-subtitle--clean (text)
   "Strip markup and inline control tokens from a subtitle TEXT line."
@@ -70,15 +83,26 @@ FILE must be a readable SubRip or WebVTT file; otherwise
   (with-temp-buffer
     (insert-file-contents file)
     (goto-char (point-min))
-    (let (cues)
+    (when (eq (char-after) ?\ufeff)
+      (delete-char 1))
+    (let ((arrow-regexp
+           (concat etaf-video-player-subtitle--clock-regexp
+                   "[ \t]*-->[ \t]*"
+                   etaf-video-player-subtitle--clock-regexp))
+          cues)
       (while (not (eobp))
         (let ((line (etaf-video-player-subtitle--line)))
-          (if (not (string-match
-                    (concat etaf-video-player-subtitle--clock-regexp
-                            "[ \t]*-->[ \t]*"
-                            etaf-video-player-subtitle--clock-regexp)
-                    line))
-              (forward-line 1)
+          (cond
+           ;; Skip WebVTT NOTE comment blocks up to the next blank line.
+           ((string-match-p "\\`NOTE\\(?:[ \t]\\|\\'\\)" line)
+            (forward-line 1)
+            (while (and (not (eobp))
+                        (not (string-empty-p
+                              (string-trim (etaf-video-player-subtitle--line)))))
+              (forward-line 1)))
+           ((not (string-match arrow-regexp line))
+            (forward-line 1))
+           (t
             (let ((start-token (match-string 1 line))
                   (end-token (match-string 2 line)))
               (forward-line 1)
@@ -94,28 +118,44 @@ FILE must be a readable SubRip or WebVTT file; otherwise
                 (let ((start (etaf-video-player-subtitle--seconds start-token))
                       (end (etaf-video-player-subtitle--seconds end-token)))
                   (when (and start end texts (< start end))
-                    (push (list start end (string-join (nreverse texts) " ")) cues))))))))
+                    (push (list start end (string-join (nreverse texts) " "))
+                          cues)))))))))
       (sort (nreverse cues) (lambda (a b) (< (car a) (car b)))))))
 
 (defun etaf-video-player-subtitle-text-at (cues seconds)
   "Return the text of the cue in CUES covering SECONDS, or nil.
-CUES is the sorted list `etaf-video-player-subtitle-parse' returns; SECONDS
-is the playback position.  The lookup binary-searches the track, so it stays
-cheap on every retention tick."
+CUES is a sorted list (from `etaf-video-player-subtitle-parse') or vector of
+cues; SECONDS is the playback position.  Uses an upper-bound binary search so
+lookups stay O(log n) on vectors while still honoring overlapping cues."
   (when (and cues (numberp seconds))
-    (let ((low 0)
-          (high (1- (length cues)))
-          (found nil))
-      (while (<= low high)
-        (let* ((middle (/ (+ low high) 2))
-               (cue (nth middle cues))
-               (start (nth 0 cue))
-               (end (nth 1 cue)))
-          (cond ((< seconds start) (setq high (1- middle)))
-                ((>= seconds end) (setq low (1+ middle)))
-                (t (setq found cue)
-                   (setq low (1+ high))))))
-      (nth 2 found))))
+    (let* ((vec (if (vectorp cues) cues (vconcat cues)))
+           (len (length vec)))
+      (when (> len 0)
+        ;; Find the rightmost cue whose start <= seconds.
+        (let ((low 0)
+              (high (1- len))
+              (pos -1))
+          (while (<= low high)
+            (let* ((mid (/ (+ low high) 2))
+                   (start (nth 0 (aref vec mid))))
+              (if (<= start seconds)
+                  (setq pos mid low (1+ mid))
+                (setq high (1- mid)))))
+          (when (>= pos 0)
+            ;; Scan a bounded neighborhood backward to catch overlapping cues
+            ;; (for example a longer caption spanning a shorter nested cue).
+            (let ((floor-idx (max 0 (- pos 8)))
+                  (idx pos)
+                  matches)
+              (while (>= idx floor-idx)
+                (let ((cue (aref vec idx)))
+                  (when (< seconds (nth 1 cue))
+                    (push (nth 2 cue) matches)))
+                (setq idx (1- idx)))
+              (when matches
+                (if (cdr matches)
+                    (string-join matches " ")
+                  (car matches))))))))))
 
 (defun etaf-video-player-subtitle-beside (video)
   "Return the first readable subtitle file beside VIDEO, or nil.

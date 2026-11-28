@@ -1,20 +1,15 @@
-;;; etaf-video-player-theme.el --- Palette and ETAF UI theme for etaf-video-player -*- lexical-binding: t; -*-
+;;; etaf-video-player-theme.el --- Palette and ETAF UI theme for the video player -*- lexical-binding: t; -*-
 
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 
 ;;; Commentary:
-;;
-;; The player renders its own surface instead of borrowing the user's Emacs
-;; theme, so it looks the same in every session.  `etaf-video-player-color' is
-;; the palette lookup used by the Views; `etaf-video-player-theme-defaults'
-;; projects the same palette onto the ETAF UI token contract consumed by
-;; etaf-ui Components (buttons, ranges, icons, dividers).  Both appearances
-;; share one layout and paint four depth steps -- page, card, raised surface
-;; and control track -- so panes stay visually separated in either mode.  The
-;; video stage paints near-black in the dark appearance (one immersive
-;; surface around the picture) and a shallow grey in the light one, where a
-;; full dark block would weigh the whole column down; the picture keeps its
-;; own letterbox either way.
+;; Obsidian Cinema (dark) and Alabaster Studio (light) palettes for the video
+;; player.  The player paints a calm four-step neutral surface hierarchy so the
+;; video stage stays the visual focal point, paired with high-contrast semantic
+;; tokens for live status pills, A-B loop brackets, bookmarks and active tabs.
+;; `etaf-video-player-color' looks up named roles, and
+;; `etaf-video-player-theme-defaults' projects the same palette onto the shared
+;; `etaf-ui-theme-tokens' contract.
 
 ;;; Code:
 
@@ -22,90 +17,91 @@
 (require 'etaf-ui)
 
 (defgroup etaf-video-player nil
-  "Video player built with ETAF and Ebox."
-  :group 'applications)
+  "Native video player built with ETAF and Ebox."
+  :group 'multimedia)
 
 (defconst etaf-video-player--palettes
-  '((dark
-     ;; depth: page < card < raised < track
-     :bg "#191a1c" :surface "#202225" :panel2 "#25272b" :panel3 "#2b2e33"
-     :hover "#2a2d31" :line "#303338"
-     :ink "#E9EDF4" :muted "#9AA4B4" :dim "#6B7484"
-     :accent "#5B8DEF" :accent-soft "#18243C"
-     :stage "#000000" :playing "#5B8DEF"
-     :gold "#E8B45C" :ok "#4FB477" :warn "#E8B45C"
-     :danger "#FF7A7A" :danger-bg "#3A1D22" :info "#6FB4E8")
-    (light
-     ;; page grey, cards white, one grey step below and a control track
-     :bg "#ECEEF2" :surface "#FFFFFF" :panel2 "#F5F6F9" :panel3 "#E3E6EC"
-     :hover "#F0F2F6" :line "#DADEE5"
-     :ink "#171A20" :muted "#5B6472" :dim "#8B93A0"
-     :accent "#2F6BE8" :accent-soft "#E6EDFC"
-     :stage "#E2E5EB" :playing "#2F6BE8"
-     :gold "#B07A16" :ok "#2E7D4F" :warn "#B07A16"
-     :danger "#C0392B" :danger-bg "#FBE4E2" :info "#2C6FA8"))
-  "Palette of every supported appearance, keyed by mode.
-The four depth keys are shared by both appearances: `:bg' is the page shell,
-`:surface' is a pane or card, `:panel2' is a raised surface such as the header
-or the footer, and `:panel3' is a control track and disabled fill.")
+  '((dark :bg "#111216" :stage "#08090C" :surface "#16181D" :panel2 "#1B1D23"
+          :panel3 "#22252D" :track "#2C303A"
+          :line "#2A2D38" :line-strong "#3A3F4D"
+          :ink "#F1F3F8" :muted "#9AA3B2" :dim "#687080"
+          :accent "#4C8DFF" :accent-fg "#FFFFFF" :accent-soft "#162542"
+          :accent-text "#8BB4FF" :accent-border "#294B8A"
+          :ok "#3DD68C" :ok-bg "#122B20" :ok-border "#23573E"
+          :warn "#F5B942" :warn-bg "#2E230F" :warn-border "#664C1B"
+          :danger "#FF6B72" :danger-bg "#35161B" :danger-border "#6E2831")
+    (light :bg "#F7F8FA" :stage "#ECEFF4" :surface "#F2F4F8" :panel2 "#FFFFFF"
+           :panel3 "#E9EDF4" :track "#D8DEE8"
+           :line "#DDE2EA" :line-strong "#C7CFD9"
+           :ink "#161922" :muted "#586170" :dim "#8790A0"
+           :accent "#2563EB" :accent-fg "#FFFFFF" :accent-soft "#E3ECFF"
+           :accent-text "#1D4ED8" :accent-border "#AFC8FF"
+           :ok "#1A7F4B" :ok-bg "#E3F6EC" :ok-border "#A5DFC0"
+           :warn "#B4690E" :warn-bg "#FEF3DC" :warn-border "#E9C783"
+           :danger "#C82834" :danger-bg "#FDE8EA" :danger-border "#F2B6BC"))
+  "Obsidian Cinema (dark) and Alabaster Studio (light) palettes keyed by mode.")
 
 (defcustom etaf-video-player-theme-mode 'dark
-  "Appearance used by a new player.
-`dark' (default) renders the player's own dark surface; `light' uses the
-light palette.  The video canvas keeps its dark stage in both modes.  This is
-independent of the active Emacs theme."
-  :type '(choice (const :tag "Dark" dark) (const :tag "Light" light))
+  "Appearance of the video player: `dark' or `light'.
+Press `T' in the player buffer to switch between dark and light mode."
+  :type '(choice (const :tag "Dark (Obsidian Cinema)" dark)
+                 (const :tag "Light (Alabaster Studio)" light))
   :group 'etaf-video-player)
 
+(defun etaf-video-player--effective-mode (&optional mode)
+  "Return `light' or `dark' for MODE or `etaf-video-player-theme-mode'."
+  (if (eq (or mode etaf-video-player-theme-mode) 'light) 'light 'dark))
+
 (defun etaf-video-player-color (key &optional mode)
-  "Return the palette color named KEY.
-MODE defaults to `etaf-video-player-theme-mode'.  An unknown KEY signals an
-error instead of returning a fallback, because a typo would otherwise paint
-an invisible surface."
-  (let* ((mode (if (eq (or mode etaf-video-player-theme-mode) 'light)
-                   'light 'dark))
+  "Return the palette color named KEY for MODE.
+When MODE is nil inside a Component render, reading `etaf-theme-defaults'
+subscribes the calling Component to theme switches automatically."
+  (unless mode
+    (ignore-errors (etaf-theme-defaults)))
+  (let* ((mode (etaf-video-player--effective-mode mode))
          (palette (cdr (assq mode etaf-video-player--palettes)))
          (color (plist-get palette key)))
     (unless (and (keywordp key) color)
-      (error "Unknown video player color: %S" key))
+      (error "Unknown etaf-video-player color: %S" key))
     color))
 
 (defun etaf-video-player-theme-defaults (&optional mode)
-  "Return the ETAF UI token plist for MODE.
-MODE defaults to `etaf-video-player-theme-mode'.  The application passes the
-result to `etaf-theme-provide' so shared etaf-ui Components use the same
-colors as the player's own Views."
-  (let* ((dark (not (eq (or mode etaf-video-player-theme-mode) 'light)))
-         (color (lambda (key) (etaf-video-player-color key mode)))
-         (panel2 (funcall color :panel2))
-         (panel3 (funcall color :panel3)))
-    ;; Shell chrome and window titles sit on the raised surface and disabled
-    ;; fills on the control track, above the catalog's pane default.
+  "Return the ETAF UI token plist for MODE."
+  (let* ((mode (etaf-video-player--effective-mode mode))
+         (bg (etaf-video-player-color :bg mode))
+         (surface (etaf-video-player-color :surface mode))
+         (panel2 (etaf-video-player-color :panel2 mode))
+         (panel3 (etaf-video-player-color :panel3 mode))
+         (track (etaf-video-player-color :track mode))
+         (ink (etaf-video-player-color :ink mode))
+         (line (etaf-video-player-color :line mode))
+         (muted (etaf-video-player-color :muted mode))
+         (dim (etaf-video-player-color :dim mode))
+         (accent (etaf-video-player-color :accent mode))
+         (accent-fg (etaf-video-player-color :accent-fg mode))
+         (accent-soft (etaf-video-player-color :accent-soft mode))
+         (ok (etaf-video-player-color :ok mode))
+         (ok-bg (etaf-video-player-color :ok-bg mode))
+         (ok-border (etaf-video-player-color :ok-border mode))
+         (warn (etaf-video-player-color :warn mode))
+         (warn-bg (etaf-video-player-color :warn-bg mode))
+         (warn-border (etaf-video-player-color :warn-border mode))
+         (danger (etaf-video-player-color :danger mode))
+         (danger-bg (etaf-video-player-color :danger-bg mode))
+         (danger-border (etaf-video-player-color :danger-border mode)))
     (append
-     (list :ui-shell-bg panel2 :ui-window-title-bg panel2 :ui-disabled-bg panel3)
+     (list :ui-shell-bg bg
+           :ui-window-title-bg panel2
+           :ui-disabled-bg panel3)
      (etaf-ui-theme-tokens
-      (list :bg (funcall color :bg)
-            :fg (funcall color :ink)
-            :panel (funcall color :surface)
-            :track panel3
-            :border (funcall color :line)
-            :muted (funcall color :muted)
-            :dim (funcall color :dim)
-            :accent (funcall color :accent)
-            :accent-fg "#FFFFFF"
-            :accent-soft (funcall color :accent-soft)
-            :success (funcall color :ok)
-            :success-bg (if dark "#17301F" "#E3F3E8")
-            :success-border (if dark "#2E5C3F" "#A9D8BB")
-            :danger (funcall color :danger)
-            :danger-bg (funcall color :danger-bg)
-            :danger-border (if dark "#7A2A2C" "#E8B4AE")
-            :warning (funcall color :warn)
-            :warning-bg (if dark "#33280F" "#FBF0DA")
-            :warning-border (if dark "#6B5423" "#E0C48A")
-            :info (funcall color :info)
-            :info-bg (if dark "#14232F" "#E4F0FA")
-            :info-border (if dark "#2C4E66" "#A8CBE6"))))))
+      (list :bg bg :fg ink :panel surface :track track :border line
+            :muted muted :dim dim
+            :accent accent :accent-fg accent-fg :accent-soft accent-soft
+            :success ok :success-bg ok-bg :success-border ok-border
+            :warning warn :warning-bg warn-bg :warning-border warn-border
+            :danger danger :danger-bg danger-bg :danger-border danger-border
+            :info accent :info-bg accent-soft
+            :info-border (etaf-video-player-color :accent-border mode))))))
 
 (provide 'etaf-video-player-theme)
 ;;; etaf-video-player-theme.el ends here

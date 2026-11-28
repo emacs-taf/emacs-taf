@@ -2082,5 +2082,48 @@ leapfrogged a top-right stacked panel down below itself and back."
         (kill-buffer parent-buf))
       (ignore-errors (select-frame-set-input-focus origin)))))
 
+(ert-deftest etaf-posframe-binds-apps-from-etaf-app-registry ()
+  "Binding apps from `etaf-app' inherits manifest defaults and lets overrides win."
+  (let* ((app 'etaf-posframe-test-proto-app)
+         (missing 'etaf-posframe-test-missing-app)
+         (saved-apps (copy-sequence etaf-posframe-apps))
+         (saved-map etaf-posframe-app-map)
+         (create-fn (lambda () 'proto-session))
+         (view-fn (lambda (_s) (etaf-view (text "proto"))))
+         (close-fn (lambda (_s) 'closed)))
+    (unwind-protect
+        (progn
+          (etaf-app-register
+           app
+           :title "Proto Panel"
+           :feature 'etaf-posframe
+           :hosts '(panel)
+           :session (list :create create-fn :view view-fn
+                          :close close-fn :keep-alive t)
+           :panel '(:width 60 :height 18 :at frame-top-right :stack t))
+          (let ((bound (etaf-posframe-bind-apps
+                        (list (list app "z" :width 72 :at 'frame-center)
+                              (cons missing "q")))))
+            (should (equal (list app) bound))
+            (let ((record (cdr (assq app etaf-posframe-apps))))
+              (should (equal "Proto Panel" (plist-get record :title)))
+              (should (eq create-fn (plist-get record :create)))
+              (should (eq view-fn (plist-get record :view)))
+              (should (eq close-fn (plist-get record :on-stop)))
+              (should (eq 'etaf-posframe (plist-get record :require)))
+              (should (eq t (plist-get record :keep-alive)))
+              (should (equal "z" (plist-get record :shortcut)))
+              (should (= 72 (plist-get record :width)))
+              (should (= 18 (plist-get record :height)))
+              (should (eq 'frame-center (plist-get record :at)))
+              (should (eq t (plist-get record :stack))))
+            (should (commandp (lookup-key etaf-posframe-app-map (kbd "z"))))
+            (should-not (lookup-key etaf-posframe-app-map (kbd "q"))))
+          (should-error (etaf-posframe-bind-app missing "q")
+                        :type 'etaf-posframe-error))
+      (etaf-app-unregister app)
+      (setq etaf-posframe-apps saved-apps
+            etaf-posframe-app-map saved-map))))
+
 (provide 'etaf-posframe-tests)
 ;;; etaf-posframe-tests.el ends here

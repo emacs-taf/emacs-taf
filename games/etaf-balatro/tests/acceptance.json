@@ -1,0 +1,65 @@
+{
+  "schema": 1,
+  "load_path": [
+    ".",
+    "lisp",
+    "tests",
+    "../etaf",
+    "../etaf-ui",
+    "../ebox",
+    "../ecss"
+  ],
+  "support": [],
+  "cases": [
+    {
+      "name": "etaf-balatro-evaluates-all-nine-poker-hands-and-ace-low-straight",
+      "file": "tests/etaf-balatro-tests.el",
+      "purpose": "All nine poker hand rankings, Ace-low straight, hand-level upgrades and error validation work"
+    },
+    {
+      "name": "etaf-balatro-scoring-cascade-order-enhancements-and-boss-debuffs",
+      "file": "tests/etaf-balatro-tests.el",
+      "purpose": "Left-to-right Joker ordering (+Mult before xMult), card enhancements, retrigger and Boss Blind traits compute exact scores and event traces"
+    },
+    {
+      "name": "etaf-balatro-seeded-run-selection-discard-and-timeline-skip",
+      "file": "tests/etaf-balatro-tests.el",
+      "purpose": "Seeded runs deal reproducibly, support selection/sort/discard, run animated scoring timelines and settle immediately on skip"
+    },
+    {
+      "name": "etaf-balatro-targeted-tarot-sculpting-and-planet-consumables",
+      "file": "tests/etaf-balatro-tests.el",
+      "purpose": "Planet consumables upgrade hand levels while targeted Tarot cards permanently forge selected hand cards in both hand and deck"
+    },
+    {
+      "name": "etaf-balatro-winning-blind-transitions-to-shop-and-supports-economy",
+      "file": "tests/etaf-balatro-tests.el",
+      "purpose": "Clearing a blind transitions to shop with payout, supports buying Jokers, Planets and Tarots, reordering and selling Jokers, and advancing to the next blind"
+    },
+    {
+      "name": "etaf-balatro-onboarding-guide-coach-and-persistent-records",
+      "file": "tests/etaf-balatro-tests.el",
+      "purpose": "First run auto-opens the 4-step beginner guide, stepping through persists tutorial completion, and Coach toggle and lifetime records persist cleanly"
+    },
+    {
+      "name": "etaf-balatro-open-renders-guide-matrix-themes-and-preserves-mode-line",
+      "file": "tests/etaf-balatro-tests.el",
+      "purpose": "Opening ETAF Balatro preserves Emacs mode-line, hides text cursor, renders onboarding guide and 52-card Deck Matrix, cycles auto/dark/light themes and refits narrow"
+    },
+    {
+      "name": "etaf-balatro-gui-return-arrows-modal-toggles-and-card-focus",
+      "file": "tests/etaf-balatro-tests.el",
+      "purpose": "GUI <return> key plays hands even after card focus, guide arrow keys obey handled/release contract, and v/h cleanly toggle modals open and closed"
+    },
+    {
+      "name": "etaf-balatro-validates-invalid-session-speed-and-modal",
+      "file": "tests/etaf-balatro-tests.el",
+      "purpose": "Invalid session handles, playback speeds and modal names signal etaf-balatro-error"
+    },
+    {
+      "name": "etaf-balatro-rapid-guide-and-chaos-key-mashing-stays-usable",
+      "file": "tests/etaf-balatro-tests.el",
+      "purpose": "Rapidly toggling the beginner guide, other modals, coach, appearance and double-skipping animations never corrupts state or focus"
+    }
+  ]
+}

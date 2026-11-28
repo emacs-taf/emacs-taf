@@ -303,6 +303,49 @@
 ;; that should reselect an open application instead of reopening it checks
 ;; this first.
 ;;
+;; Hook: etaf-app-change-functions
+;; Abnormal hook run with `(EVENT ID ENTRY)' when the application registry
+;; changes (`register' or `unregister').  Observer errors are isolated.
+;;
+;; Function: etaf-app-register (id &rest spec)
+;;;###autoload (autoload 'etaf-app-register "etaf" nil nil)
+;; Register or update ETAF application manifest ID from keyword plist SPEC.
+;; Validates `:title' (required), optional `:feature', `:icon', `:category',
+;; `:description', `:hosts' (subset of `buffer', `desktop', `panel', `pip'),
+;; `:open', `:session' (`:create', `:view', optional `:close', `:keep-alive',
+;; `:multiple-instances'), `:window', `:panel', `:file-extensions',
+;; `:capabilities' and `:doctor'.  Function entries accept unloaded symbols so
+;; autoloaded manifests register with zero startup cost.  Signals
+;; `etaf-runtime-error' on invalid specs; returns a detached manifest copy.
+;;
+;; Macro: etaf-app-define (id &rest spec)
+;;;###autoload (autoload 'etaf-app-define "etaf" nil nil 'macro)
+;; Declaratively register ETAF application ID with keyword manifest SPEC.
+;; Expands to `(etaf-app-register 'ID SPEC...)'.
+;;
+;; Function: etaf-app-unregister (id)
+;;;###autoload (autoload 'etaf-app-unregister "etaf" nil nil)
+;; Remove registered ETAF application ID from the registry and return t if it
+;; existed, or nil otherwise.
+;;
+;; Function: etaf-app-get (id)
+;;;###autoload (autoload 'etaf-app-get "etaf" nil nil)
+;; Return a detached manifest plist for registered application ID, or nil.
+;;
+;; Function: etaf-app-list (&optional host category)
+;;;###autoload (autoload 'etaf-app-list "etaf" nil nil)
+;; Return detached manifests of registered ETAF applications sorted by ID,
+;; optionally filtered by HOST (`buffer', `desktop', `panel' or `pip') and/or
+;; CATEGORY (`media', `reading', `productivity', `communication', `game',
+;; `system', `utility' or `other').
+;;
+;; Function: etaf-app-launch (id)
+;;;###autoload (autoload 'etaf-app-launch "etaf" nil t)
+;; Launch registered ETAF application ID in a standalone buffer.  Loads
+;; `:feature' lazily when needed, invokes `:open' when declared, or mounts
+;; `:session' through `etaf-app-open'.  Interactively prompts among registered
+;; applications.
+;;
 ;; Function: etaf-pip-open (id view &key title parent (size 'medium) (corner 'bottom-right) theme on-return on-close on-resize on-size-change on-corner-change)
 ;;;###autoload (autoload 'etaf-pip-open "etaf" nil nil)
 ;; Open a floating adaptive Picture-in-Picture window for symbol ID showing
@@ -2105,6 +2148,13 @@
 ;; that reads it reruns after the viewport changes, so a Component can size
 ;; fixed-grid content such as images and video to the window.
 ;;
+;; Function: etaf-image-kitty-available-p (&optional frame)
+;;;###autoload (autoload 'etaf-image-kitty-available-p "etaf" nil nil)
+;; Return a capability plist (:cell-width :cell-height :local) when FRAME
+;; supports Kitty terminal graphics, or nil otherwise.  Applications sizing
+;; `image' Hosts on compliant text terminals use `:cell-width' and
+;; `:cell-height' to preserve aspect ratio without depending on Ebox directly.
+;;
 ;; Function: etaf-display-metrics (&optional runtime)
 ;;;###autoload (autoload 'etaf-display-metrics "etaf" nil nil)
 ;; Return a fresh plist with RUNTIME's effective default-face :char-width,
@@ -2497,18 +2547,20 @@
 ;; It caps the presented frame rate; values below 1 are raised to 1.
 ;;
 ;; Variable: etaf-video-render-backend
-;; Rendering backend for graphical `etaf-video' playback: `auto' (default),
-;; `gpu', `canvas' or `image'.
+;; Rendering backend for `etaf-video' playback: `auto' (default), `gpu',
+;; `canvas', `kitty' or `image'.
 ;; `auto' prefers the native hardware `gpu' video layer when `libmpv' and the
 ;; platform GPU surface are ready on a live graphical frame (macOS
 ;; `CAOpenGLLayer', Windows Win32/WGL, Linux X11/Wayland EGL), then `canvas'
 ;; when Emacs supports canvas images and `native/etaf-video-canvas' is built,
-;; and falls back to `image'.  `gpu' requests the native GPU overlay and falls
-;; back to `image' when unavailable.  `canvas' reads BGRA frames into one
-;; Emacs canvas image in place.  `image' forces the pure-Emacs image frame
-;; pipeline (file-backed TIFF ring under `libmpv', JPEG under `ffmpeg').
-;; Missing capabilities or non-graphical frames silently keep `image'.
-;; `ascii' and `color' modes ignore this setting.
+;; and falls back to `image'; on compliant 24-bit text terminals `auto' uses
+;; `kitty' Unicode placeholder streaming in `image' mode.  `gpu' requests the
+;; native GPU overlay and falls back to `image' when unavailable.  `canvas'
+;; reads BGRA frames into one Emacs canvas image in place.  `kitty' requests
+;; Kitty terminal graphics on text frames.  `image' forces the pure-Emacs
+;; image frame pipeline (file-backed TIFF ring under `libmpv', JPEG under
+;; `ffmpeg').  Missing capabilities fall back cleanly.  `ascii' and `color'
+;; modes ignore this setting.
 ;;
 ;; Variable: etaf-video-engine
 ;; Playback engine for `etaf-video': `auto' (default), `mpv' or `ffmpeg'.
@@ -2545,7 +2597,7 @@
 ;; takes :src (a file path, or an image descriptor such as `create-image'
 ;; returns with :type and :data or :file, for in-memory thumbnails and
 ;; generated SVG), :columns and :rows (positive integers) plus an optional
-;; :adapter (`auto', `text' or `placeholder').  The source is scaled to fill
+;; :adapter (`auto', `kitty', `text' or `placeholder').  The source is scaled to fill
 ;; the grid exactly; callers preserve aspect ratios by choosing the grid.
 ;; :inset (TOP . BOTTOM), pixels under one line height, leaves a graphics
 ;; image that much empty space inside its first and last rows, showing the

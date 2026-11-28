@@ -428,5 +428,19 @@ The shape matches `etaf-install-doctor': :required and :optional lists of
 (require 'etaf-weread-views)
 (require 'etaf-weread-app)
 
+;;;###autoload
+(with-eval-after-load 'etaf
+  (etaf-app-register 'etaf-weread
+    :title "微信读书"
+    :icon "W"
+    :category 'reading
+    :feature 'etaf-weread
+    :open 'etaf-weread-open
+    :doctor 'etaf-weread-doctor
+    :hosts '(buffer desktop panel)
+    :session '(:create etaf-weread-create :view etaf-weread-view)
+    :window '(:width 1120 :height 30 :min-width 480 :min-height 14)
+    :panel '(:width 100 :height 24 :fill-height t :at frame-top-right :stack t)))
+
 (provide 'etaf-weread)
 ;;; etaf-weread.el ends here

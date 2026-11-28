@@ -582,5 +582,20 @@
             (should (equal (file-truename installed) (file-truename godot)))))
       (delete-directory directory t))))
 
+(ert-deftest etaf-gamekit-dispose-closes-session-and-kills-buffer ()
+  "Disposing a hosted GameKit session closes the backend and kills its backing buffer."
+  (let ((session (etaf-gamekit-test--peer "split")))
+    (unwind-protect
+        (progn
+          (etaf-gamekit-test--wait session)
+          (let ((buffer (etaf-gamekit-buffer session)))
+            (should (buffer-live-p buffer))
+            (etaf-gamekit-dispose session)
+            (should (eq (etaf-gamekit-status session) 'closed))
+            (should-not (buffer-live-p buffer))
+            ;; Repeated calls are safe and idempotent.
+            (etaf-gamekit-dispose session)))
+      (etaf-gamekit-test--dispose session))))
+
 (provide 'etaf-gamekit-tests)
 ;;; etaf-gamekit-tests.el ends here

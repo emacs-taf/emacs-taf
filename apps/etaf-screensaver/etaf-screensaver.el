@@ -1,280 +1,204 @@
-;;; -*- lexical-binding: t; -*-
-;;; etaf-screensaver.el --- Idle generative screensavers for Emacs
+;;; etaf-screensaver.el --- Idle generative screensavers for Emacs -*- lexical-binding: t; -*-
 
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 ;; Author: ETAF contributors
-;; Version: 0.1.1
+;; Version: 0.2.0
 ;; Package-Requires: ((emacs "29.1") (etaf "0.3.0"))
 ;; Keywords: multimedia, convenience
 ;; URL: https://github.com/emacs-taf/etaf-screensaver
 
 ;;; Commentary:
-;; A screensaver, not an editor: only animation is visible.  Keyboard input,
-;; mouse movement, a click or wheel input dismisses it and restores the prior
-;; window configuration.  Settings belong in Emacs Lisp or Customize.
+;; A restrained, canvas-only screensaver framework for Emacs built on ETAF.
+;; After an idle interval, animation fills the current frame; any key press,
+;; mouse movement, completed click or wheel event dismisses it and restores
+;; the prior window configuration without replaying input.  This is a visual
+;; screensaver, not a security lock.  No child processes are created.
 ;;
-;; Example:
+;; Quick start:
 ;;   (require 'etaf-screensaver)
 ;;   (setq etaf-screensaver-idle-delay 300
-;;         etaf-screensaver-program
-;;         '(:order shuffle :scenes (matrix snow donut plasma)))
+;;         etaf-screensaver-order 'shuffle
+;;         etaf-screensaver-playlist '(poems (matrix :speed 12) snow clock))
 ;;   (etaf-screensaver-mode 1)
 ;;
-;; Automatic mode owns one idle watcher and a rearming hook.  A presentation
-;; owns one animation timer, a transient input map and an ephemeral buffer;
-;; stopping releases all of these.  No child process is started.  This is not
-;; a security lock.  Callbacks supplied by scene authors must be pure: they
-;; may not create processes/timers or alter editor state.  Reels read their
-;; recording at scene creation; the built-in image reader can also prepare
-;; the next queued page incrementally in normal animation callbacks.  No
-;; other scene callback performs I/O.
-;;
-;; Only the following declarations are public.  Unlisted symbols are private.
-;; See docs/manual.md for playback composition, configuration and scene specs.
+;; Only the declarations below are public; unlisted symbols are internal.
+;; See docs/manual.md for configuration and custom scene authoring recipes.
 ;;
 ;; Function: etaf-screensaver-mode (&optional arg)
 ;;;###autoload (autoload 'etaf-screensaver-mode "etaf-screensaver" nil t)
-;; Toggle automatic presentation after the configured idle interval.
-;; Positive ARG enables, nonpositive ARG disables.  Disabling also dismisses
-;; an active presentation.  Repeated enabling replaces, not stacks, watchers.
-;; The automatic path avoids minibuffer input and unfocused/hidden frames.
+;; Toggle automatic idle screensaver presentation after
+;; `etaf-screensaver-idle-delay' seconds.  Positive ARG enables; nonpositive
+;; ARG disables and dismisses any active presentation.  Avoids active
+;; minibuffers and unfocused or hidden frames.
 ;;
-;; Function: etaf-screensaver-start (&optional program)
-;;;###autoload (autoload 'etaf-screensaver-start "etaf-screensaver" nil t)
-;; Present PROGRAM, defaulting to etaf-screensaver-program, in the selected
-;; frame and return its buffer.  Starting while active returns the existing
-;; buffer.  When no PROGRAM argument is given, a dismissed presentation
-;; restarts its current work/page if the effective configuration is unchanged.
-;; Its queue, scene seed and program random state continue.  An explicit
-;; PROGRAM previews a fresh round without replacing this saved position.
-;; Invalid configuration leaves the original windows unchanged;
-;; errors during takeover restore them before signaling.  Input is consumed
-;; rather than replayed into the restored buffer.
+;; Function: etaf-screensaver-open (&optional playlist seed)
+;;;###autoload (autoload 'etaf-screensaver-open "etaf-screensaver" nil t)
+;; Start presenting PLAYLIST (default `etaf-screensaver-playlist') in the
+;; selected frame and return its buffer.  With a prefix argument interactively,
+;; prompt for a single scene to preview.  Optional integer SEED reproduces
+;; randomized choices.  Starting while active returns the existing buffer
+;; without overwriting the saved window snapshot.  Invalid settings signal
+;; `etaf-screensaver-error' before taking over windows.
+;;
+;; Function: etaf-screensaver-preview (scene)
+;;;###autoload (autoload 'etaf-screensaver-preview "etaf-screensaver" nil t)
+;; Interactively choose and preview a registered SCENE without modifying
+;; `etaf-screensaver-playlist' or the saved resume position.
 ;;
 ;; Function: etaf-screensaver-stop ()
 ;;;###autoload (autoload 'etaf-screensaver-stop "etaf-screensaver" nil t)
-;; Dismiss the presentation and return nil.  Safe to call repeatedly.
-;; Restore windows and mouse tracking; release the Runtime, buffer, animation
-;; timer and wake hooks/map.  Automatic mode, if enabled, waits a fresh idle
-;; interval.  Disabling the mode releases that watcher too.
+;; Dismiss any active presentation, restore windows, mouse tracking and GC
+;; threshold, and release all timers, hooks and buffers.  Safe to call
+;; repeatedly.
 ;;
 ;; Function: etaf-screensaver-status ()
 ;;;###autoload (autoload 'etaf-screensaver-status "etaf-screensaver" nil nil)
-;; Return :active and :automatic, plus the active scene's :scene, :buffer name,
-;; zero-based :index, :seed, :ticks, :elapsed, :columns, :rows, :frame-rate,
-;; copied :params alist and :up-next scene identifiers for this round.
-;; Also returns :presentation, :duration (page dwell seconds), :works (the
-;; simultaneous scene ids) and :up-next-works (one id list per pending page).
-;; :scene and each :up-next entry name the first work on their page; :index
-;; counts pages.  :transition-progress is nil outside a page reveal, otherwise
-;; its elapsed fraction from zero to one.  Returned lists can be modified
-;; without changing playback.
+;; Return a plist snapshot of automatic mode (`:active', `:automatic') and,
+;; when active, `:scene', `:buffer', `:index', `:seed', `:ticks', `:elapsed',
+;; `:columns', `:rows', `:frame-rate', `:duration', `:frame',
+;; `:transition-progress', copied `:params' and `:up-next'.
 ;;
 ;; Function: etaf-screensaver-scenes ()
 ;;;###autoload (autoload 'etaf-screensaver-scenes "etaf-screensaver" nil nil)
-;; Return registered scene identifiers in registration order.
+;; Return registered scene identifier symbols in registration order.
 ;;
 ;; Function: etaf-screensaver-scene-info (scene)
 ;;;###autoload (autoload 'etaf-screensaver-scene-info "etaf-screensaver" nil nil)
-;; Return SCENE's :id, :title, :summary, :tags, :frame-rate and :params.
-;; SCENE accepts an identifier, its string name or displayed title.  Callback
-;; implementations stay private.  Unknown scenes signal etaf-screensaver-error.
+;; Return SCENE's public metadata plist (`:id', `:title', `:summary',
+;; `:frame-rate', `:duration', `:background', `:frame', `:params').  SCENE
+;; accepts an identifier, symbol name or display title.
 ;;
 ;; Macro: etaf-screensaver-define-scene (id &rest properties)
 ;;;###autoload (autoload 'etaf-screensaver-define-scene "etaf-screensaver" nil nil)
-;; Register a pure callback scene under ID; replace an existing registration
-;; in place.  PROPERTIES supplies :create, :step, :render, optional :resize,
-;; :title, :summary, :tags, :frame-rate, :duration, :background and :params
-;; descriptors.  :duration is the scene's natural length in seconds; a
-;; program uses it when neither the item nor scene-options give one, so a
-;; recorded work plays once without being cut mid-loop.
-;; CREATE returns state, STEP mutates it, RENDER returns row strings or a
-;; newline-separated string, and RESIZE returns resized state.  Each receives
-;; a context with dimensions, seed, tick, elapsed time, dt and parameter/random
-;; accessors; see the macro docstring and manual.  Pointer input always wakes,
-;; never enters a scene.  Registrations affect subsequent starts.
+;; Register generative scene ID with plist PROPERTIES: required `:render' and
+;; optional `:title', `:summary', `:frame-rate', `:duration', `:background',
+;; `:frame' (`full' or `card'), `:params' defaults alist, `:create', `:step'
+;; and `:resize'.  Callbacks must be pure.  Re-registering replaces ID in
+;; place.
 ;;
-;; Function: etaf-screensaver-register-scene (spec)
-;;;###autoload (autoload 'etaf-screensaver-register-scene "etaf-screensaver" nil nil)
-;; Register inert SPEC data, optionally wrapped as (etaf-scene ...).
-;; The plist holds :id, metadata, :params and a nonempty :layers stack.
-;; Built-in kinds are rain, sand, particles, field and text.
-;; Expressions use a whitelist, never eval.  Invalid specs signal
-;; etaf-screensaver-error.  An existing identifier is replaced in place.
+;; Macro: etaf-screensaver-define-text-scene (id &rest properties)
+;;;###autoload (autoload 'etaf-screensaver-define-text-scene "etaf-screensaver" nil nil)
+;; Define a text, quote or poem screensaver under ID with `:items' (list of
+;; strings or `(:text STR :caption STR)' plists, or a 0-arg generator),
+;; `:style' (`typewriter', `fade', `scroll' or `static'), `:align', `:color',
+;; `:caption-color', `:hold', `:fade', `:speed', `:letter-spacing' and
+;; `:order'.
 ;;
-;; Function: etaf-screensaver-load-scenes (&optional directories)
-;;;###autoload (autoload 'etaf-screensaver-load-scenes "etaf-screensaver" nil t)
-;; Load .esc scene files and .esr reel files from DIRECTORIES, defaulting to
-;; scene-directories, and return the number loaded.  Later directories
-;; override earlier ids.  Bad files report a message and are skipped; other
-;; files still load.  Load/reload outside presentation; changes are used by
-;; subsequent starts.
+;; Macro: etaf-screensaver-define-field-scene (id &rest properties)
+;;;###autoload (autoload 'etaf-screensaver-define-field-scene "etaf-screensaver" nil nil)
+;; Define a 2D scalar-field screensaver under ID from `:value'
+;; `(lambda (x y ctx))', `:range', `:ramp', optional `:palette' and `:block'.
 ;;
-;; Function: etaf-screensaver-define-reel-provider (id &rest properties)
-;;;###autoload (autoload 'etaf-screensaver-define-reel-provider "etaf-screensaver" nil nil)
-;; Register the recorded-animation provider ID with PROPERTIES.
-;; PROPERTIES is a plist with :title and :license display strings,
-;; :extensions file name suffixes for batch import, :match (lambda (file))
-;; recognizing the format and :read (lambda (file)) returning the recording
-;; as text frames (:width, :height, :frames, optional :durations seconds
-;; per frame and :ansi for SGR runs) or image frames (:image-frames of
-;; image file names, optional :image-size and :image-types, a same-length
-;; vector of image format symbols). Formats omitted by a provider are detected
-;; lazily once per file. Both kinds carry :frame-rate and may add :source, :license and :assets (every file of a multi-file
-;; recording).  Re-registering an ID replaces it in place.  The built-in
-;; `tte' provider reads Terminal Text Effects recordings and the `frames'
-;; provider reads baked image-frame manifests, both without running any
-;; tool. Image manifests are bounded to 1 MiB, 7200 local frame basenames,
-;; 1–120 fps, dimensions up to 2048 per axis and 2073600 declared pixels.
-;; Encoded images are bounded to 16 MiB each and 1 GiB total; paths and
-;; symlinks may not escape the bundle. Import trusted images: these bounds
-;; do not sandbox Emacs's image decoder. Header validation and import also work
-;; without image decoders. A headless buffer can publish image descriptors;
-;; visible graphical playback requires a decoder for each format.
+;; Macro: etaf-screensaver-define-particle-scene (id &rest properties)
+;;;###autoload (autoload 'etaf-screensaver-define-particle-scene "etaf-screensaver" nil nil)
+;; Define a particle-system screensaver under ID from optional `:count' and
+;; callbacks `:spawn', `:update' and `:draw'.
 ;;
-;; Function: etaf-screensaver-register-reel (spec)
-;;;###autoload (autoload 'etaf-screensaver-register-reel "etaf-screensaver" nil nil)
-;; Register the recorded animation described by SPEC as a scene.
-;; SPEC is a plist, optionally wrapped as (etaf-reel ...), with :id,
-;; :provider and :recording plus optional :title, :summary, :tags, :width,
-;; :height, :frame-rate, :frame-count, :source, :license and :background.
-;; A relative :recording resolves against the reel file's directory.  The
-;; registration retains metadata only.  Playback reads at scene creation,
-;; with recent unchanged results cached.  The built-in image provider may
-;; validate the next queued page during the current page's normal callbacks;
-;; unfinished validation completes at selection.  A next-page failure is
-;; reported only when that page is selected, not while the current page plays.
-;; Custom providers keep their synchronous :read contract.  Playback follows
-;; the recording's own timing.  Recorded text scales its final-frame subject
-;; according to etaf-screensaver-reel-text-scale while retaining native
-;; surrounding animation; images retain native pixel dimensions when they
-;; fit and otherwise scale down proportionally, never enlarging.  When the
-;; spec carries :frame-count and :frame-rate the reel registers that full
-;; length as its natural :duration, so a program plays the work once instead
-;; of cutting it mid-loop.  Invalid
-;; specs signal etaf-screensaver-error.  Registering the same :id replaces
-;; the previous scene in place.
+;; Function: etaf-screensaver-canvas-create (columns rows)
+;;;###autoload (autoload 'etaf-screensaver-canvas-create "etaf-screensaver" nil nil)
+;; Create a blank COLUMNS by ROWS character canvas.
 ;;
-;; Function: etaf-screensaver-import-recording (file &optional destination)
-;;;###autoload (autoload 'etaf-screensaver-import-recording "etaf-screensaver" nil t)
-;; Import one recording FILE as a reel and return its report plist.
-;; DESTINATION defaults to the user scene directory.  The native recording is
-;; copied next to a new .esr reel spec that names its provider, dimensions,
-;; frame count and license; it is validated first and never transcoded.
-;; The report holds :file, :status `imported', :provider, :kind (text or
-;; image), :title, :output, :recording, :width, :height, :image-size,
-;; :frame-rate, :frame-count, :colors, :attributes, :license and :source.
-;; A multi-file recording is copied into one directory named after the reel.
-;; A file no provider recognizes or a recording that fails validation
-;; signals etaf-screensaver-error and writes nothing.
+;; Function: etaf-screensaver-canvas-clear (canvas)
+;;;###autoload (autoload 'etaf-screensaver-canvas-clear "etaf-screensaver" nil nil)
+;; Clear CANVAS characters and colors in place and return CANVAS.
 ;;
-;; Function: etaf-screensaver-import-directory (directory &optional destination)
-;;;###autoload (autoload 'etaf-screensaver-import-directory "etaf-screensaver" nil t)
-;; Import every recording DIRECTORY holds and return a report plist.
-;; Candidate files use the extensions registered by reel providers.  An
-;; unrecognized file is skipped; a recognized file that fails validation is
-;; reported as failed.  Reels are written to DESTINATION (default: the user
-;; scene directory), and the report holds :directory, :destination and the
-;; :imported, :skipped and :failed lists so callers can audit compatibility,
-;; dimensions, color use and license before playing anything.  Register the
-;; new reels with etaf-screensaver-load-scenes afterwards.
+;; Function: etaf-screensaver-canvas-put (canvas row col char &optional color)
+;;;###autoload (autoload 'etaf-screensaver-canvas-put "etaf-screensaver" nil nil)
+;; Draw CHAR at ROW, COL in CANVAS with optional COLOR string or face plist.
+;; Handles wide CJK cells safely and ignores out-of-bounds coordinates.
+;;
+;; Function: etaf-screensaver-canvas-text (canvas row col text &optional color)
+;;;###autoload (autoload 'etaf-screensaver-canvas-text "etaf-screensaver" nil nil)
+;; Draw TEXT at ROW, COL in CANVAS with optional COLOR or face plist.  COL
+;; accepts an integer column or `left', `center' or `right'.
+;;
+;; Function: etaf-screensaver-canvas-fill (canvas row col width height char &optional color)
+;;;###autoload (autoload 'etaf-screensaver-canvas-fill "etaf-screensaver" nil nil)
+;; Fill a WIDTH by HEIGHT rectangle at ROW, COL in CANVAS with CHAR and COLOR.
+;;
+;; Function: etaf-screensaver-canvas-box (canvas row col width height &optional color)
+;;;###autoload (autoload 'etaf-screensaver-canvas-box "etaf-screensaver" nil nil)
+;; Draw a thin Unicode box of WIDTH by HEIGHT at ROW, COL in CANVAS.
+;;
+;; Function: etaf-screensaver-canvas-rows (canvas)
+;;;###autoload (autoload 'etaf-screensaver-canvas-rows "etaf-screensaver" nil nil)
+;; Project CANVAS to a list of exact-width strings with merged face runs.
+;;
+;; Function: etaf-screensaver-color-mix (from to ratio)
+;;;###autoload (autoload 'etaf-screensaver-color-mix "etaf-screensaver" nil nil)
+;; Linearly blend six-digit hex colors FROM and TO by RATIO clamped to [0, 1].
+;;
+;; Function: etaf-screensaver-ramp (sequence ratio)
+;;;###autoload (autoload 'etaf-screensaver-ramp "etaf-screensaver" nil nil)
+;; Sample a character or element from nonempty string, vector or list SEQUENCE
+;; at RATIO clamped to [0, 1].
 ;;
 ;; Variable: etaf-screensaver-idle-delay
-;; Positive idle seconds before automatic presentation, default 300.
-;; Re-enable the mode after changing it to re-arm immediately.
+;; Positive idle seconds before automatic presentation starts, default 300.
 ;;
-;; Variable: etaf-screensaver-program
-;; Repeating program.  The common form is a flat list of scene and pack names,
-;; played in order: (setq etaf-screensaver-program '(poems matrix)).  A lone
-;; name plays one scene or one pack.  The advanced form is a scene item plist,
-;; a pack item or a nested group.  An item has :scene and optional :duration,
-;; :frame-rate, :background, :presentation and :params alist.  A pack item
-;; (:pack NAME) plays scenes from etaf-screensaver-packs and may override the
-;; pack's :order, :count and defaults.  A group has :order
-;; sequential/shuffle/random, :scenes children
-;; and optional :count selections (default child count) and :presentation
-;; inherited by children without an explicit style.  Omitted :order means
-;; sequential.  Shuffle draws
-;; without replacement within each bag; random allows repeats.  Groups nest
-;; to select sequences, hold one style pack for a number of scenes or rotate
-;; whole packs.  Consecutive mosaic works within a pack share pages of at
-;; most four independent scenes.  Pages never duplicate a work to fill slots;
-;; their duration is the longest work's duration, and shorter reels loop.
+;; Variable: etaf-screensaver-playlist
+;; Repeating playlist: a scene symbol, a configured item `(SCENE :key val ...)',
+;; or a list mixing both.  Built-in scenes include `matrix', `snow', `donut',
+;; `plasma', `equalizer', `sand', `poems' and `clock'.
 ;;
-;; Variable: etaf-screensaver-presentation
-;; Nil uses each pack's suggested style (full for standalone works).  Full,
-;; card, band or mosaic overrides pack suggestions globally; explicit group
-;; or item :presentation settings take priority.  Card insets a thin frame by
-;; an even mat of about three line heights, with an ordinary lower-left
-;; title/summary on the work's background.
-;; Mosaic presents independent
-;; works concurrently, not crops of one work; narrow windows stack the tiles.
+;; Variable: etaf-screensaver-order
+;; Round ordering for `etaf-screensaver-playlist': `sequential' (default),
+;; `shuffle' or `random'.
 ;;
-;; Variable: etaf-screensaver-packs
-;; Named style packs: alist of (ID :title TITLE :order ORDER :background COLOR
-;; :duration SECONDS :frame-rate RATE :presentation STYLE :params ALIST
-;; :scenes (SCENE...)).  Bundled packs cover the shipped
-;; scenes; add your own with `add-to-list' after baking or registering
-;; scenes.  Playing a pack keeps its works in one visual language.
+;; Variable: etaf-screensaver-duration
+;; Default positive seconds per scene when neither item nor scene specifies one,
+;; default 30.
 ;;
-;; Variable: etaf-screensaver-reel-text-scale
-;; Recorded text size: auto (the default) fits a single work's final-frame
-;; nonblank subject, filling up to 95% of the width and 70% of the height;
-;; concurrent works keep their native overview.  An integer 1 through 24
-;; selects a fixed scale for every work; 1 preserves native text.  Small
-;; viewports bound the scale.  Graphical SVG-capable Emacs draws vector
-;; glyphs without changing line metrics or the framing font; other builds
-;; keep native text.  Image recordings are unaffected.  Snapshotted at start;
-;; invalid values signal etaf-screensaver-error before window takeover.
-;;
-;; Variable: etaf-screensaver-transition-duration
-;; Reveal seconds between different pages, default 1.2, bounded to 0–5.
-;; Zero disables the reveal.  It is capped at half the incoming page's dwell,
-;; without changing that dwell or playback order.  The outgoing page retains
-;; its colors while new moving content is revealed top-to-bottom; the same
-;; page repeated does not transition.  Resize finishes a reveal immediately.
-;; Snapshotted at start, independently of content and presentation.
-;;
-;; Variable: etaf-screensaver-scene-duration
-;; Default positive seconds per scene, default 30.  Items override this.
-;;
-;; Variable: etaf-screensaver-scene-options
-;; Per-scene settings, e.g. ((matrix :params ((speed . 5)) :duration 20)
-;; (equalizer :presentation full)).  These values override program items,
-;; pack values and the global presentation; parameter alists merge by key.
-;;
-;; Variable: etaf-screensaver-max-frame-rate
-;; Positive frame-rate cap up to 120, default 30.  Scene/item rates are capped.
-;;
-;; Variable: etaf-screensaver-seed
-;; Integer for reproducible scene and program choices, or nil for fresh starts.
+;; Variable: etaf-screensaver-frame-rate
+;; Positive global frame-rate cap in (0, 60], default 30.
 ;;
 ;; Variable: etaf-screensaver-background
-;; Default canvas color, overridden by a scene's own background.
+;; Default canvas background color when a scene does not set its own.
 ;;
-;; Variable: etaf-screensaver-scene-directories
-;; Ordered scene directories.  Defaults to bundled scenes and the user's
-;; etaf-screensaver/scenes directory.  Load files before starting playback.
+;; Variable: etaf-screensaver-frame
+;; Global framing override: nil (scene default), `full' or `card'.
+;;
+;; Variable: etaf-screensaver-transition-duration
+;; Top-to-bottom reveal seconds between different pages in [0, 5], default 1.0.
+;; Zero disables transitions.
 ;;
 ;; Error: etaf-screensaver-error
-;; Invalid scene or playback configuration.  A start validates before takeover;
-;; a runtime failure tears down the presentation and reports the error, disabling
-;; automatic mode to avoid an idle error loop.
+;; Signaled for invalid configuration, unknown scenes/parameters or runtime
+;; scene errors.
 
 ;;; Code:
 (eval-and-compile
-  (add-to-list 'load-path
-               (expand-file-name
-                "lisp"
-                (file-name-directory
-                 (or (and load-file-name
-                          (not (string-suffix-p ".eln" load-file-name))
-                          (file-directory-p (expand-file-name "lisp" (file-name-directory load-file-name)))
-                          load-file-name)
-                     (bound-and-true-p byte-compile-current-file)
-                     (locate-library "etaf-screensaver")
-                     buffer-file-name)))))
+  (let ((lisp-dir
+         (catch 'found
+           (dolist (file (list (bound-and-true-p byte-compile-current-file)
+                               (and load-file-name
+                                    (not (string-suffix-p ".eln" load-file-name))
+                                    load-file-name)
+                               (locate-library "etaf-screensaver")
+                               buffer-file-name))
+             (when (stringp file)
+               (let* ((dir (file-name-directory file))
+                      (sub (and dir (expand-file-name "lisp" dir))))
+                 (when (and sub
+                            (file-directory-p sub)
+                            (or (file-exists-p (expand-file-name "etaf-screensaver.el" dir))
+                                (file-exists-p (expand-file-name "etaf-screensaver.elc" dir))))
+                   (throw 'found sub))))))))
+    (when lisp-dir
+      (add-to-list 'load-path lisp-dir))))
+
 (require 'etaf-screensaver-app)
+(require 'etaf-screensaver-builtins)
+
+;;;###autoload
+(with-eval-after-load 'etaf
+  (etaf-app-register 'etaf-screensaver
+    :title "屏保"
+    :icon "S"
+    :category 'system
+    :feature 'etaf-screensaver
+    :open 'etaf-screensaver-open
+    :hosts '(buffer)))
 
 (provide 'etaf-screensaver)
 ;;; etaf-screensaver.el ends here

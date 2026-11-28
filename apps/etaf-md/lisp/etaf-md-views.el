@@ -546,6 +546,15 @@ when only one axis is specified."
      (dh (cons dh dh))
      (t natural))))
 
+(defun etaf-md--media-frame-border (env)
+  "Return the hairline border plist for a media frame in ENV.
+Graphical frames draw a 1px four-sided outline tightly around image pixels.
+Text terminals cannot paint overline and draw side borders as full-cell `│'
+bars, so zero-padding borders would leave open-top vertical lines beside the
+image; omit the border there so images sit cleanly above their captions."
+  (when (display-graphic-p)
+    (list :border (list '(px 1) 'solid (etaf-md--env-color env :border)))))
+
 (defun etaf-md--media-card (url alt env &optional declared-kind declared-width declared-height)
   "Return a media card View for URL with ALT in ENV.
 Local images and videos render through the ETAF image Host, which owns the
@@ -620,11 +629,11 @@ bound the rendered grid to the document's declared display size."
                    (append
                     (list
                      (etaf-node 'box
-                                (list :border (list '(px 1) 'solid
-                                                    (etaf-md--env-color env :border))
-                                      :on-press open :role 'button :tab-index 0
-                                      :pointer 'hand
-                                      :help-echo (format "%s（按 RET 打开）" help-label))
+                                (append
+                                 (etaf-md--media-frame-border env)
+                                 (list :on-press open :role 'button :tab-index 0
+                                       :pointer 'hand
+                                       :help-echo (format "%s（按 RET 打开）" help-label)))
                                 (list figure)))
                     (unless (and compact (string-empty-p caption))
                       (list (etaf-md--caption-view
@@ -661,8 +670,7 @@ bound the rendered grid to the document's declared display size."
                                           (format "%s（按 RET 播放）" caption)))
                        (list
                         (etaf-node 'box
-                                   (list :border (list '(px 1) 'solid
-                                                       (etaf-md--env-color env :border)))
+                                   (etaf-md--media-frame-border env)
                                    (list poster))
                         (etaf-md--caption-view
                          (if no-ffmpeg
@@ -680,8 +688,7 @@ bound the rendered grid to the document's declared display size."
                              :help-echo (format "%s（按 RET 播放/暂停）" caption))
                        (list
                         (etaf-node 'box
-                                   (list :border (list '(px 1) 'solid
-                                                       (etaf-md--env-color env :border)))
+                                   (etaf-md--media-frame-border env)
                                    (list
                                     (etaf-node 'etaf-video
                                                (list :src path
@@ -710,8 +717,7 @@ bound the rendered grid to the document's declared display size."
                              :help-echo (format "%s（按 RET 内嵌播放）" caption))
                        (list
                         (etaf-node 'box
-                                   (list :border (list '(px 1) 'solid
-                                                       (etaf-md--env-color env :border)))
+                                   (etaf-md--media-frame-border env)
                                    (list poster))
                         (etaf-md--caption-view
                          (format "▶ %s　·　按 RET 播放" caption)

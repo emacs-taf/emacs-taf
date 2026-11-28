@@ -889,9 +889,9 @@ and the hover paint is lost."
         (signal 'etaf-renderer-error
                 (list (format "Image %s must be a positive integer: %S"
                               (car pair) (cdr pair))))))
-    (unless (memq adapter '(auto text placeholder))
+    (unless (memq adapter '(auto kitty text placeholder))
       (signal 'etaf-renderer-error
-              (list (format "Image :adapter must be auto, text or placeholder: %S"
+              (list (format "Image :adapter must be auto, kitty, text or placeholder: %S"
                             adapter))))
     (unless (or (null inset)
                 (and (consp inset) (natnump (car inset)) (natnump (cdr inset))))
@@ -2988,6 +2988,15 @@ Runtime signals `etaf-runtime-error'."
       (etaf-set-value cell (ebox-mount-viewport buffer)))))
 
 (add-hook 'ebox-viewport-prepare-functions #'etaf--runtime-viewport-changed)
+
+;;;###autoload
+(defun etaf-image-kitty-available-p (&optional frame)
+  "Return a capability plist when FRAME supports Kitty terminal graphics.
+FRAME defaults to the selected frame.  Return nil in batch sessions, on
+graphical frames, or when FRAME's terminal does not support Kitty Unicode
+placeholder graphics.  When non-nil, the plist contains `:cell-width',
+`:cell-height' (pixel dimensions of one terminal cell) and `:local'."
+  (ebox-image-kitty-available-p frame))
 
 (defun etaf-display-metrics (&optional runtime)
   "Return RUNTIME's effective default-face metrics as a fresh plist.

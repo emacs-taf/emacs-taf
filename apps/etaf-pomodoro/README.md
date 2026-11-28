@@ -1,28 +1,15 @@
 # ETAF Pomodoro
 
-A focus timer built as an ETAF application: one ordinary Emacs buffer with a
-countdown, or the same timer mounted as a floating panel through
-[etaf-posframe](https://github.com/emacs-taf/etaf/tree/main/packages/etaf-posframe). The session is
-reactive, so a tick, a button or a key repaints the surface without a refresh
-call, and the palette follows the appearance the host reports.
+A focus timer built as an ETAF application: one ordinary Emacs buffer with a countdown, or the same timer mounted as a floating panel through [etaf-posframe](https://github.com/emacs-taf/etaf/tree/main/packages/etaf-posframe). The session is reactive, so a tick, a button or a key repaints the surface without a refresh call, and the palette follows the appearance the host reports.
 
 ## Capabilities
 
-- `M-x etaf-pomodoro-open` opens the timer as an ETAF application
-  (`etaf-app-open`): the framework owns the buffer, the default face, the fit
-  callback and the close hook.
-- The same session mounts anywhere with `etaf-pomodoro-create` and
-  `etaf-pomodoro-view`, including a floating panel registered with
-  `etaf-posframe-register-app`.
-- Three styles, `minimal`, `ring` and `card`, that occupy the same rows, so
-  switching style inside a panel never changes the panel's size.
-- The surface paints no border of its own and adds only one padding cell: the
-  host's frame is the card, so a panel border stays one pixel wide on every
-  side.
-- The palette follows the appearance the host provides and the Emacs theme
-  otherwise, so a panel inside a dark frame can stay light.
-- The one-second tick runs while a View is mounted; closing the window or the
-  panel stops it and the countdown keeps its value.
+- `M-x etaf-pomodoro-open` opens the timer as an ETAF application (`etaf-app-open`): the framework owns the buffer, the default face, the fit callback and the close hook.
+- The same session mounts anywhere with `etaf-pomodoro-create` and `etaf-pomodoro-view`, including a floating panel registered with `etaf-posframe-register-app`.
+- Three styles, `minimal`, `ring` and `card`, that occupy the same rows, so switching style inside a panel never changes the panel's size.
+- The surface paints no border of its own and adds only one padding cell: the host's frame is the card, so a panel border stays one pixel wide on every side.
+- The palette follows the appearance the host provides and the Emacs theme otherwise, so a panel inside a dark frame can stay light.
+- The one-second tick runs while a View is mounted; closing the window or the panel stops it and the countdown keeps its value.
 - One option, `etaf-pomodoro-default-minutes` (25).
 
 ## Prerequisites
@@ -80,12 +67,9 @@ Register the same timer as a floating panel:
 
 ## Documentation
 
-- [User manual](docs/manual.md): workflows, embedding, lifecycle and failure
-  semantics.
-- [Architecture](docs/architecture.md): responsibilities, data flow and
-  invariants.
-- The root entry Commentary in `etaf-pomodoro.el` is the authoritative API
-  inventory.
+- [User manual](docs/manual.md): workflows, embedding, lifecycle and failure semantics.
+- [Architecture](docs/architecture.md): responsibilities, data flow and invariants.
+- The root entry Commentary in `etaf-pomodoro.el` is the authoritative API inventory.
 - [Changelog](CHANGELOG.md).
 
 ## Development
@@ -97,10 +81,7 @@ make test
 make structure-check
 ```
 
-The package is one root entry, `etaf-pomodoro.el`, with the implementation in
-`lisp/`, the correctness scenarios in `tests/` and their inventory in
-`tests/acceptance.json`. Consumers require the root entry and use only the
-interfaces it declares; unlisted symbols are internal.
+The package is one root entry, `etaf-pomodoro.el`, with the implementation in `lisp/`, the correctness scenarios in `tests/` and their inventory in `tests/acceptance.json`. Consumers require the root entry and use only the interfaces it declares; unlisted symbols are internal.
 
 ## License
 

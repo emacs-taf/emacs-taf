@@ -534,6 +534,11 @@
    "name": "etaf-desktop-app-body-animates-inside-its-window",
    "file": "tests/etaf-desktop-tests.el",
    "purpose": "A desktop window publishes the animation frames an embedded application produces on its own, so app-owned motion stays visible."
+  },
+  {
+   "name": "etaf-desktop-discovers-etaf-app-and-closes-sessions-on-teardown",
+   "file": "tests/etaf-desktop-tests.el",
+   "purpose": "Desktop discovers applications registered via etaf-app-register and invokes their session :close callback on window close, etaf-desktop-close, and buffer kill."
   }
  ]
 }

@@ -132,6 +132,11 @@
       "name": "etaf-agenda-tests-light-theme-contrast-and-year-summary",
       "file": "tests/etaf-agenda-tests.el",
       "purpose": "Light themes enforce WCAG AA contrast across muted, dim and info text (avoiding washed-out yellow) and Year View renders all 12 months with annual summary and legend."
+    },
+    {
+      "name": "etaf-agenda-tests-tty-viewport-adapts-across-widths",
+      "file": "tests/etaf-agenda-tests.el",
+      "purpose": "Text-cell viewports fit wide, medium and narrow widths across Today and Calendar Year/Month/Week without clamping above the terminal width or clipping right-hand controls."
     }
   ]
 }

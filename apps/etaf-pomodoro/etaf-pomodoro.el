@@ -151,5 +151,21 @@ A positive whole number of minutes, 25 by default."
 (require 'etaf-pomodoro-views)
 (require 'etaf-pomodoro-app)
 
+;;;###autoload
+(with-eval-after-load 'etaf
+  (etaf-app-register 'etaf-pomodoro
+    :title "≡ 番茄钟"
+    :icon "P"
+    :category 'productivity
+    :feature 'etaf-pomodoro
+    :open 'etaf-pomodoro-open
+    :hosts '(buffer desktop panel)
+    :session '(:create etaf-pomodoro-create
+               :view etaf-pomodoro-view
+               :close etaf-pomodoro-stop-session
+               :keep-alive t)
+    :window '(:width 480 :height 16 :min-width 320 :min-height 10)
+    :panel '(:width 40 :at frame-top-right :stack t :focusable t :draggable t)))
+
 (provide 'etaf-pomodoro)
 ;;; etaf-pomodoro.el ends here

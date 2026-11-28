@@ -53,6 +53,28 @@ An application that declared its surface with `etaf-surface-declare` in its View
  :focusable t :draggable t)
 ```
 
+#### Function: etaf-posframe-bind-app (id &optional shortcut &rest overrides)
+
+Register application ID from ETAF's `etaf-app-get` registry as a floating panel.
+
+**Arguments.** ID is a symbol registered with `etaf-app-define` or `etaf-app-register` that declares `:session`. Optional SHORTCUT is a key string bound in `etaf-posframe-app-map`. Keyword OVERRIDES replace any manifest `:panel` or lifecycle option.
+
+**Semantics.** Reads `:title`, `:feature` (as `:require`), `:session` (`:create`, `:view`, `:close` as `:on-stop`, `:keep-alive`) and `:panel` defaults from `etaf-app-get`, merges SHORTCUT and OVERRIDES on top so caller overrides win, and delegates to `etaf-posframe-register-app`.
+
+**Returns.** The registered ID.
+
+**Errors.** `error→ etaf-posframe-error` when ID is not registered in `etaf-app-get` or declares no `:session`.
+
+#### Function: etaf-posframe-bind-apps (specs)
+
+Bind multiple applications from ETAF's `etaf-app-get` registry in one call.
+
+**Arguments.** SPECS is a list where each item is `ID`, `(ID . SHORTCUT)` or `(ID SHORTCUT . OVERRIDES)`.
+
+**Semantics.** Calls `etaf-posframe-bind-app` for each entry present in the application registry with a `:session`, silently skipping uninstalled or non-panel entries so one user configuration works cleanly across environments.
+
+**Returns.** List of bound application IDs in order.
+
 ## Opening and closing
 
 <!-- index: etaf-posframe-app; etaf-posframe-app-quit; application toggle -->

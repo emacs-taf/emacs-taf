@@ -27,7 +27,10 @@
 (require 'etaf-reader-library)
 
 (declare-function etaf-reader--line-content "etaf-reader-views" (session line theme))
+(declare-function etaf-reader--line-image "etaf-reader-views" (session line))
+(declare-function etaf-reader--sidebar-bar-text "etaf-reader-views" (theme percent &optional columns))
 (declare-function etaf-reader--restore-preferences "etaf-reader-navigation" (session))
+(declare-function etaf-reader--sync-shelf-cursor "etaf-reader-navigation" (session))
 
 (defcustom etaf-reader-font-size nil
   "Optional text size override (CSS pixels) for the reading column."
@@ -137,6 +140,10 @@ PARSER defaults to the `ebook-parse' backend; THEME defaults to
                   :cursor (etaf-ref nil :name 'etaf-reader-cursor)
                   :selection (etaf-ref nil :name 'etaf-reader-selection)
                   :toolbar (etaf-ref nil :name 'etaf-reader-toolbar)
+                  :last-color (etaf-ref "yellow" :name 'etaf-reader-last-color)
+                  :last-kind (etaf-ref "highlight" :name 'etaf-reader-last-kind)
+                  :drag-last-point nil
+                  :note-window-config nil
                   :pane (etaf-ref nil :name 'etaf-reader-pane)
                   :search (etaf-ref nil :name 'etaf-reader-search)
                   :theme (etaf-ref (or theme etaf-reader-theme)
@@ -176,6 +183,26 @@ PARSER defaults to the `ebook-parse' backend; THEME defaults to
 ;;; Layout metrics
 ;;; ---------------------------------------------------------------------------
 
+(defun etaf-reader--book-author (book)
+  "Return BOOK's trimmed author, or \"未知作者\" when blank."
+  (let ((author (string-trim (or (plist-get book :author) ""))))
+    (if (string-empty-p author) "未知作者" author)))
+
+(defun etaf-reader--single-line (text)
+  "Collapse whitespace and line breaks in TEXT into one trimmed line."
+  (string-trim (replace-regexp-in-string "[\n\r\t ]+" " " (or text ""))))
+
+(defun etaf-reader--line-span (entry)
+  "Return the source character length covered by wrapped line ENTRY."
+  (max 0 (- (or (plist-get entry :end) 0)
+            (or (plist-get entry :start) 0))))
+
+(defun etaf-reader--line-shift (entry)
+  "Return how many display prefix characters precede ENTRY's source text."
+  (let ((len (length (or (plist-get entry :text) "")))
+        (span (etaf-reader--line-span entry)))
+    (max 0 (- len span))))
+
 (defun etaf-reader--window (session)
   "Return the window showing SESSION, or nil."
   (let ((buffer (plist-get session :buffer)))
@@ -183,13 +210,19 @@ PARSER defaults to the `ebook-parse' backend; THEME defaults to
          (or (get-buffer-window buffer t)
              (and (eq (current-buffer) buffer) (selected-window))))))
 
-(defun etaf-reader--metrics-for (width height mode)
-  "Return the reading metrics for WIDTH columns and HEIGHT rows."
-  (let* ((layout (cond ((>= width 104) 'wide)
-                       ((>= width 68) 'medium)
-                       (t 'narrow)))
-         (spread (if (eq layout 'wide) 2 1))
-         (available (- width (+ (* spread 5) (* (1+ spread) 2) 4)))
+(defun etaf-reader--metrics-for (width height mode &optional sidebar)
+  "Return the reading metrics for WIDTH columns and HEIGHT rows.
+When SIDEBAR is non-nil and WIDTH is not narrow, subtract its 26-column width
+before deciding two-column spread and line wrap width.  Scroll mode always
+uses a single column."
+  (let* ((narrow (< width 68))
+         (sidebar-width (if (and sidebar (not narrow)) 26 0))
+         (content-width (max 24 (- width sidebar-width)))
+         (layout (cond (narrow 'narrow)
+                       ((>= content-width 104) 'wide)
+                       (t 'medium)))
+         (spread (if (and (eq mode 'page) (eq layout 'wide)) 2 1))
+         (available (- content-width (+ (* spread 5) (* (1+ spread) 2) 4)))
          (columns (max 16 (min 48 (/ available spread))))
          (rows (max 4 (- height 7))))
     (list :columns columns :rows rows :spread spread :layout layout
@@ -222,18 +255,21 @@ resize or width change never leaves stale line breaks."
          (height (or height (and (window-live-p window) (window-body-height window)) 24))
          (previous (etaf-reader--read session :metrics))
          (manual (plist-get previous :manual))
+         (sidebar (etaf-reader--read session :sidebar))
+         (content-width (max 24 (- width (if (and sidebar (>= width 68)) 26 0))))
          (metrics (etaf-reader--metrics-for width height
-                                            (etaf-reader--read session :mode))))
+                                            (etaf-reader--read session :mode)
+                                            sidebar)))
     (when (and manual
                (= (or (plist-get previous :spread) 1)
                   (or (plist-get metrics :spread) 1)))
-      (let ((requested (or (plist-get previous :requested-columns)
-                           (plist-get previous :columns) 40)))
-        (plist-put metrics :columns
-                   (min requested
-                        (max 16 (/ (- width (+ (* (plist-get metrics :spread) 5)
-                                               (* (1+ (plist-get metrics :spread)) 2) 4))
-                                   (plist-get metrics :spread)))))
+      (let* ((requested (or (plist-get previous :requested-columns)
+                            (plist-get previous :columns) 40))
+             (spread (max 1 (plist-get metrics :spread)))
+             (max-cols (max 16 (/ (- content-width (+ (* spread 5)
+                                                      (* (1+ spread) 2) 4))
+                                  spread))))
+        (plist-put metrics :columns (min requested max-cols))
         (setq metrics (plist-put metrics :requested-columns requested))
         (setq metrics (plist-put metrics :manual t))))
     (etaf-batch
@@ -273,6 +309,50 @@ geometry; a mounted reader gets its metrics from its window instead."
       (setq trimmed (1- trimmed)))
     (list (concat indent (substring text start trimmed)) start trimmed)))
 
+(defconst etaf-reader--no-line-start-chars
+  "。，、；：？！）》」』】〉”’.,;:?!)]}%"
+  "Punctuation that should not start a wrapped line.")
+
+(defconst etaf-reader--no-line-end-chars
+  "（《「『【〈“‘([{"
+  "Opening punctuation that should not be left alone at a line break.")
+
+(defun etaf-reader--ascii-word-char-p (ch)
+  "Return non-nil when CH is part of an ASCII word or number."
+  (or (<= ?a ch ?z) (<= ?A ch ?Z) (<= ?0 ch ?9) (memq ch '(?' ?- ?_))))
+
+(defun etaf-reader--choose-break (text start position)
+  "Choose a clean break offset <= POSITION for TEXT starting at START.
+Avoids splitting ASCII words mid-word and avoids starting the next line with
+closing or separating punctuation."
+  (let ((break position)
+        (ch (aref text position)))
+    (cond
+     ;; ASCII word boundary: back up to the start of the current word if it
+     ;; fits within a reasonable window.
+     ((and (> position start)
+           (etaf-reader--ascii-word-char-p ch)
+           (etaf-reader--ascii-word-char-p (aref text (1- position))))
+      (let ((scan (1- position))
+            (limit (max (1+ start) (- position 18))))
+        (while (and (> scan limit)
+                    (etaf-reader--ascii-word-char-p (aref text (1- scan))))
+          (setq scan (1- scan)))
+        (when (and (> scan start)
+                   (not (etaf-reader--ascii-word-char-p (aref text (1- scan)))))
+          (setq break scan))))
+     ;; Kin-soku (避头点): pull one preceding non-opening character down so
+     ;; punctuation does not dangle at the start of the next line.
+     ((and (> (- position start) 2)
+           (cl-position ch etaf-reader--no-line-start-chars)
+           (not (cl-position (aref text (1- position)) etaf-reader--no-line-end-chars)))
+      (setq break (1- position))))
+    ;; Also avoid stranding an opening bracket at the very end of the line.
+    (when (and (> (- break start) 2)
+               (cl-position (aref text (1- break)) etaf-reader--no-line-end-chars))
+      (setq break (1- break)))
+    break))
+
 (defun etaf-reader--wrap-segment (text from to columns indent)
   "Wrap TEXT[FROM,TO) into (STRING START END) lines no wider than COLUMNS.
 INDENT is prepended to the first produced line but keeps source offsets; its
@@ -286,15 +366,16 @@ own display width counts against the first line."
     (while (< position to)
       (let* ((character (aref text position))
              (character-width (char-width character)))
-        (when (and (> (+ width character-width) columns)
-                   (> position start))
-          (push (etaf-reader--trim-line text start position pending) lines)
-          (setq start position width 0 pending nil)
-          (while (and (< start to) (memq (aref text start) '(?\s ?\t)))
-            (setq start (1+ start))
-            (setq position (max position start))))
-        (setq width (+ width character-width))
-        (setq position (1+ position))))
+        (if (and (> (+ width character-width) columns)
+                 (> position start))
+            (let ((break (etaf-reader--choose-break text start position)))
+              (push (etaf-reader--trim-line text start break pending) lines)
+              (setq start break width 0 pending nil)
+              (while (and (< start to) (memq (aref text start) '(?\s ?\t)))
+                (setq start (1+ start)))
+              (setq position start))
+          (setq width (+ width character-width))
+          (setq position (1+ position)))))
     (when (or (> to from) (null lines))
       (push (etaf-reader--trim-line text start to pending) lines))
     (nreverse lines)))
@@ -500,6 +581,63 @@ stored annotations of that chapter index."
   "Clamp LINE to SESSION's current chapter."
   (max 0 (min (max 0 (1- (length (etaf-reader--read session :lines)))) line)))
 
+(defun etaf-reader--line-visual-rows (session line max-rows)
+  "Return how many screen rows LINE occupies in SESSION, bounded by MAX-ROWS."
+  (if (eq (plist-get line :kind) 'img)
+      (if-let* ((image (etaf-reader--line-image session line)))
+          (max 1 (min (max 1 max-rows) (or (plist-get image :rows) 1)))
+        1)
+    1))
+
+(defun etaf-reader--pack-columns (session lines top rows spread)
+  "Pack visible lines from TOP into SPREAD columns of up to ROWS visual rows.
+Return (:slices SLICES :count COUNT) where each line carries a sequential
+`:slot' index.  On text-only pages every line has height 1, so each column
+holds ROWS lines and COUNT equals `(* rows spread)'."
+  (let* ((rows (max 1 rows))
+         (spread (max 1 spread))
+         (remaining (nthcdr top lines))
+         (has-img (cl-some (lambda (line) (eq (plist-get line :kind) 'img))
+                           (seq-take remaining (* rows spread)))))
+    (if (not has-img)
+        (let* ((page-size (* rows spread))
+               (visible (cl-loop for slot below page-size
+                                 for line = (pop remaining)
+                                 collect (plist-put (copy-sequence line) :slot slot)))
+               (slices (cl-loop for column from 0 below spread
+                                for from = (* column rows)
+                                for to = (min (length visible) (+ from rows))
+                                when (< from to)
+                                collect (seq-subseq visible from to))))
+          (list :slices slices :count page-size))
+      (let ((slot 0) (consumed 0) (slices nil))
+        (dotimes (_ spread)
+          (let ((used 0) (col nil))
+            (while (and remaining (< used rows))
+              (let* ((line (car remaining))
+                     (h (etaf-reader--line-visual-rows session line (max 1 (- rows 2)))))
+                (if (and col (> (+ used h) rows))
+                    (setq used rows)
+                  (pop remaining)
+                  (push (plist-put (copy-sequence line) :slot slot) col)
+                  (setq slot (1+ slot)
+                        consumed (1+ consumed)
+                        used (+ used h)))))
+            (when col
+              (push (nreverse col) slices))))
+        (list :slices (or (nreverse slices)
+                          (list (list (list :slot 0 :text "" :kind 'gap))))
+              :count (max 1 consumed))))))
+
+(defun etaf-reader--visible-line-count (session &optional start)
+  "Return how many lines fit on one page starting at START (or current line)."
+  (let* ((metrics (etaf-reader--read session :metrics))
+         (rows (max 1 (or (plist-get metrics :rows) 20)))
+         (spread (max 1 (or (plist-get metrics :spread) 1)))
+         (lines (etaf-reader--read session :lines))
+         (top (or start (etaf-reader--read session :line))))
+    (plist-get (etaf-reader--pack-columns session lines top rows spread) :count)))
+
 (defun etaf-reader--display-window (session)
   "Replace the visible line texts and status through retained Hosts.
 Return non-nil when the retained update committed; nil when the caller must
@@ -524,9 +662,17 @@ publish ordinarily instead."
                (cl-loop for column below spread
                         always (etaf-runtime-host-props-for
                                 runtime (intern (format "reader-column-%d" column)))))
-      (let ((updates (list (cons 'reader-page
-                                 (concat (etaf-reader--page-label session) " · "
-                                         (etaf-reader-percent-text session))))))
+      (let* ((percent (etaf-reader-percent session))
+             (percent-str (etaf-reader-percent-text session))
+             (updates (list (cons 'reader-page
+                                  (concat (etaf-reader--page-label session) " · "
+                                          percent-str)))))
+        (when (etaf-runtime-host-props-for runtime 'reader-sidebar-pct)
+          (push (cons 'reader-sidebar-pct percent-str) updates))
+        (when (etaf-runtime-host-props-for runtime 'reader-sidebar-bar)
+          (push (cons 'reader-sidebar-bar
+                      (etaf-reader--sidebar-bar-text theme percent 22))
+                updates))
         (dotimes (column spread)
           (push (cons (intern (format "reader-column-%d" column))
                       (mapconcat
@@ -557,19 +703,28 @@ An open dialog or toolbar instead receives an ordinary publication."
 
 (defun etaf-reader-next-page (session)
   "Turn to the next page, moving into the next chapter at the end."
-  (let* ((page (etaf-reader--page-size session))
+  (let* ((step (etaf-reader--visible-line-count session))
          (current (etaf-reader--read session :line))
          (total (length (etaf-reader--read session :lines))))
-    (if (>= (+ current page) total)
+    (if (>= (+ current step) total)
         (etaf-reader-next-chapter session)
-      (etaf-reader-goto-line session (+ current page)))))
+      (etaf-reader-goto-line session (+ current step)))))
 
 (defun etaf-reader-previous-page (session)
-  "Turn to the previous page, moving into the previous chapter at the start."
+  "Turn to the previous page, moving to the last page of the previous chapter."
   (let* ((page (etaf-reader--page-size session))
          (current (etaf-reader--read session :line)))
     (if (<= current 0)
-        (etaf-reader-previous-chapter session)
+        (let* ((chapter (etaf-reader--read session :chapter))
+               (index (or (plist-get chapter :index) 0)))
+          (if (> index 0)
+              (progn
+                (etaf-reader-open-chapter session (1- index) 0)
+                (let* ((total (length (etaf-reader-lines session)))
+                       (last-top (* (/ (max 0 (1- total)) (max 1 page)) page)))
+                  (when (> last-top 0)
+                    (etaf-reader-goto-line session last-top))))
+            (etaf-reader-message session "已经是第一章")))
       (etaf-reader-goto-line session (max 0 (- current page))))))
 
 (defun etaf-reader-scroll-lines (session delta)
@@ -646,13 +801,13 @@ An open dialog or toolbar instead receives an ordinary publication."
 ;;; ---------------------------------------------------------------------------
 
 (defun etaf-reader--offset-at (session line char)
-  "Return the chapter offset for LINE and CHAR in SESSION."
+  "Return the chapter offset for LINE and source character index CHAR in SESSION."
   (let* ((lines (etaf-reader--read session :lines))
          (entry (nth (max 0 (min (1- (max 1 (length lines))) line)) lines)))
     (if (null entry)
         0
       (+ (or (plist-get entry :start) 0)
-         (max 0 (min (or char 0) (length (or (plist-get entry :text) ""))))))))
+         (max 0 (min (or char 0) (etaf-reader--line-span entry)))))))
 
 (defun etaf-reader--line-and-char-for-offset (session offset)
   "Return (LINE . CHAR) addressing OFFSET in SESSION's chapter."
@@ -669,7 +824,9 @@ An open dialog or toolbar instead receives an ordinary publication."
 (defun etaf-reader-selection (session)
   "Return SESSION's selection as (START . END), or nil."
   (let ((selection (etaf-reader--read session :selection)))
-    (when selection
+    (when (and selection
+               (< (or (plist-get selection :start) 0)
+                  (or (plist-get selection :end) 0)))
       (cons (plist-get selection :start) (plist-get selection :end)))))
 
 (defun etaf-reader-set-selection (session start end)
@@ -697,8 +854,9 @@ An open dialog or toolbar instead receives an ordinary publication."
 (defun etaf-reader-begin-selection (session line char)
   "Start a selection at LINE and CHAR."
   (let ((offset (etaf-reader--offset-at session line char)))
-    (etaf-reader--write session :cursor (list :line line :char char :anchor offset))
-    (etaf-reader--write session :selection nil)
+    (etaf-batch
+      (etaf-reader--write session :cursor (list :line line :char char :anchor offset))
+      (etaf-reader--write session :selection nil))
     offset))
 
 (defun etaf-reader-extend-selection (session line char)
@@ -707,10 +865,13 @@ An open dialog or toolbar instead receives an ordinary publication."
          (anchor (or (plist-get cursor :anchor)
                      (etaf-reader-begin-selection session line char)))
          (offset (etaf-reader--offset-at session line char)))
-    (etaf-reader--write session :cursor
-                        (list :line line :char char :anchor anchor))
-    (etaf-reader--write session :selection
-                        (list :start (min anchor offset) :end (max anchor offset)))
+    (etaf-batch
+      (etaf-reader--write session :cursor
+                          (list :line line :char char :anchor anchor))
+      (etaf-reader--write session :selection
+                          (unless (= anchor offset)
+                            (list :start (min anchor offset)
+                                  :end (max anchor offset)))))
     offset))
 
 (defun etaf-reader-selection-text (session)
@@ -728,6 +889,13 @@ An open dialog or toolbar instead receives an ordinary publication."
   (let ((range (etaf-reader-selection session)))
     (and range (car (etaf-reader--line-and-char-for-offset session (car range))))))
 
+(defun etaf-reader-selection-end-line (session)
+  "Return the line index the selection ends on."
+  (let ((range (etaf-reader-selection session)))
+    (and range
+         (car (etaf-reader--line-and-char-for-offset
+               session (max (car range) (1- (cdr range))))))))
+
 ;;; ---------------------------------------------------------------------------
 ;;; Annotations
 ;;; ---------------------------------------------------------------------------
@@ -740,38 +908,46 @@ An open dialog or toolbar instead receives an ordinary publication."
   "Apply annotation KIND in COLOR to SESSION's selection.
 KIND is `highlight', `underline', `wavy' or `note'."
   (let ((range (etaf-reader-selection session)))
-    (if (null range)
+    (if (or (null range) (>= (car range) (cdr range)))
         (progn (etaf-reader-message session "先选中一段文字")
                nil)
       (let* ((book (etaf-reader--read session :book))
              (chapter (etaf-reader--read session :chapter))
-           (book-id (plist-get book :id))
-           (index (or (plist-get chapter :index) 0))
-           (text (or (plist-get chapter :text) ""))
-           (start (car range))
-           (end (min (cdr range) (length text)))
-           (id (etaf-reader--annotation-id book-id index start end))
-           (now (floor (float-time)))
-           (existing (seq-find (lambda (row) (equal (plist-get row :id) id))
-                               (etaf-reader--read session :annotations))))
-      (etaf-reader-store-put-annotation
-       (list :id id :book book-id :chapter index :start start :end end
-             :kind kind :color color
-             :quote (substring text start end)
-             :note (or (plist-get existing :note) "")
-             :created (or (plist-get existing :created) now)
-             :updated now))
-      (etaf-batch
-        (etaf-reader--write session :annotations
-                            (etaf-reader-store-annotations book-id index))
-        (etaf-reader--write session :book-notes
-                            (etaf-reader-store-annotations book-id))
-        (etaf-reader--write session :selection nil)
-        (etaf-reader--write session :cursor nil)
-        (etaf-reader--write session :toolbar nil))
-      (etaf-reader-message session
-                           (format "已标注：%s" (substring text start (min end (+ start 12)))))
-      id))))
+             (book-id (plist-get book :id))
+             (index (or (plist-get chapter :index) 0))
+             (text (or (plist-get chapter :text) ""))
+             (start (max 0 (min (car range) (length text))))
+             (end (max start (min (cdr range) (length text))))
+             (id (etaf-reader--annotation-id book-id index start end))
+             (now (floor (float-time)))
+             (existing (seq-find (lambda (row) (equal (plist-get row :id) id))
+                                 (etaf-reader--read session :annotations))))
+        (if (>= start end)
+            (progn (etaf-reader-message session "先选中一段文字")
+                   nil)
+          (etaf-reader-store-put-annotation
+           (list :id id :book book-id :chapter index :start start :end end
+                 :kind kind :color color
+                 :quote (substring text start end)
+                 :note (or (plist-get existing :note) "")
+                 :created (or (plist-get existing :created) now)
+                 :updated now))
+          (etaf-batch
+            (etaf-reader--write session :last-color color)
+            (unless (equal kind "note")
+              (etaf-reader--write session :last-kind kind))
+            (etaf-reader--write session :annotations
+                                (etaf-reader-store-annotations book-id index))
+            (etaf-reader--write session :book-notes
+                                (etaf-reader-store-annotations book-id))
+            (etaf-reader--write session :selection nil)
+            (etaf-reader--write session :cursor nil)
+            (etaf-reader--write session :toolbar nil))
+          (etaf-reader-message
+           session (format "已标注：%s"
+                           (etaf-reader--single-line
+                            (substring text start (min end (+ start 12))))))
+          id)))))
 
 (defun etaf-reader-annotation-note (session id note)
   "Attach NOTE to the annotation ID."
@@ -928,8 +1104,14 @@ Return a plist `(:query :matches :index)' and jump to the first match."
       (etaf-reader--write session :view 'reader)
       (etaf-reader--write session :pane nil)
       (etaf-reader--write session :selection nil)
-      (etaf-reader-load-chapter session (or (plist-get state :chapter) 0)
-                                (plist-get state :offset)))
+      (etaf-reader--write session :cursor nil)
+      (etaf-reader--write session :toolbar nil)
+      (let ((start-ch (or (plist-get state :chapter) 0)))
+        (etaf-reader--write session :message
+                            (format "%s · 第 %d/%d 章"
+                                    (plist-get book :title)
+                                    (1+ start-ch) (length chapters)))
+        (etaf-reader-load-chapter session start-ch (plist-get state :offset))))
     (etaf-reader-schedule-save session)
     book))
 
@@ -940,8 +1122,10 @@ Return a plist `(:query :matches :index)' and jump to the first match."
     (etaf-reader--write session :books (etaf-reader-store-books))
     (etaf-reader--write session :view 'shelf)
     (etaf-reader--write session :pane nil)
+    (etaf-reader-clear-selection session)
     (etaf-reader-message session nil))
-  (etaf-reader-refresh-states session))
+  (etaf-reader-refresh-states session)
+  (etaf-reader--sync-shelf-cursor session))
 
 (defun etaf-reader-refresh-states (session)
   "Cache every book's reading state in SESSION, keyed by book id."
@@ -961,6 +1145,7 @@ Return a plist `(:query :matches :index)' and jump to the first match."
   (let ((report (etaf-reader-library-scan :parser (plist-get session :parser))))
     (etaf-reader--write session :books (etaf-reader-store-books))
     (etaf-reader-refresh-states session)
+    (etaf-reader--sync-shelf-cursor session)
     (etaf-reader-message session
                          (format "书库：共 %d 本，新增 %d，更新 %d，失败 %d"
                                  (plist-get report :total)
@@ -1077,15 +1262,19 @@ publication, where touching a Data Controller is a render side effect."
 ;;; Notes export
 ;;; ---------------------------------------------------------------------------
 
-(defun etaf-reader-export-notes (session file)
-  "Write SESSION's annotations of the current book to FILE as Markdown."
-  (let* ((book (etaf-reader--read session :book))
-         (rows (etaf-reader-store-annotations (plist-get book :id)))
-         (chapters (etaf-reader--read session :chapters))
-         (title (or (plist-get book :title) "未命名")))
+(defun etaf-reader--export-book-notes (session book file)
+  "Write BOOK's annotations to FILE as Markdown and report in SESSION."
+  (unless book
+    (signal 'etaf-reader-error '("请先选择一本书")))
+  (let* ((book-id (plist-get book :id))
+         (rows (etaf-reader-store-annotations book-id))
+         (chapters (if (equal book-id (plist-get (etaf-reader--read session :book) :id))
+                       (etaf-reader--read session :chapters)
+                     (etaf-reader-store-chapters book-id)))
+         (title (etaf-reader--book-title book)))
     (with-temp-buffer
       (insert (format "# %s\n\n" title))
-      (insert (format "作者：%s\n\n" (or (plist-get book :author) "佚名")))
+      (insert (format "作者：%s\n\n" (etaf-reader--book-author book)))
       (dolist (row rows)
         (let* ((index (or (plist-get row :chapter) 0))
                (chapter (seq-find (lambda (entry)
@@ -1101,16 +1290,28 @@ publication, where touching a Data Controller is a render side effect."
     (etaf-reader-message session (format "笔记已导出：%s" file))
     file))
 
+(defun etaf-reader-export-notes (session file)
+  "Write SESSION's annotations of the current book to FILE as Markdown."
+  (etaf-reader--export-book-notes session (etaf-reader--read session :book) file))
+
 ;;; ---------------------------------------------------------------------------
 ;;; Guarded actions
 ;;; ---------------------------------------------------------------------------
+
+(defun etaf-reader--format-error (error-data)
+  "Return a concise user-facing message for ERROR-DATA."
+  (if (and (eq (car error-data) 'etaf-reader-error)
+           (stringp (cadr error-data))
+           (null (cddr error-data)))
+      (cadr error-data)
+    (error-message-string error-data)))
 
 (defun etaf-reader-guard (session function)
   "Run FUNCTION reporting any failure in SESSION's status line."
   (condition-case error
       (funcall function)
     (etaf-reader-error
-     (etaf-reader-message session (error-message-string error)))
+     (etaf-reader-message session (etaf-reader--format-error error)))
     (error
      (etaf-reader-message session (format "出错：%s" error)))))
 
@@ -1121,50 +1322,105 @@ publication, where touching a Data Controller is a render side effect."
     (etaf-reader-set-selection session (plist-get annotation :start)
                                (plist-get annotation :end))
     (etaf-reader--write session :pane nil)
-    (etaf-reader-message session (or (plist-get annotation :quote) "标注"))))
+    (etaf-reader-message session
+                         (let ((q (etaf-reader--single-line
+                                   (plist-get annotation :quote))))
+                           (if (string-empty-p q) "标注" q)))))
+
+(defun etaf-reader--event-posn (gesture)
+  "Return the relevant event position list for drag GESTURE.
+On release (`drag-mouse-1'), `event-end' holds the drop position while
+`event-start' still holds the initial press position."
+  (let ((event (plist-get gesture :event)))
+    (when (consp event)
+      (if (and (or (eq (plist-get gesture :phase) 'end)
+                   (memq 'drag (ignore-errors (event-modifiers event))))
+               (consp (nth 2 event)))
+          (event-end event)
+        (event-start event)))))
 
 (defun etaf-reader--gesture-point (session gesture)
-  "Return the (LINE . CHAR) a drag GESTURE points at, or nil.
+  "Return the (LINE . SOURCE-CHAR) a drag GESTURE points at, or nil.
 Source coordinates are carried by the displayed text, so two columns and
-prefixes do not get confused with physical buffer lines."
-  (ignore session)
+prefixes do not get confused with physical buffer lines.  Subtracts any line
+indent/quote prefix and clamps to the line's source span; if the pointer rests
+in trailing whitespace on a row, resolves to the end of that row's text."
   (let* ((buffer (plist-get gesture :buffer))
-         (event (plist-get gesture :event))
-         (position (and event (posn-point (event-start event)))))
+         (posn (etaf-reader--event-posn gesture))
+         (position (and posn (posn-point posn))))
     (when (and (buffer-live-p buffer) (integerp position))
       (with-current-buffer buffer
         (when (and (<= (point-min) position) (< position (point-max)))
-          (when-let* ((line (get-text-property position 'reader-line)))
-            (cons line (- position
-                          (previous-single-property-change
-                           (1+ position) 'reader-line nil (point-min))))))))))
+          (let* ((lines (etaf-reader--read session :lines))
+                 (line (get-text-property position 'reader-line)))
+            (if line
+                (let* ((prop-start (previous-single-property-change
+                                    (1+ position) 'reader-line nil (point-min)))
+                       (raw-char (- position prop-start))
+                       (entry (nth line lines))
+                       (shift (if entry (etaf-reader--line-shift entry) 0))
+                       (span (if entry (etaf-reader--line-span entry) 0)))
+                  (cons line (max 0 (min span (- raw-char shift)))))
+              ;; Pointer in trailing padding of a short line: snap to end of
+              ;; the rightmost text run on the same physical row before POS.
+              (save-excursion
+                (goto-char position)
+                (let* ((bol (line-beginning-position))
+                       (prev (previous-single-property-change position 'reader-line nil bol))
+                       (hit (and prev (> prev bol) (1- prev)))
+                       (hit-line (and hit (get-text-property hit 'reader-line))))
+                  (when hit-line
+                    (let ((entry (nth hit-line lines)))
+                      (cons hit-line (if entry (etaf-reader--line-span entry) 0)))))))))))))
 
 (defun etaf-reader--drag (session gesture)
   "Handle a native drag GESTURE for SESSION's text selection."
-  (let ((point (etaf-reader--gesture-point session gesture)))
-    (when point
-      (pcase (plist-get gesture :phase)
-        ('start
-         (etaf-reader-begin-selection session (car point) (cdr point)))
-        ((or 'move 'end)
-         (etaf-reader-extend-selection session (car point) (cdr point))
-         (when (eq (plist-get gesture :phase) 'end)
-           (if (etaf-reader-selection session)
-               (etaf-reader-show-toolbar session)
-             (etaf-reader-clear-selection session)
-             (let* ((event (plist-get gesture :event))
-                    (position (and event (posn-point (event-start event))))
-                    (buffer (plist-get gesture :buffer))
-                    (id (and (buffer-live-p buffer) (integerp position)
-                             (with-current-buffer buffer
-                               (get-text-property position 'reader-annotation)))))
-               (when id (etaf-reader-show-annotation-toolbar session id))))))))))
+  (let ((phase (plist-get gesture :phase))
+        (point (etaf-reader--gesture-point session gesture)))
+    (pcase phase
+      ('start
+       (plist-put session :drag-last-point point)
+       (when (etaf-reader--read session :toolbar)
+         (etaf-reader--write session :toolbar nil))
+       (if point
+           (etaf-reader-begin-selection session (car point) (cdr point))
+         (etaf-reader-clear-selection session)))
+      ('move
+       (when point
+         (plist-put session :drag-last-point point)
+         (etaf-reader-extend-selection session (car point) (cdr point))))
+      ('end
+       (let ((target (or point (plist-get session :drag-last-point))))
+         (plist-put session :drag-last-point nil)
+         (when target
+           (etaf-reader-extend-selection session (car target) (cdr target)))
+         (if (etaf-reader-selection session)
+             (progn
+               ;; Drop the keyboard caret once a mouse drag finishes so the
+               ;; selection paints uniformly without a bright tail square.
+               (etaf-reader--write session :cursor nil)
+               (etaf-reader-show-toolbar session))
+           (etaf-reader-clear-selection session)
+           (let* ((posn (etaf-reader--event-posn gesture))
+                  (position (and posn (posn-point posn)))
+                  (buffer (plist-get gesture :buffer))
+                  (id (and (buffer-live-p buffer) (integerp position)
+                           (<= (point-min) position) (< position (point-max))
+                           (with-current-buffer buffer
+                             (get-text-property position 'reader-annotation)))))
+             (when id (etaf-reader-show-annotation-toolbar session id))))))
+      ('cancel
+       (plist-put session :drag-last-point nil)
+       (etaf-reader-clear-selection session)))))
 
 (defun etaf-reader-show-toolbar (session)
-  "Show the selection toolbar anchored at the selection's first line."
-  (let ((line (etaf-reader-selection-line session)))
+  "Show the selection toolbar anchored cleanly outside the selection range."
+  (let ((line (etaf-reader-selection-line session))
+        (end-line (etaf-reader-selection-end-line session)))
     (when line
-      (etaf-reader--write session :toolbar (list :line line :annotation nil)))))
+      (etaf-reader--write session :toolbar
+                          (list :line line :end-line (or end-line line)
+                                :annotation nil)))))
 
 (defun etaf-reader-show-annotation-toolbar (session id)
   "Show the toolbar for the annotation ID, scrolling it into view."
@@ -1172,12 +1428,16 @@ prefixes do not get confused with physical buffer lines."
          (row (seq-find (lambda (entry) (equal (plist-get entry :id) id)) rows)))
     (when row
       (let* ((lines (etaf-reader--read session :lines))
-             (line (etaf-reader--line-for-offset lines (or (plist-get row :start) 0)))
+             (start (or (plist-get row :start) 0))
+             (end (or (plist-get row :end) start))
+             (line (etaf-reader--line-for-offset lines start))
+             (end-line (etaf-reader--line-for-offset lines (max start (1- end))))
              (top (etaf-reader--read session :line))
              (page (max 1 (etaf-reader--page-size session))))
         (unless (and (>= line top) (< line (+ top page)))
           (etaf-reader-goto-line session (- line (mod line page))))
-        (etaf-reader--write session :toolbar (list :line line :annotation row))))))
+        (etaf-reader--write session :toolbar
+                            (list :line line :end-line end-line :annotation row))))))
 
 (defun etaf-reader-mark-annotation (session id kind color)
   "Change the annotation ID to KIND and COLOR."
@@ -1186,20 +1446,40 @@ prefixes do not get confused with physical buffer lines."
          (book (etaf-reader--read session :book)))
     (unless row
       (signal 'etaf-reader-error (list "标注不存在")))
-    (etaf-reader-store-put-annotation
-     (list :id (plist-get row :id) :book (plist-get row :book)
-           :chapter (plist-get row :chapter) :start (plist-get row :start)
-           :end (plist-get row :end) :kind kind :color color
-           :quote (plist-get row :quote) :note (or (plist-get row :note) "")
-           :created (plist-get row :created) :updated (floor (float-time))))
-    (etaf-batch
-      (etaf-reader--write session :annotations
-                          (etaf-reader-store-annotations
-                           (plist-get book :id) (plist-get row :chapter)))
-      (etaf-reader--write session :book-notes
-                          (etaf-reader-store-annotations (plist-get book :id))))
-    (etaf-reader-message session "标注已更新")
-    id))
+    (let ((updated
+           (list :id (plist-get row :id) :book (plist-get row :book)
+                 :chapter (plist-get row :chapter) :start (plist-get row :start)
+                 :end (plist-get row :end) :kind kind :color color
+                 :quote (plist-get row :quote) :note (or (plist-get row :note) "")
+                 :created (plist-get row :created) :updated (floor (float-time)))))
+      (etaf-reader-store-put-annotation updated)
+      (etaf-batch
+        (etaf-reader--write session :last-color color)
+        (unless (equal kind "note")
+          (etaf-reader--write session :last-kind kind))
+        (etaf-reader--write session :annotations
+                            (etaf-reader-store-annotations
+                             (plist-get book :id) (plist-get row :chapter)))
+        (etaf-reader--write session :book-notes
+                            (etaf-reader-store-annotations (plist-get book :id)))
+        (when-let* ((tb (etaf-reader--read session :toolbar))
+                    (tb-ann (plist-get tb :annotation))
+                    ((equal (plist-get tb-ann :id) id)))
+          (etaf-reader--write session :toolbar
+                              (list :line (plist-get tb :line)
+                                    :end-line (or (plist-get tb :end-line) (plist-get tb :line))
+                                    :annotation updated))))
+      (etaf-reader-message session "标注已更新")
+      id)))
+
+(defun etaf-reader--restore-note-window (session buffer)
+  "Close note BUFFER and restore SESSION's saved window configuration."
+  (let ((config (plist-get session :note-window-config)))
+    (plist-put session :note-window-config nil)
+    (when (buffer-live-p buffer)
+      (kill-buffer buffer))
+    (when (window-configuration-p config)
+      (ignore-errors (set-window-configuration config)))))
 
 (defun etaf-reader-write-note (session &optional annotation-id)
   "Edit the thought attached to ANNOTATION-ID, or to the current selection."
@@ -1220,14 +1500,22 @@ prefixes do not get confused with physical buffer lines."
     (if (not (or annotation (etaf-reader-selection session)))
         (progn (etaf-reader-message session "先选中一段文字")
                nil)
-      (let ((buffer (get-buffer-create "*etaf-reader 想法*"))
-            (session session)
-            (annotation annotation))
+      (let* ((buffer (get-buffer-create "*etaf-reader 想法*"))
+             (session session)
+             (annotation annotation)
+             (quote-preview (truncate-string-to-width
+                             (etaf-reader--single-line
+                              (if annotation
+                                  (plist-get annotation :quote)
+                                (etaf-reader-selection-text session)))
+                             36 nil nil "…")))
+        (plist-put session :note-window-config (current-window-configuration))
         (with-current-buffer buffer
           (erase-buffer)
           (insert (or (and annotation (plist-get annotation :note)) ""))
           (text-mode)
-          (setq-local header-line-format "C-c C-c 保存 · C-c C-k 取消")
+          (setq-local header-line-format
+                      (format "C-c C-c 保存 · C-c C-k 取消  「%s」" quote-preview))
           (local-set-key (kbd "C-c C-c")
                          (lambda ()
                            (interactive)
@@ -1235,36 +1523,54 @@ prefixes do not get confused with physical buffer lines."
           (local-set-key (kbd "C-c C-k")
                          (lambda ()
                            (interactive)
-                           (kill-buffer buffer))))
+                           (etaf-reader--restore-note-window session buffer))))
         (pop-to-buffer buffer)))))
 
 (defun etaf-reader--save-note-buffer (session buffer annotation)
   "Save the note in BUFFER to ANNOTATION (creating one when needed)."
-  (let ((note (string-trim (with-current-buffer buffer (buffer-string)))))
+  (let ((note (string-trim (with-current-buffer buffer (buffer-string))))
+        (etaf-reader-store-file (plist-get session :store-file))
+        (etaf-reader-cache-directory (plist-get session :cache-directory)))
     (if annotation
         (etaf-reader-annotation-note session (plist-get annotation :id) note)
-      (let ((id (etaf-reader-annotate session "note" "blue")))
+      (let* ((color (or (etaf-reader--read session :last-color) "blue"))
+             (id (etaf-reader-annotate session "note" color)))
         (when id (etaf-reader-annotation-note session id note))))
-    (kill-buffer buffer)
+    (etaf-reader--restore-note-window session buffer)
     (etaf-reader--write session :toolbar nil)))
 
 (defun etaf-reader-add-bookmark (session)
   "Bookmark the top line of the current page."
-  (let* ((chapter (etaf-reader--read session :chapter))
-         (lines (etaf-reader--read session :lines))
-         (line (etaf-reader--read session :line))
-         (entry (nth (min line (max 0 (1- (length lines)))) lines))
-         (offset (or (plist-get entry :start) 0))
-         (book (etaf-reader--read session :book))
-         (id (secure-hash 'md5 (format "%s:%d:%d" (plist-get book :id)
-                                       (or (plist-get chapter :index) 0) offset))))
-    (etaf-reader-store-put-bookmark
-     (list :id id :book (plist-get book :id)
-           :chapter (or (plist-get chapter :index) 0)
-           :offset offset
-           :label (or (plist-get entry :text) "")
-           :created (floor (float-time))))
-    (etaf-reader-message session "已加书签")))
+  (let ((book (etaf-reader--read session :book))
+        (chapter (etaf-reader--read session :chapter)))
+    (unless (and book chapter)
+      (signal 'etaf-reader-error '("请先打开一本书")))
+    (let* ((lines (etaf-reader--read session :lines))
+           (line (etaf-reader--read session :line))
+           (entry (nth (min line (max 0 (1- (length lines)))) lines))
+           (offset (or (plist-get entry :start) 0))
+           (ch-idx (or (plist-get chapter :index) 0))
+           ;; Pick a readable non-empty label when top line is a blank gap.
+           (label-entry (or (and entry
+                                 (not (string-empty-p
+                                       (etaf-reader--single-line (plist-get entry :text))))
+                                 entry)
+                            (seq-find (lambda (row)
+                                        (not (string-empty-p
+                                              (etaf-reader--single-line (plist-get row :text)))))
+                                      (nthcdr line lines))))
+           (label (let ((text (etaf-reader--single-line (plist-get label-entry :text))))
+                    (if (string-empty-p text)
+                        (format "第 %d 章" (1+ ch-idx))
+                      text)))
+           (id (secure-hash 'md5 (format "%s:%d:%d" (plist-get book :id) ch-idx offset))))
+      (etaf-reader-store-put-bookmark
+       (list :id id :book (plist-get book :id)
+             :chapter ch-idx
+             :offset offset
+             :label label
+             :created (floor (float-time))))
+      (etaf-reader-message session "已加书签"))))
 
 (provide 'etaf-reader-model)
 ;;; etaf-reader-model.el ends here

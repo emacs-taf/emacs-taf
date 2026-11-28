@@ -34,7 +34,8 @@
 | `lisp/ebox-measure.el` | 像素度量、文本单元切分、显示空格与显示孪生 | — |
 | `lisp/ebox-style.el` | 样式 schema、别名、校验器、简写展开与 ECSS scope | `lisp/ebox-size.el`、ECSS |
 | `lisp/ebox-node.el` | 保留节点记录、作者属性、选择器适配器与计算样式 | `lisp/ebox-measure.el`、`lisp/ebox-size.el`、`lisp/ebox-style.el`、ECSS |
-| `lisp/ebox-image.el` | 图片准备、转换器协议与光栅缓存 | `lisp/ebox-measure.el` |
+| `lisp/ebox-image.el` | 图片准备、转换器协议与光栅缓存 | `lisp/ebox-measure.el`、`lisp/ebox-kitty.el` |
+| `lisp/ebox-kitty.el` | Kitty 终端图形协议探测、Unicode placeholder 栅格与终端实时帧流 | — |
 | `lisp/ebox-layout.el` | 文本、box、row、column 与定位布局、行合成与编辑规划 | `lisp/ebox-node.el`、`lisp/ebox-image.el` |
 | `lisp/ebox-flex.el` | flex 与 grid 算法 | `lisp/ebox-node.el`、`lisp/ebox-size.el`、`lisp/ebox-layout.el` |
 | `lisp/ebox-buffer.el` | 挂载、脏队列、flush 编排、缓冲区写入与几何查询 | `lisp/ebox-node.el`、`lisp/ebox-layout.el`、`lisp/ebox-flex.el` |

@@ -60,6 +60,14 @@ object width is the whole rule rather than the track."
          (state (key) (plist-get (etaf-video-player-gui--state) key))
          (press (ref) (etaf-video-player-gui--press ref)))
       (step "ready" #'ignore (lambda () (> (state :presented) 0)))
+      (step "canvas-pause" (lambda () (etaf-dispatch-event
+                                       (etaf-runtime-for-buffer "*Video Player*")
+                                       'video-canvas 'press))
+            (lambda () (not (state :playing))))
+      (step "canvas-resume" (lambda () (etaf-dispatch-event
+                                        (etaf-runtime-for-buffer "*Video Player*")
+                                        'video-canvas 'press))
+            (lambda () (state :playing)))
       (step "pause" (lambda () (press 'video-play))
             (lambda () (not (state :playing))) t)
       (step "volume-click" (lambda () (etaf-video-player-gui--range 'etaf-video-player-volume 0.4 nil))
@@ -89,6 +97,16 @@ object width is the whole rule rather than the track."
       (step "previous" (lambda () (press 'video-previous)) (lambda () (= 0 (state :index))))
       (step "keyboard-pause" (lambda () (execute-kbd-macro (kbd "SPC")))
             (lambda () (not (state :playing))))
+      (step "studio-inspector-on" (lambda () (execute-kbd-macro (kbd "i")))
+            (lambda () (state :inspector)) t)
+      (step "theater-on" (lambda () (execute-kbd-macro (kbd "w")))
+            (lambda () (state :theater)) t)
+      (step "theater-off" (lambda () (execute-kbd-macro (kbd "w")))
+            (lambda () (and (not (state :theater)) (state :inspector))))
+      (step "ab-set-a" (lambda () (execute-kbd-macro (kbd "A")))
+            (lambda () (numberp (car (state :ab-loop)))))
+      (step "ab-clear" (lambda () (etaf-video-player-clear-ab))
+            (lambda () (null (state :ab-loop))))
       (step "keyboard-fit" (lambda () (execute-kbd-macro (kbd "F")))
             (lambda () (> (state :columns) 0)))
       (step "ascii-mode" (lambda () (execute-kbd-macro (kbd "C")))
@@ -116,6 +134,10 @@ object width is the whole rule rather than the track."
                       (append
                        (etaf-gui-verifier-line-height-assertions (get-buffer "*Video Player*"))
                        (list (etaf-gui-verifier-assert
+                              "mode-line is preserved"
+                              (with-current-buffer "*Video Player*"
+                                (and mode-line-format t)))
+                             (etaf-gui-verifier-assert
                               "footer is visible"
                               (with-current-buffer "*Video Player*"
                                 (pos-visible-in-window-p (1- (point-max)) (selected-window)))))))

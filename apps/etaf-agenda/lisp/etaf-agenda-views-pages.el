@@ -1027,9 +1027,9 @@ never shifts any clickable control."
          ;; Distribute vertical breathing room across the full stage height so
          ;; desktop frames fill cleanly without dead bottom voids while compact
          ;; windows stay crisp and scroll smoothly.
-         (year-cols (cond ((>= cal-inner-w 86) 4)
-                          ((>= cal-inner-w 64) 3)
-                          (t 2)))
+         (year-cols (etaf-agenda-layout-year-columns
+                     cal-inner-w
+                     (etaf-agenda-plan-char-px plan (etaf-current-runtime))))
          (year-rows (/ 12 year-cols))
          (year-col-gap (if (>= cal-inner-w 94) 3 2))
          (year-card-inner (max 14 (- (/ (max 32 (- cal-inner-w (* (1- year-cols) year-col-gap)))

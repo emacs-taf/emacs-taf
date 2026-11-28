@@ -365,6 +365,11 @@
    "name": "etaf-posframe-nested-modal-teardown-restores-active-frame",
    "file": "tests/etaf-posframe-tests.el",
    "purpose": "Closing an outer modal while a nested help modal is open unwinds both child frames and restores focus to the active parent frame rather than a parked frame."
+  },
+  {
+   "name": "etaf-posframe-binds-apps-from-etaf-app-registry",
+   "file": "tests/etaf-posframe-tests.el",
+   "purpose": "etaf-posframe-bind-app and etaf-posframe-bind-apps inherit manifest defaults from etaf-app, apply caller overrides, bind shortcuts, and skip unregistered apps."
   }
  ]
 }

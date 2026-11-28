@@ -270,5 +270,280 @@ sees the state."
   (when-let* ((buffer (get-buffer name)))
     (and (etaf-app--live-record buffer) buffer)))
 
+;;;; Application declarations and registry
+
+(defconst etaf-app--valid-hosts '(buffer desktop panel pip)
+  "Supported host identifiers for `etaf-app-register'.")
+
+(defconst etaf-app--valid-categories
+  '(media reading productivity communication game system utility other)
+  "Supported launcher categories for `etaf-app-register'.")
+
+(defconst etaf-app--valid-spec-keys
+  '(:title :feature :icon :category :description :hosts :open :session
+    :window :panel :file-extensions :capabilities :doctor)
+  "Supported keyword keys in an `etaf-app-register' specification.")
+
+(defvar etaf-app-change-functions nil
+  "Abnormal hook run when the application registry changes.
+Each function is called with `(EVENT ID ENTRY)' where EVENT is `register'
+or `unregister', ID is the application symbol and ENTRY is a detached
+manifest plist (or nil on removal).  Observer errors are isolated.")
+
+(defvar etaf-app--registry (make-hash-table :test #'eq)
+  "Registered ETAF application manifests keyed by application symbol.")
+
+(defun etaf-app--run-change-hook (event id entry)
+  "Run `etaf-app-change-functions' with (EVENT ID ENTRY), isolating errors."
+  (dolist (fn (copy-sequence etaf-app-change-functions))
+    (when (functionp fn)
+      (condition-case nil
+          (funcall fn event id entry)
+        (error nil)))))
+
+(defun etaf-app--symbol-id-p (value)
+  "Return non-nil when VALUE is a non-nil, non-keyword, non-t symbol."
+  (and (symbolp value) value (not (eq value t)) (not (keywordp value))))
+
+(defun etaf-app--callable-ref-p (value)
+  "Return non-nil when VALUE is a function or lazy function symbol."
+  (or (functionp value) (etaf-app--symbol-id-p value)))
+
+(defun etaf-app--keyword-plist-p (value)
+  "Return non-nil when VALUE is a proper keyword plist."
+  (and (listp value)
+       (proper-list-p value)
+       (zerop (% (length value) 2))
+       (cl-loop for (k _v) on value by #'cddr always (keywordp k))))
+
+(defun etaf-app--copy-entry (entry)
+  "Return a detached copy of application manifest ENTRY."
+  (when entry
+    (let ((copy (copy-sequence entry)))
+      (dolist (key '(:hosts :session :window :panel :file-extensions :capabilities))
+        (when-let* ((val (plist-get copy key)))
+          (setq copy (plist-put copy key (copy-tree val)))))
+      copy)))
+
+(defun etaf-app--validate-session (id session)
+  "Validate and normalize `:session' plist SESSION for application ID."
+  (unless (etaf-app--keyword-plist-p session)
+    (signal 'etaf-runtime-error
+            (list (format "Application %s :session must be a keyword plist" id)
+                  session)))
+  (let ((create (plist-get session :create))
+        (view (plist-get session :view))
+        (close (plist-get session :close)))
+    (unless (etaf-app--callable-ref-p create)
+      (signal 'etaf-runtime-error
+              (list (format "Application %s :session needs callable :create" id)
+                    create)))
+    (unless (etaf-app--callable-ref-p view)
+      (signal 'etaf-runtime-error
+              (list (format "Application %s :session needs callable :view" id)
+                    view)))
+    (when (and close (not (etaf-app--callable-ref-p close)))
+      (signal 'etaf-runtime-error
+              (list (format "Application %s :session :close must be callable" id)
+                    close)))
+    (cl-loop for (k _v) on session by #'cddr
+             unless (memq k '(:create :view :close :keep-alive :multiple-instances))
+             do (signal 'etaf-runtime-error
+                        (list (format "Unknown :session option %S for application %s" k id)
+                              k))))
+  (copy-tree session))
+
+(defun etaf-app--normalize-spec (id spec)
+  "Validate and normalize application ID and SPEC into a registry plist."
+  (unless (etaf-app--symbol-id-p id)
+    (signal 'etaf-runtime-error (list "Application ID must be a symbol" id)))
+  (unless (etaf-app--keyword-plist-p spec)
+    (signal 'etaf-runtime-error (list "Application spec must be a keyword plist" spec)))
+  (cl-loop for (k _v) on spec by #'cddr
+           unless (memq k etaf-app--valid-spec-keys)
+           do (signal 'etaf-runtime-error
+                      (list (format "Unknown application option %S for %s" k id) k)))
+  (let* ((title (plist-get spec :title))
+         (feature (if (plist-member spec :feature)
+                      (plist-get spec :feature)
+                    id))
+         (icon (plist-get spec :icon))
+         (category (or (plist-get spec :category) 'other))
+         (description (plist-get spec :description))
+         (open (plist-get spec :open))
+         (doctor (plist-get spec :doctor))
+         (session (when-let* ((raw (plist-get spec :session)))
+                    (etaf-app--validate-session id raw)))
+         (hosts (if (plist-member spec :hosts)
+                    (plist-get spec :hosts)
+                  (if session '(buffer desktop panel) '(buffer))))
+         (window (plist-get spec :window))
+         (panel (plist-get spec :panel))
+         (exts (plist-get spec :file-extensions))
+         (caps (plist-get spec :capabilities)))
+    (unless (and (stringp title) (not (string-empty-p title)))
+      (signal 'etaf-runtime-error
+              (list (format "Application %s needs nonempty string :title" id) title)))
+    (when (and feature (not (etaf-app--symbol-id-p feature)))
+      (signal 'etaf-runtime-error
+              (list (format "Application %s :feature must be a symbol" id) feature)))
+    (when (and icon (not (stringp icon)))
+      (signal 'etaf-runtime-error
+              (list (format "Application %s :icon must be a string" id) icon)))
+    (unless (memq category etaf-app--valid-categories)
+      (signal 'etaf-runtime-error
+              (list (format "Unsupported category %S for application %s" category id)
+                    category)))
+    (when (and description (not (stringp description)))
+      (signal 'etaf-runtime-error
+              (list (format "Application %s :description must be a string" id)
+                    description)))
+    (when (and open (not (etaf-app--callable-ref-p open)))
+      (signal 'etaf-runtime-error
+              (list (format "Application %s :open must be callable" id) open)))
+    (when (and doctor (not (etaf-app--callable-ref-p doctor)))
+      (signal 'etaf-runtime-error
+              (list (format "Application %s :doctor must be callable" id) doctor)))
+    (unless (and (listp hosts) (proper-list-p hosts) hosts
+                 (cl-every (lambda (h) (memq h etaf-app--valid-hosts)) hosts))
+      (signal 'etaf-runtime-error
+              (list (format "Application %s :hosts must be a nonempty subset of %S"
+                            id etaf-app--valid-hosts)
+                    hosts)))
+    (when (and (or (memq 'desktop hosts) (memq 'panel hosts))
+               (null session))
+      (signal 'etaf-runtime-error
+              (list (format "Application %s declares desktop/panel host without :session"
+                            id)
+                    hosts)))
+    (when (and window (not (etaf-app--keyword-plist-p window)))
+      (signal 'etaf-runtime-error
+              (list (format "Application %s :window must be a keyword plist" id) window)))
+    (when (and panel (not (etaf-app--keyword-plist-p panel)))
+      (signal 'etaf-runtime-error
+              (list (format "Application %s :panel must be a keyword plist" id) panel)))
+    (when (and exts (not (and (listp exts) (proper-list-p exts)
+                              (cl-every (lambda (e) (and (stringp e) (not (string-empty-p e))))
+                                        exts))))
+      (signal 'etaf-runtime-error
+              (list (format "Application %s :file-extensions must be strings" id) exts)))
+    (when (and caps (not (and (listp caps) (proper-list-p caps)
+                              (cl-every #'symbolp caps))))
+      (signal 'etaf-runtime-error
+              (list (format "Application %s :capabilities must be symbols" id) caps)))
+    (list :id id
+          :title (copy-sequence title)
+          :feature feature
+          :icon (and icon (copy-sequence icon))
+          :category category
+          :description (and description (copy-sequence description))
+          :hosts (delete-dups (copy-sequence hosts))
+          :open open
+          :session session
+          :window (and window (copy-tree window))
+          :panel (and panel (copy-tree panel))
+          :file-extensions (and exts (mapcar #'copy-sequence exts))
+          :capabilities (and caps (copy-sequence caps))
+          :doctor doctor)))
+
+;;;###autoload
+(defun etaf-app-register (id &rest spec)
+  "Register or update ETAF application manifest ID from keyword plist SPEC.
+Return a detached copy of the normalized manifest plist."
+  (let ((entry (etaf-app--normalize-spec id spec)))
+    (puthash id entry etaf-app--registry)
+    (let ((detached (etaf-app--copy-entry entry)))
+      (etaf-app--run-change-hook 'register id detached)
+      detached)))
+
+;;;###autoload
+(defmacro etaf-app-define (id &rest spec)
+  "Declaratively register ETAF application ID with keyword manifest SPEC."
+  (declare (indent 1))
+  `(etaf-app-register ',id ,@spec))
+
+;;;###autoload
+(defun etaf-app-unregister (id)
+  "Remove registered ETAF application ID and return non-nil if it existed."
+  (unless (etaf-app--symbol-id-p id)
+    (signal 'etaf-runtime-error (list "Application ID must be a symbol" id)))
+  (when (gethash id etaf-app--registry)
+    (remhash id etaf-app--registry)
+    (etaf-app--run-change-hook 'unregister id nil)
+    t))
+
+;;;###autoload
+(defun etaf-app-get (id)
+  "Return a detached manifest plist for registered application ID, or nil."
+  (when-let* ((entry (gethash id etaf-app--registry)))
+    (etaf-app--copy-entry entry)))
+
+;;;###autoload
+(defun etaf-app-list (&optional host category)
+  "Return detached manifests of registered ETAF applications sorted by ID.
+Optional HOST filters by `:hosts'; optional CATEGORY filters by `:category'."
+  (when (and host (not (memq host etaf-app--valid-hosts)))
+    (signal 'etaf-runtime-error (list "Unsupported application host" host)))
+  (when (and category (not (memq category etaf-app--valid-categories)))
+    (signal 'etaf-runtime-error (list "Unsupported application category" category)))
+  (let (items)
+    (maphash
+     (lambda (_id entry)
+       (when (and (or (null host) (memq host (plist-get entry :hosts)))
+                  (or (null category) (eq category (plist-get entry :category))))
+         (push (etaf-app--copy-entry entry) items)))
+     etaf-app--registry)
+    (sort items (lambda (a b)
+                  (string< (symbol-name (plist-get a :id))
+                           (symbol-name (plist-get b :id)))))))
+
+;;;###autoload
+(defun etaf-app-launch (id)
+  "Launch registered ETAF application ID in a standalone buffer.
+Loads `:feature' lazily when needed, invokes `:open' when declared, or mounts
+`:session' via `etaf-app-open'."
+  (interactive
+   (let ((apps (etaf-app-list)))
+     (unless apps
+       (user-error "No ETAF applications are registered"))
+     (let* ((choices
+             (mapcar (lambda (app)
+                       (cons (format "%s — %s [%s]"
+                                     (plist-get app :id)
+                                     (plist-get app :title)
+                                     (plist-get app :category))
+                             (plist-get app :id)))
+                     apps))
+            (pick (completing-read "Launch ETAF app: "
+                                   (mapcar #'car choices) nil t)))
+       (list (cdr (assoc pick choices))))))
+  (let ((entry (or (etaf-app-get id)
+                   (signal 'etaf-runtime-error
+                           (list (format "Unknown ETAF application: %S" id) id)))))
+    (when-let* ((feature (plist-get entry :feature)))
+      (unless (featurep feature)
+        (require feature)))
+    (let ((open (plist-get entry :open))
+          (session-spec (plist-get entry :session)))
+      (cond
+       (open
+        (if (commandp open)
+            (call-interactively open)
+          (funcall open)))
+       (session-spec
+        (let* ((session (funcall (plist-get session-spec :create)))
+               (close-fn (plist-get session-spec :close)))
+          (etaf-app-open (format "*%s*" (plist-get entry :title))
+                         (funcall (plist-get session-spec :view) session)
+                         :state session
+                         :mode-line t
+                         :meta (list :app id :title (plist-get entry :title))
+                         :on-close (when close-fn
+                                     (lambda () (funcall close-fn session))))))
+       (t
+        (signal 'etaf-runtime-error
+                (list (format "Application %s declares neither :open nor :session" id)
+                      id)))))))
+
 (provide 'etaf-app)
 ;;; etaf-app.el ends here

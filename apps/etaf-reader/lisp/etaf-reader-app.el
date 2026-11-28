@@ -44,19 +44,62 @@
          (etaf-reader-cache-directory (plist-get session :cache-directory)))
     (etaf-reader-guard session function)))
 
+(defun etaf-reader--require-reader (session)
+  "Signal `etaf-reader-error' unless SESSION has an open book in reading view."
+  (unless (and (eq (etaf-reader--read session :view) 'reader)
+               (etaf-reader--read session :book))
+    (signal 'etaf-reader-error '("请先打开一本书"))))
+
+(defun etaf-reader--find-text-line (lines from step)
+  "Return the nearest line index in LINES from FROM moving by STEP (+1 or -1)
+whose source span is positive, or FROM clamped to LINES."
+  (let* ((count (length lines))
+         (idx (max 0 (min (1- (max 1 count)) from))))
+    (while (and (>= idx 0) (< idx count)
+                (<= (etaf-reader--line-span (nth idx lines)) 0))
+      (setq idx (+ idx step)))
+    (if (and (>= idx 0) (< idx count))
+        idx
+      (max 0 (min (1- (max 1 count)) from)))))
+
 (defun etaf-reader--cursor-move (session delta-line delta-char)
-  "Move the selection caret by DELTA-LINE lines and DELTA-CHAR characters."
+  "Move the selection caret by DELTA-LINE lines and DELTA-CHAR characters.
+Wraps cleanly across line ends and skips blank paragraph-gap lines."
   (let* ((cursor (etaf-reader--read session :cursor))
          (lines (etaf-reader--read session :lines))
          (count (length lines))
-         (line (or (plist-get cursor :line) (etaf-reader--read session :line)))
+         (line (or (plist-get cursor :line)
+                   (etaf-reader--find-text-line lines (etaf-reader--read session :line) 1)))
          (char (or (plist-get cursor :char) 0))
-         (new-line (max 0 (min (1- (max 1 count)) (+ line delta-line))))
-         (entry (nth new-line lines))
-         (text (or (plist-get entry :text) ""))
-         (new-char (if (/= new-line line)
-                       (if (> delta-line 0) 0 (length text))
-                     (max 0 (min (length text) (+ char delta-char))))))
+         (cur-span (if (< line count) (etaf-reader--line-span (nth line lines)) 0))
+         (new-line line)
+         (new-char char))
+    (cond
+     ((/= delta-line 0)
+      (let* ((step (if (> delta-line 0) 1 -1))
+             (candidate (+ line delta-line)))
+        (setq new-line (etaf-reader--find-text-line lines candidate step))
+        (let ((span (if (< new-line count) (etaf-reader--line-span (nth new-line lines)) 0)))
+          (setq new-char (max 0 (min span char))))))
+     ((> delta-char 0)
+      (if (< (+ char delta-char) cur-span)
+          (setq new-char (+ char delta-char))
+        (if (< char cur-span)
+            (setq new-char cur-span)
+          (let ((next (etaf-reader--find-text-line lines (1+ line) 1)))
+            (if (> next line)
+                (setq new-line next new-char 0)
+              (setq new-char cur-span))))))
+     ((< delta-char 0)
+      (if (> (+ char delta-char) 0)
+          (setq new-char (+ char delta-char))
+        (if (> char 0)
+            (setq new-char 0)
+          (let ((prev (etaf-reader--find-text-line lines (1- line) -1)))
+            (if (< prev line)
+                (setq new-line prev
+                      new-char (etaf-reader--line-span (nth prev lines)))
+              (setq new-char 0)))))))
     (if cursor
         (etaf-reader-extend-selection session new-line new-char)
       (etaf-reader-begin-selection session new-line new-char))
@@ -76,6 +119,7 @@
   :bindings ((reader (or session
                          (signal 'etaf-reader-error
                                  '("etaf-reader-app needs the :session from `etaf-reader-create'"))))
+             (runtime (etaf-current-runtime))
              (theme (etaf-reader--ref reader :theme))
              (tokens (etaf-computed
                       (lambda ()
@@ -89,6 +133,29 @@
     (when-let* ((surface (etaf-surface-host)))
       (etaf-surface-declare surface :theme tokens :mode theme
                             :modes etaf-reader--surface-modes))
+    ;; Scroll the active chapter into view inside the full-height TOC sidebar
+    ;; only when the open book, chapter, or sidebar visibility changes, so
+    ;; manual wheel browsing of the TOC is never fought back.
+    (let* ((last-toc-key nil)
+           (reveal-toc
+            (lambda ()
+              (let* ((view (etaf-reader--read reader :view))
+                     (metrics (etaf-reader--read reader :metrics))
+                     (sidebar (and (etaf-reader--read reader :sidebar)
+                                   (not (eq (plist-get metrics :layout) 'narrow))))
+                     (book (etaf-reader--read reader :book))
+                     (chapter (etaf-reader--read reader :chapter))
+                     (key (and (eq view 'reader) sidebar book chapter
+                               (list (plist-get book :id)
+                                     (plist-get chapter :index)
+                                     (etaf-reader--read reader :window-rows)))))
+                (unless (equal key last-toc-key)
+                  (setq last-toc-key key)
+                  (when (and key runtime (etaf-runtime-mounted-p runtime))
+                    (ignore-errors
+                      (etaf-scroll-into-view runtime 'reader-toc-current))))))))
+      (etaf-on-mounted reveal-toc)
+      (etaf-on-updated reveal-toc))
     (etaf-on-unmounted
      (lambda ()
        (when-let* ((timer (plist-get reader :save-timer)))
@@ -151,38 +218,38 @@
     ("i" etaf-reader-scan-command "重新扫描书库")
     ("E" etaf-reader-export-command "导出笔记")
     ("C-c h" etaf-help "查看快捷键")
-    ("q" etaf-reader-close "关闭阅读器")
-    ("<wheel-down>" etaf-reader-wheel-down-command "向下阅读")
-    ("<wheel-up>" etaf-reader-wheel-up-command "向上阅读")
-    ("<mouse-5>" etaf-reader-wheel-down-command "向下阅读")
-    ("<mouse-4>" etaf-reader-wheel-up-command "向上阅读"))
+    ("q" etaf-reader-close "关闭阅读器"))
   "Root keys of the reader, as (KEY COMMAND LABEL).
 They beat the renderer's own minor-mode map; a focused control still takes
-RET, and the reader's RET dispatches between a selection and activation.")
+RET, and the reader's RET dispatches between a selection and activation.
+Wheel bindings live on the non-scrolling main columns so scrollable sidebars
+and the detail panel keep native smooth scrolling.")
 
 (defun etaf-reader-view-for-session (session)
   "Return the mountable View of SESSION."
   (etaf-view (etaf-reader-app :session session :keys etaf-reader--bindings)))
 
 (defun etaf-reader-return-command ()
-  "Confirm the current selection, or activate the focused control."
+  "Confirm the current selection, activate a focused control, or open the book."
   (etaf-reader--call
    (lambda ()
      (let ((session (etaf-reader--current)))
        (cond
-        ((and (and (eq (etaf-reader--read session :view) 'shelf)
-                   (etaf-reader--read session :shelf-cursor))
+        ((and (etaf-reader-selection session)
+              (etaf-reader--read session :cursor)
+              (null (etaf-reader--read session :toolbar)))
+         (etaf-reader-show-toolbar session))
+        ((etaf-focused-host-ref)
+         (etaf-activate))
+        ((and (eq (etaf-reader--read session :view) 'shelf)
+              (etaf-reader--read session :shelf-cursor)
               (let* ((page (etaf-reader-library-page session))
                      (id (etaf-reader--read session :shelf-cursor)))
                 (when-let* ((book (seq-find (lambda (row) (equal id (plist-get row :id)))
                                             (plist-get page :items))))
                   (etaf-reader-open-book session book)
                   t))))
-        ((and (etaf-reader-selection session)
-              (etaf-reader--read session :cursor)
-              (null (etaf-reader--read session :toolbar)))
-         (etaf-reader-show-toolbar session))
-        (t (etaf-activate)))))))
+        (t nil))))))
 
 ;;; ---------------------------------------------------------------------------
 ;;; Commands
@@ -276,44 +343,58 @@ selection, a focused control releases the arrows to focus movement."
 (defun etaf-reader-chapter-forward-command ()
   "Open the next chapter."
   (etaf-reader--call
-   (lambda () (etaf-reader-next-chapter (etaf-reader--current)))))
+   (lambda ()
+     (let ((session (etaf-reader--current)))
+       (etaf-reader--require-reader session)
+       (etaf-reader-next-chapter session)))))
 
 (defun etaf-reader-chapter-backward-command ()
   "Open the previous chapter."
   (etaf-reader--call
-   (lambda () (etaf-reader-previous-chapter (etaf-reader--current)))))
+   (lambda ()
+     (let ((session (etaf-reader--current)))
+       (etaf-reader--require-reader session)
+       (etaf-reader-previous-chapter session)))))
 
 (defun etaf-reader-toggle-selection-command ()
   "Start or clear the keyboard selection."
   (etaf-reader--call
    (lambda ()
      (let ((session (etaf-reader--current)))
+       (etaf-reader--require-reader session)
        (if (etaf-reader--read session :cursor)
            (etaf-reader-clear-selection session)
-         (etaf-reader-begin-selection session
-                                      (etaf-reader--read session :line) 0)
-         (etaf-reader-message session "方向键移动选择，回车打开工具条，C-c C-k 取消"))))))
+         (let* ((lines (etaf-reader--read session :lines))
+                (start (etaf-reader--find-text-line
+                        lines (etaf-reader--read session :line) 1)))
+           (etaf-reader-begin-selection session start 0)
+           (etaf-reader-message session "方向键移动选择，回车打开工具条，C-c C-k 取消")))))))
 
 (defun etaf-reader-confirm-selection-command ()
   "Open the annotation toolbar for the current selection."
   (etaf-reader--call
    (lambda ()
      (let ((session (etaf-reader--current)))
+       (etaf-reader--require-reader session)
        (if (etaf-reader-selection session)
            (etaf-reader-show-toolbar session)
          (etaf-reader-message session "还没有选中文字"))))))
 
 (defun etaf-reader-cancel-selection-command ()
-  "Clear the selection, cursor and toolbar."
+  "Close any open help/pane and clear the selection, cursor and toolbar."
   (etaf-reader--call
    (lambda ()
      (let ((session (etaf-reader--current)))
+       (when-let* ((buffer (plist-get session :buffer))
+                   (runtime (and (buffer-live-p buffer)
+                                 (etaf-runtime-for-buffer buffer))))
+         (etaf-help-close runtime))
        (etaf-batch
          (etaf-reader--write session :pane nil)
          (etaf-reader-clear-selection session))))))
 
 (defun etaf-reader-search-command ()
-  "Search the current book."
+  "Search the current book or filter the library on the shelf."
   (etaf-reader--call
    (lambda ()
      (let* ((session (etaf-reader--current))
@@ -328,12 +409,19 @@ selection, a focused control releases the arrows to focus movement."
 
 (defun etaf-reader-search-next-command ()
   "Jump to the next search match."
-  (etaf-reader--call (lambda () (etaf-reader-search-next (etaf-reader--current)))))
+  (etaf-reader--call
+   (lambda ()
+     (let ((session (etaf-reader--current)))
+       (etaf-reader--require-reader session)
+       (etaf-reader-search-next session)))))
 
 (defun etaf-reader-search-previous-command ()
   "Jump to the previous search match."
   (etaf-reader--call
-   (lambda () (etaf-reader-search-next (etaf-reader--current) t))))
+   (lambda ()
+     (let ((session (etaf-reader--current)))
+       (etaf-reader--require-reader session)
+       (etaf-reader-search-next session t)))))
 
 (defun etaf-reader-toc-command ()
   "Toggle the table of contents pane."
@@ -363,20 +451,33 @@ selection, a focused control releases the arrows to focus movement."
 
 (defun etaf-reader-jump-back-command ()
   "Return to the position before a navigation jump."
-  (etaf-reader--call (lambda () (etaf-reader-jump-back (etaf-reader--current)))))
+  (etaf-reader--call
+   (lambda ()
+     (let ((session (etaf-reader--current)))
+       (etaf-reader--require-reader session)
+       (etaf-reader-jump-back session)))))
 
 (defun etaf-reader-bookmark-command ()
   "Bookmark the top line of the current page."
-  (etaf-reader--call (lambda () (etaf-reader-add-bookmark (etaf-reader--current)))))
+  (etaf-reader--call
+   (lambda ()
+     (let ((session (etaf-reader--current)))
+       (etaf-reader--require-reader session)
+       (etaf-reader-add-bookmark session)))))
 
 (defun etaf-reader-goto-percent-command ()
   "Jump to a percent of the book."
   (etaf-reader--call
    (lambda ()
-     (let* ((session (etaf-reader--current))
-            (input (read-string "跳到百分比（0-100）：")))
-       (when (string-match-p "\\`[0-9.]+\\'" input)
-         (etaf-reader-goto-percent session (string-to-number input)))))))
+     (let ((session (etaf-reader--current)))
+       (etaf-reader--require-reader session)
+       (let ((input (string-trim (read-string "跳到百分比（0-100）："))))
+         (if (string-match-p "\\`[0-9]+\\(?:\\.[0-9]+\\)?\\'" input)
+             (progn
+               (etaf-reader--remember-position session)
+               (etaf-reader-goto-percent session (string-to-number input)))
+           (unless (string-empty-p input)
+             (etaf-reader-message session "请输入 0 到 100 之间的数字"))))))))
 
 (defun etaf-reader-toggle-mode-command ()
   "Toggle page turning and scrolling."
@@ -460,18 +561,30 @@ to the same key so one binding covers whichever view is open."
      (etaf-reader-message (etaf-reader--current) "正在扫描书库…")
      (etaf-reader-refresh-library (etaf-reader--current)))))
 
+(defun etaf-reader--export-book-interactive (session book)
+  "Prompt for a destination path and export BOOK's annotations in SESSION."
+  (unless book
+    (signal 'etaf-reader-error '("请先选择一本书")))
+  (let* ((title (etaf-reader--book-title book))
+         (default (expand-file-name (concat title ".md") "~/"))
+         (file (etaf-call-with-input
+                (lambda ()
+                  (read-file-name "导出到：" (file-name-directory default)
+                                  default nil (file-name-nondirectory default))))))
+    (etaf-reader--export-book-notes session book file)))
+
 (defun etaf-reader-export-command ()
-  "Export the current book's annotations as Markdown."
+  "Export the current book's (or shelf cursor book's) annotations as Markdown."
   (etaf-reader--call
    (lambda ()
      (let* ((session (etaf-reader--current))
-            (book (etaf-reader--read session :book))
-            (default (expand-file-name
-                      (concat (or (plist-get book :title) "notes") ".md")
-                      "~/"))
-            (file (read-file-name "导出到：" (file-name-directory default)
-                                  default nil (file-name-nondirectory default))))
-       (etaf-reader-export-notes session file)))))
+            (book (if (eq (etaf-reader--read session :view) 'reader)
+                      (etaf-reader--read session :book)
+                    (let* ((id (etaf-reader--read session :shelf-cursor))
+                           (items (plist-get (etaf-reader-library-page session) :items)))
+                      (or (and id (seq-find (lambda (row) (equal id (plist-get row :id))) items))
+                          (car items))))))
+       (etaf-reader--export-book-interactive session book)))))
 
 (defun etaf-reader--wheel (delta)
   "Scroll by DELTA lines (or turn pages)."
@@ -498,10 +611,12 @@ An open reader closes first and saves its position."
   ;; ETAF's publication is a render side effect and is rejected.
   (etaf-reader--write session :books (etaf-reader-store-books))
   (etaf-reader-refresh-states session)
+  (etaf-reader--sync-shelf-cursor session)
   (let ((buffer
          (etaf-app-open
           etaf-reader--buffer-name (etaf-reader-view-for-session session)
           :state session
+          :mode-line t
           :background (lambda ()
                         (etaf-reader-color :bg (etaf-reader--read session :theme)))
           :on-fit (lambda (window) (etaf-reader--fit session window))
@@ -561,7 +676,7 @@ and tests display the exact state they built."
   (condition-case error
       (funcall function)
     (etaf-reader-error
-     (etaf-reader-message session (error-message-string error)))
+     (etaf-reader-message session (etaf-reader--format-error error)))
     (error
      (etaf-reader-message session (format "出错：%s" error)))))
 

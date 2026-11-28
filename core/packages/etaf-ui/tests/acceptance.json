@@ -1467,6 +1467,11 @@
       "name": "etaf-ui-markdown-table-images-dispatch-with-column-width",
       "file": "tests/etaf-ui-markdown-tests.el",
       "purpose": "Table cells dispatch Markdown, empty-alt, linked and inline HTML images via `:render-media' as `table-image' with resolved column width and alignment across both grid and narrow card layouts."
+    },
+    {
+      "name": "etaf-ui-pane-resizer-and-splitter-fit-one-cell-on-text-displays",
+      "file": "tests/etaf-ui-desktop-tests.el",
+      "purpose": "Pane resizer and horizontal splitter dividers occupy a single cell width on text displays instead of multiple blank columns."
     }
   ]
 }

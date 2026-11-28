@@ -139,5 +139,16 @@
 (require 'etaf-agenda-views)
 (require 'etaf-agenda-app)
 
+;;;###autoload
+(with-eval-after-load 'etaf
+  (etaf-app-register 'etaf-agenda
+    :title "日程与任务"
+    :icon "A"
+    :category 'productivity
+    :feature 'etaf-agenda
+    :open 'etaf-agenda-open
+    :doctor 'etaf-agenda-doctor
+    :hosts '(buffer)))
+
 (provide 'etaf-agenda)
 ;;; etaf-agenda.el ends here

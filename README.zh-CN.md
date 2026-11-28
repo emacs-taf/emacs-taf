@@ -3,7 +3,7 @@
 [English](README.md)
 
 [![Repository structure](https://github.com/emacs-taf/emacs-taf/actions/workflows/structure.yml/badge.svg)](https://github.com/emacs-taf/emacs-taf/actions/workflows/structure.yml)
-[![Package installation](https://github.com/emacs-taf/emacs-taf/actions/workflows/package-installation.yml/badge.svg)](https://github.com/emacs-taf/emacs-taf/actions/workflows/package-installation.yml)
+[![Package installation](https://github.com/emacs-taf/emacs-taf/actions/workflows/installation.yml/badge.svg)](https://github.com/emacs-taf/emacs-taf/actions/workflows/installation.yml)
 
 [官网与参考手册](https://etaf.top/zh-cn/) · [包归档](https://etaf.top/packages/) · [预编译原生模块](https://etaf.top/native/) · [媒体图库](https://etaf.top/media/) · [许可证](LICENSE)
 

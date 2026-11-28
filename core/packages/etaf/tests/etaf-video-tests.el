@@ -1107,5 +1107,22 @@ clock's media position instead of drifting ahead during ffplay cold start."
             (should (eq 'ascii (plist-get state :mode)))))
       (etaf-video-tests--cleanup name))))
 
+(ert-deftest etaf-video-kitty-backend-falls-back-cleanly-in-batch ()
+  "Requesting the `kitty' render backend degrades cleanly in batch sessions."
+  (let ((etaf-video-engine 'ffmpeg)
+        (etaf-video-render-backend 'kitty)
+        (name "*etaf-video-test-kitty-fallback*")
+        handle)
+    (unwind-protect
+        (progn
+          (setq handle (etaf-video-tests--mount
+                        name (list :src nil :mode 'image
+                                   :columns 16 :rows 6 :autoplay nil)))
+          (let ((state (etaf-video-state handle)))
+            (should (eq 'ffmpeg (plist-get state :engine)))
+            (should (eq 'image (plist-get state :render-backend)))
+            (should (eq 'ascii (plist-get state :mode)))))
+      (etaf-video-tests--cleanup name))))
+
 (provide 'etaf-video-tests)
 ;;; etaf-video-tests.el ends here

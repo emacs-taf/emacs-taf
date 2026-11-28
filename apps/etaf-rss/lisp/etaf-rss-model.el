@@ -29,6 +29,8 @@
 (require 'etaf-rss-store)
 (require 'etaf-rss-miniflux)
 
+(declare-function etaf-rss-open "etaf-rss" (&optional model))
+
 
 ;;; ---------------------------------------------------------------------------
 ;;; Geometry and timing
@@ -392,13 +394,37 @@ Anything else signals `etaf-rss-error' and leaves APP unchanged."
 ;;; List loading
 ;;; ---------------------------------------------------------------------------
 
+(defun etaf-rss--sync-activity (app)
+  "Publish APP's unread RSS summary to the ETAF Live Activity protocol."
+  (let ((unread (or (etaf-rss--read app :unread) 0))
+        (total (or (etaf-rss--read app :total) 0))
+        (feeds (length (or (etaf-rss--read app :feeds) []))))
+    (if (<= unread 0)
+        (when (etaf-activity-get 'etaf-rss)
+          (etaf-activity-remove 'etaf-rss))
+      (etaf-activity-publish
+       'etaf-rss
+       (list
+        :app 'etaf-rss
+        :kind 'inbox
+        :priority 48
+        :state 'idle
+        :icon "◉"
+        :title (format "RSS · %d 篇未读" unread)
+        :subtitle (format "%d 个订阅源 · 共 %d 篇文章" feeds total)
+        :compact (format "RSS %d" unread)
+        :open (lambda ()
+                (when (fboundp 'etaf-rss-open)
+                  (etaf-rss-open app))))))))
+
 (defun etaf-rss--apply-feeds (app data)
   "Store the sidebar values of DATA in APP."
   (etaf-batch
     (etaf-rss--write app :feeds (or (plist-get data :feeds) []))
     (etaf-rss--write app :total (or (plist-get data :total) 0))
     (etaf-rss--write app :unread (or (plist-get data :unread) 0))
-    (etaf-rss--write app :starred-count (or (plist-get data :starred) 0))))
+    (etaf-rss--write app :starred-count (or (plist-get data :starred) 0)))
+  (etaf-rss--sync-activity app))
 
 (defun etaf-rss--clamp-position (app)
   "Keep APP's selection and window start inside its current rows."

@@ -249,4 +249,67 @@ restores immediately when modality tracking is disabled."
       (set-window-configuration config)
       (when (buffer-live-p buffer) (kill-buffer buffer)))))
 
+(ert-deftest etaf-app-registry-defines-filters-validates-and-launches ()
+  "Application registry validates manifests, detaches copies, notifies hooks and launches."
+  (let* ((events nil)
+         (closed nil)
+         (hook-fn (lambda (event id entry)
+                    (push (list event id (and entry (plist-get entry :title))) events)))
+         (etaf-app-change-functions (list hook-fn)))
+    (unwind-protect
+        (progn
+          ;; Schema validation rejects invalid manifests immediately.
+          (should-error (etaf-app-register 'etaf-test-bad :title "")
+                        :type 'etaf-runtime-error)
+          (should-error (etaf-app-register 'etaf-test-bad :title "Bad" :unknown t)
+                        :type 'etaf-runtime-error)
+          (should-error (etaf-app-register 'etaf-test-bad :title "Bad" :hosts '(desktop))
+                        :type 'etaf-runtime-error)
+          ;; Register a buffer-only app.
+          (let ((a (etaf-app-define etaf-test-buf-app
+                     :title "Buf App"
+                     :category 'utility
+                     :feature nil
+                     :hosts '(buffer)
+                     :open (lambda () 'opened-direct))))
+            (should (equal (plist-get a :title) "Buf App"))
+            (should (equal (plist-get a :hosts) '(buffer)))
+            ;; Mutating returned copy must not affect stored manifest.
+            (plist-put a :title "Mutated")
+            (should (equal (plist-get (etaf-app-get 'etaf-test-buf-app) :title) "Buf App"))
+            (should (eq (etaf-app-launch 'etaf-test-buf-app) 'opened-direct)))
+          ;; Register a session-backed multi-host app and launch via :session fallback.
+          (etaf-app-define etaf-test-sess-app
+            :title "Sess App"
+            :icon "S"
+            :category 'media
+            :feature nil
+            :session (list :create (lambda () 'sess-handle)
+                           :view (lambda (s) (etaf-view (box (text (expr (format "S:%s" s))))))
+                           :close (lambda (s) (push s closed))
+                           :keep-alive t)
+            :window '(:width 800 :height 24)
+            :panel '(:width 40 :height 12 :at frame-top-right))
+          (let ((desktop-ids (mapcar (lambda (x) (plist-get x :id))
+                                     (etaf-app-list 'desktop)))
+                (media-ids (mapcar (lambda (x) (plist-get x :id))
+                                   (etaf-app-list nil 'media))))
+            (should (memq 'etaf-test-sess-app desktop-ids))
+            (should-not (memq 'etaf-test-buf-app desktop-ids))
+            (should (memq 'etaf-test-sess-app media-ids)))
+          (let ((buf (etaf-app-launch 'etaf-test-sess-app)))
+            (should (buffer-live-p buf))
+            (should (eq (etaf-app-state buf) 'sess-handle))
+            (etaf-app-close buf)
+            (should (equal closed '(sess-handle))))
+          (should (etaf-app-unregister 'etaf-test-buf-app))
+          (should-not (etaf-app-unregister 'etaf-test-buf-app))
+          (should-not (etaf-app-get 'etaf-test-buf-app))
+          (should (assoc 'register events))
+          (should (assoc 'unregister events)))
+      (ignore-errors (etaf-app-unregister 'etaf-test-buf-app))
+      (ignore-errors (etaf-app-unregister 'etaf-test-sess-app))
+      (when-let* ((b (get-buffer "*Sess App*")))
+        (kill-buffer b)))))
+
 ;;; etaf-app-tests.el ends here

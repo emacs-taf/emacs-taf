@@ -34,7 +34,8 @@ The selector module is the bottom of the package: it knows nothing about styles 
 | `lisp/ebox-measure.el` | Pixel measurement, text-unit segmentation, display spaces and display twins | — |
 | `lisp/ebox-style.el` | Style schema, aliases, validators, shorthand expansion and ECSS scopes | `lisp/ebox-size.el`, ECSS |
 | `lisp/ebox-node.el` | Retained node records, author properties, the selector adapter and computed styles | `lisp/ebox-measure.el`, `lisp/ebox-size.el`, `lisp/ebox-style.el`, ECSS |
-| `lisp/ebox-image.el` | Image preparation, the converter protocol and the raster cache | `lisp/ebox-measure.el` |
+| `lisp/ebox-image.el` | Image preparation, the converter protocol and the raster cache | `lisp/ebox-measure.el`, `lisp/ebox-kitty.el` |
+| `lisp/ebox-kitty.el` | Kitty terminal graphics protocol probing, Unicode placeholder grids and live TTY frame streaming | — |
 | `lisp/ebox-layout.el` | Text, box, row, column and positioned layout, line composition and edit planning | `lisp/ebox-node.el`, `lisp/ebox-image.el` |
 | `lisp/ebox-flex.el` | The flex and grid algorithms | `lisp/ebox-node.el`, `lisp/ebox-size.el`, `lisp/ebox-layout.el` |
 | `lisp/ebox-buffer.el` | Mounts, the dirty queue, flush orchestration, buffer writes and geometry queries | `lisp/ebox-node.el`, `lisp/ebox-layout.el`, `lisp/ebox-flex.el` |

@@ -434,5 +434,31 @@ The shape matches `etaf-install-doctor': `:required' and `:optional' lists of
                 (list "plantuml" (and (executable-find "plantuml") t)
                       "Optional: install PlantUML to draw plantuml source blocks.")))))
 
+;;;###autoload
+(with-eval-after-load 'etaf
+  (etaf-app-register 'etaf-org
+    :title "Org 阅读"
+    :icon "O"
+    :category 'reading
+    :feature 'etaf-org
+    :open 'etaf-org-open
+    :doctor 'etaf-org-doctor
+    :file-extensions '("org")
+    :hosts '(buffer desktop panel)
+    :session (list :create
+                   (lambda ()
+                     (let ((file (condition-case nil
+                                     (expand-file-name
+                                      (read-file-name
+                                       "Org 文件：" nil nil t nil
+                                       (lambda (name)
+                                         (or (file-directory-p name)
+                                             (string-match-p "\\.org\\'" name)))))
+                                   (quit (user-error "没有选择 Org 文件")))))
+                       (etaf-org-create :file file)))
+                   :view 'etaf-org-view)
+    :window '(:width 1024 :height 30 :min-width 360 :min-height 12)
+    :panel '(:width 110 :height 26 :fill-height t :at frame-top-right :stack t)))
+
 (provide 'etaf-org)
 ;;; etaf-org.el ends here

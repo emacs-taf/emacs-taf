@@ -134,6 +134,12 @@
 ;; Idempotently release the session's process, timers and application mount.
 ;; Preserve its buffer and last observation for inspection. No save is implied.
 ;;
+;; Function: etaf-gamekit-dispose (session)
+;;;###autoload (autoload 'etaf-gamekit-dispose "etaf-gamekit" nil nil)
+;; Idempotently close SESSION and kill its backing buffer when live.
+;; Intended for host close callbacks (such as `etaf-app-define' `:session'
+;; `:close') where a hosted session owns no visible Emacs buffer.
+;;
 ;; Function: etaf-gamekit-register-backend (name &key title launch features replace)
 ;; Backend author API: register symbolic NAME with TITLE and LAUNCH. LAUNCH
 ;; receives detached game OPTIONS and returns a program/argument string list;

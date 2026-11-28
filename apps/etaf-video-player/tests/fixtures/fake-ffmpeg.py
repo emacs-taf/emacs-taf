@@ -56,6 +56,13 @@ def main():
     frames = int(os.environ.get("FAKE_FFMPEG_FRAMES", "40"))
     interval = float(os.environ.get("FAKE_FFMPEG_INTERVAL", "0.02"))
     pattern = os.environ.get("FAKE_FFMPEG_PATTERN", "columns")
+    status = int(os.environ.get("FAKE_FFMPEG_STATUS", "0"))
+    error_text = os.environ.get("FAKE_FFMPEG_ERROR", "")
+    if error_text:
+        sys.stderr.write(error_text + "\n")
+        sys.stderr.flush()
+    if status != 0 and frames == 0:
+        return status
     pixel_format = "gray"
     for index, argument in enumerate(argv):
         if argument == "-pix_fmt" and index + 1 < len(argv):
@@ -91,7 +98,7 @@ def main():
         out.flush()
         if interval > 0:
             time.sleep(interval)
-    return 0
+    return status
 
 
 if __name__ == "__main__":

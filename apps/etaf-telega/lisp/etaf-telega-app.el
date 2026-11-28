@@ -1112,9 +1112,11 @@ attachments, such as files and stickers, open through Telega."
                          ((equal (plist-get (etaf-telega-model-viewer model) :id) id))
                          (current (etaf-telega-model-message-by-id model id)))
                (etaf-telega--show-media current source progress)))))
-      (etaf-telega-backend-native etaf-telega--backend #'etaf-telega--open-content
-                                  (plist-get (etaf-telega-model-chat model) :id)
-                                  id))))
+      (etaf-telega-backend-native
+       etaf-telega--backend
+       (lambda () (interactive) (etaf-telega--open-content))
+       (plist-get (etaf-telega-model-chat model) :id)
+       id))))
 
 (defun etaf-telega--viewer-step (delta)
   "Show the viewable message DELTA steps from the viewer's message."

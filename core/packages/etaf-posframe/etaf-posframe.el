@@ -186,6 +186,22 @@
 ;; ID, `:create' and `:view'; the remaining values are used and checked when the
 ;; panel opens, so an invalid panel option signals from `etaf-posframe-app'.
 ;;
+;; Function: etaf-posframe-bind-app (id &optional shortcut &rest overrides)
+;;;###autoload (autoload 'etaf-posframe-bind-app "etaf-posframe" nil nil)
+;; Register application ID from ETAF's `etaf-app-get' registry as a floating
+;; panel without repeating `:title', `:create', `:view', `:on-stop' or `:panel'
+;; defaults.  Optional SHORTCUT binds a key in `etaf-posframe-app-map'; keyword
+;; OVERRIDES replace any manifest panel or lifecycle option.  Signals
+;; `etaf-posframe-error' when ID is not registered in `etaf-app' or declares
+;; no `:session'.  Return ID.
+;;
+;; Function: etaf-posframe-bind-apps (specs)
+;;;###autoload (autoload 'etaf-posframe-bind-apps "etaf-posframe" nil nil)
+;; Bind multiple applications from ETAF's `etaf-app' registry in one call.
+;; Each item in SPECS is `ID', `(ID . SHORTCUT)' or `(ID SHORTCUT . OVERRIDES)'.
+;; Entries whose ID is not currently registered or declares no `:session' are
+;; skipped cleanly.  Return the list of bound application IDs.
+;;
 ;; Function: etaf-posframe-app-quit (id)
 ;;;###autoload (autoload 'etaf-posframe-app-quit "etaf-posframe" nil t)
 ;; Stop application ID: hide its panel, call its `:on-stop' with the session and
@@ -1541,10 +1557,24 @@ the theme's `header-line' box would draw a coloured outline around it."
           (when (> (window-start win) (point-min))
             (set-window-start win (point-min) t)))))))
 
+(defun etaf-posframe--ensure-terminal-borders ()
+  "Configure solid box-drawing glyphs for terminal child-frame borders once."
+  (when (and (not (display-graphic-p)) (not noninteractive))
+    (require 'disp-table)
+    (unless standard-display-table
+      (setq standard-display-table (make-display-table)))
+    (dolist (slot '((box-vertical . ?│) (box-horizontal . ?─)
+                    (box-down-right . ?┌) (box-down-left . ?┐)
+                    (box-up-right . ?└) (box-up-left . ?┘)))
+      (unless (display-table-slot standard-display-table (car slot))
+        (set-display-table-slot standard-display-table (car slot)
+                                (make-glyph-code (cdr slot)))))))
+
 (defun etaf-posframe--prepare-buffer (buffer header theme width &optional mode scrollable)
   "Set BUFFER up as a panel surface with HEADER and THEME.
 MODE adds the title-bar theme toggle over `etaf-posframe--theme-modes', as in
 `etaf-posframe--header-format'.  SCROLLABLE defaults to t; nil locks scroll."
+  (etaf-posframe--ensure-terminal-borders)
   (let ((theme theme)
         (can-scroll (if (null scrollable) nil t)))
     (with-current-buffer buffer
@@ -3221,7 +3251,10 @@ Works on headerless panels without `:title'.  When the pointer moves more than
           (let ((done nil)
                 (end-ev nil))
             (while (not done)
-              (let ((ev (read-event)))
+              (let ((ev (if (or noninteractive (display-graphic-p)
+                                (not (bound-and-true-p xterm-mouse-mode)))
+                            (read-event)
+                          (read-key nil t))))
                 (cond
                  ((mouse-movement-p ev)
                   (let* ((mp (mouse-absolute-pixel-position))
@@ -3592,6 +3625,64 @@ reaches a run of moves instead of stopping after one cell."
                 (list (cons id options)))
         etaf-posframe-app-map (etaf-posframe--app-keymap))
   id)
+
+(defun etaf-posframe--merge-plist (base overrides)
+  "Return a new plist merging keyword plists BASE and OVERRIDES (OVERRIDES win)."
+  (let ((result (copy-sequence base)))
+    (cl-loop for (k v) on overrides by #'cddr
+             do (setq result (plist-put result k v)))
+    result))
+
+;;;###autoload
+(defun etaf-posframe-bind-app (id &optional shortcut &rest overrides)
+  "Register application ID from ETAF's `etaf-app-get' registry as a floating panel.
+Optional SHORTCUT binds a key in `etaf-posframe-app-map'.  Keyword OVERRIDES
+replace manifest panel or lifecycle defaults."
+  (let* ((spec (or (and (symbolp id) (etaf-app-get id))
+                   (signal 'etaf-posframe-error
+                           (list (format "Application %S is not registered in `etaf-app'" id)
+                                 id))))
+         (session (or (plist-get spec :session)
+                      (signal 'etaf-posframe-error
+                              (list (format "Application %S declares no embeddable :session" id)
+                                    id))))
+         (feature (plist-get spec :feature))
+         (close-fn (plist-get session :close))
+         (base (list :title (plist-get spec :title)
+                     :create (plist-get session :create)
+                     :view (plist-get session :view))))
+    (when feature
+      (setq base (plist-put base :require feature)))
+    (when close-fn
+      (setq base (plist-put base :on-stop close-fn)))
+    (when (plist-member session :keep-alive)
+      (setq base (plist-put base :keep-alive (plist-get session :keep-alive))))
+    (when-let* ((panel-hints (plist-get spec :panel)))
+      (setq base (etaf-posframe--merge-plist base panel-hints)))
+    (when shortcut
+      (setq base (plist-put base :shortcut shortcut)))
+    (when overrides
+      (setq base (etaf-posframe--merge-plist base overrides)))
+    (apply #'etaf-posframe-register-app id base)))
+
+;;;###autoload
+(defun etaf-posframe-bind-apps (specs)
+  "Bind multiple applications from ETAF's `etaf-app' registry.
+Each element of SPECS is `ID', `(ID . SHORTCUT)' or `(ID SHORTCUT . OVERRIDES)'.
+Entries not currently registered or lacking `:session' are skipped cleanly."
+  (let (bound)
+    (dolist (entry specs)
+      (let* ((id (if (consp entry) (car entry) entry))
+             (rest (and (consp entry) (cdr entry)))
+             (shortcut (cond ((stringp rest) rest)
+                             ((consp rest) (car rest))
+                             (t nil)))
+             (overrides (and (consp rest) (cdr rest)))
+             (spec (and (symbolp id) (etaf-app-get id))))
+        (when (and spec (plist-get spec :session))
+          (apply #'etaf-posframe-bind-app id shortcut overrides)
+          (push id bound))))
+    (nreverse bound)))
 
 ;;;###autoload
 (defun etaf-posframe-cycle ()

@@ -1,2 +1,0 @@
-;;; -*- lisp-data -*-
-(:id poem-caiju :title "采菊东篱" :summary "陶渊明《饮酒》 · 逐字排印" :tags (imported ink poem) :provider tte :recording "poem-caiju.tterec" :kind text :width 80 :height 24 :frame-rate 20 :frame-count 78 :source "ink: 采菊东篱下" :license "MIT" :background "#F4F1EA")

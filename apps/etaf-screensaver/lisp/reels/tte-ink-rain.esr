@@ -1,2 +1,0 @@
-;;; -*- lisp-data -*-
-(:id tte-ink-rain :title "一蓑烟雨" :summary "苏轼《定风波》 · 逐字排印" :tags (imported ink poem) :provider tte :recording "ink-rain.tterec" :kind text :width 80 :height 24 :frame-rate 20 :frame-count 80 :source "ink: 一蓑烟雨任平生" :license "MIT" :background "#F4F1EA")

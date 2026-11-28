@@ -6,15 +6,15 @@
 
 <!-- index: 图像准备; prepared 值; 来源; adapter; inset -->
 
-`ebox-image-prepare` 是图像模型唯一的 I/O 边界。它的 SOURCE 是本地文件名——展开后以 truename、大小、修改时间与 inode 构成缓存身份——或携带 `:file` 或 `:data` 的 Emacs 图像描述符。远程文件在读取前就被拒绝。COLUMNS 与 ROWS 是图像必须填满的字符区域，adapter 的选择决定先尝试哪条路径：`auto` 先试图形描述符，再试转换器列表，最后是单色占位；`text` 跳过图形路径；`placeholder` 两者都跳过。
+`ebox-image-prepare` 是图像模型唯一的 I/O 边界。它的 SOURCE 是本地文件名——展开后以 truename、大小、修改时间与 inode 构成缓存身份——或携带 `:file` 或 `:data` 的 Emacs 图像描述符。远程文件在读取前就被拒绝。COLUMNS 与 ROWS 是图像必须填满的字符区域，adapter 的选择决定先尝试哪条路径：`auto` 先试图形描述符，再在支持 24-bit 色彩与 Kitty 图形协议的文本终端上尝试 Kitty 图像，再试转换器列表，最后是单色占位；`kitty` 只试 Kitty 终端图形并回退到占位；`text` 跳过两种图形路径；`placeholder` 全部跳过。
 
 #### Function: ebox-image-prepare (source columns rows &key (adapter 'auto) (frame (selected-frame)) inset (converters ebox-image-converters))
 
 把 SOURCE 准备成一个 COLUMNS×ROWS 字符区域的图像。
 
-**参数。** SOURCE 是本地文件或含 `:file` 或 `:data` 的 Emacs 图像描述符。COLUMNS 与 ROWS 是正整数。ADAPTER 是 `auto`、`text` 或 `placeholder`。FRAME 提供图形桌面所用的字体度量。CONVERTERS 遵守 `ebox-image-converters`。INSET 是 nil 或 `(TOP . BOTTOM)`，表示图形图像在它的行内上下各留空多少像素（每边不超过一行高）。
+**参数。** SOURCE 是本地文件或含 `:file` 或 `:data` 的 Emacs 图像描述符。COLUMNS 与 ROWS 是正整数。ADAPTER 是 `auto`、`kitty`、`text` 或 `placeholder`。FRAME 提供图形桌面所用的字体度量或用于 Kitty 探测的终端。CONVERTERS 遵守 `ebox-image-converters`。INSET 是 nil 或 `(TOP . BOTTOM)`，表示图形图像在它的行内上下各留空多少像素（每边不超过一行高）。
 
-**语义。** 调用会读取并解码所有需要的内容，返回一个 detached 值；此后布局与写 buffer 不再接触来源。`auto` 下，图形 frame 且有可用的字体度量与图片类型时产出基于切片的描述符；否则按顺序尝试转换器；全部拒绝时产出单色占位栅格。图片缺失或损坏最终落到占位而不是报错。完全相同的准备由缓存回答。
+**语义。** 调用会读取并解码所有需要的内容，返回一个 detached 值；此后布局与写 buffer 不再接触来源。`auto` 下，图形 frame 且有可用的字体度量与图片类型时产出基于切片的描述符；在支持的 24-bit 文本终端上接着尝试 Kitty Unicode placeholder 图形；否则按顺序尝试转换器；全部拒绝时产出单色占位栅格。图片缺失或损坏最终落到占位而不是报错。完全相同的准备由缓存回答。
 
 **返回。** 供图像节点、`ebox-image-info` 与 `ebox-image-content` 使用的不透明可复用值。
 
@@ -80,7 +80,7 @@
 
 **参数。** PREPARED 是 `ebox-image-prepare` 返回的值。
 
-**语义。** plist 的键为 `:adapter`（`graphics`、`text` 或 `placeholder`）、`:converter`（产出文本栅格的转换器名，没有则为 nil）、`:columns` 与 `:rows`。值是新构造的，调用方可以保存或修改。
+**语义。** plist 的键为 `:adapter`（`graphics`、`kitty`、`text` 或 `placeholder`）、`:converter`（产出文本栅格的转换器名，没有则为 nil）、`:columns` 与 `:rows`。值是新构造的，调用方可以保存或修改。
 
 **返回。** 该 plist。
 
@@ -98,90 +98,6 @@
 
 **参见。** `ebox-image-converters`。
 
-## Kitty 终端图形协议
-
-<!-- index: Kitty 图形; 终端图像; Unicode 占位符; 实时视频流 -->
-
-在支持 24 位真彩与 Kitty Unicode 占位符的终端（`Kitty` 0.28+、`Ghostty`、`Ghostel` 与 `iTerm2` 3.6+）中，Ebox 可通过 Kitty 虚拟放置（`U=1`）与 Unicode 占位单元格（`U+10EEEE` 加行列变音符）渲染静态图片并推送实时视频帧。
-
-#### Variable: ebox-image-kitty-protocol
-
-控制文本 frame 上 Kitty 终端图形协议的使用策略。
-
-**语义。** 默认为 `auto`，首次探测终端并在兼容的 24 位终端上启用 Unicode 占位符图形。设为 `t` 时对任何应答 Kitty 查询的 24 位文本终端启用；设为 `nil` 则禁用该协议，回退到 `ebox-image-converters` 或占位点阵。
-
-**返回。** 不适用；变量取值为 `auto`、`t` 或 `nil`。
-
-**参见。** `ebox-image-kitty-available-p`、`ebox-image-prepare`。
-
-#### Function: ebox-image-kitty-available-p (&optional frame)
-
-在 FRAME 支持 Kitty Unicode 占位符图形时返回能力 plist，否则返回 nil。
-
-**参数。** FRAME 为存活 frame，默认取 `(selected-frame)`。
-
-**语义。** 在批处理模式、图形 frame、`ebox-image-kitty-protocol` 为 nil 或终端不支持 24 位色与 Unicode 占位符时返回 nil；否则返回含 `:cell-width`、`:cell-height` 与 `:local` 的新 plist。
-
-**返回。** 能力 plist 或 nil。
-
-**参见。** `ebox-image-kitty-protocol`、`ebox-image-kitty-stream-create`。
-
-#### Function: ebox-image-kitty-stream-create (columns rows &optional frame)
-
-在 FRAME 上为 COLUMNS 列 × ROWS 行的区域创建 Kitty 虚拟放置流。
-
-**参数。** COLUMNS 与 ROWS 为不超过 Kitty 变音符表上限的正整数；FRAME 默认取 `(selected-frame)`。
-
-**语义。** 当 FRAME 支持 Kitty 图形时分配终端图像 ID 并构建可复用的 Unicode 占位栅格，返回不透明流句柄；不可用时返回 nil。
-
-**返回。** 流句柄或 nil。
-
-**错误。** 尺寸非正或超过变音符上限时报错。
-
-**参见。** `ebox-image-kitty-stream-grid`、`ebox-image-kitty-stream-present`、`ebox-image-kitty-stream-destroy`。
-
-#### Function: ebox-image-kitty-stream-grid (stream)
-
-返回 Kitty STREAM 对应的独立 Unicode 占位栅格字符串。
-
-**参数。** STREAM 是 `ebox-image-kitty-stream-create` 返回的句柄。
-
-**语义。** 返回 STREAM 占位栅格的新副本，供调用方一次性写入画布缓冲区，随后原地推送视频帧。
-
-**返回。** 带文本属性的字符串。
-
-**错误。** STREAM 非法时报错。
-
-**参见。** `ebox-image-kitty-stream-create`、`ebox-image-kitty-stream-present`。
-
-#### Function: ebox-image-kitty-stream-present (stream bytes width height &optional format)
-
-把一帧单字节像素 BYTES 就地推送到 Kitty STREAM，不修改缓冲区。
-
-**参数。** STREAM 为存活流句柄；BYTES 为单字节像素字符串（尺寸 WIDTH × HEIGHT）；FORMAT 为 `rgb24`（默认）、`rgba32` 或 `png`。
-
-**语义。** 本地终端经自动删除临时文件传输，远程连接经分块直传，终端直接刷新已显示的占位单元格内容。
-
-**返回。** 发送成功返回非 nil；STREAM 已销毁或终端关闭时返回 nil。
-
-**错误。** STREAM 非法、BYTES 非单字节、尺寸非正、FORMAT 不支持或字节长度不匹配时报错。
-
-**参见。** `ebox-image-kitty-stream-create`、`ebox-image-kitty-stream-destroy`。
-
-#### Function: ebox-image-kitty-stream-destroy (stream)
-
-销毁 Kitty STREAM 并释放终端上的图像数据。
-
-**参数。** STREAM 是 `ebox-image-kitty-stream-create` 返回的句柄。
-
-**语义。** 向终端发送一次静默删除指令并标记 STREAM 已销毁；重复调用安全无副作用。
-
-**返回。** nil。
-
-**错误。** STREAM 非法时报错。
-
-**参见。** `ebox-image-kitty-stream-create`。
-
 ## 一行一个字形
 
 <!-- index: 图像不变式; 一行一个字形; 图像节点 -->
@@ -189,6 +105,86 @@
 图形 adapter 的核心不变式是：图像的一行就是一个字形。准备栅格的每一行是单个字符，其 display 规范携带整条宽度的切片，redisplay 因此一步画出整行；若设计成每格一个切片，每次重绘与滚动的成本都会乘以列数。这一不变式解释了为什么图形图像的行数永远恰好是 ROWS、横向尺寸永远是 COLUMNS 乘单元格宽，以及为什么 `:inset` 用更短的切片加位移实现，而不是增加像素或行数。
 
 图像节点就按这些行布局：`ebox-node-create` 建立 `image` 节点、把 prepared 值放在 `:image` 属性下，得到的条目高度等于行数、宽度等于准备结果中最宽的行的像素宽。被拉伸的图像盒用背景填满多余的水平空间，栅格从不重排——改变容器尺寸不会重新准备图像。要就地更换图像，准备新值并调用 `ebox-node-set-image`；节点保留自己的位置，由 flush 重绘。
+
+## Kitty 终端图形
+
+<!-- index: Kitty 图形协议; Unicode placeholder; 终端图像; Kitty 帧流 -->
+
+在支持 Kitty 图形协议与 Unicode placeholder（`U=1`，如 Kitty 0.28+、Ghostty、Ghostel 与 iTerm2 3.6+）的 24-bit 文本终端上，Ebox 按进程隔离的 24-bit 图像 ID 上传一次图像，并生成一块 COLUMNS×ROWS 的 `U+10EEEE` 组合占位格，其 `:foreground` 编码该 ID。每个单元格都占一列文本并携带各自的行列与高位字节组合变音符，因此 Ebox 常规文本布局、增量行 diff、滚动、水平裁剪与模态遮罩无需光标坐标钩子即可工作；透明 PNG 或栅格化 SVG 会叠在所在盒子的 `:background` 之上，悬停与背景压暗也会保护前景 ID 不被覆写。本地 PNG 文件通过 `t=f` 零拷贝传输；SVG 与其它栅格格式在 `rsvg-convert`、`ffmpeg`、ImageMagick 或 macOS `sips` 可用时自动转为 PNG，不可用时回退到 `ebox-image-converters` 与占位格。
+
+#### Variable: ebox-image-kitty-protocol
+
+控制文本 frame 上是否启用 Kitty 终端图形协议。
+
+**语义。** 默认值 `auto` 对每个文本终端做一次单往返探测，并在支持 `U=1` 的 24-bit 终端（Kitty 0.28+、Ghostty、Ghostel 与 iTerm2 3.6+）上启用。设为 `t` 时，只要 24-bit 文本终端对 Kitty 查询返回 `OK` 即启用，不检查终端名称。设为 nil 时禁用协议，文本 frame 始终回退到 `ebox-image-converters` 或占位格。
+
+**参见。** `ebox-image-kitty-available-p`、`ebox-image-prepare`。
+
+#### Function: ebox-image-kitty-available-p (&optional frame)
+
+在 FRAME 支持 Kitty 终端图形时返回能力 plist，否则返回 nil。
+
+**参数。** FRAME 默认为当前选中的 frame。
+
+**语义。** 批处理会话、图形 frame、`ebox-image-kitty-protocol` 为 nil，或终端缺少 24-bit 色彩与 Kitty Unicode placeholder 支持时返回 nil。否则对终端做一次探测（按终端缓存结果），返回含 `:cell-width`、`:cell-height`（单格像素宽高）与 `:local`（本地文件传输是否可用）的新 plist。
+
+**返回。** 能力 plist 或 nil。
+
+**参见。** `ebox-image-kitty-protocol`、`ebox-image-kitty-stream-create`。
+
+#### Function: ebox-image-kitty-stream-create (columns rows &optional frame)
+
+在 FRAME 上创建一块 COLUMNS×ROWS 格子的 Kitty 虚拟放置帧流。
+
+**参数。** COLUMNS 与 ROWS 为不超过 Kitty 变音符上限（297）的正整数。FRAME 默认为当前选中的 frame。
+
+**语义。** 分配一个进程内唯一的图像 ID 并预生成静态 Unicode placeholder 栅格，使 `etaf-video` 等实时帧生产者只需往 buffer 写一次栅格，后续帧原地推送即可更新画面。
+
+**返回。** 不透明的帧流句柄；FRAME 不支持 Kitty 终端图形时返回 nil。
+
+**错误。** 尺寸非正或超过变音符上限时触发 `error`。
+
+**参见。** `ebox-image-kitty-stream-grid`、`ebox-image-kitty-stream-present`、`ebox-image-kitty-stream-destroy`。
+
+#### Function: ebox-image-kitty-stream-grid (stream)
+
+返回 Kitty STREAM 的 owned Unicode placeholder 栅格字符串。
+
+**参数。** STREAM 是 `ebox-image-kitty-stream-create` 返回的句柄。
+
+**返回。** COLUMNS×ROWS 占位格字符串的新拷贝。
+
+**错误。** 传入非 Kitty 帧流对象时触发 `error`。
+
+**参见。** `ebox-image-kitty-stream-create`、`ebox-image-kitty-stream-present`。
+
+#### Function: ebox-image-kitty-stream-present (stream bytes width height &optional format)
+
+把一帧 WIDTH×HEIGHT 的单字节串 BYTES 原地推送到 Kitty STREAM。
+
+**参数。** STREAM 是 Kitty 帧流句柄。BYTES 为单字节字符串。WIDTH 与 HEIGHT 为正整数。FORMAT 为 `rgb24`（默认）、`rgba32` 或 `png`。
+
+**语义。** 按 STREAM 的图像 ID 与虚拟放置（`U=1`、`q=2`）传输帧数据；本地终端走终端读完即删的临时文件（`t=t`），远程连接走 4096 字节分片 base64（`t=d`）。屏幕上已显示的占位格原地更新，不修改任何 Emacs buffer。
+
+**返回。** 传输成功返回 `t`，STREAM 已销毁或终端关闭时返回 nil。
+
+**错误。** 非法句柄、多字节数据、非正尺寸、不支持的格式或原始像素字节数不匹配时触发 `error`。
+
+**参见。** `ebox-image-kitty-stream-create`、`ebox-image-kitty-stream-destroy`。
+
+#### Function: ebox-image-kitty-stream-destroy (stream)
+
+销毁 Kitty STREAM 并释放终端侧的图像数据。
+
+**参数。** STREAM 是 Kitty 帧流句柄。
+
+**语义。** 若终端仍存活则发送静默删除指令（`a=d,d=I`）释放该图像 ID，并标记 STREAM 已销毁。重复调用安全无副作用。
+
+**返回。** nil。
+
+**错误。** 传入非 Kitty 帧流对象时触发 `error`。
+
+**参见。** `ebox-image-kitty-stream-create`。
 
 ## 错误与恢复
 
