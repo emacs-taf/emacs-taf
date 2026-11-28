@@ -20,7 +20,7 @@
 (call-interactively #'etaf-install)
 ```
 
-以后运行 `M-x etaf-install` 重开已安装的目标，不必再次下载。`M-x etaf-install-doctor` 只检查必需和可选能力，不访问网络，也不写配置。[工作区 README](https://github.com/emacs-taf/emacs-taf/blob/main/README.zh-CN.md#在已有-emacs-中安装) 列出可选目标及外部后端边界。包管理仍由 package.el 负责；通过 `M-x list-packages` 更新或卸载，更新已加载代码后重启 Emacs。
+以后运行 `M-x etaf-install` 重开已安装的目标，不必再次下载。`M-x etaf-install-doctor` 只检查必需和可选能力，不访问网络，也不写配置。[Monorepo README](https://github.com/emacs-taf/emacs-taf/blob/main/README.zh-CN.md#在已有-emacs-中安装) 列出可选目标及外部后端边界。包管理仍由 package.el 负责；通过 `M-x list-packages` 更新或卸载，更新已加载代码后重启 Emacs。
 
 安装入口会拒绝冲突的源码加载路径和已加载的源码依赖，不会静默覆盖它们。安装或包入口加载失败时，只移除本次新增的包，保留旧安装和无关包，报告任何清理失败，并要求重启后再试：删除包文件无法撤销进程中已经加载的 Lisp。源码检出用于开发时应放在独立配置中，不要混用同一依赖的两种安装方式。
 

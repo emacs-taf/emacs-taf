@@ -20,7 +20,7 @@ Evaluate the following once, then select the component gallery or another suppor
 (call-interactively #'etaf-install)
 ```
 
-Thereafter, `M-x etaf-install` reopens installed targets without downloading again. `M-x etaf-install-doctor` checks required and optional capabilities without accessing the network or writing configuration. The [workspace README](https://github.com/emacs-taf/emacs-taf#install-in-an-existing-emacs) lists the available targets and the boundary around external backends. Package.el remains the package manager; use `M-x list-packages` for updates and removal, and restart Emacs after updating loaded code.
+Thereafter, `M-x etaf-install` reopens installed targets without downloading again. `M-x etaf-install-doctor` checks required and optional capabilities without accessing the network or writing configuration. The [monorepo README](https://github.com/emacs-taf/emacs-taf#install-in-an-existing-emacs) lists the available targets and the boundary around external backends. Package.el remains the package manager; use `M-x list-packages` for updates and removal, and restart Emacs after updating loaded code.
 
 The installer rejects conflicting source load paths and already loaded source dependencies rather than silently replacing them. On an installation or entry-loading failure, it removes only packages added by that attempt, keeps older installations and unrelated packages, reports any cleanup failure, and requires a restart before retrying: deleting package files cannot undo Lisp already loaded into the process. Keep source checkouts for development in a separate profile instead of mixing both installations of the same dependency.
 

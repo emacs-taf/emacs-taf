@@ -1,14 +1,14 @@
-# 工作区开发工具
+# Monorepo 开发工具
 
 [English](manual.md)
 
-工作区维护共用的开发命令：`scripts/elisp.py` 跨各仓库查找和运行 Lisp，
+本 Monorepo 维护共用的开发命令：`scripts/elisp.py` 跨 `packages/` 查找和运行 Lisp，
 `scripts/performance.py` 是唯一的测量驱动。各包在 `benchmarks/performance-scenarios.el` 注册长期维护的
 场景，提供应用初始化、操作和验证条件；计时、profiler、超时和基线比较由通用工具负责。
 
 ## 查找和运行 Lisp
 
-`scripts/elisp.py` 读取工作区各仓库下的全部 `.el` 文件，跳过 `.jj`、`.worktrees`
+`scripts/elisp.py` 读取本 Monorepo 各包下的全部 `.el` 文件，跳过 `.jj`、`.worktrees`
 等隐藏目录。查一个定义只需一条命令，不必先搜索再猜行号范围；批量运行也不必手写
 `load-path`。
 

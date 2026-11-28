@@ -523,7 +523,10 @@ def install_selection_errors(root):
 
 
 README_PKG_LINK = re.compile(r'\|\s*\[([a-z][a-z0-9-]*)\]\(https://github\.com/emacs-taf/[a-z][a-z0-9-]*(?:\.git)?/?\)')
-OUTSIDE_HEADING = re.compile(r'^## (?:Outside this checkout|不在本检出中的仓库)\s*$', re.M)
+OUTSIDE_HEADING = re.compile(
+    r'^## (?:Outside this (?:checkout|monorepo)|不在本检出中的仓库|独立仓库（不在本 Monorepo 中）)\s*$',
+    re.M | re.I,
+)
 NEXT_H2_HEADING = re.compile(r'^## \S', re.M)
 
 

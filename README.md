@@ -1,44 +1,23 @@
-# Emacs TAF workspace
+# Emacs TAF Monorepo
 
 [中文](README.zh-CN.md)
 
-This repository owns the shared development policy and orchestration for the
-Emacs TAF ecosystem: its framework packages, applications and games. Every
-package is a directory under `packages/` in one Jujutsu checkout, registered in
-`workspace.json`; each still publishes as its own repository with its own
-version, public interfaces, releases and behavior checks.
+[![Repository structure](https://github.com/emacs-taf/emacs-taf/actions/workflows/structure.yml/badge.svg)](https://github.com/emacs-taf/emacs-taf/actions/workflows/structure.yml)
+[![Package installation](https://github.com/emacs-taf/emacs-taf/actions/workflows/package-installation.yml/badge.svg)](https://github.com/emacs-taf/emacs-taf/actions/workflows/package-installation.yml)
 
-## Development
+[Website & Manual](https://etaf.top) · [Package Archive](https://etaf.top/packages/) · [Native Modules](https://etaf.top/native/) · [Media Library](https://etaf.top/media/) · [License](LICENSE)
 
-This repository (`https://github.com/emacs-taf/emacs-taf`) is the public monorepo
-and canonical entry point for development and pull requests across the ETAF
-ecosystem. Every registered package lives under `packages/`, so a single change
-and PR can span a provider and the applications that consume it.
+**Emacs TAF (ETAF)** is a declarative text application framework for Emacs with CSS-style selectors and cascade, box/flex/grid layout, reactive components and incremental buffer rendering.
 
-The individual repositories under `https://github.com/emacs-taf/<package>` are
-**read-only projections** published from this monorepo so each package keeps an
-ordinary single-repository history for package managers (`straight.el`, `elpaca`)
-and single-package browsing. Contributors—especially `jj` / `jjosh` users—should
-clone this monorepo directly rather than pulling multiple projected package
-repositories into one Jujutsu checkout (which share `change-id`s across
-projections and produce divergent commits).
+This repository (`https://github.com/emacs-taf/emacs-taf`) is the **official Emacs TAF monorepo** and canonical home for development, issues and pull requests across the ecosystem. All 33 framework packages, extensions, applications, games, the official installer and the reference manual live under `packages/` in one checkout, while individual `https://github.com/emacs-taf/<package>` repositories are published as read-only single-package projections.
 
-```sh
-make check                # the whole checkout in dependency order, before a release
-make plan-affected        # preview which units the current change reaches
-make check-affected       # compile/test only affected units (supports JOBS=4)
-make order                # show parallelizable dependency layers
-make -C packages/etaf-ui check
-```
+![ETAF applications in Emacs](https://etaf.top/media/site/shots/etaf-ncm.webp)
 
-This repository and the projected package repositories each carry a `pre-mono`
-tag naming the history they had before the checkout was unified; a clone older
-than that has to be replaced rather than pulled.
+*ETAF applications running inside native Emacs buffers — see more captures on [etaf.top](https://etaf.top) and the [media library](https://etaf.top/media/).*
 
 ## Install in an existing Emacs
 
-Use Emacs 29.1 or newer. Evaluate this once, then choose a target (the component
-gallery is the default):
+Requires **Emacs 29.1 or newer**. No Git, Python, C compiler or replacement Emacs configuration is needed. Evaluate once, then choose a target (the `etaf-ui` component gallery is the default):
 
 ```elisp
 ;;; -*- lexical-binding: t; -*-
@@ -50,42 +29,39 @@ gallery is the default):
 (call-interactively #'etaf-install)
 ```
 
-Afterward, use `M-x etaf-install`; installed targets reopen offline. When installing or updating a target, `etaf-install` automatically downloads, verifies (SHA-256) and activates any prebuilt native dynamic modules declared by that target or its ETAF dependencies (such as `etaf-md`'s QuickJS Mermaid/MathJax renderer, `etaf`'s `libmpv` bridge or `ekp`'s C line-breaking engine) directly into `~/.cache/emacs-taf/native/` without a compiler or a second command (set `etaf-install-auto-native` to nil to opt out, or run `M-x etaf-install-native` / press `n` in `M-x etaf-install-manage` to retry or force-refresh). Use `M-x etaf-install-manage` to see installed and available versions, runtime readiness, manual `System CLI` prerequisites (only external OS tools you install yourself—excluding auto-downloaded native modules, bundled package backends and managed game engines), Lisp dependencies, native module actions (`n`) and doctor reports (`?`); one window holds the table and the echo area names the keys (`i` install, `n` native, `u` update, `U` update all, `d` remove, `RET` open, `?` doctor, `g` refresh, `l` list-packages, `q` quit). When a target misses a required OS CLI tool during interactive `M-x etaf-install`, `*ETAF Installation*` opens automatically with a combined copyable command for your package manager (`c` copy, `r` re-check, `o` open). `M-x list-packages` remains the advanced package menu. Package.el owns dependency installation, local byte compilation, updates and removal. No Git, Python, system compiler, Pi or replacement Emacs configuration is required.
+Key entry points and guarantees:
 
-The installer groups its targets: framework (`etaf-install`, the `etaf-ui` gallery, `etaf`, `ebox`, `ecss`, `ekp`, `etaf-db`, `etaf-gamekit`, `etaf-posframe`, `etaf-ext`), extensions (`etaf-hints`, `etaf-highlight`, `etaf-translate`, `etaf-export`), applications (`etaf-manual`, `etaf-md`, `etaf-org`, `etaf-video-player`, `etaf-desktop`, `etaf-telega`, `etaf-weread`, `etaf-ncm`, `etaf-bili`, `etaf-youtube`, `etaf-pomodoro`, `maillist`) and games (`etaf-xiangqi`, `etaf-tanks`). Each entry reports what is missing before opening. SQLite needs an Emacs build with SQLite support; `M-x etaf-install-doctor` reports required and optional capabilities without installing anything. External service accounts and media programs are detected, not installed; an application's own backend ships in its package.  For Telega the installer installs the Emacs `telega` package but not the native `telega-server`: install TDLib, run `M-x telega-server-build` (or follow the Telega installation guide), and put `telega-server` on `exec-path`.  The install message, `M-x etaf-install-doctor` and the `?` key in
-`M-x etaf-install-manage` print this remedy.
+- **`M-x etaf-install`**: Install any supported framework package, extension, application or game from `https://etaf.top/packages/`; already-installed targets reopen offline.
+- **`M-x etaf-install-manage`**: Native tabulated-list manager for installed/available versions, runtime readiness, manual `System CLI` prerequisites and Lisp dependencies (`i` install, `n` native modules, `u` update, `U` update all, `d` remove, `RET` open, `?` doctor, `g` refresh, `l` list-packages, `q` quit).
+- **Automatic prebuilt native modules**: Installing or updating a target automatically downloads, SHA-256 verifies and activates declared prebuilt dynamic modules (such as `etaf-md`'s QuickJS Mermaid/MathJax renderer, `etaf`'s `libmpv` bridge and `ekp`'s C line-breaking engine) into `~/.cache/emacs-taf/native/`. Set `etaf-install-auto-native` to `nil` to opt out, or use `M-x etaf-install-native` (`n` in the manager).
+- **Capability diagnostics (`M-x etaf-install-doctor`)**: Reports required and optional capabilities offline without writing config. Missing required external OS CLIs open `*ETAF Installation*` with one combined copyable command for your package manager (`c` copy, `r` re-check, `o` open). External service accounts and OS binaries are detected, never auto-installed (for `etaf-telega`, install TDLib and run `M-x telega-server-build` so `telega-server` is on `exec-path`).
+- **Standard `package.el` lifecycle**: `package.el` owns dependency resolution, local byte compilation, upgrades and removal (`M-x list-packages` remains available). Removal preserves application data, logins and caches; failed installs roll back only newly added packages; restart Emacs after upgrading loaded Lisp, and do not mix source checkouts with installed packages of the same dependency.
 
-Use `M-x etaf-install-manage` for the supported targets and `M-x list-packages`
-for advanced or third-party packages; restart Emacs after updates. Removal keeps
-application data, logins and caches; shared dependencies stay installed.
-A failed installation removes only its newly added packages, reports cleanup
-failures and preserves previous installations; restart before retrying because
-partially loaded Lisp cannot be rolled back. Do not mix source checkouts and
-package installations of the same dependency. See the
-[installation reference](https://etaf.top/introduction/#installation).
-The checkout instructions below are for development.
+See the full [installation reference](https://etaf.top/introduction/#installation) for details.
 
-## Repositories
+## Packages in this Monorepo
 
-Framework packages and workspace tooling developed in this checkout:
+Every package below lives in `packages/<name>` and is registered in [workspace.json](workspace.json).
 
-| Repository | Responsibility | Dependencies in this workspace |
+### Framework
+
+| Package | Responsibility | Monorepo dependencies |
 | --- | --- | --- |
 | [ecss](https://github.com/emacs-taf/ecss) | Selector and cascade semantics | None |
 | [ekp](https://github.com/emacs-taf/ekp) | Knuth–Plass paragraph layout | None |
 | [ebox](https://github.com/emacs-taf/ebox) | Box layout, rendering and incremental publication | ecss; optional ekp |
 | [etaf](https://github.com/emacs-taf/etaf) | Components, state and application runtime | ebox |
-| [etaf-ui](https://github.com/emacs-taf/etaf-ui) | Reusable UI components | etaf |
+| [etaf-ui](https://github.com/emacs-taf/etaf-ui) | Reusable UI components and theme tokens | etaf |
 | [etaf-gamekit](https://github.com/emacs-taf/etaf-gamekit) | Game definitions, independent instances, actions and backend adapters | etaf |
 | [etaf-posframe](https://github.com/emacs-taf/etaf-posframe) | Floating child-frame panels for any ETAF View | etaf |
 | [etaf-ext](https://github.com/emacs-taf/etaf-ext) | Universal extension engine, lifecycle manager and host hooks for ETAF apps | etaf, etaf-ui, etaf-posframe |
 | [etaf-db](https://github.com/emacs-taf/etaf-db) | Database backends for ETAF; currently SQLite | etaf |
 | [etaf-install](https://github.com/emacs-taf/emacs-taf) | Official `package.el` installer, capability doctor, native module downloader and package manager (`packages/etaf-install`) | None |
-| [etaf-manual](https://github.com/emacs-taf/etaf-manual) | The ETAF Reference Manual for the core packages, in English and Chinese, checked against their public interfaces; published at <https://etaf.top> | etaf, etaf-ui; its gate reads ecss, ekp, ebox and etaf-db |
+| [etaf-manual](https://github.com/emacs-taf/etaf-manual) | Bilingual ETAF Reference Manual for the core packages, checked against public interfaces and published at <https://etaf.top> | etaf, etaf-ui; gate also reads ecss, ekp, ebox, etaf-db |
 
 ### Extensions
 
-Extensions build on [etaf-ext](https://github.com/emacs-taf/etaf-ext) and attach cross-cutting capabilities to any ETAF buffer or application:
+Built on [etaf-ext](https://github.com/emacs-taf/etaf-ext) to attach cross-cutting capabilities to any ETAF buffer or application:
 
 | Extension | Responsibility | Framework dependencies |
 | --- | --- | --- |
@@ -94,168 +70,112 @@ Extensions build on [etaf-ext](https://github.com/emacs-taf/etaf-ext) and attach
 | [etaf-translate](https://github.com/emacs-taf/etaf-translate) | Immersive inline and side-by-side translation for ETAF views | etaf-ext, etaf, etaf-ui, etaf-db, ebox |
 | [etaf-export](https://github.com/emacs-taf/etaf-export) | Vector SVG and PDF export for ETAF rendered pages | etaf-ext, etaf, etaf-ui, ebox |
 
-[etaf-gamekit](https://github.com/emacs-taf/etaf-gamekit) provides game
-definitions and a common action/observation lifecycle over Godot, boardgame.io
-and OpenSpiel. Game applications own their rules and presentation and live
-beside the framework packages, outside the framework core; the core does not
-depend on their components.
-Install the backend needed by your game, or use
-`make -C packages/etaf-gamekit engine-all GAMEKIT_PYTHON=python3.11` before running the
-complete `make -C packages/etaf-gamekit check`. Its README and manual describe standalone
-game projects and adapter integration.
-
-## Applications
-
-Applications and games are two kinds of programs built on the framework; each lives
-under `packages/` in this checkout and publishes as its own independent repository.
-
 ### Applications
-
-Every application is a package directory under `packages/` registered in `workspace.json`; the
-table names the framework packages each one uses:
 
 | Application | Responsibility | Framework dependencies |
 | --- | --- | --- |
 | [etaf-desktop](https://github.com/emacs-taf/etaf-desktop) | Desktop window-management application built from ETAF and ETAF UI | etaf, etaf-ui, ebox |
 | [etaf-ncm](https://github.com/emacs-taf/etaf-ncm) | NetEase Cloud Music player: library browsing, playback control, lyrics and queue | etaf, etaf-ui, ebox |
 | [etaf-weread](https://github.com/emacs-taf/etaf-weread) | WeChat Reading client: shelf, notebook, highlights, store search and statistics | etaf, etaf-ui, etaf-db, ebox |
-| [etaf-md](https://github.com/emacs-taf/etaf-md) | Native Markdown renderer and live previewer: centered measure, full-grid tables, 35+ extended `:::` containers, zero-browser QuickJS Mermaid/MathJax SVGs, interactive widgets and lockstep split preview | etaf, etaf-ui, ebox |
-| [etaf-org](https://github.com/emacs-taf/etaf-org) | Org reading view and living documents: native Org syntax, extensible node engine, editorial and live workspace widgets, Mermaid/KaTeX diagrams, outline side window and O(Δ) live split preview | etaf, etaf-ui, ebox |
-| [etaf-rss](https://github.com/emacs-taf/etaf-rss) | RSS reader: subscriptions, folders, unread and starred scopes, reading pane, search and OPML, over a local JSON store or a Miniflux server | etaf, etaf-ui, ebox |
-| [maillist](https://github.com/emacs-taf/maillist) | Mailing-list client: public-inbox thread list with unread and starred scopes, a fixed-header reader, local read/star state and replies through smtpmail | etaf, etaf-ui, etaf-db, ebox |
+| [etaf-md](https://github.com/emacs-taf/etaf-md) | Native Markdown renderer and live previewer: centered measure, full-grid tables, 35+ `:::` containers, zero-browser QuickJS Mermaid/MathJax SVGs and lockstep split preview | etaf, etaf-ui, ebox |
+| [etaf-org](https://github.com/emacs-taf/etaf-org) | Org reading view and living documents: native Org syntax, extensible node engine, live widgets, Mermaid/KaTeX diagrams, outline side window and O(Δ) live split preview | etaf, etaf-ui, ebox |
+| [etaf-rss](https://github.com/emacs-taf/etaf-rss) | RSS reader: subscriptions, folders, unread/starred scopes, reading pane, search and OPML (local JSON or Miniflux) | etaf, etaf-ui, ebox |
+| [maillist](https://github.com/emacs-taf/maillist) | Mailing-list client: public-inbox thread list, unread/star marks, fixed-header reader and smtpmail replies | etaf, etaf-ui, etaf-db, ebox |
 | [etaf-reader](https://github.com/emacs-taf/etaf-reader) | Local ebook reader: EPUB/TXT/Markdown/HTML/FB2/PDF import, paged reading, annotations and progress | etaf, etaf-ui, etaf-db, ebox |
-| [etaf-pomodoro](https://github.com/emacs-taf/etaf-pomodoro) | Focus timer as an application and as a floating panel: reactive countdown, three styles and a host-following palette | etaf, etaf-ui, ebox |
+| [etaf-pomodoro](https://github.com/emacs-taf/etaf-pomodoro) | Focus timer as an application or floating panel: reactive countdown, three styles and host-following palette | etaf, etaf-ui, ebox |
 | [etaf-telega](https://github.com/emacs-taf/etaf-telega) | Telegram client on Telega's TDLib backend: chats, live message stream, composer and message actions | etaf, etaf-ui, ebox |
 | [etaf-video-player](https://github.com/emacs-taf/etaf-video-player) | Local video and streams as image frames, density characters or true-color half blocks, with sound | etaf, etaf-ui, ebox |
 | [etaf-bili](https://github.com/emacs-taf/etaf-bili) | Bilibili client: popular feed, ranking and search with in-buffer playback | etaf, etaf-ui, ebox |
 | [etaf-youtube](https://github.com/emacs-taf/etaf-youtube) | YouTube client: account feeds, search, channels, playlists and in-canvas video playback | etaf, etaf-ui, etaf-db, ebox |
-| [etaf-screensaver](https://github.com/emacs-taf/etaf-screensaver) | Idle screensavers: canvas-only animation, input dismissal, grouped playback and adapted recorded animations | etaf, ebox |
-| [etaf-web](https://github.com/emacs-taf/etaf-web) | Web article reader: compiles HTML to `etaf-md` intermediate language with local caching and opens it in an `etaf-md` reading buffer | etaf-md, etaf, etaf-ui, ebox |
-| [etaf-agenda](https://github.com/emacs-taf/etaf-agenda) | Personal agenda: daily log, year/month/week calendar, grouped task list, project stages, habit tracker and monthly review on SQLite | etaf, etaf-ui, etaf-db, ebox |
+| [etaf-screensaver](https://github.com/emacs-taf/etaf-screensaver) | Idle screensavers: canvas-only animation, input dismissal, grouped playback and recorded animations | etaf, ebox |
+| [etaf-web](https://github.com/emacs-taf/etaf-web) | Web article reader: compiles HTML to `etaf-md` intermediate language with local caching | etaf-md, etaf, etaf-ui, ebox |
+| [etaf-agenda](https://github.com/emacs-taf/etaf-agenda) | Personal agenda: daily log, year/month/week calendar, tasks, projects, habits and monthly review on SQLite | etaf, etaf-ui, etaf-db, ebox |
 
-`etaf-agenda`, `etaf-reader`, `etaf-rss`, `etaf-screensaver` and `etaf-web` live and pass their checks in this checkout but are not in the package archive yet; `M-x etaf-install` does not list them.
+> **Archive status:** `etaf-agenda`, `etaf-reader`, `etaf-rss`, `etaf-screensaver` and `etaf-web` pass their checks in this monorepo but are not published to the ELPA archive yet (`M-x etaf-install` does not list them).
 
 ### Games
 
-Game applications live under `packages/` too. Both build on
-[etaf-gamekit](https://github.com/emacs-taf/etaf-gamekit) for game definitions,
-independent instances, actions and backend adapters, and keep their rules,
-presentation and resources in their own package directories.
+Both games build on [etaf-gamekit](https://github.com/emacs-taf/etaf-gamekit) and keep their rules, presentation and assets in their own package directories:
 
 | Game | Description | Backend |
 | --- | --- | --- |
 | [etaf-tanks](https://github.com/emacs-taf/etaf-tanks) | Iron Tide: real-time tank battle with a native arena | Godot |
 | [etaf-xiangqi](https://github.com/emacs-taf/etaf-xiangqi) | Chu He: xiangqi (Chinese chess) against the computer or hot-seat | OpenSpiel |
 
-## Outside this checkout
+For gamekit development tests, install the required engine backend or run `make -C packages/etaf-gamekit engine-all GAMEKIT_PYTHON=python3.11` before `make -C packages/etaf-gamekit check`.
 
-These repositories build on the framework but are not part of this checkout. They keep their own history and checks and consume the framework through its published packages. One can join later with `python3 scripts/add-package.py`.
+## Outside this Monorepo
+
+These companion repositories build on the ETAF framework through published packages and maintain their own independent histories. Any of them can join the monorepo later via `python3 scripts/add-package.py`.
 
 | Repository | Responsibility |
 | --- | --- |
 | [ebox-playground](https://github.com/emacs-taf/ebox-playground) | Runnable Ebox layout examples |
 | [etaf-playground](https://github.com/emacs-taf/etaf-playground) | ETAF/UI integration examples and acceptance surfaces |
 | [etaf-pi](https://github.com/emacs-taf/etaf-pi) | Native Pi agent client: streamed conversations, tool output, session recovery and multiline input |
-| [etaf-video-studio](https://github.com/emacs-taf/etaf-video-studio) | Record, edit and publish software tutorials through the video-project skill: recording, non-destructive edits, background previews/exports and a two-step publish flow |
-| [etaf-browser](https://github.com/emacs-taf/etaf-browser) | Browser client with an address and status shell in the ETAF canvas |
+| [etaf-video-studio](https://github.com/emacs-taf/etaf-video-studio) | Record, edit and publish software tutorials with non-destructive timelines and background export |
+| [etaf-browser](https://github.com/emacs-taf/etaf-browser) | Browser client with an address and status shell rendered on the ETAF canvas |
 | [etaf-algo-lab](https://github.com/emacs-taf/etaf-algo-lab) | Learn algorithms by watching, steering and comparing them inside Emacs |
-| [etaf-slides](https://github.com/emacs-taf/etaf-slides) | Present a markdown deck as slides: an aspect-preserving 16:9 stage, speaker notes, a slide overview and a presentation clock |
+| [etaf-slides](https://github.com/emacs-taf/etaf-slides) | Present a Markdown deck as aspect-preserving 16:9 slides with speaker notes, overview and timer |
 | [etaf-solitaire](https://github.com/emacs-taf/etaf-solitaire) | Verdant: K+ Klondike solitaire with undo and redo |
 | [etaf-salvage](https://github.com/emacs-taf/etaf-salvage) | Salvage Station: real-time exploration and extraction |
 | [etaf-mario](https://github.com/emacs-taf/etaf-mario) | Super Mario: four-stage text platformer built from character sprites, with items and enemies |
 
-## Setup
+## Monorepo Layout & Read-Only Projections
 
-All packages listed in `workspace.json` live under `packages/` in this single
-monorepo checkout; do not clone separate sibling repositories or nest `.git`/`.jj`
-directories inside `packages/`. Package READMEs specify optional runtime
-requirements; native builds are explicit package targets.
-
-External contributors can clone and open pull requests with ordinary Git (`git clone https://github.com/emacs-taf/emacs-taf.git`) and Python 3.10+. Maintainers use `jjosh` for change-graph operations and per-package projection publishing. Package
-checks also require an appropriate Emacs executable (`make check EMACS=/path/to/emacs`).
-Run `make setup-hooks` to configure hooks in a Git checkout or print the equivalent
-manual gates for a `jjosh` checkout.
-
-Protect pushed history in this checkout:
-
-```sh
-jjosh config set --repo 'revset-aliases."immutable_heads()"' \
-  'builtin_immutable_heads() | remote_bookmarks()'
+```text
+emacs-taf/
+├── packages/                 # All 33 monorepo packages (each with <pkg>.el, lisp/, tests/, Makefile)
+├── scripts/                  # Shared build, structure/API checks, refscope, release and media publishing tools
+├── docs/                     # Monorepo tool manual, ecosystem architecture and keyboard navigation contracts
+├── tests/tools/              # Unit and regression tests for shared monorepo tooling and installer flows
+├── workspace.json            # Package registry and roles
+├── release-dependencies.json # Official ELPA archive package selection and runtime resources
+└── Makefile                  # Dependency-ordered monorepo orchestration targets
 ```
 
-## Workspace commands
+- **Single source of truth for PRs**: Changes spanning a framework provider and its consuming applications land together in one atomic commit and PR.
+- **Read-only per-package projections**: Individual repositories under `https://github.com/emacs-taf/<package>` are read-only projections generated from `packages/<package>` so package managers (`straight.el`, `elpaca`) and readers keep an ordinary single-package repository view.
+- **Note for `jj` / `jjosh` users**: Clone this monorepo directly rather than pulling multiple projected package repositories into one Jujutsu checkout (shared `change-id`s across projections produce divergent commits). Both this monorepo and every projected repository carry a `pre-mono` tag marking the pre-monorepo history; clones older than `pre-mono` must be re-cloned rather than pulled.
 
-Read the [accepted ecosystem architecture and development contract](docs/architecture.zh-CN.md)
-before cross-package work. It records package ownership, shared style and interaction
-semantics, ETAF Component/API usability, asynchronous resources and error recovery,
-implementation gaps, migration order and observable acceptance criteria.
-Its target behavior is explicitly distinguished from the current implementation.
+## Development & Contributing
 
-- `make structure-check`: validate the root, every package under `packages/`, `workspace.json` registry alignment and cross-package public API boundaries.
-- `make check`: run structure/API gates, compile in dependency order, run policy regression tests and run public package acceptance checks.
-- `make plan-affected` / `make check-affected [JOBS=4]`: compute symbol-level impact for the current change (`@`) via `scripts/refscope.py` and re-check only affected units in dependency order (optionally parallel per layer).
-- `make order`: print the parallelizable dependency layers of all packages.
-- `make perf-list`: list registered performance scenarios.
-- `make perf-check PERF_ARGS='--mode gui --scenario gallery.selection.mouse --diagnose'`:
-  measure the existing native Emacs, then collect separate phase, CPU and memory
-  diagnostics. `--baseline /path/result.json` compares a previous run. See the
-  [performance workflow and scenario interface](docs/manual.md).
-- `make verify-baseline`: save a batch correctness/performance baseline with logs and raw samples.
-- `make verify BASELINE=/path/result.json`: run the same batch checks and compare p95/max
-  with the baseline through `scripts/performance.py`; increases over 2 ms fail independently
-  of each registered scenario's absolute budget. The wrapper compiles the workspace, measures
-  the registered Playground workloads, and runs `make check` even after a performance failure.
-  One set of 5 warmups and 30 samples is a screen, reported as `screened`.
-  `make verify-repeatability BASELINE=/path/result.json` compares three independent sets
-  against a three-set baseline recorded with `scripts/verify.py --record-baseline --repeatability`.
-  Ordinary `make verify` adopts the baseline's sample grouping.
-  Each run prints a compact summary and an evidence directory outside Git. Actual GUI
-  rendering/input and installation checks remain separate acceptance requirements.
-- `make compile`, `make test`, `make clean`: delegate to package-owned entry points in dependency order.
-- `python3 scripts/add-package.py`: register a new package under `packages/` and `workspace.json`.
-- `python3 scripts/publish-packages.py [--dry-run] [--package NAME]`: project and push packages from the shared tree to their independent remotes.
+External contributors need only standard **Git**, **Python 3.10+** and **Emacs 29.1+**:
 
-Packages expose one root entry with the supported API in its Commentary.
-Checkout users add repository roots to `load-path`; multi-file implementations
-live in `lisp/`. Small single-file packages may keep implementation in the entry. Tests, examples, benchmarks, tools and native sources live in
-`tests/`, `examples/`, `benchmarks/`, `scripts/` and `native/` respectively.
-Organize by responsibility: correctness tests and their helpers go in `tests/`,
-including development-tool tests in `tests/tools/` and data in `tests/fixtures/`.
-`tests/acceptance.json` inventories every maintained Lisp test. Tests exercise only
-public package APIs. Dedicated measurement harnesses
-and workloads belong in `benchmarks/`; general runners and release tools belong in
-`scripts/`. Language and file extension do not determine these boundaries.
-Create directories only when needed; native subprojects retain ecosystem conventions.
+```sh
+git clone https://github.com/emacs-taf/emacs-taf.git
+cd emacs-taf
+make setup-hooks              # configure local Git pre-commit / commit-msg hooks
+```
+
+Common commands:
+
+| Command | Purpose |
+| --- | --- |
+| `make structure-check` | Validate repository layout, `workspace.json` alignment, media policy and cross-package public API boundaries |
+| `make -C packages/<pkg> check` | Run structure check, byte compilation, public acceptance tests and API check for one package |
+| `make plan-affected` | Preview which packages are affected by the current change (via `scripts/refscope.py`) |
+| `make check-affected JOBS=4` | Compile and test only affected units in dependency order |
+| `make order` | Print parallelizable dependency layers across all packages |
+| `make check` | Full monorepo validation in dependency order (used before releases) |
+| `make perf-list` / `make perf-check` | List or run registered performance scenarios (see [docs/manual.md](docs/manual.md)) |
+| `python3 scripts/media-publish.py publish --item <pkg>:/path/shot.png` | Compress and upload showcase screenshots/videos to `https://etaf.top/media/` (never commit showcase media to Git) |
+
+Contribution conventions:
+
+- Keep each package's root entry (`<pkg>.el`) Commentary as the authoritative public API list; consumers never require another package's internal `lisp/` modules.
+- Format commits using [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) (title ≤ 72 chars plus a `Validation:` line) and verify with `python3 scripts/check-commit-message.py <msg-file>`.
+- Do not commit showcase images or videos to Git (only compact ≤ 100 KB offline test inputs belong in `tests/fixtures/`); host showcase assets on `https://etaf.top/media/`.
+- Maintainer workflows (`jjosh` change-graph commands, per-package projection via `scripts/publish-packages.py`, archive releases and performance verification) are documented in [docs/manual.md](docs/manual.md).
 
 ## Documentation
 
-Keep a short README. The root entry Commentary owns the supported API inventory,
-calling signatures and usage notes. Put integration workflows and examples in
-`docs/manual.md`, current internal ownership in `docs/architecture.md`, and notable
-version changes in `CHANGELOG.md`. The latter three are created only when needed.
-The workspace architecture document also owns accepted cross-package target behavior
-and migration boundaries. The dedicated [keyboard navigation contract](docs/keyboard-navigation.zh-CN.md)
-owns regions, editing states and key binding rules; other documents link to it.
-Maintain these contracts in place instead of adding separate plans.
-Translations consistently use `.zh-CN.md`. Do not duplicate the same contract in
-several files; callers link to the provider's manual. Preserve legal notices.
+- **ETAF Reference Manual**: <https://etaf.top> ([English](https://etaf.top/introduction/) · [简体中文](https://etaf.top/zh-cn/introduction/))
+- **Monorepo Tooling & Release Manual**: [docs/manual.md](docs/manual.md) · [docs/manual.zh-CN.md](docs/manual.zh-CN.md)
+- **Ecosystem Architecture & Development Contract**: [docs/architecture.zh-CN.md](docs/architecture.zh-CN.md)
+- **Keyboard Navigation Contract**: [docs/keyboard-navigation.zh-CN.md](docs/keyboard-navigation.zh-CN.md)
+- **Changelog**: [CHANGELOG.md](CHANGELOG.md)
 
-This is a project convention informed by [Diátaxis](https://diataxis.fr/),
-[README guidance](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-readmes)
-and [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), not a universal filename standard.
+## License
 
-## Version control workflow
-
-Separate concurrent development from serialized delivery so multiple packages can evolve in `default@` while local Emacs tests the latest code directly. During development, validate only the edited package (`make -C packages/<pkg> check`, plus `make check-affected JOBS=4` when editing a shared provider). When committing a finished package or batch, run one `make check-affected JOBS=4` + `make structure-check` pass, verify each [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) message (72-character title limit plus a `Validation:` line) with `python3 scripts/check-commit-message.py <file>`, and seal path-scoped commits in place from `@` with `jjosh` (never mix plain `jj` on a `jjosh` checkout) so unfinished work in other packages stays undisturbed in `@`.
-
-Push and release are explicit batch steps rather than per-task actions. Push the checkout root (`main`) once to the public `origin` remote (`github.com/emacs-taf/emacs-taf`) and the private `aliyun` backup mirror after a batch of sealed commits, run `jjosh git export` before building archives, and project only changed packages to their read-only per-package remotes (`origin` at `github.com/emacs-taf` plus maintainer mirrors) via `python3 scripts/publish-packages.py --package <name>...` (or let a single batch archive release publish all drifted packages together). Keep `default@` aligned to `main` (`jjosh new main` or `jjosh rebase -s @ -d main`) whenever `main` advances. Do not force-push or implicitly publish other branches or tags.
-
-## Enforcement
-
-The pre-commit hook checks the exact Git index; jj commits bypass it, so run the
-same check before pushing. The checked-in CI workflow runs the
-same structure check on pushes and pull requests. Local hooks can be bypassed;
-remote administrators must enable Actions and make the structure job a required
-merge check. Remote permissions and branch protection are managed on each hosting service.
-The checker catches mechanical drift; interface design and documentation accuracy
-still require behavioral tests and review.
+Licensed under the GNU General Public License v3.0 or later. See [LICENSE](LICENSE) for details.

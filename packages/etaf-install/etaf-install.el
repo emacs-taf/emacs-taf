@@ -115,7 +115,7 @@
 ;; Optional HTTPS base URL or existing local directory overriding the download
 ;; URLs in `native/manifest.json' (for mirrors, offline installs or tests).
 ;;
-;; Setup once using the installation block in the workspace README, then use
+;; Setup once using the installation block in the monorepo README, then use
 ;; M-x etaf-install.  Credentials and external application backends are outside
 ;; this installer's scope.  It offers only targets with a verified Lisp install.
 

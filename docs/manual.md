@@ -1,9 +1,9 @@
-# Workspace development tools
+# Monorepo development tools
 
 [中文](manual.zh-CN.md)
 
-The workspace owns the shared development commands: `scripts/elisp.py` looks up
-and runs Lisp across the checkouts, and `scripts/performance.py` is the one
+This monorepo owns the shared development commands: `scripts/elisp.py` looks up
+and runs Lisp across `packages/`, and `scripts/performance.py` is the one
 measurement driver. Packages register their maintained workloads in
 `benchmarks/performance-scenarios.el`; they do not implement their own timers,
 profiler collectors or baseline comparators. Package runtimes remain ordinary
@@ -11,7 +11,7 @@ dependencies of the workloads.
 
 ## Look up and run Lisp
 
-`scripts/elisp.py` reads every `.el` file under the workspace checkouts, skipping
+`scripts/elisp.py` reads every `.el` file under the monorepo packages, skipping
 hidden directories such as `.jj` and `.worktrees`. A lookup is one command
 instead of a search followed by a guessed line range, and a batch run needs no
 hand-written `load-path`.

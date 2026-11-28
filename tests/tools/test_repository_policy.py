@@ -597,10 +597,10 @@ class PolicyTests(unittest.TestCase):
         self.assertIn('README.md: registered package etaf-beta is missing from the in-checkout tables', errors)
 
         self.write('README.md',
-                   '# Workspace\n\n## Applications\n\n'
+                   '# Emacs TAF Monorepo\n\n## Applications\n\n'
                    '| [etaf-alpha](https://github.com/emacs-taf/etaf-alpha) | Alpha | etaf |\n'
                    '| [etaf-beta](https://github.com/emacs-taf/etaf-beta) | Beta | etaf |\n\n'
-                   '## Outside this checkout\n\n'
+                   '## Outside this Monorepo\n\n'
                    '| [etaf-other](https://github.com/emacs-taf/etaf-other) | Other |\n')
         self.assertEqual([], POLICY.workspace_readme_errors(self.root))
 
