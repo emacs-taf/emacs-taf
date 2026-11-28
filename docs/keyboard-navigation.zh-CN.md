@@ -263,7 +263,7 @@ GUI Escape 与终端 ESC、Meta 和功能键序列分别验证，沿用 Emacs �
 
 ## 10 实现状态与交付边界
 
-当前公开契约已有可复用基础，但与本方案仍有以下差距。具体可调用签名以 [ETAF 入口](https://github.com/emacs-taf/etaf/blob/main/etaf.el)、[ETAF UI 入口](https://github.com/emacs-taf/etaf-ui/blob/main/etaf-ui.el)和 [Ebox 入口](https://github.com/emacs-taf/ebox/blob/main/ebox.el)为准。
+当前公开契约已有可复用基础，但与本方案仍有以下差距。具体可调用签名以 [ETAF 入口](https://github.com/emacs-taf/etaf/blob/main/packages/etaf/etaf.el)、[ETAF UI 入口](https://github.com/emacs-taf/etaf/blob/main/packages/etaf-ui/etaf-ui.el)和 [Ebox 入口](https://github.com/emacs-taf/etaf/blob/main/packages/ebox/ebox.el)为准。
 
 | 能力 | 当前公开契约 | 目标差距 |
 | --- | --- | --- |

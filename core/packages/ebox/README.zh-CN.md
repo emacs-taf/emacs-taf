@@ -28,11 +28,11 @@ Ebox 没有原生模块。可用时，图片准备也可以使用 Emacs 图形�
 
 ## 从源码 checkout 安装
 
-将 ECSS 和 Ebox 源码根目录加入 `load-path`，再 require 包入口：
+克隆 [`emacs-taf/etaf`](https://github.com/emacs-taf/etaf)，将 `packages/` 下的 `ecss` 和 `ebox` 目录加入 `load-path`，再 require 包入口：
 
 ```elisp
-(add-to-list 'load-path "/path/to/ecss")
-(add-to-list 'load-path "/path/to/ebox")
+(add-to-list 'load-path "/path/to/etaf/packages/ecss")
+(add-to-list 'load-path "/path/to/etaf/packages/ebox")
 (require 'ebox)
 ```
 
@@ -75,11 +75,11 @@ checkout 用户只 require `ebox`；`lisp/` 下的实现文件是私有的。权
 从 workspace 根目录运行：
 
 ```sh
-make -C ebox structure-check
-make -C ebox check
+make -C core/packages/ebox structure-check
+make -C core/packages/ebox check
 ```
 
-`make -C ebox check` 包含结构验证、byte compilation 和包维护的公开验收场景。
+`make -C core/packages/ebox check` 包含结构验证、byte compilation 和包维护的公开验收场景。
 
 ## 许可证
 

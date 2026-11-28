@@ -8,10 +8,9 @@ import textwrap
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
-WORKSPACE = ROOT.parent
+WORKSPACE = next((p for p in ROOT.parents if (p / 'workspace.json').is_file()), ROOT.parent)
 REQUIRED_SIBLINGS = (
-    'ecss', 'ekp', 'ebox', 'etaf', 'etaf-ui', 'etaf-db',
-    'ebox-playground', 'etaf-playground',
+    'ecss', 'ekp', 'ebox', 'etaf', 'etaf-ui', 'etaf-db', 'etaf-posframe',
 )
 
 
@@ -135,11 +134,13 @@ class CheckReferencesTests(unittest.TestCase):
                       'use https://etaf.top/chapter/', result.stderr)
 
     def test_real_workspace_passes_when_siblings_are_available(self):
-        missing = [name for name in REQUIRED_SIBLINGS if not (WORKSPACE / name).is_dir()]
+        pkg_root = WORKSPACE / 'core' / 'packages' if (WORKSPACE / 'core' / 'packages').is_dir() else WORKSPACE
+        missing = [name for name in REQUIRED_SIBLINGS if not (pkg_root / name).is_dir()]
         if missing:
             self.skipTest('workspace siblings are unavailable: ' + ', '.join(missing))
         result = subprocess.run(
-            [sys.executable, str(ROOT / 'scripts/check-references.py')],
+            [sys.executable, str(ROOT / 'scripts/check-references.py'),
+             '--root', str(WORKSPACE), '--manuscript', str(ROOT)],
             cwd=ROOT, capture_output=True, text=True, timeout=60,
         )
         self.assertEqual(0, result.returncode, result.stderr)

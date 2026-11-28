@@ -5,7 +5,7 @@
 ;; Version: 0.1.3
 ;; Package-Requires: ((emacs "29.1") (etaf "0.3.10") (etaf-ui "0.3.6") (etaf-posframe "0.3.0"))
 ;; Keywords: extensions, ui, convenience
-;; URL: https://github.com/emacs-taf/etaf-ext
+;; URL: https://github.com/emacs-taf/etaf
 
 ;;; Commentary:
 

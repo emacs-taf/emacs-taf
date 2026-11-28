@@ -1,6 +1,6 @@
 <h1 align="center"><img src="design/etaf-logo.svg" alt="ETAF — Emacs 文本应用框架" width="480"></h1>
 
-ETAF 在独立的 [Ebox](https://github.com/emacs-taf/ebox/blob/main/) 布局与渲染引擎上，使用可复用的 Component 构建文本应用。
+ETAF 在独立的 [Ebox](https://github.com/emacs-taf/etaf/tree/main/packages/ebox) 布局与渲染引擎上，使用可复用的 Component 构建文本应用。
 
 ## 安装
 
@@ -105,7 +105,7 @@ ETAF 提供一个独立、按需加载、与具体应用无关的性能记录器
 [`examples/`](README.zh-CN.md) 目录包含四个只依赖 core 的最佳实践应用：保留式状态与 Action、Data Controller 所有权、Resource 错误/清理 lifecycle，以及时间驱动的动画。`make check` 会编译它们，并通过已挂载的公开事件路径驱动交互。
 
 ```elisp
-(add-to-list 'load-path "/path/to/github/etaf/examples")
+(add-to-list 'load-path "/path/to/etaf/packages/etaf/examples")
 (require 'etaf)
 (etaf-counter-example-open)
 ```
@@ -116,31 +116,32 @@ ETAF 提供一个独立、按需加载、与具体应用无关的性能记录器
 - [English Reference Manual](https://etaf.top/introduction/) · [中文参考手册](https://etaf.top/zh-cn/introduction/)
 - [English Best-practice Examples](README.md) · [中文示例](README.zh-CN.md)
 
-## 独立包
+## 同仓核心包
+
+全部核心框架包统一维护在 [`emacs-taf/etaf`](https://github.com/emacs-taf/etaf) 的 `packages/` 目录下：
 
 | 包 | 职责 |
 | --- | --- |
-| [`etaf-ui`](https://github.com/emacs-taf/etaf-ui/blob/main/README.md) | 官方 Component 目录：Button、Checkbox、Label、Panel 和 DataGrid。 |
-| [`etaf-db`](https://github.com/emacs-taf/etaf-db/blob/main/README.md) | 数据库后端包，目前提供 SQLite；Data Controller 仍属于 ETAF core。 |
-| [`etaf-playground`](https://github.com/emacs-taf/etaf-playground/blob/main/README.md) | ETAF 示例；只有请求官方目录示例时才加载 UI 包。 |
-| [`ebox-playground`](https://github.com/emacs-taf/ebox-playground/blob/main/README.md) | 只使用 Ebox 的布局示例，与 ETAF 独立。 |
+| [`ecss`](https://github.com/emacs-taf/etaf/tree/main/packages/ecss) | CSS 级联样式引擎：选择器、优先级、自定义属性与计算样式。 |
+| [`ebox`](https://github.com/emacs-taf/etaf/tree/main/packages/ebox) | Box / Flex / Grid 布局、渲染与增量 buffer 发布引擎。 |
+| [`etaf-ui`](https://github.com/emacs-taf/etaf/tree/main/packages/etaf-ui) | 官方 Component 目录：Button、Checkbox、Label、Panel 和 DataGrid。 |
+| [`etaf-db`](https://github.com/emacs-taf/etaf/tree/main/packages/etaf-db) | 数据库后端包，目前提供 SQLite；Data Controller 仍属于 ETAF core。 |
+| [`etaf-posframe`](https://github.com/emacs-taf/etaf/tree/main/packages/etaf-posframe) | 任意 ETAF View 的浮动子 frame 面板宿主。 |
+| [`etaf-ext`](https://github.com/emacs-taf/etaf/tree/main/packages/etaf-ext) | 通用扩展引擎、权限门禁与扩展管理中心。 |
 
 没有单独需要安装的 `etaf-data`：Data 是 ETAF 核心能力。也没有笼统的 `etaf-adapters` 包：其他数据库、服务、文件或 ORM 应使用明确名称的具体 Data Source 包实现同一契约。
 
 ## 源码开发
 
-源码开发时先加载 ECSS，再加载 Ebox，最后加载 ETAF。ETAF 直接声明 ECSS 依赖，以便主题解析保留延迟层叠值。ETAF 使用 Ebox 作为保留节点、布局、焦点、输入和 buffer 引擎；应用只使用 ETAF 公共 API。
-
-开发时先把同级 Ebox 检出目录加入 `load-path`：
+源码开发时克隆 [`emacs-taf/etaf`](https://github.com/emacs-taf/etaf)，把 `packages/` 下的 `ecss`、`ebox` 与 `etaf` 加入 `load-path`。ETAF 直接声明 ECSS 依赖，以便主题解析保留延迟层叠值。ETAF 使用 Ebox 作为保留节点、布局、焦点、输入和 buffer 引擎；应用只使用 ETAF 公共 API。
 
 ```elisp
-(add-to-list 'load-path "/path/to/github/ecss")
-(add-to-list 'load-path "/path/to/github/ebox")
-(add-to-list 'load-path "/path/to/github/etaf")
+(dolist (pkg '("ecss" "ebox" "etaf"))
+  (add-to-list 'load-path (expand-file-name pkg "/path/to/etaf/packages")))
 (require 'etaf)
 ```
 
-为了交互速度，每次更新后在 Ebox 和 ETAF 检出目录中运行 `make native`。它会字节编译对应的包，并把原生代码存入你的 `eln-cache`；即使关闭了 JIT 原生编译，Emacs 也会自动用它代替字节码，无需额外配置。之后修改过的源文件在下次 `make native` 前以字节码运行。
+为了交互速度，每次更新后在 `ebox` 和 `etaf` 包目录中运行 `make native`。它会字节编译对应的包，并把原生代码存入你的 `eln-cache`；即使关闭了 JIT 原生编译，Emacs 也会自动用它代替字节码，无需额外配置。之后修改过的源文件在下次 `make native` 前以字节码运行。
 
 运行完整本地门禁：
 
@@ -148,7 +149,7 @@ ETAF 提供一个独立、按需加载、与具体应用无关的性能记录器
 make check EMACS=/Applications/Emacs.app/Contents/MacOS/Emacs
 ```
 
-核心门禁会编译实现、运行 core/Data/Resource 测试，并检查文档和 API 边界。还应在同级 `etaf-ui`、`etaf-db`、`etaf-playground` 和 `ebox-playground` 仓库分别运行 `make check`；它们都不会被 core facade 自动加载。
+核心门禁会编译实现、运行 core/Data/Resource 测试，并检查文档和 API 边界。还应在同级 `etaf-ui` 与 `etaf-db` 包目录分别运行 `make check`；它们都不会被 core facade 自动加载。
 
 
 

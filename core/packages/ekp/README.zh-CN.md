@@ -26,12 +26,11 @@ Emacs-kp 在 Emacs 内部完整实现了 Knuth-Plass 最优断行算法,支持�
 
 用 `package.el` 从归档安装即可；包会把 `dictionaries/` 与 `native/` 同 `lisp/` 放在一起，不需要额外设置 `load-path`。
 
-从源码使用时，把**仓库根目录**加入 `load-path`，并让 `dictionaries/` 与 `native/` 留在该根目录下：
+从源码使用时，克隆 [`emacs-taf/etaf`](https://github.com/emacs-taf/etaf)，把 `packages/ekp` 目录加入 `load-path`，并让 `dictionaries/` 与 `native/` 留在该目录下：
 
 ```elisp
-(add-to-list 'load-path "/path/to/emacs-kp")
+(add-to-list 'load-path "/path/to/etaf/packages/ekp")
 (require 'ekp)
-(require 'ekp)   ; buffer/region 命令
 ```
 
 强烈建议字节编译——编译后 Elisp 引擎约快 10 倍。

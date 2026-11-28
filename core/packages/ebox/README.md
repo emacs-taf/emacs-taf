@@ -28,11 +28,11 @@ Ebox has no native module.  Image preparation may also use Emacs graphical image
 
 ## Installation from a source checkout
 
-Add ECSS and Ebox source roots to `load-path`, then require the package entry:
+Clone [`emacs-taf/etaf`](https://github.com/emacs-taf/etaf), add the `ecss` and `ebox` directories under `packages/` to `load-path`, then require the package entry:
 
 ```elisp
-(add-to-list 'load-path "/path/to/ecss")
-(add-to-list 'load-path "/path/to/ebox")
+(add-to-list 'load-path "/path/to/etaf/packages/ecss")
+(add-to-list 'load-path "/path/to/etaf/packages/ebox")
 (require 'ebox)
 ```
 
@@ -75,11 +75,11 @@ The following example was verified with `python3 scripts/elisp.py run -p ebox` f
 From the workspace root:
 
 ```sh
-make -C ebox structure-check
-make -C ebox check
+make -C core/packages/ebox structure-check
+make -C core/packages/ebox check
 ```
 
-`make -C ebox check` includes structure validation, byte compilation and the public acceptance scenarios listed by the package.
+`make -C core/packages/ebox check` includes structure validation, byte compilation and the public acceptance scenarios listed by the package.
 
 ## License
 

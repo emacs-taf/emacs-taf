@@ -102,11 +102,15 @@ backend needs a running instance and an API token.
 
 ## Installation
 
+Install from the ETAF package archive (`https://etaf.top/packages/`) with
+`M-x etaf-install` and select `etaf-rss`.
+
+From a source checkout, clone [`emacs-taf/etaf`](https://github.com/emacs-taf/etaf)
+and `etaf-rss`, then add the package directories to `load-path`:
+
 ```elisp
-(add-to-list 'load-path "/path/to/etaf")
-(add-to-list 'load-path "/path/to/etaf-ui")
-(add-to-list 'load-path "/path/to/ebox")
-(add-to-list 'load-path "/path/to/ecss")
+(dolist (pkg '("ecss" "ebox" "etaf" "etaf-ui"))
+  (add-to-list 'load-path (expand-file-name pkg "/path/to/etaf/packages")))
 (add-to-list 'load-path "/path/to/etaf-rss")
 (require 'etaf-rss)
 
@@ -141,7 +145,9 @@ explicitly, which is how a script can read two backends side by side.
 A non-interactive path to a working reader, with no network:
 
 ```sh
-emacs -Q --batch -L . -L lisp -L ../etaf -L ../etaf-ui -L ../ebox -L ../ecss \
+emacs -Q --batch -L . -L lisp \
+      -L ../etaf/packages/etaf -L ../etaf/packages/etaf-ui \
+      -L ../etaf/packages/ebox -L ../etaf/packages/ecss \
       -l examples/etaf-rss-demo.el
 ```
 
@@ -170,7 +176,7 @@ reading, search and OPML. Performance workloads live in
 `benchmarks/performance-scenarios.el` and run through the workspace driver:
 
 ```sh
-python3 ../scripts/performance.py run --mode gui \
+python3 ../../scripts/performance.py run --mode gui \
   --scenario-file benchmarks/performance-scenarios.el \
   --scenario 'etaf-rss.*' --diagnose
 ```

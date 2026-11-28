@@ -28,7 +28,7 @@ REFERENCE = re.compile(
     r'https?://etaf\.top/'
     r'(?:(?P<language>zh-cn)/)?'
     r'(?P<chapter>[a-z0-9-]+)/?'
-    r'(?:#(?P<anchor>[^)\s]+))?'
+    r'(?:#(?P<anchor>[^)\s>]+))?'
 )
 OLD_REFERENCE = re.compile(
     r'https?://[^/\s)]+/emacs-taf/etaf-manual/(?:src|tree)/branch/main/book/'
@@ -39,8 +39,8 @@ FENCE = re.compile(r'^[ ]{0,3}(`{3,}|~{3,})[ \t]*(.*)$')
 LINK = re.compile(r'\[([^]]*)\]\([^)]*\)')
 
 # Site areas that are not book chapters, so their URLs are not resolved against
-# the manuscript: /packages/ is the package archive.
-SITE_AREAS = {'packages'}
+# the manuscript: /packages/, /native/, /media/ and the /zh-cn/ landing root.
+SITE_AREAS = {'packages', 'native', 'media', 'zh-cn'}
 
 
 def markdown_files(directory):
@@ -64,6 +64,11 @@ def scanned_files(root, manuscript):
         child for child in root.iterdir()
         if child.is_dir() and ((child / '.git').exists() or (child / '.jj').exists())
     }
+    for container in (root / 'core' / 'packages', root / 'apps', root / 'games', root / 'packages'):
+        if container.is_dir():
+            for child in container.iterdir():
+                if child.is_dir() and not child.name.startswith('.'):
+                    repositories.add(child)
     repositories.add(manuscript)
     for repository in repositories:
         if repository.is_dir():

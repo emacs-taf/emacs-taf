@@ -2,7 +2,7 @@
 
 A focus timer built as an ETAF application: one ordinary Emacs buffer with a
 countdown, or the same timer mounted as a floating panel through
-[etaf-posframe](https://github.com/emacs-taf/etaf-posframe). The session is
+[etaf-posframe](https://github.com/emacs-taf/etaf/tree/main/packages/etaf-posframe). The session is
 reactive, so a tick, a button or a key repaints the surface without a refresh
 call, and the palette follows the appearance the host reports.
 
@@ -35,14 +35,14 @@ call, and the palette follows the appearance the host reports.
 
 ## Installation
 
-Checkout users add the repository roots to `load-path` and require the entry:
+Install from the ETAF package archive (`https://etaf.top/packages/`) with `M-x etaf-install` and select `etaf-pomodoro`.
+
+From a source checkout, clone [`emacs-taf/etaf`](https://github.com/emacs-taf/etaf) and `etaf-pomodoro`, then add the package directories to `load-path` and require the entry:
 
 ```elisp
+(dolist (pkg '("ecss" "ebox" "etaf" "etaf-ui"))
+  (add-to-list 'load-path (expand-file-name pkg "/path/to/etaf/packages")))
 (add-to-list 'load-path "/path/to/etaf-pomodoro")
-(add-to-list 'load-path "/path/to/etaf")
-(add-to-list 'load-path "/path/to/etaf-ui")
-(add-to-list 'load-path "/path/to/ebox")
-(add-to-list 'load-path "/path/to/ecss")
 (require 'etaf-pomodoro)
 ```
 

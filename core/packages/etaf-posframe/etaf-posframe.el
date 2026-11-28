@@ -6,7 +6,7 @@
 ;; Version: 0.3.4
 ;; Package-Requires: ((emacs "29.1") (etaf "0.3.0") (etaf-ui "0.3.0") (posframe "0.9.0"))
 ;; Keywords: frames, ui
-;; URL: https://github.com/emacs-taf/etaf-posframe
+;; URL: https://github.com/emacs-taf/etaf
 
 ;;; Commentary:
 

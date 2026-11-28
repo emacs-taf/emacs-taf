@@ -130,10 +130,14 @@ ETAF UI, ETAF DB and their dependencies automatically. Start the client with
 
 ### From a source checkout
 
-Add this repository and the provider roots (`etaf`, `etaf-ui`, `etaf-db`,
-`ebox`, `ecss`) to `load-path`, then:
+Clone [`emacs-taf/etaf`](https://github.com/emacs-taf/etaf) and `maillist`, then
+add the framework package directories (`etaf/packages/{ecss,ebox,etaf,etaf-ui,etaf-db}`)
+and this repository to `load-path`:
 
 ```elisp
+(dolist (pkg '("ecss" "ebox" "etaf" "etaf-ui" "etaf-db"))
+  (add-to-list 'load-path (expand-file-name pkg "/path/to/etaf/packages")))
+(add-to-list 'load-path "/path/to/maillist")
 (require 'maillist)
 ;; M-x maillist-open
 ```

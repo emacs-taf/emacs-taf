@@ -137,11 +137,15 @@ The login, queue and saved queues live in the backend's state directory,
 
 ### 3. The Emacs package
 
+Install from the ETAF package archive (`https://etaf.top/packages/`) with
+`M-x etaf-install` and select `etaf-ncm`.
+
+From a source checkout, clone [`emacs-taf/etaf`](https://github.com/emacs-taf/etaf)
+and `etaf-ncm`, then add the package directories to `load-path`:
+
 ```elisp
-(add-to-list 'load-path "/path/to/etaf")
-(add-to-list 'load-path "/path/to/etaf-ui")
-(add-to-list 'load-path "/path/to/ebox")
-(add-to-list 'load-path "/path/to/ecss")
+(dolist (pkg '("ecss" "ebox" "etaf" "etaf-ui"))
+  (add-to-list 'load-path (expand-file-name pkg "/path/to/etaf/packages")))
 (add-to-list 'load-path "/path/to/etaf-ncm")
 (require 'etaf-ncm)
 
@@ -180,7 +184,7 @@ bash "$BACKEND/scripts/netease-music.sh" check || bash "$BACKEND/scripts/netease
 ```
 
 ```elisp
-;; After adding the five repositories to `load-path':
+;; After installing via etaf-install or adding the package directories to `load-path':
 (require 'etaf-ncm)
 (etaf-ncm-open)                  ; real backend; returns the player buffer
 ```
@@ -208,11 +212,12 @@ error in its message line; `g` retries after the backend is fixed.
 
 `M-x etaf-ncm-demo-open` mounts the complete player on a scripted library, so it
 needs no network, login or mpv. `M-x etaf-ncm-demo-live` opens the same player
-against the installed backend. From a checkout with sibling providers:
+against the installed backend. From a source checkout beside `etaf`:
 
 ```sh
 cd etaf-ncm
-emacs -Q -L ../ecss -L ../ebox -L ../etaf -L ../etaf-ui \
+emacs -Q -L ../etaf/packages/ecss -L ../etaf/packages/ebox \
+  -L ../etaf/packages/etaf -L ../etaf/packages/etaf-ui \
   -L . -l examples/etaf-ncm-demo.el -f etaf-ncm-demo-open
 ```
 

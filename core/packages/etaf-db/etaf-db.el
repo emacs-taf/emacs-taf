@@ -4,7 +4,7 @@
 ;; Author: ETAF contributors
 ;; Version: 0.1.3
 ;; Package-Requires: ((emacs "29.1") (etaf "0.2.1"))
-;; URL: https://github.com/emacs-taf/etaf-db
+;; URL: https://github.com/emacs-taf/etaf
 
 ;;; Commentary:
 

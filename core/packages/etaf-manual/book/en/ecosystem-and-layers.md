@@ -1,6 +1,6 @@
 # Ecosystem and Layers
 
-ETAF consists of six packages, layered so that each kind of fact has exactly one owner. This chapter describes what a text application is, what each package provides, how the packages depend on each other, where the public interface of each package ends, which package owns which facts, and the path that a change of state takes to the buffer. Later chapters describe each of these subjects in detail.
+ETAF consists of seven packages, layered so that each kind of fact has exactly one owner. This chapter describes what a text application is, what each package provides, how the packages depend on each other, where the public interface of each package ends, which package owns which facts, and the path that a change of state takes to the buffer. Later chapters describe each of these subjects in detail.
 
 ## Text applications
 

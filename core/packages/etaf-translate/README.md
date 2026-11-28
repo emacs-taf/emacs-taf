@@ -6,7 +6,7 @@ Universal immersive page translation for any mounted [ETAF](https://github.com/e
 
 ## Capabilities
 
-- **Native `etaf-ext` extension**: registers directly with [etaf-ext](https://github.com/emacs-taf/etaf-ext) for shared Host tree caching, atomic multi-owner presentations (`companion-inside`, `companion-after`, `override`), unified mode-line badges, Pure Mode, circuit-breaker isolation, and management inside `M-x etaf-ext-manage`.
+- **Native `etaf-ext` extension**: registers directly with [etaf-ext](https://github.com/emacs-taf/etaf/tree/main/packages/etaf-ext) for shared Host tree caching, atomic multi-owner presentations (`companion-inside`, `companion-after`, `override`), unified mode-line badges, Pure Mode, circuit-breaker isolation, and management inside `M-x etaf-ext-manage`.
 - **Five focused commands**: `etaf-translate-toggle`, `etaf-translate-panel`, `etaf-translate-at-point`, `etaf-translate-paragraph` and `etaf-translate-mode-cycle` — zero redundant minor modes or overlapping commands.
 - **Two modes and three editorial styles**: bilingual stacked (`left-bar`, `muted`, `tinted`) and in-place replacement with hover-original `:help-echo` — switching instantly from cache.
 - **Minimal floating UI**: slim 6-row top-right control panel (`etaf-translate-panel` with live `:theme 'auto` following, automatic sparse persistence to `etaf-translate-state-file`, and auto-dismiss on buffer switch), pure-translation quick popup (`etaf-translate-at-point` translating active region or word at point without repeating original text, auto-sizing up to 60% frame height with scrolling), and a clickable buffer-local Mode-line indicator (`译[54/155]` / `译✓` / `译!N`) that preserves the active theme's mode-line.
@@ -49,5 +49,5 @@ Universal immersive page translation for any mounted [ETAF](https://github.com/e
 ## Validation
 
 ```sh
-make -C packages/etaf-translate check
+make -C core/packages/etaf-translate check
 ```

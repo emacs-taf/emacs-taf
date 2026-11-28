@@ -17,15 +17,12 @@ documented in each module's own Commentary.
 - Emacs 29.1 or newer, built with SQLite (`sqlite-available-p` returns
   non-nil). Without it the client still reads the archive, but nothing is
   stored between sessions.
-- `etaf`, `etaf-ui`, `ebox`, `ecss` and `etaf-db` on `load-path` for a
-  checkout; the archive install brings them in.
+- `ecss`, `ebox`, `etaf`, `etaf-ui` and `etaf-db` (from `emacs-taf/etaf`) on
+  `load-path` for a source checkout; the archive install brings them in.
 
 ```elisp
-(add-to-list 'load-path "/path/to/etaf")
-(add-to-list 'load-path "/path/to/etaf-ui")
-(add-to-list 'load-path "/path/to/ebox")
-(add-to-list 'load-path "/path/to/ecss")
-(add-to-list 'load-path "/path/to/etaf-db")
+(dolist (pkg '("ecss" "ebox" "etaf" "etaf-ui" "etaf-db"))
+  (add-to-list 'load-path (expand-file-name pkg "/path/to/etaf/packages")))
 (add-to-list 'load-path "/path/to/maillist")
 (require 'maillist)
 ```

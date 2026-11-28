@@ -1,14 +1,18 @@
 # Workspace development instructions
 
 Start development from this directory. These instructions govern the packages
-under `packages/`, each of which publishes as its own repository.
+under `core/packages/`, `apps/`, and `games/` (registered in `workspace.json`),
+where `core/` projects into `emacs-taf/etaf` and each app/game projects into its
+own repository.
 
 ## Locate the task
 
 - Use [README.md](README.md) for the repository map and workspace commands. All
-  packages under `packages/` live in this single `jjosh` checkout; inspect and
-  commit changes here, and publish per-package projections to their remotes via
-  `scripts/publish-packages.py`.
+  packages live in this single colocated Git + `jj` monorepo; inspect and commit
+  changes here, and push `main` to `origin` (`emacs-taf/emacs-taf`) so GitHub
+  Actions (`.github/workflows/project.yml`, also runnable locally via
+  `scripts/project-repos.py`) projects `core/` to `emacs-taf/etaf` and each
+  app/game to its own read-only repository.
 - Before editing a package, discover and read any AGENTS.md on the path from its
   root to the target files, then its README and the relevant contract sections.
 - Maintain common instructions here. Add a local AGENTS.md only when its scope
@@ -121,7 +125,7 @@ to every repository changed from this workspace.
 - Keep the reference manual current. A change to a core package's public
   interface, documented behavior or a mechanism the manual explains updates the
   affected etaf-manual chapters in both languages in the same integrated
-  delivery; `make -C packages/etaf-manual check` verifies definition coverage, signatures,
+  delivery; `make -C core/packages/etaf-manual check` verifies definition coverage, signatures,
   translations, links and examples against the packages in this checkout.
 
 ## Development and validation
@@ -290,7 +294,7 @@ to every repository changed from this workspace.
   `check-parens` in an `emacs-lisp-mode` buffer; in `fundamental-mode`, `;` is
   not a comment and apostrophes inside comments are treated as quotes, producing
   false `Unmatched bracket or quote` reports.
-- From this directory, validate day-to-day package work with `make -C packages/<package> check` (plus `make check-affected JOBS=4` when editing a shared provider like `ebox`, `etaf` or `etaf-ui`); do not run workspace-wide `make structure-check` or `make check` for every single package task. Reserve one `make check-affected JOBS=4` + `make structure-check` pass for a serialized commit/push wrap-up, and full `make check` for a release. Every package borrows the container's checker, so there is one verdict rather than a copy per package. Checkout-wide tooling or policy changes run `python3 scripts/check-repository.py --exclude packages/` plus `python3 scripts/check-api.py --workspace packages`.
+- From this directory, validate day-to-day package work with `make -C <layer>/<package> check` (for example `make -C core/packages/etaf check`, `make -C apps/etaf-md check`, or `make -C games/etaf-xiangqi check`, plus `make check-affected JOBS=4` when editing a shared provider like `ebox`, `etaf` or `etaf-ui`); do not run workspace-wide `make structure-check` or `make check` for every single package task. Reserve one `make check-affected JOBS=4` + `make structure-check` pass for a serialized commit/push wrap-up, and full `make check` for a release. Every package borrows the container's checker, so there is one verdict rather than a copy per package. Checkout-wide tooling or policy changes run `python3 scripts/check-repository.py --exclude core/packages/ --exclude apps/ --exclude games/` plus `python3 scripts/check-api.py --workspace .`.
 - Validate each complete feature change through the affected examples' data flow,
   visible rendering, behavior and interaction latency before continuing to another
   feature. Provider unit scenarios alone do not establish application acceptance.
@@ -332,11 +336,12 @@ to every repository changed from this workspace.
   Run workspace validation (`make check` / `make verify`) only after editing and
   committing are complete on a quiet tree: any workspace source change during
   measurement marks the entire run `UNVERIFIED: Workspace sources changed during measurement`.
-- jjosh runs no Git hooks, so run the gates yourself before publishing (see
+- `jj` runs no Git hooks, so run the gates yourself before publishing (see
   `Version control and delivery`). CI runs the same structural and API checker plus
   `make api-check` in batch Emacs. Local checks and the checkout's CI validate
-  every package directly from `packages/`. CI runs only where the checkout is
-  hosted with an Actions runner; projected package repositories carry no CI.
+  every package directly from `core/packages/`, `apps/`, and `games/`. CI runs
+  only where the checkout is hosted with an Actions runner; projected package
+  repositories carry no CI.
   The boundary gate covers runtime, runnable examples and Lisp tests/helpers.
   Tests may not reference internal APIs of either their own package or a provider.
   Static checks cover direct references; code review must also reject dynamically
@@ -357,99 +362,67 @@ to every repository changed from this workspace.
 
 ## Version control and delivery
 
-This checkout is a single jjosh repository: plain `jj` cannot read it, and `package.el` still receives one ordinary repository per package. Write with `jjosh` only, and publish by projecting packages out of the shared tree.
+This checkout is a standard colocated Git + Jujutsu (`jj`) monorepo: standard `git` and `jj` share the same `.git/` object store, `core/` projects into `emacs-taf/etaf`, and each app/game under `apps/` and `games/` projects into its own read-only repository.
 
 ```sh
-jjosh status                                      # inspect the change graph, not a Git index
-jjosh commit packages/<pkg> -m "type(pkg): ..."   # seal one package in place, keeping other WIP in @
-jjosh bookmark set main -r @- && jjosh git export # advance main and mirror into Git store for releases
+jj status                                              # inspect the change graph
+jj commit core/packages/<pkg> -m "type(pkg): ..."      # seal one package in place, keeping other WIP in @
+jj bookmark set main -r @- && jj git export            # advance main and mirror into Git refs for releases
 ```
 
-`jjosh git export` matters for releases: the archive builder reads Git objects, so a commit that was described but not exported is invisible to `git archive`.
+`jj git export` keeps Git refs aligned with `jj` bookmarks so `git archive` and release scripts see the latest `main`.
 
 ### Four-stage lifecycle (develop / commit / push / release)
 
-Separate concurrent day-to-day development from serialized delivery so multiple tasks can edit different packages in parallel, the user's local Emacs (`~/src/etaf-mono/packages/*`, which reads `default@`) always runs the latest code, and expensive workspace checks and releases run only once per batch.
+Separate concurrent day-to-day development from serialized delivery so multiple tasks can edit different packages in parallel, the user's local Emacs (`~/src/etaf-mono/{core/packages,apps,games}/*`, which reads `default@`) always runs the latest code, and expensive workspace checks and releases run only once per batch.
 
 | Stage | When it runs | Validation scope | Delivery action |
 | --- | --- | --- | --- |
-| **1. Develop** | Default for every feature, fix or UI task | Only the edited package (`make -C packages/<pkg> check` + GUI acceptance); add `make check-affected JOBS=4` when editing a shared provider | Edit directly in `default@`. **Do not** commit, create a disposable delivery workspace, run workspace-wide `make structure-check`/`make check`, push remotes or publish archives |
-| **2. Commit** | Only when the user explicitly asks to commit a package or batch wrap-up | Run **once** per batch: `make check-affected JOBS=4` + `make structure-check` + `scripts/check-commit-message.py` | Serialize in one conversation; seal finished packages **in place** by path from `@`, leaving unfinished WIP in `@`; advance `main` and run `jjosh git export` |
-| **3. Push** | Only when the user explicitly asks to push/sync source repos | Sealed commits already validated at Stage 2 | Push root `main` once to `aliyun` (private backup) and, on explicit public release/push confirmation, to `origin` (`github.com/emacs-taf/emacs-taf`, with `git ls-remote` readback); project **only changed packages** via `publish-packages.py --package <pkg>...` (skip if releasing immediately) |
+| **1. Develop** | Default for every feature, fix or UI task | Only the edited package (`make -C <layer>/<pkg> check` + GUI acceptance); add `make check-affected JOBS=4` when editing a shared provider | Edit directly in `default@`. **Do not** commit, create a disposable delivery workspace, run workspace-wide `make structure-check`/`make check`, push remotes or publish archives |
+| **2. Commit** | Only when the user explicitly asks to commit a package or batch wrap-up | Run **once** per batch: `make check-affected JOBS=4` + `make structure-check` + `scripts/check-commit-message.py` | Serialize in one conversation; seal finished packages **in place** by path from `@`, leaving unfinished WIP in `@`; advance `main` and run `jj git export` |
+| **3. Push** | Only when the user explicitly asks to push/sync source repos | Sealed commits already validated at Stage 2 | Push root `main` once to `aliyun` (private backup) and, on explicit public release/push confirmation, to `origin` (`github.com/emacs-taf/emacs-taf`, with `git ls-remote` readback); GitHub Actions (`.github/workflows/project.yml`) automatically projects `core/` to `emacs-taf/etaf` and changed apps/games to their repositories (manual fallback: `python3 scripts/project-repos.py --only <target>`) |
 | **4. Release** | Only when the user explicitly asks to publish to `etaf.top` / update `M-x etaf-install` | One full/auto-scoped release gate inside `etaf-archive-release` | Batch all drifted packages in **one** `pi-skill etaf-archive-release release --yes` run, then immediately realign `default@` onto the new `main` |
 
 ### Keeping `default@` aligned with `main` (mandatory)
 
-The user's local Emacs loads `~/src/etaf-mono/packages/*` directly from `default@`. Leaving `default@` behind `main` makes newly committed code invisible to local testing and traps later conversations in stale diffs.
+The user's local Emacs loads `~/src/etaf-mono/{core/packages,apps,games}/*` directly from `default@`. Leaving `default@` behind `main` makes newly committed code invisible to local testing and traps later conversations in stale diffs.
 
-- Keep `default@` directly on top of `main` at all times. Before starting work or committing, check `jjosh log -r 'main | @'`; if `default@` is behind `main` and no other writer is actively editing, realign first (`jjosh new main` when empty, or `jjosh rebase -s @ -d main` when carrying active WIP).
-- Do not create a disposable delivery workspace merely to dodge unrelated uncommitted WIP in other packages—cut path-scoped commits in place from `@` instead. Reserve `jjosh workspace add` for genuine same-file concurrency, bisection (`jjosh log`/`new`), or automated release staging (`etaf-archive-release`).
-- Whenever **any** isolated workspace or release tool advances `main`, realign `default@` onto the new `main` (`jjosh new main` or `jjosh rebase -s @ -d main`) and remove the disposable workspace (`jjosh workspace forget <name>` + delete dir) before finishing.
-
-### Never mix the two binaries
-
-`jjosh` and `jj` write metadata the other refuses to read. Asking the wrong one leaves the checkout unusable for its owner, so a script that shells out must decide which owns a tree rather than trying both: a jjosh checkout keeps a private object store at `.jj/repo/store/git/`, while a jj checkout reaches one through a Git directory. `scripts/check-repository.py` does this in `owner_binary`.
+- Keep `default@` directly on top of `main` at all times. Before starting work or committing, check `jj log -r 'main | @'`; if `default@` is behind `main` and no other writer is actively editing, realign first (`jj new main` when empty, or `jj rebase -s @ -d main` when carrying active WIP).
+- Do not create a disposable delivery workspace merely to dodge unrelated uncommitted WIP in other packages—cut path-scoped commits in place from `@` instead. Reserve `jj workspace add` for genuine same-file concurrency, bisection (`jj log`/`new`), or automated release staging (`etaf-archive-release`).
+- Whenever **any** isolated workspace or release tool advances `main`, realign `default@` onto the new `main` (`jj new main` or `jj rebase -s @ -d main`) and remove the disposable workspace (`jj workspace forget <name>` + delete dir) before finishing.
 
 ### Changes
 
-- Check `jjosh status` and recent `jjosh op log -n 5` before editing or committing. Never describe, squash or abandon another task's unfinished files in `@`, and never run concurrent commits or pushes against `main` from parallel conversations.
-- When the user asks to commit a package or wrap up a batch, seal one explainable, revertible commit per package (or one cohesive commit for a cross-package feature) directly in place from `@`: use `jjosh commit packages/<pkg> -m "..."` when no files were renamed, or `EDITOR=true jjosh split -r @ -- packages/<pkg>` followed by `jjosh describe -r @- -m "..."` when the package includes file renames/moves. Keep code, regression coverage and documentation together; unfinished packages remain untouched in `@`. Verify `jjosh diff -r @- --stat` contains only the intended paths before advancing `main`.
-- `jjosh squash` folds the working copy into its parent, which is how a fix found while verifying an unpublished commit joins that commit instead of trailing it.
+- Check `jj status` and recent `jj op log -n 5` before editing or committing. Never describe, squash or abandon another task's unfinished files in `@`, and never run concurrent commits or pushes against `main` from parallel conversations.
+- When the user asks to commit a package or wrap up a batch, seal one explainable, revertible commit per package (or one cohesive commit for a cross-package feature) directly in place from `@`: use `jj commit <layer>/<pkg> -m "..."` when no files were renamed, or `EDITOR=true jj split -r @ -- <layer>/<pkg>` followed by `jj describe -r @- -m "..."` when the package includes file renames/moves. Keep code, regression coverage and documentation together; unfinished packages remain untouched in `@`. Verify `jj diff -r @- --stat` contains only the intended paths before advancing `main`.
+- `jj squash` folds the working copy into its parent, which is how a fix found while verifying an unpublished commit joins that commit instead of trailing it.
 - Unpublished commits (`mutable()`) may be reworded or squashed. Never rewrite a published commit.
 - Use Conventional Commits: `type(scope): concrete imperative English summary`, at most 72 characters, then a blank line and the problem and resulting behaviour. Include `Validation:` on one line with what actually ran. Validate with `python3 scripts/check-commit-message.py <file>`.
 
 ### Remotes
 
-The checkout itself pushes repository-wide (`main`) to two whole-repo remotes holding the installer, shared tooling, workspace contracts and cross-package history:
+The checkout pushes repository-wide (`main`) to two whole-repo remotes holding the full monorepo, shared tooling, workspace contracts and cross-package history:
 
 | Remote | Form | Visibility & credentials |
 | --- | --- | --- |
-| `origin` | `https://github.com/emacs-taf/emacs-taf.git` | Public canonical monorepo (PR entry); `GIT_ASKPASS` from `gh auth token` |
-| `aliyun` | `https://forgejo.vhkd.top/emacs-taf/etaf-mono.git` | Private backup mirror; `GIT_ASKPASS` from `git credential fill` |
+| `origin` | `https://github.com/emacs-taf/emacs-taf.git` | Public canonical monorepo (PR entry & CI trigger); `gh auth` / `GIT_ASKPASS` |
+| `aliyun` | `https://forgejo.vhkd.top/emacs-taf/etaf-mono.git` | Private backup mirror; `git credential fill` |
 
-When pushing a batch of sealed commits, advance `main` once (`jjosh bookmark set main -r @- && jjosh git export`), push `aliyun`, and—when approved for public GitHub sync—push `origin` (`GIT_ASKPASS="$PWD/scripts/askpass.sh" jjosh git push --remote origin --bookmark main`).
+When pushing a batch of sealed commits, advance `main` once (`jj bookmark set main -r @- && jj git export`), push `aliyun`, and—when approved for public GitHub sync—push `origin` (`git push origin main` or `jj git push --remote origin --bookmark main`).
 
-Every package projects out of the shared tree as a **read-only** single-package repository to three remotes, all named after the package:
+### Projection to public repositories
 
-| Remote | Form | Credentials |
-| --- | --- | --- |
-| `aliyun#NAME` | `https://forgejo.vhkd.top/emacs-taf/NAME.git` | `GIT_ASKPASS` from `git credential fill` |
-| `laycat#NAME` | `ssh://git@gitea.gklazycat.heiyu.space/emacs-taf/NAME.git` | SSH key |
-| `origin#NAME` | `https://github.com/emacs-taf/NAME.git` | `GIT_ASKPASS` from `gh auth token` |
+Pushing `main` to `origin` automatically triggers `.github/workflows/project.yml`, which projects:
 
-Two details cost a debugging session each and are easy to avoid:
+- `core/` → `https://github.com/emacs-taf/etaf` (all 15 core framework, extension, installer and manual packages under `packages/`)
+- `apps/<name>/` → `https://github.com/emacs-taf/<name>` (each standalone application repository)
+- `games/<name>/` → `https://github.com/emacs-taf/<name>` (each standalone game repository)
 
-- `jjosh git remote add` treats `git@host:path` as a local directory. Write `ssh://git@host/path`, or the fetch fails with "is not a valid git directory".
-- jjosh does not read git's credential helper. An HTTPS push without `GIT_ASKPASS` fails with "Failed to obtain credentials" and tries to open `/dev/tty`.
-
-### Publishing
-
-A push projects the package's directory out of the shared commit, so the remote receives ordinary single-repository history with no `packages/` prefix. When syncing source repositories manually without an archive release, pass `--package` for **only the packages that changed in the batch** (`python3 scripts/publish-packages.py --package <pkg1> --package <pkg2>`).
-
-```sh
-jjosh bookmark track 'main#NAME@origin'      # fetching creates an untracked bookmark
-jjosh bookmark set 'main#NAME' -r @- --allow-backwards
-jjosh git push --remote 'origin#NAME' --bookmark 'main#NAME'
-```
-
-**A projection replaces the remote's history; it does not extend it.** The pushed commit has no parent in common with what the remote served, because the paths differ. Read the dry run before the first push: `Expected old` and `New raw target` name two unrelated commits. Before replacing history, tag what is there, so the old commits stay reachable:
-
-```sh
-git -C <legacy checkout> tag -f pre-mono <remote tip>
-git -C <legacy checkout> push <url> refs/tags/pre-mono
-```
-
-Confirm the result by reading the remotes directly, never through jjosh:
-
-```sh
-git ls-remote https://forgejo.vhkd.top/emacs-taf/NAME.git refs/heads/main
-```
-
-All three must serve the same commit and keep a `pre-mono` tag.
+Only targets whose projected tree changed are pushed; unchanged targets are skipped. For manual local projection or dry-run inspection, run `python3 scripts/project-repos.py --dry-run` (or `--only etaf` / `--only <pkg>`). Confirm remote heads with `git ls-remote https://github.com/emacs-taf/<repo>.git refs/heads/main`.
 
 ### Archives
 
-`scripts/package-release.py build|verify|stage|publish` builds a package.el archive from the sealed commit, and `pi-skill etaf-archive-release release --yes` orchestrates a single batch release across every drifted package (one bump commit, one root/package push, one `--scope auto` parallel install gate, incremental upload to `etaf.top` and remote `manifest.json` verification). Two facts about it are not obvious:
+`scripts/package-release.py build|verify|stage|publish` builds a package.el archive from the sealed commit, and `pi-skill etaf-archive-release release --yes` orchestrates a single batch release across every drifted package (one bump commit, internal `Package-Requires` sync via `sync-requires --write`, one root push, one `--scope auto` parallel install gate, incremental upload to `etaf.top` and remote `manifest.json` verification). Two facts about it are not obvious:
 
 - **The archive refuses to replace a file it already published.** A package whose source changed without a version bump cannot ship; the deployment stops with `Immutable package differs`. Bump `Version` and record what changed.
 - **Verification serves a cached standard-archive snapshot** at `~/.cache/etaf-standard-archives`, because MELPA answers 429 after a few index fetches and a refused index reads as a missing package. It prefetches when the cache is missing; `--refresh-standard-archives` fetches the current closure.
@@ -463,21 +436,18 @@ Independent packages outside `workspace.json` (colocated `jj` checkouts such as 
 ### History and recovery
 
 - `immutable_heads()` includes `remote_bookmarks()`, so published commits cannot
-  be rewritten; confirm with `jjosh config get 'revset-aliases."immutable_heads()"'`.
-- `jjosh undo` reverses the last operation; `jjosh op log` and
-  `jjosh op restore <operation>` reach further back.
-- Locate regressions with `jjosh log -p <path>`, `jjosh file annotate <path>` and
-  `jjosh diff`. Bisection edits the working copy, so run it in
-  `jjosh workspace add`.
+  be rewritten; confirm with `jj config get 'revset-aliases."immutable_heads()"'`.
+- `jj undo` reverses the last operation; `jj op log` and
+  `jj op restore <operation>` reach further back.
+- Locate regressions with `jj log -p <path>`, `jj file annotate <path>` and
+  `jj diff`. Bisection edits the working copy, so run it in
+  `jj workspace add`.
 
 ## Applications and games
 
-Framework packages, extensions, applications and games are directories under `packages/`, registered in `workspace.json` with `role` set to `framework`, `extension`, `application` or `game`. Only packages built on `etaf-ext` (declaring `etaf-ext` in `Package-Requires`) carry `role` set to `extension`; `etaf-ext` itself and `etaf-manual` belong to `framework`. The checkout is the only workspace: do not create a nested workspace root, and do not clone a second checkout of a registered package. Isolated trees (`jjosh workspace add`) are used only for same-file concurrency, bisection, benchmarks or automated archive releases, and are removed immediately after realigning `default@` onto `main`.
+Packages are organized in three layers registered in `workspace.json`: `core/packages/` (`role` set to `framework` or `extension`, projected together to `emacs-taf/etaf`), `apps/` (`role` set to `application`), and `games/` (`role` set to `game`). Only packages built on `etaf-ext` (declaring `etaf-ext` in `Package-Requires`) carry `role` set to `extension`; `etaf-ext` itself, `etaf-install` and `etaf-manual` belong to `framework`. The checkout is the only workspace: do not create a nested workspace root, and do not clone a second checkout of a registered package. Isolated trees (`jj workspace add`) are used only for same-file concurrency, bisection, benchmarks or automated archive releases, and are removed immediately after realigning `default@` onto `main`.
 
-Application and game Makefiles resolve providers as siblings (`../etaf`); they
-keep the `../..` fallback only so a standalone clone still builds. A new
-application is added to `workspace.json`, the README tables, and (only if the
-archive ships it) `release-dependencies.json` in the same change.
+Application and game Makefiles resolve providers from `../../core/packages/<pkg>` (with sibling `../<pkg>` and `../etaf/packages/<pkg>` fallbacks so standalone clones also build). A new application is added to `workspace.json`, the README tables, and (only if the archive ships it) `release-dependencies.json` in the same change.
 
 ### Emacs 29 compatibility
 

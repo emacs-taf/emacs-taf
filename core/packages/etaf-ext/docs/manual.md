@@ -20,7 +20,7 @@ To temporarily hide all extensions on the current ETAF page without changing glo
 ## Organizing Extensions
 
 - Keep `etaf-ext` strictly for the engine and manager UI.
-- Package reusable extensions as independent packages (`packages/etaf-<name>`) depending on `etaf-ext` (for example `etaf-hints` and `etaf-highlight`).
+- Package reusable extensions as independent packages (`core/packages/etaf-<name>` in the monorepo, `packages/etaf-<name>` in `emacs-taf/etaf`) depending on `etaf-ext` (for example `etaf-hints` and `etaf-highlight`).
 - Write small personal tweaks directly in your Emacs init file via `etaf-ext-define`.
 
 ## Authoring an Extension

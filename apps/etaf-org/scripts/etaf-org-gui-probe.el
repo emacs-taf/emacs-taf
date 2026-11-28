@@ -23,7 +23,7 @@
 
 (defconst etaf-org-probe--root
   (expand-file-name ".." (file-name-directory (or load-file-name buffer-file-name)))
-  "Root directory of `packages/etaf-org'.")
+  "Root directory of `apps/etaf-org'.")
 
 (defun etaf-org-probe--max-line-width (buffer)
   "Return maximum display width among lines in BUFFER."

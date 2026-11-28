@@ -16,10 +16,10 @@
 
 ## 配套独立扩展
 
-- [etaf-translate](https://github.com/emacs-taf/etaf-translate)：原生基于 `etaf-ext` 的零侵入沉浸式页面翻译与快译浮窗扩展。
-- [etaf-hints](https://github.com/emacs-taf/etaf-hints)：面向任意 ETAF 页面的独立 Vimium 风格快捷跳转扩展。
-- [etaf-highlight](https://github.com/emacs-taf/etaf-highlight)：独立通用划词高亮与持久化批注卡片扩展。
-- [etaf-export](https://github.com/emacs-taf/etaf-export)：面向任意 ETAF 渲染页面的零浏览器实时矢量预览与 PDF / SVG 导出扩展。
+- [etaf-translate](https://github.com/emacs-taf/etaf/tree/main/packages/etaf-translate)：原生基于 `etaf-ext` 的零侵入沉浸式页面翻译与快译浮窗扩展。
+- [etaf-hints](https://github.com/emacs-taf/etaf/tree/main/packages/etaf-hints)：面向任意 ETAF 页面的独立 Vimium 风格快捷跳转扩展。
+- [etaf-highlight](https://github.com/emacs-taf/etaf/tree/main/packages/etaf-highlight)：独立通用划词高亮与持久化批注卡片扩展。
+- [etaf-export](https://github.com/emacs-taf/etaf/tree/main/packages/etaf-export)：面向任意 ETAF 渲染页面的零浏览器实时矢量预览与 PDF / SVG 导出扩展。
 
 ## 快速上手
 

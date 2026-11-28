@@ -2,7 +2,7 @@
 
 [English](README.md)
 
-ETAF Markdown Preview 把本地 Markdown 文档渲染为 Emacs 原生的现代阅读视图。它基于 [ETAF](https://github.com/emacs-taf/etaf) 组件体系与 [Ebox](https://github.com/emacs-taf/ebox) 排版引擎，在普通 Emacs buffer 中提供居中阅读版心、标题层级缩放、带行高亮与复制按钮的代码块、完整网格线的管道表格、GitHub 提示块、脚注、本地图片与视频就地播放、零浏览器原生 Mermaid 图表与 MathJax 数学公式、文档容器以及 Emacs 活文档组件——同时完整保留 Emacs 原生滚动、`isearch` 与自由分窗体验。
+ETAF Markdown Preview 把本地 Markdown 文档渲染为 Emacs 原生的现代阅读视图。它基于 [ETAF](https://github.com/emacs-taf/etaf) 组件体系与 [Ebox](https://github.com/emacs-taf/etaf/tree/main/packages/ebox) 排版引擎，在普通 Emacs buffer 中提供居中阅读版心、标题层级缩放、带行高亮与复制按钮的代码块、完整网格线的管道表格、GitHub 提示块、脚注、本地图片与视频就地播放、零浏览器原生 Mermaid 图表与 MathJax 数学公式、文档容器以及 Emacs 活文档组件——同时完整保留 Emacs 原生滚动、`isearch` 与自由分窗体验。
 
 单窗全宽阅读视图（`M-x etaf-md-open`），呈现标题层级、提示块、完整网格表格、高亮代码块以及原生渲染的 Mermaid 图表与 MathJax 公式：
 
@@ -58,14 +58,17 @@ ETAF Markdown Preview 把本地 Markdown 文档渲染为 Emacs 原生的现代�
 
 ### 从源码检出使用
 
-将本仓库与框架仓库克隆为同级目录，按需执行 `make native-build`，再将各仓库根目录加入 `load-path`：
+克隆统一核心框架仓库 [`emacs-taf/etaf`](https://github.com/emacs-taf/etaf)（内置 `packages/{ecss,ebox,etaf,etaf-ui}`）与本仓库，按需执行 `make native-build`，再将各包目录加入 `load-path`：
+
+```sh
+git clone https://github.com/emacs-taf/etaf.git
+git clone https://github.com/emacs-taf/etaf-md.git
+```
 
 ```elisp
-(add-to-list 'load-path "/path/to/emacs-taf/ecss")
-(add-to-list 'load-path "/path/to/emacs-taf/ebox")
-(add-to-list 'load-path "/path/to/emacs-taf/etaf-ui")
-(add-to-list 'load-path "/path/to/emacs-taf/etaf")
-(add-to-list 'load-path "/path/to/emacs-taf/etaf-md")
+(dolist (pkg '("ecss" "ebox" "etaf-ui" "etaf"))
+  (add-to-list 'load-path (expand-file-name pkg "/path/to/etaf/packages")))
+(add-to-list 'load-path "/path/to/etaf-md")
 (require 'etaf-md)
 ```
 

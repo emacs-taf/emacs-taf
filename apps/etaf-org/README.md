@@ -1,6 +1,6 @@
 # ETAF Org (`etaf-org`)
 
-`etaf-org` renders native Org-mode documents as modern interactive reading views inside Emacs using [ETAF](https://github.com/emacs-taf/etaf) and [Ebox](https://github.com/emacs-taf/ebox), and extends Org through a unified node registry, style-rule engine, Org-native container syntax, workspace live views, and an O(Δ) live-editing preview shell.
+`etaf-org` renders native Org-mode documents as modern interactive reading views inside Emacs using [ETAF](https://github.com/emacs-taf/etaf) and [Ebox](https://github.com/emacs-taf/etaf/tree/main/packages/ebox), and extends Org through a unified node registry, style-rule engine, Org-native container syntax, workspace live views, and an O(Δ) live-editing preview shell.
 
 ![ETAF Org at a wide frame](https://etaf.top/media/etaf-org/etaf-org-wide.webp)
 
@@ -27,18 +27,18 @@ From the ETAF package archive, install via `M-x etaf-install` and select `etaf-o
 (require 'etaf-org)
 ```
 
-From a checkout, add this repository and its sibling providers to `load-path` and byte-compile:
+From a source checkout, clone [`emacs-taf/etaf`](https://github.com/emacs-taf/etaf) and `etaf-org`, add the framework package directories and this repository to `load-path`, and byte-compile:
 
 ```sh
-make compile
+git clone https://github.com/emacs-taf/etaf.git
+git clone https://github.com/emacs-taf/etaf-org.git
+make -C etaf-org compile
 ```
 
 ```elisp
-(add-to-list 'load-path "~/emacs-taf/etaf-org")
-(add-to-list 'load-path "~/emacs-taf/etaf-ui")
-(add-to-list 'load-path "~/emacs-taf/etaf")
-(add-to-list 'load-path "~/emacs-taf/ebox")
-(add-to-list 'load-path "~/emacs-taf/ecss")
+(dolist (pkg '("ecss" "ebox" "etaf" "etaf-ui"))
+  (add-to-list 'load-path (expand-file-name pkg "/path/to/etaf/packages")))
+(add-to-list 'load-path "/path/to/etaf-org")
 (require 'etaf-org)
 ```
 

@@ -3,7 +3,7 @@
 [中文](manual.zh-CN.md)
 
 This monorepo owns the shared development commands: `scripts/elisp.py` looks up
-and runs Lisp across `packages/`, and `scripts/performance.py` is the one
+and runs Lisp across `core/packages/`, `apps/`, and `games/`, and `scripts/performance.py` is the one
 measurement driver. Packages register their maintained workloads in
 `benchmarks/performance-scenarios.el`; they do not implement their own timers,
 profiler collectors or baseline comparators. Package runtimes remain ordinary
@@ -104,7 +104,8 @@ package.el only, since `M-x etaf-install` does not own them.
 
 Maintainers use Python 3.12+, Git and Emacs for release verification. Users need
 only Emacs. Seal the working copy first: every package is exported from that one
-sealed checkout commit (`packages/<name>` in its tree), never from working copies
+sealed checkout commit (its path in `workspace.json` under `core/packages/`,
+`apps/` or `games/`), never from working copies
 or remote heads. `release-dependencies.json` selects packages and runtime
 resources, while the same commit supplies the installer.
 
@@ -123,11 +124,11 @@ The manifest also records the checkout revision. Rewriting that sealed commit �
 including a message edit — gives it a new identity, so rebuild and rerun
 `release-check` before publishing an amended commit.
 
-`etaf-install` lives in its own package directory (`packages/etaf-install/`) with
+`etaf-install` lives in its own package directory (`core/packages/etaf-install/`) with
 its own `README`, `LICENSE`, `CHANGELOG`, and `lisp/` modules. Changes to the
 workspace root `README.md` or `CHANGELOG.md` do not alter
-`etaf-install-<version>.tar` bytes; bump `packages/etaf-install/etaf-install.el`'s
-`Version` only when files shipped inside `packages/etaf-install/` change. The
+`etaf-install-<version>.tar` bytes; bump `core/packages/etaf-install/etaf-install.el`'s
+`Version` only when files shipped inside `core/packages/etaf-install/` change. The
 publisher refuses a changed versioned tarball.
 
 `release-check` runs each supported target through `etaf-install`, the documented
@@ -150,6 +151,19 @@ For a focused diagnosis, use `scripts/package-release.py verify --directory DIR
 --target etaf-ui`; `--direct` runs only ordinary package.el installation. This
 narrower evidence does not certify the omitted targets or installation path.
 
+Before releasing updated packages, keep internal `Package-Requires` lower bounds
+aligned with the current versions of their ETAF dependencies so native
+`package-upgrade` cannot leave a provider behind a consumer:
+
+```sh
+python scripts/package-release.py sync-requires --changed-only --check
+python scripts/package-release.py sync-requires --changed-only --write
+```
+
+`verify --scope auto` enforces the same check automatically for every changed
+first-party package before running Emacs installations, while leaving unchanged
+packages untouched.
+
 A target that depends on a standard archive can be checked without fetching that
 archive for every target. Prefetch one live snapshot, then serve it to the
 verification:
@@ -171,8 +185,8 @@ After the supported environment checks, publish the validated directory with
 `make release-publish RELEASE_DIR=/path/to/release`. The command delegates to the
 manual site's package-only publisher; it does not rebuild or change site pages.
 For the first combined site/package publication, use
-`make -C packages/etaf-manual site-publish PUBLISH_ARGS='--packages /path/to/release'`.
-See the [site deployment contract](https://github.com/emacs-taf/etaf-manual/blob/main/docs/manual.md#publishing-the-site-and-packages)
+`make -C core/packages/etaf-manual site-publish PUBLISH_ARGS='--packages /path/to/release'`.
+See the [site deployment contract](https://github.com/emacs-taf/etaf/blob/main/packages/etaf-manual/docs/manual.md#publishing-the-site-and-packages)
 for transport, locking, immutable versions, historical downloads and rollback.
 
 `package-release.py stage --directory DIR --output NEW` is the local publication
@@ -212,32 +226,32 @@ both; when a cell fails, read its log rather than guessing from the exit code.
 
 ## Commit and publish one cross-package change
 
-Every package lives in this one jjosh checkout, so a provider change and the
-consumers it migrates are one commit; there is no per-repository sequence to
-order and no revision pin to update.
+Every package lives in this one colocated Git + `jj` monorepo, so a provider
+change and the consumers it migrates are one commit; there is no per-repository
+sequence to order and no revision pin to update.
 
 ```sh
-jjosh status                                   # what @ holds; never seal another writer's work
+jj status                                      # what @ holds; never seal another writer's work
 make plan-affected                             # the units the change reaches
 make check-affected JOBS=4                     # compile and test them, providers first
-jjosh describe -m "$(cat /tmp/message.txt)" && jjosh new
+jj describe -m "$(cat /tmp/message.txt)" && jj new
 python3 scripts/check-commit-message.py /tmp/message.txt
 make structure-check
-python3 scripts/publish-packages.py --dry-run  # then without --dry-run
-jjosh bookmark set main -r @- && jjosh git push --remote aliyun --bookmark main
-jjosh git push --remote origin --bookmark main
+jj bookmark set main -r @- && jj git export
+jj git push --remote aliyun --bookmark main
+jj git push --remote origin --bookmark main    # triggers .github/workflows/project.yml
 ```
 
 - The message is one Conventional Commit with a concrete scope, a body that
   explains the change and a `Validation:` line naming the gates that ran.
-  jjosh runs no Git hooks, so the message and structure checks above are the
+  `jj` runs no Git hooks, so the message and structure checks above are the
   gate; run them before anything is pushed.
-- `publish-packages.py` projects each package directory out of the shared
-  commit and pushes it to the package's own `aliyun`, `laycat` and `origin`
-  remotes, one package after another. `--package NAME` and `--remote NAME`
-  narrow a run; an unchanged package costs one request.
+- Pushing `main` to `origin` automatically triggers `.github/workflows/project.yml`,
+  which projects `core/` to `emacs-taf/etaf` and each changed app/game to its
+  own read-only repository. To preview or run projections locally, use
+  `python3 scripts/project-repos.py --dry-run` (or `--only <target>`).
 - The checkout itself publishes to two repository-wide remotes holding the
-  installer source, shared tooling, workspace contracts and cross-package
+  full monorepo, shared tooling, workspace contracts and cross-package
   history: the public canonical monorepo `origin` (`github.com/emacs-taf/emacs-taf`,
   where external PRs land) and the private backup `aliyun` (`emacs-taf/etaf-mono`
   on forgejo). Push `main` after every delivery.
@@ -270,13 +284,13 @@ When adding or updating a C/C++ Emacs dynamic module, publish the verified binar
 ```sh
 # 1. Build and smoke-test per (OS, Arch) locally or via .github/workflows/native-modules.yml
 python3 scripts/native-release.py build --output /tmp/native-builds --package etaf-md
-# 2. Assemble verified manifests into packages/<pkg>/native/manifest.json and stage /native/
+# 2. Assemble verified manifests into <layer>/<pkg>/native/manifest.json and stage /native/
 python3 scripts/native-release.py manifest --input /tmp/native-builds --write-packages --stage /tmp/native-stage
 python3 scripts/native-release.py verify --all --stage /tmp/native-stage
 # 3. Publish to https://etaf.top/native/ (verifies manifest and generates /native/index.html)
-python3 packages/etaf-manual/site/scripts/publish.py --native-only /tmp/native-stage
+python3 core/packages/etaf-manual/site/scripts/publish.py --native-only /tmp/native-stage
 # Or refresh hosted manifest metadata and regenerate /native/index.html without re-uploading binaries:
-python3 packages/etaf-manual/site/scripts/publish.py --native-pages-only
+python3 core/packages/etaf-manual/site/scripts/publish.py --native-pages-only
 ```
 
 ### Publish showcase media (`/media/`)
@@ -307,13 +321,13 @@ make release-publish RELEASE_DIR=/tmp/release-next
 
 Adding a package to the archive is a fixed sequence; do not invent another route:
 
-1. Keep the package under `packages/<name>` and register it in `workspace.json` (`python3 scripts/add-package.py NAME --url URL`).
+1. Place the package under `core/packages/<name>`, `apps/<name>`, or `games/<name>` and register it in `workspace.json` (`python3 scripts/add-package.py NAME --url URL`).
 2. Declare `Version` and every Emacs dependency in `Package-Requires`; classify non-Lisp files using the 4-tier table: put pure-source backends and runtime data in `release-dependencies.json` `resources`, and for C dynamic modules publish via `/native/` and include only `native/manifest.json` in `resources` (never `Makefile`, `native/vendor/` or compiled binaries). The entry must also resolve its own `lisp/` while the byte compiler runs: prefer `byte-compile-current-file`, then `load-file-name`, then `buffer-file-name`. An archive install otherwise reports `Cannot open load file` for the modules.
-3. Implement `<package>-doctor` returning `(LABEL AVAILABLE REMEDY)` facts, and mark blocking versus degraded capabilities; register any manual external OS CLI tools in `packages/etaf-install/lisp/etaf-install-catalog.el`'s `etaf-install--cli-catalog` and `etaf-install--system-tools` (never prebuilt native modules, bundled `backends/`, or managed game engines; list managed engines under `:managed-engines`). An application also presents itself through `<package>-open`: the install gate requires that name before it accepts the target, and the menu's Open action runs it.
+3. Implement `<package>-doctor` returning `(LABEL AVAILABLE REMEDY)` facts, and mark blocking versus degraded capabilities; register any manual external OS CLI tools in `core/packages/etaf-install/lisp/etaf-install-catalog.el`'s `etaf-install--cli-catalog` and `etaf-install--system-tools` (never prebuilt native modules, bundled `backends/`, or managed game engines; list managed engines under `:managed-engines`). An application also presents itself through `<package>-open`: the install gate requires that name before it accepts the target, and the menu's Open action runs it.
 4. Add the target to `etaf-install--targets` with its group and open command so the menu shows its status before installation. A target the menu does not list is not installable at all: `etaf-install` answers `Unsupported target`. Add the same package to the application or game list in `scripts/install-smoke.el`, or give a framework its own functional check there, so the release gate reopens and diagnoses the installed package.
-5. Place the package in the archive page's section list, `GROUPS` in `etaf-manual/site/scripts/archive_pages.py`. The page writer reports every package no section places and the publisher refuses to deploy such a page, so an unplaced package stops the release instead of reaching readers as a nameless `Other` entry.
+5. Place the package in the archive page's section list, `GROUPS` in `core/packages/etaf-manual/site/scripts/archive_pages.py`. The page writer reports every package no section places and the publisher refuses to deploy such a page, so an unplaced package stops the release instead of reaching readers as a nameless `Other` entry.
 6. Run the package's `make check`, `make structure-check`, `make installer-compile` and `tests/tools/test_install.py`, then the dev-lane install on Emacs 29.1, 30.2 and 31.1 (29.1 lives on `lightos`, see the host notes).
-7. Commit with jjosh, publish the package projection and push the checkout's `main` (see [Commit and publish one cross-package change](#commit-and-publish-one-cross-package-change)),
+7. Commit with `jj` and push the checkout's `main` (see [Commit and publish one cross-package change](#commit-and-publish-one-cross-package-change), which triggers `.github/workflows/project.yml` to project public repos),
    then build the sealed archive and run `make release-check`.
 8. Publish with `make release-publish`, then read back `archive-contents` and the
    package page over HTTPS.
@@ -589,23 +603,23 @@ an absent command is reported in one line instead of a traceback.
 
 ## Validate an isolated checkout in a real GUI
 
-A `jjosh workspace add` checkout must be exercised in the full user configuration
+A `jj workspace add` checkout must be exercised in the full user configuration
 without ever loading the main checkout's code generation. The user init reads
 `emacs-taf-dir` for package roots, but `init-etaf.el` and eager `use-package`
-forms also add primary checkout paths (`~/src/etaf-mono/packages/*` and legacy
+forms also add primary checkout paths (`~/src/etaf-mono/{core/packages,apps,games}/*` and legacy
 standalone `~/emacs-taf/*`), and an added path wins the resolution.
 
 1. Put a private `site-start.el` first on the load path with
    `EMACSLOADPATH=<private directory>:`. It runs before the init file, so it can
    `setq` (never `defvar`) `emacs-taf-dir` to the isolated root, set a private
    `server-name`, `load-prefer-newer` and a bounded `kill-emacs` watchdog, and
-   advise `require` and `load` to redirect primary checkout libraries (`~/src/etaf-mono/packages`
+   advise `require` and `load` to redirect primary checkout libraries (`~/src/etaf-mono`
    and `~/emacs-taf`) and relative names to the isolated root. Advising `load` alone is not enough: Emacs 31's
    `require` does not call the advised subr.
 2. Start a background instance with
    `open -g -n -a Emacs --env 'EMACSLOADPATH=<private directory>:' --args -l
    <start file>`. The start file runs after the init file: it puts the isolated
-   roots first, removes the primary checkout entries (`~/src/etaf-mono/packages`
+   roots first, removes the primary checkout entries (`~/src/etaf-mono`
    and `~/emacs-taf`), starts the named server and
    records its PID. Background measurement must not be App-Nap throttled; check
    it as described in [Run a measured change](#run-a-measured-change) instead of
@@ -614,9 +628,9 @@ standalone `~/emacs-taf/*`), and an added path wins the resolution.
    provider and the `(provide . feature)` entries in `load-history` must all
    resolve under the isolated root. The performance driver repeats this in its
    preflight and rejects a library loaded from another checkout. Confirm the
-   isolated checkout follows the published main first: a `jjosh workspace add`
+   isolated checkout follows the published main first: a `jj workspace add`
    checkout keeps its own working-copy commit, so compare its `@-` with
-   `jjosh log -r main`; one that sits behind main invalidates both the
+   `jj log -r main`; one that sits behind main invalidates both the
    measurement and the recorded revision.
 4. Run `scripts/performance.py run --mode gui --server <name> --root <isolated
    root> --load-path <app root>` and close the instance by its recorded PID,
@@ -626,7 +640,7 @@ When writers change the primary checkout, snapshot the measured source generatio
 `UNVERIFIED: Workspace sources changed during measurement`:
 copy `workspace.json` and each loaded package directory (ecss, ekp, ebox, etaf,
 etaf-ui, and etaf-gamekit or the app) with `rsync -a --exclude .jj
---exclude .git <checkout>/packages/<name> /tmp/<snapshot>/`, substituting a `jjosh workspace
+--exclude .git <checkout>/<layer>/<name> /tmp/<snapshot>/`, substituting a `jj workspace
 add` checkout where a change is not in the primary tree. Apply the same
 site-start redirection and start file with `--root /private/tmp/<snapshot>` and
 matching `--load-path`;

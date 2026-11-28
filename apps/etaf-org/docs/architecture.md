@@ -49,7 +49,7 @@ Level 5 (live editing, application shell, authoring mode)
 
 ## Measured performance baseline
 
-Measured in batch mode via `make -C packages/etaf-org benchmark` on a generated 120-section, 40,789-character, 2,272-line Org document:
+Measured in batch mode via `make -C apps/etaf-org benchmark` on a generated 120-section, 40,789-character, 2,272-line Org document:
 
 | Path | Elapsed |
 | --- | --- |

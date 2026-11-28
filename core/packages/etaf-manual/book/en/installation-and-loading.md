@@ -56,9 +56,9 @@ Ebox measures text in the fonts that the frame uses, so ordinary text needs no p
 
 <!-- index: source checkout; load-path; require -->
 
-Add the root of each repository to `load-path` and require the entry feature of the package you use. Requiring a package loads the packages it requires, so their roots must be in `load-path` as well:
+Clone the unified framework repository `https://github.com/emacs-taf/etaf` (which contains every core package under `packages/`) and add the required package directories to `load-path`, then require the entry feature of the package you use. Requiring a package loads the packages it requires, so their directories must be in `load-path` as well:
 
-| To require | Add the roots of |
+| To require | Add the package directories of |
 | --- | --- |
 | `ecss` | `ecss` |
 | `ekp` | `ekp` |
@@ -68,10 +68,8 @@ Add the root of each repository to `load-path` and require the entry feature of 
 | `etaf-db` | `ecss`, `ebox`, `etaf`, `etaf-db` |
 
 ```elisp
-(add-to-list 'load-path "/path/to/ecss")
-(add-to-list 'load-path "/path/to/ebox")
-(add-to-list 'load-path "/path/to/etaf")
-(add-to-list 'load-path "/path/to/etaf-ui")
+(dolist (pkg '("ecss" "ebox" "etaf" "etaf-ui"))
+  (add-to-list 'load-path (expand-file-name pkg "/path/to/etaf/packages")))
 (require 'etaf-ui)
 ```
 
@@ -93,6 +91,27 @@ Function and Macro records may carry an autoload cookie:
 ```
 
 When package.el installs a package, it collects these cookies into the package's autoload file. Public commands such as `ekp-c-module-build` are then available through `M-x` at once. A public function or macro that carries no cookie becomes available only after the package is loaded; `require` the package before calling it. Records of the other kinds have no autoloads, so require the package before using them. A source checkout has no autoload file; require its entry instead.
+
+For declarative init files, register `("etaf" . "https://etaf.top/packages/")` in `package-archives` and declare the packages you want with Emacs's built-in `use-package` (`:ensure t :pin etaf`):
+
+```elisp
+(require 'package)
+(add-to-list 'package-archives '("etaf" . "https://etaf.top/packages/") t)
+(package-initialize)
+
+(use-package etaf-install
+  :ensure t
+  :pin etaf
+  :config
+  (etaf-install-ensure '(etaf-ui etaf-md)))
+
+(use-package etaf-ui
+  :ensure t
+  :pin etaf
+  :defer t)
+```
+
+When every listed target is already installed, startup stays offline and leaves lazy loading to `use-package` and package.el autoloads; update installed dependency closures later with `M-x etaf-install-update`.
 
 ## Compiling
 

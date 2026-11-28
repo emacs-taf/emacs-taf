@@ -17,7 +17,7 @@ Requires Emacs 29.1 or newer, ETAF 0.3 and [Posframe](https://github.com/tumashu
  :auto-hide 6)
 ```
 
-A panel is passive by default: it takes no keyboard focus and hides as soon as the user works elsewhere.  `:focusable t` gives it the keyboard and `:focus-on-open` decides whether it is selected on open; `:auto-hide nil` keeps it until it is closed, `:draggable t` moves it by its title bar, and several panels can be open at once.  The user documentation — the options, the lifecycle, the failures and the Theme contract — is the [Floating Panels](https://github.com/emacs-taf/etaf-manual/blob/main/book/en/posframe-panels.md) and [Panel Applications](https://github.com/emacs-taf/etaf-manual/blob/main/book/en/posframe-applications.md) chapters of the ETAF Reference Manual.
+A panel is passive by default: it takes no keyboard focus and hides as soon as the user works elsewhere.  `:focusable t` gives it the keyboard and `:focus-on-open` decides whether it is selected on open; `:auto-hide nil` keeps it until it is closed, `:draggable t` moves it by its title bar, and several panels can be open at once.  The user documentation — the options, the lifecycle, the failures and the Theme contract — is the [Floating Panels](https://etaf.top/posframe-panels/) and [Panel Applications](https://etaf.top/posframe-applications/) chapters of the ETAF Reference Manual.
 
 The [symbol card](examples/etaf-symbol-card.el) example uses the catalog from `etaf-ui` and answers "what is this symbol, how is it called here, where do I go next" in one keypress.  A pinned, draggable timer with three styles lives in its own package, [etaf-pomodoro](https://github.com/emacs-taf/etaf-pomodoro).
 
@@ -32,8 +32,8 @@ The [symbol card](examples/etaf-symbol-card.el) example uses the catalog from `e
 ;; timer); :view renders that session.  Both are plain functions, so an
 ;; application that ships xxx-create needs no glue, and one that first wants a
 ;; file prompt gets a small factory.
-(defun my/etaf-md-preview-session ()
-  (etaf-md-preview-create :file (read-file-name "Markdown: ")))
+(defun my/etaf-md-session ()
+  (etaf-md-create :file (read-file-name "Markdown: ")))
 
 (defun my/etaf-manual-session ()
   "Open the manual where the reader stopped last time."
@@ -55,7 +55,7 @@ The [symbol card](examples/etaf-symbol-card.el) example uses the catalog from `e
                 :focusable t :draggable t)
     (weread     :title "WeRead"       :create etaf-weread-create :view etaf-weread-view
                 :width 100 :height 24 :shortcut "w" :at frame-top-right :stack t)
-    (md-preview :title "Markdown"     :create my/etaf-md-preview-session :view etaf-md-preview-view
+    (md         :title "Markdown"     :create my/etaf-md-session :view etaf-md-view
                 :width 110 :height 26 :shortcut "d" :at frame-top-right :stack t)
     (manual     :title "ETAF Manual"  :create my/etaf-manual-session :view etaf-manual-reader-view
                 :keep-alive t :width 180 :height 40 :shortcut "h" :at frame-center :stack t)
@@ -114,7 +114,7 @@ The shape of a registration:
 The [entry Commentary](etaf-posframe.el) is the supported API inventory. Requires Emacs 29.1+, ETAF and Posframe on `load-path`; install from the ETAF package archive once released, or add this checkout to `load-path`:
 
 ```elisp
-(add-to-list 'load-path "/path/to/etaf-posframe")
+(add-to-list 'load-path "/path/to/etaf/packages/etaf-posframe")
 ```
 
 ## Panels on a text terminal

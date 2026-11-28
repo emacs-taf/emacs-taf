@@ -12,9 +12,13 @@ The demo desktop at a wide frame:
 
 ## Minimal example
 
+Install via `M-x etaf-install` from `https://etaf.top/packages/`, or from source
+checkouts of [`emacs-taf/etaf`](https://github.com/emacs-taf/etaf) and
+`etaf-desktop`:
+
 ```elisp
-(add-to-list 'load-path "/path/to/etaf")
-(add-to-list 'load-path "/path/to/etaf-ui")
+(dolist (pkg '("ecss" "ebox" "etaf" "etaf-ui"))
+  (add-to-list 'load-path (expand-file-name pkg "/path/to/etaf/packages")))
 (add-to-list 'load-path "/path/to/etaf-desktop")
 (require 'etaf-desktop)
 (let ((desktop (etaf-desktop-open)))
@@ -40,11 +44,12 @@ contract and [architecture](docs/architecture.md) for ownership boundaries.
 
 `M-x etaf-desktop-demo-open` mounts a complete desktop with six sample
 applications (Notes, Tasks, Clock, Calculator, Chat and Monitor) spread over
-two workspaces. From a checkout with sibling providers:
+two workspaces. From a source checkout beside `etaf`:
 
 ```sh
 cd etaf-desktop
-emacs -Q -L ../ecss -L ../ebox -L ../etaf -L ../etaf-ui -L . \
+emacs -Q -L ../etaf/packages/ecss -L ../etaf/packages/ebox \
+  -L ../etaf/packages/etaf -L ../etaf/packages/etaf-ui -L . \
   -l etaf-desktop -f etaf-desktop-demo-open
 ```
 
@@ -54,8 +59,9 @@ contract described in [the manual](docs/manual.md#applications-and-instances).
 
 ## Checks
 
-Run `make check` with Emacs 29.1 or newer and sibling `etaf`, `etaf-ui`, `ebox`
-and `ecss` checkouts.
+Run `make check` with Emacs 29.1 or newer and the core packages from
+[`emacs-taf/etaf`](https://github.com/emacs-taf/etaf) (`ecss`, `ebox`, `etaf`
+and `etaf-ui`).
 
 The workspace's `scripts/performance.py` includes native mouse workloads named
 `etaf-desktop.demo.*`. They run the complete six-application demo with its Clock

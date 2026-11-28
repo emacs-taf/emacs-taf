@@ -1,7 +1,7 @@
 # Chu He · 中国象棋
 
 Chinese chess (xiangqi) with a native ETAF board and the OpenSpiel rule engine,
-built as an independent [GameKit](https://github.com/emacs-taf/etaf-gamekit)
+built as an independent [GameKit](https://github.com/emacs-taf/etaf/tree/main/packages/etaf-gamekit)
 application. Play the computer or a friend: pick a stone, click a highlighted
 point, and the bridge answers for the computer's side or hands the turn to the
 other local player.
@@ -45,32 +45,44 @@ move.
 
 ## Installation
 
+### From the ETAF package archive (recommended)
+
+```elisp
+(require 'package)
+(add-to-list 'package-archives '("etaf" . "https://etaf.top/packages/"))
+(package-initialize)
+(package-refresh-contents)
+(package-install 'etaf-install)
+```
+
+Then run `M-x etaf-install` and select `etaf-xiangqi`. The installer pulls
+`ecss`, `ebox`, `etaf`, `etaf-ui` and `etaf-gamekit` automatically, and prompts
+to install the pinned OpenSpiel runtime under `~/.cache/emacs-taf/game-engines`
+(or run `M-x etaf-gamekit-install-openspiel` anytime).
+
+### From a source checkout
+
+All core framework packages live in the single
+[`emacs-taf/etaf`](https://github.com/emacs-taf/etaf) repository:
+
 ```sh
-git clone https://github.com/emacs-taf/ecss.git
-git clone https://github.com/emacs-taf/ebox.git
 git clone https://github.com/emacs-taf/etaf.git
-git clone https://github.com/emacs-taf/etaf-ui.git
-git clone https://github.com/emacs-taf/etaf-gamekit.git
 git clone https://github.com/emacs-taf/etaf-xiangqi.git
 ```
 
-Then install the OpenSpiel runtime once from the package itself with
-`M-x etaf-gamekit-install-openspiel`; it writes only under
-`~/.cache/emacs-taf/game-engines`.
-
-Add every provider root and this repository to `load-path`:
+Add the framework package directories and this repository to `load-path`:
 
 ```elisp
-(add-to-list 'load-path "/path/to/ecss")
-(add-to-list 'load-path "/path/to/ebox")
-(add-to-list 'load-path "/path/to/etaf")
-(add-to-list 'load-path "/path/to/etaf-ui")
-(add-to-list 'load-path "/path/to/etaf-gamekit")
+(dolist (pkg '("ecss" "ebox" "etaf" "etaf-ui" "etaf-gamekit"))
+  (add-to-list 'load-path (expand-file-name pkg "/path/to/etaf/packages")))
 (add-to-list 'load-path "/path/to/etaf-xiangqi")
 (require 'etaf-xiangqi)
 
 (global-set-key (kbd "C-c x") #'etaf-xiangqi-open)
 ```
+
+Then install the OpenSpiel runtime once with `M-x etaf-gamekit-install-openspiel`
+(it writes only under `~/.cache/emacs-taf/game-engines`).
 
 `M-x etaf-xiangqi-open` starts an independent match and fits the board to its
 window; it accepts an optional integer seed for a reproducible opening.
@@ -113,7 +125,7 @@ separately.
 - [Chu He manual](docs/manual.md) — the board, window adaptation and GUI
   acceptance.
 - [Package entry](etaf-xiangqi.el) — the supported API inventory.
-- [GameKit](https://github.com/emacs-taf/etaf-gamekit) — the shared game
+- [GameKit](https://github.com/emacs-taf/etaf/tree/main/packages/etaf-gamekit) — the shared game
   framework, its adapters and backend installation.
 
 ## License

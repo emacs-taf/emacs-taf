@@ -42,8 +42,7 @@ Emacs 里的 Telegram 客户端：界面用 [ETAF](https://github.com/emacs-taf/
 ## 要求
 
 - Emacs 29.1 或更新版本。
-- 提供者检出：`etaf`、`etaf-ui`、`ebox`、`ecss`。把它们放在本仓库旁边
-  （`../etaf` 等），或放进工作区的上级目录（`../etaf` 等）。
+- 核心框架包：`etaf`、`etaf-ui`、`ebox`、`ecss`（通过 `M-x etaf-install` 自动安装，或克隆 [`emacs-taf/etaf`](https://github.com/emacs-taf/etaf) 使用其 `packages/` 目录）。
 - 真实使用时还需要 `telega` 包与服务端（`telega-server` + TDLib）。安装器会安装
   `telega` 包，但不会编译原生 `telega-server`：先安装 TDLib，再运行
   `M-x telega-server-build`（或按 Telega README 手工构建），把 `telega-server`
@@ -53,7 +52,9 @@ Emacs 里的 Telegram 客户端：界面用 [ETAF](https://github.com/emacs-taf/
 
 ## 安装与运行
 
-把本仓库根、四个提供者的仓库根和 telega 的加载路径加进 `load-path`，然后：
+推荐通过 ETAF 包归档（`https://etaf.top/packages/`）运行 `M-x etaf-install` 并选择 `etaf-telega`。
+
+从源码检出使用时，将 `emacs-taf/etaf` 下的核心包目录（`packages/{ecss,ebox,etaf,etaf-ui}`）、本仓库根和 `telega` 的路径加入 `load-path`，然后：
 
 ```elisp
 (require 'etaf-telega)

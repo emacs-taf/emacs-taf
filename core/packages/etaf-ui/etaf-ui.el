@@ -5,7 +5,7 @@
 ;; Version: 0.3.13
 ;; Keywords: ui, convenience
 ;; Package-Requires: ((emacs "29.1") (etaf "0.3.8"))
-;; URL: https://github.com/emacs-taf/etaf-ui
+;; URL: https://github.com/emacs-taf/etaf
 
 ;;; Commentary:
 

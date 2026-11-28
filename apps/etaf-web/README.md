@@ -35,20 +35,17 @@ reading view.
 ## Prerequisites
 
 - Emacs 29.1 or newer built with libxml support (`(libxml-available-p)`).
-- Sibling checkouts of `etaf-md`, `etaf`, `etaf-ui`, `ebox` and `ecss` on
-  `load-path`.
+- [`emacs-taf/etaf`](https://github.com/emacs-taf/etaf) (`packages/{ecss,ebox,etaf,etaf-ui}`) and `etaf-md` on `load-path`.
 
 ## Installation
 
-Add the repository roots to `load-path` and require `etaf-web`:
+Clone [`emacs-taf/etaf`](https://github.com/emacs-taf/etaf), `etaf-md` and `etaf-web`, then add the package directories to `load-path` and require `etaf-web`:
 
 ```elisp
-(add-to-list 'load-path "/path/to/emacs-taf/ecss")
-(add-to-list 'load-path "/path/to/emacs-taf/ebox")
-(add-to-list 'load-path "/path/to/emacs-taf/etaf-ui")
-(add-to-list 'load-path "/path/to/emacs-taf/etaf")
-(add-to-list 'load-path "/path/to/emacs-taf/etaf-md")
-(add-to-list 'load-path "/path/to/emacs-taf/etaf-web")
+(dolist (pkg '("ecss" "ebox" "etaf-ui" "etaf"))
+  (add-to-list 'load-path (expand-file-name pkg "/path/to/etaf/packages")))
+(add-to-list 'load-path "/path/to/etaf-md")
+(add-to-list 'load-path "/path/to/etaf-web")
 (require 'etaf-web)
 ```
 
@@ -75,5 +72,5 @@ Or compile HTML purely without disk or network I/O:
 - Run all package checks from the workspace root:
 
 ```sh
-make -C packages/etaf-web check
+make -C apps/etaf-web check
 ```

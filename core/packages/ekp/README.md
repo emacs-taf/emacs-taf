@@ -26,12 +26,11 @@ Emacs-kp implements the Knuth-Plass optimal line breaking algorithm with full su
 
 With `package.el`, install the package from your archive of choice.  The package keeps `dictionaries/` and `native/` next to `lisp/`, and `package-install` places them together, so no extra path setup is needed.
 
-From source, add the repository root to `load-path` and keep `dictionaries/` and `native/` at that root:
+From source, clone [`emacs-taf/etaf`](https://github.com/emacs-taf/etaf), add the `ekp` package directory to `load-path`, and keep `dictionaries/` and `native/` at that root:
 
 ```elisp
-(add-to-list 'load-path "/path/to/emacs-kp")
+(add-to-list 'load-path "/path/to/etaf/packages/ekp")
 (require 'ekp)
-(require 'ekp)   ; buffer/region commands
 ```
 
 Byte-compiling is strongly recommended — the Elisp engine is about 10× faster compiled.

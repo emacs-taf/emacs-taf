@@ -111,12 +111,15 @@ names `M-x etaf-weread-login`; `g` retries once you have signed in.
 
 ### 3. The Emacs package
 
+Install from the ETAF package archive (`https://etaf.top/packages/`) with
+`M-x etaf-install` and select `etaf-weread`.
+
+From a source checkout, clone [`emacs-taf/etaf`](https://github.com/emacs-taf/etaf)
+and `etaf-weread`, then add the package directories to `load-path`:
+
 ```elisp
-(add-to-list 'load-path "/path/to/etaf")
-(add-to-list 'load-path "/path/to/etaf-ui")
-(add-to-list 'load-path "/path/to/etaf-db")
-(add-to-list 'load-path "/path/to/ebox")
-(add-to-list 'load-path "/path/to/ecss")
+(dolist (pkg '("ecss" "ebox" "etaf" "etaf-ui" "etaf-db"))
+  (add-to-list 'load-path (expand-file-name pkg "/path/to/etaf/packages")))
 (add-to-list 'load-path "/path/to/etaf-weread")
 (require 'etaf-weread)
 
@@ -170,12 +173,13 @@ backend error in its message line; sign in again through the bundled backend
 `M-x etaf-weread-demo-open` mounts the complete reader on a scripted account,
 so it needs no network, login or external backend.
 `M-x etaf-weread-demo-live` opens the same reader against the installed
-backend. From a checkout with sibling providers:
+backend. From a source checkout beside `etaf`:
 
 ```sh
 cd etaf-weread
-emacs -Q -L ../ecss -L ../ebox -L ../etaf -L ../etaf-ui \
-  -L ../etaf-db -L . -l examples/etaf-weread-demo.el -f etaf-weread-demo-open
+emacs -Q -L ../etaf/packages/ecss -L ../etaf/packages/ebox \
+  -L ../etaf/packages/etaf -L ../etaf/packages/etaf-ui \
+  -L ../etaf/packages/etaf-db -L . -l examples/etaf-weread-demo.el -f etaf-weread-demo-open
 ```
 
 ## Documentation

@@ -2,7 +2,7 @@
 
 [English](manual.md)
 
-本 Monorepo 维护共用的开发命令：`scripts/elisp.py` 跨 `packages/` 查找和运行 Lisp，
+本 Monorepo 维护共用的开发命令：`scripts/elisp.py` 跨 `core/packages/`、`apps/` 与 `games/` 查找和运行 Lisp，
 `scripts/performance.py` 是唯一的测量驱动。各包在 `benchmarks/performance-scenarios.el` 注册长期维护的
 场景，提供应用初始化、操作和验证条件；计时、profiler、超时和基线比较由通用工具负责。
 
@@ -62,7 +62,7 @@ python3 scripts/package_archive.py verify --directory /tmp/package-archive
 
 ### 构建与验证官方包集
 
-维护者使用 Python 3.12+、Git 和 Emacs 进行发布验证；用户只需要 Emacs。先封口工作副本：每个包都从这一个封口的检出提交里导出（树中的 `packages/<名字>`），不读取未提交文件或当前远端头部。`release-dependencies.json` 选择包及运行资源，同一提交提供安装入口。
+维护者使用 Python 3.12+、Git 和 Emacs 进行发布验证；用户只需要 Emacs。先封口工作副本：每个包都从这一个封口的检出提交里导出（按 `workspace.json` 登记的 `core/packages/`、`apps/`、`games/` 路径），不读取未提交文件或当前远端头部。`release-dependencies.json` 选择包及运行资源，同一提交提供安装入口。
 
 ```sh
 make release-build RELEASE_DIR=/tmp/etaf-release-unique
@@ -76,7 +76,16 @@ make release-tool-tests
 
 定向诊断可运行 `scripts/package-release.py verify --directory DIR --target etaf-ui`；`--paths package-install` 只验证普通 package.el 安装。这类局部证据不证明省略的目标或安装路径。
 
-完成受支持环境的验证后，用 `make release-publish RELEASE_DIR=/path/to/release` 发布该归档。命令委托给手册站点的仅包发布器，不重新构建或改变页面。首次同时上线站点和包归档时，使用 `make -C packages/etaf-manual site-publish PUBLISH_ARGS='--packages /path/to/release'`。传输、部署锁、版本不可变、历史下载和回滚的契约见[站点部署手册](https://github.com/emacs-taf/etaf-manual/blob/main/docs/manual.zh-CN.md#发布站点和包归档)。
+发布更新包之前，先对齐内部 `Package-Requires` 最低版本下界，避免用户原生执行 `package-upgrade` 时把上层包升上去却落下底层提供方：
+
+```sh
+python3 scripts/package-release.py sync-requires --changed-only --check
+python3 scripts/package-release.py sync-requires --changed-only --write
+```
+
+`verify --scope auto` 会在运行 Emacs 安装检查前自动对所有变更的一方包执行该门禁，未变更包保持不动。
+
+完成受支持环境的验证后，用 `make release-publish RELEASE_DIR=/path/to/release` 发布该归档。命令委托给手册站点的仅包发布器，不重新构建或改变页面。首次同时上线站点和包归档时，使用 `make -C core/packages/etaf-manual site-publish PUBLISH_ARGS='--packages /path/to/release'`。传输、部署锁、版本不可变、历史下载和回滚的契约见[站点部署手册](https://github.com/emacs-taf/etaf/blob/main/packages/etaf-manual/docs/manual.zh-CN.md#发布站点和包归档)。
 
 `package-release.py stage --directory DIR --output NEW` 是发布器调用的本地门禁。它要求封口工作区清单与记录的包版本一致，验证器、安装探针和清单摘要仍有效，并在同一记录的 Emacs/平台上完成全部目标的安装入口验证。局部证据会被拒绝；输出只含 `archive-contents`、公开清单及其中列出的源码 tar 包。报告是本地验证证据，不是签名；此门禁本身不认证其他 Emacs 版本、平台或 GUI 行为。
 
@@ -86,28 +95,28 @@ make release-tool-tests
 
 ## 提交并发布一次跨包改动
 
-所有包都在这一份 jjosh 检出里，所以提供方改动和它迁移的消费方是同一个提交；
+所有包都在这一份标准 colocated Git + `jj` 单仓里，所以提供方改动和它迁移的消费方是同一个提交；
 不需要按仓库排序，也没有版本 pin 要更新。
 
 ```sh
-jjosh status                                   # 看 @ 里有什么；不封别人的改动
+jj status                                      # 看 @ 里有什么；不封别人的改动
 make plan-affected                             # 本次改动影响到的单元
 make check-affected JOBS=4                     # 按提供方优先编译并测试它们
-jjosh describe -m "$(cat /tmp/message.txt)" && jjosh new
+jj describe -m "$(cat /tmp/message.txt)" && jj new
 python3 scripts/check-commit-message.py /tmp/message.txt
 make structure-check
-python3 scripts/publish-packages.py --dry-run  # 确认后去掉 --dry-run
-jjosh bookmark set main -r @- && jjosh git push --remote aliyun --bookmark main
-jjosh git push --remote origin --bookmark main
+jj bookmark set main -r @- && jj git export
+jj git push --remote aliyun --bookmark main
+jj git push --remote origin --bookmark main    # 自动触发 .github/workflows/project.yml
 ```
 
 - 消息是一条带具体 scope 的 Conventional Commit，正文解释改动，并用 `Validation:`
-  行写明实际跑过的门禁。jjosh 不运行 Git 钩子，所以上面的消息与结构检查就是门禁，
+  行写明实际跑过的门禁。`jj` 不运行 Git 钩子，所以上面的消息与结构检查就是门禁，
   推送任何东西之前都要跑。
-- `publish-packages.py` 把每个包目录从共享提交里投影出来，依次推到该包自己的
-  `aliyun`、`laycat` 和 `origin` 远端。`--package NAME` 与 `--remote NAME` 缩小范围；
-  没有变化的包只花一次请求。
-- 检出本身推向两个仓库级远端，完整保存安装器源码、共享工具、工作区契约与跨包历史：
+- 推送 `main` 到 `origin` 后，`.github/workflows/project.yml` 自动把 `core/` 投影到
+  `emacs-taf/etaf`，并把有变更的 `apps/`、`games/` 投影到各自只读仓库。本地预览或手动
+  执行可用 `python3 scripts/project-repos.py --dry-run`（或 `--only <目标>`）。
+- 检出本身推向两个仓库级远端，完整保存全部包源码、共享工具、工作区契约与跨包历史：
   公开主单仓 `origin`（GitHub 上的 `emacs-taf/emacs-taf`，也是外部 PR 入口）与私有备份
   `aliyun`（forgejo 上的 `emacs-taf/etaf-mono`）。每次交付后推送 `main`。
 - `make check` 覆盖整份检出，用于发布前；`make check-affected` 是日常门禁。
@@ -123,7 +132,7 @@ jjosh git push --remote origin --bookmark main
 | L0 标准 ELPA 依赖 | `etaf`、`etaf-db`、`telega`、`posframe` | 写进 `Package-Requires`；跨源依赖同时写进 `release-dependencies.json` 的 `external` 与 `etaf-install--targets` 能力标签（`gnu`/`nongnu`/`melpa`） | 否（进 `Depends on`） |
 | L1 随包源码组件、离线文档与运行资源 | 纯源码运行时后端（`backends/`：`weread`、`netease`）、`docs/` 扁平纯 Markdown 手册、`dictionaries/`、`book/`、引擎安装脚本、以及公开命令调用的纯代码 `examples/` | 严格按统一目录归类放入应用仓并在 `release-dependencies.json` 的 `resources` 声明（`scripts/add-package.py` 与 `scripts/check-repository.py` 的 `suggest_release_resources` 可自动给出推荐清单），随 `.tar` 原子发布、解包即用且 `README` → `docs/` 离线零死链；所有展示截图、官网图片与演示视频统一用 `scripts/media-publish.py` 托管到 `https://etaf.top/media/` 并在文档中写链接（绝不提交进 Git）；`scripts/check-repository.py` 硬门禁拒绝所有 `tests/fixtures/`（单文件 ≤ 100 KB）之外的图片/视频，也拒绝把 `tests/`、`benchmarks/`、`scripts/`、`media/`、`Makefile`、`design/`、`site/`、`native/vendor/` 或平台二进制塞进 `.tar` | 否 |
 | L2 预编译原生模块与受管引擎 | `etaf-md` 与 `etaf-org` 共用的 QuickJS（`etaf-md-typeset-native`）、`etaf` `libmpv`、`ekp` C 模块；Godot / OpenSpiel | C 模块由 `scripts/native-release.py` 或 CI（`.github/workflows/native-modules.yml`）按 `(OS, Arch)` 预编译并发布到 `https://etaf.top/native/`，`.tar` 内只随 `resources` 携带 `native/manifest.json`，用户 `M-x etaf-install` 自动下载校验并热加载至 `~/.cache/emacs-taf/native/`；游戏引擎在 `etaf-install--system-tools` 的 `:managed-engines` 登记并通过 `M-x etaf-gamekit-install-*` 安装 | 否（进 `Runtime`） |
-| L3 / L4 外部系统 CLI | `ffmpeg`、`mpv`、`node`、`python3`、`rsvg-convert`、`telega-server`、`qrencode`、`git`、`rg`、`dot`、`plantuml`、`curl` | 不打包、不代跑 `sudo`/`brew`/`apt`；登记在 `packages/etaf-install/lisp/etaf-install-catalog.el` 的 `etaf-install--cli-catalog` 与 `etaf-install--system-tools`（区分 `:required` 与 `:optional`），并实现 `<包>-doctor`；交互安装缺必需项自动弹出 `*ETAF Installation*` 给合并安装命令 | **是（仅此一类）** |
+| L3 / L4 外部系统 CLI | `ffmpeg`、`mpv`、`node`、`python3`、`rsvg-convert`、`telega-server`、`qrencode`、`git`、`rg`、`dot`、`plantuml`、`curl` | 不打包、不代跑 `sudo`/`brew`/`apt`；登记在 `core/packages/etaf-install/lisp/etaf-install-catalog.el` 的 `etaf-install--cli-catalog` 与 `etaf-install--system-tools`（区分 `:required` 与 `:optional`），并实现 `<包>-doctor`；交互安装缺必需项自动弹出 `*ETAF Installation*` 给合并安装命令 | **是（仅此一类）** |
 
 组件源码必须放在应用仓库内，不放别的仓库或技能目录，这样一次版本提升就同时发布 Lisp 与组件。
 
@@ -134,13 +143,13 @@ jjosh git push --remote origin --bookmark main
 ```sh
 # 1. 本机或 CI 矩阵按 (OS, Arch) 编译并冒烟验证（也可用 GitHub Actions native-modules.yml）
 python3 scripts/native-release.py build --output /tmp/native-builds --package etaf-md
-# 2. 汇总校验并写回 packages/<包>/native/manifest.json，同时生成可部署目录
+# 2. 汇总校验并写回 <分层>/<包>/native/manifest.json，同时生成可部署目录
 python3 scripts/native-release.py manifest --input /tmp/native-builds --write-packages --stage /tmp/native-stage
 python3 scripts/native-release.py verify --all --stage /tmp/native-stage
 # 3. 单独发布到 https://etaf.top/native/（自动校验清单并生成可浏览的 /native/index.html）
-python3 packages/etaf-manual/site/scripts/publish.py --native-only /tmp/native-stage
+python3 core/packages/etaf-manual/site/scripts/publish.py --native-only /tmp/native-stage
 # 仅刷新已托管清单的模块/版本元数据并重新生成 /native/index.html（不重复上传二进制）：
-python3 packages/etaf-manual/site/scripts/publish.py --native-pages-only
+python3 core/packages/etaf-manual/site/scripts/publish.py --native-pages-only
 ```
 
 ### 发布展示多媒体（`/media/`）
@@ -171,12 +180,12 @@ make release-publish RELEASE_DIR=/tmp/release-next
 
 新增一个包进归档是固定顺序，不要另开路径：
 
-1. 包放在 `packages/<名字>` 下，并登记进 `workspace.json`（`python3 scripts/add-package.py NAME --url URL`）。
+1. 包按职责放在 `core/packages/<名字>`、`apps/<名字>` 或 `games/<名字>` 下，并登记进 `workspace.json`（`python3 scripts/add-package.py NAME --url URL`）。
 2. 声明 `Version` 与全部 Emacs 依赖；按四层表区分资源：纯源码后端与运行数据放进仓库并在 `release-dependencies.json` 的 `resources` 列出；若有 C 动态模块，则先按上节发布到 `/native/` 且 `resources` 只列 `native/manifest.json`（绝不把 `Makefile`、`native/vendor/` 或二进制塞进 `.tar`）。
-3. 实现 `<包>-doctor`，返回 `(LABEL AVAILABLE REMEDY)`，标清阻塞与降级；若有需用户手工安装的外部 OS CLI，在 `packages/etaf-install/lisp/etaf-install-catalog.el` 的 `etaf-install--cli-catalog` 和 `etaf-install--system-tools` 登记（不含自动原生模块、随包 `backends/` 与受管引擎；受管引擎填 `:managed-engines`）。
-4. 把目标加进 `etaf-install--targets`（含分组、`<包>-open` 与跨源能力标签）及 `etaf-manual/site/scripts/archive_pages.py` 的 `GROUPS`，并在 `scripts/install-smoke.el` 补上验收条目。
+3. 实现 `<包>-doctor`，返回 `(LABEL AVAILABLE REMEDY)`，标清阻塞与降级；若有需用户手工安装的外部 OS CLI，在 `core/packages/etaf-install/lisp/etaf-install-catalog.el` 的 `etaf-install--cli-catalog` 和 `etaf-install--system-tools` 登记（不含自动原生模块、随包 `backends/` 与受管引擎；受管引擎填 `:managed-engines`）。
+4. 把目标加进 `etaf-install--targets`（含分组、`<包>-open` 与跨源能力标签）及 `core/packages/etaf-manual/site/scripts/archive_pages.py` 的 `GROUPS`，并在 `scripts/install-smoke.el` 补上验收条目。
 5. 跑该包的 `make check`、`make structure-check`、`make installer-compile` 和 `tests/tools/test_install.py`，再用 dev 道验证安装。
-6. 用 jjosh 封口提交到 `main`，通过 `pi-skill etaf-archive-release release <包> --yes`（或手动 `publish-packages.py` + `make release-build/check/publish`）投影推送、跑门禁并发布，随后回读 `https://etaf.top/packages/manifest.json` 与该包详情页。
+6. 用 `jj` 封口提交到 `main`，通过 `pi-skill etaf-archive-release release <包> --yes`（或手动推送 `main` 触发 CI 自动投影 + `make release-build/check/publish`）对齐依赖、跑门禁并发布，随后回读 `https://etaf.top/packages/manifest.json` 与该包详情页。
 7. 页面或书稿有变化就重发站点；让六格安装工作流在发布提交上全部通过。
 
 不要手改 `/srv/etaf.top` 下的文件：部署锁、版本不可变、校验和回读与回滚都由部署器负责。
@@ -350,24 +359,24 @@ python3 scripts/tui-capture.py --cols 120 --rows 40 --out /tmp/app-wide.png -- \
 
 ## 在真实 GUI 中验证隔离检出
 
-`jjosh workspace add` 检出必须在完整用户配置里运行，且绝不能加载主检出的代码代。用户 init 会从
+`jj workspace add` 检出必须在完整用户配置里运行，且绝不能加载主检出的代码代。用户 init 会从
 `emacs-taf-dir` 取包根，但 `init-etaf.el` 与提前加载的 `use-package` 还会添加主检出路径
-（`~/src/etaf-mono/packages/*` 与独立仓 `~/emacs-taf/*`），且已加入的路径会赢得解析。
+（`~/src/etaf-mono/{core/packages,apps,games}/*` 与独立仓 `~/emacs-taf/*`），且已加入的路径会赢得解析。
 
 1. 用 `EMACSLOADPATH=<私有目录>:` 让私有的 `site-start.el` 排在加载路径最前。它在 init
    文件之前运行，因此可以用 `setq`（不能用 `defvar`）把 `emacs-taf-dir` 指向隔离根，设置
    私有 `server-name`、`load-prefer-newer` 和有界的 `kill-emacs` 看门狗，并对 `require`
-   与 `load` 加 advice，把主检出路径（`~/src/etaf-mono/packages` 与 `~/emacs-taf`）的库和相对名重定向到隔离根。只 advice
+   与 `load` 加 advice，把主检出路径（`~/src/etaf-mono` 与 `~/emacs-taf`）的库和相对名重定向到隔离根。只 advice
    `load` 不够：Emacs 31 的 `require` 不会调用被 advice 的 subr。
 2. 不抢焦点地启动后台实例：`open -g -n -a Emacs --env 'EMACSLOADPATH=<私有目录>:'
    --args -l <启动文件>`。启动文件在 init 文件之后运行：把隔离根放到最前、移除
-   `~/src/etaf-mono/packages` 与 `~/emacs-taf` 条目、启动命名 server 并记录 PID。后台测量不能被 App Nap
+   `~/src/etaf-mono` 与 `~/emacs-taf` 条目、启动命名 server 并记录 PID。后台测量不能被 App Nap
    限制；按「执行一次测评」一节的方法确认，不要传 `-NSAppSleepDisabled`，
    Emacs 会把它当作未知选项拒绝。
 3. 测量前先证明只有一个代码代：每个 provider 的 `locate-library` 结果与 `load-history`
    里的 `(provide . feature)` 条目都必须落在隔离根下。性能驱动会在预检里重复这项检查，
    并拒绝加载自另一份 checkout 的库。测量前先确认隔离检出已跟到已发布的 main：
-   `jjosh workspace add` 检出有自己的工作副本提交，用 `jjosh log -r main` 与它的 `@-` 对比；
+   `jj workspace add` 检出有自己的工作副本提交，用 `jj log -r main` 与它的 `@-` 对比；
    落在 main 之后会使测量与记录的 revision 双双失效。
 4. 运行 `scripts/performance.py run --mode gui --server <名字> --root <隔离根>
    --load-path <应用根>`，并按记录的 PID 关闭实例，不要按进程名杀。

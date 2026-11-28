@@ -6,7 +6,7 @@
 
 ## 核心能力
 
-- **原生基于 `etaf-ext` 构建**：直接注册进 [etaf-ext](https://github.com/emacs-taf/etaf-ext) 扩展引擎，共享 Host 树快照缓存、多扩展原子表现层（`companion-inside`、`companion-after`、`override`）、统一 mode-line 徽章、单页纯净模式、异常熔断与 `M-x etaf-ext-manage` 管理中心。
+- **原生基于 `etaf-ext` 构建**：直接注册进 [etaf-ext](https://github.com/emacs-taf/etaf/tree/main/packages/etaf-ext) 扩展引擎，共享 Host 树快照缓存、多扩展原子表现层（`companion-inside`、`companion-after`、`override`）、统一 mode-line 徽章、单页纯净模式、异常熔断与 `M-x etaf-ext-manage` 管理中心。
 - **5 个正交命令**：`etaf-translate-toggle`、`etaf-translate-panel`、`etaf-translate-at-point`、`etaf-translate-paragraph` 与 `etaf-translate-mode-cycle`；无需额外开关全局 minor-mode，`require` 即就绪。
 - **两种模式与三种双语样式**：双语对照（`left-bar` 细线 / `muted` 极简 / `tinted` 轻底）与原地译文替换（带 `:help-echo` 悬停回看原文）；利用缓存 0 延迟瞬切。
 - **极简浮动界面**：6 行右上角浮动控制面板（`etaf-translate-panel`，严格跟随 `:theme 'auto`，面板修改的模式/样式/语言/引擎自动稀疏持久化到 `etaf-translate-state-file`，切缓冲区自动收起）、纯译文自适应快译浮窗（`etaf-translate-at-point`，不重复原文，高度随内容自适应至窗口 60%，超长支持滚轮与 `j`/`k` 滚动）以及保留原主题的 Mode-line 进度指示（`译[54/155]` / `译✓` / `译!N`）。
@@ -49,5 +49,5 @@
 ## 验证
 
 ```sh
-make -C packages/etaf-translate check
+make -C core/packages/etaf-translate check
 ```

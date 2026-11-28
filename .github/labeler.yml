@@ -27,7 +27,6 @@
   - changed-files:
       - any-glob-to-any-file:
           - "core/packages/etaf-install/**"
-          - "packages/etaf-install/**"
           - "scripts/package-release.py"
           - "scripts/package_archive.py"
           - "scripts/native-release.py"
@@ -35,100 +34,100 @@
 
 "pkg:ecss":
   - changed-files:
-      - any-glob-to-any-file: ["core/packages/ecss/**", "packages/ecss/**"]
+      - any-glob-to-any-file: ["core/packages/ecss/**"]
 "pkg:ekp":
   - changed-files:
-      - any-glob-to-any-file: ["core/packages/ekp/**", "packages/ekp/**"]
+      - any-glob-to-any-file: ["core/packages/ekp/**"]
 "pkg:ebox":
   - changed-files:
-      - any-glob-to-any-file: ["core/packages/ebox/**", "packages/ebox/**"]
+      - any-glob-to-any-file: ["core/packages/ebox/**"]
 "pkg:etaf":
   - changed-files:
-      - any-glob-to-any-file: ["core/packages/etaf/**", "packages/etaf/**"]
+      - any-glob-to-any-file: ["core/packages/etaf/**"]
 "pkg:etaf-ui":
   - changed-files:
-      - any-glob-to-any-file: ["core/packages/etaf-ui/**", "packages/etaf-ui/**"]
+      - any-glob-to-any-file: ["core/packages/etaf-ui/**"]
 "pkg:etaf-posframe":
   - changed-files:
-      - any-glob-to-any-file: ["core/packages/etaf-posframe/**", "packages/etaf-posframe/**"]
+      - any-glob-to-any-file: ["core/packages/etaf-posframe/**"]
 "pkg:etaf-ext":
   - changed-files:
-      - any-glob-to-any-file: ["core/packages/etaf-ext/**", "packages/etaf-ext/**"]
+      - any-glob-to-any-file: ["core/packages/etaf-ext/**"]
 "pkg:etaf-db":
   - changed-files:
-      - any-glob-to-any-file: ["core/packages/etaf-db/**", "packages/etaf-db/**"]
+      - any-glob-to-any-file: ["core/packages/etaf-db/**"]
 "pkg:etaf-gamekit":
   - changed-files:
-      - any-glob-to-any-file: ["core/packages/etaf-gamekit/**", "packages/etaf-gamekit/**"]
+      - any-glob-to-any-file: ["core/packages/etaf-gamekit/**"]
 "pkg:etaf-install":
   - changed-files:
-      - any-glob-to-any-file: ["core/packages/etaf-install/**", "packages/etaf-install/**"]
+      - any-glob-to-any-file: ["core/packages/etaf-install/**"]
 "pkg:etaf-hints":
   - changed-files:
-      - any-glob-to-any-file: ["core/packages/etaf-hints/**", "packages/etaf-hints/**"]
+      - any-glob-to-any-file: ["core/packages/etaf-hints/**"]
 "pkg:etaf-highlight":
   - changed-files:
-      - any-glob-to-any-file: ["core/packages/etaf-highlight/**", "packages/etaf-highlight/**"]
+      - any-glob-to-any-file: ["core/packages/etaf-highlight/**"]
 "pkg:etaf-translate":
   - changed-files:
-      - any-glob-to-any-file: ["core/packages/etaf-translate/**", "packages/etaf-translate/**"]
+      - any-glob-to-any-file: ["core/packages/etaf-translate/**"]
 "pkg:etaf-export":
   - changed-files:
-      - any-glob-to-any-file: ["core/packages/etaf-export/**", "packages/etaf-export/**"]
+      - any-glob-to-any-file: ["core/packages/etaf-export/**"]
 "pkg:etaf-manual":
   - changed-files:
-      - any-glob-to-any-file: ["core/packages/etaf-manual/**", "packages/etaf-manual/**"]
+      - any-glob-to-any-file: ["core/packages/etaf-manual/**"]
 "pkg:etaf-md":
   - changed-files:
-      - any-glob-to-any-file: ["apps/etaf-md/**", "packages/etaf-md/**"]
+      - any-glob-to-any-file: ["apps/etaf-md/**"]
 "pkg:etaf-org":
   - changed-files:
-      - any-glob-to-any-file: ["apps/etaf-org/**", "packages/etaf-org/**"]
+      - any-glob-to-any-file: ["apps/etaf-org/**"]
 "pkg:maillist":
   - changed-files:
-      - any-glob-to-any-file: ["apps/maillist/**", "packages/maillist/**"]
+      - any-glob-to-any-file: ["apps/maillist/**"]
 "pkg:etaf-video-player":
   - changed-files:
-      - any-glob-to-any-file: ["apps/etaf-video-player/**", "packages/etaf-video-player/**"]
+      - any-glob-to-any-file: ["apps/etaf-video-player/**"]
 "pkg:etaf-ncm":
   - changed-files:
-      - any-glob-to-any-file: ["apps/etaf-ncm/**", "packages/etaf-ncm/**"]
+      - any-glob-to-any-file: ["apps/etaf-ncm/**"]
 "pkg:etaf-weread":
   - changed-files:
-      - any-glob-to-any-file: ["apps/etaf-weread/**", "packages/etaf-weread/**"]
+      - any-glob-to-any-file: ["apps/etaf-weread/**"]
 "pkg:etaf-telega":
   - changed-files:
-      - any-glob-to-any-file: ["apps/etaf-telega/**", "packages/etaf-telega/**"]
+      - any-glob-to-any-file: ["apps/etaf-telega/**"]
 "pkg:etaf-bili":
   - changed-files:
-      - any-glob-to-any-file: ["apps/etaf-bili/**", "packages/etaf-bili/**"]
+      - any-glob-to-any-file: ["apps/etaf-bili/**"]
 "pkg:etaf-youtube":
   - changed-files:
-      - any-glob-to-any-file: ["apps/etaf-youtube/**", "packages/etaf-youtube/**"]
+      - any-glob-to-any-file: ["apps/etaf-youtube/**"]
 "pkg:etaf-desktop":
   - changed-files:
-      - any-glob-to-any-file: ["apps/etaf-desktop/**", "packages/etaf-desktop/**"]
+      - any-glob-to-any-file: ["apps/etaf-desktop/**"]
 "pkg:etaf-pomodoro":
   - changed-files:
-      - any-glob-to-any-file: ["apps/etaf-pomodoro/**", "packages/etaf-pomodoro/**"]
+      - any-glob-to-any-file: ["apps/etaf-pomodoro/**"]
 "pkg:etaf-agenda":
   - changed-files:
-      - any-glob-to-any-file: ["apps/etaf-agenda/**", "packages/etaf-agenda/**"]
+      - any-glob-to-any-file: ["apps/etaf-agenda/**"]
 "pkg:etaf-rss":
   - changed-files:
-      - any-glob-to-any-file: ["apps/etaf-rss/**", "packages/etaf-rss/**"]
+      - any-glob-to-any-file: ["apps/etaf-rss/**"]
 "pkg:etaf-reader":
   - changed-files:
-      - any-glob-to-any-file: ["apps/etaf-reader/**", "packages/etaf-reader/**"]
+      - any-glob-to-any-file: ["apps/etaf-reader/**"]
 "pkg:etaf-screensaver":
   - changed-files:
-      - any-glob-to-any-file: ["apps/etaf-screensaver/**", "packages/etaf-screensaver/**"]
+      - any-glob-to-any-file: ["apps/etaf-screensaver/**"]
 "pkg:etaf-web":
   - changed-files:
-      - any-glob-to-any-file: ["apps/etaf-web/**", "packages/etaf-web/**"]
+      - any-glob-to-any-file: ["apps/etaf-web/**"]
 "pkg:etaf-xiangqi":
   - changed-files:
-      - any-glob-to-any-file: ["games/etaf-xiangqi/**", "packages/etaf-xiangqi/**"]
+      - any-glob-to-any-file: ["games/etaf-xiangqi/**"]
 "pkg:etaf-tanks":
   - changed-files:
-      - any-glob-to-any-file: ["games/etaf-tanks/**", "packages/etaf-tanks/**"]
+      - any-glob-to-any-file: ["games/etaf-tanks/**"]

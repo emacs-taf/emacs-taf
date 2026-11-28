@@ -12,7 +12,7 @@ manual describes the workflows and the contracts behind them.
 ## Prerequisites
 
 - Emacs 29.1 or newer.
-- The `etaf`, `etaf-ui`, `ebox` and `ecss` repositories, each on `load-path`.
+- Core framework packages (`ecss`, `ebox`, `etaf` and `etaf-ui` from `emacs-taf/etaf`) on `load-path` for a source checkout, or installed via `M-x etaf-install`.
 - The bundled backend, Node.js, Python 3 and mpv, with a signed-in account.
   The backend ships inside this package under `backends/netease/`; the README's
   "The bundled backend and its one-time login" section gives the check, login
@@ -20,10 +20,8 @@ manual describes the workflows and the contracts behind them.
   `etaf-ncm-state-directory`, which the client passes to it.
 
 ```elisp
-(add-to-list 'load-path "/path/to/etaf")
-(add-to-list 'load-path "/path/to/etaf-ui")
-(add-to-list 'load-path "/path/to/ebox")
-(add-to-list 'load-path "/path/to/ecss")
+(dolist (pkg '("ecss" "ebox" "etaf" "etaf-ui"))
+  (add-to-list 'load-path (expand-file-name pkg "/path/to/etaf/packages")))
 (add-to-list 'load-path "/path/to/etaf-ncm")
 (require 'etaf-ncm)
 ```

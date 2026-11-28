@@ -1,6 +1,6 @@
 <h1 align="center"><img src="design/etaf-logo.svg" alt="ETAF — Emacs Text Application Framework" width="480"></h1>
 
-ETAF builds text applications from reusable Components above the independent [Ebox](https://github.com/emacs-taf/ebox/blob/main/) layout and rendering engine.
+ETAF builds text applications from reusable Components above the independent [Ebox](https://github.com/emacs-taf/etaf/tree/main/packages/ebox) layout and rendering engine.
 
 ## Installation
 
@@ -105,7 +105,7 @@ Use `etaf-performance-call-operation` or `etaf-performance-with-operation` to tr
 The [`examples/`](README.md) directory contains four core-only best-practice applications: retained state and Actions, Data Controller ownership, Resource error/cleanup lifecycle, and time-driven animation. They are byte-compiled and driven through mounted public event paths by `make check`.
 
 ```elisp
-(add-to-list 'load-path "/path/to/github/etaf/examples")
+(add-to-list 'load-path "/path/to/etaf/packages/etaf/examples")
 (require 'etaf)
 (etaf-counter-example-open)
 ```
@@ -116,31 +116,32 @@ The [`examples/`](README.md) directory contains four core-only best-practice app
 - [Reference manual](https://etaf.top/introduction/) · [参考手册（中文）](https://etaf.top/zh-cn/introduction/)
 - [Best-practice examples](README.md) · [中文示例](README.zh-CN.md)
 
-## Independent packages
+## Companion core packages
+
+All core framework packages live together under `packages/` in [`emacs-taf/etaf`](https://github.com/emacs-taf/etaf):
 
 | Package | Role |
 | --- | --- |
-| [`etaf-ui`](https://github.com/emacs-taf/etaf-ui/blob/main/README.md) | Official Component catalog: Button, Checkbox, Label, Panel, and DataGrid. |
-| [`etaf-db`](https://github.com/emacs-taf/etaf-db/blob/main/README.md) | Database backend package, currently providing SQLite; the Data Controller remains in ETAF core. |
-| [`etaf-playground`](https://github.com/emacs-taf/etaf-playground/blob/main/README.md) | ETAF examples, with the UI catalog loaded only when requested. |
-| [`ebox-playground`](https://github.com/emacs-taf/ebox-playground/blob/main/README.md) | Ebox-only layout examples, independent from ETAF. |
+| [`ecss`](https://github.com/emacs-taf/etaf/tree/main/packages/ecss) | CSS cascade engine: selectors, specificity, custom properties and computed styles. |
+| [`ebox`](https://github.com/emacs-taf/etaf/tree/main/packages/ebox) | Box, Flex and Grid layout, rendering and incremental buffer publication. |
+| [`etaf-ui`](https://github.com/emacs-taf/etaf/tree/main/packages/etaf-ui) | Official Component catalog: Button, Checkbox, Label, Panel, and DataGrid. |
+| [`etaf-db`](https://github.com/emacs-taf/etaf/tree/main/packages/etaf-db) | Database backend package, currently providing SQLite; the Data Controller remains in ETAF core. |
+| [`etaf-posframe`](https://github.com/emacs-taf/etaf/tree/main/packages/etaf-posframe) | Floating child-frame panels for any ETAF View. |
+| [`etaf-ext`](https://github.com/emacs-taf/etaf/tree/main/packages/etaf-ext) | Universal extension engine, permission gating and Extension Manager. |
 
 There is no separate `etaf-data` install: Data is a core ETAF capability. There is no generic `etaf-adapters` package: other databases, services, files, or ORMs should provide concrete Data Source packages with explicit names.
 
 ## Source development
 
-For checkout-based development, load ECSS before Ebox, then ETAF. ETAF declares ECSS directly to preserve deferred cascade values when resolving Theme tokens. ETAF uses Ebox as its retained node, layout, focus, input and buffer engine; applications stay on ETAF public APIs.
-
-During development, load the sibling Ebox checkout before ETAF:
+For checkout-based development, clone [`emacs-taf/etaf`](https://github.com/emacs-taf/etaf) and add `ecss`, `ebox` and `etaf` from `packages/` to `load-path`. ETAF declares ECSS directly to preserve deferred cascade values when resolving Theme tokens. ETAF uses Ebox as its retained node, layout, focus, input and buffer engine; applications stay on ETAF public APIs.
 
 ```elisp
-(add-to-list 'load-path "/path/to/github/ecss")
-(add-to-list 'load-path "/path/to/github/ebox")
-(add-to-list 'load-path "/path/to/github/etaf")
+(dolist (pkg '("ecss" "ebox" "etaf"))
+  (add-to-list 'load-path (expand-file-name pkg "/path/to/etaf/packages")))
 (require 'etaf)
 ```
 
-For interactive speed, run `make native` in the Ebox and ETAF checkouts after each update. Each target byte-compiles its package and stores native code in your `eln-cache`, which Emacs loads in place of the bytecode without further configuration, even when JIT native compilation is disabled. A source file edited later runs as bytecode until the next `make native`.
+For interactive speed, run `make native` in the `ebox` and `etaf` package directories after each update. Each target byte-compiles its package and stores native code in your `eln-cache`, which Emacs loads in place of the bytecode without further configuration, even when JIT native compilation is disabled. A source file edited later runs as bytecode until the next `make native`.
 
 Run the complete local gate:
 
@@ -148,7 +149,7 @@ Run the complete local gate:
 make check EMACS=/Applications/Emacs.app/Contents/MacOS/Emacs
 ```
 
-The core gate byte-compiles the implementation, runs the core/Data/Resource tests, and checks documentation/API boundaries. Run `make check` in the sibling `etaf-ui`, `etaf-db`, `etaf-playground`, and `ebox-playground` repositories for their independent gates; none is loaded by the core facade.
+The core gate byte-compiles the implementation, runs the core/Data/Resource tests, and checks documentation/API boundaries. Run `make check` in the sibling `etaf-ui` and `etaf-db` package directories for their independent gates; none is loaded by the core facade.
 
 
 

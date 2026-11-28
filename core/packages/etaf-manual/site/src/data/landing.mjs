@@ -39,8 +39,8 @@ const apps = [
    '我喜欢的音乐、歌词与播放队列', 'Emacs 里的网易云音乐播放器'],
   ['etaf-weread', "the shelf and a book's progress, contents and notes", 'WeChat Reading client in Emacs',
    '书架，以及选中书的进度、目录与笔记', 'Emacs 里的微信读书客户端'],
-  ['etaf-md-preview', 'the source beside the rendered view', 'Markdown reading view beside its source in Emacs',
-   '左边原文，右边渲染', 'Emacs 里并排显示 Markdown 原文与渲染'],
+  ['etaf-md', 'the source beside the rendered view', 'Markdown reading view beside its source in Emacs',
+   '左边原文，右边渲染', 'Emacs 里并排显示 Markdown 原文与渲染', 'etaf-md-preview'],
   ['etaf-telega', "chats beside a channel's live messages", 'Telegram client in Emacs',
    '会话列表与频道的实时消息', 'Emacs 里的 Telegram 客户端'],
   ['etaf-desktop', 'windows, workspaces and a launcher', 'ETAF Desktop window manager',
@@ -62,14 +62,14 @@ const games = [
 ];
 
 const shots = (list, zh) => list.map((row) => {
-  const [name, width, height, en, enAlt, zhCaption, zhAlt] =
+  const [name, width, height, en, enAlt, zhCaption, zhAlt, shotName] =
     typeof row[1] === 'number' ? row : [row[0], 1600, 1022, ...row.slice(1)];
   return {
   name,
   width,
   height,
   href: repo(name),
-  image: `https://etaf.top/media/site/shots/${name}.webp`,
+  image: `https://etaf.top/media/site/shots/${shotName || name}.webp`,
   caption: zh ? zhCaption : en,
   alt: zh ? zhAlt : enAlt,
   };

@@ -2,7 +2,7 @@
 
 [中文](README.zh-CN.md)
 
-ETAF Markdown Preview renders a local Markdown document as a modern reading view inside Emacs. Built on [ETAF](https://github.com/emacs-taf/etaf) components and the [Ebox](https://github.com/emacs-taf/ebox) renderer, it combines a centered reading measure, typographic heading scale, syntax-highlighted code blocks with line markers and copy actions, full-grid pipe tables, GitHub alerts, footnotes, local image/video playback, native zero-browser Mermaid diagrams and MathJax display formulas, documentation containers, and Emacs living-document widgets — all inside one ordinary Emacs buffer so native scrolling, isearch and window splitting keep working.
+ETAF Markdown Preview renders a local Markdown document as a modern reading view inside Emacs. Built on [ETAF](https://github.com/emacs-taf/etaf) components and the [Ebox](https://github.com/emacs-taf/etaf/tree/main/packages/ebox) renderer, it combines a centered reading measure, typographic heading scale, syntax-highlighted code blocks with line markers and copy actions, full-grid pipe tables, GitHub alerts, footnotes, local image/video playback, native zero-browser Mermaid diagrams and MathJax display formulas, documentation containers, and Emacs living-document widgets — all inside one ordinary Emacs buffer so native scrolling, isearch and window splitting keep working.
 
 Wide single-window reading view (`M-x etaf-md-open`) with headings, callouts, full-grid tables, highlighted code blocks, and crisp native Mermaid & MathJax SVGs:
 
@@ -58,14 +58,17 @@ If you installed offline or directly via `package-install`, run `M-x etaf-instal
 
 ### From a source checkout
 
-Clone this repository next to the framework checkouts so the directories are siblings, optionally run `make native-build`, then add each repository root to `load-path`:
+Clone [`emacs-taf/etaf`](https://github.com/emacs-taf/etaf) (which contains `ecss`, `ebox`, `etaf` and `etaf-ui` under `packages/`) and this repository, optionally run `make native-build`, then add each package root to `load-path`:
+
+```sh
+git clone https://github.com/emacs-taf/etaf.git
+git clone https://github.com/emacs-taf/etaf-md.git
+```
 
 ```elisp
-(add-to-list 'load-path "/path/to/emacs-taf/ecss")
-(add-to-list 'load-path "/path/to/emacs-taf/ebox")
-(add-to-list 'load-path "/path/to/emacs-taf/etaf-ui")
-(add-to-list 'load-path "/path/to/emacs-taf/etaf")
-(add-to-list 'load-path "/path/to/emacs-taf/etaf-md")
+(dolist (pkg '("ecss" "ebox" "etaf-ui" "etaf"))
+  (add-to-list 'load-path (expand-file-name pkg "/path/to/etaf/packages")))
+(add-to-list 'load-path "/path/to/etaf-md")
 (require 'etaf-md)
 ```
 

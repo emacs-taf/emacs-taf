@@ -5,15 +5,20 @@
 ## 要求
 
 - Emacs 29.1 或更新版本。
-- 提供者检出：`etaf`、`etaf-ui`、`ebox`、`ecss`、`ekp`、`etaf-db`（位于本单仓的 `packages/` 下或同级目录）。
+- 核心框架包：`etaf`、`etaf-ui`、`ebox`、`ecss`、`ekp`、`etaf-db`（通过 `M-x etaf-install` 自动安装，或位于 [`emacs-taf/etaf`](https://github.com/emacs-taf/etaf) 的 `packages/` 下）。
 
 ## 安装与运行
 
-把本包根目录与提供者根目录加入 `load-path` 后：
+推荐通过 ETAF 包归档（`https://etaf.top/packages/`）运行 `M-x etaf-install` 选择 `etaf-agenda`。
+
+从源码检出使用时，克隆 `emacs-taf/etaf` 与 `etaf-agenda`，把对应包目录加入 `load-path` 后：
 
 ```elisp
+(dolist (pkg '("ecss" "ekp" "ebox" "etaf" "etaf-ui" "etaf-db"))
+  (add-to-list 'load-path (expand-file-name pkg "/path/to/etaf/packages")))
+(add-to-list 'load-path "/path/to/etaf-agenda")
 (require 'etaf-agenda)
-M-x etaf-agenda-open
+;; M-x etaf-agenda-open
 ```
 
 数据库默认位于 `~/.emacs.d/etaf-agenda/agenda.sqlite3`，首次打开自动初始化并在旧版本 schema 上按序迁移；`etaf-agenda-open` 也可直接传入自定义数据库路径。支持在运行时直接 `load-theme` 切换深浅主题，所有表面、语义色与 `etaf-ui` 控件原地重绘。

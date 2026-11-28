@@ -16,10 +16,10 @@
 
 ## Ecosystem Extensions
 
-- [etaf-translate](https://github.com/emacs-taf/etaf-translate): universal zero-invasion immersive page translation and quick popup built natively on `etaf-ext`.
-- [etaf-hints](https://github.com/emacs-taf/etaf-hints): standalone Vimium-style quick-jump badges for any mounted ETAF page.
-- [etaf-highlight](https://github.com/emacs-taf/etaf-highlight): standalone universal span highlighter and persisted companion note cards.
-- [etaf-export](https://github.com/emacs-taf/etaf-export): zero-browser live vector preview and PDF / SVG exporter for any mounted ETAF page.
+- [etaf-translate](https://github.com/emacs-taf/etaf/tree/main/packages/etaf-translate): universal zero-invasion immersive page translation and quick popup built natively on `etaf-ext`.
+- [etaf-hints](https://github.com/emacs-taf/etaf/tree/main/packages/etaf-hints): standalone Vimium-style quick-jump badges for any mounted ETAF page.
+- [etaf-highlight](https://github.com/emacs-taf/etaf/tree/main/packages/etaf-highlight): standalone universal span highlighter and persisted companion note cards.
+- [etaf-export](https://github.com/emacs-taf/etaf/tree/main/packages/etaf-export): zero-browser live vector preview and PDF / SVG exporter for any mounted ETAF page.
 
 ## Prerequisites
 

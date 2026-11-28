@@ -5,7 +5,7 @@
 ;; Version: 0.2.3
 ;; Package-Requires: ((emacs "29.1") (etaf "0.3.10") (etaf-ui "0.3.6") (etaf-ext "0.1.0"))
 ;; Keywords: convenience, docs, extensions, ui
-;; URL: https://github.com/emacs-taf/etaf-export
+;; URL: https://github.com/emacs-taf/etaf
 
 ;;; Commentary:
 

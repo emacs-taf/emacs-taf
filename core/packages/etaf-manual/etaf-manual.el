@@ -4,7 +4,7 @@
 ;; Author: ETAF contributors
 ;; Version: 0.1.26
 ;; Package-Requires: ((emacs "29.1") (etaf "0.3.10") (etaf-ui "0.3.6"))
-;; URL: https://github.com/emacs-taf/etaf-manual
+;; URL: https://github.com/emacs-taf/etaf
 
 ;;; Commentary:
 

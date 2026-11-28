@@ -26,7 +26,7 @@ The installer rejects conflicting source load paths and already loaded source de
 
 ## Scope
 
-The manual covers six packages:
+The manual covers seven packages:
 
 | Package | Provides | Depends on |
 | --- | --- | --- |

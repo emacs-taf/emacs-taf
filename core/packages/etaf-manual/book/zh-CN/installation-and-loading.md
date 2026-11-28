@@ -56,9 +56,9 @@ Ebox 用帧实际使用的字体测量文字，所以普通文字不需要特定
 
 <!-- index: 源码检出; load-path; require -->
 
-把每个仓库的根目录加进 `load-path`，再 require 要用的那个包的入口 feature。require 一个包会加载它依赖的包，所以那些包的根目录也要在 `load-path` 里：
+克隆统一框架仓库 `https://github.com/emacs-taf/etaf`（`packages/` 下包含全部核心包），把需要的包目录加进 `load-path`，再 require 要用的那个包的入口 feature。require 一个包会加载它依赖的包，所以那些包的目录也要在 `load-path` 里：
 
-| 要 require 的包 | 要加入的根目录 |
+| 要 require 的包 | 要加入的包目录 |
 | --- | --- |
 | `ecss` | `ecss` |
 | `ekp` | `ekp` |
@@ -68,10 +68,8 @@ Ebox 用帧实际使用的字体测量文字，所以普通文字不需要特定
 | `etaf-db` | `ecss`、`ebox`、`etaf`、`etaf-db` |
 
 ```elisp
-(add-to-list 'load-path "/path/to/ecss")
-(add-to-list 'load-path "/path/to/ebox")
-(add-to-list 'load-path "/path/to/etaf")
-(add-to-list 'load-path "/path/to/etaf-ui")
+(dolist (pkg '("ecss" "ebox" "etaf" "etaf-ui"))
+  (add-to-list 'load-path (expand-file-name pkg "/path/to/etaf/packages")))
 (require 'etaf-ui)
 ```
 
@@ -93,6 +91,27 @@ Function 与 Macro 记录可以带一个 autoload 标记：
 ```
 
 package.el 安装一个包时，会把这些标记收集进这个包的 autoload 文件。`ekp-c-module-build` 这样的公共命令装好就能用 `M-x` 调用。没有标记的公共函数或宏要等包加载后才可用；调用前先 require 这个包。其他种类的记录没有 autoload，同样要先 require。源码检出没有 autoload 文件，要直接 require 入口。
+
+需要在配置文件里声明式管理时，把 `("etaf" . "https://etaf.top/packages/")` 加入 `package-archives`，配合 Emacs 内置的 `use-package`（`:ensure t :pin etaf`）使用：
+
+```elisp
+(require 'package)
+(add-to-list 'package-archives '("etaf" . "https://etaf.top/packages/") t)
+(package-initialize)
+
+(use-package etaf-install
+  :ensure t
+  :pin etaf
+  :config
+  (etaf-install-ensure '(etaf-ui etaf-md)))
+
+(use-package etaf-ui
+  :ensure t
+  :pin etaf
+  :defer t)
+```
+
+列表里的目标全部已安装时，启动不发网络请求，按需加载交回 `use-package` 与 package.el autoload；后续用 `M-x etaf-install-update` 按依赖闭包整体更新。
 
 ## 编译
 

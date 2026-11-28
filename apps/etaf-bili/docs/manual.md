@@ -55,7 +55,7 @@ For programmatic use and offline testing, `etaf-bili-client-factory` accepts a f
 Run real graphical verification with ETAF's maintained verifier and this package's scenario adapter:
 
 ```elisp
-(load "/path/to/etaf/scripts/emacs-gui-verifier.el")
+(load "/path/to/etaf/packages/etaf/scripts/emacs-gui-verifier.el")
 (load "/path/to/etaf-bili/scripts/etaf-bili-gui-scenarios.el")
 (etaf-bili-gui-run "/tmp/bili-gui-evidence")
 ```
@@ -63,5 +63,5 @@ Run real graphical verification with ETAF's maintained verifier and this package
 Run `bili.appearance` and `bili.scroll` through the workspace performance driver:
 
 ```sh
-python3 scripts/performance.py --scenario-file packages/etaf-bili/benchmarks/performance-scenarios.el --scenario bili.appearance --load-path packages/etaf-bili --mode batch
+python3 scripts/performance.py --scenario-file apps/etaf-bili/benchmarks/performance-scenarios.el --scenario bili.appearance --load-path apps/etaf-bili --mode batch
 ```

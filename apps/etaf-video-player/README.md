@@ -83,12 +83,15 @@ variables documented in ETAF's manual.
 
 ## Installation
 
+Install from the ETAF package archive (`https://etaf.top/packages/`) with
+`M-x etaf-install` and select `etaf-video-player`.
+
+From a source checkout, clone [`emacs-taf/etaf`](https://github.com/emacs-taf/etaf)
+and `etaf-video-player`, then add the package directories to `load-path`:
+
 ```elisp
-(add-to-list 'load-path "/path/to/ecss")
-(add-to-list 'load-path "/path/to/ebox")
-(add-to-list 'load-path "/path/to/etaf")
-(add-to-list 'load-path "/path/to/etaf-ui")
-(add-to-list 'load-path "/path/to/etaf-db")
+(dolist (pkg '("ecss" "ebox" "etaf" "etaf-ui" "etaf-db"))
+  (add-to-list 'load-path (expand-file-name pkg "/path/to/etaf/packages")))
 (add-to-list 'load-path "/path/to/etaf-video-player")
 (require 'etaf-video-player)
 

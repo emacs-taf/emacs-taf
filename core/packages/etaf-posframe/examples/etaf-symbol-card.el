@@ -11,7 +11,7 @@
 ;;
 ;; Load it from this repository and bind one key:
 ;;
-;;   (add-to-list 'load-path "/path/to/etaf-posframe/examples")
+;;   (add-to-list 'load-path "/path/to/etaf/packages/etaf-posframe/examples")
 ;;   (require 'etaf-symbol-card)
 ;;   (global-set-key (kbd "C-c h") #'etaf-symbol-card-show)
 ;;
