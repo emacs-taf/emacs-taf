@@ -77,7 +77,7 @@ class InstallTests(unittest.TestCase):
             f"      package-archives (list (cons \"etaf\" {quote(str(self.archive) + '/')}))\n"
             "      package-directory-list nil native-comp-jit-compilation nil\n"
             "      print-circle t print-level 5 print-length 20)\n"
-            f"(load {quote(ROOT / 'packages/etaf-install/etaf-install.el')} nil t)\n"
+            f"(load {quote(ROOT / 'core/packages/etaf-install/etaf-install.el')} nil t)\n"
             f"(setq etaf-install-archive-url {quote(str(self.archive) + '/')})\n"
             f"{body}\n(princ \"scenario=ok\\n\")\n")
         environment = dict(os.environ)

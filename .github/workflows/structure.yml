@@ -9,7 +9,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - name: Check repository structure and public API boundaries
         run: |
-          if [ -f workspace.json ] && [ -d packages ]; then
+          if [ -f workspace.json ] && { [ -d core/packages ] || [ -d packages ]; }; then
             make structure-check
           elif [ -f workspace.json ]; then
             python3 scripts/check-api.py --workspace . --fetch-providers
@@ -22,7 +22,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y emacs-nox
-          if [ -d packages/etaf-posframe ]; then
+          if [ -d core/packages/etaf-posframe ] || [ -d packages/etaf-posframe ]; then
             mkdir -p "$HOME/.emacs.d/elpa"
             git clone --depth=1 https://github.com/tumashu/posframe.git "$HOME/.emacs.d/elpa/posframe-ci"
           fi

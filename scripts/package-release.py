@@ -30,6 +30,7 @@ import threading
 import time
 
 import package_archive
+import workspace_layout
 
 ROOT = Path(__file__).resolve().parents[1]
 # A third-party archive throttles repeated index fetches: MELPA answers 429 after
@@ -193,25 +194,24 @@ def change_graph_binary(root):
 
 
 def package_container(root):
-    """Return the directory that holds every package of ROOT, or nil."""
-    container = root / "packages"
-    return container if container.is_dir() else None
+    """Return the first package container directory of ROOT, or nil."""
+    containers = workspace_layout.package_containers(root)
+    return containers[0] if containers else None
 
 
 def package_directory(name):
     """Return NAME's directory in this checkout."""
-    container = package_container(ROOT)
-    return (container / name) if container else (ROOT / name)
+    return workspace_layout.package_path(ROOT, name)
 
 
 def subtree_of(name):
-    """Return NAME's path inside the exported revision, or nil at the root.
-
-    The installer itself lives at the checkout root, so a package container
-    does not by itself mean every name is inside it.
-    """
-    container = package_container(ROOT)
-    return f"packages/{name}" if container and (container / name).is_dir() else None
+    """Return NAME's path inside the exported revision, or nil for sibling checkouts."""
+    if not workspace_layout.package_containers(ROOT):
+        return None
+    path = workspace_layout.package_path(ROOT, name)
+    if path.is_dir() and workspace_layout.container_root(path) == ROOT.resolve():
+        return path.resolve().relative_to(ROOT.resolve()).as_posix()
+    return None
 
 
 def head_revision(root):
@@ -280,7 +280,9 @@ def community_module():
 
 def installer_catalog_path(root):
     """Locate the file defining `etaf-install--targets' and `--system-tools'."""
-    for rel in ("packages/etaf-install/lisp/etaf-install-catalog.el",
+    for rel in ("core/packages/etaf-install/lisp/etaf-install-catalog.el",
+                "core/packages/etaf-install/etaf-install.el",
+                "packages/etaf-install/lisp/etaf-install-catalog.el",
                 "packages/etaf-install/etaf-install.el",
                 "etaf-install.el"):
         candidate = root / rel

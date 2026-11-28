@@ -1,4 +1,4 @@
-"""Contract of scripts/add-package.py: the steps it plans and the names it refuses."""
+"""Contract of scripts/add-package.py: layered placement and registry rules."""
 import contextlib
 import importlib.util
 import io
@@ -22,35 +22,40 @@ class ArgumentTests(unittest.TestCase):
                               capture_output=True, text=True, timeout=60, cwd=ROOT)
 
     def test_a_name_that_is_already_a_package_is_refused(self):
-        result = self.call('etaf', '--url', 'https://example.invalid/etaf.git', '--dry-run')
+        result = self.call('etaf', '--dry-run')
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('already exists', result.stderr)
 
     def test_a_name_that_is_not_a_package_name_is_refused(self):
-        result = self.call('../escape', '--url', 'https://example.invalid/x.git', '--dry-run')
+        result = self.call('../escape', '--dry-run')
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('not a package name', result.stderr)
 
-    def test_dry_run_plans_every_step_without_touching_the_registry(self):
+    def test_dry_run_places_application_under_apps_without_touching_registry(self):
         registry = ROOT / 'workspace.json'
         before = registry.read_text(encoding='utf-8')
-        result = self.call('etaf-probe-unit', '--url',
-                           'https://example.invalid/etaf-probe-unit.git', '--dry-run')
+        result = self.call('etaf-probe-unit', '--repo', 'emacs-taf/etaf-probe-unit', '--dry-run')
         self.assertEqual(result.returncode, 0, result.stderr)
-        # A unit is registered, given a remote, fetched, and checked out as the
-        # working copy before its directory can hold anything.
-        for fragment in ('project add etaf-probe-unit',
-                         'git remote add origin https://example.invalid/etaf-probe-unit.git',
-                         'git fetch --project etaf-probe-unit',
-                         'new @ main#etaf-probe-unit@origin',
-                         'register etaf-probe-unit in workspace.json'):
-            self.assertIn(fragment, result.stdout)
+        self.assertIn('would create apps/etaf-probe-unit/', result.stdout)
+        self.assertIn('register etaf-probe-unit at apps/etaf-probe-unit in workspace.json as application',
+                      result.stdout)
         self.assertEqual(registry.read_text(encoding='utf-8'), before)
+
+    def test_dry_run_places_extension_under_core_packages(self):
+        result = self.call('etaf-probe-ext', '--role', 'extension', '--dry-run')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('would create core/packages/etaf-probe-ext/', result.stdout)
+        self.assertIn('as extension', result.stdout)
+
+    def test_dry_run_places_game_under_games(self):
+        result = self.call('etaf-probe-game', '--role', 'game', '--dry-run')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('would create games/etaf-probe-game/', result.stdout)
 
 
 class RegistryTests(unittest.TestCase):
-    def test_a_new_name_becomes_a_registry_entry(self):
-        document = {'schema': 2, 'packages': {'etaf': {'url': 'u', 'branch': 'main'}}}
+    def test_a_new_name_becomes_a_layered_registry_entry(self):
+        document = {'schema': 3, 'packages': {'etaf': {'path': 'core/packages/etaf', 'role': 'framework'}}}
         with tempfile.TemporaryDirectory() as work:
             path = Path(work) / 'workspace.json'
             path.write_text(json.dumps(document), encoding='utf-8')
@@ -58,34 +63,19 @@ class RegistryTests(unittest.TestCase):
             add_package.ROOT = Path(work)
             try:
                 with contextlib.redirect_stdout(io.StringIO()):
-                    add_package.register('etaf-probe', 'https://example.invalid/x.git',
-                                         'main', 'application', False)
+                    add_package.register('etaf-probe', '', 'main', 'application', False,
+                                         repo='emacs-taf/etaf-probe')
                 written = json.loads(path.read_text(encoding='utf-8'))
             finally:
                 add_package.ROOT = original
-        self.assertEqual(written['packages']['etaf-probe'],
-                         {'url': 'https://example.invalid/x.git',
-                          'branch': 'main', 'role': 'application'})
+        self.assertEqual(written['packages']['etaf-probe'], {
+            'path': 'apps/etaf-probe',
+            'role': 'application',
+            'branch': 'main',
+            'repo': 'emacs-taf/etaf-probe',
+            'url': 'https://github.com/emacs-taf/etaf-probe.git',
+        })
         self.assertIn('etaf', written['packages'])
-
-    def test_dry_run_accepts_extension_role(self):
-        result = subprocess.run(
-            [sys.executable, str(ROOT / 'scripts/add-package.py'),
-             'etaf-probe-ext', '--url', 'https://example.invalid/etaf-probe-ext.git',
-             '--role', 'extension', '--dry-run'],
-            capture_output=True, text=True, timeout=60, cwd=ROOT)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn('register etaf-probe-ext in workspace.json as extension', result.stdout)
-
-    def test_dry_run_plans_without_jjosh_on_path(self):
-        result = subprocess.run(
-            [sys.executable, str(ROOT / 'scripts/add-package.py'),
-             'etaf-probe-nojj', '--url', 'https://example.invalid/etaf-probe-nojj.git',
-             '--dry-run'],
-            capture_output=True, text=True, timeout=60, cwd=ROOT,
-            env={'PATH': ''})
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn('would run: jjosh project add etaf-probe-nojj', result.stdout)
 
 
 if __name__ == '__main__':

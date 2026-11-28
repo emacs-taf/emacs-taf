@@ -13,6 +13,10 @@ import sys
 import tempfile
 from urllib.parse import unquote
 
+sys.dont_write_bytecode = True
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import workspace_layout
+
 POLICY_VERSION = 16
 DOC_NAMES = {'README.md', 'README.zh-CN.md', 'CHANGELOG.md', 'CHANGELOG.zh-CN.md',
              'AGENTS.md', 'docs/manual.md', 'docs/manual.zh-CN.md',
@@ -21,8 +25,10 @@ DOC_NAMES = {'README.md', 'README.zh-CN.md', 'CHANGELOG.md', 'CHANGELOG.zh-CN.md
              # like the workspace keyboard contract: the container syntax, its
              # parameters and the rules a definition follows.
              'docs/extensions.md', 'docs/extensions.zh-CN.md'}
-WORKSPACE_DOC_NAMES = {'docs/keyboard-navigation.zh-CN.md'}
+WORKSPACE_DOC_NAMES = {'docs/keyboard-navigation.zh-CN.md',
+                       'core/README.md', 'core/README.zh-CN.md'}
 DIRS = {'lisp', 'tests', 'examples', 'media', 'benchmarks', 'scripts', 'docs', 'native', 'packages',
+        'core', 'apps', 'games',
         'dictionaries', 'design', 'book', 'site', 'backends', '.github', '.gitea', '.githooks'}
 # A reference book is product content rendered by its package: one Markdown
 # chapter per file under book/<language>/, with the same link checks as docs.
@@ -31,7 +37,7 @@ BOOK_CHAPTER = re.compile(r'book/[a-z]{2}(?:-[A-Z][A-Za-z]+)?/[a-z0-9]+(?:-[a-z0
 # licenses belong to their own projects.
 SKIP = {'.git', '.jj', '__pycache__', 'target', '.omx', '.worktrees', '.claude',
         'node_modules'}
-SHARED = ('scripts/check-api.py', 'scripts/check-api.el', 'scripts/api-workspace.json', '.editorconfig', 'scripts/check-repository.py', 'scripts/run-acceptance.py', '.githooks/pre-commit', '.githooks/commit-msg', 'scripts/check-commit-message.py',
+SHARED = ('scripts/check-api.py', 'scripts/check-api.el', 'scripts/api-workspace.json', 'scripts/workspace_layout.py', '.editorconfig', 'scripts/check-repository.py', 'scripts/run-acceptance.py', '.githooks/pre-commit', '.githooks/commit-msg', 'scripts/check-commit-message.py',
           '.github/workflows/structure.yml', 'scripts/package_archive.py')
 
 # A length the canvas draws is measured with the canvas's own face: `ch' and
@@ -100,10 +106,12 @@ def _public_defcustoms(root, files):
 def provider_directory(root):
     """Return the checkout directory holding the sibling provider repositories.
 
-    Providers normally sit beside the repository.  A nested application
-    workspace keeps them one level above its own checkout, so accept the
-    nearest ancestor that holds a provider named by the API registry.
+    In the layered monorepo, providers live in `<monorepo>/core/packages`.
+    Otherwise providers sit beside the repository or one level up.
     """
+    monorepo = workspace_layout.container_root(root)
+    if monorepo is not None:
+        return workspace_layout.core_packages_dir(monorepo)
     try:
         names = json.loads((Path(__file__).resolve().parent / 'api-workspace.json').read_text(encoding='utf-8'))
     except (OSError, ValueError):
@@ -150,8 +158,7 @@ def package_of_container(root):
     The container owns the shared tooling, the hooks and the workflow, so a
     package does not carry its own copies of them.
     """
-    root = Path(root).resolve()
-    return root.parent.name == 'packages' and (root.parent.parent / 'workspace.json').exists()
+    return workspace_layout.container_root(root) is not None
 
 
 def inventory(root):
@@ -205,6 +212,7 @@ def check(root, files=None, notices=None):
     errors = []
     generated_chapters = generated_book_chapters(root)
     workspace = (root / 'workspace.json').exists()
+    package_rel_dirs = set(workspace_layout.all_package_relpaths(root)) if workspace else set()
     doc_names = DOC_NAMES | (WORKSPACE_DOC_NAMES if workspace else set())
     if workspace:
         registry = __import__('json').loads((root / 'workspace.json').read_text(encoding='utf-8'))
@@ -223,38 +231,53 @@ def check(root, files=None, notices=None):
         for name in sorted(allowed_dirs - DIRS):
             if (root / name / 'workspace.json').exists():
                 fail(name, 'nested workspace root; register its checkouts in the workspace registry instead')
-        packages_dir = root / 'packages'
+        containers = workspace_layout.package_containers(root)
         registered = registry.get('packages')
-        if packages_dir.is_dir() and isinstance(registered, dict):
-            actual = {p.name for p in packages_dir.iterdir()
-                      if p.is_dir() and not p.name.startswith('.')}
+        if containers and isinstance(registered, dict):
+            actual_map = {}
+            for container in containers:
+                for p in sorted(container.iterdir()):
+                    if p.is_dir() and not p.name.startswith('.'):
+                        if p.name in actual_map:
+                            fail(p.relative_to(root).as_posix(),
+                                 f'duplicate package directory (already at {actual_map[p.name].relative_to(root).as_posix()})')
+                        else:
+                            actual_map[p.name] = p
+            actual = set(actual_map)
             declared = set(registered)
             for name in sorted(actual - declared):
-                fail(f'packages/{name}', 'unregistered package directory; add it to workspace.json')
+                fail(actual_map[name].relative_to(root).as_posix(),
+                     'unregistered package directory; add it to workspace.json')
             for name in sorted(declared - actual):
-                fail('workspace.json', f'registered package is missing under packages/: {name}')
-            for name in sorted(actual):
+                fail('workspace.json', f'registered package is missing on disk: {name}')
+            for name, pkg_dir in sorted(actual_map.items()):
+                rel_pkg = pkg_dir.relative_to(root).as_posix()
                 for vcs in ('.git', '.jj'):
-                    if (packages_dir / name / vcs).exists():
-                        fail(f'packages/{name}/{vcs}',
-                             'nested VCS directory inside packages/; keep one shared checkout')
+                    if (pkg_dir / vcs).exists():
+                        fail(f'{rel_pkg}/{vcs}',
+                             'nested VCS directory inside package container; keep one shared checkout')
             valid_roles = {'framework', 'extension', 'application', 'game'}
             for name, meta in sorted(registered.items()):
                 if not isinstance(meta, dict):
                     continue
+                if isinstance(meta.get('path'), str):
+                    expected_dir = (root / meta['path']).resolve()
+                    if name in actual_map and actual_map[name].resolve() != expected_dir:
+                        fail('workspace.json',
+                             f'{name}: declared path {meta["path"]} does not match {actual_map[name].relative_to(root).as_posix()}')
                 role = meta.get('role')
                 if role is None:
                     continue
                 if role not in valid_roles:
                     fail('workspace.json',
                          f'{name}: unknown role {role!r}; expected one of {sorted(valid_roles)}')
-                elif role == 'extension':
-                    entry_path = packages_dir / name / f'{name}.el'
+                elif role == 'extension' and name in actual_map:
+                    entry_path = actual_map[name] / f'{name}.el'
                     if entry_path.is_file():
                         head = entry_path.read_text(encoding='utf-8', errors='replace')
                         req = re.search(r'^;; Package-Requires: (.+)$', head, re.M)
                         if not req or not re.search(r'\(etaf-ext\s+"[^"]+"\)', req.group(1)):
-                            fail(f'packages/{name}/{name}.el',
+                            fail(f'{actual_map[name].relative_to(root).as_posix()}/{name}.el',
                                  'role "extension" requires declaring etaf-ext in Package-Requires')
     # A package inside a shared container borrows the tooling the container
     # owns; only a root that stands alone carries its own copies.
@@ -358,6 +381,7 @@ def check(root, files=None, notices=None):
                 fail(f, f'cross-repository link must use the provider URL: {link}')
             elif (target.as_posix() != '.' and target.as_posix() not in files
                   and target.as_posix() not in generated_chapters
+                  and target.as_posix().rstrip('/') not in package_rel_dirs
                   and not any(name.startswith(target.as_posix().rstrip('/') + '/') for name in files)):
                 fail(f, f'broken local link (including exact case): {link}')
     # Report every place that measures a length on the canvas with the frame's
@@ -492,6 +516,8 @@ def install_selection_errors(root):
     """
     installer = next(
         (root / rel for rel in (
+            'core/packages/etaf-install/lisp/etaf-install-catalog.el',
+            'core/packages/etaf-install/etaf-install.el',
             'packages/etaf-install/lisp/etaf-install-catalog.el',
             'packages/etaf-install/etaf-install.el',
             'etaf-install.el',
@@ -522,7 +548,9 @@ def install_selection_errors(root):
     return errors
 
 
-README_PKG_LINK = re.compile(r'\|\s*\[([a-z][a-z0-9-]*)\]\(https://github\.com/emacs-taf/[a-z][a-z0-9-]*(?:\.git)?/?\)')
+README_PKG_LINK = re.compile(
+    r'\|\s*\[`?([a-z][a-z0-9-]*)`?\]\((?:https://github\.com/emacs-taf/[a-z0-9./-]+|(?:core/packages|apps|games|packages)/[a-z0-9-]+)\)'
+)
 OUTSIDE_HEADING = re.compile(
     r'^## (?:Outside this (?:checkout|monorepo)|不在本检出中的仓库|独立仓库（不在本 Monorepo 中）)\s*$',
     re.M | re.I,
@@ -538,7 +566,7 @@ def workspace_readme_errors(root):
     - a registered package omitted from the in-checkout tables altogether.
     """
     ws_path = root / 'workspace.json'
-    if not ws_path.is_file() or not (root / 'packages').is_dir():
+    if not ws_path.is_file() or not workspace_layout.package_containers(root):
         return []
     try:
         registry = json.loads(ws_path.read_text(encoding='utf-8'))
@@ -663,8 +691,7 @@ def archive_consistency_errors(root):
     broken `elpa/ && make' remedies, and validates `native/manifest.json'.
     """
     selection_path = root / 'release-dependencies.json'
-    packages_dir = root / 'packages'
-    if not selection_path.is_file() or not packages_dir.is_dir():
+    if not selection_path.is_file() or not workspace_layout.package_containers(root):
         return []
     try:
         selection = json.loads(selection_path.read_text(encoding='utf-8'))
@@ -681,9 +708,10 @@ def archive_consistency_errors(root):
         native_validator = module.validate_manifest
 
     for name, options in sorted(packages.items()):
-        pkg_dir = packages_dir / name
+        pkg_dir = workspace_layout.package_path(root, name)
         if not pkg_dir.is_dir():
             continue
+        pkg_rel = pkg_dir.resolve().relative_to(root.resolve()).as_posix()
         resources = (options or {}).get('resources') or []
         resource_set = set(resources)
         for resource in resources:
@@ -750,10 +778,10 @@ def archive_consistency_errors(root):
                 try:
                     doc = json.loads(manifest_path.read_text(encoding='utf-8'))
                 except (OSError, ValueError) as error:
-                    errors.append(f'packages/{name}/native/manifest.json: invalid JSON: {error}')
+                    errors.append(f'{pkg_rel}/native/manifest.json: invalid JSON: {error}')
                 else:
                     for err in native_validator(doc, expected_package=name):
-                        errors.append(f'packages/{name}/native/manifest.json: {err}')
+                        errors.append(f'{pkg_rel}/native/manifest.json: {err}')
         # Archive packages never ship a root Makefile; doctor remedies and ELPA
         # install guides must not tell archive users to run one.
         for doc_name, pattern in (('README.md', BROKEN_ELPA_DOC),
@@ -766,7 +794,7 @@ def archive_consistency_errors(root):
             match = pattern.search(text)
             if match:
                 errors.append(
-                    f'packages/{name}/{doc_name}: archive users do not receive root Makefile/build scripts; '
+                    f'{pkg_rel}/{doc_name}: archive users do not receive root Makefile/build scripts; '
                     f'replace {match.group(0)!r} with M-x etaf-install-native')
     return errors
 
@@ -833,7 +861,7 @@ def main():
         errors = check(args.root, files=kept, notices=notices)
         if not errors and not args.skip_api:
             mode = '--workspace' if (args.root/'workspace.json').exists() else '--root'
-            api_root = args.root/'packages' if (args.root/'packages').is_dir() else args.root.resolve()
+            api_root = args.root.resolve()
             result = subprocess.run([sys.executable, str(args.root/'scripts/check-api.py'),
                                      mode, str(api_root),
                                      '--providers-dir', str(provider_directory(args.root))],

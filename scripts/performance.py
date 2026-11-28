@@ -95,11 +95,12 @@ def write_json(path, value):
 
 def discover(root, extra):
     """Resolve scenario entry files and public package roots without shell code."""
-    if (root / "packages").is_dir():
-        # One checkout, one directory per delivery unit.
-        packages = sorted(p for p in (root / "packages").iterdir()
-                          if p.is_dir() and not p.name.startswith('.'))
-    elif (root / "workspace.json").is_file():
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import workspace_layout
+    discovered = workspace_layout.package_dirs(root)
+    if discovered:
+        packages = list(discovered.values())
+    elif (root / "workspace.json").is_file() and "repositories" in read_json(root / "workspace.json"):
         packages = [root / name for name in read_json(root / "workspace.json")["repositories"]]
     else:
         packages = [root] + sorted(p for p in root.parent.iterdir()

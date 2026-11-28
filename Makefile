@@ -2,37 +2,35 @@
 .NOTPARALLEL:
 EMACS ?= emacs
 JOBS ?= 1
-# Every directory under packages/ in dependency order (providers first). Recipes
-# expand it on demand, so targets that do not iterate packages pay nothing, and
-# a failure stops the recipe instead of silently falling back to name order.
-PACKAGE_ORDER = python3 scripts/refscope.py order
+# Every package under core/packages/, apps/, games/ in dependency order (providers first).
+PACKAGE_PATHS = python3 scripts/refscope.py order --paths
 .PHONY: compile test check clean structure-check setup-hooks order plan-affected check-affected
 structure-check:
-	python3 scripts/check-repository.py --exclude packages/
-	@set -e; for pkg in packages/*; do python3 scripts/check-repository.py --root "$$pkg" --skip-api; done
-	python3 scripts/check-api.py --workspace packages
+	python3 scripts/check-repository.py --exclude core/packages/ --exclude apps/ --exclude games/
+	@set -e; for pkg in $$(python3 scripts/workspace_layout.py list-paths); do python3 scripts/check-repository.py --root "$$pkg" --skip-api; done
+	python3 scripts/check-api.py --workspace .
 setup-hooks:
 	@if [ -d .git ]; then \
 		git config --local core.hooksPath .githooks; \
 		echo "Configured core.hooksPath=.githooks for this Git checkout."; \
 	else \
-		echo "jjosh does not run Git hooks; before publishing, check your message and tree with:"; \
+		echo "jj does not run Git hooks; before publishing, check your message and tree with:"; \
 		echo "  python3 scripts/check-commit-message.py /tmp/msg"; \
 		echo "  make structure-check"; \
 	fi
 order:
 	python3 scripts/refscope.py order --layers
 compile: installer-compile
-	@set -e; order="$$($(PACKAGE_ORDER))"; for repo in $$order; do $(MAKE) -C "packages/$$repo" compile EMACS="$(EMACS)"; done
+	@set -e; paths="$$($(PACKAGE_PATHS))"; for dir in $$paths; do $(MAKE) -C "$$dir" compile EMACS="$(EMACS)"; done
 test:
 	python3 -m unittest discover -s tests/tools -p 'test_*.py'
-	@set -e; order="$$($(PACKAGE_ORDER))"; for repo in $$order; do $(MAKE) -C "packages/$$repo" test EMACS="$(EMACS)"; done
+	@set -e; paths="$$($(PACKAGE_PATHS))"; for dir in $$paths; do $(MAKE) -C "$$dir" test EMACS="$(EMACS)"; done
 # Compile before the tool tests: the performance scenarios record whether the
 # libraries they load came from source or from byte code, so a stale `.elc'
 # beside a newer `.el' turns every sample invalid.
 check: structure-check compile
 	python3 -m unittest discover -s tests/tools -p 'test_*.py'
-	@set -e; order="$$($(PACKAGE_ORDER))"; for repo in $$order; do $(MAKE) -C "packages/$$repo" check EMACS="$(EMACS)"; done
+	@set -e; paths="$$($(PACKAGE_PATHS))"; for dir in $$paths; do $(MAKE) -C "$$dir" check EMACS="$(EMACS)"; done
 
 # Preview or execute only the units a change reaches: a symbol nobody outside
 # uses costs nothing, while `check' still proves the whole checkout before a release.
@@ -41,13 +39,13 @@ plan-affected:
 check-affected:
 	python3 scripts/refscope.py run --rev '@' --yes --jobs "$(JOBS)"
 clean:
-	@set -e; order="$$($(PACKAGE_ORDER))"; for repo in $$order; do $(MAKE) -C "packages/$$repo" clean; done
+	@set -e; paths="$$($(PACKAGE_PATHS))"; for dir in $$paths; do $(MAKE) -C "$$dir" clean; done
 
 RELEASE_DIR ?= /tmp/etaf-release
 .PHONY: installer-compile release-build release-drift release-check release-check-full release-publish release-tool-tests
 installer-compile:
-	$(MAKE) -C packages/etaf-install compile EMACS="$(EMACS)"
-	python3 scripts/elisp.py run --emacs "$(EMACS)" -L packages/etaf-install -L packages/etaf-install/lisp -e '(require (quote bytecomp)) (let ((byte-compile-error-on-warn t)) (unless (byte-compile-file "scripts/install-smoke.el") (error "Compilation failed: scripts/install-smoke.el")))'
+	$(MAKE) -C core/packages/etaf-install compile EMACS="$(EMACS)"
+	python3 scripts/elisp.py run --emacs "$(EMACS)" -L core/packages/etaf-install -L core/packages/etaf-install/lisp -e '(require (quote bytecomp)) (let ((byte-compile-error-on-warn t)) (unless (byte-compile-file "scripts/install-smoke.el") (error "Compilation failed: scripts/install-smoke.el")))'
 release-build:
 	python3 scripts/package-release.py build --directory "$(RELEASE_DIR)"
 release-drift:
@@ -64,7 +62,7 @@ release-tool-tests:
 
 .PHONY: api-check
 api-check:
-	@set -e; order="$$($(PACKAGE_ORDER))"; for repo in $$order; do $(MAKE) -C "packages/$$repo" api-check EMACS="$(EMACS)"; done
+	@set -e; paths="$$($(PACKAGE_PATHS))"; for dir in $$paths; do $(MAKE) -C "$$dir" api-check EMACS="$(EMACS)"; done
 
 .PHONY: verify verify-baseline verify-repeatability
 verify:

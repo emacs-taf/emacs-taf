@@ -20,7 +20,11 @@ import sys
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
-PUBLISHER = ROOT / "packages/etaf-manual/site/scripts/publish.py"
+PUBLISHER = (
+    ROOT / "core/packages/etaf-manual/site/scripts/publish.py"
+    if (ROOT / "core/packages/etaf-manual/site/scripts/publish.py").is_file()
+    else ROOT / "packages/etaf-manual/site/scripts/publish.py"
+)
 BASE_URL = "https://etaf.top/media"
 NAMESPACE_RE = re.compile(r"[a-z][a-z0-9-]*\Z")
 SEGMENT_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*\Z")

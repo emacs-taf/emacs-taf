@@ -17,9 +17,10 @@ FIXTURE = ROOT / "tests/fixtures/performance-scenarios.el"
 
 
 def code_root(name):
-    """Locate a provider in one checkout or in a tree of sibling checkouts."""
-    packaged = ROOT / "packages" / name
-    return packaged if packaged.is_dir() else ROOT / name
+    """Locate a provider in layered or flat monorepo or sibling checkouts."""
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import workspace_layout
+    return workspace_layout.package_path(ROOT, name)
 
 
 class BrokenScenarioFile(unittest.TestCase):

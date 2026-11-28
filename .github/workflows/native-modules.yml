@@ -8,16 +8,16 @@ on:
         default: ''
   push:
     paths:
-      - 'packages/etaf-md/native/**'
-      - 'packages/etaf/native/**'
-      - 'packages/ekp/native/**'
+      - 'apps/etaf-md/native/**'
+      - 'core/packages/etaf/native/**'
+      - 'core/packages/ekp/native/**'
       - 'scripts/native-release.py'
       - '.github/workflows/native-modules.yml'
   pull_request:
     paths:
-      - 'packages/etaf-md/native/**'
-      - 'packages/etaf/native/**'
-      - 'packages/ekp/native/**'
+      - 'apps/etaf-md/native/**'
+      - 'core/packages/etaf/native/**'
+      - 'core/packages/ekp/native/**'
       - 'scripts/native-release.py'
       - '.github/workflows/native-modules.yml'
 permissions:
@@ -129,7 +129,8 @@ jobs:
             --stage "${RUNNER_TEMP}/staged-native"
           python3 scripts/native-release.py verify --all --stage "${RUNNER_TEMP}/staged-native"
           mkdir -p "${RUNNER_TEMP}/package-manifests"
-          for f in packages/*/native/manifest.json; do
+          for f in core/packages/*/native/manifest.json apps/*/native/manifest.json games/*/native/manifest.json; do
+            [ -f "$f" ] || continue
             pkg=$(basename "$(dirname "$(dirname "$f")")")
             cp "$f" "${RUNNER_TEMP}/package-manifests/${pkg}-manifest.json"
           done

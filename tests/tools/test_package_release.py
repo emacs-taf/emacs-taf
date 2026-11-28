@@ -102,7 +102,7 @@ class PackageReleaseVerificationTests(unittest.TestCase):
             [sys.executable, str(ROOT / "scripts/package_archive.py"), "build",
              "--directory", str(self.archive), "--package", f"ekp={self.source}",
              "--resource", "ekp=native/manifest.json",
-             "--package", f"etaf-install={ROOT / 'packages/etaf-install'}"], capture_output=True, text=True, timeout=20)
+             "--package", f"etaf-install={ROOT / 'core/packages/etaf-install'}"], capture_output=True, text=True, timeout=20)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def verify(self, *extra, success=True):
@@ -254,7 +254,7 @@ class PackageReleaseBuildTests(unittest.TestCase):
         self.base = Path(self.temp.name)
         self.root = self.base / "workspace"
         (self.root / "scripts").mkdir(parents=True)
-        for name in ("package-release.py", "package_archive.py"):
+        for name in ("package-release.py", "package_archive.py", "workspace_layout.py"):
             shutil.copyfile(ROOT / "scripts" / name, self.root / "scripts" / name)
         (self.root / ".gitignore").write_text("ecss/\n__pycache__/\n")
         (self.root / "etaf-install.el").write_text(
@@ -332,9 +332,9 @@ class PackageReleaseStageTests(unittest.TestCase):
         self.base = Path(self.temp.name)
         self.root = self.base / "workspace"
         (self.root / "scripts").mkdir(parents=True)
-        for name in ("package-release.py", "package_archive.py", "install-smoke.el"):
+        for name in ("package-release.py", "package_archive.py", "workspace_layout.py", "install-smoke.el"):
             shutil.copyfile(ROOT / "scripts" / name, self.root / "scripts" / name)
-        shutil.copytree(ROOT / "packages/etaf-install", self.root / "packages/etaf-install",
+        shutil.copytree(ROOT / "core/packages/etaf-install", self.root / "packages/etaf-install",
                         ignore=shutil.ignore_patterns("*.elc"))
         targets = ("etaf-ui", "etaf", "etaf-manual", "ekp", "etaf-db")
         (self.root / ".gitignore").write_text("__pycache__/\n")

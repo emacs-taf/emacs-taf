@@ -33,7 +33,7 @@ class MediaPublishTests(unittest.TestCase):
             MEDIA.resolve_dest_rel("site", src, "../escape.png", keep_format=True)
 
     def test_stage_and_verify_keep_format_and_webp(self):
-        sample_png = ROOT / "packages/etaf-md/tests/fixtures/wide-400x100.png"
+        sample_png = ROOT / "apps/etaf-md/tests/fixtures/wide-400x100.png"
         stage = self.work / "stage"
         items = [("site", sample_png, "og/sample.png")]
         if shutil.which("cwebp") or shutil.which("ffmpeg"):

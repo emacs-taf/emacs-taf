@@ -16,6 +16,9 @@ import sys
 import tempfile
 import time
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import workspace_layout
+
 
 def prelude(level, length, cap):
     """Elisp that bounds ERT batch failure reports and never pretty-prints them."""
@@ -78,7 +81,16 @@ def command(root, emacs, level, length, cap):
             raise ValueError('Each case needs an ERT name and observable acceptance purpose')
         names.append(name)
     args = [emacs, '-Q', '--batch']
-    for path in manifest.get('load_path', ['.']):args += ['-L', str(root / path)]
+    monorepo = workspace_layout.container_root(root)
+    for path in manifest.get('load_path', ['.']):
+        resolved = root / path
+        if not resolved.exists() and monorepo is not None:
+            parts = Path(path).parts
+            if len(parts) >= 2 and parts[0] == '..':
+                candidate = workspace_layout.package_path(monorepo, parts[1]).joinpath(*parts[2:])
+                if candidate.is_dir():
+                    resolved = candidate
+        args += ['-L', str(resolved)]
     args += ['--eval', prelude(level, length, cap)]
     entries = list(root.glob('*.el'))
     if len(entries) != 1:raise ValueError('Expected one package entry at the repository root')

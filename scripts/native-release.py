@@ -24,6 +24,8 @@ import sys
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import workspace_layout
 
 NAME_RE = re.compile(r"[a-z][a-z0-9-]*\Z")
 VERSION_RE = re.compile(r"[0-9]+(?:\.[0-9]+)*\Z")
@@ -467,7 +469,7 @@ def build_package(package: str, output: Path, emacs: str,
     if cross and sys.platform != "darwin":
         raise ValueError(f"Cross-compilation from {native_plat} to {plat} is only supported on macOS")
 
-    pkg_dir = ROOT / "packages" / package
+    pkg_dir = workspace_layout.package_path(ROOT, package)
     native_src = pkg_dir / "native"
     if not native_src.is_dir():
         raise ValueError(f"Missing native source directory: {native_src}")
@@ -772,7 +774,7 @@ def assemble_manifests(input_dir: Path, *, write_packages: bool = False,
         if pkg not in NATIVE_PACKAGES:
             raise ValueError(f"Unknown package in records: {pkg}")
         spec = NATIVE_PACKAGES[pkg]
-        manifest_path = ROOT / "packages" / pkg / "native" / "manifest.json"
+        manifest_path = workspace_layout.package_path(ROOT, pkg) / "native" / "manifest.json"
         existing_platforms: dict[str, dict] = {}
         if not replace and manifest_path.is_file():
             old = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -869,13 +871,12 @@ def assemble_manifests(input_dir: Path, *, write_packages: bool = False,
 
 
 def verify_all(root: Path = ROOT) -> list[str]:
-    """Validate every package `native/manifest.json` under ROOT/packages."""
+    """Validate every package `native/manifest.json` across ROOT's containers."""
     errors: list[str] = []
-    packages_dir = root / "packages"
-    if not packages_dir.is_dir():
-        return errors
-    for manifest_path in sorted(packages_dir.glob("*/native/manifest.json")):
-        pkg = manifest_path.parents[1].name
+    for pkg, pkg_dir in sorted(workspace_layout.package_dirs(root).items()):
+        manifest_path = pkg_dir / "native" / "manifest.json"
+        if not manifest_path.is_file():
+            continue
         try:
             data = json.loads(manifest_path.read_text(encoding="utf-8"))
         except (OSError, ValueError) as error:

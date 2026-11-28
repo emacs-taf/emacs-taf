@@ -1,0 +1,59 @@
+name: Project Read-Only Repositories
+
+on:
+  push:
+    branches:
+      - main
+  schedule:
+    # Daily reconciliation net so transient push failures self-heal.
+    - cron: '23 3 * * *'
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Projection target id (blank = all targets, e.g. etaf or etaf-md)
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: project-read-only-repos
+  cancel-in-progress: false
+
+jobs:
+  project:
+    if: github.repository == 'emacs-taf/emacs-taf'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      PROJECTION_TOKEN: ${{ secrets.PROJECTION_TOKEN }}
+      PYTHONUTF8: '1'
+    steps:
+      - name: Check projection token
+        id: auth
+        run: |
+          if [ -z "${PROJECTION_TOKEN}" ]; then
+            echo "::notice::PROJECTION_TOKEN secret is not configured; skipping automated read-only projections."
+            echo "enabled=false" >> "${GITHUB_OUTPUT}"
+          else
+            echo "enabled=true" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        if: steps.auth.outputs.enabled == 'true'
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Run layered projections
+        if: steps.auth.outputs.enabled == 'true'
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.target }}" ]; then
+            python3 scripts/project-repos.py --target "${{ inputs.target }}" --engine subtree
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            python3 scripts/project-repos.py --changed-since "${{ github.event.before }}" --rev "${{ github.sha }}" --engine subtree
+          else
+            python3 scripts/project-repos.py --engine subtree
+          fi

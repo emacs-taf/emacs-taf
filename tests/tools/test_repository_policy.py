@@ -339,7 +339,7 @@ class PolicyTests(unittest.TestCase):
         # Missing registered package under packages/ is rejected.
         (self.root / 'packages/alpha').rmdir()
         errors = '\n'.join(POLICY.check(self.root, files=[f for f in POLICY.inventory(self.root) if not f.startswith('packages/')]))
-        self.assertIn('registered package is missing under packages/: alpha', errors)
+        self.assertIn('registered package is missing on disk: alpha', errors)
 
     def test_extension_role_requires_etaf_ext_dependency_and_rejects_unknown_roles(self):
         self.write('AGENTS.md', '# Workspace instructions\n')

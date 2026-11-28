@@ -7,6 +7,10 @@ import re
 import sys
 import subprocess
 
+sys.dont_write_bytecode = True
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import workspace_layout
+
 API = re.compile(r'^;; (Function|Macro|Variable|Hook|Error|Component): ([^\s()]+)(.*)$', re.M)
 REQUIRES = re.compile(r'^;; Package-Requires: (.+)$', re.M)
 REQUIREMENT = re.compile(r'\(([a-z][a-z0-9-]*) "[0-9]+(?:\.[0-9]+)*"\)')
@@ -381,16 +385,26 @@ def main():
         workspace = args.workspace.resolve()
         if args.fetch_providers:
             for name, entry in registry.items():
-                if not (workspace/name).exists(): clone_provider(entry['url'], workspace/name)
+                if not workspace_layout.package_path(workspace, name).is_dir():
+                    clone_provider(entry['url'], workspace / name)
+        # Discover packages across core/packages/, apps/, games/ (or legacy
+        # packages/, or direct children when a caller passes packages/ itself).
+        discovered = workspace_layout.package_dirs(workspace)
+        if not discovered:
+            discovered = {
+                p.name: p for p in sorted(workspace.iterdir())
+                if p.is_dir() and not p.name.startswith('.')
+            }
         # A workspace checkout holds only the packages it registered;
         # a name in the registry with no directory there is not a defect.
-        packages = {name:package(workspace/name) for name in registry
-                    if (workspace/name).is_dir()}
+        packages = {name: package(discovered[name]) for name in registry
+                    if name in discovered}
         selected = None
     else:
         own = package(root)
         name = next((n for n,e in registry.items() if e['entry']==own['entry'].stem), root.name)
-        provider_dir = (args.providers_dir or root.parent).resolve()
+        monorepo = workspace_layout.container_root(root)
+        provider_dir = (args.providers_dir or (workspace_layout.core_packages_dir(monorepo) if monorepo else root.parent)).resolve()
         packages = {name: own}
         pending = [name]
         while pending:
@@ -405,7 +419,11 @@ def main():
                                  if symbol==e['entry'] or symbol.startswith(e['entry']+'-')), None)
                 if provider and provider not in packages: dependencies.add(provider)
             for dependency in sorted(dependencies):
-                path = provider_dir/dependency
+                path = provider_dir / dependency
+                if not path.is_dir() and monorepo is not None:
+                    alt = workspace_layout.package_path(monorepo, dependency)
+                    if alt.is_dir():
+                        path = alt
                 if args.fetch_providers and not path.exists():
                     clone_provider(registry[dependency]['url'], path)
                 if not path.is_dir():
@@ -417,8 +435,8 @@ def main():
     if args.workspace:
         # Also audit every package directory under workspace (including apps not
         # in api-workspace.json) plus root etaf-install.el for M-x leaks.
-        for pkg_dir in sorted(workspace.iterdir()):
-            if not pkg_dir.is_dir() or pkg_dir.name.startswith('.') or pkg_dir.name in packages:
+        for pkg_name, pkg_dir in sorted(discovered.items()):
+            if pkg_name in packages:
                 continue
             entry = pkg_dir / (pkg_dir.name + '.el')
             if not entry.is_file():
@@ -438,11 +456,12 @@ def main():
                 errors.extend(ex_errs)
                 ex_pkg_files = [ex_entry] + sorted((ex_root / 'lisp').glob('*.el'))
                 errors.extend(check_interactive_leaks(ex_pkg_files, ex_api, ex_entry.name, check_undeclared=True))
-        installer = workspace.parent / 'etaf-install.el'
-        if installer.is_file():
-            inst_api, inst_errors = declarations(installer)
-            errors.extend(inst_errors)
-            errors.extend(check_interactive_leaks([installer], inst_api, installer.name, check_undeclared=True))
+        for installer in (workspace / 'etaf-install.el', workspace.parent / 'etaf-install.el'):
+            if installer.is_file():
+                inst_api, inst_errors = declarations(installer)
+                errors.extend(inst_errors)
+                errors.extend(check_interactive_leaks([installer], inst_api, installer.name, check_undeclared=True))
+                break
     errors = sorted(set(errors))
     if errors:
         print('\n'.join(errors), file=sys.stderr)

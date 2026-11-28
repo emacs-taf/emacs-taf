@@ -72,16 +72,13 @@ import subprocess
 import sys
 
 workspace, target = (Path(argument) for argument in sys.argv[1:3])
+sys.path.insert(0, str(workspace / "scripts"))
+import workspace_layout
 selection = json.loads((workspace / "release-dependencies.json").read_text())["packages"]
-packages_root = workspace / "packages" if (workspace / "packages").is_dir() else workspace
-sources = {name: packages_root / name for name in selection}
-# The installer lives under packages/etaf-install (or the workspace root in
-# older checkouts); a trial needs it to reach the manager.
-sources["etaf-install"] = (
-    (packages_root / "etaf-install")
-    if (packages_root / "etaf-install").is_dir()
-    else workspace
-)
+sources = {name: workspace_layout.package_path(workspace, name) for name in selection}
+# The installer lives under core/packages/etaf-install (or legacy packages/etaf-install).
+inst_dir = workspace_layout.package_path(workspace, "etaf-install")
+sources["etaf-install"] = inst_dir if inst_dir.is_dir() else workspace
 command = [sys.executable, str(workspace / "scripts/package_archive.py"),
            "build", "--directory", str(target)]
 for name, source in sources.items():

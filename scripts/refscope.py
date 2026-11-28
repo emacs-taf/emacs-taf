@@ -36,6 +36,9 @@ import subprocess
 import sys
 from typing import NamedTuple
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import workspace_layout
+
 CHECK_API = Path(__file__).resolve().parent / 'check-api.py'
 TOKEN = re.compile(r"[^\s()\[\]'`,;\"]+")
 BARE_DEFVAR = re.compile(r"(?<!['`])\(defvar\s+([^\s()]+)\s*\)")
@@ -307,10 +310,13 @@ class EmacsScoper:
 
     def units(self, root):
         found = {}
-        # One checkout keeps every unit under packages/; a tree of sibling
-        # checkouts has them at the root. The scoper decides, not the engine.
-        base = root / 'packages' if (root / 'packages').is_dir() else root
-        for directory in sorted(base.iterdir()):
+        # Layered monorepo uses core/packages/, apps/, games/; legacy flat
+        # checkouts use packages/; sibling trees have packages at the root.
+        pkg_map = workspace_layout.package_dirs(root)
+        candidates = (list(pkg_map.values()) if pkg_map
+                      else [d for d in sorted(root.iterdir())
+                            if d.is_dir() and not d.name.startswith('.')])
+        for directory in candidates:
             if not directory.is_dir() or directory.name.startswith('.'):
                 continue
             entries = list(directory.glob('*.el'))
@@ -494,6 +500,8 @@ def main():
     order_cmd = sub.add_parser("order", help="all units in dependency order (providers first)")
     order_cmd.add_argument("--layers", action="store_true",
                            help="print one parallelizable dependency layer per line")
+    order_cmd.add_argument("--paths", action="store_true",
+                           help="print repo-relative directory paths instead of bare package names")
 
     plan = sub.add_parser("plan", help="what to re-check for a set of changed files")
     add_change_arguments(plan)
@@ -519,12 +527,16 @@ def main():
         # symbol graph, so it skips extraction and stays cheap enough for
         # every Makefile recipe that iterates packages.
         graph = Graph(EmacsScoper(check).units(root), {}, {}, {}, {})
+        def fmt(name):
+            if args.paths:
+                return graph.units[name].root.resolve().relative_to(root).as_posix()
+            return name
         if args.layers:
             for layer in execution_layers(graph, graph.units):
-                print(' '.join(layer))
+                print(' '.join(fmt(name) for name in layer))
         else:
             for name in execution_order(graph, graph.units):
-                print(name)
+                print(fmt(name))
         return 0
 
     graph = build(root, check)

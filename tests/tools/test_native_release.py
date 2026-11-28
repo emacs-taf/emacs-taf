@@ -38,8 +38,11 @@ class NativeReleaseTests(unittest.TestCase):
 
     def test_workspace_package_native_manifests_pass_verification(self):
         self.assertEqual([], NATIVE.verify_all(ROOT))
+        import sys
+        sys.path.insert(0, str(ROOT / "scripts"))
+        import workspace_layout
         for pkg in ("etaf-md", "etaf", "ekp"):
-            self.assertTrue((ROOT / "packages" / pkg / "native" / "manifest.json").is_file(), pkg)
+            self.assertTrue((workspace_layout.package_path(ROOT, pkg) / "native" / "manifest.json").is_file(), pkg)
 
     def test_validate_manifest_rejects_non_https_bad_sha_and_unsafe_filenames(self):
         self.assertEqual([], NATIVE.validate_manifest(self.sample_manifest(), expected_package="etaf-md"))

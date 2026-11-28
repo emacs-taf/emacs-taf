@@ -1,171 +1,243 @@
 {
-  "schema": 2,
-  "note": "One jjosh checkout: each package is a delivery unit under packages/, published to its own remote. The revision is the checkout commit, not a per-package pin.",
+  "schema": 3,
+  "note": "Emacs TAF Monorepo: core/ holds the 15 core framework, extension, installer and manual packages (projected together to emacs-taf/etaf); apps/ and games/ hold standalone product packages (projected individually).",
+  "projections": {
+    "etaf": {
+      "prefix": "core",
+      "repo": "emacs-taf/etaf",
+      "branch": "main"
+    }
+  },
   "packages": {
     "ebox": {
-      "url": "https://github.com/emacs-taf/ebox.git",
-      "branch": "main",
-      "role": "framework"
+      "path": "core/packages/ebox",
+      "role": "framework",
+      "projection": "etaf",
+      "url": "https://github.com/emacs-taf/etaf.git",
+      "branch": "main"
     },
     "ecss": {
-      "url": "https://github.com/emacs-taf/ecss.git",
-      "branch": "main",
-      "role": "framework"
+      "path": "core/packages/ecss",
+      "role": "framework",
+      "projection": "etaf",
+      "url": "https://github.com/emacs-taf/etaf.git",
+      "branch": "main"
     },
     "ekp": {
-      "url": "https://github.com/emacs-taf/ekp.git",
-      "branch": "main",
-      "role": "framework"
+      "path": "core/packages/ekp",
+      "role": "framework",
+      "projection": "etaf",
+      "url": "https://github.com/emacs-taf/etaf.git",
+      "branch": "main"
     },
     "etaf": {
+      "path": "core/packages/etaf",
+      "role": "framework",
+      "projection": "etaf",
       "url": "https://github.com/emacs-taf/etaf.git",
-      "branch": "main",
-      "role": "framework"
+      "branch": "main"
     },
     "etaf-agenda": {
-      "url": "https://github.com/emacs-taf/etaf-agenda.git",
+      "path": "apps/etaf-agenda",
+      "role": "application",
       "branch": "main",
-      "role": "application"
+      "repo": "emacs-taf/etaf-agenda",
+      "url": "https://github.com/emacs-taf/etaf-agenda.git"
     },
     "etaf-bili": {
-      "url": "https://github.com/emacs-taf/etaf-bili.git",
+      "path": "apps/etaf-bili",
+      "role": "application",
       "branch": "main",
-      "role": "application"
+      "repo": "emacs-taf/etaf-bili",
+      "url": "https://github.com/emacs-taf/etaf-bili.git"
     },
     "etaf-db": {
-      "url": "https://github.com/emacs-taf/etaf-db.git",
-      "branch": "main",
-      "role": "framework"
+      "path": "core/packages/etaf-db",
+      "role": "framework",
+      "projection": "etaf",
+      "url": "https://github.com/emacs-taf/etaf.git",
+      "branch": "main"
     },
     "etaf-desktop": {
-      "url": "https://github.com/emacs-taf/etaf-desktop.git",
+      "path": "apps/etaf-desktop",
+      "role": "application",
       "branch": "main",
-      "role": "application"
+      "repo": "emacs-taf/etaf-desktop",
+      "url": "https://github.com/emacs-taf/etaf-desktop.git"
     },
     "etaf-export": {
-      "url": "https://github.com/emacs-taf/etaf-export.git",
-      "branch": "main",
-      "role": "extension"
+      "path": "core/packages/etaf-export",
+      "role": "extension",
+      "projection": "etaf",
+      "url": "https://github.com/emacs-taf/etaf.git",
+      "branch": "main"
     },
     "etaf-ext": {
-      "url": "https://github.com/emacs-taf/etaf-ext.git",
-      "branch": "main",
-      "role": "framework"
+      "path": "core/packages/etaf-ext",
+      "role": "framework",
+      "projection": "etaf",
+      "url": "https://github.com/emacs-taf/etaf.git",
+      "branch": "main"
     },
     "etaf-gamekit": {
-      "url": "https://github.com/emacs-taf/etaf-gamekit.git",
-      "branch": "main",
-      "role": "framework"
+      "path": "core/packages/etaf-gamekit",
+      "role": "framework",
+      "projection": "etaf",
+      "url": "https://github.com/emacs-taf/etaf.git",
+      "branch": "main"
     },
     "etaf-highlight": {
-      "url": "https://github.com/emacs-taf/etaf-highlight.git",
-      "branch": "main",
-      "role": "extension"
+      "path": "core/packages/etaf-highlight",
+      "role": "extension",
+      "projection": "etaf",
+      "url": "https://github.com/emacs-taf/etaf.git",
+      "branch": "main"
     },
     "etaf-hints": {
-      "url": "https://github.com/emacs-taf/etaf-hints.git",
-      "branch": "main",
-      "role": "extension"
+      "path": "core/packages/etaf-hints",
+      "role": "extension",
+      "projection": "etaf",
+      "url": "https://github.com/emacs-taf/etaf.git",
+      "branch": "main"
     },
     "etaf-install": {
-      "url": "https://github.com/emacs-taf/emacs-taf.git",
-      "branch": "main",
-      "role": "framework"
+      "path": "core/packages/etaf-install",
+      "role": "framework",
+      "projection": "etaf",
+      "url": "https://github.com/emacs-taf/etaf.git",
+      "branch": "main"
     },
     "etaf-manual": {
-      "url": "https://github.com/emacs-taf/etaf-manual.git",
-      "branch": "main",
-      "role": "framework"
+      "path": "core/packages/etaf-manual",
+      "role": "framework",
+      "projection": "etaf",
+      "url": "https://github.com/emacs-taf/etaf.git",
+      "branch": "main"
     },
     "etaf-md": {
-      "url": "https://github.com/emacs-taf/etaf-md.git",
+      "path": "apps/etaf-md",
+      "role": "application",
       "branch": "main",
-      "role": "application"
+      "repo": "emacs-taf/etaf-md",
+      "url": "https://github.com/emacs-taf/etaf-md.git"
     },
     "etaf-ncm": {
-      "url": "https://github.com/emacs-taf/etaf-ncm.git",
+      "path": "apps/etaf-ncm",
+      "role": "application",
       "branch": "main",
-      "role": "application"
+      "repo": "emacs-taf/etaf-ncm",
+      "url": "https://github.com/emacs-taf/etaf-ncm.git"
     },
     "etaf-org": {
-      "url": "https://github.com/emacs-taf/etaf-org.git",
+      "path": "apps/etaf-org",
+      "role": "application",
       "branch": "main",
-      "role": "application"
+      "repo": "emacs-taf/etaf-org",
+      "url": "https://github.com/emacs-taf/etaf-org.git"
     },
     "etaf-pomodoro": {
-      "url": "https://github.com/emacs-taf/etaf-pomodoro.git",
+      "path": "apps/etaf-pomodoro",
+      "role": "application",
       "branch": "main",
-      "role": "application"
+      "repo": "emacs-taf/etaf-pomodoro",
+      "url": "https://github.com/emacs-taf/etaf-pomodoro.git"
     },
     "etaf-posframe": {
-      "url": "https://github.com/emacs-taf/etaf-posframe.git",
-      "branch": "main",
-      "role": "framework"
+      "path": "core/packages/etaf-posframe",
+      "role": "framework",
+      "projection": "etaf",
+      "url": "https://github.com/emacs-taf/etaf.git",
+      "branch": "main"
     },
     "etaf-reader": {
-      "url": "https://github.com/emacs-taf/etaf-reader.git",
+      "path": "apps/etaf-reader",
+      "role": "application",
       "branch": "main",
-      "role": "application"
+      "repo": "emacs-taf/etaf-reader",
+      "url": "https://github.com/emacs-taf/etaf-reader.git"
     },
     "etaf-rss": {
-      "url": "https://github.com/emacs-taf/etaf-rss.git",
+      "path": "apps/etaf-rss",
+      "role": "application",
       "branch": "main",
-      "role": "application"
+      "repo": "emacs-taf/etaf-rss",
+      "url": "https://github.com/emacs-taf/etaf-rss.git"
     },
     "etaf-screensaver": {
-      "url": "https://github.com/emacs-taf/etaf-screensaver.git",
+      "path": "apps/etaf-screensaver",
+      "role": "application",
       "branch": "main",
-      "role": "application"
+      "repo": "emacs-taf/etaf-screensaver",
+      "url": "https://github.com/emacs-taf/etaf-screensaver.git"
     },
     "etaf-tanks": {
+      "path": "games/etaf-tanks",
+      "role": "game",
+      "repo": "emacs-taf/etaf-tanks",
       "url": "https://github.com/emacs-taf/etaf-tanks.git",
-      "branch": "main",
-      "role": "game"
+      "branch": "main"
     },
     "etaf-telega": {
-      "url": "https://github.com/emacs-taf/etaf-telega.git",
+      "path": "apps/etaf-telega",
+      "role": "application",
       "branch": "main",
-      "role": "application"
+      "repo": "emacs-taf/etaf-telega",
+      "url": "https://github.com/emacs-taf/etaf-telega.git"
     },
     "etaf-translate": {
-      "url": "https://github.com/emacs-taf/etaf-translate.git",
-      "branch": "main",
-      "role": "extension"
+      "path": "core/packages/etaf-translate",
+      "role": "extension",
+      "projection": "etaf",
+      "url": "https://github.com/emacs-taf/etaf.git",
+      "branch": "main"
     },
     "etaf-ui": {
-      "url": "https://github.com/emacs-taf/etaf-ui.git",
-      "branch": "main",
-      "role": "framework"
+      "path": "core/packages/etaf-ui",
+      "role": "framework",
+      "projection": "etaf",
+      "url": "https://github.com/emacs-taf/etaf.git",
+      "branch": "main"
     },
     "etaf-video-player": {
-      "url": "https://github.com/emacs-taf/etaf-video-player.git",
+      "path": "apps/etaf-video-player",
+      "role": "application",
       "branch": "main",
-      "role": "application"
+      "repo": "emacs-taf/etaf-video-player",
+      "url": "https://github.com/emacs-taf/etaf-video-player.git"
     },
     "etaf-web": {
-      "url": "https://github.com/emacs-taf/etaf-web.git",
+      "path": "apps/etaf-web",
+      "role": "application",
       "branch": "main",
-      "role": "application"
+      "url": "https://github.com/emacs-taf/emacs-taf.git"
     },
     "etaf-weread": {
-      "url": "https://github.com/emacs-taf/etaf-weread.git",
+      "path": "apps/etaf-weread",
+      "role": "application",
       "branch": "main",
-      "role": "application"
+      "repo": "emacs-taf/etaf-weread",
+      "url": "https://github.com/emacs-taf/etaf-weread.git"
     },
     "etaf-xiangqi": {
+      "path": "games/etaf-xiangqi",
+      "role": "game",
+      "repo": "emacs-taf/etaf-xiangqi",
       "url": "https://github.com/emacs-taf/etaf-xiangqi.git",
-      "branch": "main",
-      "role": "game"
+      "branch": "main"
     },
     "etaf-youtube": {
-      "url": "https://github.com/emacs-taf/etaf-youtube.git",
+      "path": "apps/etaf-youtube",
+      "role": "application",
       "branch": "main",
-      "role": "application"
+      "repo": "emacs-taf/etaf-youtube",
+      "url": "https://github.com/emacs-taf/etaf-youtube.git"
     },
     "maillist": {
-      "url": "https://github.com/emacs-taf/maillist.git",
+      "path": "apps/maillist",
+      "role": "application",
       "branch": "main",
-      "role": "application"
+      "repo": "emacs-taf/maillist",
+      "url": "https://github.com/emacs-taf/maillist.git"
     }
   }
 }

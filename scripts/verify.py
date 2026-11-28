@@ -13,22 +13,29 @@ import tempfile
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import workspace_layout
 
 
 def snapshot(root):
     """Record the revision and working state of every delivery unit.
 
-    One checkout keeps every package under packages/, so the whole tree shares
-    a single revision and the snapshot has one entry. A multi-checkout
-    workspace still records one entry per registered repository.
+    One checkout keeps every package under core/packages/, apps/, games/ (or
+    legacy packages/), so the whole tree shares a single revision.
     """
-    if (root / 'packages').is_dir() and (root / '.jj').is_dir():
+    if workspace_layout.package_containers(root) and (root / '.jj').is_dir():
         def jj(*args):
             return subprocess.check_output(['jj', '--no-pager', *args], cwd=root,
                                            stderr=subprocess.DEVNULL)
         return {'.': {'revision': jj('log', '--no-graph', '-r', '@-', '-T', 'commit_id').decode().strip(),
                       'status': jj('diff', '-r', '@', '--summary').decode(),
                       'change_digest': hashlib.sha256(jj('diff', '-r', '@', '--git')).hexdigest()}}
+    if workspace_layout.package_containers(root) and (root / '.git').exists():
+        def git(*args):
+            return subprocess.check_output(['git', '-C', str(root), *args], stderr=subprocess.DEVNULL)
+        return {'.': {'revision': git('rev-parse', 'HEAD').decode().strip(),
+                      'status': git('status', '--porcelain', '--untracked-files=all').decode(),
+                      'change_digest': hashlib.sha256(git('diff', '--binary', 'HEAD')).hexdigest()}}
     names = ['.'] + list(json.loads((root / 'workspace.json').read_text())['repositories'])
     result = {}
     for name in names:

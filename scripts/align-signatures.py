@@ -15,6 +15,9 @@ import re
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import workspace_layout
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -65,7 +68,7 @@ DEFUN = re.compile(r'^\((?:cl-)?defun\s+([^\s()]+)\s+', re.M)
 def definitions(root, package):
     """Map every defun name to its one-line argument list, as defined in source."""
     found = {}
-    home = Path(root) / 'packages' / package
+    home = workspace_layout.package_path(Path(root), package)
     for path in sorted(list(home.glob('*.el')) + list((home / 'lisp').glob('*.el'))):
         text = path.read_text(encoding='utf-8', errors='replace')
         for match in DEFUN.finditer(text):
@@ -84,7 +87,7 @@ DECLARED = re.compile(r'^;; Function: ([^\s()]+)( \(.*\))?$', re.M)
 
 def align(root, package):
     """Rewrite PACKAGE's Commentary signatures to its definitions."""
-    entry = Path(root) / 'packages' / package / f'{package}.el'
+    entry = workspace_layout.package_path(Path(root), package) / f'{package}.el'
     with entry.open(encoding='utf-8', newline='') as handle:
         text = handle.read()
     signatures = definitions(root, package)
@@ -112,10 +115,11 @@ def align(root, package):
 
 
 def main(argv):
-    names = argv or sorted(path.name for path in (ROOT / 'packages').iterdir()
-                           if (path / f'{path.name}.el').is_file())
+    dirs = workspace_layout.package_dirs(ROOT)
+    names = argv or sorted(name for name, path in dirs.items()
+                           if (path / f'{name}.el').is_file())
     for name in names:
-        if not (ROOT / 'packages' / name / f'{name}.el').is_file():
+        if not (workspace_layout.package_path(ROOT, name) / f'{name}.el').is_file():
             sys.exit(f'align-signatures: unknown package {name}')
         align(ROOT, name)
 

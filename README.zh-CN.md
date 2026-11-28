@@ -9,7 +9,7 @@
 
 **Emacs TAF（ETAF）** 是面向 Emacs 的声明式文本应用框架，提供 CSS 风格选择器与层叠、盒模型 / Flex / Grid 布局、响应式组件与增量 buffer 渲染能力。
 
-本仓库（`https://github.com/emacs-taf/emacs-taf`）是 **Emacs TAF 官方 Monorepo**，也是整个生态统一的源码、Issue 与 Pull Request 入口。全部 33 个框架包、扩展、应用、游戏、官方安装器与参考手册都位于本仓库 `packages/` 目录下；`https://github.com/emacs-taf/<包名>` 下的单包仓库是由本 Monorepo 按目录投影生成的只读镜像。
+本仓库（`https://github.com/emacs-taf/emacs-taf`）是 **Emacs TAF 官方 Monorepo**，也是整个生态统一的源码、Pull Request 与 CI 入口。全部 33 个包按产品边界分为三层：`core/packages/`（15 个核心框架、通用扩展、安装器与参考手册包，整目录自动投影到 [emacs-taf/etaf](https://github.com/emacs-taf/etaf)）、`apps/`（16 个应用）与 `games/`（2 款游戏），已对外发布的应用与游戏各自自动投影到 `https://github.com/emacs-taf/<包名>`。
 
 ![Emacs 中的 ETAF 应用界面](https://etaf.top/media/site/shots/etaf-ncm.webp)
 
@@ -41,36 +41,36 @@
 
 ## 本 Monorepo 包含的包
 
-下列全部包都位于本仓库 `packages/<包名>` 目录并登记在 [workspace.json](workspace.json) 中。
+下列全部包都位于本仓库 `core/packages/`、`apps/` 或 `games/` 目录并登记在 [workspace.json](workspace.json) 中。
 
-### 框架核心
+### 框架核心（`core/packages/` → [emacs-taf/etaf](https://github.com/emacs-taf/etaf)）
 
 | 包名 | 职责 | 本 Monorepo 依赖 |
 | --- | --- | --- |
-| [ecss](https://github.com/emacs-taf/ecss) | 选择器与样式层叠引擎 | 无 |
-| [ekp](https://github.com/emacs-taf/ekp) | Knuth–Plass 段落排版 | 无 |
-| [ebox](https://github.com/emacs-taf/ebox) | Box 布局、渲染与增量发布 | ecss；可选 ekp |
-| [etaf](https://github.com/emacs-taf/etaf) | 组件、响应式状态与应用运行时 | ebox |
-| [etaf-ui](https://github.com/emacs-taf/etaf-ui) | 通用 UI 组件库与主题 token | etaf |
-| [etaf-gamekit](https://github.com/emacs-taf/etaf-gamekit) | 游戏定义、独立实例、动作与后端适配器 | etaf |
-| [etaf-posframe](https://github.com/emacs-taf/etaf-posframe) | 任意 ETAF View 的浮动子框面板 | etaf |
-| [etaf-ext](https://github.com/emacs-taf/etaf-ext) | 通用扩展引擎、生命周期管理与宿主钩子 | etaf、etaf-ui、etaf-posframe |
-| [etaf-db](https://github.com/emacs-taf/etaf-db) | ETAF 数据库后端（目前支持 SQLite） | etaf |
-| [etaf-install](https://github.com/emacs-taf/emacs-taf) | 官方 `package.el` 安装入口、能力诊断、预编译原生模块下载与包管理界面（`packages/etaf-install`） | 无 |
-| [etaf-manual](https://github.com/emacs-taf/etaf-manual) | 核心包中英双语《ETAF 参考手册》，对照公共接口校验并发布于 <https://etaf.top> | etaf、etaf-ui；门禁同时校验 ecss、ekp、ebox、etaf-db |
+| [ecss](core/packages/ecss) | 选择器与样式层叠引擎 | 无 |
+| [ekp](core/packages/ekp) | Knuth–Plass 段落排版 | 无 |
+| [ebox](core/packages/ebox) | Box 布局、渲染与增量发布 | ecss；可选 ekp |
+| [etaf](core/packages/etaf) | 组件、响应式状态与应用运行时 | ebox |
+| [etaf-ui](core/packages/etaf-ui) | 通用 UI 组件库与主题 token | etaf |
+| [etaf-gamekit](core/packages/etaf-gamekit) | 游戏定义、独立实例、动作与后端适配器 | etaf |
+| [etaf-posframe](core/packages/etaf-posframe) | 任意 ETAF View 的浮动子框面板 | etaf |
+| [etaf-ext](core/packages/etaf-ext) | 通用扩展引擎、生命周期管理与宿主钩子 | etaf、etaf-ui、etaf-posframe |
+| [etaf-db](core/packages/etaf-db) | ETAF 数据库后端（目前支持 SQLite） | etaf |
+| [etaf-install](core/packages/etaf-install) | 官方 `package.el` 安装入口、能力诊断、预编译原生模块下载与包管理界面 | 无 |
+| [etaf-manual](core/packages/etaf-manual) | 核心包中英双语《ETAF 参考手册》，对照公共接口校验并发布于 <https://etaf.top> | etaf、etaf-ui；门禁同时校验 ecss、ekp、ebox、etaf-db |
 
-### 通用扩展
+### 通用扩展（`core/packages/` → [emacs-taf/etaf](https://github.com/emacs-taf/etaf)）
 
-构建在 [etaf-ext](https://github.com/emacs-taf/etaf-ext) 之上，为任意 ETAF 视图与应用提供通用增强能力：
+构建在 [etaf-ext](core/packages/etaf-ext) 之上，为任意 ETAF 视图与应用提供通用增强能力：
 
 | 扩展 | 职责 | 框架依赖 |
 | --- | --- | --- |
-| [etaf-hints](https://github.com/emacs-taf/etaf-hints) | 交互元素的快速键盘跳转提示 | etaf-ext、etaf、etaf-ui、ebox |
-| [etaf-highlight](https://github.com/emacs-taf/etaf-highlight) | 跨 ETAF 视图的高亮与批注笔记 | etaf-ext、etaf、etaf-ui、ebox |
-| [etaf-translate](https://github.com/emacs-taf/etaf-translate) | 面向 ETAF 视图的沉浸式双语对照翻译 | etaf-ext、etaf、etaf-ui、etaf-db、ebox |
-| [etaf-export](https://github.com/emacs-taf/etaf-export) | 将 ETAF 渲染页面导出为矢量 SVG 与 PDF | etaf-ext、etaf、etaf-ui、ebox |
+| [etaf-hints](core/packages/etaf-hints) | 交互元素的快速键盘跳转提示 | etaf-ext、etaf、etaf-ui、ebox |
+| [etaf-highlight](core/packages/etaf-highlight) | 跨 ETAF 视图的高亮与批注笔记 | etaf-ext、etaf、etaf-ui、ebox |
+| [etaf-translate](core/packages/etaf-translate) | 面向 ETAF 视图的沉浸式双语对照翻译 | etaf-ext、etaf、etaf-ui、etaf-db、ebox |
+| [etaf-export](core/packages/etaf-export) | 将 ETAF 渲染页面导出为矢量 SVG 与 PDF | etaf-ext、etaf、etaf-ui、ebox |
 
-### 应用
+### 应用（`apps/`）
 
 | 应用 | 职责 | 框架依赖 |
 | --- | --- | --- |
@@ -88,30 +88,28 @@
 | [etaf-bili](https://github.com/emacs-taf/etaf-bili) | B 站客户端：热门、排行榜与搜索，支持 buffer 内直接播放 | etaf、etaf-ui、ebox |
 | [etaf-youtube](https://github.com/emacs-taf/etaf-youtube) | YouTube 客户端：账号订阅流、搜索、频道、播放列表与画布内播放 | etaf、etaf-ui、etaf-db、ebox |
 | [etaf-screensaver](https://github.com/emacs-taf/etaf-screensaver) | 空闲屏保：纯画布动画、输入唤回、组合播放与录制动画适配 | etaf、ebox |
-| [etaf-web](https://github.com/emacs-taf/etaf-web) | 网页文章阅读器：将 HTML 编译为 `etaf-md` 中间语言并做本地缓存 | etaf-md、etaf、etaf-ui、ebox |
+| [etaf-web](apps/etaf-web) | 网页文章阅读器：将 HTML 编译为 `etaf-md` 中间语言并做本地缓存 | etaf-md、etaf、etaf-ui、ebox |
 | [etaf-agenda](https://github.com/emacs-taf/etaf-agenda) | 个人日程与任务工作台：今日、日历（年 / 月 / 周）、清单、项目、习惯与月度回顾（SQLite） | etaf、etaf-ui、etaf-db、ebox |
 
 > **归档状态**：`etaf-agenda`、`etaf-reader`、`etaf-rss`、`etaf-screensaver`、`etaf-web` 已在本 Monorepo 中通过验证，但尚未进入官方 ELPA 归档（`M-x etaf-install` 暂不列出）。
 
-### 游戏
+### 游戏（`games/`）
 
-两款游戏均构建在 [etaf-gamekit](https://github.com/emacs-taf/etaf-gamekit) 之上，规则、呈现与素材保存在各自包目录：
+两款游戏均构建在 [etaf-gamekit](core/packages/etaf-gamekit) 之上，规则、呈现与素材保存在各自包目录：
 
 | 游戏 | 说明 | 后端 |
 | --- | --- | --- |
 | [etaf-tanks](https://github.com/emacs-taf/etaf-tanks) | Iron Tide：原生竞技场的实时坦克对战 | Godot |
 | [etaf-xiangqi](https://github.com/emacs-taf/etaf-xiangqi) | 楚河：中国象棋人机对战或同机双人对弈 | OpenSpiel |
 
-开发时运行完整 `make -C packages/etaf-gamekit check` 前，先安装所选引擎后端或执行 `make -C packages/etaf-gamekit engine-all GAMEKIT_PYTHON=python3.11`。
+开发时运行完整 `make -C core/packages/etaf-gamekit check` 前，先安装所选引擎后端或执行 `make -C core/packages/etaf-gamekit engine-all GAMEKIT_PYTHON=python3.11`。
 
 ## 独立仓库（不在本 Monorepo 中）
 
-以下周边仓库基于已发布的 ETAF 框架包构建，保留各自的独立提交历史。需要并入本 Monorepo 时可通过 `python3 scripts/add-package.py` 接入。
+以下周边仓库基于已发布的 ETAF 框架包构建，保留各自的独立提交历史。
 
 | 仓库 | 职责 |
 | --- | --- |
-| [ebox-playground](https://github.com/emacs-taf/ebox-playground) | Ebox 布局示例 |
-| [etaf-playground](https://github.com/emacs-taf/etaf-playground) | ETAF/UI 集成示例与验收入口 |
 | [etaf-pi](https://github.com/emacs-taf/etaf-pi) | 原生 Pi 代理客户端：流式对话、工具输出、会话恢复与多行输入 |
 | [etaf-video-studio](https://github.com/emacs-taf/etaf-video-studio) | 录制、非破坏性剪辑并导出软件教程视频 |
 | [etaf-browser](https://github.com/emacs-taf/etaf-browser) | 带地址栏与状态栏外壳的浏览器客户端，界面绘制在 ETAF 画布中 |
@@ -121,22 +119,26 @@
 | [etaf-salvage](https://github.com/emacs-taf/etaf-salvage) | Salvage Station：实时探索与回收 |
 | [etaf-mario](https://github.com/emacs-taf/etaf-mario) | 超级马里奥：四关纯文本平台跳跃，字符精灵、道具与敌人 |
 
-## Monorepo 结构与只读子仓投影
+## Monorepo 结构与分层只读投影
 
 ```text
 emacs-taf/
-├── packages/                 # 全部 33 个包（各自包含 <pkg>.el、lisp/、tests/、Makefile）
+├── core/                     # 核心投影目录（→ emacs-taf/etaf）：README + packages/<15 个框架/扩展/手册包>
+├── apps/                     # 16 个终端应用（已发布应用各自投影 → emacs-taf/<app>）
+├── games/                    # 2 款游戏（各自投影 → emacs-taf/<game>）
 ├── scripts/                  # 共用构建、结构与 API 门禁、影响面分析（refscope）、发布与媒体托管脚本
 ├── docs/                     # Monorepo 工具手册、生态架构规范与键盘导航契约
 ├── tests/tools/              # 共享工具与安装器回归测试
-├── workspace.json            # Monorepo 包注册表与角色定义
+├── workspace.json            # Monorepo 包注册表、路径、角色与投影声明（schema 3）
 ├── release-dependencies.json # 官方 ELPA 归档选包与随包运行资源清单
 └── Makefile                  # 按依赖拓扑编排的统一验证入口
 ```
 
-- **统一开发与 PR 入口**：横跨框架底包与上层应用的改动只需一个原子提交和单个 PR。
-- **只读单包投影仓**：`https://github.com/emacs-taf/<包名>` 是由 `packages/<包名>` 自动投影出的只读镜像，便于 `straight.el`、`elpaca` 等包管理器按单包引用与浏览。
-- **`jj` / `jjosh` 用户注意**：请直接克隆本 Monorepo，不要把多个投影子仓拉进同一个 Jujutsu 检出（跨包提交在投影后保留相同 `change-id`，同时拉取会触发 `divergent` 冲突）。本 Monorepo 与所有投影子仓都保留了 `pre-mono` 标签记录单仓化之前的历史，早于该节点的旧克隆需重新克隆。
+- **统一开发与 PR 入口**：横跨框架底包与上层应用的改动只需在 `emacs-taf/emacs-taf` 提交单个原子 PR。
+- **分层自动只读投影**：
+  - `core/` 自动投影到 **[emacs-taf/etaf](https://github.com/emacs-taf/etaf)**，对外提供一个包含 15 个核心框架、扩展、安装器与参考手册包的纯净核心仓库。
+  - `apps/` 与 `games/` 下已对外发布的产品各自自动投影到独立仓库（`https://github.com/emacs-taf/<包名>`），投影仓统一关闭 PR 以防止历史分叉。
+- **源码包管理器安装（`straight.el` / `elpaca`）**：优先使用官方 ELPA 源（`https://etaf.top/packages/`），也可直接从本 Monorepo 按 `:files ("core/packages/<pkg>/*")` 或 `:files ("apps/<app>/*")` 切片安装。
 
 ## 开发与贡献
 
@@ -153,7 +155,8 @@ make setup-hooks              # 配置本地 Git pre-commit / commit-msg 钩子
 | 命令 | 用途 |
 | --- | --- |
 | `make structure-check` | 检查仓库目录规范、`workspace.json` 一致性、媒体策略与跨包公共 API 边界 |
-| `make -C packages/<包名> check` | 单独运行某个包的结构检查、字节编译、公开验收测试与 API 绑定检查 |
+| `make -C core/packages/<包名> check` | 单独运行核心包的结构检查、字节编译、公开验收测试与 API 绑定检查 |
+| `make -C apps/<应用名> check` | 单独运行应用校验（游戏为 `make -C games/<游戏名> check`） |
 | `make plan-affected` | 预览当前改动在符号级波及的包（基于 `scripts/refscope.py`） |
 | `make check-affected JOBS=4` | 按依赖顺序只编译测试受影响的单元 |
 | `make order` | 查看全部包的可并行依赖分层 |
@@ -166,7 +169,7 @@ make setup-hooks              # 配置本地 Git pre-commit / commit-msg 钩子
 - 每个包以根目录 `<包名>.el` 头部 Commentary 作为公共 API 唯一清单；消费方只加载提供方根入口，不直接引用其内部 `lisp/` 模块。
 - 提交信息遵循 [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/)（标题不超过 72 字符且包含 `Validation:` 行），可用 `python3 scripts/check-commit-message.py <文件>` 本地校验。
 - 展示用图片与视频统一托管在 `https://etaf.top/media/`，不提交进 Git（Git 内仅允许 `tests/fixtures/` 存放 ≤ 100 KB 的离线单元测试输入）。
-- 维护者工作流（`jjosh` 变更图操作、`scripts/publish-packages.py` 按包投影、ELPA 归档发布与性能回归验证）见 [docs/manual.zh-CN.md](docs/manual.zh-CN.md)。
+- 维护者工作流（`.github/workflows/project.yml` 自动投影、ELPA 归档发布与性能回归验证）见 [docs/manual.zh-CN.md](docs/manual.zh-CN.md)。
 
 ## 文档索引
 
