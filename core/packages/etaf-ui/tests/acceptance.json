@@ -1487,6 +1487,26 @@
       "name": "etaf-ui-host-theme-ref-reacts-to-mode-and-theme-switch",
       "file": "tests/etaf-ui-host-theme-tests.el",
       "purpose": "Reactive host theme refs update on mode-ref writes and reject malformed options and transforms cleanly."
+    },
+    {
+      "name": "etaf-ui-virtual-list-fixed-height-renders-o-viewport-and-scrolls",
+      "file": "tests/etaf-ui-virtual-list-tests.el",
+      "purpose": "Fixed-height 5,000-row virtual list mounts only O(viewport + 2*overscan) rows and renders target slices across mid and end jumps."
+    },
+    {
+      "name": "etaf-ui-virtual-list-dynamic-heights-and-scroll-anchor",
+      "file": "tests/etaf-ui-virtual-list-tests.el",
+      "purpose": "Dynamic-height virtual list measures multi-line row heights post-commit and anchors scroll offsets when rows above the viewport grow."
+    },
+    {
+      "name": "etaf-ui-virtual-list-keyboard-navigation-and-empty-state",
+      "file": "tests/etaf-ui-virtual-list-tests.el",
+      "purpose": "Virtual list handles arrow, page, home, end and RET navigation without unnecessary scroll jumps and shows empty states cleanly."
+    },
+    {
+      "name": "etaf-ui-virtual-list-5000-rows-constant-order-benchmark",
+      "file": "tests/etaf-ui-virtual-list-tests.el",
+      "purpose": "Verify 5,000-row virtual list matches 500-row O(viewport) initial render count and completes repeated scroll jumps in constant-order time."
     }
   ]
 }

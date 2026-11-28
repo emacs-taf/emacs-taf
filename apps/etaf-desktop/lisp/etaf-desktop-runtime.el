@@ -1168,6 +1168,37 @@ cell clear for them."
                    :padding '((lh 0) (ch 2) (lh 1) (ch 2)))
              (list (etaf-node 'text nil (list text)))))
 
+(defun etaf-desktop--window-error-fallback (desktop id title info reset)
+  "Return isolated error fallback View for window ID (TITLE) in DESKTOP.
+INFO carries `:error' and `:phase'; RESET remounts the window body cleanly."
+  (let ((phase (or (plist-get info :phase) 'render))
+        (message (error-message-string (plist-get info :error))))
+    (etaf-node
+     'column
+     (list :width 'stretch :height 'stretch
+           :padding '((lh 1) (ch 2)) :item-gap '(lh 1)
+           :role 'alert :aria-label (format "%s 渲染异常" title))
+     (list
+      (etaf-node 'text (list :font-weight 'bold
+                             :color (etaf-theme-token :ui-danger-fg "#d1242f"))
+                 (list (format "窗口异常：%s（%s）" title phase)))
+      (etaf-node 'text (list :color (etaf-theme-token :ui-muted-fg "#6b7280"))
+                 (list message))
+      (etaf-node
+       'row (list :item-gap '(ch 1))
+       (list
+        (etaf-node 'etaf-button
+                   (list :label "重试" :variant 'primary
+                         :ref (intern (format "etaf-desktop-retry-%s" id))
+                         :on-press reset)
+                   nil)
+        (etaf-node 'etaf-button
+                   (list :label "关闭窗口" :variant 'ghost
+                         :ref (intern (format "etaf-desktop-error-close-%s" id))
+                         :on-press (lambda ()
+                                     (etaf-desktop-close-window desktop id)))
+                   nil)))))))
+
 (defun etaf-desktop--window-shell
     (desktop window active move resize-left resize-right resize-top resize-bottom
              resize-top-left resize-top-right resize-bottom-left resize-bottom-right)
@@ -1242,7 +1273,14 @@ MOVE, RESIZE-RIGHT and RESIZE-BOTTOM are owned by the window Component."
            :on-focus (lambda ()
                        (unless (equal id (etaf-desktop--active-window-id desktop))
                          (etaf-desktop-focus-window desktop id))))
-     (list body))))
+     (list
+      (etaf-node
+       'etaf-error-boundary
+       (list :name id
+             :fallback
+             (lambda (info reset)
+               (etaf-desktop--window-error-fallback desktop id title info reset)))
+       (list body))))))
 
 (defun etaf-desktop--taskbar-key (id grouping)
   "Return the taskbar key for window ID according to GROUPING."

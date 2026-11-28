@@ -406,6 +406,47 @@ Behavior 是规格，不是节点：一个名字、一组语义属性，以及�
 
 **参见。** [响应式系统](reactivity.md#错误与恢复)关于 Runtime 如何收集并重新抛出排空中的错误。
 
+#### Component: etaf-error-boundary (&key fallback on-error name)
+
+隔离组件子树内的渲染、响应式更新、生命周期钩子与事件回调错误。
+
+**参数。** FALLBACK 是 View、字符串、nil（内置告警盒），或返回降级 View 的双参函数 `(INFO RESET)`；其中 INFO 为 `(:error CONDITION :phase PHASE :name NAME)`（PHASE 取 `render`、`update` 或 `event`），RESET 是清除错误并全新重挂载子树的零参函数。ON-ERROR 为可选单参函数，在捕获错误时于纯渲染阶段之外接收 INFO。NAME 是可选符号或字符串，随 INFO 提供诊断标识。
+
+**语义。** 正常状态下边界以 fragment 透传默认插槽，不引入额外布局盒。后代在首次渲染、响应式更新、生命周期钩子或事件/按键派发中抛出 `error` 时，边界销毁受损子树、调用 ON-ERROR 并切换渲染 FALLBACK，同时保持兄弟子树正常更新与提交。调用 RESET 会清空错误状态并递增内部重挂键，让子树以干净状态重新挂载。用户中断（`quit`）永不被吞没，FALLBACK 自身抛出的错误不会再被已触发的同一边界捕获，而是继续向外层边界或 Runtime 传播。
+
+**返回。** 一个 View。
+
+**错误。** FALLBACK 不是 View、字符串、函数或 nil，ON-ERROR 既不是函数也不是 nil，或 NAME 不是符号、字符串或 nil 时抛出 `error→ etaf-component-call-error`。
+
+**示例。** 用可重试降级视图隔离子组件。
+
+```elisp
+(etaf-view
+ (etaf-error-boundary
+  :name 'feed
+  :fallback (lambda (info reset)
+              (etaf-view
+               (box :on-press reset
+                 (text (expr (format "Failed (%s): %s"
+                                     (plist-get info :phase)
+                                     (error-message-string (plist-get info :error))))))))
+  (feed-panel)))
+```
+
+**参见。** `etaf-error-boundary-run` 与 [响应式系统](reactivity.md#错误与恢复)。
+
+#### Property: :on-error
+
+`etaf-error-boundary` 的错误通知回调属性。
+
+**参数。** 接收诊断 plist `(:error CONDITION :phase PHASE :name NAME)` 的单参函数，或 nil。
+
+**语义。** 当 `etaf-error-boundary` 在 `render`、`update` 或 `event` 阶段捕获后代 `error` 时，于纯渲染阶段之外调用该回调。适合记录日志或上报外部诊断；`:on-error` 自身抛出的错误不会被已触发的同一边界再次吞没。
+
+**错误。** `:on-error` 既不是函数也不是 nil 时抛出 `error→ etaf-component-call-error`。
+
+**参见。** `etaf-error-boundary`。
+
 ## 语义细节
 
 ### Behavior 的同一性与替换

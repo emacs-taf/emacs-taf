@@ -10,7 +10,7 @@ The enclosing workspace `AGENTS.md` (`../AGENTS.md`) carries the shared engineer
 | --- | --- |
 | View grammar, Hosts, structural normalization | `etaf-view`, `etaf-compiler` |
 | Component definition, props, slots, retained instances | `etaf-component` |
-| Mounted lifetime, retained Host tree, fine-grained bindings, commit, direct Ebox writes | `etaf-runtime` |
+| Mounted lifetime, retained Host tree, fine-grained bindings, commit, direct Ebox writes, error boundaries | `etaf-runtime`, `etaf-error-boundary` |
 | Application buffers: canvas, theme face, fit after window changes, single close | `etaf-app` |
 | Two-tier buffer/window and frame fullscreen lifecycle, mode-line & split restore | `etaf-fullscreen` |
 | Floating adaptive Picture-in-Picture child-frame host and border drag-resize | `etaf-pip` |

@@ -406,6 +406,47 @@ Run FUNCTION and handle its signaled error with HANDLER.
 
 **See also.** [Reactivity](reactivity.md#errors-and-recovery) for how the Runtime collects and re-signals errors from a drain.
 
+#### Component: etaf-error-boundary (&key fallback on-error name)
+
+Isolate render, reactive update, lifecycle, and event errors inside the component's child subtree.
+
+**Arguments.** FALLBACK is a View, a string, nil for a built-in alert box, or a function `(INFO RESET)` returning a fallback View, where INFO is `(:error CONDITION :phase PHASE :name NAME)` with PHASE one of `render`, `update`, or `event`, and RESET is a zero-argument function that clears the caught error and remounts the children fresh. ON-ERROR is an optional function called with INFO outside the pure render phase when an error is caught. NAME is an optional symbol or string carried in INFO for diagnostics.
+
+**Semantics.** While healthy, the boundary projects its default slot inside a fragment without adding an extra layout box. When a descendant signals an `error` during initial render, reactive update, lifecycle hook, or event/key dispatch, the boundary disposes the broken child subtree, invokes ON-ERROR, and switches to FALLBACK while healthy sibling subtrees keep updating normally. Calling RESET clears the error state and bumps the internal remount key so children mount cleanly from scratch. User interrupts (`quit`) are never swallowed, and errors raised inside FALLBACK itself bubble out of the already-tripped boundary to any enclosing boundary or to the Runtime.
+
+**Returns.** A View.
+
+**Errors.** `error→ etaf-component-call-error` when FALLBACK is not a View, string, function or nil, ON-ERROR is neither a function nor nil, or NAME is not a symbol, string or nil.
+
+**Example.** Isolate a child widget with a retryable fallback.
+
+```elisp
+(etaf-view
+ (etaf-error-boundary
+  :name 'feed
+  :fallback (lambda (info reset)
+              (etaf-view
+               (box :on-press reset
+                 (text (expr (format "Failed (%s): %s"
+                                     (plist-get info :phase)
+                                     (error-message-string (plist-get info :error))))))))
+  (feed-panel)))
+```
+
+**See also.** `etaf-error-boundary-run` and [Reactivity](reactivity.md#errors-and-recovery).
+
+#### Property: :on-error
+
+The error-notification callback of `etaf-error-boundary`.
+
+**Arguments.** A function of one argument, the diagnostic plist `(:error CONDITION :phase PHASE :name NAME)`, or nil.
+
+**Semantics.** Runs outside the pure render phase whenever an enclosing `etaf-error-boundary` catches a descendant `error` during `render`, `update`, or `event`. Use it for logging or updating external diagnostics; errors signaled by `:on-error` itself are not caught by the already-tripped boundary.
+
+**Errors.** `error→ etaf-component-call-error` when `:on-error` is neither a function nor nil.
+
+**See also.** `etaf-error-boundary`.
+
 ## Semantic details
 
 ### Behavior identity and replacement

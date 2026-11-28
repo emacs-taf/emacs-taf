@@ -840,23 +840,29 @@ replace the tabs and the list."
                                    (etaf-value (plist-get model :chats)))
                            :active (etaf-value (plist-get model :filter))
                            :on-change #'etaf-telega-select-filter))))
-        (etaf-node
-         'box (etaf-telega--scroll-body 'telega-list)
-         (list
+        (let ((chats (etaf-telega--list-chats model))
+              (cursor-ref (plist-get model :cursor))
+              (has-any (etaf-value (plist-get model :chats))))
           (etaf-view
-           (flex :flex-direction 'column :width 'stretch :focus-group 'vertical
-             (expr
-              (let ((chats (etaf-telega--list-chats model)))
-                (if chats
-                    (mapcar (lambda (chat)
-                              (etaf-view (etaf-telega-chat-row :key (plist-get chat :id)
-                                                               :chat chat
-                                                               :selected selected)))
-                            chats)
-                  (list (etaf-telega--muted-line
-                         (if (etaf-value (plist-get model :chats))
+           (etaf-virtual-list
+            :ref 'telega-list
+            :items chats
+            :item-key (lambda (chat) (plist-get chat :id))
+            :estimate-height 4
+            :height 'stretch
+            :width 'stretch
+            :overscan 6
+            :selected-key cursor-ref
+            :focus-group 'vertical
+            :label "会话列表"
+            :empty-view (etaf-telega--muted-line
+                         (if has-any
                              "这个分组没有对话"
-                           "正在载入对话…"))))))))))))))))
+                           "正在载入对话…"))
+            :render-item (lambda (chat _idx _sel)
+                           (etaf-view
+                            (etaf-telega-chat-row :chat chat
+                                                  :selected selected))))))))))))
 
 ;;;; Chat
 

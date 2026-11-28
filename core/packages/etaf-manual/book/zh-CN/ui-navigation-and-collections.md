@@ -143,6 +143,32 @@
                     (:key b :title "Beta")))
 ```
 
+#### Component: etaf-virtual-list (&key items item-key render-item item-height estimate-height overscan height width selected-key on-select on-activate on-scroll scroll-anchor empty-view empty-label keys region focus-group ref class label)
+
+渲染窗口化虚拟滚动列表，让已挂载的 Host 数量始终与可见视口成正比，而非随数据总量线性增长。
+
+**参数。** ITEMS 是列表、向量或响应式数据源。ITEM-KEY 为可选单参函数，返回条目唯一标量键（缺省依次取 `:key`、`:id` 或从 0 计数的索引）。RENDER-ITEM 为必需函数 `(ITEM INDEX SELECTED-P)`，仅为可见窗口内的条目返回行 View。ITEM-HEIGHT 启用 O(1) 固定行高快路径；为 nil 时启用动态行高模式，初始按 ESTIMATE-HEIGHT（默认 `1`）估算并在提交后通过 `etaf-host-ref-size` 测量回填。OVERSCAN（默认 `4`）控制视口上下缓冲区的额外渲染行数。HEIGHT 为正整数行数或 ECSS 高度（默认 `stretch`），WIDTH 默认 `stretch`，SELECTED-KEY 是当前选中键或响应式源，ON-SELECT 与 ON-ACTIVATE 在键盘导航（`<up>`、`<down>`、`C-p`、`C-n`、`<prior>`、`<next>`、`<home>`、`<end>`、`RET`）时接收条目键，ON-SCROLL 接收滚动行偏移，SCROLL-ANCHOR（`top`、`bottom` 或 nil）在视口上方动态行高变化时自动补偿滚动偏移，EMPTY-VIEW 或 EMPTY-LABEL 用于空列表展示。KEYS、REGION、FOCUS-GROUP、REF、CLASS 与 LABEL 配置滚动容器。
+
+**语义。** 组件只实例化可见窗口加两侧 OVERSCAN 缓冲内的条目，并用上下占位盒撑起总高度，使数千条数据的首帧挂载与滚动保持 O(viewport) 代价。在缓冲区内微幅滚动完全由 Ebox 原生完成，不触发响应式重渲染；越过缓冲区边界时再滑动窗口。键盘导航通过 ON-SELECT 上报下一选中键，仅在目标行离开可视区时调用 `etaf-scroll-to`，避免跳帧。
+
+**返回。** 一个 View。
+
+**错误。** ITEMS 不是列表、向量或响应式源，RENDER-ITEM 不是函数，ITEM-HEIGHT 或 ESTIMATE-HEIGHT 非法，OVERSCAN 为负，SCROLL-ANCHOR 不在 `top`/`bottom`/nil 中，或回调既不是函数也不是 nil 时抛出 `error→ etaf-component-call-error`。
+
+**示例。**
+
+```elisp
+(etaf-virtual-list
+ :items rows
+ :item-key (lambda (row) (plist-get row :id))
+ :item-height 1
+ :height 20
+ :render-item (lambda (row _idx _sel)
+                (etaf-view (text (expr (plist-get row :title))))))
+```
+
+**参见。** `etaf-list`、`etaf-text-grid`。
+
 ## 分页
 
 <!-- index: etaf-pagination; controller pager; page summary -->

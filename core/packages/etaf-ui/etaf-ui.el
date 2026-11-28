@@ -1555,6 +1555,36 @@
 ;; nonempty strings; an empty list is allowed. The list owns no state: the
 ;; caller supplies both CHECKED and SELECTED and updates them itself.
 ;;
+;; Component: etaf-virtual-list (&key items item-key render-item item-height estimate-height overscan height width selected-key on-select on-activate on-scroll scroll-anchor empty-view empty-label keys region focus-group ref class label)
+;; Parameters:
+;; :items — List, vector, or reactive source of items to virtualize.
+;; :item-key — Optional function (item) returning unique scalar key; defaults to :key, :id, or index.
+;; :render-item — Required function (item index selected-p) returning a View for visible rows.
+;; :item-height — Optional positive integer line height enabling the O(1) fixed-height fast path.
+;; :estimate-height — Positive integer default row height (1) for dynamic measurement mode.
+;; :overscan — Non-negative integer extra rows rendered beyond each viewport edge (default 4).
+;; :height — Positive integer line count or ECSS height (default `stretch').
+;; :width — ECSS width (default `stretch').
+;; :selected-key — Optional selected item key or reactive source.
+;; :on-select — Optional function (key) called on arrow/page/home/end navigation.
+;; :on-activate — Optional function (key) called on RET.
+;; :on-scroll — Optional function (offset) called when the container scrolls.
+;; :scroll-anchor — `top' (default), `bottom', or nil scroll compensation for dynamic row measurement.
+;; :empty-view — Optional View rendered when :items is empty.
+;; :empty-label — Optional string rendered when :items is empty and :empty-view is nil.
+;; :keys — Optional extra (KEY COMMAND LABEL) entries placed ahead of navigation keys.
+;; :region — Optional ETAF :region plist on the scrolling container.
+;; :focus-group — Optional focus-group direction on the scrolling container.
+;; :ref — Optional Host reference for the scrolling container.
+;; :class — Optional extra CSS class string.
+;; :label — Accessible name string (default "Virtual list").
+;;
+;; Render a windowed virtual scrolling list whose mounted Host count stays
+;; O(viewport + 2*overscan) regardless of total collection size.  Top and
+;; bottom spacer boxes preserve total scrollable height, while fixed-height
+;; O(1) arithmetic or dynamic post-commit height measurement with scroll-anchor
+;; compensation handles arbitrary collections smoothly.
+;;
 ;; Component: etaf-date-picker (&key value label placeholder on-change disabled bind)
 ;; Parameters:
 ;; :value — ISO YYYY-MM-DD string/nil or ref/computed; default nil (empty).
@@ -2203,6 +2233,7 @@ nothing about where the package directory is.")
 (require 'etaf-ui-selection)
 (require 'etaf-ui-feedback)
 (require 'etaf-ui-navigation)
+(require 'etaf-ui-virtual-list)
 (require 'etaf-ui-surface)
 (require 'etaf-ui-key-help)
 (require 'etaf-ui-reactions)

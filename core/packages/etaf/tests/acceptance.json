@@ -1422,6 +1422,31 @@
       "name": "etaf-app-registry-defines-filters-validates-and-launches",
       "file": "tests/etaf-app-tests.el",
       "purpose": "Verify etaf-app-define/register validates manifests, detaches copies, filters by host/category, notifies hooks and launches via :open or :session."
+    },
+    {
+      "name": "etaf-error-boundary-catches-sync-render-error",
+      "file": "tests/etaf-error-boundary-tests.el",
+      "purpose": "Verify etaf-error-boundary isolates synchronous child render errors to :fallback while sibling subtrees mount normally and :on-error receives render diagnostic info."
+    },
+    {
+      "name": "etaf-error-boundary-catches-reactive-update-error",
+      "file": "tests/etaf-error-boundary-tests.el",
+      "purpose": "Verify etaf-error-boundary catches reactive update errors without rolling back healthy siblings and keeps siblings reactive afterward."
+    },
+    {
+      "name": "etaf-error-boundary-catches-event-callback-error",
+      "file": "tests/etaf-error-boundary-tests.el",
+      "purpose": "Verify etaf-error-boundary catches event callback errors during dispatch and switches to :fallback cleanly."
+    },
+    {
+      "name": "etaf-error-boundary-reset-remounts-fresh-and-recovers",
+      "file": "tests/etaf-error-boundary-tests.el",
+      "purpose": "Verify calling the fallback RESET callback clears the caught error, remounts children fresh, and recovers once the failing condition clears."
+    },
+    {
+      "name": "etaf-error-boundary-propagates-quit-and-fallback-errors",
+      "file": "tests/etaf-error-boundary-tests.el",
+      "purpose": "Verify etaf-error-boundary never swallows quit interrupts and lets errors raised by its own :fallback bubble to an enclosing boundary."
     }
   ]
 }

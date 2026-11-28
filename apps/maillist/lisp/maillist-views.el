@@ -229,47 +229,73 @@
          :color (maillist-color :dim)
       (text (expr (or (plist-get thread :snippet) ""))))))
 
+(defun maillist--flatten-thread-groups (groups)
+  "Flatten date GROUPS into spacer, header, and thread rows."
+  (let (out (first t))
+    (dolist (group groups (nreverse out))
+      (unless first
+        (push (list :kind 'spacer :key (format "spacer:%s" (car group))) out))
+      (setq first nil)
+      (push (list :kind 'header :key (format "header:%s" (car group)) :label (car group)) out)
+      (dolist (thread (cdr group))
+        (push (list :kind 'thread :key (plist-get thread :id) :thread thread) out)))))
+
 (etaf-define-component maillist-thread-list
     (&key groups selected scope searching compact-author on-press)
-  "Render GROUPS of thread rows, each labelled by its date."
-  :view
-  (column :width 'stretch :height 'stretch :min-height '(lh 0)
-          :overflow 'scroll
-          :focus-group 'vertical
-          :region '(:id threads :label "线程列表" :key "t"
-                        :neighbors (:up search :right reader))
-          :ref 'maillist-thread-list :role 'region :tab-index 0
-          :aria-label "线程列表"
-          :item-gap '(lh 0)
-          :padding (list (list 'lh 0) (list 'ch 0))
-    (column :if (null groups) :width 'stretch :height 'stretch
-            :padding (list (list 'lh 3) (list 'ch 2))
-      (etaf-empty
-       :title (cond (searching "没有匹配的线程")
-                    ((eq scope 'starred) "还没有收藏的线程")
-                    ((eq scope 'unread) "没有未读线程")
-                    (t "这里还没有线程"))
-       :description (cond (searching "换个关键词，或清空搜索框回到列表。")
-                          ((eq scope 'starred) "在列表中按 s 收藏线程，或按 1 返回全部。")
-                          ((eq scope 'unread) "当前列表已全部读完，按 1 返回全部或按 g 同步。")
-                          (t "按 g 从邮件列表档案同步。"))))
-    (column :for (group groups) :key (car group)
-            :width 'stretch :item-gap '(lh 0)
-      (box :if (not (eq group (car groups))) :height '(lh 1))
-      (flex :align-items 'center :height '(lh 1)
-            :padding (list (list 'lh 0) (list 'ch 1))
-            :gap (list (list 'lh 0) (list 'ch 1))
-        (box :flex-shrink 0 :height '(lh 1) :color (maillist-color :muted)
-          (text (expr (car group))))
-        (box :flex-grow 1 :flex-basis '(ch 0) :min-width '(ch 0)
-             :height '(lh 1)
-             :border-bottom (maillist--border (maillist-color :line-soft))))
-      (maillist-thread-row :for (thread (cdr group))
-                           :key (plist-get thread :id)
-                           :thread thread
-                           :selected (equal (plist-get thread :id) selected)
-                           :compact-author compact-author
-                           :on-press (lambda () (funcall on-press (plist-get thread :id)))))))
+  "Render GROUPS of thread rows, each labelled by its date via `etaf-virtual-list'."
+  :render
+  (let ((flat (maillist--flatten-thread-groups groups))
+        (empty-view
+         (etaf-view
+          (column :width 'stretch :height 'stretch
+                  :padding (list (list 'lh 3) (list 'ch 2))
+            (etaf-empty
+             :title (cond (searching "没有匹配的线程")
+                          ((eq scope 'starred) "还没有收藏的线程")
+                          ((eq scope 'unread) "没有未读线程")
+                          (t "这里还没有线程"))
+             :description (cond (searching "换个关键词，或清空搜索框回到列表。")
+                                ((eq scope 'starred) "在列表中按 s 收藏线程，或按 1 返回全部。")
+                                ((eq scope 'unread) "当前列表已全部读完，按 1 返回全部或按 g 同步。")
+                                (t "按 g 从邮件列表档案同步。")))))))
+    (etaf-view
+     (etaf-virtual-list
+      :ref 'maillist-thread-list
+      :items flat
+      :item-key (lambda (entry) (plist-get entry :key))
+      :item-height 1
+      :height 'stretch
+      :width 'stretch
+      :overscan 8
+      :selected-key selected
+      :focus-group 'vertical
+      :region '(:id threads :label "线程列表" :key "t"
+                    :neighbors (:up search :right reader))
+      :label "线程列表"
+      :empty-view empty-view
+      :render-item
+      (lambda (entry _idx sel-p)
+        (pcase (plist-get entry :kind)
+          ('spacer (etaf-node 'box (list :height '(lh 1) :width 'stretch) nil))
+          ('header
+           (etaf-view
+            (flex :align-items 'center :height '(lh 1)
+                  :padding (list (list 'lh 0) (list 'ch 1))
+                  :gap (list (list 'lh 0) (list 'ch 1))
+              (box :flex-shrink 0 :height '(lh 1) :color (maillist-color :muted)
+                (text (expr (plist-get entry :label))))
+              (box :flex-grow 1 :flex-basis '(ch 0) :min-width '(ch 0)
+                   :height '(lh 1)
+                   :border-bottom (maillist--border (maillist-color :line-soft))))))
+          (_
+           (let ((thread (plist-get entry :thread)))
+             (etaf-view
+              (maillist-thread-row
+               :thread thread
+               :selected sel-p
+               :compact-author compact-author
+               :on-press (lambda ()
+                           (funcall on-press (plist-get thread :id)))))))))))))
 
 ;;; ---------------------------------------------------------------------------
 ;;; Reader

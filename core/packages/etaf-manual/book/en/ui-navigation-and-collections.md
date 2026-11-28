@@ -143,6 +143,32 @@ Render a selectable list. ITEMS contain `:key`, `:title` and optional `:descript
                     (:key b :title "Beta")))
 ```
 
+#### Component: etaf-virtual-list (&key items item-key render-item item-height estimate-height overscan height width selected-key on-select on-activate on-scroll scroll-anchor empty-view empty-label keys region focus-group ref class label)
+
+Render a windowed virtual scrolling list whose mounted Host count stays proportional to the visible viewport instead of the total item count.
+
+**Arguments.** ITEMS is a list, vector, or reactive source of items. ITEM-KEY is an optional single-argument function returning a unique scalar key for each item (defaulting to `:key`, `:id`, or the zero-based index). RENDER-ITEM is a required function `(ITEM INDEX SELECTED-P)` returning a View for each visible row. ITEM-HEIGHT enables the O(1) fixed line-height fast path; when nil, dynamic row heights start at ESTIMATE-HEIGHT (default `1`) and are measured post-commit via `etaf-host-ref-size`. OVERSCAN (default `4`) is the number of extra rows kept rendered above and below the viewport. HEIGHT is a positive line count or ECSS height (default `stretch`), WIDTH defaults to `stretch`, SELECTED-KEY is an optional value or reactive source, ON-SELECT and ON-ACTIVATE receive a key on keyboard navigation (`<up>`, `<down>`, `C-p`, `C-n`, `<prior>`, `<next>`, `<home>`, `<end>`, `RET`), ON-SCROLL receives the scroll offset in lines, SCROLL-ANCHOR (`top`, `bottom`, or nil) compensates scroll offsets when measured dynamic rows above the viewport change height, and EMPTY-VIEW or EMPTY-LABEL renders when ITEMS is empty. KEYS, REGION, FOCUS-GROUP, REF, CLASS, and LABEL configure the scrolling container.
+
+**Semantics.** Only items inside the visible window plus OVERSCAN rows on each edge are materialized between top and bottom spacer boxes, keeping mount and scroll cost O(viewport) for thousands of rows. Scrolling within the overscan cushion stays inside Ebox without triggering a reactive re-render; crossing the cushion edge slides the window cleanly. Keyboard navigation moves selection through ON-SELECT and calls `etaf-scroll-to` only when the newly selected item leaves the visible viewport.
+
+**Returns.** A View.
+
+**Errors.** `error→ etaf-component-call-error` when ITEMS is not a list, vector or reactive source, RENDER-ITEM is not a function, ITEM-HEIGHT or ESTIMATE-HEIGHT is invalid, OVERSCAN is negative, SCROLL-ANCHOR is outside `top`/`bottom`/nil, or a callback is neither a function nor nil.
+
+**Example.**
+
+```elisp
+(etaf-virtual-list
+ :items rows
+ :item-key (lambda (row) (plist-get row :id))
+ :item-height 1
+ :height 20
+ :render-item (lambda (row _idx _sel)
+                (etaf-view (text (expr (plist-get row :title))))))
+```
+
+**See also.** `etaf-list`, `etaf-text-grid`.
+
 ## Pagination
 
 <!-- index: etaf-pagination; controller pager; page summary -->

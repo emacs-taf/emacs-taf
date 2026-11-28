@@ -1854,5 +1854,42 @@ with the desktop's theme instead of the Emacs frame's polarity."
               (etaf-desktop-close desktop))))
       (etaf-app-unregister app))))
 
+(ert-deftest etaf-desktop-window-error-boundary-isolates-and-recovers ()
+  "A crashing desktop window isolates to its error card while sibling windows keep working, and Retry recovers."
+  (let* ((boom (etaf-ref t))
+         (desktop (etaf-desktop-create :name " *desktop-eb-isolation*"))
+         (buffer nil))
+    (unwind-protect
+        (progn
+          (etaf-desktop-open-window
+           desktop 'good-win
+           :title "Healthy App" :x 16 :y 1 :width 240 :height 7
+           :view (etaf-view (text "healthy-window-body")))
+          (etaf-desktop-open-window
+           desktop 'bad-win
+           :title "Crashy App" :x 16 :y 9 :width 380 :height 8
+           :view (etaf-view
+                  (box
+                    (text (expr (if (etaf-value boom)
+                                    (error "window render crash")
+                                  "recovered-window-body"))))))
+          (setq buffer (etaf-desktop-mount desktop))
+          (let ((txt (with-current-buffer buffer
+                       (buffer-substring-no-properties (point-min) (point-max)))))
+            (should (string-match-p "healthy-window-body" txt))
+            (should (string-match-p "窗口异常：Crashy App" txt))
+            (should (string-match-p "window render crash" txt)))
+          ;; Clear failure and press Retry button inside isolated error card.
+          (etaf-set-value boom nil)
+          (etaf-dispatch-event (etaf-runtime-for-buffer buffer)
+                               'etaf-desktop-retry-bad-win 'press)
+          (let ((txt (with-current-buffer buffer
+                       (buffer-substring-no-properties (point-min) (point-max)))))
+            (should (string-match-p "healthy-window-body" txt))
+            (should (string-match-p "recovered-window-body" txt))
+            (should-not (string-match-p "窗口异常" txt))))
+      (ignore-errors (etaf-desktop-close desktop))
+      (when (buffer-live-p buffer) (kill-buffer buffer)))))
+
 (provide 'etaf-desktop-tests)
 ;;; etaf-desktop-tests.el ends here

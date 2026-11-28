@@ -116,6 +116,18 @@ capture the environment they must run in later.")
 (defvar etaf--dirty-runtimes nil
   "Runtimes with work for the next drain commit.")
 
+(defvar etaf--seg-boundaries (make-hash-table :test #'eq :weakness 'key)
+  "Weak map from `etaf-error-boundary' Component segments to boundary records.")
+
+(defvar etaf--scope-segments (make-hash-table :test #'eq :weakness 'key)
+  "Weak map from Component setup Effect Scopes to their owning segments.")
+
+(defvar etaf--boundary-sync-error-function nil
+  "Hook `(SEG ERR)' called when a boundary Component fails synchronously.")
+
+(defvar etaf--boundary-hook-error-function nil
+  "Hook `(INST ERR)' called when a lifecycle hook signals inside a boundary.")
+
 (defvar-local etaf--mount-cursor nil
   "Cursor state a mounted View replaced, as (HAD-LOCAL . CURSOR-TYPE).")
 
@@ -1971,6 +1983,8 @@ stays proportional to the change."
          (scope (etaf-effect-scope :detached t
                                    :name (etaf--component-spec-name spec))))
     (setf (etaf--instance-scope inst) scope)
+    (when-let* ((seg (etaf--instance-seg inst)))
+      (puthash scope seg etaf--scope-segments))
     (let* ((etaf--component-phase 'setup)
            (etaf--current-ictx ctx)
            (etaf--current-component-instance inst)
@@ -2007,12 +2021,19 @@ stays proportional to the change."
 (defun etaf--comp-show (seg view)
   "Show Component SEG's rendered VIEW."
   (let* ((inst (etaf--seg-data seg))
-         (name (etaf--component-spec-name (etaf--instance-spec inst))))
+         (name (etaf--component-spec-name (etaf--instance-spec inst)))
+         (items nil))
     (etaf--validate-component-render-result view name)
-    (setf (etaf--instance-view inst) view)
-    (etaf--patch-kids
-     seg (etaf--flatten (etaf--apply-component-attrs view (etaf--comp-attrs inst) name))
-     (etaf--instance-ctx inst))))
+    (setf (etaf--instance-view inst) view
+          items (etaf--flatten
+                 (etaf--apply-component-attrs view (etaf--comp-attrs inst) name)))
+    (if (and etaf--boundary-sync-error-function
+             (gethash seg etaf--seg-boundaries))
+        (condition-case err
+            (etaf--patch-kids seg items (etaf--instance-ctx inst))
+          (error
+           (funcall etaf--boundary-sync-error-function seg err)))
+      (etaf--patch-kids seg items (etaf--instance-ctx inst)))))
 
 (defun etaf--comp-bind-render (seg)
   "Render Component SEG once, or bind its `:render' in an effect."
@@ -2320,14 +2341,17 @@ Host's `:ref' and to Host query, focus or event APIs."
 
 ;;;; Commit and lifecycle
 
-(defun etaf--run-hooks (runtime hooks)
+(defun etaf--run-hooks (runtime hooks &optional inst)
   "Run lifecycle HOOKS in RUNTIME, collecting failures in the drain."
   (dolist (hook (reverse hooks))
     (condition-case err
         (let ((etaf--current-runtime runtime)
               (etaf--render-phase-p nil))
           (funcall hook))
-      ((error quit) (push err etaf--drain-errors)))))
+      ((error quit)
+       (unless (and inst etaf--boundary-hook-error-function
+                    (funcall etaf--boundary-hook-error-function inst err))
+         (push err etaf--drain-errors))))))
 
 (defun etaf--runtime-commit (runtime)
   "Bring RUNTIME's buffer up to date and run its lifecycle hooks."
@@ -2358,10 +2382,10 @@ Host's `:ref' and to Host query, focus or event APIs."
       (dolist (inst (reverse mounted))
         (unless (etaf--instance-dead inst)
           (setf (etaf--instance-mounted-p inst) t)
-          (etaf--run-hooks runtime (etaf--instance-mounted-hooks inst))))
+          (etaf--run-hooks runtime (etaf--instance-mounted-hooks inst) inst)))
       (dolist (inst (reverse updated))
         (unless (or (etaf--instance-dead inst) (memq inst mounted))
-          (etaf--run-hooks runtime (etaf--instance-updated-hooks inst))))
+          (etaf--run-hooks runtime (etaf--instance-updated-hooks inst) inst)))
       (dolist (inst (reverse retired))
         (etaf--run-hooks runtime (etaf--instance-unmounted-hooks inst))))
     (when (and did-commit app-changed (> (etaf-runtime-rev runtime) 1)

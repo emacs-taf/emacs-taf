@@ -539,6 +539,11 @@
    "name": "etaf-desktop-discovers-etaf-app-and-closes-sessions-on-teardown",
    "file": "tests/etaf-desktop-tests.el",
    "purpose": "Desktop discovers applications registered via etaf-app-register and invokes their session :close callback on window close, etaf-desktop-close, and buffer kill."
+  },
+  {
+   "name": "etaf-desktop-window-error-boundary-isolates-and-recovers",
+   "file": "tests/etaf-desktop-tests.el",
+   "purpose": "Desktop wraps each window body in etaf-error-boundary so a failing window renders an isolated error card with Retry while sibling windows stay healthy."
   }
  ]
 }

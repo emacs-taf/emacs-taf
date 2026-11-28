@@ -364,18 +364,26 @@ the list never scrolls the article."
         :keys (when on-scroll
                 (list (list "<wheel-up>" (lambda () (funcall on-scroll -1)) "上一篇文章")
                       (list "<wheel-down>" (lambda () (funcall on-scroll 1)) "下一篇文章")))
-    (column :for (entry entries) :key (plist-get entry :index)
-            :width 'stretch :item-gap '(lh 0) :flex-shrink 0
-      (etaf-rss--view-row
-       :index (plist-get entry :index)
-       :row (plist-get entry :row)
-       :selected (plist-get entry :selected)
-       :pane pane
-       :press on-press))
-    (box :if (null entries) :height '(lh 4) :text-align 'center
-         :color (etaf-rss-color :dim)
-      (text (expr (or empty-note "这里还没有内容"))))
-    (box :flex-grow 1 :flex-basis '(lh 0) :min-height '(lh 0))
+    (etaf-virtual-list
+     :items entries
+     :item-key (lambda (entry) (plist-get entry :index))
+     :item-height 1
+     :height 'stretch
+     :width 'stretch
+     :overscan 6
+     :label "文章列表"
+     :empty-view (etaf-view
+                  (box :height '(lh 4) :text-align 'center
+                       :color (etaf-rss-color :dim)
+                    (text (expr (or empty-note "这里还没有内容")))))
+     :render-item (lambda (entry _idx _sel)
+                    (etaf-view
+                     (etaf-rss--view-row
+                      :index (plist-get entry :index)
+                      :row (plist-get entry :row)
+                      :selected (plist-get entry :selected)
+                      :pane pane
+                      :press on-press))))
     (flex :if (> total 0) :width 'stretch :height '(lh 1)
           :align-items 'center :padding '((lh 0) (ch 1)) :flex-shrink 0
           :border-top (etaf-rss--border 'top (etaf-rss-color :line-soft))

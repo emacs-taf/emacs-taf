@@ -14,6 +14,7 @@
 (require 'ebox)
 (require 'etaf-reactive)
 (require 'etaf-runtime)
+(require 'etaf-error-boundary)
 
 (defvar etaf--current-runtime)
 (defvar etaf--observer-context)
@@ -170,9 +171,19 @@ otherwise call the local callback with no arguments."
                      ;; the batch ends.
                      (when (eq event-kind 'press)
                        (etaf--maybe-finish-input-session runtime host-ref))
-                     (let ((result (if payload-p
-                                       (funcall callback payload)
-                                     (funcall callback))))
+                     (let* ((boundary (etaf--boundary-for-host runtime host-ref))
+                            (result
+                             (if boundary
+                                 (condition-case err
+                                     (if payload-p
+                                         (funcall callback payload)
+                                       (funcall callback))
+                                   (error
+                                    (etaf--boundary-trip boundary err 'event)
+                                    nil))
+                               (if payload-p
+                                   (funcall callback payload)
+                                 (funcall callback)))))
                      ;; UI shells can install a capture callback on an
                      ;; ancestor Host.  This keeps activation and focus
                      ;; policy out of every leaf component while preserving

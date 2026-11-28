@@ -2,7 +2,7 @@
 .NOTPARALLEL:
 EMACS ?= emacs
 LOAD_PATH = -L . -L lisp -L examples -L scripts -L benchmarks -L ../ebox -L ../ecss
-SOURCES = lisp/etaf-view.el lisp/etaf-compiler.el lisp/etaf-component.el lisp/etaf-reactive.el lisp/etaf-animation.el lisp/etaf-observer.el lisp/etaf-context.el lisp/etaf-async.el lisp/etaf-resource.el lisp/etaf-data.el lisp/etaf-list-cache.el lisp/etaf-runtime.el lisp/etaf-behavior.el lisp/etaf-controlled-behavior.el lisp/etaf-actions.el lisp/etaf-events.el lisp/etaf-keys.el lisp/etaf-regions.el lisp/etaf-help.el lisp/etaf-viewport.el lisp/etaf-app.el lisp/etaf-process.el lisp/etaf-performance.el lisp/etaf-measure.el etaf.el scripts/emacs-gui-verifier.el
+SOURCES = lisp/etaf-view.el lisp/etaf-compiler.el lisp/etaf-component.el lisp/etaf-reactive.el lisp/etaf-animation.el lisp/etaf-observer.el lisp/etaf-context.el lisp/etaf-async.el lisp/etaf-resource.el lisp/etaf-data.el lisp/etaf-list-cache.el lisp/etaf-runtime.el lisp/etaf-error-boundary.el lisp/etaf-behavior.el lisp/etaf-controlled-behavior.el lisp/etaf-actions.el lisp/etaf-events.el lisp/etaf-keys.el lisp/etaf-regions.el lisp/etaf-help.el lisp/etaf-viewport.el lisp/etaf-app.el lisp/etaf-process.el lisp/etaf-performance.el lisp/etaf-measure.el etaf.el scripts/emacs-gui-verifier.el
 SOURCES += scripts/resource-gui-scenarios.el benchmarks/performance-scenarios.el
 SOURCES += lisp/etaf-video-source.el lisp/etaf-video-audio.el lisp/etaf-video-mpv.el lisp/etaf-video-session.el lisp/etaf-video-component.el
 SOURCES += lisp/etaf-projection.el lisp/etaf-inspect.el lisp/etaf-activity.el lisp/etaf-fullscreen.el lisp/etaf-pip.el

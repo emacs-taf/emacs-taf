@@ -1036,6 +1036,16 @@
 ;; control flow.  Errors signaled outside FUNCTION, or by HANDLER itself, are not
 ;; swallowed by this boundary.
 ;;
+;; Component: etaf-error-boundary (&key fallback on-error name)
+;; Isolate render, reactive update, lifecycle, and event errors in children.
+;; Render children normally until an error occurs; on error (never `quit'),
+;; dispose the broken child subtree, invoke optional ON-ERROR with
+;; `(:error CONDITION :phase PHASE :name NAME)' (`PHASE' is `render', `update',
+;; or `event'), and display FALLBACK (a View, string, nil for a default alert,
+;; or a function `(INFO RESET)' returning a View whose zero-argument RESET
+;; clears the error and remounts the children cleanly).  Errors signaled inside
+;; FALLBACK itself are not caught by the already-tripped boundary.
+;;
 ;; Error: etaf-event-error
 ;; Invalid ETAF Event
 ;; Catch this condition with condition-case; failed calls do not return a value.
@@ -2942,6 +2952,7 @@
 (require 'etaf-resource)
 (require 'etaf-data)
 (require 'etaf-runtime)
+(require 'etaf-error-boundary)
 (require 'etaf-behavior)
 (require 'etaf-controlled-behavior)
 (require 'etaf-actions)

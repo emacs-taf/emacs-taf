@@ -37,6 +37,7 @@
 (require 'ebox)
 (require 'etaf-reactive)
 (require 'etaf-runtime)
+(require 'etaf-error-boundary)
 (require 'etaf-events)
 (require 'etaf-regions)
 
@@ -397,9 +398,19 @@ keymap or M-x runs it."
                                    :kind 'key :payload nil)))
     (etaf-runtime-event-begin runtime)
     (unwind-protect
-        (if (commandp command)
-            (call-interactively command)
-          (funcall command))
+        (let ((boundary (etaf--boundary-for-host runtime ref)))
+          (if boundary
+              (condition-case err
+                  (if (commandp command)
+                      (call-interactively command)
+                    (funcall command))
+                (error
+                 (etaf-call-with-batch
+                  (lambda () (etaf--boundary-trip boundary err 'event)))
+                 nil))
+            (if (commandp command)
+                (call-interactively command)
+              (funcall command))))
       (etaf-runtime-event-end runtime))))
 
 (defun etaf--keys-callable (references kind)

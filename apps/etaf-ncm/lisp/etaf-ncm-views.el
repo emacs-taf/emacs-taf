@@ -879,9 +879,10 @@ are the group's `:keys' and DIRECTION moves its selection and scrolls past
 the pool's first and last cell.  BARE drops the heading and its count line, so
 the pool fills a small-size card's content area."
   :render
-  ;; One cell per entry, up to a fixed canvas: the count never changes, so the
-  ;; column is not rebuilt when the queue grows.
-  (let ((offsets (number-sequence 0 (1- (max etaf-ncm-render-limit (or rows 0))))))
+  ;; Virtualize the exact queue entries via `etaf-virtual-list' so scroll height
+  ;; matches the live queue length while mounting only visible rows + overscan.
+  (let* ((entries (plist-get (etaf-value projection) :entries))
+         (offsets (and entries (number-sequence 0 (1- (length entries))))))
    (etaf-view
   (flex :position 'relative :flex-direction 'column :width 'stretch :flex-grow 1 :flex-basis '(lh 0)
         :min-height '(lh 0) :gap '((lh 0) (px 0)) :overflow 'hidden
@@ -896,15 +897,22 @@ the pool fills a small-size card's content area."
          :visibility (if (plist-get (etaf-value projection) :entries) 'hidden 'visible)
          :color (etaf-ncm-color :dim)
       (text "队列是空的"))
-    ;; One scrolling canvas, exactly as the library list is: the wheel scrolls
-    ;; it natively, so a gesture runs through the whole queue with momentum.
-    (box :ref 'ncm-queue-scroll :id "ncm-queue-scroll"
-         :position 'relative :width 'stretch :flex-grow 1 :flex-basis '(px 0)
-         :min-height '(lh 0) :overflow 'scroll
-      (column :width 'stretch
-        (etaf-ncm--view-queue-cell :for (index offsets) :key index
-                                   :projection projection :index index
-                                   :on-jump on-jump)))))))
+    ;; One windowed virtual scrolling canvas: the wheel scrolls it natively
+    ;; while mounting only the visible queue slice plus overscan.
+    (etaf-virtual-list
+     :ref 'ncm-queue-scroll
+     :items offsets
+     :item-key #'identity
+     :item-height 1
+     :height 'stretch
+     :width 'stretch
+     :overscan 8
+     :label "播放队列"
+     :render-item (lambda (index _i _sel)
+                    (etaf-view
+                     (etaf-ncm--view-queue-cell :projection projection
+                                                :index index
+                                                :on-jump on-jump))))))))
 
 (etaf-define-component etaf-ncm--view-aside
     (&key kind visible layout columns window-rows title artist album cover
