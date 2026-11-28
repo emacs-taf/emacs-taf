@@ -8,15 +8,15 @@ on:
         default: ''
   push:
     paths:
-      - 'apps/etaf-md/native/**'
-      - 'core/packages/etaf/native/**'
+      - 'core/packages/etaf-doc/native/**'
+      - 'core/packages/etaf-media/native/**'
       - 'core/packages/ekp/native/**'
       - 'scripts/native-release.py'
       - '.github/workflows/native-modules.yml'
   pull_request:
     paths:
-      - 'apps/etaf-md/native/**'
-      - 'core/packages/etaf/native/**'
+      - 'core/packages/etaf-doc/native/**'
+      - 'core/packages/etaf-media/native/**'
       - 'core/packages/ekp/native/**'
       - 'scripts/native-release.py'
       - '.github/workflows/native-modules.yml'
@@ -35,19 +35,19 @@ jobs:
           - label: macOS arm64 + x86_64
             os: macos-latest
             platform_group: darwin
-            packages: etaf-md etaf ekp
+            packages: etaf-doc etaf-media ekp
           - label: Linux x86_64 (glibc 2.35, dlopen Pango)
             os: ubuntu-22.04
             platform_group: linux-x86_64
-            packages: etaf-md etaf ekp
+            packages: etaf-doc etaf-media ekp
           - label: Linux arm64 (dlopen Pango)
             os: ubuntu-24.04-arm
             platform_group: linux-arm64
-            packages: etaf-md etaf ekp
+            packages: etaf-doc etaf-media ekp
           - label: Windows x86_64
             os: windows-latest
             platform_group: windows-x86_64
-            packages: etaf ekp
+            packages: etaf-media ekp
     env:
       PYTHONUTF8: '1'
     steps:
