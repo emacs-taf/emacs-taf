@@ -144,7 +144,7 @@
 文本 → 解析 → 节点树 → 派生 → 渲染 → 视图
 ```
 
-- **解析**：封闭。调用共享的 `etaf-ui-markdown-parse`，本文不改它。
+- **解析**：封闭。调用共享的 `etaf-doc-markdown-parse`，本文不改它。
 - **派生**：整篇算一次。章节号、锚点、块的显示身份都在这一步，结果写到节点属性上。
 - **渲染**：按块独立。声明的属性与画法在这一步生效。
 
@@ -1141,8 +1141,8 @@ print("hi")
 | `home-box`、`image-card`、`link-card`、`npm-badge`、`qrcode`、`code-tree`、`npm-to` | 站点与展示 | 原语 / `etaf-badge` / `etaf-qr` | 已实现 |
 | `include`、`code-ref`、`symbol`、`project-tree`、`git-log`、`git-diff` | Emacs 原生活文档（L1 只读） | 沙箱资产层（`:asset-data`） | 已实现 |
 | `run` | Emacs 原生活文档（L2 显式触发） | 受控动作层（`etaf-md-allow-actions`） | 已实现 |
-| 行内轻语义：`!!遮罩!!`、`[+注释]`、`[[双链]]`、`%%注释%%`、`:color[...]`、`:sym[...]` | 行内扩展 | `etaf-ui-markdown` | 已实现 |
-| 代码块增强：`:collapsed-lines[=N]`、`/word/`、`[!code word:...]`、`:whitespace`、`:indent-guides` | 代码围栏 | `etaf-ui-markdown` | 已实现 |
+| 行内轻语义：`!!遮罩!!`、`[+注释]`、`[[双链]]`、`%%注释%%`、`:color[...]`、`:sym[...]` | 行内扩展 | `etaf-doc-markdown` | 已实现 |
+| 代码块增强：`:collapsed-lines[=N]`、`/word/`、`[!code word:...]`、`:whitespace`、`:indent-guides` | 代码围栏 | `etaf-doc-markdown` | 已实现 |
 | 交互式 GFM 任务复选框（写回源文档）、`T` 独立可配置目录侧窗、`S` 全局遮罩、`K` 居中浮层链接/符号速览、图库灯箱 | 阅读器壳层 | `etaf-md-app` / `etaf-media-viewer` | 已实现 |
 
 ## 7. 交互契约

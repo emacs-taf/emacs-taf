@@ -1,4 +1,4 @@
-;;; etaf-video-session.el --- Headless playback sessions for native video -*- lexical-binding: t; -*-
+;;; etaf-media-session.el --- Headless playback sessions for native video -*- lexical-binding: t; -*-
 
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -12,8 +12,8 @@
 ;;; Code:
 
 (require 'cl-lib)
-(require 'etaf-video-source)
-(require 'etaf-video-audio)
+(require 'etaf-media-source)
+(require 'etaf-media-audio)
 
 (defvar etaf-video-display-fps 30
   "Display timer rate in frames per second for new sessions.
@@ -561,5 +561,5 @@ ON-STATE runs after every state change.  The session starts paused: call
      :volume (or volume etaf-video-audio-volume)
      :presented 0)))
 
-(provide 'etaf-video-session)
-;;; etaf-video-session.el ends here
+(provide 'etaf-media-session)
+;;; etaf-media-session.el ends here

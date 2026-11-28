@@ -223,11 +223,11 @@
 
 (require 'etaf)
 (require 'ebox)
-(require 'etaf-video-source)
-(require 'etaf-video-audio)
-(require 'etaf-video-mpv)
-(require 'etaf-video-session)
-(require 'etaf-video-component)
+(require 'etaf-media-source)
+(require 'etaf-media-audio)
+(require 'etaf-media-mpv)
+(require 'etaf-media-session)
+(require 'etaf-media-video)
 
 (provide 'etaf-media)
 ;;; etaf-media.el ends here

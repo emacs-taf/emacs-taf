@@ -1825,14 +1825,6 @@
 ;; Invalid input to the etaf-ui-svg scene helpers
 ;; Catch this condition with condition-case; invalid scenes produce no markup.
 ;;
-;; The markdown document renderer turns the block tree produced by
-;; `etaf-ui-markdown-parse' into ordinary ETAF Views.  It is data-driven:
-;; every color comes from the caller's `:palette' alist and media or code
-;; blocks can be delegated to caller callbacks, so the same renderer serves a
-;; previewer, a manual reader or any other document view.  It owns no state
-;; and no buffer, so it renders headless in tests and inside a mounted
-;; Component alike.
-;;
 ;;; Code:
 
 ;;;###autoload

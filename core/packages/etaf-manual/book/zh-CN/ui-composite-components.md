@@ -107,53 +107,53 @@
 
 <!-- index: markdown; 文档树; 调色板; 渲染回调 -->
 
-Markdown 正文渲染把 Markdown 文本转换成普通 ETAF View，供 Markdown 预览器、手册阅读器与其他文档视图共用。它分两步：`etaf-ui-markdown-parse` 把文本解析成不带呈现事实的块树，渲染函数再把块树与一份环境 plist 变成 View。两步都是纯函数，不拥有缓冲区、运行时状态或文件，所以同一代码路径既服务离屏测试，也服务已挂载的 Component。
+Markdown 正文渲染把 Markdown 文本转换成普通 ETAF View，供 Markdown 预览器、手册阅读器与其他文档视图共用。它分两步：`etaf-doc-markdown-parse` 把文本解析成不带呈现事实的块树，渲染函数再把块树与一份环境 plist 变成 View。两步都是纯函数，不拥有缓冲区、运行时状态或文件，所以同一代码路径既服务离屏测试，也服务已挂载的 Component。
 
-#### Function: etaf-ui-markdown-parse (text &optional flavor)
+#### Function: etaf-doc-markdown-parse (text &optional flavor)
 
 把 Markdown 文本解析为文档 plist。
 
-**参数。** TEXT 是 Markdown 源文本。FLAVOR 选择方言：`etaf-ui-markdown-flavors` 中的名字（默认 `gfm`）、覆盖个别扩展标志的特性 plist，或 nil 以使用 `etaf-ui-markdown-flavor`。
+**参数。** TEXT 是 Markdown 源文本。FLAVOR 选择方言：`etaf-doc-markdown-flavors` 中的名字（默认 `gfm`）、覆盖个别扩展标志的特性 plist，或 nil 以使用 `etaf-doc-markdown-flavor`。
 
 **语义。** 解析覆盖 CommonMark 的块与内联结构以及 GitHub 扩展：管道表格、任务列表项、删除线、裸自动链接、脚注与告警块；YAML front matter 被剥离为文档元数据。块是 plist，`:type` 为 `heading`、`paragraph`、`code-block`、`blockquote`、`list`、`table`、`thematic-break`、`html-block` 或 `footnote-def`；内联的 `:type` 为 `text`、`code`、`emph`、`strong`、`strike`、`link`、`image`、`autolink`、`footnote-ref`、`html` 或 `break`。块树不携带呈现事实：样式与 ETAF 节点的选择属于渲染函数。标题获得稳定且唯一的锚点；链接引用定义与脚注定义在块读取时收集，再解析进内联节点。解析是纯 Elisp，不读缓冲区、文件或网络。
 
 **返回。** 文档 plist：`:meta`（front matter alist）、`:title`、`:children`（带标题锚点的顶层块；每个顶层块另带 `:begin` 与 `:end`，即它在 TEXT 中的半开字符区间，供调用方把一次编辑映射回它所在的块）、`:outline`（按文档顺序的 `(LEVEL TEXT ID)`）、`:footnotes`（含 `:label`、`:number` 与 `:children`）与 `:features`（解析出的扩展 plist）。
 
-**错误。** 未知方言名报 `error→ etaf-ui-markdown-error`。
+**错误。** 未知方言名报 `error→ etaf-doc-markdown-error`。
 
 **示例。**
 
 ```elisp
-(etaf-ui-markdown-parse "# 标题\n\n正文。\n")
+(etaf-doc-markdown-parse "# 标题\n\n正文。\n")
 ```
 
-**参见。** `etaf-ui-markdown-view-blocks`、`etaf-ui-markdown-flavors`。
+**参见。** `etaf-doc-markdown-view-blocks`、`etaf-doc-markdown-flavors`。
 
-#### Function: etaf-ui-markdown-view-block (block env)
+#### Function: etaf-doc-markdown-view-block (block env)
 
-把一个块渲染为一个 ETAF View，无可渲染内容时返回 nil。BLOCK 是 `etaf-ui-markdown-parse` 的一个顶层块，ENV 是 `etaf-ui-markdown-view-blocks` 描述的环境 plist。展开成多个 View 的块被包进一个 column，因此调用方每块拥有一个节点，可用于滚动、选中或逐块引用。
+把一个块渲染为一个 ETAF View，无可渲染内容时返回 nil。BLOCK 是 `etaf-doc-markdown-parse` 的一个顶层块，ENV 是 `etaf-doc-markdown-view-blocks` 描述的环境 plist。展开成多个 View 的块被包进一个 column，因此调用方每块拥有一个节点，可用于滚动、选中或逐块引用。
 
-#### Function: etaf-ui-markdown-view-blocks (blocks env &optional tight)
+#### Function: etaf-doc-markdown-view-blocks (blocks env &optional tight)
 
-按文档顺序返回 BLOCKS 的 View 列表，空输入返回 nil。相邻块之间隔一个空行，TIGHT 非 nil 时去掉。返回列表不带容器，调用方自行包裹；需要脚注定义时再渲染 `:footnotes` 的 View 并追加。环境 plist 的 `:palette` 必需，它是语义颜色键到颜色的 alist（`:ink`、`:muted`、`:faint`、`:heading`、`:accent`、`:accent-soft`、`:panel`、`:code-bg`（可选；行内代码与代码块有它时用它，否则回退 `:panel`）、`:border`、`:quote-bg`、`:quote-bar`、`:table-header`、`:table-stripe`、`:heading-rule`（可选；一级与二级标题下方的分隔线缺省时用 `:border`）、`:ok`、`:ok-soft`、`:warn`、`:warn-soft`、`:danger`、`:danger-soft`、`:important` 与 `:important-soft`）；每个颜色都经它读取，因此换调色板不会漏出半更新的颜色，未知键报 `error→ etaf-ui-markdown-error`。其余可选项都是回调：`:open-link` 收到链接 URL，每个渲染出的链接还以 `:accent-soft` 调色板颜色作为指针悬停底色；`:footnote-jump` 收到脚注标签；`:footnote-ref (label)` 返回挂到脚注定义盒上的宿主 `:ref` 符号；`:footnote-back (label)` 在每条脚注定义末尾追加可点击的 `↩` 返回控件；`:on-copy (kind text lines)` 在代码块复制按钮写入剪贴板后收到通知；`:render-media (kind node env)` 返回媒体的 View，KIND 为 `image`、`video`、`inline-image`、`table-image` 或 `html-media`（`table-image` 时 ENV 提供 `:table-cell` t、等于单元格内容宽度的 `:width` 与 `:table-cell-width` 以及 `:table-cell-align`），没有它时媒体退化为 alt 文本或 URL；`:render-code-block (block env)` 可为代码块返回 View，返回 nil 保留默认围栏块；`:code-link (text)` 以每个 code span 的文本调用，可返回 URL 或 (URL . HELP) cons 把该 span 变成链接，它保留代码样式，激活时用 URL 调 `:open-link`，帮助回显为 HELP 或 URL；`:alert-labels` 按种类覆盖告警标签；`:features` 是文档解析出的扩展 plist，控制告警块是否渲染为 callout；`:line-grid` 非 nil 时每一行都保持标准行高，供与其他内容并排滚动的文档使用：标题与脚注引用沿用正文字号，一级标题改用强调色，二级标题加左侧强调条，滚动时显露的行不会改变高度。没有 `:line-grid` 时，一级与二级标题在文字下方画一条 `:heading-rule` 的分隔线，标题色与正文同色的主题里也能分出层级；带语言的围栏块以一条包含语言名的标题条开始，标题条下压一条分隔线，标签因此框住整块而不是浮在第一行上；引用块的正文字用 `:muted` 上色，链接与代码保留各自设的颜色。表格整张是一个 grid：列轨道只解析一次，所有行共用同一组列边界，所以横竖都对齐，任何一行的长单元格都不会把该行挤出列线。各列按最宽单元格的内容分配宽度，并为每列保留一个不可再窄的下限：窄字符组成的一个词（单词、标识符、代码片段）整词保留，含宽字符的一段按固定上限（12 格）计入下限——中文可在字间断行，长句不必撑宽整列。较长的单元格在词边界换行。容器装不下各列下限时表格按底线上限溢出，而不是把列压到词以下。表格画外框、列与列之间的竖线和行与行之间的横线，表头行下方的那条横线比行间更重；调色板把斑马纹与表头行给成同一个表面时，斑马纹不再画。HTML 注释渲染为空。
+按文档顺序返回 BLOCKS 的 View 列表，空输入返回 nil。相邻块之间隔一个空行，TIGHT 非 nil 时去掉。返回列表不带容器，调用方自行包裹；需要脚注定义时再渲染 `:footnotes` 的 View 并追加。环境 plist 的 `:palette` 必需，它是语义颜色键到颜色的 alist（`:ink`、`:muted`、`:faint`、`:heading`、`:accent`、`:accent-soft`、`:panel`、`:code-bg`（可选；行内代码与代码块有它时用它，否则回退 `:panel`）、`:border`、`:quote-bg`、`:quote-bar`、`:table-header`、`:table-stripe`、`:heading-rule`（可选；一级与二级标题下方的分隔线缺省时用 `:border`）、`:ok`、`:ok-soft`、`:warn`、`:warn-soft`、`:danger`、`:danger-soft`、`:important` 与 `:important-soft`）；每个颜色都经它读取，因此换调色板不会漏出半更新的颜色，未知键报 `error→ etaf-doc-markdown-error`。其余可选项都是回调：`:open-link` 收到链接 URL，每个渲染出的链接还以 `:accent-soft` 调色板颜色作为指针悬停底色；`:footnote-jump` 收到脚注标签；`:footnote-ref (label)` 返回挂到脚注定义盒上的宿主 `:ref` 符号；`:footnote-back (label)` 在每条脚注定义末尾追加可点击的 `↩` 返回控件；`:on-copy (kind text lines)` 在代码块复制按钮写入剪贴板后收到通知；`:render-media (kind node env)` 返回媒体的 View，KIND 为 `image`、`video`、`inline-image`、`table-image` 或 `html-media`（`table-image` 时 ENV 提供 `:table-cell` t、等于单元格内容宽度的 `:width` 与 `:table-cell-width` 以及 `:table-cell-align`），没有它时媒体退化为 alt 文本或 URL；`:render-code-block (block env)` 可为代码块返回 View，返回 nil 保留默认围栏块；`:code-link (text)` 以每个 code span 的文本调用，可返回 URL 或 (URL . HELP) cons 把该 span 变成链接，它保留代码样式，激活时用 URL 调 `:open-link`，帮助回显为 HELP 或 URL；`:alert-labels` 按种类覆盖告警标签；`:features` 是文档解析出的扩展 plist，控制告警块是否渲染为 callout；`:line-grid` 非 nil 时每一行都保持标准行高，供与其他内容并排滚动的文档使用：标题与脚注引用沿用正文字号，一级标题改用强调色，二级标题加左侧强调条，滚动时显露的行不会改变高度。没有 `:line-grid` 时，一级与二级标题在文字下方画一条 `:heading-rule` 的分隔线，标题色与正文同色的主题里也能分出层级；带语言的围栏块以一条包含语言名的标题条开始，标题条下压一条分隔线，标签因此框住整块而不是浮在第一行上；引用块的正文字用 `:muted` 上色，链接与代码保留各自设的颜色。表格整张是一个 grid：列轨道只解析一次，所有行共用同一组列边界，所以横竖都对齐，任何一行的长单元格都不会把该行挤出列线。各列按最宽单元格的内容分配宽度，并为每列保留一个不可再窄的下限：窄字符组成的一个词（单词、标识符、代码片段）整词保留，含宽字符的一段按固定上限（12 格）计入下限——中文可在字间断行，长句不必撑宽整列。较长的单元格在词边界换行。容器装不下各列下限时表格按底线上限溢出，而不是把列压到词以下。表格画外框、列与列之间的竖线和行与行之间的横线，表头行下方的那条横线比行间更重；调色板把斑马纹与表头行给成同一个表面时，斑马纹不再画。HTML 注释渲染为空。
 
-#### Variable: etaf-ui-markdown-flavor
+#### Variable: etaf-doc-markdown-flavor
 
-`etaf-ui-markdown-parse` 的默认方言。
+`etaf-doc-markdown-parse` 的默认方言。
 
 **语义。** 显式的 FLAVOR 参数优先于它。`gfm` 启用 GitHub 扩展与 front matter，`commonmark` 只解析核心规范，特性 plist 可以逐项开关扩展。
 
-**参见。** `etaf-ui-markdown-parse`、`etaf-ui-markdown-flavors`。
+**参见。** `etaf-doc-markdown-parse`、`etaf-doc-markdown-flavors`。
 
-#### Variable: etaf-ui-markdown-flavors
+#### Variable: etaf-doc-markdown-flavors
 
 具名方言与它们启用的扩展标志。
 
 **语义。** `commonmark` 是 CommonMark 核心；`gfm` 加上渲染器也视为默认的 GitHub 扩展：表格、任务列表、删除线、裸自动链接、脚注与告警块，外加 front matter（它是文档约定而非 Markdown 扩展）。`etaf` 在 `gfm` 之上再读定义列表、上下标、缩写、`$` 公式、表情短代码、`==高亮==`、`::图标::`、`:kbd[按键]` 与 `:badge[文字]`。
 
-**参见。** `etaf-ui-markdown-parse`。
+**参见。** `etaf-doc-markdown-parse`。
 
-#### Function: etaf-ui-markdown-extension-p (name)
+#### Function: etaf-doc-markdown-extension-p (name)
 
 返回正在解析的文档是否启用了扩展 NAME。
 
@@ -163,49 +163,49 @@ Markdown 正文渲染把 Markdown 文本转换成普通 ETAF View，供 Markdown
 
 **语义。** 解析器扩展先用它判断自己的语法要不要运行；未启用的语法原样留作字面文本，与 CommonMark 读法一致，扩展因此能在同一份解析器里开关而不分叉。它读的是当前解析的状态，所以在解析之外调用它没有意义。
 
-**参见。** `etaf-ui-markdown-block-extensions`、`etaf-ui-markdown-inline-extensions`、`etaf-ui-markdown-flavors`。
+**参见。** `etaf-doc-markdown-block-extensions`、`etaf-doc-markdown-inline-extensions`、`etaf-doc-markdown-flavors`。
 
-#### Variable: etaf-ui-markdown-block-extensions
+#### Variable: etaf-doc-markdown-block-extensions
 
 解析器新增的块级语法，按 （NAME RECOGNIZER） 列出。
 
-**语义。** RECOGNIZER 接收剩余源行，认领时返回 （BLOCK . REST）；是否运行由 `etaf-ui-markdown-extension-p` 按方言的 `:extensions` 决定，未启用的语法原样留作字面文本，与 CommonMark 读法一致。新增一种块语法，就是在这里加一条识别器、再把名字加进方言，而不是为每种方言分叉一个解析器。
+**语义。** RECOGNIZER 接收剩余源行，认领时返回 （BLOCK . REST）；是否运行由 `etaf-doc-markdown-extension-p` 按方言的 `:extensions` 决定，未启用的语法原样留作字面文本，与 CommonMark 读法一致。新增一种块语法，就是在这里加一条识别器、再把名字加进方言，而不是为每种方言分叉一个解析器。
 
-**参见。** `etaf-ui-markdown-inline-extensions`、`etaf-ui-markdown-flavors`。
+**参见。** `etaf-doc-markdown-inline-extensions`、`etaf-doc-markdown-flavors`。
 
-#### Variable: etaf-ui-markdown-inline-extensions
+#### Variable: etaf-doc-markdown-inline-extensions
 
 解析器新增的行内语法，按 （NAME TRIGGER-CHAR RECOGNIZER） 列出。
 
-**语义。** TRIGGER-CHAR 是能开启该语法的字符，缩写这类从词字符开始的识别器为 nil。RECOGNIZER 接收 （TEXT POSITION END），认领时返回 （NODE . NEXT）。同样受 `etaf-ui-markdown-extension-p` 约束：方言没启用的行内语法永不运行，其文字保持原样。
+**语义。** TRIGGER-CHAR 是能开启该语法的字符，缩写这类从词字符开始的识别器为 nil。RECOGNIZER 接收 （TEXT POSITION END），认领时返回 （NODE . NEXT）。同样受 `etaf-doc-markdown-extension-p` 约束：方言没启用的行内语法永不运行，其文字保持原样。
 
-**参见。** `etaf-ui-markdown-block-extensions`、`etaf-ui-markdown-flavors`。
+**参见。** `etaf-doc-markdown-block-extensions`、`etaf-doc-markdown-flavors`。
 
-#### Variable: etaf-ui-markdown-emoji
+#### Variable: etaf-doc-markdown-emoji
 
 渲染器绘制的表情短代码，按 （NAME . CHARACTER） 列出。
 
 **语义。** 文档写 `:tada:`，页面显示对应字符；不在表里的名字保留冒号，`12:30:45` 这类时间永不当作短代码。要教渲染器更多表情就在这里加条目。
 
-**参见。** `etaf-ui-markdown-flavors`。
+**参见。** `etaf-doc-markdown-flavors`。
 
-#### Variable: etaf-ui-markdown-subscript-table
+#### Variable: etaf-doc-markdown-subscript-table
 
 `~subscript~` 片段可用的字符，按 （CHAR . SCRIPT） 列出。
 
 **语义。** 表里没有的字符保留源拼写，所以这种写法只画出 Unicode 能表达的形态，不臆造字形。
 
-**参见。** `etaf-ui-markdown-superscript-table`、`etaf-ui-markdown-flavors`。
+**参见。** `etaf-doc-markdown-superscript-table`、`etaf-doc-markdown-flavors`。
 
-#### Variable: etaf-ui-markdown-superscript-table
+#### Variable: etaf-doc-markdown-superscript-table
 
 `^superscript^` 片段可用的字符，按 （CHAR . SCRIPT） 列出。
 
 **语义。** 表里没有的字符保留源拼写，所以这种写法只画出 Unicode 能表达的形态，不臆造字形。
 
-**参见。** `etaf-ui-markdown-subscript-table`、`etaf-ui-markdown-flavors`。
+**参见。** `etaf-doc-markdown-subscript-table`、`etaf-doc-markdown-flavors`。
 
-#### Variable: etaf-ui-markdown-code-renderers
+#### Variable: etaf-doc-markdown-code-renderers
 
 按围栏语言登记渲染器，形式是 （LANGUAGE . FUNCTION） 的 alist。
 
@@ -213,9 +213,9 @@ Markdown 正文渲染把 Markdown 文本转换成普通 ETAF View，供 Markdown
 
 **返回。** 不适用；变量保存渲染器表。
 
-**参见。** `etaf-ui-markdown-highlight-languages`、`etaf-ui-markdown-view-blocks`。
+**参见。** `etaf-doc-highlight-languages`、`etaf-doc-markdown-view-blocks`。
 
-#### Variable: etaf-ui-markdown-highlight-languages
+#### Variable: etaf-doc-highlight-languages
 
 用 Emacs 模式为围栏代码着色的语言表，形式是 （LANGUAGE . MODE）。
 
@@ -223,9 +223,9 @@ Markdown 正文渲染把 Markdown 文本转换成普通 ETAF View，供 Markdown
 
 **返回。** 不适用；变量保存语言到模式的映射。
 
-**参见。** `etaf-ui-markdown-code-renderers`、`etaf-ui-markdown-view-blocks`。
+**参见。** `etaf-doc-markdown-code-renderers`、`etaf-doc-markdown-view-blocks`。
 
-#### Variable: etaf-ui-markdown-gfm-features
+#### Variable: etaf-doc-markdown-gfm-features
 
 GitHub Flavored Markdown 整体启用的特性 plist。
 
@@ -233,9 +233,9 @@ GitHub Flavored Markdown 整体启用的特性 plist。
 
 **返回。** 不适用；变量保存特性 plist。
 
-**参见。** `etaf-ui-markdown-flavors`、`etaf-ui-markdown-parse`。
+**参见。** `etaf-doc-markdown-flavors`、`etaf-doc-markdown-parse`。
 
-#### Error: etaf-ui-markdown-error
+#### Error: etaf-doc-markdown-error
 
 Markdown 文档操作被拒绝时的条件。
 
@@ -243,9 +243,9 @@ Markdown 文档操作被拒绝时的条件。
 
 **恢复。** 失败不产生半渲染的文档：解析失败没有块树，渲染失败没有 View 上屏。修正方言或补齐调色板键后重新调用。
 
-**参见。** `etaf-ui-markdown-parse`、`etaf-ui-markdown-view-blocks`。
+**参见。** `etaf-doc-markdown-parse`、`etaf-doc-markdown-view-blocks`。
 
-#### Function: etaf-ui-markdown-highlight-code (language text)
+#### Function: etaf-doc-highlight-code (language text)
 
 返回把 TEXT 当作 LANGUAGE 着色后的 run，无法着色时返回 nil。
 
@@ -255,9 +255,9 @@ Markdown 文档操作被拒绝时的条件。
 
 **语义。** 它在该语言自己的 major mode 里跑这段文本，所以关键字、字符串、注释与数字的取色与源缓冲区里看到的一致。结果按 （LANGUAGE . TEXT） 缓存，下一次重绘只是一次查表。
 
-**参见。** `etaf-ui-markdown-highlight-languages`、`etaf-ui-markdown-code-renderers`。
+**参见。** `etaf-doc-highlight-languages`、`etaf-doc-markdown-code-renderers`。
 
-#### Function: etaf-ui-markdown-math-text (source)
+#### Function: etaf-doc-markdown-math-text (source)
 
 把 TeX 公式 SOURCE 写成纯文本。
 
@@ -267,13 +267,13 @@ Markdown 文档操作被拒绝时的条件。
 
 **语义。** 这是排版近似而不是排版器：命令名换成它们的符号，`\frac{a}{b}` 变成 `a/b`，`\sqrt{x}` 变成 `√(x)`，`^{}` 与 `_{}` 变成该位置的 Unicode 字母。不认识的部分保留原字符，所以公式不会变成一行噪声。
 
-**参见。** `etaf-ui-markdown-flavors`、`etaf-ui-markdown-parse`。
+**参见。** `etaf-doc-markdown-flavors`、`etaf-doc-markdown-parse`。
 
 ## 共享文档基础设施（`etaf-doc`）
 
 <!-- index: etaf-doc; 文档缓存; 二维码; QuickJS 排版; 活文档资产; 文档协议; 编辑组件 -->
 
-`etaf-doc` 包集中提供各文档应用共用的非语法层基础设施（包含 `etaf-ui-markdown-*` 以及六个可复用子系统）：有界 LRU 远程图片缓存、异步二维码生成、原生 QuickJS Mermaid 与 MathJax 排版、工作区沙箱活文档资产、带 schema 校验的自定义节点协议，以及编辑类 UI 组件。
+`etaf-doc` 包集中提供各文档应用共用的非语法层基础设施（包含 `etaf-doc-markdown-*` 以及六个可复用子系统）：有界 LRU 远程图片缓存、异步二维码生成、原生 QuickJS Mermaid 与 MathJax 排版、工作区沙箱活文档资产、带 schema 校验的自定义节点协议，以及编辑类 UI 组件。
 
 ### 文档缓存
 

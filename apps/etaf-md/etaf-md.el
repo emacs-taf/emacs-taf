@@ -339,7 +339,7 @@
 ;; background and is cached by its source and the page's colours, keeping the
 ;; last valid picture visible while editing until the replacement arrives.
 ;; With this nil, or without the native module, the fence stays a code block and
-;; the formula keeps `etaf-ui-markdown-math-text', which is also what an inline
+;; the formula keeps `etaf-doc-markdown-math-text', which is also what an inline
 ;; formula always keeps, because a picture inside a line would change the line
 ;; height.
 ;;

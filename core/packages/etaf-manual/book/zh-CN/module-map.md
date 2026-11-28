@@ -91,17 +91,17 @@ Runtime 按职责拆分为五个内聚模块（`lisp/etaf-txn.el`、`lisp/etaf-h
 
 ## `etaf-media` 与 `etaf-posframe` 的模块
 
-<!-- index: etaf-media; etaf-posframe; etaf-video-component.el; etaf-posframe-pool.el -->
+<!-- index: etaf-media; etaf-posframe; etaf-media-video.el; etaf-posframe-pool.el -->
 
 原生视频播放独立在 `etaf-media` 中，将多媒体子进程与平台 C/Objective-C 动态模块隔离在 `etaf` 核心之外；浮动面板与统一的子 frame 复用池位于 `etaf-posframe`。
 
 | 模块 | 职责 | 依赖 |
 | --- | --- | --- |
-| `etaf-media/lisp/etaf-video-source.el` | 视频源归一化、探测与帧过滤 | — |
-| `etaf-media/lisp/etaf-video-audio.el` | 播放会话的音频侧车 | `etaf-video-source.el` |
-| `etaf-media/lisp/etaf-video-mpv.el` | 可选的跨平台 `libmpv` 播放后端与原生模块加载器 | `etaf-video-source.el` |
-| `etaf-media/lisp/etaf-video-session.el` | 播放会话：帧生产者、侧车与定时器 | `etaf-video-source.el`、`etaf-video-audio.el`、`etaf-video-mpv.el` |
-| `etaf-media/lisp/etaf-video-component.el` | `etaf-video` 组件、句柄表与 ETAF 钩子注册 | `etaf-video-source.el`、`etaf-video-session.el`、`etaf-video-audio.el`、`etaf-video-mpv.el`、ETAF、Ebox |
+| `etaf-media/lisp/etaf-media-source.el` | 视频源归一化、探测与帧过滤 | — |
+| `etaf-media/lisp/etaf-media-audio.el` | 播放会话的音频侧车 | `etaf-media-source.el` |
+| `etaf-media/lisp/etaf-media-mpv.el` | 可选的跨平台 `libmpv` 播放后端与原生模块加载器 | `etaf-media-source.el` |
+| `etaf-media/lisp/etaf-media-session.el` | 播放会话：帧生产者、侧车与定时器 | `etaf-media-source.el`、`etaf-media-audio.el`、`etaf-media-mpv.el` |
+| `etaf-media/lisp/etaf-media-video.el` | `etaf-video` 组件、句柄表与 ETAF 钩子注册 | `etaf-media-source.el`、`etaf-media-session.el`、`etaf-media-audio.el`、`etaf-media-mpv.el`、ETAF、Ebox |
 | `etaf-posframe/lisp/etaf-posframe-pool.el` | 共享图形子 frame 复用池（同时服务面板与 `etaf-pip-open`）、主题派生与选项 | ETAF、ETAF UI、Posframe |
 | `etaf-posframe/lisp/etaf-posframe-panel.el` | 面板渲染、边框、悬停/焦点追踪与生命周期 | `etaf-posframe-pool.el` |
 | `etaf-posframe/lisp/etaf-posframe-layout.el` | 实时缩放、锚点与偏移落位、堆叠与拖拽 | `etaf-posframe-pool.el`、`etaf-posframe-panel.el` |
@@ -148,9 +148,9 @@ EKP 独立于其它包：它的两个底模块是纯的，布局模块是它们�
 | `lisp/etaf-ui-window.el` | window chrome、window controls、resizable panel 与 pane resizer | `lisp/etaf-ui-basic.el` |
 | `lisp/etaf-ui-tile-grid.el` | tile grid | `lisp/etaf-ui-basic.el` |
 | `lisp/etaf-ui-text-grid.el` | text grid | `lisp/etaf-ui-basic.el` |
-| `etaf-doc/lisp/etaf-ui-markdown-parse.el` | 纯 Elisp Markdown 解析器、方言与块/行内扩展 | — |
-| `etaf-doc/lisp/etaf-ui-markdown-highlight.el` | 带缓存的 Emacs major-mode font-lock 代码着色 | — |
-| `etaf-doc/lisp/etaf-ui-markdown.el` | Markdown 块与行内 View 渲染及 TeX 公式纯文本回退 | `etaf-ui-markdown-parse.el`、`etaf-ui-markdown-highlight.el`、ETAF、ETAF UI |
+| `etaf-doc/lisp/etaf-doc-markdown-parse.el` | 纯 Elisp Markdown 解析器、方言与块/行内扩展 | — |
+| `etaf-doc/lisp/etaf-doc-highlight.el` | 带缓存的 Emacs major-mode font-lock 代码着色 | — |
+| `etaf-doc/lisp/etaf-doc-markdown.el` | Markdown 块与行内 View 渲染及 TeX 公式纯文本回退 | `etaf-doc-markdown-parse.el`、`etaf-doc-highlight.el`、ETAF、ETAF UI |
 | `etaf-doc/lisp/etaf-doc-cache.el` | 有界 LRU 磁盘缓存清理与异步远程 HTTP(S) 图片缓存 | — |
 | `etaf-doc/lisp/etaf-doc-qrcode.el` | 异步 `qrencode` 二维码 PNG 生成与缓存 | `etaf-doc-cache.el` |
 | `etaf-doc/lisp/etaf-doc-typeset.el` | 共享 QuickJS + Pele + MathJax 原生后台线程与像素网格换算 | `etaf-doc-cache.el` |

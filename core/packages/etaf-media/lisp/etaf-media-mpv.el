@@ -1,4 +1,4 @@
-;;; etaf-video-mpv.el --- Cross-platform libmpv playback backend -*- lexical-binding: t; -*-
+;;; etaf-media-mpv.el --- Cross-platform libmpv playback backend -*- lexical-binding: t; -*-
 
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -15,7 +15,7 @@
 
 (require 'cl-lib)
 (require 'subr-x)
-(require 'etaf-video-source)
+(require 'etaf-media-source)
 
 (declare-function etaf-video-mpv--native-available-p "etaf-video-mpv" (&optional library))
 (declare-function etaf-video-mpv--native-version "etaf-video-mpv" ())
@@ -797,5 +797,5 @@ repeated cross-thread libmpv lock acquisitions."
             :error (etaf-video-mpv--session-error session)
             :ended ended))))
 
-(provide 'etaf-video-mpv)
-;;; etaf-video-mpv.el ends here
+(provide 'etaf-media-mpv)
+;;; etaf-media-mpv.el ends here

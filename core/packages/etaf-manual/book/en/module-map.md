@@ -91,17 +91,17 @@ The Runtime is split into five focused modules (`lisp/etaf-txn.el`, `lisp/etaf-h
 
 ## The `etaf-media` and `etaf-posframe` modules
 
-<!-- index: etaf-media; etaf-posframe; etaf-video-component.el; etaf-posframe-pool.el -->
+<!-- index: etaf-media; etaf-posframe; etaf-media-video.el; etaf-posframe-pool.el -->
 
 Native video playback lives in `etaf-media`, keeping multimedia subprocesses and native C/Objective-C modules out of `etaf`. Floating panels and the shared child-frame reuse pool live in `etaf-posframe`.
 
 | Module | Responsibility | Depends on |
 | --- | --- | --- |
-| `etaf-media/lisp/etaf-video-source.el` | Video source normalization, probing and frame filtering | — |
-| `etaf-media/lisp/etaf-video-audio.el` | The audio sidecar of a playback session | `etaf-video-source.el` |
-| `etaf-media/lisp/etaf-video-mpv.el` | Optional cross-platform `libmpv` playback backend and native module loader | `etaf-video-source.el` |
-| `etaf-media/lisp/etaf-video-session.el` | The playback session: frame producer, sidecar and timer | `etaf-video-source.el`, `etaf-video-audio.el`, `etaf-video-mpv.el` |
-| `etaf-media/lisp/etaf-video-component.el` | The `etaf-video` Component, handle registry and ETAF hook registration | `etaf-video-source.el`, `etaf-video-session.el`, `etaf-video-audio.el`, `etaf-video-mpv.el`, ETAF, Ebox |
+| `etaf-media/lisp/etaf-media-source.el` | Video source normalization, probing and frame filtering | — |
+| `etaf-media/lisp/etaf-media-audio.el` | The audio sidecar of a playback session | `etaf-media-source.el` |
+| `etaf-media/lisp/etaf-media-mpv.el` | Optional cross-platform `libmpv` playback backend and native module loader | `etaf-media-source.el` |
+| `etaf-media/lisp/etaf-media-session.el` | The playback session: frame producer, sidecar and timer | `etaf-media-source.el`, `etaf-media-audio.el`, `etaf-media-mpv.el` |
+| `etaf-media/lisp/etaf-media-video.el` | The `etaf-video` Component, handle registry and ETAF hook registration | `etaf-media-source.el`, `etaf-media-session.el`, `etaf-media-audio.el`, `etaf-media-mpv.el`, ETAF, Ebox |
 | `etaf-posframe/lisp/etaf-posframe-pool.el` | Shared graphical child-frame reuse pool (serving both panels and `etaf-pip-open`), Theme derivation and options | ETAF, ETAF UI, Posframe |
 | `etaf-posframe/lisp/etaf-posframe-panel.el` | Panel rendering, borders, hover/focus tracking and lifecycle | `etaf-posframe-pool.el` |
 | `etaf-posframe/lisp/etaf-posframe-layout.el` | Live resize, anchor/offset placement, stacking and dragging | `etaf-posframe-pool.el`, `etaf-posframe-panel.el` |
@@ -148,9 +148,9 @@ The component catalog is divided by component family. Most families load the bas
 | `lisp/etaf-ui-window.el` | Window chrome, window controls, resizable panel and pane resizer | `lisp/etaf-ui-basic.el` |
 | `lisp/etaf-ui-tile-grid.el` | Tile grid | `lisp/etaf-ui-basic.el` |
 | `lisp/etaf-ui-text-grid.el` | Text grid | `lisp/etaf-ui-basic.el` |
-| `etaf-doc/lisp/etaf-ui-markdown-parse.el` | Pure-Elisp Markdown parser, dialects and block/inline extensions | — |
-| `etaf-doc/lisp/etaf-ui-markdown-highlight.el` | Cached Emacs major-mode font-lock code highlighting | — |
-| `etaf-doc/lisp/etaf-ui-markdown.el` | Markdown block/inline View rendering and TeX math text fallback | `etaf-ui-markdown-parse.el`, `etaf-ui-markdown-highlight.el`, ETAF, ETAF UI |
+| `etaf-doc/lisp/etaf-doc-markdown-parse.el` | Pure-Elisp Markdown parser, dialects and block/inline extensions | — |
+| `etaf-doc/lisp/etaf-doc-highlight.el` | Cached Emacs major-mode font-lock code highlighting | — |
+| `etaf-doc/lisp/etaf-doc-markdown.el` | Markdown block/inline View rendering and TeX math text fallback | `etaf-doc-markdown-parse.el`, `etaf-doc-highlight.el`, ETAF, ETAF UI |
 | `etaf-doc/lisp/etaf-doc-cache.el` | Bounded LRU disk pruning and async remote HTTP(S) image cache | — |
 | `etaf-doc/lisp/etaf-doc-qrcode.el` | Async `qrencode` PNG generator and cache | `etaf-doc-cache.el` |
 | `etaf-doc/lisp/etaf-doc-typeset.el` | Shared QuickJS + Pele + MathJax native worker and pixel-to-grid sizing | `etaf-doc-cache.el` |

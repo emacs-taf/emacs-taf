@@ -2,7 +2,7 @@
 .NOTPARALLEL:
 EMACS ?= emacs
 LOAD_PATH = -L . -L lisp -L tests -L ../etaf -L ../etaf-ui -L ../ebox -L ../ecss
-SOURCES = lisp/etaf-ui-markdown-parse.el lisp/etaf-ui-markdown-highlight.el lisp/etaf-ui-markdown.el
+SOURCES = lisp/etaf-doc-markdown-parse.el lisp/etaf-doc-highlight.el lisp/etaf-doc-markdown.el
 SOURCES += lisp/etaf-doc-cache.el lisp/etaf-doc-qrcode.el lisp/etaf-doc-typeset.el
 SOURCES += lisp/etaf-doc-assets.el lisp/etaf-doc-protocol.el lisp/etaf-doc-widgets.el
 SOURCES += etaf-doc.el

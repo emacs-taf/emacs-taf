@@ -25,11 +25,11 @@
 ;; This Commentary is the authoritative export list; implementations and precise
 ;; docstrings remain beside their definitions.  The ETAF Reference Manual contains workflows.
 ;;
-;; Function: etaf-ui-markdown-parse (text &optional flavor)
-;; Parse markdown TEXT into a document plist, or signal `etaf-ui-markdown-error'.
-;; FLAVOR is a dialect name from `etaf-ui-markdown-flavors' (`etaf' is the
+;; Function: etaf-doc-markdown-parse (text &optional flavor)
+;; Parse markdown TEXT into a document plist, or signal `etaf-doc-markdown-error'.
+;; FLAVOR is a dialect name from `etaf-doc-markdown-flavors' (`etaf' is the
 ;; default), a feature plist overriding individual flags and extensions, or
-;; nil for `etaf-ui-markdown-flavor'.  Keys are `:meta' (front matter alist),
+;; nil for `etaf-doc-markdown-flavor'.  Keys are `:meta' (front matter alist),
 ;; `:title', `:children' (top-level blocks with heading ids), `:outline'
 ;; (`(LEVEL TEXT ID)' in document order), `:footnotes' (definitions with
 ;; `:label', `:number' and `:children') and `:features' (the resolved
@@ -47,7 +47,7 @@
 ;; caller maps an edit back to the block that holds it; nested blocks carry no
 ;; range because their offsets belong to the snippet their container parsed.
 ;;
-;; Variable: etaf-ui-markdown-code-renderers
+;; Variable: etaf-doc-markdown-code-renderers
 ;; Renderers for one fenced language, as an alist of (LANGUAGE . FUNCTION).
 ;; FUNCTION receives the block and the rendering environment and returns a
 ;; View, or nil to keep the default.  This is where a language that needs a
@@ -56,7 +56,7 @@
 ;; The environment's `:render-code-block' is consulted first and overrides the
 ;; table for one caller.
 ;;
-;; Function: etaf-ui-markdown-highlight-code (language text)
+;; Function: etaf-doc-highlight-code (language text)
 ;; Return runs colouring TEXT as LANGUAGE, or nil to paint it in one colour.
 ;; Emacs already knows how to read the language: this runs its major mode over
 ;; the text in a scratch buffer and turns the faces `font-lock' produced into
@@ -64,15 +64,15 @@
 ;; kept (colour, weight, slant, underline, strike-through), so a page of code
 ;; shows the colours the source buffer shows.  The answer is a pure function of
 ;; (LANGUAGE . TEXT) and is cached, so a repaint costs one lookup; a language
-;; with no available mode, or a block over `etaf-ui-markdown-highlight--max-lines'
+;; with no available mode, or a block over `etaf-doc-highlight--max-lines'
 ;; or `--max-chars', returns nil instead of fontifying.  Never signals.
 ;;
-;; Variable: etaf-ui-markdown-highlight-languages
+;; Variable: etaf-doc-highlight-languages
 ;; Fence language names and the major mode that reads each one, as an alist of
 ;; (NAME . MODE).  A mode whose library cannot be loaded is skipped, so adding a
 ;; name never makes a document fail to render.
 ;;
-;; Function: etaf-ui-markdown-math-text (source)
+;; Function: etaf-doc-markdown-math-text (source)
 ;; Return SOURCE, a TeX formula, written as plain text; never signals.
 ;; The page paints a formula as text rather than an image: command names get
 ;; their symbols, `\frac{a}{b}' becomes `a/b', `\sqrt{x}' becomes `√(x)',
@@ -81,13 +81,13 @@
 ;; turns into noise.  Callers that want real typesetting return a View from
 ;; `:render-math' instead, which leaves this function as the fallback.
 ;;
-;; Function: etaf-ui-markdown-view-block (block env)
+;; Function: etaf-doc-markdown-view-block (block env)
 ;; Return BLOCK rendered as one ETAF View, or nil when nothing renders.
-;; BLOCK is one top-level block of `etaf-ui-markdown-parse' and ENV is the
+;; BLOCK is one top-level block of `etaf-doc-markdown-parse' and ENV is the
 ;; rendering environment described below.  A block that expands to several
 ;; Views is wrapped in one column, so callers own one node per block.
 ;;
-;; Function: etaf-ui-markdown-view-blocks (blocks env &optional tight)
+;; Function: etaf-doc-markdown-view-blocks (blocks env &optional tight)
 ;; Return the list of Views for BLOCKS in document order, or nil for empty input.
 ;; Consecutive blocks are separated by one blank line unless TIGHT is non-nil.
 ;; The list carries no container, so callers wrap it for scrolling, selection
@@ -105,7 +105,7 @@
 ;; `:warn-soft', `:danger', `:danger-soft', `:important' and
 ;; `:important-soft'); every color is read through it, so a palette change
 ;; never leaks a half-updated set of colors, and an unknown key signals
-;; `etaf-ui-markdown-error'.  `:open-link' is called with a link URL;
+;; `etaf-doc-markdown-error'.  `:open-link' is called with a link URL;
 ;; `:link-hover' controls whether rendered links carry an `:accent-soft' hover
 ;; background (default t when omitted; nil suppresses link hover highlights);
 ;; `:heading-underline' controls whether headings draw a bottom rule on levels
@@ -149,14 +149,14 @@
 ;; short unbreakable run such as a CJK word whole, and wrap longer cells at
 ;; word boundaries.
 ;;
-;; Variable: etaf-ui-markdown-flavor
-;; Default markdown dialect of `etaf-ui-markdown-parse', `etaf' unless set.
+;; Variable: etaf-doc-markdown-flavor
+;; Default markdown dialect of `etaf-doc-markdown-parse', `etaf' unless set.
 ;; A FLAVOR argument overrides it.  `etaf' is the widest preset and what a
 ;; reader gets by opening a document; `gfm' and `commonmark' name the narrower
 ;; ones to use when a document has to parse exactly as those specifications
 ;; say, and a feature plist toggles individual flags and extensions.
 ;;
-;; Variable: etaf-ui-markdown-flavors
+;; Variable: etaf-doc-markdown-flavors
 ;; Named markdown dialects and the syntax each one enables.
 ;; `commonmark' is the CommonMark core; `gfm' adds GitHub's extensions there
 ;; as well: tables, task lists, strikethrough, bare autolinks, footnotes,
@@ -166,50 +166,50 @@
 ;; still parses under another, with the syntax it did not enable showing as
 ;; literal text.  None of the added syntax needs an external program.
 ;;
-;; Variable: etaf-ui-markdown-gfm-features
+;; Variable: etaf-doc-markdown-gfm-features
 ;; The feature plist GitHub Flavored Markdown enables: front matter, tables,
 ;; task lists, strikethrough, autolinks, footnotes and alert blocks.
 ;; A preset spells its own flags out, so extending this list never changes what
 ;; an older preset meant; use it to start a plist of your own.
 ;;
-;; Function: etaf-ui-markdown-extension-p (name)
+;; Function: etaf-doc-markdown-extension-p (name)
 ;; Return non-nil when the document being parsed enables extension NAME.
 ;; NAME is one of the symbols in a preset's `:extensions' list, such as
 ;; `emoji' or `definition-list'.  A parser extension calls this to decide
 ;; whether its syntax runs at all; disabled syntax stays literal text.
 ;;
-;; Variable: etaf-ui-markdown-block-extensions
+;; Variable: etaf-doc-markdown-block-extensions
 ;; Block syntax the parser adds, as an alist of (NAME RECOGNIZER).
 ;; RECOGNIZER takes the remaining source lines and returns (BLOCK . REST) when
-;; it claims them; `etaf-ui-markdown-extension-p' decides whether it runs.
+;; it claims them; `etaf-doc-markdown-extension-p' decides whether it runs.
 ;; Adding a block syntax means adding its recognizer here and its name to a
 ;; preset, which keeps one parser instead of forking it per dialect.
 ;;
-;; Variable: etaf-ui-markdown-inline-extensions
+;; Variable: etaf-doc-markdown-inline-extensions
 ;; Inline syntax the parser adds, as (NAME TRIGGER-CHAR RECOGNIZER).
 ;; TRIGGER-CHAR opens the syntax, or is nil for a recognizer that starts at a
 ;; word character such as an abbreviation.  RECOGNIZER takes (TEXT POSITION
 ;; END) and returns (NODE . NEXT) when it claims the text there.  The same
-;; gating by `etaf-ui-markdown-extension-p' applies, so an inline extension a
+;; gating by `etaf-doc-markdown-extension-p' applies, so an inline extension a
 ;; preset does not enable never runs and its text stays as written.
 ;;
-;; Variable: etaf-ui-markdown-emoji
+;; Variable: etaf-doc-markdown-emoji
 ;; Emoji shortcodes this renderer paints, as an alist of (NAME . CHARACTER).
 ;; A document writes `:tada:' and the page shows the character; a name outside
 ;; this table keeps its colons, and a time such as `12:30:45' is never a
 ;; shortcode.  Add entries here to teach the renderer more of them.
 ;;
-;; Variable: etaf-ui-markdown-subscript-table
+;; Variable: etaf-doc-markdown-subscript-table
 ;; Characters a `~subscript~' run can be written with, as (CHAR . SCRIPT).
 ;; A character missing from the table keeps the source spelling, so the
 ;; construct paints what Unicode can express and never invents glyphs.
 ;;
-;; Variable: etaf-ui-markdown-superscript-table
+;; Variable: etaf-doc-markdown-superscript-table
 ;; Characters a `^superscript^' run can be written with, as (CHAR . SCRIPT).
 ;; A character missing from the table keeps the source spelling, so the
 ;; construct paints what Unicode can express and never invents glyphs.
 ;;
-;; Error: etaf-ui-markdown-error
+;; Error: etaf-doc-markdown-error
 ;; Markdown document error
 ;; Signaled for an unknown dialect, a missing palette and unknown palette
 ;; keys; catch this condition with condition-case.
@@ -355,9 +355,9 @@
 
 (require 'etaf)
 (require 'etaf-ui)
-(require 'etaf-ui-markdown-parse)
-(require 'etaf-ui-markdown-highlight)
-(require 'etaf-ui-markdown)
+(require 'etaf-doc-markdown-parse)
+(require 'etaf-doc-highlight)
+(require 'etaf-doc-markdown)
 (require 'etaf-doc-cache)
 (require 'etaf-doc-qrcode)
 (require 'etaf-doc-typeset)

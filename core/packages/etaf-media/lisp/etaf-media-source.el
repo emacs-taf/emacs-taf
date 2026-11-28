@@ -1,4 +1,4 @@
-;;; etaf-video-source.el --- Frame producers for native video -*- lexical-binding: t; -*-
+;;; etaf-media-source.el --- Frame producers for native video -*- lexical-binding: t; -*-
 
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -608,5 +608,5 @@ The frame is a unibyte string of raw pixels or one complete JPEG image."
     (when (buffer-live-p stderr)
       (kill-buffer stderr))))
 
-(provide 'etaf-video-source)
-;;; etaf-video-source.el ends here
+(provide 'etaf-media-source)
+;;; etaf-media-source.el ends here

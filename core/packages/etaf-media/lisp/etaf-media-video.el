@@ -1,4 +1,4 @@
-;;; etaf-video-component.el --- Native video Component and controls -*- lexical-binding: t; -*-
+;;; etaf-media-video.el --- Native video Component and controls -*- lexical-binding: t; -*-
 
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -31,10 +31,10 @@
 (require 'cl-lib)
 (require 'ebox)
 (require 'etaf)
-(require 'etaf-video-audio)
-(require 'etaf-video-mpv)
-(require 'etaf-video-session)
-(require 'etaf-video-source)
+(require 'etaf-media-audio)
+(require 'etaf-media-mpv)
+(require 'etaf-media-session)
+(require 'etaf-media-source)
 
 ;; Only the image mode uses these optional native display primitives.
 (declare-function image-flush "image.c" (spec &optional frame))
@@ -1517,5 +1517,5 @@ Keys include `:handle', `:engine', `:render-backend', `:mode', `:source',
             :volume-default (lambda () etaf-video-audio-volume)
             :ffplay-program (lambda () etaf-video-ffplay-program)))
 
-(provide 'etaf-video-component)
-;;; etaf-video-component.el ends here
+(provide 'etaf-media-video)
+;;; etaf-media-video.el ends here

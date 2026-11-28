@@ -99,16 +99,16 @@ Every documented variable, grouped by the chapter that defines it. Each row link
 
 | Variable | Purpose |
 | --- | --- |
-| [`etaf-ui-markdown-flavor`](ui-composite-components.md#variable-etaf-ui-markdown-flavor) | Default markdown dialect of `etaf-ui-markdown-parse`. |
-| [`etaf-ui-markdown-flavors`](ui-composite-components.md#variable-etaf-ui-markdown-flavors) | Named dialects and the extension flags they enable. |
-| [`etaf-ui-markdown-block-extensions`](ui-composite-components.md#variable-etaf-ui-markdown-block-extensions) | Block syntax the parser adds, as recognizers. |
-| [`etaf-ui-markdown-inline-extensions`](ui-composite-components.md#variable-etaf-ui-markdown-inline-extensions) | Inline syntax the parser adds, as trigger characters and recognizers. |
-| [`etaf-ui-markdown-emoji`](ui-composite-components.md#variable-etaf-ui-markdown-emoji) | Emoji shortcodes the renderer paints. |
-| [`etaf-ui-markdown-subscript-table`](ui-composite-components.md#variable-etaf-ui-markdown-subscript-table) | Characters a `~subscript~` run can use. |
-| [`etaf-ui-markdown-superscript-table`](ui-composite-components.md#variable-etaf-ui-markdown-superscript-table) | Characters a `^superscript^` run can use. |
-| [`etaf-ui-markdown-code-renderers`](ui-composite-components.md#variable-etaf-ui-markdown-code-renderers) | Renderers registered per fenced language. |
-| [`etaf-ui-markdown-highlight-languages`](ui-composite-components.md#variable-etaf-ui-markdown-highlight-languages) | Languages whose fenced code is colored with an Emacs mode. |
-| [`etaf-ui-markdown-gfm-features`](ui-composite-components.md#variable-etaf-ui-markdown-gfm-features) | The feature plist GitHub Flavored Markdown enables. |
+| [`etaf-doc-markdown-flavor`](ui-composite-components.md#variable-etaf-doc-markdown-flavor) | Default markdown dialect of `etaf-doc-markdown-parse`. |
+| [`etaf-doc-markdown-flavors`](ui-composite-components.md#variable-etaf-doc-markdown-flavors) | Named dialects and the extension flags they enable. |
+| [`etaf-doc-markdown-block-extensions`](ui-composite-components.md#variable-etaf-doc-markdown-block-extensions) | Block syntax the parser adds, as recognizers. |
+| [`etaf-doc-markdown-inline-extensions`](ui-composite-components.md#variable-etaf-doc-markdown-inline-extensions) | Inline syntax the parser adds, as trigger characters and recognizers. |
+| [`etaf-doc-markdown-emoji`](ui-composite-components.md#variable-etaf-doc-markdown-emoji) | Emoji shortcodes the renderer paints. |
+| [`etaf-doc-markdown-subscript-table`](ui-composite-components.md#variable-etaf-doc-markdown-subscript-table) | Characters a `~subscript~` run can use. |
+| [`etaf-doc-markdown-superscript-table`](ui-composite-components.md#variable-etaf-doc-markdown-superscript-table) | Characters a `^superscript^` run can use. |
+| [`etaf-doc-markdown-code-renderers`](ui-composite-components.md#variable-etaf-doc-markdown-code-renderers) | Renderers registered per fenced language. |
+| [`etaf-doc-highlight-languages`](ui-composite-components.md#variable-etaf-doc-highlight-languages) | Languages whose fenced code is colored with an Emacs mode. |
+| [`etaf-doc-markdown-gfm-features`](ui-composite-components.md#variable-etaf-doc-markdown-gfm-features) | The feature plist GitHub Flavored Markdown enables. |
 
 ## Parameter Reference
 

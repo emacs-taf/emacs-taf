@@ -6,9 +6,9 @@
 
 | Module | Responsibility |
 | --- | --- |
-| `lisp/etaf-ui-markdown-parse.el` | CommonMark / GFM / ETAF Markdown block and inline parser |
-| `lisp/etaf-ui-markdown-highlight.el` | Syntax highlighting across major modes and built-in lexers |
-| `lisp/etaf-ui-markdown.el` | Markdown AST to ETAF View block/inline renderer |
+| `lisp/etaf-doc-markdown-parse.el` | CommonMark / GFM / ETAF Markdown block and inline parser |
+| `lisp/etaf-doc-highlight.el` | Syntax highlighting across major modes and built-in lexers |
+| `lisp/etaf-doc-markdown.el` | Markdown AST to ETAF View block/inline renderer |
 | `lisp/etaf-doc-cache.el` | Bounded LRU disk pruning and async HTTP(S) remote image cache |
 | `lisp/etaf-doc-qrcode.el` | Asynchronous `qrencode` PNG generator and cache attachment |
 | `lisp/etaf-doc-typeset.el` | Shared QuickJS (`etaf-md-typeset-native`) worker for Mermaid and MathJax SVGs |

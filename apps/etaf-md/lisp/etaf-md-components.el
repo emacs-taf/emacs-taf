@@ -361,7 +361,7 @@ A directory is `(dir . NAME)' and appears when it changes; a file is
 (defun etaf-md--code-tree-code (env node)
   "Return NODE's code drawn for ENV's tree."
   (when node
-    (etaf-ui-markdown-view-block
+    (etaf-doc-markdown-view-block
      ;; The card draws the frame and the language row; the fence contributes
      ;; only its highlighted body, so scrolling moves the code alone.
      (plist-put (plist-put (copy-sequence (etaf-md-node-block node))
@@ -636,7 +636,7 @@ shown under a strip that names every manager the `tabs' attribute lists."
         ;; is the whole gap the card should keep around its code.
         (box :width 'stretch :padding '((lh 0) (ch 0))
              :border-top (etaf-md--hairline env)
-          (expr (etaf-ui-markdown-view-block
+          (expr (etaf-doc-markdown-view-block
                  synthetic
                  (etaf-md--markdown-env env))))))))
 

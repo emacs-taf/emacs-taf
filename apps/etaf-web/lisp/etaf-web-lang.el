@@ -10,7 +10,7 @@
 ;; 1. Ancestor DOM + multi-framework metadata (data-language, lang, class
 ;;    prefixes on `<code>', `<pre>' and 1..3 enclosing wrappers, bare known
 ;;    language classes, sibling language badges and filename headers).
-;; 2. Canonical language normalization aligned with `etaf-ui-markdown-highlight'.
+;; 2. Canonical language normalization aligned with `etaf-doc-highlight'.
 ;; 3. High-precision deterministic content anchors (shebang, JSON parse,
 ;;    unified diff, HTTP wire message, Python REPL, Dockerfile, Makefile,
 ;;    Emacs Lisp / Lisp S-exprs, HTML/XML, SQL, Shell command sessions, TOML).

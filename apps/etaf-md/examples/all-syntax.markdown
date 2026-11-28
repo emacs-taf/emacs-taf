@@ -1761,7 +1761,7 @@ check: structure-check compile acceptance api-check
      ;; because a container cannot be painted without one.
      ((and (etaf-md-node-block node)
            (not (eq (plist-get (etaf-md-node-block node) :type) 'container)))
-      (etaf-ui-markdown-view-block
+      (etaf-doc-markdown-view-block
        (etaf-md-node-block node)
        ;; A block painted below a container keeps the page services: media,
 ```

@@ -818,7 +818,7 @@
 
 (defun etaf-org--table-header-fill (env)
   "Return the header tint for a table in ENV, deepened to stay visible.
-Mirrors `etaf-ui-markdown--header-fill': when `:table-header' sits too close
+Mirrors `etaf-doc-markdown--header-fill': when `:table-header' sits too close
 to the page surface, rebuild it as one clean step toward `:ink'."
   (let* ((page (or (plist-get env :background)
                    (etaf-org--color env :bg)))
@@ -1084,7 +1084,7 @@ headers when `:sortable t', and whole-table centering/right alignment when
 (defun etaf-org--list-marker (item env marks)
   "Return the marker View of list ITEM in ENV in a MARKS wide column.
 Checkboxes use font-native geometric squares (`■', `◧', `□') matching
-`etaf-ui-markdown', so line height never shifts across CJK/Latin fonts."
+`etaf-doc-markdown', so line height never shifts across CJK/Latin fonts."
   (let ((cb (plist-get item :checkbox))
         (lno (plist-get item :line-start))
         (session (plist-get env :session)))
@@ -1197,7 +1197,7 @@ Checkboxes use font-native geometric squares (`■', `◧', `□') matching
 (defun etaf-org--code-runs (language text env)
   "Return syntax-highlighted runs for TEXT in LANGUAGE."
   (when (and (stringp language) (not (string-empty-p language)))
-    (when-let* ((runs (etaf-ui-markdown-highlight-code language text)))
+    (when-let* ((runs (etaf-doc-highlight-code language text)))
       (mapcar
        (lambda (run)
          (let* ((props (copy-sequence (plist-get run :props)))
@@ -1604,7 +1604,7 @@ can embed frameless syntax-highlighted code without double borders."
 
 (defun etaf-org--quote-view (block env &optional opts)
   "Return the quote View of BLOCK in ENV with optional style OPTS.
-Matches `etaf-ui-markdown--blockquote-node': sleek 3px left bar, muted
+Matches `etaf-doc-markdown--blockquote-node': sleek 3px left bar, muted
 ink, soft quote tint, and zero bloated top/bottom empty rows."
   (let* ((node-env (etaf-org--make-node-env nil block env))
          (bg (or (and (plist-get opts :background)

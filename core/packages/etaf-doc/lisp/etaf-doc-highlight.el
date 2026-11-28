@@ -1,4 +1,4 @@
-;;; etaf-ui-markdown-highlight.el --- Colour fenced code with Emacs' own faces  -*- lexical-binding: t; -*-
+;;; etaf-doc-highlight.el --- Colour fenced code with Emacs' own faces  -*- lexical-binding: t; -*-
 
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -26,24 +26,24 @@
 (require 'cl-lib)
 (require 'subr-x)
 
-(defconst etaf-ui-markdown-highlight--max-lines 400
+(defconst etaf-doc-highlight--max-lines 400
   "Lines a code block may have and still be highlighted.
 A page repaints after every keystroke, so a pasted file-long block is left in
 one colour instead of turning typing into a fontification run.")
 
-(defconst etaf-ui-markdown-highlight--max-chars 20000
+(defconst etaf-doc-highlight--max-chars 20000
   "Characters a code block may have and still be highlighted.")
 
-(defconst etaf-ui-markdown-highlight--cache-size 256
+(defconst etaf-doc-highlight--cache-size 256
   "Code blocks kept in the highlight cache.")
 
-(defvar etaf-ui-markdown-highlight--cache (make-hash-table :test #'equal)
+(defvar etaf-doc-highlight--cache (make-hash-table :test #'equal)
   "Highlighted runs by (LANGUAGE . TEXT).")
 
-(defvar etaf-ui-markdown-highlight--buffers (make-hash-table :test #'eq)
+(defvar etaf-doc-highlight--buffers (make-hash-table :test #'eq)
   "Reusable hidden scratch buffers keyed by major mode.")
 
-(defconst etaf-ui-markdown-highlight-languages
+(defconst etaf-doc-highlight-languages
   '(("elisp" . emacs-lisp-mode) ("emacs-lisp" . emacs-lisp-mode)
     ("el" . emacs-lisp-mode) ("lisp" . emacs-lisp-mode)
     ("common-lisp" . lisp-mode) ("clisp" . lisp-mode)
@@ -95,7 +95,7 @@ one colour instead of turning typing into a fontification run.")
 Only a mode whose library is already loaded or loadable is used; the entry
 keeps the name a document writes, which is not always the mode's name.")
 
-(defconst etaf-ui-markdown-highlight--ts-modes
+(defconst etaf-doc-highlight--ts-modes
   '(("rust" rust-ts-mode . rust) ("rs" rust-ts-mode . rust)
     ("go" go-ts-mode . go) ("golang" go-ts-mode . go)
     ("typescript" typescript-ts-mode . typescript)
@@ -121,14 +121,14 @@ keeps the name a document writes, which is not always the mode's name.")
     ("lua" lua-ts-mode . lua))
   "Built-in Emacs 29+ Tree-sitter modes paired with their grammar symbols.")
 
-(defconst etaf-ui-markdown-highlight--fallback-modes
+(defconst etaf-doc-highlight--fallback-modes
   '(("tsx" . js-jsx-mode)
     ("typescript" . js-mode) ("ts" . js-mode)
     ("yaml" . conf-colon-mode) ("yml" . conf-colon-mode)
     ("nginx" . conf-space-mode))
   "Built-in fallback modes when neither classic nor Tree-sitter modes load.")
 
-(defun etaf-ui-markdown-highlight--try-mode (mode)
+(defun etaf-doc-highlight--try-mode (mode)
   "Return MODE if it is callable or its library loads cleanly, else nil."
   (when mode
     (let ((library (intern (replace-regexp-in-string "-mode\\'" "" (symbol-name mode)))))
@@ -137,30 +137,30 @@ keeps the name a document writes, which is not always the mode's name.")
                 (require library nil t))
         (and (fboundp mode) mode)))))
 
-(defun etaf-ui-markdown-highlight--try-ts-mode (language)
+(defun etaf-doc-highlight--try-ts-mode (language)
   "Return a ready built-in Tree-sitter mode for LANGUAGE, or nil."
-  (when-let* ((entry (assoc language etaf-ui-markdown-highlight--ts-modes))
+  (when-let* ((entry (assoc language etaf-doc-highlight--ts-modes))
               (mode (cadr entry))
               (ts-lang (cddr entry)))
     (when (and (fboundp 'treesit-ready-p)
                (treesit-ready-p ts-lang t))
-      (etaf-ui-markdown-highlight--try-mode mode))))
+      (etaf-doc-highlight--try-mode mode))))
 
-(defun etaf-ui-markdown-highlight--mode (language)
+(defun etaf-doc-highlight--mode (language)
   "Return the major mode that reads LANGUAGE, or nil when none is available.
 Tries the primary classic mode, then an Emacs 29+ Tree-sitter mode only when
 its grammar is ready, and finally any built-in syntax fallback."
   (when-let* ((language (and (stringp language) (downcase language))))
-    (let* ((primary (cdr (assoc language etaf-ui-markdown-highlight-languages)))
+    (let* ((primary (cdr (assoc language etaf-doc-highlight-languages)))
            (primary-is-ts (and primary
                                (string-suffix-p "-ts-mode" (symbol-name primary)))))
       (or (and (not primary-is-ts)
-               (etaf-ui-markdown-highlight--try-mode primary))
-          (etaf-ui-markdown-highlight--try-ts-mode language)
-          (etaf-ui-markdown-highlight--try-mode
-           (cdr (assoc language etaf-ui-markdown-highlight--fallback-modes)))))))
+               (etaf-doc-highlight--try-mode primary))
+          (etaf-doc-highlight--try-ts-mode language)
+          (etaf-doc-highlight--try-mode
+           (cdr (assoc language etaf-doc-highlight--fallback-modes)))))))
 
-(defconst etaf-ui-markdown-highlight-roles
+(defconst etaf-doc-highlight-roles
   '((font-lock-keyword-face . keyword)
     (font-lock-builtin-face . builtin)
     (font-lock-string-face . string)
@@ -186,7 +186,7 @@ the tokens are the faces font-lock already found; a role names what a token is,
 which is what lets the page colour it from its own palette instead of copying
 whatever the reader's theme happened to choose.")
 
-(defconst etaf-ui-markdown-highlight-palettes
+(defconst etaf-doc-highlight-palettes
   '((light . ((keyword . "#cf222e") (builtin . "#0550ae") (string . "#0a3069")
               (comment . "#6e7781") (function . "#8250df") (variable . "#953800")
               (type . "#953800") (constant . "#0550ae") (preprocessor . "#953800")
@@ -201,16 +201,16 @@ on the page the way a block sits in a browser: saturated enough to read on a
 white surface and light enough on a dark one.  A face with no role keeps its
 own colour, adjusted to the page's contrast.")
 
-(defun etaf-ui-markdown-highlight-color (props dark)
+(defun etaf-doc-highlight-color (props dark)
   "Return the colour the run PROPS takes on a page of DARK appearance, or nil.
-PROPS comes from `etaf-ui-markdown-highlight--face-props'; a run whose face has
+PROPS comes from `etaf-doc-highlight--face-props'; a run whose face has
 no role answers nil, and its caller decides what to paint."
   (when-let* ((role (plist-get props :role))
               (palette (alist-get (if dark 'dark 'light)
-                                  etaf-ui-markdown-highlight-palettes)))
+                                  etaf-doc-highlight-palettes)))
     (alist-get role palette)))
 
-(defun etaf-ui-markdown-highlight--face-props (face)
+(defun etaf-doc-highlight--face-props (face)
   "Return the drawing props of FACE as an Ebox style plist.
 Only what a text run can express is kept: colour, weight, slant, underline and
 strike-through.  An inherited attribute is resolved through the face itself, so
@@ -223,7 +223,7 @@ a mode that only sets a foreground still renders."
       ;; that inherits from a font-lock face is resolved to the role too.
       (let ((role (cl-some (lambda (f)
                              (and (symbolp f)
-                                  (cdr (assq f etaf-ui-markdown-highlight-roles))))
+                                  (cdr (assq f etaf-doc-highlight-roles))))
                            faces)))
         (when role (setq props (plist-put props :role role))))
       ;; INHERIT is t, not nil: a mode's face usually sets one attribute and
@@ -247,7 +247,7 @@ a mode that only sets a foreground still renders."
           (setq props (plist-put props :text-decoration-line '(line-through))))))
     props))
 
-(defun etaf-ui-markdown-highlight--runs (text)
+(defun etaf-doc-highlight--runs (text)
   "Return TEXT as runs of `(:text STRING :props PLIST)' by its faces.
 The runs follow the face changes in order, so a stretch of one token stays one
 run: a page of code is a handful of text nodes, not one per character."
@@ -260,7 +260,7 @@ run: a page of code is a handful of text nodes, not one per character."
              (cached (gethash face face-cache 'miss))
              (props (if (eq cached 'miss)
                         (puthash face
-                                 (etaf-ui-markdown-highlight--face-props face)
+                                 (etaf-doc-highlight--face-props face)
                                  face-cache)
                       cached))
              (next (or (next-single-property-change index 'face text end) end)))
@@ -277,7 +277,7 @@ run: a page of code is a handful of text nodes, not one per character."
         (setq index next)))
     (nreverse runs)))
 
-(defun etaf-ui-markdown-highlight-code (language text)
+(defun etaf-doc-highlight-code (language text)
   "Return runs colouring TEXT as LANGUAGE, or nil when it cannot be coloured.
 The answer is a list of `(:text STRING :props PLIST)' covering TEXT in order,
 with PLIST an Ebox style plist; nil means paint the block in one colour.  This
@@ -286,24 +286,24 @@ comments and numbers come out as the source buffer shows them, and the result
 costs one cache lookup on the next repaint."
   (when (and (stringp text)
              (stringp language)
-             (<= (length text) etaf-ui-markdown-highlight--max-chars)
-             (<= (cl-count ?\n text) etaf-ui-markdown-highlight--max-lines))
+             (<= (length text) etaf-doc-highlight--max-chars)
+             (<= (cl-count ?\n text) etaf-doc-highlight--max-lines))
     (let* ((key (cons (downcase language) text))
-           (cached (gethash key etaf-ui-markdown-highlight--cache 'miss)))
+           (cached (gethash key etaf-doc-highlight--cache 'miss)))
       (if (not (eq cached 'miss))
           cached
-        (let ((runs (etaf-ui-markdown-highlight--compute language text)))
-          (when (> (hash-table-count etaf-ui-markdown-highlight--cache)
-                   etaf-ui-markdown-highlight--cache-size)
-            (clrhash etaf-ui-markdown-highlight--cache))
-          (puthash key runs etaf-ui-markdown-highlight--cache)
+        (let ((runs (etaf-doc-highlight--compute language text)))
+          (when (> (hash-table-count etaf-doc-highlight--cache)
+                   etaf-doc-highlight--cache-size)
+            (clrhash etaf-doc-highlight--cache))
+          (puthash key runs etaf-doc-highlight--cache)
           runs)))))
 
-(defun etaf-ui-markdown-highlight--buffer (mode)
+(defun etaf-doc-highlight--buffer (mode)
   "Return a live hidden scratch buffer initialized in MODE, or nil.
 Reusing one buffer per major mode avoids paying mode setup on every keystroke
 while editing inside a fenced code block."
-  (let ((existing (gethash mode etaf-ui-markdown-highlight--buffers)))
+  (let ((existing (gethash mode etaf-doc-highlight--buffers)))
     (if (and (buffer-live-p existing)
              (not (eq (buffer-local-value 'major-mode existing)
                       'fundamental-mode)))
@@ -321,7 +321,7 @@ while editing inside a fenced code block."
           (if (not (eq major-mode 'fundamental-mode))
               (progn
                 (setq-local font-lock-verbose nil)
-                (puthash mode buf etaf-ui-markdown-highlight--buffers)
+                (puthash mode buf etaf-doc-highlight--buffers)
                 buf)
             (kill-buffer buf)
             nil))))))
@@ -330,174 +330,174 @@ while editing inside a fenced code block."
 ;;; Built-in zero-dependency lightweight lexer fallback & Shell CLI enhancer
 ;;; ---------------------------------------------------------------------------
 
-(defun etaf-ui-markdown-highlight--word-set (words)
+(defun etaf-doc-highlight--word-set (words)
   "Build an `equal' hash-table set from space-separated WORDS string."
   (let ((tbl (make-hash-table :test #'equal)))
     (dolist (w (split-string words "[ \t\n]+" t))
       (puthash w t tbl))
     tbl))
 
-(defconst etaf-ui-markdown-highlight--lex-specs
+(defconst etaf-doc-highlight--lex-specs
   (let* ((go-spec
           (list :line-comment "//" :block-comment '("/*" . "*/")
                 :strings '(double backtick char) :type-cap t
-                :keywords (etaf-ui-markdown-highlight--word-set
+                :keywords (etaf-doc-highlight--word-set
                            "break case chan const continue default defer else fallthrough for func go goto if import interface map package range return select struct switch type var")
-                :types (etaf-ui-markdown-highlight--word-set
+                :types (etaf-doc-highlight--word-set
                         "any bool byte comparable complex64 complex128 error float32 float64 int int8 int16 int32 int64 rune string uint uint8 uint16 uint32 uint64 uintptr")
-                :constants (etaf-ui-markdown-highlight--word-set
+                :constants (etaf-doc-highlight--word-set
                             "true false nil iota")
-                :builtins (etaf-ui-markdown-highlight--word-set
+                :builtins (etaf-doc-highlight--word-set
                            "append cap clear close complex copy delete imag len make max min new panic print println real recover")))
          (rust-spec
           (list :line-comment "//" :block-comment '("/*" . "*/")
                 :strings '(double char) :rust-lifetimes t :rust-macros t
                 :type-cap t
-                :keywords (etaf-ui-markdown-highlight--word-set
+                :keywords (etaf-doc-highlight--word-set
                            "as async await break const continue crate dyn else enum extern fn for if impl in let loop match mod move mut pub ref return self Self static struct super trait type unsafe use where while")
-                :types (etaf-ui-markdown-highlight--word-set
+                :types (etaf-doc-highlight--word-set
                         "bool char str i8 i16 i32 i64 i128 isize u8 u16 u32 u64 u128 usize f32 f64 String Vec Option Result Box Arc Rc HashMap HashSet BTreeMap")
-                :constants (etaf-ui-markdown-highlight--word-set
+                :constants (etaf-doc-highlight--word-set
                             "true false Some None Ok Err")))
          (docker-spec
           (list :line-comment "#" :strings '(double single)
                 :case-insensitive-kw t :vars t :flags t
-                :keywords (etaf-ui-markdown-highlight--word-set
+                :keywords (etaf-doc-highlight--word-set
                            "FROM RUN CMD LABEL MAINTAINER EXPOSE ENV ADD COPY ENTRYPOINT VOLUME USER WORKDIR ARG ONBUILD STOPSIGNAL HEALTHCHECK SHELL AS")))
          (zig-spec
           (list :line-comment "//" :strings '(double char)
                 :at-builtins t :type-cap t
-                :keywords (etaf-ui-markdown-highlight--word-set
+                :keywords (etaf-doc-highlight--word-set
                            "addrspace align allowzero and anyframe anytype asm async await break callconv catch comptime const continue defer else enum errdefer error export extern fn for if inline linksection noalias noinline nosuspend or orelse packed pub resume return struct suspend switch test threadlocal try union unreachable usingnamespace var volatile while")
-                :types (etaf-ui-markdown-highlight--word-set
+                :types (etaf-doc-highlight--word-set
                         "bool f16 f32 f64 f80 f128 i8 i16 i32 i64 i128 isize u8 u16 u32 u64 u128 usize c_char c_int c_long c_short c_uint c_ulong c_ushort comptime_float comptime_int anyerror anyopaque void noreturn type")
-                :constants (etaf-ui-markdown-highlight--word-set
+                :constants (etaf-doc-highlight--word-set
                             "true false null undefined")))
          (sfc-spec
           (list :line-comment "//" :block-comment '("/*" . "*/")
                 :html-comment t :html-tags t
                 :strings '(double single backtick)
-                :keywords (etaf-ui-markdown-highlight--word-set
+                :keywords (etaf-doc-highlight--word-set
                            "as async await break case catch class const continue default delete do else export extends finally for from function if import in instanceof interface let new of return static switch this throw try type typeof var void while yield")
-                :types (etaf-ui-markdown-highlight--word-set
+                :types (etaf-doc-highlight--word-set
                         "string number boolean any unknown never void object Record Array Promise")
-                :constants (etaf-ui-markdown-highlight--word-set
+                :constants (etaf-doc-highlight--word-set
                             "true false null undefined NaN Infinity")))
          (kotlin-spec
           (list :line-comment "//" :block-comment '("/*" . "*/")
                 :strings '(double char) :at-builtins t :type-cap t
-                :keywords (etaf-ui-markdown-highlight--word-set
+                :keywords (etaf-doc-highlight--word-set
                            "abstract actual annotation as break by catch class companion const constructor continue crossinline data do else enum expect external final finally for fun get if import in infix init inline inner interface internal is lateinit noinline object open operator out override package private protected public reified return sealed set super suspend tailrec this throw try typealias val var vararg when where while")
-                :types (etaf-ui-markdown-highlight--word-set
+                :types (etaf-doc-highlight--word-set
                         "Any Boolean Byte Char Double Float Int Long Nothing Short String Unit List Map Set")
-                :constants (etaf-ui-markdown-highlight--word-set "true false null")))
+                :constants (etaf-doc-highlight--word-set "true false null")))
          (swift-spec
           (list :line-comment "//" :block-comment '("/*" . "*/")
                 :strings '(double) :at-builtins t :type-cap t
-                :keywords (etaf-ui-markdown-highlight--word-set
+                :keywords (etaf-doc-highlight--word-set
                            "actor as async await break case catch class continue default defer do else enum extension fallthrough fileprivate for func guard if import in init inout internal is let mutating nonmutating open operator override private protocol public repeat rethrows return self Self static struct subscript super switch throw throws try typealias var where while")
-                :types (etaf-ui-markdown-highlight--word-set
+                :types (etaf-doc-highlight--word-set
                         "Any Bool Character Double Float Int Int64 String UInt Void Array Dictionary Set Optional")
-                :constants (etaf-ui-markdown-highlight--word-set "true false nil")))
+                :constants (etaf-doc-highlight--word-set "true false nil")))
          (scala-spec
           (list :line-comment "//" :block-comment '("/*" . "*/")
                 :strings '(double char) :at-builtins t :type-cap t
-                :keywords (etaf-ui-markdown-highlight--word-set
+                :keywords (etaf-doc-highlight--word-set
                            "abstract case catch class def do else enum export extends final finally for given if implicit import lazy match new object override package private protected return sealed super then this throw trait try type using val var while with yield")
-                :types (etaf-ui-markdown-highlight--word-set
+                :types (etaf-doc-highlight--word-set
                         "Any AnyVal Boolean Byte Char Double Float Int Long Nothing Short String Unit Option Either List Seq Map Set")
-                :constants (etaf-ui-markdown-highlight--word-set "true false null None Some")))
+                :constants (etaf-doc-highlight--word-set "true false null None Some")))
          (dart-spec
           (list :line-comment "//" :block-comment '("/*" . "*/")
                 :strings '(double single) :at-builtins t :type-cap t
-                :keywords (etaf-ui-markdown-highlight--word-set
+                :keywords (etaf-doc-highlight--word-set
                            "abstract as assert async await base break case catch class const continue covariant default deferred do dynamic else enum export extends extension external factory final finally for get hide if implements import in interface is late library mixin new on operator part required rethrow return sealed set show static super switch sync this throw try typedef var void when while with yield")
-                :types (etaf-ui-markdown-highlight--word-set
+                :types (etaf-doc-highlight--word-set
                         "bool double int num String Object Future Stream List Map Set Iterable")
-                :constants (etaf-ui-markdown-highlight--word-set "true false null")))
+                :constants (etaf-doc-highlight--word-set "true false null")))
          (haskell-spec
           (list :line-comment "--" :block-comment '("{-". "-}")
                 :strings '(double char) :type-cap t
-                :keywords (etaf-ui-markdown-highlight--word-set
+                :keywords (etaf-doc-highlight--word-set
                            "as case class data default deriving do else forall foreign hiding if import in infix infixl infixr instance let mdo module newtype of qualified then type where")
-                :types (etaf-ui-markdown-highlight--word-set
+                :types (etaf-doc-highlight--word-set
                         "Bool Char Double Float Int Integer IO Maybe Either String Ordering")
-                :constants (etaf-ui-markdown-highlight--word-set "True False Nothing Just Left Right")))
+                :constants (etaf-doc-highlight--word-set "True False Nothing Just Left Right")))
          (elixir-spec
           (list :line-comment "#" :strings '(double single) :type-cap t
-                :keywords (etaf-ui-markdown-highlight--word-set
+                :keywords (etaf-doc-highlight--word-set
                            "after alias and case catch cond def defdelegate defexception defguard defimpl defmacro defmodule defp defprotocol defstruct do else end fn for if import in not or quote raise receive require rescue try unless unquote use when with")
-                :constants (etaf-ui-markdown-highlight--word-set "true false nil")))
+                :constants (etaf-doc-highlight--word-set "true false nil")))
          (erlang-spec
           (list :line-comment "%" :strings '(double) :type-cap t
-                :keywords (etaf-ui-markdown-highlight--word-set
+                :keywords (etaf-doc-highlight--word-set
                            "after and andalso band begin bnot bor bsl bsr bxor case catch cond div end fun if let not of or orelse receive rem try when xor")
-                :constants (etaf-ui-markdown-highlight--word-set "true false ok error undefined")))
+                :constants (etaf-doc-highlight--word-set "true false ok error undefined")))
          (ocaml-spec
           (list :block-comment '("(*" . "*)") :strings '(double)
-                :keywords (etaf-ui-markdown-highlight--word-set
+                :keywords (etaf-doc-highlight--word-set
                            "and as assert asr begin class constraint do done downto else end exception external for fun function functor if in include inherit initializer land lazy let lor lsl lsr lxor match method mod module mutable new nonrec object of open or private rec sig struct then to try type val virtual when while with")
-                :types (etaf-ui-markdown-highlight--word-set "int float bool char string bytes unit list array option result")
-                :constants (etaf-ui-markdown-highlight--word-set "true false None Some Ok Error")))
+                :types (etaf-doc-highlight--word-set "int float bool char string bytes unit list array option result")
+                :constants (etaf-doc-highlight--word-set "true false None Some Ok Error")))
          (nix-spec
           (list :line-comment "#" :block-comment '("/*" . "*/")
                 :strings '(double)
-                :keywords (etaf-ui-markdown-highlight--word-set
+                :keywords (etaf-doc-highlight--word-set
                            "assert else if in inherit let or rec then with")
-                :builtins (etaf-ui-markdown-highlight--word-set
+                :builtins (etaf-doc-highlight--word-set
                            "builtins derivation import fetchTarball fetchGit fetchurl map foldl' filter")
-                :constants (etaf-ui-markdown-highlight--word-set "true false null")))
+                :constants (etaf-doc-highlight--word-set "true false null")))
          (lua-spec
           (list :line-comment "--" :strings '(double single)
-                :keywords (etaf-ui-markdown-highlight--word-set
+                :keywords (etaf-doc-highlight--word-set
                            "and break do else elseif end for function goto if in local not or repeat return then until while")
-                :builtins (etaf-ui-markdown-highlight--word-set
+                :builtins (etaf-doc-highlight--word-set
                            "assert error ipairs next pairs pcall print require select tonumber tostring type xpcall")
-                :constants (etaf-ui-markdown-highlight--word-set "true false nil")))
+                :constants (etaf-doc-highlight--word-set "true false nil")))
          (clojure-spec
           (list :line-comment ";" :strings '(double)
-                :keywords (etaf-ui-markdown-highlight--word-set
+                :keywords (etaf-doc-highlight--word-set
                            "def defn defn- defmacro defprotocol defrecord defmulti defmethod deftype fn let loop recur if when cond case do dotimes doseq for ns require import use try catch finally throw quote")
-                :constants (etaf-ui-markdown-highlight--word-set "true false nil")))
+                :constants (etaf-doc-highlight--word-set "true false nil")))
          (powershell-spec
           (list :line-comment "#" :strings '(double single)
                 :vars t :case-insensitive-kw t :flags t
-                :keywords (etaf-ui-markdown-highlight--word-set
+                :keywords (etaf-doc-highlight--word-set
                            "begin break catch class continue data do dynamicparam else elseif end enum exit filter finally for foreach from function if in param process return switch throw trap try until using while")
-                :constants (etaf-ui-markdown-highlight--word-set "true false null")))
+                :constants (etaf-doc-highlight--word-set "true false null")))
          (fish-spec
           (list :line-comment "#" :strings '(double single) :vars t :flags t
-                :keywords (etaf-ui-markdown-highlight--word-set
+                :keywords (etaf-doc-highlight--word-set
                            "and begin break builtin case command continue else end eval exec for function if in not or return set switch while")))
          (graphql-spec
           (list :line-comment "#" :strings '(double) :at-builtins t :type-cap t
-                :keywords (etaf-ui-markdown-highlight--word-set
+                :keywords (etaf-doc-highlight--word-set
                            "directive enum extend fragment implements input interface mutation on query repeatable scalar schema subscription type union")
-                :types (etaf-ui-markdown-highlight--word-set "ID Int Float String Boolean")
-                :constants (etaf-ui-markdown-highlight--word-set "true false null")))
+                :types (etaf-doc-highlight--word-set "ID Int Float String Boolean")
+                :constants (etaf-doc-highlight--word-set "true false null")))
          (proto-spec
           (list :line-comment "//" :block-comment '("/*" . "*/")
                 :strings '(double single) :type-cap t
-                :keywords (etaf-ui-markdown-highlight--word-set
+                :keywords (etaf-doc-highlight--word-set
                            "edition enum extend extensions import map message oneof option optional package public repeated required reserved returns rpc service stream syntax to weak")
-                :types (etaf-ui-markdown-highlight--word-set
+                :types (etaf-doc-highlight--word-set
                         "bool bytes double fixed32 fixed64 float int32 int64 sfixed32 sfixed64 sint32 sint64 string uint32 uint64")
-                :constants (etaf-ui-markdown-highlight--word-set "true false")))
+                :constants (etaf-doc-highlight--word-set "true false")))
          (hcl-spec
           (list :line-comment "#" :block-comment '("/*" . "*/")
                 :strings '(double)
-                :keywords (etaf-ui-markdown-highlight--word-set
+                :keywords (etaf-doc-highlight--word-set
                            "backend count data depends_on dynamic for for_each if in lifecycle locals module output provider required_providers resource terraform variable")
-                :constants (etaf-ui-markdown-highlight--word-set "true false null")))
+                :constants (etaf-doc-highlight--word-set "true false null")))
          (cmake-spec
           (list :line-comment "#" :strings '(double) :vars t :case-insensitive-kw t
-                :keywords (etaf-ui-markdown-highlight--word-set
+                :keywords (etaf-doc-highlight--word-set
                            "add_custom_command add_custom_target add_definitions add_dependencies add_executable add_library add_subdirectory add_test break cmake_minimum_required configure_file else elseif endforeach endfunction endif endmacro endwhile fetchcontent_declare file find_library find_package find_path find_program foreach function if include install list macro message option project return set string target_compile_definitions target_compile_options target_include_directories target_link_libraries target_sources unset while")
-                :constants (etaf-ui-markdown-highlight--word-set
+                :constants (etaf-doc-highlight--word-set
                             "ON OFF TRUE FALSE PUBLIC PRIVATE INTERFACE STATIC SHARED REQUIRED")))
          (abnf-spec
           (list :line-comment ";" :strings '(double) :abnf t
-                :builtins (etaf-ui-markdown-highlight--word-set
+                :builtins (etaf-doc-highlight--word-set
                            "ALPHA BIT CHAR CR CRLF CTL DIGIT DQUOTE HEXDIG HTAB LF LWSP OCTET SP VCHAR WSP OWS BWS RWS"))))
     (list (cons "go" go-spec) (cons "golang" go-spec)
           (cons "rust" rust-spec) (cons "rs" rust-spec)
@@ -522,7 +522,7 @@ while editing inside a fenced code block."
           (cons "bnf" abnf-spec) (cons "ebnf" abnf-spec)))
   "Built-in zero-dependency lightweight lexer specs for fallback highlighting.")
 
-(defun etaf-ui-markdown-highlight--push-run (runs slice props)
+(defun etaf-doc-highlight--push-run (runs slice props)
   "Prepend SLICE with PROPS onto reversed RUNS, coalescing equal PROPS."
   (if (and runs (equal (plist-get (car runs) :props) props))
       (progn
@@ -531,7 +531,7 @@ while editing inside a fenced code block."
         runs)
     (cons (list :text slice :props props) runs)))
 
-(defun etaf-ui-markdown-highlight--scan-quoted (text i len quote)
+(defun etaf-doc-highlight--scan-quoted (text i len quote)
   "Return end index after a QUOTE-delimited string starting at I in TEXT."
   (let ((j (1+ i))
         (esc nil))
@@ -545,7 +545,7 @@ while editing inside a fenced code block."
          (t (setq j (1+ j))))))
     j))
 
-(defun etaf-ui-markdown-highlight--lex (spec text)
+(defun etaf-doc-highlight--lex (spec text)
   "Tokenize TEXT with lightweight SPEC into `(:text STRING :props PLIST)' runs."
   (let* ((len (length text))
          (i 0)
@@ -615,17 +615,17 @@ while editing inside a fenced code block."
                   role 'preprocessor at-bol nil)))
          ;; Double-quoted string.
          ((and (memq 'double strings) (= ch ?\"))
-          (setq next (etaf-ui-markdown-highlight--scan-quoted text i len ?\")
+          (setq next (etaf-doc-highlight--scan-quoted text i len ?\")
                 role 'string at-bol nil))
          ;; Backtick string.
          ((and (memq 'backtick strings) (= ch ?`))
-          (setq next (etaf-ui-markdown-highlight--scan-quoted text i len ?`)
+          (setq next (etaf-doc-highlight--scan-quoted text i len ?`)
                 role 'string at-bol nil))
          ;; Single-quoted string or char literal / Rust lifetime.
          ((and (= ch ?') (or (memq 'single strings) (memq 'char strings) rust-lt))
           (cond
            ((memq 'single strings)
-            (setq next (etaf-ui-markdown-highlight--scan-quoted text i len ?')
+            (setq next (etaf-doc-highlight--scan-quoted text i len ?')
                   role 'string at-bol nil))
            ;; Char literal `'a'` or `'\n'` or `'\x20'`.
            ((and (memq 'char strings)
@@ -717,21 +717,21 @@ while editing inside a fenced code block."
          ;; Any other single punctuation character.
          (t
           (setq next (1+ i) at-bol nil)))
-        (setq runs (etaf-ui-markdown-highlight--push-run
+        (setq runs (etaf-doc-highlight--push-run
                     runs (substring text i next)
                     (when role (list :role role))))
         (setq i next)))
     (nreverse runs)))
 
-(defconst etaf-ui-markdown-highlight--shell-langs
+(defconst etaf-doc-highlight--shell-langs
   '("sh" "bash" "zsh" "shell" "console" "shell-session")
   "Languages whose uncolored CLI runs receive prompt/command/flag enhancement.")
 
-(defconst etaf-ui-markdown-highlight--shell-wrappers
+(defconst etaf-doc-highlight--shell-wrappers
   '("sudo" "doas" "env" "command" "exec" "nohup" "time" "xargs")
   "Shell command prefixes that keep the next word in command position.")
 
-(defun etaf-ui-markdown-highlight--enhance-shell (runs)
+(defun etaf-doc-highlight--enhance-shell (runs)
   "Enhance uncolored spans in shell RUNS with prompt, command, flag and pipe roles.
 Already-colored runs from `sh-mode' (strings, comments, variables, keywords)
 are preserved untouched, and concatenation of all `:text' remains identical."
@@ -744,7 +744,7 @@ are preserved untouched, and concatenation of all `:text' remains identical."
             (props (plist-get run :props)))
         (if props
             (progn
-              (setq out (etaf-ui-markdown-highlight--push-run out txt props))
+              (setq out (etaf-doc-highlight--push-run out txt props))
               (if (string-suffix-p "\n" txt)
                   (setq at-bol t expect-cmd t)
                 (setq at-bol nil expect-cmd nil)))
@@ -791,7 +791,7 @@ are preserved untouched, and concatenation of all `:text' remains identical."
                      ;; Variable assignment `FOO=bar` before command.
                      ((and (< end len) (= (aref txt end) ?=))
                       (setq next end role 'variable at-bol nil expect-cmd nil))
-                     ((member tok etaf-ui-markdown-highlight--shell-wrappers)
+                     ((member tok etaf-doc-highlight--shell-wrappers)
                       (setq next end role 'builtin at-bol nil expect-cmd t))
                      (t
                       (setq next end role 'function at-bol nil expect-cmd nil)))))
@@ -803,16 +803,16 @@ are preserved untouched, and concatenation of all `:text' remains identical."
                                            '(?\s ?\t ?\n ?| ?\; ?> ?< ?&))))
                       (setq j (1+ j)))
                     (setq next j at-bol nil expect-cmd nil))))
-                (setq out (etaf-ui-markdown-highlight--push-run
+                (setq out (etaf-doc-highlight--push-run
                            out (substring txt i next)
                            (when role (list :role role))))
                 (setq i next)))))))
     (nreverse out)))
 
-(defvar-local etaf-ui-markdown-highlight--last-text nil
+(defvar-local etaf-doc-highlight--last-text nil
   "Last source text fontified in this scratch highlight buffer.")
 
-(defun etaf-ui-markdown-highlight--line-prefix (old new)
+(defun etaf-doc-highlight--line-prefix (old new)
   "Return the line-start index of the first difference between OLD and NEW."
   (let* ((common (min (length old) (length new)))
          (cmp (compare-strings old 0 common new 0 common))
@@ -822,11 +822,11 @@ are preserved untouched, and concatenation of all `:text' remains identical."
       (let ((nl (cl-position ?\n new :from-end t :end diff)))
         (if nl (1+ nl) 0)))))
 
-(defun etaf-ui-markdown-highlight--compute (language text)
+(defun etaf-doc-highlight--compute (language text)
   "Return the highlighted runs of TEXT as LANGUAGE, or nil."
   (let* ((lang (and (stringp language) (downcase language)))
-         (mode (and lang (etaf-ui-markdown-highlight--mode lang)))
-         (buf (and mode (etaf-ui-markdown-highlight--buffer mode)))
+         (mode (and lang (etaf-doc-highlight--mode lang)))
+         (buf (and mode (etaf-doc-highlight--buffer mode)))
          (runs
           (cond
            (buf
@@ -837,10 +837,10 @@ are preserved untouched, and concatenation of all `:text' remains identical."
                   (message-log-max nil))
               (with-current-buffer buf
                 (let* ((inhibit-read-only t)
-                       (last etaf-ui-markdown-highlight--last-text)
+                       (last etaf-doc-highlight--last-text)
                        (prefix (if (and (stringp last)
                                         (= (1- (point-max)) (length last)))
-                                   (etaf-ui-markdown-highlight--line-prefix last text)
+                                   (etaf-doc-highlight--line-prefix last text)
                                  0)))
                   (if (> prefix 0)
                       (let ((edit-pos (1+ prefix)))
@@ -857,10 +857,10 @@ are preserved untouched, and concatenation of all `:text' remains identical."
                                               (nth 8 ppss)
                                             edit-pos)))
                               (font-lock-ensure start (point-max))
-                              (setq etaf-ui-markdown-highlight--last-text text)
-                              (etaf-ui-markdown-highlight--runs (buffer-string)))
+                              (setq etaf-doc-highlight--last-text text)
+                              (etaf-doc-highlight--runs (buffer-string)))
                           (error
-                           (setq etaf-ui-markdown-highlight--last-text nil)
+                           (setq etaf-doc-highlight--last-text nil)
                            nil)))
                     (erase-buffer)
                     (insert text)
@@ -869,17 +869,17 @@ are preserved untouched, and concatenation of all `:text' remains identical."
                     (condition-case nil
                         (progn
                           (font-lock-ensure)
-                          (setq etaf-ui-markdown-highlight--last-text text)
-                          (etaf-ui-markdown-highlight--runs (buffer-string)))
+                          (setq etaf-doc-highlight--last-text text)
+                          (etaf-doc-highlight--runs (buffer-string)))
                       (error
-                       (setq etaf-ui-markdown-highlight--last-text nil)
+                       (setq etaf-doc-highlight--last-text nil)
                        nil)))))))
-           ((when-let* ((spec (cdr (assoc lang etaf-ui-markdown-highlight--lex-specs))))
-              (etaf-ui-markdown-highlight--lex spec text))))))
-    (if (and runs (member lang etaf-ui-markdown-highlight--shell-langs))
-        (etaf-ui-markdown-highlight--enhance-shell runs)
+           ((when-let* ((spec (cdr (assoc lang etaf-doc-highlight--lex-specs))))
+              (etaf-doc-highlight--lex spec text))))))
+    (if (and runs (member lang etaf-doc-highlight--shell-langs))
+        (etaf-doc-highlight--enhance-shell runs)
       runs)))
 
-(provide 'etaf-ui-markdown-highlight)
+(provide 'etaf-doc-highlight)
 
-;;; etaf-ui-markdown-highlight.el ends here
+;;; etaf-doc-highlight.el ends here

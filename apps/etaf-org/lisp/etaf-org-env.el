@@ -98,7 +98,7 @@
 
 (defun etaf-org--mono-family ()
   "Return the optional `:font-mono' theme token, or nil for unified body font.
-Matches `etaf-ui-markdown--mono-family': avoids forcing Emacs `fixed-pitch'
+Matches `etaf-doc-markdown--mono-family': avoids forcing Emacs `fixed-pitch'
 (\"Monospace\") which switches to mismatched fallback fonts on macOS/Windows."
   (let ((family (etaf-theme-token :font-mono nil)))
     (and (stringp family) (not (string-empty-p family)) family)))

@@ -5,7 +5,7 @@
 ;;; Commentary:
 ;;
 ;; Presentation layer of etaf-md.  The document body comes from the
-;; shared `etaf-ui-markdown' renderer; this module keeps what is specific to
+;; shared `etaf-doc-markdown' renderer; this module keeps what is specific to
 ;; the previewer: the face-derived or named palette, the front-matter header,
 ;; the reading column, and the media layer that turns images, videos and HTML
 ;; media elements into poster cards backed by ETAF's image and video Hosts.
@@ -981,9 +981,9 @@ reading-measure adjustments never rebuild their VDOM subtrees."
                    (table-env (if table-max
                                   (plist-put (copy-sequence env) :table-max-width table-max)
                                 env)))
-              (etaf-ui-markdown-view-block block table-env)))
+              (etaf-doc-markdown-view-block block table-env)))
            (t (etaf-md--wrap-heading
-               block (etaf-ui-markdown-view-block block env))))))
+               block (etaf-doc-markdown-view-block block env))))))
     (etaf-md--wrap-block-width block rendered session env)))
 
 (defconst etaf-md--measure-gutter 2
@@ -1189,7 +1189,7 @@ inside the page gutters when the window narrows, without clipping."
                                 (list (etaf-md--spacer)
                                       (etaf-md--divider "脚注")
                                       (etaf-md--spacer))
-                                (etaf-ui-markdown-view-blocks
+                                (etaf-doc-markdown-view-blocks
                                  footnotes (etaf-md--card-env
                                             session fn-env 'footnotes)))))))
         (plist-put session :footnotes-cache (cons footnotes (cons fn-env node)))

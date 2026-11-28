@@ -276,12 +276,12 @@
     (caution   . ("小心" danger "⊘"))
     (danger    . ("危险" danger "⊘")))
   "Mapping from callout node type to `(DEFAULT-LABEL ACCENT ICON)'.
-Monochrome glyphs match `etaf-ui-markdown--alert-defaults' so no color
+Monochrome glyphs match `etaf-doc-markdown--alert-defaults' so no color
 emoji clashes with the editorial palette.")
 
 (defun etaf-org-nodes--paint-callout (env)
   "Shared paint for all seven callout containers (`note'..`danger').
-Matches `etaf-ui-markdown--blockquote-node' alerts: compact 3px solid left
+Matches `etaf-doc-markdown--blockquote-node' alerts: compact 3px solid left
 accent bar, soft semantic tint, zero vertical slab padding, monochrome icon
 and bold title, and leaf-only disclosure toggle when collapsible."
   (let* ((type (etaf-org-type env))

@@ -1,4 +1,4 @@
-;;; etaf-video-audio.el --- Audio sidecar for native video -*- lexical-binding: t; -*-
+;;; etaf-media-audio.el --- Audio sidecar for native video -*- lexical-binding: t; -*-
 
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -13,7 +13,7 @@
 ;;; Code:
 
 (require 'cl-lib)
-(require 'etaf-video-source)
+(require 'etaf-media-source)
 
 (defvar etaf-video-ffplay-program "ffplay"
   "Name or absolute path of the ffplay executable used for audio.
@@ -122,5 +122,5 @@ Sources without a reported audio stream and the built-in demo stay silent."
   (when-let* ((buffer (process-buffer process)))
     (when (buffer-live-p buffer) (kill-buffer buffer))))
 
-(provide 'etaf-video-audio)
-;;; etaf-video-audio.el ends here
+(provide 'etaf-media-audio)
+;;; etaf-media-audio.el ends here

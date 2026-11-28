@@ -2,7 +2,7 @@
 .NOTPARALLEL:
 EMACS ?= emacs
 LOAD_PATH = -L . -L lisp -L tests -L ../etaf -L ../ebox -L ../ecss
-SOURCES = lisp/etaf-video-source.el lisp/etaf-video-audio.el lisp/etaf-video-mpv.el lisp/etaf-video-session.el lisp/etaf-video-component.el etaf-media.el
+SOURCES = lisp/etaf-media-source.el lisp/etaf-media-audio.el lisp/etaf-media-mpv.el lisp/etaf-media-session.el lisp/etaf-media-video.el etaf-media.el
 
 .PHONY: all compile load check clean structure-check setup-hooks acceptance api-check test
 

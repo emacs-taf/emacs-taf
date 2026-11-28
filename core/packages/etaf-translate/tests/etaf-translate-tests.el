@@ -8,7 +8,7 @@
 ;; `etaf-translate': rich inline extraction/restoration, smart exclusions,
 ;; cached instant mode/style switching, live reactive commit survival,
 ;; batching/error-retry/cancellation, declarative rules + L2 cache + provider
-;; extension points, and real `etaf-ui-markdown' document rendering.
+;; extension points, and real `etaf-doc-markdown' document rendering.
 
 ;;; Code:
 
@@ -427,7 +427,7 @@
       (etaf-translate-unregister-provider 'test-virt))))
 
 (ert-deftest etaf-translate-real-markdown-document-with-table-and-code ()
-  "End-to-end translation on a real `etaf-ui-markdown' document preserves tables and skips fenced code."
+  "End-to-end translation on a real `etaf-doc-markdown' document preserves tables and skips fenced code."
   (let* ((md (concat
               "# Getting Started\n\n"
               "ETAF renders declarative Views with **incremental** layout and `ebox` caching.\n\n"
@@ -439,7 +439,7 @@
               "| --- | --- |\n"
               "| ECSS | Selector cascade |\n"
               "| ETAF | Reactive Views |\n"))
-         (doc (etaf-ui-markdown-parse md))
+         (doc (etaf-doc-markdown-parse md))
          (blocks (plist-get doc :children))
          (palette '((:ink . "#1e293b") (:heading . "#0f172a") (:muted . "#64748b")
                     (:accent . "#2563eb") (:accent-soft . "#dbeafe")
@@ -449,7 +449,7 @@
                     (:table-stripe . "#f1f5f9") (:heading-rule . "#e2e8f0")))
          (env (list :palette palette :background "#ffffff"))
          (view (etaf-node 'column '(:width stretch :item-gap (lh 0))
-                          (etaf-ui-markdown-view-blocks blocks env)))
+                          (etaf-doc-markdown-view-blocks blocks env)))
          (seen nil))
     (etaf-translate-test--with-engine
         'test-md

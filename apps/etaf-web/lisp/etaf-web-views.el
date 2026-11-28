@@ -298,7 +298,7 @@ inside one crisp 1px outlined box matching the active frame canvas."
       (etaf-node 'box (append key-prop (list :width width)) (list input-node))))))
 
 (defun etaf-web--markdown-palette (mode)
-  "Build `etaf-ui-markdown' semantic color alist derived from browser MODE."
+  "Build `etaf-doc-markdown' semantic color alist derived from browser MODE."
   (let* ((pal (etaf-web--palette mode))
          (bg (plist-get pal :bg))
          (fg (plist-get pal :fg))
@@ -350,7 +350,7 @@ inside one crisp 1px outlined box matching the active frame canvas."
           (cons :important-soft (etaf-ui-color-mix bg important 0.14)))))
 
 (defun etaf-web--inline-plain-text (inlines)
-  "Extract plain text from parsed `etaf-ui-markdown-parse' INLINES."
+  "Extract plain text from parsed `etaf-doc-markdown-parse' INLINES."
   (mapconcat
    (lambda (n)
      (cond
@@ -477,7 +477,7 @@ DIR/assets/, preserving natural or declared aspect ratios without distortion."
      "\\\\\\(.\\)" "\\1" (match-string 1 attrs) t)))
 
 (defun etaf-web--normalize-embedded-containers (markdown)
-  "Convert `:::' container blocks in MARKDOWN for `etaf-ui-markdown-parse'.
+  "Convert `:::' container blocks in MARKDOWN for `etaf-doc-markdown-parse'.
 Normalizes callouts (`:::note|tip|important|warning|caution'), `:::details',
 `:::columns'/`:::col'/`:::card', `:::tabs' (`@tab'), `:::steps'/`:::step', and
 `:::timeline'/`:::event' into native GFM alerts, blockquotes, and headings so
@@ -581,11 +581,11 @@ raw `:::' fences never leak inside Tier 2 Docs or Discourse split panes."
 
 (defun etaf-web--parse-embedded-markdown (markdown)
   "Parse MARKDOWN for embedded Docs/Discourse views using the `etaf' dialect."
-  (etaf-ui-markdown-parse (etaf-web--normalize-embedded-containers markdown) 'etaf))
+  (etaf-doc-markdown-parse (etaf-web--normalize-embedded-containers markdown) 'etaf))
 
 (cl-defun etaf-web--render-markdown-blocks
     (doc &key theme-mode dir open-link (line-grid t) (max-cols 80) show-title)
-  "Render parsed `etaf-ui-markdown-parse' DOC into an embedded column View.
+  "Render parsed `etaf-doc-markdown-parse' DOC into an embedded column View.
 Unlike `etaf-md-view', carries zero `:width (vw 100)' assumption so it fits
 cleanly inside split panes and cards with exact parent-column symmetry."
   (let* ((mode (or theme-mode 'auto))
@@ -618,7 +618,7 @@ cleanly inside split panes and cards with exact parent-column symmetry."
           (delq nil
                 (mapcar
                  (lambda (blk)
-                   (when-let* ((v (etaf-ui-markdown-view-block blk env)))
+                   (when-let* ((v (etaf-doc-markdown-view-block blk env)))
                      (let ((id (and (eq (plist-get blk :type) 'heading)
                                     (plist-get blk :id))))
                        (if (and (stringp id) (not (string-empty-p id)))
@@ -632,7 +632,7 @@ cleanly inside split panes and cards with exact parent-column symmetry."
           (when footnotes
             (append
              (list (etaf-node 'etaf-divider (list :orientation 'horizontal :label "脚注") nil))
-             (etaf-ui-markdown-view-blocks footnotes env t)))))
+             (etaf-doc-markdown-view-blocks footnotes env t)))))
     (etaf-node
      'column (list :width 'stretch :item-gap '(lh 1) :color (cdr (assq :ink pal)))
      (append

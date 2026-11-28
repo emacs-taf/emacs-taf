@@ -65,7 +65,12 @@
 | 条件 | 父条件 | 触发时机 |
 | --- | --- | --- |
 | [`etaf-ui-svg-error`](ui-icons.md#error-etaf-ui-svg-error) | `error` | SVG 场景辅助收到的输入非法。 |
-| [`etaf-ui-markdown-error`](ui-composite-components.md#error-etaf-ui-markdown-error) | `error` | markdown 操作被拒绝：解析时方言名未知，或渲染时缺少调色板、调色板键未知。 |
+
+## ETAF Doc
+
+| 条件 | 父条件 | 触发时机 |
+| --- | --- | --- |
+| [`etaf-doc-markdown-error`](ui-composite-components.md#error-etaf-doc-markdown-error) | `error` | markdown 操作被拒绝：解析时方言名未知，或渲染时缺少调色板、调色板键未知。 |
 
 ## ETAF DB
 

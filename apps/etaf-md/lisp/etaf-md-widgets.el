@@ -68,7 +68,7 @@
       (setq block (plist-put block :info
                              (format "%s :line-numbers=%d"
                                      (or lang "text") start-line))))
-    (etaf-ui-markdown-view-block block (etaf-md--markdown-env env))))
+    (etaf-doc-markdown-view-block block (etaf-md--markdown-env env))))
 
 (defun etaf-md--widget-error-body (env message)
   "Return a concise danger-colored fallback text View for MESSAGE in ENV."

@@ -77,7 +77,7 @@ with standard Emacs window controls or mouse drag on the divider."
 
 (defcustom etaf-md-flavor nil
   "Default Markdown dialect of `etaf-md-create'.
-Nil defers to `etaf-ui-markdown-flavor', which is the widest preset and the one
+Nil defers to `etaf-doc-markdown-flavor', which is the widest preset and the one
 a reader expects to open a document.  A document may name its own dialect in
 its front matter (`flavor: gfm'), and a session's `:flavor' argument overrides
 both: the argument, then the document, then this variable."
@@ -109,7 +109,7 @@ document is body text and cannot change how the rest of it parses."
 (defun etaf-md--flavor-for (session text)
   "Return the dialect SESSION parses TEXT with.
 A session's own `:flavor' wins, then the document's front matter, then
-`etaf-md-flavor'; nil leaves the choice to `etaf-ui-markdown-parse',
+`etaf-md-flavor'; nil leaves the choice to `etaf-doc-markdown-parse',
 whose default is the widest preset.  One file of a directory can therefore stay
 CommonMark while the rest read with everything the renderer knows."
   (or (plist-get session :flavor)
@@ -477,7 +477,7 @@ DEFS is an alist of (LABEL . RAW-TEXT) collected in document order."
                  (synthetic (concat refs "\n\n"
                                     (mapconcat #'identity def-blocks "\n\n")
                                     "\n"))
-                 (parsed (etaf-ui-markdown-parse synthetic flavor)))
+                 (parsed (etaf-doc-markdown-parse synthetic flavor)))
             (plist-get parsed :footnotes)))))))
 
 (defun etaf-md--parse-container-body (name text flavor base)
@@ -508,7 +508,7 @@ their block ranges move to where the stretch sits in TEXT."
     (cl-flet ((flush (end)
                 (when (< plain-start end)
                   (let* ((slice (substring text plain-start end))
-                         (parsed (etaf-ui-markdown-parse slice flavor))
+                         (parsed (etaf-doc-markdown-parse slice flavor))
                          (blocks (plist-get parsed :children)))
                     (etaf-md--collect-footnote-defs
                      slice etaf-md--footnote-def-collector)
@@ -593,7 +593,7 @@ their block ranges move to where the stretch sits in TEXT."
                                      :source (substring text (plist-get container :begin)))))))
         (flush (length text)))
       (let ((document (copy-sequence (or template
-                                            (etaf-ui-markdown-parse "" flavor)))))
+                                            (etaf-doc-markdown-parse "" flavor)))))
         (setf (plist-get document :children) result)
         (plist-put document :meta (or (plist-get document :meta) nil))
         (when top-level
@@ -666,7 +666,7 @@ definitions for incremental splice parses."
       (let ((parsed
              (if (etaf-md--container-syntax-p text)
                  (etaf-md--parse-containers text flavor)
-               (let ((doc (etaf-ui-markdown-parse text flavor)))
+               (let ((doc (etaf-doc-markdown-parse text flavor)))
                  (when etaf-md--footnote-def-collector
                    (etaf-md--collect-footnote-defs
                     text etaf-md--footnote-def-collector))
@@ -680,7 +680,7 @@ definitions for incremental splice parses."
           (setq parsed (plist-put (copy-sequence parsed)
                                   :doc-defs (etaf-md--doc-defs-extract text))))
         parsed)
-    (etaf-ui-markdown-error
+    (etaf-doc-markdown-error
      (signal 'etaf-md-error (cdr err)))))
 
 ;;; ---------------------------------------------------------------------------

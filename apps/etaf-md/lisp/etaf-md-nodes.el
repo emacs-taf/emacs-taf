@@ -1286,7 +1286,7 @@ sits flush under the tab bar without double boxes."
      (mapcar
       (lambda (child)
         (if (eq (etaf-md-node-type child) 'code-block)
-            (etaf-ui-markdown-view-block
+            (etaf-doc-markdown-view-block
              (plist-put (plist-put (copy-sequence (etaf-md-node-block child))
                                    :header nil)
                         :frame nil)
@@ -1816,7 +1816,7 @@ table-cell media sizing when supplied."
                          (setq copy (plist-put copy :table-cell-width w))
                          (setq copy (plist-put copy :table-cell-align (or align 'left)))
                          copy))
-             (rendered (etaf-ui-markdown-view-block block cell-env)))
+             (rendered (etaf-doc-markdown-view-block block cell-env)))
         (if rendered
             (list rendered)
           (list (etaf-node 'text nil

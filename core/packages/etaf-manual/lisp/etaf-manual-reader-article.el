@@ -563,7 +563,7 @@ viewer, separated from its neighbors by one blank line."
     (cl-flet ((flush ()
                 (when static
                   (when views (push (etaf-manual-reader--spacer) views))
-                  (dolist (view (etaf-ui-markdown-view-blocks
+                  (dolist (view (etaf-doc-markdown-view-blocks
                                  (nreverse static)
                                  (etaf-manual-reader--doc-env env)))
                     (push view views))
@@ -647,7 +647,7 @@ table is built once per chapter and language and compared by identity."
    ((etaf-manual-reader--block-figure block env)
     (etaf-manual-reader--figure-viewer
      (etaf-manual-reader--block-figure block env) env))
-   (t (etaf-ui-markdown-view-block block (etaf-manual-reader--doc-env env)))))
+   (t (etaf-doc-markdown-view-block block (etaf-manual-reader--doc-env env)))))
 
 (defun etaf-manual-reader--render-blocks (blocks env)
   "Render BLOCKS in ENV with definition cards and example viewers."

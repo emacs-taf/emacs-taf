@@ -80,7 +80,7 @@ renders a width-dependent Markdown block (such as a table or figure)."
      :root-begin (etaf-md-env-root-begin env))))
 
 (defun etaf-md--markdown-env (env &optional block)
-  "Return the `etaf-ui-markdown' rendering env for paint ENV and optional BLOCK.
+  "Return the `etaf-doc-markdown' rendering env for paint ENV and optional BLOCK.
 Preserves page services and interactive state while subscribing to width only
 when ENV carries an explicit narrowed width or BLOCK actually requires width."
   (let* ((session (etaf-md-env-session env))
@@ -145,7 +145,7 @@ when ENV carries an explicit narrowed width or BLOCK actually requires width."
       (let ((block (etaf-md-node-block node)))
         (etaf-md--wrap-heading
          block
-         (etaf-ui-markdown-view-block
+         (etaf-doc-markdown-view-block
           block
           ;; A block painted below a container keeps the page services: media,
           ;; links and the page directory are part of the environment the block

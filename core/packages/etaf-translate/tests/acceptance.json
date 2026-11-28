@@ -46,7 +46,7 @@
     {
       "name": "etaf-translate-real-markdown-document-with-table-and-code",
       "file": "tests/etaf-translate-tests.el",
-      "purpose": "End-to-end translation of an etaf-ui-markdown document translates headings, prose, quotes and table cells while skipping fenced code blocks."
+      "purpose": "End-to-end translation of an etaf-doc-markdown document translates headings, prose, quotes and table cells while skipping fenced code blocks."
     },
     {
       "name": "etaf-translate-overflow-scroll-viewport-lazy-promotion",

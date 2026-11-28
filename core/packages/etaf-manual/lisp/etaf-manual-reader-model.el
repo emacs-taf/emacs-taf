@@ -213,7 +213,7 @@ but callers read the chapter before asking, so a chapter change re-parses."
     (when chapter
       (or (gethash key cache)
           (puthash key
-                   (etaf-ui-markdown-parse
+                   (etaf-doc-markdown-parse
                     (etaf-manual-reader--chapter-text chapter))
                    cache)))))
 

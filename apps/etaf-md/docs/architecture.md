@@ -21,7 +21,7 @@
 | `lisp/etaf-md-typeset.el` | Diagram and formula pictures: cache keys, embedded QuickJS native backend dispatch and `mermaid-cli` fallback. |
 | `native/` | Optional Emacs dynamic module (`etaf-md-typeset-native`) embedding QuickJS, vendored Obsidian Pele (Mermaid→SVG), MathJax (TeX→SVG) and CoreText/Pango text measurement, inspired by [LuciusChen/pele.el](https://github.com/LuciusChen/pele.el). |
 
-Markdown itself is parsed by `etaf-ui-markdown`; this package parses the `:::name` container syntax around it and owns what each node type paints.
+Markdown itself is parsed by `etaf-doc-markdown`; this package parses the `:::name` container syntax around it and owns what each node type paints.
 
 Only ETAF and ETAF UI public interfaces are used by the application; the buffer is an ordinary Emacs buffer rendered by Ebox through ETAF. The previewer never calls an `ebox-` function directly.
 
@@ -33,7 +33,7 @@ file or text → parser → document plist → session refs → views → ETAF m
                           theme / width / errors (reactive refs)
 ```
 
-- **Parser.** `etaf-md--parse` is a pure function over a string. A document that writes `:::name {attrs}` containers goes through this package's own pre-parse, which reads the fences, nests them and parses each block's body; everything inside a block, and every document without containers, is handed to `etaf-ui-markdown-parse`, so the markdown grammar is written once for every viewer in the ecosystem. The output carries no presentation facts.
+- **Parser.** `etaf-md--parse` is a pure function over a string. A document that writes `:::name {attrs}` containers goes through this package's own pre-parse, which reads the fences, nests them and parses each block's body; everything inside a block, and every document without containers, is handed to `etaf-doc-markdown-parse`, so the markdown grammar is written once for every viewer in the ecosystem. The output carries no presentation facts.
 - **Model.** A session is a plist of `etaf-ref`s: document, title, theme, reading measure and error text. Every displayed value is read through `etaf-md--read` while rendering, so a refresh, a theme change or a measure change repaints the mounted preview through the ordinary ETAF reactive path; no code calls the renderer or the buffer directly. A window resize is not a session change: the column is viewport-relative and reflows through the renderer's own viewport update.
 - **Views.** `etaf-md--view-document` composes a centered reading column from `etaf-node` values: flexible spacers center a column whose width stretches to the window up to the session's measure. Inline content becomes styled `text` runs; links and footnote references carry `:on-press` boundaries that ETAF turns into Ebox keymaps. Media blocks use the ETAF `image` Host, which owns graphics and terminal adapters and the video poster frame.
 - **Application.** `etaf-md-app` is the only place that reads the session's refs; it also provides the palette tokens for its subtree. The shell adds what a Component cannot own: the buffer, the keymap, the initial measure and the commands.

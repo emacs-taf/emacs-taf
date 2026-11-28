@@ -107,53 +107,53 @@ Show a scanned-code sign-in panel over the calling application.
 
 <!-- index: markdown; document tree; palette; render callback -->
 
-Markdown document rendering turns Markdown text into ordinary ETAF Views for a previewer, a manual reader or any other document view.  It works in two steps: `etaf-ui-markdown-parse` parses the text into a block tree that carries no presentation facts, and the render functions turn that tree plus an environment plist into Views.  Both steps are pure functions without a buffer, runtime state or file, so one code path serves headless tests and a mounted Component alike.
+Markdown document rendering turns Markdown text into ordinary ETAF Views for a previewer, a manual reader or any other document view.  It works in two steps: `etaf-doc-markdown-parse` parses the text into a block tree that carries no presentation facts, and the render functions turn that tree plus an environment plist into Views.  Both steps are pure functions without a buffer, runtime state or file, so one code path serves headless tests and a mounted Component alike.
 
-#### Function: etaf-ui-markdown-parse (text &optional flavor)
+#### Function: etaf-doc-markdown-parse (text &optional flavor)
 
 Parse Markdown TEXT into a document plist.
 
-**Arguments.** TEXT is the Markdown source.  FLAVOR selects the dialect: a name from `etaf-ui-markdown-flavors` (`gfm` is the default), a feature plist overriding individual extension flags, or nil for `etaf-ui-markdown-flavor`.
+**Arguments.** TEXT is the Markdown source.  FLAVOR selects the dialect: a name from `etaf-doc-markdown-flavors` (`gfm` is the default), a feature plist overriding individual extension flags, or nil for `etaf-doc-markdown-flavor`.
 
 **Semantics.** Parsing covers CommonMark block and inline structure plus the GitHub extensions: pipe tables, task list items, strikethrough, bare autolinks, footnotes and alert blocks; YAML front matter is stripped into document metadata.  A block is a plist whose `:type` is `heading`, `paragraph`, `code-block`, `blockquote`, `list`, `table`, `thematic-break`, `html-block` or `footnote-def`; an inline's `:type` is `text`, `code`, `emph`, `strong`, `strike`, `link`, `image`, `autolink`, `footnote-ref`, `html` or `break`.  The tree carries no presentation facts: the render functions own every style and ETAF node choice.  Headings get stable unique anchors, and link reference definitions and footnote definitions are collected while blocks are read and resolved into inline nodes.  Parsing is pure Elisp and reads no buffer, file or network.
 
 **Returns.** A document plist: `:meta` (front matter alist), `:title`, `:children` (top-level blocks with heading anchors; each top-level block also carries `:begin` and `:end`, its half-open character range in TEXT, so a caller maps an edit back to the block that holds it), `:outline` (document-order `(LEVEL TEXT ID)`), `:footnotes` (with `:label`, `:number` and `:children`) and `:features` (the resolved extension plist).
 
-**Errors.** An unknown dialect name signals `error→ etaf-ui-markdown-error`.
+**Errors.** An unknown dialect name signals `error→ etaf-doc-markdown-error`.
 
 **Example.**
 
 ```elisp
-(etaf-ui-markdown-parse "# Title\n\nBody.\n")
+(etaf-doc-markdown-parse "# Title\n\nBody.\n")
 ```
 
-**See also.** `etaf-ui-markdown-view-blocks`, `etaf-ui-markdown-flavors`.
+**See also.** `etaf-doc-markdown-view-blocks`, `etaf-doc-markdown-flavors`.
 
-#### Function: etaf-ui-markdown-view-block (block env)
+#### Function: etaf-doc-markdown-view-block (block env)
 
-Render one block as an ETAF View, or nil when it has no rendered content.  BLOCK is one top-level block of `etaf-ui-markdown-parse` and ENV is the environment plist described by `etaf-ui-markdown-view-blocks`.  A block that expands to several Views is wrapped in one column, so callers own one node per block for scrolling, selection or per-block references.
+Render one block as an ETAF View, or nil when it has no rendered content.  BLOCK is one top-level block of `etaf-doc-markdown-parse` and ENV is the environment plist described by `etaf-doc-markdown-view-blocks`.  A block that expands to several Views is wrapped in one column, so callers own one node per block for scrolling, selection or per-block references.
 
-#### Function: etaf-ui-markdown-view-blocks (blocks env &optional tight)
+#### Function: etaf-doc-markdown-view-blocks (blocks env &optional tight)
 
-Return the list of Views for BLOCKS in document order, or nil for empty input.  Consecutive blocks are separated by one blank line unless TIGHT is non-nil.  The list carries no container, so callers wrap it themselves; render the `:footnotes` Views and append them when the document's footnote definitions belong in the flow.  ENV's `:palette` is required: an alist of semantic color keys (`:ink`, `:muted`, `:faint`, `:heading`, `:accent`, `:accent-soft`, `:panel`, `:code-bg` (optional; inline code and code blocks use it when present and fall back to `:panel`), `:border`, `:quote-bg`, `:quote-bar`, `:table-header`, `:table-stripe`, `:heading-rule` (optional; the rule under a level-1 and level-2 heading falls back to `:border`), `:ok`, `:ok-soft`, `:warn`, `:warn-soft`, `:danger`, `:danger-soft`, `:important` and `:important-soft`); every color is read through it, so a palette change never leaks a half-updated set of colors, and an unknown key signals `error→ etaf-ui-markdown-error`.  The remaining entries are callbacks: `:open-link` receives a link URL, and every rendered link also carries the `:accent-soft` palette color as its pointer-hover face; `:footnote-jump` receives a footnote label; `:footnote-ref (label)` returns a host `:ref` symbol attached to the footnote definition box; `:footnote-back (label)` appends a clickable `↩` return control to each footnote definition; `:on-copy (kind text lines)` is notified after the code block copy action copies TEXT; `:render-media (kind node env)` returns the View for media, where KIND is `image`, `video`, `inline-image`, `table-image` or `html-media` (for `table-image`, ENV supplies `:table-cell` t, `:width` and `:table-cell-width` set to the cell's inner content columns, and `:table-cell-align`), and without it media falls back to its alt text or URL; `:render-code-block (block env)` may return a View for a code block and nil keeps the default fenced block; `:code-link (text)` is called with the text of every code span and may return a URL or a (URL . HELP) cons to make that span a link, which keeps the code style and calls `:open-link` with URL when activated, its help echo being HELP or URL; `:alert-labels` overrides the callout labels kind by kind; and `:features`, the document's resolved extension plist, gates whether alert blocks render as callouts; `:line-grid` non-nil keeps every line at the standard line height, for documents that scroll beside other content: headings and footnote references keep the body font size, a level-1 heading uses the accent color and a level-2 heading gains a left accent bar, so scrolling never changes the height of the lines it reveals.  Without `:line-grid` a level-1 and level-2 heading draws a rule from `:heading-rule` under its text, which sets the level apart even in a theme whose heading color is its body color; a fenced block with a language opens with a header strip that holds the language and closes with a rule, so the label frames the block instead of floating over its first line; a quote paints its plain text in `:muted` while links and code keep the colors they set for themselves.  A table is one grid: its tracks are resolved once, so every row shares the same column boundaries and a wide cell in one row cannot push that row off the column lines. Columns share the width in proportion to their widest cell and keep a floor: a run of narrow characters, such as a word or a code span, stays whole, while a run of wide characters counts at a fixed cap of 12 cells, because a line may break between them. Longer cells wrap at word boundaries, and a container too narrow for the floors lets the table overflow rather than squeezing columns below their words.  A table draws its outer border, a rule between every pair of columns and a rule between rows, its header row closed by a stronger rule than the rows, and it drops the zebra stripe when the palette gives the stripe and the header row the same surface.  HTML comments render as nothing.
+Return the list of Views for BLOCKS in document order, or nil for empty input.  Consecutive blocks are separated by one blank line unless TIGHT is non-nil.  The list carries no container, so callers wrap it themselves; render the `:footnotes` Views and append them when the document's footnote definitions belong in the flow.  ENV's `:palette` is required: an alist of semantic color keys (`:ink`, `:muted`, `:faint`, `:heading`, `:accent`, `:accent-soft`, `:panel`, `:code-bg` (optional; inline code and code blocks use it when present and fall back to `:panel`), `:border`, `:quote-bg`, `:quote-bar`, `:table-header`, `:table-stripe`, `:heading-rule` (optional; the rule under a level-1 and level-2 heading falls back to `:border`), `:ok`, `:ok-soft`, `:warn`, `:warn-soft`, `:danger`, `:danger-soft`, `:important` and `:important-soft`); every color is read through it, so a palette change never leaks a half-updated set of colors, and an unknown key signals `error→ etaf-doc-markdown-error`.  The remaining entries are callbacks: `:open-link` receives a link URL, and every rendered link also carries the `:accent-soft` palette color as its pointer-hover face; `:footnote-jump` receives a footnote label; `:footnote-ref (label)` returns a host `:ref` symbol attached to the footnote definition box; `:footnote-back (label)` appends a clickable `↩` return control to each footnote definition; `:on-copy (kind text lines)` is notified after the code block copy action copies TEXT; `:render-media (kind node env)` returns the View for media, where KIND is `image`, `video`, `inline-image`, `table-image` or `html-media` (for `table-image`, ENV supplies `:table-cell` t, `:width` and `:table-cell-width` set to the cell's inner content columns, and `:table-cell-align`), and without it media falls back to its alt text or URL; `:render-code-block (block env)` may return a View for a code block and nil keeps the default fenced block; `:code-link (text)` is called with the text of every code span and may return a URL or a (URL . HELP) cons to make that span a link, which keeps the code style and calls `:open-link` with URL when activated, its help echo being HELP or URL; `:alert-labels` overrides the callout labels kind by kind; and `:features`, the document's resolved extension plist, gates whether alert blocks render as callouts; `:line-grid` non-nil keeps every line at the standard line height, for documents that scroll beside other content: headings and footnote references keep the body font size, a level-1 heading uses the accent color and a level-2 heading gains a left accent bar, so scrolling never changes the height of the lines it reveals.  Without `:line-grid` a level-1 and level-2 heading draws a rule from `:heading-rule` under its text, which sets the level apart even in a theme whose heading color is its body color; a fenced block with a language opens with a header strip that holds the language and closes with a rule, so the label frames the block instead of floating over its first line; a quote paints its plain text in `:muted` while links and code keep the colors they set for themselves.  A table is one grid: its tracks are resolved once, so every row shares the same column boundaries and a wide cell in one row cannot push that row off the column lines. Columns share the width in proportion to their widest cell and keep a floor: a run of narrow characters, such as a word or a code span, stays whole, while a run of wide characters counts at a fixed cap of 12 cells, because a line may break between them. Longer cells wrap at word boundaries, and a container too narrow for the floors lets the table overflow rather than squeezing columns below their words.  A table draws its outer border, a rule between every pair of columns and a rule between rows, its header row closed by a stronger rule than the rows, and it drops the zebra stripe when the palette gives the stripe and the header row the same surface.  HTML comments render as nothing.
 
-#### Variable: etaf-ui-markdown-flavor
+#### Variable: etaf-doc-markdown-flavor
 
-Default markdown dialect of `etaf-ui-markdown-parse`.
+Default markdown dialect of `etaf-doc-markdown-parse`.
 
 **Semantics.** An explicit FLAVOR argument wins over it.  `gfm` enables the GitHub extensions and front matter, `commonmark` parses the core specification only, and a feature plist toggles individual extensions.
 
-**See also.** `etaf-ui-markdown-parse`, `etaf-ui-markdown-flavors`.
+**See also.** `etaf-doc-markdown-parse`, `etaf-doc-markdown-flavors`.
 
-#### Variable: etaf-ui-markdown-flavors
+#### Variable: etaf-doc-markdown-flavors
 
 Named dialects and the extension flags they enable.
 
 **Semantics.** `commonmark` is the CommonMark core; `gfm` adds the GitHub extensions the renderer also treats as its default: tables, task lists, strikethrough, bare autolinks, footnotes and alert blocks, plus front matter, which is a document convention rather than a markdown extension.  `etaf` reads definition lists, sub- and superscript, abbreviations, `$` math, emoji shortcodes, `==highlighted==` runs, `::icon::`, `:kbd[keys]` and `:badge[text]` on top of `gfm`.
 
-**See also.** `etaf-ui-markdown-parse`.
+**See also.** `etaf-doc-markdown-parse`.
 
-#### Function: etaf-ui-markdown-extension-p (name)
+#### Function: etaf-doc-markdown-extension-p (name)
 
 Return non-nil when the document being parsed enables extension NAME.
 
@@ -163,49 +163,49 @@ Return non-nil when the document being parsed enables extension NAME.
 
 **Semantics.** A parser extension calls it to decide whether its own syntax runs at all; disabled syntax stays literal text exactly as CommonMark reads it, which lets one parser carry every dialect instead of forking per dialect. It reads the state of the parse in progress, so calling it outside a parse has no meaning.
 
-**See also.** `etaf-ui-markdown-block-extensions`, `etaf-ui-markdown-inline-extensions`, `etaf-ui-markdown-flavors`.
+**See also.** `etaf-doc-markdown-block-extensions`, `etaf-doc-markdown-inline-extensions`, `etaf-doc-markdown-flavors`.
 
-#### Variable: etaf-ui-markdown-block-extensions
+#### Variable: etaf-doc-markdown-block-extensions
 
 Block syntax the parser adds, as an alist of (NAME RECOGNIZER).
 
-**Semantics.** RECOGNIZER takes the remaining source lines and returns (BLOCK . REST) when it claims them; `etaf-ui-markdown-extension-p` decides whether it runs, so a block syntax a dialect does not enable never runs and its text stays literal, exactly as CommonMark reads it. Adding a block syntax means adding its recognizer here and its name to a dialect, which keeps one parser instead of forking it per dialect.
+**Semantics.** RECOGNIZER takes the remaining source lines and returns (BLOCK . REST) when it claims them; `etaf-doc-markdown-extension-p` decides whether it runs, so a block syntax a dialect does not enable never runs and its text stays literal, exactly as CommonMark reads it. Adding a block syntax means adding its recognizer here and its name to a dialect, which keeps one parser instead of forking it per dialect.
 
-**See also.** `etaf-ui-markdown-inline-extensions`, `etaf-ui-markdown-flavors`.
+**See also.** `etaf-doc-markdown-inline-extensions`, `etaf-doc-markdown-flavors`.
 
-#### Variable: etaf-ui-markdown-inline-extensions
+#### Variable: etaf-doc-markdown-inline-extensions
 
 Inline syntax the parser adds, as (NAME TRIGGER-CHAR RECOGNIZER).
 
-**Semantics.** TRIGGER-CHAR opens the syntax, or is nil for a recognizer that starts at a word character such as an abbreviation. RECOGNIZER takes (TEXT POSITION END) and returns (NODE . NEXT) when it claims the text there. The same gating by `etaf-ui-markdown-extension-p` applies, so an inline extension a dialect does not enable never runs and its text stays as written.
+**Semantics.** TRIGGER-CHAR opens the syntax, or is nil for a recognizer that starts at a word character such as an abbreviation. RECOGNIZER takes (TEXT POSITION END) and returns (NODE . NEXT) when it claims the text there. The same gating by `etaf-doc-markdown-extension-p` applies, so an inline extension a dialect does not enable never runs and its text stays as written.
 
-**See also.** `etaf-ui-markdown-block-extensions`, `etaf-ui-markdown-flavors`.
+**See also.** `etaf-doc-markdown-block-extensions`, `etaf-doc-markdown-flavors`.
 
-#### Variable: etaf-ui-markdown-emoji
+#### Variable: etaf-doc-markdown-emoji
 
 Emoji shortcodes this renderer paints, as an alist of (NAME . CHARACTER).
 
 **Semantics.** A document writes `:tada:` and the page shows the character; a name outside this table keeps its colons, and a time such as `12:30:45` is never a shortcode. Add entries here to teach the renderer more of them.
 
-**See also.** `etaf-ui-markdown-flavors`.
+**See also.** `etaf-doc-markdown-flavors`.
 
-#### Variable: etaf-ui-markdown-subscript-table
+#### Variable: etaf-doc-markdown-subscript-table
 
 Characters a `~subscript~` run can be written with, as (CHAR . SCRIPT).
 
 **Semantics.** A character missing from the table keeps the source spelling, so the construct paints what Unicode can express and never invents glyphs.
 
-**See also.** `etaf-ui-markdown-superscript-table`, `etaf-ui-markdown-flavors`.
+**See also.** `etaf-doc-markdown-superscript-table`, `etaf-doc-markdown-flavors`.
 
-#### Variable: etaf-ui-markdown-superscript-table
+#### Variable: etaf-doc-markdown-superscript-table
 
 Characters a `^superscript^` run can be written with, as (CHAR . SCRIPT).
 
 **Semantics.** A character missing from the table keeps the source spelling, so the construct paints what Unicode can express and never invents glyphs.
 
-**See also.** `etaf-ui-markdown-subscript-table`, `etaf-ui-markdown-flavors`.
+**See also.** `etaf-doc-markdown-subscript-table`, `etaf-doc-markdown-flavors`.
 
-#### Variable: etaf-ui-markdown-code-renderers
+#### Variable: etaf-doc-markdown-code-renderers
 
 Renderers for one fenced language, as an alist of (LANGUAGE . FUNCTION).
 
@@ -213,9 +213,9 @@ Renderers for one fenced language, as an alist of (LANGUAGE . FUNCTION).
 
 **Returns.** Not applicable; the variable holds the renderer table.
 
-**See also.** `etaf-ui-markdown-highlight-languages`, `etaf-ui-markdown-view-blocks`.
+**See also.** `etaf-doc-highlight-languages`, `etaf-doc-markdown-view-blocks`.
 
-#### Variable: etaf-ui-markdown-highlight-languages
+#### Variable: etaf-doc-highlight-languages
 
 Languages whose fenced code is colored with an Emacs mode, as (LANGUAGE . MODE).
 
@@ -223,9 +223,9 @@ Languages whose fenced code is colored with an Emacs mode, as (LANGUAGE . MODE).
 
 **Returns.** Not applicable; the variable holds the language-to-mode mapping.
 
-**See also.** `etaf-ui-markdown-code-renderers`, `etaf-ui-markdown-view-blocks`.
+**See also.** `etaf-doc-markdown-code-renderers`, `etaf-doc-markdown-view-blocks`.
 
-#### Variable: etaf-ui-markdown-gfm-features
+#### Variable: etaf-doc-markdown-gfm-features
 
 The feature plist GitHub Flavored Markdown enables as a whole.
 
@@ -233,9 +233,9 @@ The feature plist GitHub Flavored Markdown enables as a whole.
 
 **Returns.** Not applicable; the variable holds the feature plist.
 
-**See also.** `etaf-ui-markdown-flavors`, `etaf-ui-markdown-parse`.
+**See also.** `etaf-doc-markdown-flavors`, `etaf-doc-markdown-parse`.
 
-#### Error: etaf-ui-markdown-error
+#### Error: etaf-doc-markdown-error
 
 The condition of a rejected markdown document operation.
 
@@ -243,9 +243,9 @@ The condition of a rejected markdown document operation.
 
 **Recovery.** A failure produces no half-rendered document: a failed parse has no block tree and a failed render publishes no View.  Fix the dialect or supply the palette keys and call again.
 
-**See also.** `etaf-ui-markdown-parse`, `etaf-ui-markdown-view-blocks`.
+**See also.** `etaf-doc-markdown-parse`, `etaf-doc-markdown-view-blocks`.
 
-#### Function: etaf-ui-markdown-highlight-code (language text)
+#### Function: etaf-doc-highlight-code (language text)
 
 Return runs colouring TEXT as LANGUAGE, or nil when it cannot be coloured.
 
@@ -255,9 +255,9 @@ Return runs colouring TEXT as LANGUAGE, or nil when it cannot be coloured.
 
 **Semantics.** It runs the language's own major mode over the text, so keywords, strings, comments and numbers come out as the source buffer shows them. The answer is cached per (LANGUAGE . TEXT), so the next repaint costs one lookup.
 
-**See also.** `etaf-ui-markdown-highlight-languages`, `etaf-ui-markdown-code-renderers`.
+**See also.** `etaf-doc-highlight-languages`, `etaf-doc-markdown-code-renderers`.
 
-#### Function: etaf-ui-markdown-math-text (source)
+#### Function: etaf-doc-markdown-math-text (source)
 
 Return SOURCE, a TeX formula, written as plain text.
 
@@ -267,13 +267,13 @@ Return SOURCE, a TeX formula, written as plain text.
 
 **Semantics.** This is a typographic approximation rather than a typesetter: command names become their symbols, `\frac{a}{b}` becomes `a/b`, `\sqrt{x}` becomes `√(x)`, and `^{}` and `_{}` become the Unicode letters of that position. Anything it does not know keeps its own characters, so a formula can never turn into a row of noise.
 
-**See also.** `etaf-ui-markdown-flavors`, `etaf-ui-markdown-parse`.
+**See also.** `etaf-doc-markdown-flavors`, `etaf-doc-markdown-parse`.
 
 ## Shared document infrastructure (`etaf-doc`)
 
 <!-- index: etaf-doc; document cache; qrcode; QuickJS typesetting; living document assets; document protocol; editorial widgets -->
 
-The `etaf-doc` package collects the shared non-syntax infrastructure used across document viewers (`etaf-ui-markdown-*` plus six reusable subsystems): bounded LRU remote-image caching, async QR code generation, native QuickJS Mermaid and MathJax typesetting, sandboxed workspace living-document assets, a schema-checked custom node protocol, and editorial UI widgets.
+The `etaf-doc` package collects the shared non-syntax infrastructure used across document viewers (`etaf-doc-markdown-*` plus six reusable subsystems): bounded LRU remote-image caching, async QR code generation, native QuickJS Mermaid and MathJax typesetting, sandboxed workspace living-document assets, a schema-checked custom node protocol, and editorial UI widgets.
 
 ### Document cache
 

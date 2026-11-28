@@ -144,7 +144,7 @@ Three consequences.
 text → parse → node tree → derive → render → view
 ```
 
-- **Parse**: closed. It calls the shared `etaf-ui-markdown-parse`, which this document does not change.
+- **Parse**: closed. It calls the shared `etaf-doc-markdown-parse`, which this document does not change.
 - **Derive**: computed once for the whole document. Section numbers, anchors and each block's display identity happen here, and the results are written onto node attributes.
 - **Render**: per block. Declared attributes and the paint take effect here.
 
@@ -1124,8 +1124,8 @@ Component: `etaf-underline-field`.
 | `home-box`, `image-card`, `link-card`, `npm-badge`, `qrcode`, `code-tree`, `npm-to` | Site & showcase | Primitives / `etaf-badge` / `etaf-qr` | Implemented |
 | `include`, `code-ref`, `symbol`, `project-tree`, `git-log`, `git-diff` | Emacs-native living docs (L1 read-only) | Sandboxed asset layer (`:asset-data`) | Implemented |
 | `run` | Emacs-native living docs (L2 explicit action) | Trust-gated actions (`etaf-md-allow-actions`) | Implemented |
-| Inline semantics: `!!spoiler!!`, `[+note]`, `[[wiki]]`, `%%comment%%`, `:color[...]`, `:sym[...]` | Inline extensions | `etaf-ui-markdown` | Implemented |
-| Code fence upgrades: `:collapsed-lines[=N]`, `/word/`, `[!code word:...]`, `:whitespace`, `:indent-guides` | Code blocks | `etaf-ui-markdown` | Implemented |
+| Inline semantics: `!!spoiler!!`, `[+note]`, `[[wiki]]`, `%%comment%%`, `:color[...]`, `:sym[...]` | Inline extensions | `etaf-doc-markdown` | Implemented |
+| Code fence upgrades: `:collapsed-lines[=N]`, `/word/`, `[!code word:...]`, `:whitespace`, `:indent-guides` | Code blocks | `etaf-doc-markdown` | Implemented |
 | Interactive GFM task checkboxes, `T` independent configurable TOC side window, `S` global spoilers, `K` floating link/symbol peek dialog, media lightbox | Reader shell | `etaf-md-app` / `etaf-media-viewer` | Implemented |
 
 ## 7. The interaction contract

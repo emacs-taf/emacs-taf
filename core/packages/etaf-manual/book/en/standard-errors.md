@@ -65,7 +65,12 @@ The error conditions are part of the public API: a program that calls the framew
 | Condition | Parent | Signaled when |
 | --- | --- | --- |
 | [`etaf-ui-svg-error`](ui-icons.md#error-etaf-ui-svg-error) | `error` | The SVG scene helpers received invalid input. |
-| [`etaf-ui-markdown-error`](ui-composite-components.md#error-etaf-ui-markdown-error) | `error` | A markdown operation was rejected: an unknown dialect name during parsing, or a missing palette or unknown palette key during rendering. |
+
+## ETAF Doc
+
+| Condition | Parent | Signaled when |
+| --- | --- | --- |
+| [`etaf-doc-markdown-error`](ui-composite-components.md#error-etaf-doc-markdown-error) | `error` | A markdown operation was rejected: an unknown dialect name during parsing, or a missing palette or unknown palette key during rendering. |
 
 ## ETAF DB
 

@@ -13,7 +13,7 @@
 ;; requests.  Renders a full-height independently scrollable two-pane layout
 ;; with a draggable `etaf-pane-resizer' divider on wide viewports and folds
 ;; cleanly into an `etaf-drawer' on narrow or collapsed viewports.  Article
-;; prose is rendered with embedded `etaf-ui-markdown' inside a single symmetric
+;; prose is rendered with embedded `etaf-doc-markdown' inside a single symmetric
 ;; centered reading column so breadcrumb, headings, code blocks and chapter
 ;; cards share one exact vertical grid.
 
@@ -926,7 +926,7 @@ truncates dynamically with ellipsis when a title exceeds PANEL-COLS."
                   (etaf-node 'text (list :color dim-tok) (list "│")))
                 (when (and (stringp crumb-line) (not (string-empty-p crumb-line)))
                   (etaf-node 'text (list :color muted-tok) (list crumb-line)))))))
-           ;; Embedded Markdown body (`etaf-ui-markdown', zero vw-100 offset!)
+           ;; Embedded Markdown body (`etaf-doc-markdown', zero vw-100 offset!)
            (etaf-web--render-markdown-blocks
             doc
             :theme-mode theme

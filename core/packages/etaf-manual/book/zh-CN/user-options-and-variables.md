@@ -99,16 +99,16 @@
 
 | 变量 | 用途 |
 | --- | --- |
-| [`etaf-ui-markdown-flavor`](ui-composite-components.md#variable-etaf-ui-markdown-flavor) | `etaf-ui-markdown-parse` 的默认 markdown 方言。 |
-| [`etaf-ui-markdown-flavors`](ui-composite-components.md#variable-etaf-ui-markdown-flavors) | 具名方言及其启用的扩展开关。 |
-| [`etaf-ui-markdown-block-extensions`](ui-composite-components.md#variable-etaf-ui-markdown-block-extensions) | 解析器新增的块级语法，按识别器列出。 |
-| [`etaf-ui-markdown-inline-extensions`](ui-composite-components.md#variable-etaf-ui-markdown-inline-extensions) | 解析器新增的行内语法，按触发字符与识别器列出。 |
-| [`etaf-ui-markdown-emoji`](ui-composite-components.md#variable-etaf-ui-markdown-emoji) | 渲染器绘制的表情短代码表。 |
-| [`etaf-ui-markdown-subscript-table`](ui-composite-components.md#variable-etaf-ui-markdown-subscript-table) | `~subscript~` 可用的字符映射。 |
-| [`etaf-ui-markdown-superscript-table`](ui-composite-components.md#variable-etaf-ui-markdown-superscript-table) | `^superscript^` 可用的字符映射。 |
-| [`etaf-ui-markdown-code-renderers`](ui-composite-components.md#variable-etaf-ui-markdown-code-renderers) | 按围栏语言登记的渲染器表。 |
-| [`etaf-ui-markdown-highlight-languages`](ui-composite-components.md#variable-etaf-ui-markdown-highlight-languages) | 用 Emacs 模式着色围栏代码的语言表。 |
-| [`etaf-ui-markdown-gfm-features`](ui-composite-components.md#variable-etaf-ui-markdown-gfm-features) | GitHub Flavored Markdown 启用的特性 plist。 |
+| [`etaf-doc-markdown-flavor`](ui-composite-components.md#variable-etaf-doc-markdown-flavor) | `etaf-doc-markdown-parse` 的默认 markdown 方言。 |
+| [`etaf-doc-markdown-flavors`](ui-composite-components.md#variable-etaf-doc-markdown-flavors) | 具名方言及其启用的扩展开关。 |
+| [`etaf-doc-markdown-block-extensions`](ui-composite-components.md#variable-etaf-doc-markdown-block-extensions) | 解析器新增的块级语法，按识别器列出。 |
+| [`etaf-doc-markdown-inline-extensions`](ui-composite-components.md#variable-etaf-doc-markdown-inline-extensions) | 解析器新增的行内语法，按触发字符与识别器列出。 |
+| [`etaf-doc-markdown-emoji`](ui-composite-components.md#variable-etaf-doc-markdown-emoji) | 渲染器绘制的表情短代码表。 |
+| [`etaf-doc-markdown-subscript-table`](ui-composite-components.md#variable-etaf-doc-markdown-subscript-table) | `~subscript~` 可用的字符映射。 |
+| [`etaf-doc-markdown-superscript-table`](ui-composite-components.md#variable-etaf-doc-markdown-superscript-table) | `^superscript^` 可用的字符映射。 |
+| [`etaf-doc-markdown-code-renderers`](ui-composite-components.md#variable-etaf-doc-markdown-code-renderers) | 按围栏语言登记的渲染器表。 |
+| [`etaf-doc-highlight-languages`](ui-composite-components.md#variable-etaf-doc-highlight-languages) | 用 Emacs 模式着色围栏代码的语言表。 |
+| [`etaf-doc-markdown-gfm-features`](ui-composite-components.md#variable-etaf-doc-markdown-gfm-features) | GitHub Flavored Markdown 启用的特性 plist。 |
 
 ## 参数参考
 
