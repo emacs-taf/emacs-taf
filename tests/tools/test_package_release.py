@@ -441,7 +441,9 @@ class PackageReleaseStageTests(unittest.TestCase):
     def test_publisher_refuses_partial_evidence_before_building_or_connecting(self):
         self.report["installations"].pop()
         (self.archive / "installation.json").write_text(json.dumps(self.report))
-        publisher = ROOT / "etaf-manual/site/scripts/publish.py"
+        publisher = ROOT / "core/packages/etaf-manual/site/scripts/publish.py"
+        if not publisher.is_file():
+            publisher = ROOT / "etaf-manual/site/scripts/publish.py"
         if not publisher.is_file():
             self.skipTest("Site publisher checkout is not available")
         result = subprocess.run([sys.executable, str(publisher), "--packages", str(self.archive)],
@@ -567,6 +569,196 @@ class PackageReleaseAutoScopeTests(unittest.TestCase):
             self.assertEqual(scope, "selected")
             self.assertEqual(targets, ["etaf-md"])
             self.assertIn("etaf-md", reason)
+
+    def test_auto_scope_rejects_stale_internal_requires_on_changed_packages_only(self):
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            live = base / "live"
+            built = base / "built"
+            inst = self.pkg("etaf-install", "0.2.0", [["emacs", "29.1"]], b"inst-same")
+            etaf = self.pkg("etaf", "0.3.18", [["emacs", "29.1"]], b"etaf-same")
+            # Unchanged package with older bound must NOT block unrelated releases.
+            unchanged = self.pkg("maillist", "0.4.3", [["emacs", "29.1"], ["etaf", "0.3.10"]], b"mail-same")
+            md_live = self.pkg("etaf-md", "0.2.1", [["emacs", "29.1"], ["etaf", "0.3.10"]], b"md-old")
+            md_stale = self.pkg("etaf-md", "0.3.0", [["emacs", "29.1"], ["etaf", "0.3.10"]], b"md-new")
+            self.make_archive(live, [inst, etaf, unchanged, md_live])
+            self.make_archive(built, [inst, etaf, unchanged, md_stale])
+            with self.assertRaises(ValueError) as caught:
+                release_module().resolve_auto_scope(
+                    built, ["etaf", "maillist", "etaf-md"], live.as_uri() + "/")
+            msg = str(caught.exception)
+            self.assertIn("etaf-md: etaf 0.3.10 -> 0.3.18", msg)
+            self.assertNotIn("maillist", msg)
+            self.assertIn("sync-requires --write --package etaf-md", msg)
+
+            # Once changed package aligns its bound, unchanged stale maillist still passes.
+            built_ok = base / "built-ok"
+            md_aligned = self.pkg("etaf-md", "0.3.0", [["emacs", "29.1"], ["etaf", "0.3.18"]], b"md-new")
+            self.make_archive(built_ok, [inst, etaf, unchanged, md_aligned])
+            scope, targets, _reason = release_module().resolve_auto_scope(
+                built_ok, ["etaf", "maillist", "etaf-md"], live.as_uri() + "/")
+            self.assertEqual(scope, "selected")
+            self.assertEqual(targets, ["etaf-md"])
+
+    def test_auto_scope_skips_community_packages_for_stale_requires(self):
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            live = base / "live"
+            built = base / "built"
+            inst = self.pkg("etaf-install", "0.2.0", [["emacs", "29.1"]], b"inst-same")
+            etaf = self.pkg("etaf", "0.3.18", [["emacs", "29.1"]], b"etaf-same")
+            comm_old = self.pkg("exc", "0.1.0", [["emacs", "29.1"], ["etaf", "0.3.10"]], b"exc-old")
+            comm_new = self.pkg("exc", "0.1.1", [["emacs", "29.1"], ["etaf", "0.3.10"]], b"exc-new")
+            self.make_archive(live, [inst, etaf, comm_old])
+            self.make_archive(built, [inst, etaf, comm_new])
+            # Mark exc as a community package in the built manifest.
+            mpath = built / "manifest.json"
+            manifest = json.loads(mpath.read_text(encoding="utf-8"))
+            manifest["community"] = {
+                "exc": {"url": "https://example.invalid/exc", "license": "GPL-3.0",
+                        "maintainer": "ext", "group": "application", "label": "exc", "open": ""}
+            }
+            mpath.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            scope, targets, _reason = release_module().resolve_auto_scope(
+                built, ["etaf"], live.as_uri() + "/")
+            self.assertEqual(scope, "selected")
+            self.assertEqual(targets, ["exc"])
+
+
+class PackageReleaseRequiresSyncTests(unittest.TestCase):
+    """sync-requires keeps internal Package-Requires lower bounds aligned cleanly."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.base = Path(self.temp.name)
+        self.root = self.base / "workspace"
+        (self.root / "scripts").mkdir(parents=True)
+        for name in ("package-release.py", "package_archive.py", "workspace_layout.py"):
+            shutil.copyfile(ROOT / "scripts" / name, self.root / "scripts" / name)
+        self.write_pkg("core/packages/etaf-install", "etaf-install", "0.2.0", '((emacs "29.1"))')
+        self.write_pkg("core/packages/ecss", "ecss", "0.1.4", '((emacs "29.1"))')
+        self.write_pkg("core/packages/etaf", "etaf", "0.3.18", '((emacs "29.1") (ecss "0.1.0"))')
+        self.write_pkg(
+            "apps/etaf-md", "etaf-md", "0.4.0",
+            '((emacs "29.1") (etaf "0.3.10") (posframe "0.9.0"))',
+            body=";; Important comment preserved\n(defun etaf-md-open () t)\n",
+        )
+        self.write_pkg(
+            "apps/maillist", "maillist", "0.4.3",
+            '((emacs "29.1") (etaf "0.3.10"))',
+        )
+        (self.root / "workspace.json").write_text(json.dumps({
+            "schema": 3,
+            "packages": {
+                "etaf-install": {"path": "core/packages/etaf-install", "role": "framework"},
+                "ecss": {"path": "core/packages/ecss", "role": "framework"},
+                "etaf": {"path": "core/packages/etaf", "role": "framework"},
+                "etaf-md": {"path": "apps/etaf-md", "role": "application"},
+                "maillist": {"path": "apps/maillist", "role": "application"},
+            },
+        }), encoding="utf-8")
+        (self.root / "release-dependencies.json").write_text(json.dumps({
+            "schema": 1,
+            "packages": {
+                "ecss": {},
+                "etaf": {},
+                "etaf-md": {"external": ["posframe"]},
+                "maillist": {},
+            },
+        }), encoding="utf-8")
+
+    def write_pkg(self, rel, name, version, reqs, body=""):
+        pkg_dir = self.root / rel
+        pkg_dir.mkdir(parents=True, exist_ok=True)
+        (pkg_dir / f"{name}.el").write_text(
+            f";;; -*- lexical-binding: t; -*-\n"
+            f";;; {name}.el --- Fixture {name}\n"
+            f";; Version: {version}\n"
+            f";; Package-Requires: {reqs}\n"
+            f"{body}"
+            f"(provide '{name})\n",
+            encoding="utf-8",
+        )
+
+    def run_cli(self, *args, success=True):
+        result = subprocess.run(
+            [sys.executable, str(self.root / "scripts/package-release.py"), *args],
+            capture_output=True, text=True, timeout=30,
+        )
+        self.assertEqual(result.returncode == 0, success, result.stdout + result.stderr)
+        return result
+
+    def test_compare_versions_handles_padding_and_multi_digit_segments(self):
+        cmp = release_module().compare_versions
+        self.assertEqual(cmp("0.3.9", "0.3.10"), -1)
+        self.assertEqual(cmp("1.0", "1.0.0"), 0)
+        self.assertEqual(cmp("3.1.14", "3.1.6"), 1)
+        self.assertEqual(cmp("0.3.18", "0.3.18"), 0)
+
+    def test_sync_requires_check_preview_and_write_preserves_external_deps_and_body(self):
+        # Preview exits 0 without modifying files.
+        before = (self.root / "apps/etaf-md/etaf-md.el").read_text(encoding="utf-8")
+        preview = self.run_cli("sync-requires", "--package", "etaf-md", "--json")
+        data = json.loads(preview.stdout)
+        self.assertEqual(data["mode"], "preview")
+        self.assertEqual(len(data["stale"]), 1)
+        self.assertEqual(data["stale"][0], {
+            "package": "etaf-md", "dependency": "etaf",
+            "declared": "0.3.10", "current": "0.3.18",
+        })
+        self.assertEqual((self.root / "apps/etaf-md/etaf-md.el").read_text(encoding="utf-8"), before)
+
+        # --check fails with exit code 1 when stale bounds exist.
+        check_fail = self.run_cli("sync-requires", "--package", "etaf-md", "--check", success=False)
+        self.assertIn("etaf-md: etaf 0.3.10 -> 0.3.18", check_fail.stdout)
+        self.assertIn("stale internal Package-Requires", check_fail.stderr)
+
+        # --write updates only internal bounds, keeping emacs, external posframe, and file body intact.
+        write_res = self.run_cli("sync-requires", "--package", "etaf-md", "--write", "--json")
+        write_data = json.loads(write_res.stdout)
+        self.assertEqual(write_data["updated_packages"], ["etaf-md"])
+        after = (self.root / "apps/etaf-md/etaf-md.el").read_text(encoding="utf-8")
+        self.assertIn(';; Package-Requires: ((emacs "29.1") (etaf "0.3.18") (posframe "0.9.0"))', after)
+        self.assertIn(";; Important comment preserved", after)
+        # Unselected packages stay untouched.
+        self.assertIn('(etaf "0.3.10")', (self.root / "apps/maillist/maillist.el").read_text(encoding="utf-8"))
+
+        # Subsequent --check passes cleanly.
+        self.run_cli("sync-requires", "--package", "etaf-md", "--check", success=True)
+
+    def test_sync_requires_changed_only_targets_only_drifted_packages(self):
+        # Build a "live" archive matching the initial workspace, then modify only etaf-md.
+        sys.path.insert(0, str(ROOT / "scripts"))
+        import package_archive
+        live = self.base / "live"
+        sources = {
+            "etaf-install": self.root / "core/packages/etaf-install",
+            "ecss": self.root / "core/packages/ecss",
+            "etaf": self.root / "core/packages/etaf",
+            "etaf-md": self.root / "apps/etaf-md",
+            "maillist": self.root / "apps/maillist",
+        }
+        package_archive.build(live, sources, {})
+
+        # Change only etaf-md (simulate a new release of etaf-md).
+        self.write_pkg(
+            "apps/etaf-md", "etaf-md", "0.4.1",
+            '((emacs "29.1") (etaf "0.3.10") (posframe "0.9.0"))',
+            body="(defun etaf-md-open () 'updated)\n",
+        )
+        res = self.run_cli(
+            "sync-requires", "--changed-only", "--live-url", live.as_uri() + "/",
+            "--write", "--json",
+        )
+        data = json.loads(res.stdout)
+        self.assertEqual(data["checked_packages"], ["etaf-md"])
+        self.assertEqual(data["updated_packages"], ["etaf-md"])
+        # Unchanged etaf & maillist were NOT rewritten.
+        self.assertIn('(ecss "0.1.0")', (self.root / "core/packages/etaf/etaf.el").read_text(encoding="utf-8"))
+        self.assertIn('(etaf "0.3.10")', (self.root / "apps/maillist/maillist.el").read_text(encoding="utf-8"))
+        # Changed etaf-md WAS aligned to current etaf 0.3.18.
+        self.assertIn('(etaf "0.3.18")', (self.root / "apps/etaf-md/etaf-md.el").read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

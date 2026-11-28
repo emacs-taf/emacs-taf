@@ -60,13 +60,186 @@ def direct_urlopen(url, timeout=30):
     return build_opener(ProxyHandler({})).open(url, timeout=timeout)
 
 
+def compare_versions(left, right):
+    """Compare dot-separated numeric package versions; return -1, 0, or 1."""
+    a = tuple(int(part) for part in str(left).split("."))
+    b = tuple(int(part) for part in str(right).split("."))
+    length = max(len(a), len(b))
+    a_pad = a + (0,) * (length - len(a))
+    b_pad = b + (0,) * (length - len(b))
+    return -1 if a_pad < b_pad else (1 if a_pad > b_pad else 0)
+
+
+def find_stale_internal_requires(packages_by_name, target_names=None, skip_names=()):
+    """Return internal ETAF dependencies whose declared minimum trails the current version.
+
+    Only direct first-party internal dependencies are checked; `emacs`, external
+    archives (GNU/NonGNU/MELPA) and skipped packages (such as upstream community
+    packages) are ignored.  Returns a deterministically sorted list of records:
+    {package, dependency, declared, current}.
+    """
+    skip = set(skip_names)
+    selected = sorted(packages_by_name if target_names is None else target_names)
+    stale = []
+    for name in selected:
+        if name in skip or name not in packages_by_name:
+            continue
+        pkg = packages_by_name[name]
+        for dep, declared in pkg.get("requirements", ()):
+            if dep == "emacs" or dep in skip or dep not in packages_by_name:
+                continue
+            current = packages_by_name[dep]["version"]
+            if compare_versions(declared, current) < 0:
+                stale.append({
+                    "package": name,
+                    "dependency": dep,
+                    "declared": declared,
+                    "current": current,
+                })
+    return stale
+
+
+def rewrite_package_requires(entry_path, pkg_name, updates):
+    """Update declared dependency minimum versions in ENTRY_PATH's Package-Requires header.
+
+    Preserves dependency order and every other byte in ENTRY_PATH, then re-validates
+    the written header via `package_archive.metadata`.  Returns (changed, header_line).
+    """
+    info = package_archive.metadata(entry_path.parent, pkg_name)
+    source = entry_path.read_text(encoding="utf-8")
+    match = re.search(r"^;; Package-Requires: (.+)$", source, re.M)
+    if not match:
+        raise ValueError(f"{pkg_name}: missing Package-Requires header in {entry_path}")
+    new_pairs = [(dep, updates.get(dep, ver)) for dep, ver in info["requirements"]]
+    new_line = ";; Package-Requires: (" + " ".join(
+        f'({dep} "{ver}")' for dep, ver in new_pairs
+    ) + ")"
+    if match.group(0) == new_line:
+        return False, new_line
+    updated = source[:match.start()] + new_line + source[match.end():]
+    entry_path.write_text(updated, encoding="utf-8")
+    verified = package_archive.metadata(entry_path.parent, pkg_name)
+    if verified["requirements"] != new_pairs:
+        raise ValueError(f"{pkg_name}: rewritten Package-Requires failed validation")
+    return True, new_line
+
+
+def workspace_release_metadata(root=ROOT):
+    """Read current header metadata and entry paths for all first-party release packages."""
+    selection = json.loads((root / "release-dependencies.json").read_text(encoding="utf-8"))
+    if selection.get("schema") != 1:
+        raise ValueError("Unsupported release selection schema")
+    names = ["etaf-install", *selection["packages"].keys()]
+    meta, entries, resources = {}, {}, {}
+    for name in dict.fromkeys(names):
+        pkg_dir = workspace_layout.package_path(root, name)
+        if not pkg_dir.is_dir():
+            raise ValueError(f"Missing package directory for {name}: {pkg_dir}")
+        meta[name] = package_archive.metadata(pkg_dir, name)
+        entries[name] = pkg_dir / f"{name}.el"
+        resources[name] = (selection["packages"].get(name) or {}).get("resources", [])
+    return meta, entries, resources
+
+
+def detect_changed_workspace_packages(root=ROOT, live_url=DEFAULT_ARCHIVE_URL, directory=None):
+    """Return first-party package names whose shipped archive bytes differ from LIVE_URL."""
+    url = live_url.rstrip("/")
+    if not url.endswith(".json"):
+        url = url + "/manifest.json"
+    with direct_urlopen(url, timeout=20) as response:
+        live = json.loads(response.read())
+    live_by_name = {item["name"]: item["sha256"] for item in live.get("packages", ())}
+    if directory is not None:
+        manifest = package_archive.verify(directory)
+        community_only = set(manifest.get("community", {}))
+        return sorted(
+            item["name"]
+            for item in manifest["packages"]
+            if item["name"] not in community_only and live_by_name.get(item["name"]) != item["sha256"]
+        )
+    meta, entries, resources = workspace_release_metadata(root)
+    sources = {name: entries[name].parent for name in meta}
+    with tempfile.TemporaryDirectory(prefix=".etaf-sync-probe-") as work:
+        probe = Path(work) / "archive"
+        manifest = package_archive.build(probe, sources, resources)
+    return sorted(
+        item["name"]
+        for item in manifest["packages"]
+        if live_by_name.get(item["name"]) != item["sha256"]
+    )
+
+
+def sync_requires(packages=None, *, changed_only=False, live_url=DEFAULT_ARCHIVE_URL,
+                  directory=None, write=False, check=False, json_mode=False, root=ROOT):
+    """Check or align internal ETAF Package-Requires lower bounds in workspace headers.
+
+    Prevents version skew for native `package-upgrade` users when an upper package
+    releases against newer core/extension APIs without bumping its declared minimum.
+    """
+    if write and check:
+        raise ValueError("--write and --check cannot be combined")
+    meta, entries, _ = workspace_release_metadata(root)
+    if packages:
+        unknown = sorted(set(packages) - set(meta))
+        if unknown:
+            raise ValueError(f"Unknown release package(s): {', '.join(unknown)}")
+        selected = sorted(dict.fromkeys(packages))
+    elif changed_only:
+        selected = detect_changed_workspace_packages(root=root, live_url=live_url, directory=directory)
+    else:
+        selected = sorted(meta)
+
+    stale = find_stale_internal_requires(meta, target_names=selected)
+    grouped = {}
+    for item in stale:
+        grouped.setdefault(item["package"], {})[item["dependency"]] = item["current"]
+
+    updated_files = []
+    if write and grouped:
+        for pkg, updates in sorted(grouped.items()):
+            changed, _ = rewrite_package_requires(entries[pkg], pkg, updates)
+            if changed:
+                updated_files.append(pkg)
+
+    payload = {
+        "mode": "write" if write else ("check" if check else "preview"),
+        "checked_packages": selected,
+        "stale": stale,
+        "updated_packages": updated_files,
+        "ok": not stale or write,
+    }
+    if json_mode:
+        print(json.dumps(payload, indent=2, sort_keys=True))
+    elif not stale:
+        scope_desc = f"{len(selected)} package(s)"
+        print(f"Internal Package-Requires bounds are current across {scope_desc}.")
+    else:
+        verb = "Updated" if write else "Stale"
+        print(f"{verb} internal Package-Requires lower bound(s) ({len(stale)} in {len(grouped)} package(s)):")
+        for item in stale:
+            print(f"  {item['package']}: {item['dependency']} {item['declared']} -> {item['current']}")
+        if not write and not check:
+            pkgs_flags = " ".join(f"--package {p}" for p in sorted(grouped))
+            print(f"hint=python3 scripts/package-release.py sync-requires --write {pkgs_flags}")
+
+    if check and stale:
+        pkgs_flags = " ".join(f"--package {p}" for p in sorted(grouped))
+        raise ValueError(
+            f"Found {len(stale)} stale internal Package-Requires lower bound(s); "
+            f"run: python3 scripts/package-release.py sync-requires --write {pkgs_flags}"
+        )
+    return 0
+
+
 def resolve_auto_scope(directory, declared_targets, live_url):
     """Compare DIRECTORY against LIVE_URL before running Emacs verification.
 
     1) Fail fast if ANY built package modifies bytes under an already-published
        version (avoids wasting an entire install matrix + SSH upload only to
        discover immutable drift on the archive host).
-    2) When only a subset of packages changed (and not etaf-install), narrow
+    2) Fail fast if ANY changed first-party package declares a stale internal
+       ETAF dependency lower bound (prevents version skew under package.el).
+    3) When only a subset of packages changed (and not etaf-install), narrow
        verification to the changed targets and their transitive dependents.
     Returns (scope, targets, reason).
     """
@@ -97,7 +270,27 @@ def resolve_auto_scope(directory, declared_targets, live_url):
         )
 
     changed = {name for name, item in built.items() if live_by_name.get(name) != item["sha256"]}
-    if not changed or "etaf-install" in changed:
+    if not changed:
+        return "full", list(declared_targets), None
+
+    community_only = set(manifest.get("community", {}))
+    stale = find_stale_internal_requires(built, target_names=changed, skip_names=community_only)
+    if stale:
+        lines = [
+            f"  {item['package']}: {item['dependency']} {item['declared']} -> {item['current']}"
+            for item in stale
+        ]
+        pkgs = sorted({item["package"] for item in stale})
+        fix_cmd = "python3 scripts/package-release.py sync-requires --write " + " ".join(
+            f"--package {p}" for p in pkgs
+        )
+        raise ValueError(
+            "Stale internal Package-Requires lower bound(s) in changed package(s):\n"
+            + "\n".join(lines)
+            + f"\nRun: {fix_cmd}"
+        )
+
+    if "etaf-install" in changed:
         return "full", list(declared_targets), None
 
     def installed_closure(name):
@@ -109,7 +302,6 @@ def resolve_auto_scope(directory, declared_targets, live_url):
                 stack.extend(d for d, _v in built.get(dep, {}).get("requirements", ()))
         return found
 
-    community_only = set(manifest.get("community", {}))
     all_candidates = list(dict.fromkeys([*declared_targets, *sorted(community_only)]))
     selected = [
         name for name in all_candidates
@@ -515,10 +707,7 @@ def build(directory):
                     if dependency in external:
                         continue
                     raise ValueError(f"{package['name']}: dependency {dependency} is absent")
-                actual = tuple(map(int, available[dependency].split(".")))
-                required = tuple(map(int, minimum.split(".")))
-                length = max(len(actual), len(required))
-                if actual + (0,) * (length - len(actual)) < required + (0,) * (length - len(required)):
+                if compare_versions(available[dependency], minimum) < 0:
                     raise ValueError(f"{package['name']}: dependency {dependency} is too old")
         manifest["sources"] = provenance
         manifest["updated"] = updated
@@ -972,9 +1161,9 @@ def stage(directory, output):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command")
-    for name in ("build", "verify", "stage", "publish", "published", "prefetch"):
+    for name in ("build", "verify", "stage", "publish", "published", "prefetch", "sync-requires"):
         command = sub.add_parser(name)
-        if name != "published":
+        if name not in ("published", "sync-requires"):
             command.add_argument("--directory", type=Path, required=True)
         if name == "verify":
             command.add_argument("--emacs", default="emacs")
@@ -999,6 +1188,22 @@ def main():
             command.add_argument("--output", type=Path, required=True)
         elif name == "published":
             command.add_argument("--url", default="https://etaf.top/packages/")
+        elif name == "sync-requires":
+            command.add_argument("--package", action="append", default=[],
+                                 help="Limit check/sync to named release package(s) (repeatable)")
+            command.add_argument("--changed-only", action="store_true",
+                                 help="Limit check/sync to packages whose archive bytes differ from --live-url")
+            command.add_argument("--directory", type=Path,
+                                 help="Optional built archive directory used with --changed-only")
+            command.add_argument("--live-url", default=DEFAULT_ARCHIVE_URL,
+                                 help="Live archive URL used with --changed-only")
+            mode = command.add_mutually_exclusive_group()
+            mode.add_argument("--check", action="store_true",
+                              help="Exit non-zero if any stale internal Package-Requires bound is found")
+            mode.add_argument("--write", action="store_true",
+                              help="Rewrite stale internal Package-Requires bounds in package entry .el files")
+            command.add_argument("--json", action="store_true",
+                                 help="Emit machine-readable JSON output")
     arguments = sys.argv[1:]
     if not arguments or arguments == ["help"]:
         parser.print_help()
@@ -1021,12 +1226,22 @@ def main():
         stage(args.directory.resolve(), args.output.resolve())
     elif args.command == "published":
         published(args.url)
+    elif args.command == "sync-requires":
+        return sync_requires(
+            packages=args.package or None,
+            changed_only=args.changed_only,
+            live_url=args.live_url,
+            directory=args.directory.resolve() if args.directory else None,
+            write=args.write,
+            check=args.check,
+            json_mode=args.json,
+        )
     else:
         # The site publisher owns transport, deployment locking and rollback.
         # It invokes stage before contacting the host and never uploads reports.
         # The site publisher lives in the manual's checkout, which the package
         # container holds when every package shares one tree.
-        manual = ROOT / "packages" / "etaf-manual"
+        manual = package_directory("etaf-manual")
         site = (manual if manual.is_dir() else ROOT / "etaf-manual") / "site" / "scripts" / "publish.py"
         return subprocess.call([sys.executable, str(site),
                                 "--packages-only", str(args.directory.resolve())])
