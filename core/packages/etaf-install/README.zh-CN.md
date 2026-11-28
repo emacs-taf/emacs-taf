@@ -31,6 +31,32 @@ Emacs TAF 生态的官方安装入口。`etaf-install` 构建在 Emacs 内置 `p
 
 后续直接运行 `M-x etaf-install`、`M-x etaf-install-manage`、`M-x etaf-install-doctor`、`M-x etaf-install-native`、`M-x etaf-install-update` 或 `M-x etaf-install-remove`。
 
+## 用 `use-package` 声明式配置
+
+`https://etaf.top/packages/` 是标准 ELPA 包归档，可以直接在 `init.el` 中用 Emacs 29+ 内置的 `use-package` 配合 `etaf-install-ensure` 做持久化声明管理：
+
+```elisp
+(require 'package)
+(add-to-list 'package-archives '("etaf" . "https://etaf.top/packages/") t)
+(package-initialize)
+
+;; 首次启动自动安装缺失目标及其预编译原生模块；
+;; 全部已装时零联网、不拖慢启动。
+(use-package etaf-install
+  :ensure t
+  :pin etaf
+  :config
+  (etaf-install-ensure '(etaf-md etaf-org etaf-ncm etaf-xiangqi)))
+
+(use-package etaf-md
+  :ensure t
+  :pin etaf
+  :commands (etaf-md-open etaf-md-preview)
+  :bind (:map markdown-mode-map ("C-c m e" . etaf-md-preview)))
+```
+
+后续升级只需运行 `M-x etaf-install-update`（或在 `M-x etaf-install-manage` 里按 `U`），会自动按依赖闭包自底向上升级，并同步预编译原生模块。
+
 ## 文档
 
 - 公共 API 清单：见 [etaf-install.el](etaf-install.el) 头部 Commentary
@@ -42,6 +68,6 @@ Emacs TAF 生态的官方安装入口。`etaf-install` 构建在 Emacs 内置 `p
 在单仓根目录运行：
 
 ```sh
-make -C packages/etaf-install check
+make -C core/packages/etaf-install check
 python3 -m unittest tests/tools/test_install.py
 ```

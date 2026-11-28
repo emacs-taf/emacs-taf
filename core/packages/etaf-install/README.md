@@ -31,6 +31,32 @@ Evaluate once in Emacs, then pick a target (the `etaf-ui` component gallery is t
 
 Afterward, run `M-x etaf-install`, `M-x etaf-install-manage`, `M-x etaf-install-doctor`, `M-x etaf-install-native`, `M-x etaf-install-update`, or `M-x etaf-install-remove`.
 
+## Declarative configuration (`use-package`)
+
+Because `https://etaf.top/packages/` is a standard ELPA archive, you can declare ETAF packages directly in `init.el` with Emacs's built-in `use-package` (Emacs 29+) and `etaf-install-ensure`:
+
+```elisp
+(require 'package)
+(add-to-list 'package-archives '("etaf" . "https://etaf.top/packages/") t)
+(package-initialize)
+
+;; Install missing ETAF targets and their prebuilt native modules once.
+;; Performs zero network requests on subsequent startups when all are installed.
+(use-package etaf-install
+  :ensure t
+  :pin etaf
+  :config
+  (etaf-install-ensure '(etaf-md etaf-org etaf-ncm etaf-xiangqi)))
+
+(use-package etaf-md
+  :ensure t
+  :pin etaf
+  :commands (etaf-md-open etaf-md-preview)
+  :bind (:map markdown-mode-map ("C-c m e" . etaf-md-preview)))
+```
+
+When everything is already installed, startup stays completely offline and lazy-loaded. Upgrade cleanly at any time with `M-x etaf-install-update` (or `U` in `M-x etaf-install-manage`), which upgrades ETAF dependency closures bottom-up and syncs prebuilt native modules automatically.
+
 ## Documentation
 
 - Public API inventory: Commentary in [etaf-install.el](etaf-install.el)
@@ -42,6 +68,6 @@ Afterward, run `M-x etaf-install`, `M-x etaf-install-manage`, `M-x etaf-install-
 From the monorepo root:
 
 ```sh
-make -C packages/etaf-install check
+make -C core/packages/etaf-install check
 python3 -m unittest tests/tools/test_install.py
 ```

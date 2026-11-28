@@ -4,6 +4,11 @@ All notable user-visible changes to `etaf-install` are documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- Added `etaf-install-ensure` for declarative, offline-fast package installation
+  in user `init.el` files alongside built-in `use-package`.
+
 ### Changed
 
 - Extracted `etaf-install` from the workspace root into a dedicated multi-file

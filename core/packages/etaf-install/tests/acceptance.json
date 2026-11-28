@@ -26,6 +26,11 @@
       "name": "etaf-install-test-manifest-catalog-discovery",
       "file": "tests/etaf-install-tests.el",
       "purpose": "Verify etaf-install dynamically discovers new targets and system_tools from manifest.json."
+    },
+    {
+      "name": "etaf-install-test-ensure-declarative-lifecycle",
+      "file": "tests/etaf-install-tests.el",
+      "purpose": "Verify etaf-install-ensure installs missing targets once and stays offline when already installed."
     }
   ]
 }

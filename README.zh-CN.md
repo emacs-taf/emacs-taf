@@ -32,6 +32,7 @@
 核心入口与约定：
 
 - **`M-x etaf-install`**：从 `https://etaf.top/packages/` 安装任意受支持的框架、扩展、应用或游戏；已安装的目标可离线重开。
+- **声明式 `use-package` 与 `etaf-install-ensure`**：把 `("etaf" . "https://etaf.top/packages/")` 加入 `package-archives`，用 `(etaf-install-ensure '(etaf-md etaf-org ...))` 声明需要的包（已装时零联网，缺失时自动补装包与原生模块），再用标准 `(use-package etaf-md :ensure t :pin etaf ...)` 延迟加载与绑键。详见 [etaf-install](core/packages/etaf-install)。
 - **`M-x etaf-install-manage`**：原生列表包管理面板，集中查看已安装 / 可用版本、运行时状态、需手工安装的外部 `System CLI` 与 Lisp 依赖（`i` 安装、`n` 原生模块、`u` 更新、`U` 全部更新、`d` 卸载、`RET` 打开、`?` 诊断、`g` 刷新、`l` 打开 `list-packages`、`q` 退出）。
 - **预编译原生动态模块自动安装**：安装或更新目标时，按依赖闭包自动下载、校验 SHA-256 并热加载声明的原生模块（如 `etaf-md` 的 QuickJS Mermaid/MathJax 渲染器、`etaf` 的 `libmpv` 播放桥、`ekp` 的 C 排版引擎）到 `~/.cache/emacs-taf/native/`。设为 `(setq etaf-install-auto-native nil)` 可关闭，或通过 `M-x etaf-install-native`（管理界面按 `n`）手动管理。
 - **能力诊断（`M-x etaf-install-doctor`）**：离线检查必需与可选能力，不改写配置。若缺少必需的外部 OS 命令，交互安装时自动弹出 `*ETAF Installation*` 引导页并给出当前系统包管理器的合并安装命令（`c` 复制、`r` 重检、`o` 打开）。外部服务账号与系统程序只检测、不代装（`etaf-telega` 需先安装 TDLib 并运行 `M-x telega-server-build`，确保 `telega-server` 在 `exec-path` 上）。

@@ -16,6 +16,12 @@
 (require 'etaf-install-native)
 (require 'etaf-install-doctor)
 
+(defvar etaf-install--skip-refresh nil
+  "Non-nil when a batch caller has already refreshed the required archives.")
+
+(defvar etaf-install--last-native-report nil
+  "Internal collector for native installation results during batch ensure.")
+
 (defun etaf-install (&optional package no-open)
   "Install supported PACKAGE and open it unless NO-OPEN is non-nil."
   (interactive (list (etaf-install--read-target)))
@@ -36,10 +42,11 @@
     (unless package--initialized (package-initialize))
     (etaf-install--check-source package)
     (unless (package-installed-p package)
-      (message "ETAF: checking the official package archive…")
-      ;; Scope the refresh to ETAF without discarding the user's other archive
-      ;; configuration.  No global signature setting or proxy is rewritten.
-      (etaf-install--refresh-archives (list package))
+      (unless etaf-install--skip-refresh
+        (message "ETAF: checking the official package archive…")
+        ;; Scope the refresh to ETAF without discarding the user's other archive
+        ;; configuration.  No global signature setting or proxy is rewritten.
+        (etaf-install--refresh-archives (list package)))
       (let* ((descriptor (cadr (assq package package-archive-contents)))
              (before (apply #'append (mapcar #'cdr package-alist)))
              (selected (copy-sequence package-selected-packages)))
@@ -83,6 +90,7 @@
            (post-facts (etaf-install-doctor package))
            (missing (cl-remove-if #'cadr (plist-get post-facts :required)))
            (managed-started nil))
+      (setq etaf-install--last-native-report native-auto)
       (when (and missing (not no-open) (not noninteractive))
         (let* ((engine (etaf-install--missing-managed-engine package missing))
                (missing-clis (etaf-install--missing-cli-tools-from-facts
@@ -125,6 +133,78 @@
          (t
           (message "ETAF: %s is ready.  M-x etaf-install opens installed targets; M-x etaf-install-manage updates or removes them." package))))))
     package))
+
+(defun etaf-install-ensure (packages &optional refresh)
+  "Ensure every target in PACKAGES is installed from the official ETAF archive.
+PACKAGES may be a single package symbol or a list of package symbols, suitable
+for declarative use in an Emacs init file alongside `use-package'.  Registers
+the ETAF archive locally without modifying user init files.
+
+When every requested package is already installed and REFRESH is nil, performs
+no network requests and returns immediately so startup stays fast and offline.
+When any package is missing (or REFRESH is non-nil), refreshes the required
+archives once, installs each missing target without opening its application,
+and ensures declared prebuilt native modules when `etaf-install-auto-native'
+is non-nil.
+
+Return a plist with `:installed', `:already', `:native-installed' and
+`:native-failed'."
+  (let* ((raw (cond
+               ((null packages) nil)
+               ((and (symbolp packages) (not (eq packages t))) (list packages))
+               ((listp packages) packages)
+               (t (user-error "PACKAGES must be a symbol or list of symbols: %S" packages))))
+         (requested (delete-dups (copy-sequence raw))))
+    (dolist (pkg requested)
+      (unless (and (symbolp pkg) (not (memq pkg '(nil t))))
+        (user-error "Invalid ETAF package symbol: %S" pkg)))
+    (unless package--initialized (package-initialize))
+    (etaf-install--archive)
+    (if (null requested)
+        (list :installed nil :already nil
+              :native-installed nil :native-failed nil)
+      (let (already missing)
+        (dolist (pkg requested)
+          (if (package-installed-p pkg)
+              (push pkg already)
+            (push pkg missing)))
+        (setq already (nreverse already)
+              missing (nreverse missing))
+        (if (and (null missing) (not refresh))
+            (list :installed nil
+                  :already already
+                  :native-installed nil
+                  :native-failed nil)
+          (when etaf-install--busy
+            (user-error "An ETAF installation is already running in this Emacs"))
+          (when etaf-install--restart-required
+            (user-error "Restart Emacs before retrying; a failed installation left partially loaded Lisp"))
+          (etaf-install--refresh-archives (if refresh requested missing))
+          (let ((etaf-install--skip-refresh t)
+                (etaf-install--last-native-report nil)
+                installed native-installed native-failed)
+            (dolist (pkg missing)
+              (setq etaf-install--last-native-report nil)
+              (etaf-install pkg t)
+              (push pkg installed)
+              (when etaf-install--last-native-report
+                (setq native-installed
+                      (append native-installed
+                              (plist-get etaf-install--last-native-report :installed))
+                      native-failed
+                      (append native-failed
+                              (plist-get etaf-install--last-native-report :failed)))))
+            (when refresh
+              (dolist (pkg already)
+                (let ((one (etaf-install--native-ensure-best-effort pkg)))
+                  (setq native-installed
+                        (append native-installed (plist-get one :installed))
+                        native-failed
+                        (append native-failed (plist-get one :failed))))))
+            (list :installed (nreverse installed)
+                  :already already
+                  :native-installed native-installed
+                  :native-failed native-failed)))))))
 
 
 ;;; Target management

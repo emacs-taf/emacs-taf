@@ -41,6 +41,21 @@
 ;; package.el owns upgrades and removal.  Restart Emacs after upgrading loaded
 ;; packages.
 ;;
+;; Function: etaf-install-ensure (packages &optional refresh)
+;;;###autoload (autoload 'etaf-install-ensure "etaf-install")
+;; Declaratively ensure every target in PACKAGES (a symbol or list of symbols)
+;; is installed from the official ETAF archive, intended for init files
+;; alongside `use-package'.  Registers the ETAF archive locally without
+;; editing init files.  When every target in PACKAGES is already installed and
+;; REFRESH is nil, performs zero network requests and returns immediately so
+;; startup stays fast and offline.  When any target is missing (or REFRESH is
+;; non-nil), refreshes the needed archives once, installs each missing target
+;; without opening its application, and ensures declared prebuilt native
+;; modules when `etaf-install-auto-native' is non-nil.  Return a plist with
+;; :installed, :already, :native-installed and :native-failed.  Signals
+;; `user-error' for invalid package symbols or the same source/restart guards
+;; as `etaf-install'.
+;;
 ;; Function: etaf-install-doctor (&optional package)
 ;;;###autoload (autoload 'etaf-install-doctor "etaf-install" nil t)
 ;; Return a plist with :package, :ready, :required and :optional capability
