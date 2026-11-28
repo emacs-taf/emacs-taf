@@ -148,6 +148,63 @@ def generate(root: Path, extras: list[Path], output: Path, emacs: str) -> tuple[
             tmp_out.unlink(missing_ok=True)
 
 
+ELISP_CHECKER = r"""
+(progn
+  (let ((autoload-file (getenv "DEV_AUTOLOADS_OUT")))
+    (load autoload-file nil t)
+    (when (featurep 'etaf)
+      (error "dev-autoloads check failed: loading autoloads eagerly loaded `etaf'"))
+    (require 'etaf)
+    (let ((apps (etaf-app-list))
+          (errors nil))
+      (unless apps
+        (push "etaf-app-list is empty after loading dev-autoloads and etaf" errors))
+      (dolist (entry apps)
+        (let ((id (plist-get entry :id))
+              (title (plist-get entry :title))
+              (open (plist-get entry :open))
+              (feature (plist-get entry :feature)))
+          (unless (and (symbolp id) id)
+            (push (format "invalid :id in app entry: %S" entry) errors))
+          (unless (and (stringp title) (not (string-empty-p title)))
+            (push (format "%S: missing non-empty :title" id) errors))
+          (unless (and (symbolp open) (fboundp open))
+            (push (format "%S: :open %S is not fboundp/autoloaded" id open) errors))
+          (when (and feature (not (locate-library (symbol-name feature))))
+            (push (format "%S: :feature %S not found on load-path" id feature) errors))))
+      (when errors
+        (dolist (err (nreverse errors))
+          (princ (format "error: %s\n" err) #'external-debugging-output))
+        (kill-emacs 1))
+      (princ (format "dev-autoloads check OK: zero eager load, %d registered apps validated\n"
+                     (length apps))))))
+"""
+
+
+def check(root: Path, extras: list[Path], emacs: str) -> int:
+    """Verify generated dev-autoloads loads cleanly without eager `etaf' load."""
+    with tempfile.TemporaryDirectory(prefix="etaf-dev-autoloads-check-") as tmp:
+        out = Path(tmp) / "dev-autoloads.el"
+        pkg_count, form_count = generate(root, extras, out, emacs)
+        env = os.environ.copy()
+        env["DEV_AUTOLOADS_OUT"] = str(out)
+        proc = subprocess.run(
+            [emacs, "-Q", "--batch", "--eval", ELISP_CHECKER],
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if proc.stdout:
+            sys.stdout.write(proc.stdout)
+        if proc.returncode != 0:
+            if proc.stderr:
+                sys.stderr.write(proc.stderr)
+            return proc.returncode
+        print(f"Verified {pkg_count} packages, {form_count} autoload forms.")
+        return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -174,7 +231,14 @@ def main(argv: list[str] | None = None) -> int:
         default=os.environ.get("EMACS", "emacs"),
         help="Emacs executable to invoke (default: emacs).",
     )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="Generate to a temp file and verify zero eager `etaf' load plus app registry schema.",
+    )
     args = parser.parse_args(argv)
+    if args.check:
+        return check(args.root, args.extra, args.emacs)
     pkg_count, form_count = generate(args.root, args.extra, args.output, args.emacs)
     print(f"Generated {args.output.expanduser()} ({pkg_count} packages, {form_count} autoload forms)")
     return 0

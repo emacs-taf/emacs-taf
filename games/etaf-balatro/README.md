@@ -15,6 +15,19 @@ ETAF Balatro is a Balatro-inspired text deck-building and scoring roguelike buil
 - GNU Emacs 29.1 or newer
 - `ecss`, `ebox`, `etaf`, and `etaf-ui` from [`emacs-taf/etaf`](https://github.com/emacs-taf/etaf) on `load-path`
 
+## Installation
+
+<!-- BEGIN:GENERATED:pkg-install-en:etaf-balatro -->
+> `etaf-balatro` is currently incubating in the monorepo. Install from a source checkout of [`emacs-taf/emacs-taf`](https://github.com/emacs-taf/emacs-taf) (or [`emacs-taf/etaf`](https://github.com/emacs-taf/etaf) + this package):
+
+```elisp
+(dolist (pkg '("ecss" "ebox" "etaf" "etaf-ui"))
+  (add-to-list 'load-path (expand-file-name pkg "/path/to/etaf/packages")))
+(add-to-list 'load-path "/path/to/etaf-balatro")
+(require 'etaf-balatro)
+```
+<!-- END:GENERATED:pkg-install-en:etaf-balatro -->
+
 ## Quick Start
 
 ```elisp

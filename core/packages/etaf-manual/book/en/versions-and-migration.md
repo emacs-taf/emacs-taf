@@ -6,16 +6,18 @@ The manual documents the version combination in the table below. Except for EKP 
 
 ## Versions
 
+<!-- BEGIN:GENERATED:manual-version-table-en -->
 | Package | Version | Documented with |
 | --- | --- | --- |
 | `ecss` | 0.1.4 | Emacs 28.1 |
-| `ekp` | 1.0.7 | Emacs 29.1 |
-| `ebox` | 3.1.14 | Emacs 29.1, `ecss 0.1.4` |
-| `etaf` | 0.3.18 | Emacs 29.1, `ebox 3.1.14`, `ecss 0.1.4` |
-| `etaf-ui` | 0.3.13 | Emacs 29.1, `etaf 0.3.18`, `ebox 3.1.14` |
-| `etaf-db` | 0.1.3 | Emacs 29.1, `etaf 0.3.18` |
-| `etaf-posframe` | 0.3.4 | Emacs 29.1, `etaf 0.3.18`, `etaf-ui 0.3.13`, Posframe 0.9.0 |
-| `etaf-manual` | 0.1.26 | Emacs 29.1, `etaf 0.3.18`, `etaf-ui 0.3.13` |
+| `ekp` | 1.0.8 | Emacs 29.1 |
+| `ebox` | 3.1.15 | Emacs 29.1, `ecss 0.1.4` |
+| `etaf` | 0.3.19 | Emacs 29.1, `ebox 3.1.15`, `ecss 0.1.4` |
+| `etaf-ui` | 0.3.14 | Emacs 29.1, `etaf 0.3.19` |
+| `etaf-db` | 0.1.4 | Emacs 29.1, `etaf 0.3.19` |
+| `etaf-posframe` | 0.3.5 | Emacs 29.1, `etaf 0.3.19`, `etaf-ui 0.3.14`, Posframe 0.9.0 |
+| `etaf-manual` | 0.1.27 | Emacs 29.1, `etaf 0.3.19`, `etaf-ui 0.3.14` |
+<!-- END:GENERATED:manual-version-table-en -->
 
 The third column is the combination this edition documents.  Each package's `Package-Requires` header states the minimum it installs with, which can be lower.
 

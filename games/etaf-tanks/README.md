@@ -43,6 +43,7 @@ artwork and stages are original.
 
 ## Installation
 
+<!-- BEGIN:GENERATED:pkg-install-en:etaf-tanks -->
 ### From the ETAF package archive (recommended)
 
 ```elisp
@@ -51,34 +52,31 @@ artwork and stages are original.
 (package-initialize)
 (package-refresh-contents)
 (package-install 'etaf-install)
+(etaf-install-ensure '(etaf-tanks))
 ```
 
-Then run `M-x etaf-install` and select `etaf-tanks`. The installer pulls `ecss`,
-`ebox`, `etaf`, `etaf-ui` and `etaf-gamekit` automatically, and offers to
-install the pinned Godot runtime with `M-x etaf-gamekit-install-godot`.
+Or run `M-x etaf-install` and select `etaf-tanks` interactively.
 
 ### From a source checkout
 
-All core framework packages live in the single
-[`emacs-taf/etaf`](https://github.com/emacs-taf/etaf) repository:
+All core framework packages live in [`emacs-taf/etaf`](https://github.com/emacs-taf/etaf):
 
 ```sh
 git clone https://github.com/emacs-taf/etaf.git
 git clone https://github.com/emacs-taf/etaf-tanks.git
-make -C etaf/packages/etaf-gamekit engine
 ```
-
-`M-x etaf-gamekit-install-godot` installs the same pinned runtime; `make -C
-etaf/packages/etaf-gamekit engine` is the checkout equivalent.
-
-Add the framework package directories and this repository to `load-path`:
 
 ```elisp
 (dolist (pkg '("ecss" "ebox" "etaf" "etaf-ui" "etaf-gamekit"))
   (add-to-list 'load-path (expand-file-name pkg "/path/to/etaf/packages")))
 (add-to-list 'load-path "/path/to/etaf-tanks")
 (require 'etaf-tanks)
+```
+<!-- END:GENERATED:pkg-install-en:etaf-tanks -->
 
+Install the pinned Godot runtime with `M-x etaf-gamekit-install-godot` (or `make -C etaf/packages/etaf-gamekit engine` from a source checkout).
+
+```elisp
 (global-set-key (kbd "C-c t") #'etaf-tanks-open)
 ```
 

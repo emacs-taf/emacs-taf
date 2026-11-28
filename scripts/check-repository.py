@@ -267,9 +267,31 @@ def check(root, files=None, notices=None):
                         fail(f'{rel_pkg}/{vcs}',
                              'nested VCS directory inside package container; keep one shared checkout')
             valid_roles = {'framework', 'extension', 'application', 'game'}
+            valid_statuses = {None, 'active', 'incubating'}
+            release_pkg_set = set()
+            release_target_set = set()
+            rel_sel_path = root / 'release-dependencies.json'
+            if rel_sel_path.is_file():
+                try:
+                    rel_sel = json.loads(rel_sel_path.read_text(encoding='utf-8'))
+                    release_pkg_set = set(rel_sel.get('packages') or ())
+                    release_target_set = set(rel_sel.get('targets') or ())
+                except (OSError, ValueError, TypeError):
+                    pass
             for name, meta in sorted(registered.items()):
                 if not isinstance(meta, dict):
                     continue
+                status = meta.get('status')
+                if status not in valid_statuses:
+                    fail('workspace.json',
+                         f'{name}: unknown status {status!r}; expected one of ["active", "incubating"]')
+                elif status == 'incubating':
+                    if name in release_pkg_set or name in release_target_set:
+                        fail('release-dependencies.json',
+                             f'{name}: incubating package must graduate before entering archive releases')
+                    if meta.get('repo') or meta.get('projection'):
+                        fail('workspace.json',
+                             f'{name}: incubating package must not declare standalone repo or projection')
                 if isinstance(meta.get('path'), str):
                     expected_dir = (root / meta['path']).resolve()
                     if name in actual_map and actual_map[name].resolve() != expected_dir:
@@ -321,7 +343,7 @@ def check(root, files=None, notices=None):
         if len(parts) == 1 and f not in doc_names and f not in {
                 'Makefile', 'LICENSE', 'COPYING', 'NOTICE', '.gitignore',
                 '.gitattributes', '.editorconfig', 'workspace.json',
-                'release-dependencies.json'} and not f.endswith('.el'):
+                'release-dependencies.json', 'doc-coupling.json'} and not f.endswith('.el'):
             fail(f, 'unapproved root file; use the designated source/tool/data directory')
         if f.startswith('native/') and f.endswith('.rs') and 'vendor' not in parts:
             if re.search(r'#\s*\[\s*(?:test\s*\]|cfg\s*\(\s*test\s*\))', (root / f).read_text(encoding='utf-8')):
@@ -436,6 +458,17 @@ def check(root, files=None, notices=None):
             if not (root/directory).is_dir():fail('Makefile', f'missing scanned directory: {directory}')
         for pattern in re.findall(r'\$\(wildcard ((?:examples|tests|scripts|benchmarks)/[^)]+)\)', text):
             if not list(root.glob(pattern)):fail('Makefile', f'empty source discovery: {pattern}')
+        monorepo = workspace_layout.container_root(root)
+        if not workspace and monorepo is not None:
+            rel_pkg = root.resolve().relative_to(monorepo.resolve()).as_posix()
+            if rel_pkg.startswith('core/packages/'):
+                if re.search(r'(?<!\.\./)\.\./\.\./scripts/', text):
+                    fail('Makefile', 'core/packages/<pkg> Makefile must reference ../../../scripts/, not ../../scripts/')
+            elif rel_pkg.startswith(('apps/', 'games/')):
+                if re.search(r'^PROVIDER_ROOT\s*\?=\s*\.\.\s*$', text, re.M):
+                    fail('Makefile', 'apps/ and games/ Makefiles must resolve providers from ../../core/packages, not ..')
+                if re.search(r'(?:^|\s)-L\s+\.\./(?:ecss|ekp|ebox|etaf|etaf-ui|etaf-db|etaf-posframe|etaf-ext|etaf-gamekit)(?=\s|$)', text):
+                    fail('Makefile', 'apps/ and games/ Makefiles must not use legacy flat -L ../<core-pkg> paths')
     if not workspace:
         customs = _public_defcustoms(root, files)
         key_customs = [c for c in customs if c.endswith('-keys')]

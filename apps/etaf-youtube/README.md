@@ -15,7 +15,38 @@ ETAF YouTube is a native YouTube client rendered inside Emacs as an ETAF text ap
 
 ## Installation
 
-Install directly from the ETAF archive with `M-x etaf-install` and select `etaf-youtube`. Installing `etaf-youtube` automatically pulls its package dependencies (`etaf`, `etaf-ui`, `etaf-db`) and downloads and verifies the prebuilt `etaf-video-mpv` native binary for `etaf` with no local compiler required.
+<!-- BEGIN:GENERATED:pkg-install-en:etaf-youtube -->
+### From the ETAF package archive (recommended)
+
+```elisp
+(require 'package)
+(add-to-list 'package-archives '("etaf" . "https://etaf.top/packages/"))
+(package-initialize)
+(package-refresh-contents)
+(package-install 'etaf-install)
+(etaf-install-ensure '(etaf-youtube))
+```
+
+Or run `M-x etaf-install` and select `etaf-youtube` interactively.
+
+### From a source checkout
+
+All core framework packages live in [`emacs-taf/etaf`](https://github.com/emacs-taf/etaf):
+
+```sh
+git clone https://github.com/emacs-taf/etaf.git
+git clone https://github.com/emacs-taf/etaf-youtube.git
+```
+
+```elisp
+(dolist (pkg '("ecss" "ebox" "etaf" "etaf-ui" "etaf-db"))
+  (add-to-list 'load-path (expand-file-name pkg "/path/to/etaf/packages")))
+(add-to-list 'load-path "/path/to/etaf-youtube")
+(require 'etaf-youtube)
+```
+<!-- END:GENERATED:pkg-install-en:etaf-youtube -->
+
+Installing `etaf-youtube` via `etaf-install` also downloads and verifies the prebuilt `etaf-video-mpv` native binary for `etaf` with no local compiler required.
 
 Run `M-x etaf-install-doctor` (or inspect `(etaf-youtube-doctor)`) to check system tools:
 

@@ -200,6 +200,10 @@ def sync_requires(packages=None, *, changed_only=False, live_url=DEFAULT_ARCHIVE
             changed, _ = rewrite_package_requires(entries[pkg], pkg, updates)
             if changed:
                 updated_files.append(pkg)
+        if updated_files:
+            sync_script = Path(root) / "scripts" / "sync-generated-docs.py"
+            if sync_script.is_file():
+                subprocess.run([sys.executable, str(sync_script), "--root", str(root), "--write"], check=False)
 
     payload = {
         "mode": "write" if write else ("check" if check else "preview"),

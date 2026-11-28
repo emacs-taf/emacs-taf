@@ -114,7 +114,8 @@ notes) alongside `M-g` region jumps (`f` search, `t` list, `v` reader):
 
 ## Install
 
-### Recommended: ETAF package archive
+<!-- BEGIN:GENERATED:pkg-install-en:maillist -->
+### From the ETAF package archive (recommended)
 
 ```elisp
 (require 'package)
@@ -122,25 +123,29 @@ notes) alongside `M-g` region jumps (`f` search, `t` list, `v` reader):
 (package-initialize)
 (package-refresh-contents)
 (package-install 'etaf-install)
+(etaf-install-ensure '(maillist))
 ```
 
-Then run `M-x etaf-install` and pick `maillist` — the installer pulls ETAF,
-ETAF UI, ETAF DB and their dependencies automatically. Start the client with
-`M-x maillist-open` (or manage upgrades later with `M-x etaf-install-manage`).
+Or run `M-x etaf-install` and select `maillist` interactively.
 
 ### From a source checkout
 
-Clone [`emacs-taf/etaf`](https://github.com/emacs-taf/etaf) and `maillist`, then
-add the framework package directories (`etaf/packages/{ecss,ebox,etaf,etaf-ui,etaf-db}`)
-and this repository to `load-path`:
+All core framework packages live in [`emacs-taf/etaf`](https://github.com/emacs-taf/etaf):
+
+```sh
+git clone https://github.com/emacs-taf/etaf.git
+git clone https://github.com/emacs-taf/maillist.git
+```
 
 ```elisp
 (dolist (pkg '("ecss" "ebox" "etaf" "etaf-ui" "etaf-db"))
   (add-to-list 'load-path (expand-file-name pkg "/path/to/etaf/packages")))
 (add-to-list 'load-path "/path/to/maillist")
 (require 'maillist)
-;; M-x maillist-open
 ```
+<!-- END:GENERATED:pkg-install-en:maillist -->
+
+Start the client with `M-x maillist-open` (or manage upgrades later with `M-x etaf-install-manage`).
 
 ## Keys
 

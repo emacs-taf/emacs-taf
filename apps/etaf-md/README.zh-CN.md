@@ -42,6 +42,7 @@ ETAF Markdown Preview 把本地 Markdown 文档渲染为 Emacs 原生的现代�
 
 ## 安装
 
+<!-- BEGIN:GENERATED:pkg-install-zh:etaf-md -->
 ### 通过 ETAF 包归档安装（推荐）
 
 ```elisp
@@ -50,15 +51,14 @@ ETAF Markdown Preview 把本地 Markdown 文档渲染为 Emacs 原生的现代�
 (package-initialize)
 (package-refresh-contents)
 (package-install 'etaf-install)
+(etaf-install-ensure '(etaf-md))
 ```
 
-随后运行 `M-x etaf-install` 并选择 `etaf-md`：安装器会一步完成 `etaf`、`etaf-ui`、`ebox`、`ecss` 依赖安装，并自动下载对应平台的预编译 QuickJS Mermaid 与 MathJax 原生渲染模块、校验 SHA-256 后缓存至 `~/.cache/emacs-taf/native/`（升级 `etaf-md` 不丢失，无需本机 C 编译器、Node.js 或 `make`）并立即热加载生效，装完直接可用。
+或运行 `M-x etaf-install` 并在菜单中选择 `etaf-md`。
 
-如果此前在离线环境或通过 `package-install` 直接安装了 `etaf-md`，随时可运行 `M-x etaf-install-native`（或在 `M-x etaf-install-manage` 选中 `etaf-md` 按 `n`）补装或刷新预编译二进制；运行 `M-x etaf-install-doctor`（或求值 `(etaf-md-doctor)`）可查看 `typeset-native`、`ffmpeg`、`qrencode` 与 `git` 的就绪状态。
+### 从源码检出安装
 
-### 从源码检出使用
-
-克隆统一核心框架仓库 [`emacs-taf/etaf`](https://github.com/emacs-taf/etaf)（内置 `packages/{ecss,ebox,etaf,etaf-ui}`）与本仓库，按需执行 `make native-build`，再将各包目录加入 `load-path`：
+全部核心框架包位于 [`emacs-taf/etaf`](https://github.com/emacs-taf/etaf)：
 
 ```sh
 git clone https://github.com/emacs-taf/etaf.git
@@ -66,11 +66,16 @@ git clone https://github.com/emacs-taf/etaf-md.git
 ```
 
 ```elisp
-(dolist (pkg '("ecss" "ebox" "etaf-ui" "etaf"))
+(dolist (pkg '("ecss" "ebox" "etaf" "etaf-ui"))
   (add-to-list 'load-path (expand-file-name pkg "/path/to/etaf/packages")))
 (add-to-list 'load-path "/path/to/etaf-md")
 (require 'etaf-md)
 ```
+<!-- END:GENERATED:pkg-install-zh:etaf-md -->
+
+通过 `etaf-install` 安装时会自动下载对应平台的预编译 QuickJS Mermaid 与 MathJax 原生渲染模块、校验 SHA-256 后缓存至 `~/.cache/emacs-taf/native/`（升级 `etaf-md` 不丢失，无需本机 C 编译器、Node.js 或 `make`）并立即热加载生效。
+
+如果此前在离线环境或通过 `package-install` 直接安装了 `etaf-md`，随时可运行 `M-x etaf-install-native`（或在 `M-x etaf-install-manage` 选中 `etaf-md` 按 `n`）补装或刷新预编译二进制；运行 `M-x etaf-install-doctor`（或求值 `(etaf-md-doctor)`）可查看 `typeset-native`、`ffmpeg`、`qrencode` 与 `git` 的就绪状态。源码检出时按需执行 `make native-build`。
 
 ## 使用方式
 

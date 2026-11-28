@@ -6,7 +6,18 @@ This is a visual screensaver, **not a security lock**. Dismissal releases its an
 
 ## Requirements and setup
 
-Emacs 29.1 or later. Install from the ETAF package archive (`https://etaf.top/packages/`) with `M-x etaf-install` and select `etaf-screensaver`, or clone [`emacs-taf/etaf`](https://github.com/emacs-taf/etaf) and add `etaf/packages/{ecss,ebox,etaf}` and this package root to `load-path`:
+Emacs 29.1 or later.
+
+<!-- BEGIN:GENERATED:pkg-install-en:etaf-screensaver -->
+> `etaf-screensaver` is maintained in the monorepo (not yet published to the ELPA archive). Install from a source checkout of [`emacs-taf/emacs-taf`](https://github.com/emacs-taf/emacs-taf) (or [`emacs-taf/etaf`](https://github.com/emacs-taf/etaf) + this package):
+
+```elisp
+(dolist (pkg '("ecss" "ebox" "etaf"))
+  (add-to-list 'load-path (expand-file-name pkg "/path/to/etaf/packages")))
+(add-to-list 'load-path "/path/to/etaf-screensaver")
+(require 'etaf-screensaver)
+```
+<!-- END:GENERATED:pkg-install-en:etaf-screensaver -->
 
 ```elisp
 (require 'etaf-screensaver)

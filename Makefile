@@ -4,13 +4,18 @@ EMACS ?= emacs
 JOBS ?= 1
 # Every package under core/packages/, apps/, games/ in dependency order (providers first).
 PACKAGE_PATHS = python3 scripts/refscope.py order --paths
-.PHONY: compile test check clean structure-check setup-hooks order plan-affected check-affected dev-autoloads
+.PHONY: compile test check clean structure-check setup-hooks order plan-affected check-affected dev-autoloads sync-docs
 dev-autoloads:
 	python3 scripts/dev-autoloads.py --emacs "$(EMACS)" $(if $(EXTRA),--extra "$(EXTRA)")
+sync-docs:
+	python3 scripts/sync-generated-docs.py --write
 structure-check:
+	python3 scripts/sync-generated-docs.py --check
 	python3 scripts/check-repository.py --exclude core/packages/ --exclude apps/ --exclude games/
 	@set -e; for pkg in $$(python3 scripts/workspace_layout.py list-paths); do python3 scripts/check-repository.py --root "$$pkg" --skip-api; done
 	python3 scripts/check-api.py --workspace .
+	python3 scripts/check-docs.py
+	python3 scripts/refscope.py check-requires
 setup-hooks:
 	@if [ -d .git ]; then \
 		git config --local core.hooksPath .githooks; \

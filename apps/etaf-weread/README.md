@@ -111,18 +111,38 @@ names `M-x etaf-weread-login`; `g` retries once you have signed in.
 
 ### 3. The Emacs package
 
-Install from the ETAF package archive (`https://etaf.top/packages/`) with
-`M-x etaf-install` and select `etaf-weread`.
+<!-- BEGIN:GENERATED:pkg-install-en:etaf-weread -->
+### From the ETAF package archive (recommended)
 
-From a source checkout, clone [`emacs-taf/etaf`](https://github.com/emacs-taf/etaf)
-and `etaf-weread`, then add the package directories to `load-path`:
+```elisp
+(require 'package)
+(add-to-list 'package-archives '("etaf" . "https://etaf.top/packages/"))
+(package-initialize)
+(package-refresh-contents)
+(package-install 'etaf-install)
+(etaf-install-ensure '(etaf-weread))
+```
+
+Or run `M-x etaf-install` and select `etaf-weread` interactively.
+
+### From a source checkout
+
+All core framework packages live in [`emacs-taf/etaf`](https://github.com/emacs-taf/etaf):
+
+```sh
+git clone https://github.com/emacs-taf/etaf.git
+git clone https://github.com/emacs-taf/etaf-weread.git
+```
 
 ```elisp
 (dolist (pkg '("ecss" "ebox" "etaf" "etaf-ui" "etaf-db"))
   (add-to-list 'load-path (expand-file-name pkg "/path/to/etaf/packages")))
 (add-to-list 'load-path "/path/to/etaf-weread")
 (require 'etaf-weread)
+```
+<!-- END:GENERATED:pkg-install-en:etaf-weread -->
 
+```elisp
 (global-set-key (kbd "C-c r") #'etaf-weread-open)
 ```
 

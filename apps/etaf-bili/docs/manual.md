@@ -55,8 +55,8 @@ For programmatic use and offline testing, `etaf-bili-client-factory` accepts a f
 Run real graphical verification with ETAF's maintained verifier and this package's scenario adapter:
 
 ```elisp
-(load "/path/to/etaf/packages/etaf/scripts/emacs-gui-verifier.el")
-(load "/path/to/etaf-bili/scripts/etaf-bili-gui-scenarios.el")
+(load "core/packages/etaf/scripts/emacs-gui-verifier.el")
+(load "apps/etaf-bili/scripts/etaf-bili-gui-scenarios.el")
 (etaf-bili-gui-run "/tmp/bili-gui-evidence")
 ```
 

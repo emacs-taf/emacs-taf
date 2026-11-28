@@ -480,6 +480,194 @@ def run_plan(graph, impacts, assume_yes=False, jobs=1):
     return 0
 
 
+def _unquoted_call_heads(source, check_mod):
+    """Return set of symbols in unquoted function/macro call position `(SYM ...)'."""
+    toks = list(check_mod._sexp_tokens(source))
+    n = len(toks)
+    heads = set()
+
+    def skip_form(idx):
+        if idx >= n:
+            return n
+        kind, val = toks[idx]
+        if kind == 'punct':
+            return skip_form(idx + 1)
+        if kind == '(':
+            depth = 1
+            idx += 1
+            while idx < n and depth > 0:
+                if toks[idx][0] == '(':
+                    depth += 1
+                elif toks[idx][0] == ')':
+                    depth -= 1
+                idx += 1
+            return idx
+        return idx + 1
+
+    def walk(idx, end):
+        while idx < end:
+            kind, val = toks[idx]
+            if kind == 'punct' and val in ("'", "`"):
+                idx = skip_form(idx + 1)
+                continue
+            if kind == '(':
+                form_end = skip_form(idx)
+                if idx + 1 < form_end - 1 and toks[idx + 1][0] == 'atom':
+                    head = toks[idx + 1][1]
+                    if head in ('quote', 'declare-function'):
+                        idx = form_end
+                        continue
+                    heads.add(head)
+                    walk(idx + 2, form_end - 1)
+                else:
+                    walk(idx + 1, form_end - 1)
+                idx = form_end
+                continue
+            idx += 1
+
+    walk(0, n)
+    return heads
+
+
+def check_requires(graph, check_mod, root):
+    """Reconcile Package-Requires headers against hard cross-package references across all units.
+
+    Reports:
+      - missing: a unit's runtime files hard-require a monorepo provider or invoke its
+        un-guarded symbols without listing that provider in Package-Requires.
+      - unused: Package-Requires lists a monorepo provider that no runtime, test,
+        example or benchmark file references.
+    """
+    feature_owners = {}
+    for name, unit in graph.units.items():
+        for f in unit.files:
+            src = f.read_text(encoding='utf-8', errors='replace')
+            for feat in re.findall(r"\(provide\s+'([^\s()]+)", src):
+                feature_owners[feat] = name
+    owner_of = {**feature_owners, **graph.owners}
+    known = set(graph.units.keys())
+    errors = []
+
+    hard_req_re = re.compile(r"\(require\s+'([^\s()]+)\s*\)")
+    soft_req_re = re.compile(r"\(require\s+'([^\s()]+)\s+[^\s()]+\s+t\s*\)")
+    featurep_re = re.compile(r"\(featurep\s+'([^\s()]+)\)")
+    fboundp_re = re.compile(r"\((?:fboundp|boundp)\s+'([^\s()]+)\)")
+    decl_fn_re = re.compile(r'\(declare-function\s+([^\s()]+)\s+"([^"]+)"')
+
+    for name, unit in sorted(graph.units.items()):
+        declared_raw = check_mod.required(unit.entry)
+        if declared_raw is None:
+            continue
+        declared = set(declared_raw) - {'emacs'}
+        hard_deps = set()
+        soft_providers = set()
+        guarded_syms = set()
+        runtime_calls = {}
+
+        for f in unit.files:
+            raw = f.read_text(encoding='utf-8', errors='replace')
+            src = mask(raw)
+            for m in hard_req_re.finditer(src):
+                p = feature_owners.get(m.group(1))
+                if p and p != name:
+                    hard_deps.add(p)
+            for m in soft_req_re.finditer(src):
+                p = feature_owners.get(m.group(1))
+                if p and p != name:
+                    soft_providers.add(p)
+            for m in featurep_re.finditer(src):
+                p = feature_owners.get(m.group(1))
+                if p and p != name:
+                    soft_providers.add(p)
+            for m in fboundp_re.finditer(src):
+                guarded_syms.add(m.group(1))
+            for m in decl_fn_re.finditer(raw):
+                guarded_syms.add(m.group(1))
+                p = feature_owners.get(m.group(2))
+                if p and p != name:
+                    soft_providers.add(p)
+            for sym in _unquoted_call_heads(raw, check_mod):
+                if sym in guarded_syms:
+                    continue
+                p = graph.owners.get(sym)
+                if p and p != name:
+                    runtime_calls.setdefault(p, set()).add(sym)
+
+        for provider, syms in runtime_calls.items():
+            if provider in soft_providers:
+                continue
+            unguarded = syms - guarded_syms
+            if unguarded:
+                hard_deps.add(provider)
+
+        anywhere = set(hard_deps) | set(soft_providers)
+        extra_files = []
+        for sub in ('tests', 'examples', 'benchmarks'):
+            sub_dir = unit.root / sub
+            if sub_dir.is_dir():
+                extra_files.extend(p for p in sub_dir.rglob('*.el')
+                                   if 'fixtures' not in p.relative_to(unit.root).parts)
+        for f in unit.files + extra_files:
+            for tok in set(check_mod.tokens(f.read_text(encoding='utf-8', errors='replace'))):
+                p = owner_of.get(tok)
+                if p and p != name:
+                    anywhere.add(p)
+
+        rel_entry = unit.entry.resolve().relative_to(root).as_posix()
+        for missing in sorted(hard_deps - declared):
+            errors.append(f'{rel_entry}: Package-Requires omits {missing}, which runtime sources require')
+        for unused in sorted((declared & known) - anywhere):
+            errors.append(f'{rel_entry}: Package-Requires declares {unused}, which no source or test uses')
+
+    return errors
+
+
+def match_doc_coupling(root, changed_paths):
+    """Return list of triggered doc-coupling rules from root/doc-coupling.json."""
+    import fnmatch
+    import json
+
+    config_path = root / 'doc-coupling.json'
+    if not config_path.is_file():
+        return []
+    config = json.loads(config_path.read_text(encoding='utf-8'))
+    rel_changed = []
+    for p in changed_paths:
+        rp = Path(p).resolve()
+        try:
+            rel_changed.append(rp.relative_to(root).as_posix())
+        except ValueError:
+            rel_changed.append(Path(p).as_posix().lstrip('./'))
+    changed_set = set(rel_changed)
+
+    def matches_glob(path, pattern):
+        if '**' in pattern:
+            prefix = pattern.split('**', 1)[0].rstrip('/')
+            return path == prefix or path.startswith(prefix + '/')
+        return fnmatch.fnmatchcase(path, pattern)
+
+    hits = []
+    for rule in config.get('rules') or []:
+        matched_files = sorted(
+            p for p in rel_changed
+            if any(matches_glob(p, pat) for pat in rule.get('watch') or ())
+        )
+        if not matched_files:
+            continue
+        docs = list(rule.get('docs') or [])
+        touched_docs = [d for d in docs if d in changed_set]
+        untouched_docs = [d for d in docs if d not in changed_set]
+        hits.append({
+            'id': rule['id'],
+            'description': rule.get('description', ''),
+            'matched_files': matched_files,
+            'docs': docs,
+            'touched_docs': touched_docs,
+            'untouched_docs': untouched_docs,
+        })
+    return hits
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -513,6 +701,14 @@ def main():
     run.add_argument("--jobs", type=int, default=1,
                      help="parallel workers within each dependency layer (default: 1)")
 
+    sub.add_parser("check-requires", help="verify Package-Requires matches cross-package references across all units")
+
+    doc_imp = sub.add_parser("doc-impact", help="show documentation coupled to changed files via doc-coupling.json")
+    doc_src = doc_imp.add_mutually_exclusive_group(required=True)
+    doc_src.add_argument("--changed", nargs="+", type=Path, help="changed files relative to root or absolute")
+    doc_src.add_argument("--rev", help="compute changed files from VCS revision")
+    doc_imp.add_argument("--json", action="store_true", help="machine-readable output")
+
     args = parser.parse_args()
     root = args.root.resolve()
     check = load_check()
@@ -520,6 +716,24 @@ def main():
     if args.command == "plugins":
         print(f'scoper     {EmacsScoper.name}')
         print(f'extractor  {ElispExtractor.name}')
+        return 0
+
+    if args.command == "doc-impact":
+        import json
+        changed = collect_changed(root, args)
+        hits = match_doc_coupling(root, changed)
+        if args.json:
+            print(json.dumps(hits, indent=2))
+            return 0
+        if not hits:
+            print("no coupled documentation impacted")
+            return 0
+        for hit in hits:
+            print(f"[{hit['id']}] {hit['description']}")
+            print("  triggered by: " + ", ".join(hit['matched_files']))
+            for d in hit['docs']:
+                mark = "updated" if d in hit['touched_docs'] else "review"
+                print(f"    [{mark}] {d}")
         return 0
 
     if args.command == "order":
@@ -540,6 +754,15 @@ def main():
         return 0
 
     graph = build(root, check)
+
+    if args.command == "check-requires":
+        errs = check_requires(graph, check, root)
+        if errs:
+            for e in errs:
+                print(e, file=sys.stderr)
+            return 1
+        print(f"Package-Requires OK across {len(graph.units)} packages.")
+        return 0
 
     if args.command == "stats":
         print(f"packages       {len(graph.units)}")

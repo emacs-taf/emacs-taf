@@ -128,10 +128,16 @@ def core_packages_dir(root: Path) -> Path:
     return root
 
 
+def is_incubating(meta: dict | None) -> bool:
+    """Return True when a workspace.json package entry is marked incubating."""
+    return isinstance(meta, dict) and meta.get("status") == "incubating"
+
+
 def projection_targets(root: Path) -> list[dict]:
     """Return ordered list of projection targets declared in workspace.json.
 
     Each entry has keys: `id`, `prefix`, `repo`, `branch`.
+    Packages marked `status: "incubating"` are excluded from standalone projections.
     """
     ws = load_workspace(root)
     targets: list[dict] = []
@@ -154,7 +160,7 @@ def projection_targets(root: Path) -> list[dict]:
     packages = ws.get("packages")
     if isinstance(packages, dict):
         for name, meta in sorted(packages.items()):
-            if not isinstance(meta, dict):
+            if not isinstance(meta, dict) or is_incubating(meta):
                 continue
             if meta.get("projection") in seen:
                 continue

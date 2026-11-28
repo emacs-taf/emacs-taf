@@ -21,18 +21,27 @@
 
 ## Installation
 
-From the ETAF package archive, install via `M-x etaf-install` and select `etaf-org` (this installs all framework dependencies plus the prebuilt native Mermaid/MathJax module automatically), or load it after `package-install`:
+<!-- BEGIN:GENERATED:pkg-install-en:etaf-org -->
+### From the ETAF package archive (recommended)
 
 ```elisp
-(require 'etaf-org)
+(require 'package)
+(add-to-list 'package-archives '("etaf" . "https://etaf.top/packages/"))
+(package-initialize)
+(package-refresh-contents)
+(package-install 'etaf-install)
+(etaf-install-ensure '(etaf-org))
 ```
 
-From a source checkout, clone [`emacs-taf/etaf`](https://github.com/emacs-taf/etaf) and `etaf-org`, add the framework package directories and this repository to `load-path`, and byte-compile:
+Or run `M-x etaf-install` and select `etaf-org` interactively.
+
+### From a source checkout
+
+All core framework packages live in [`emacs-taf/etaf`](https://github.com/emacs-taf/etaf):
 
 ```sh
 git clone https://github.com/emacs-taf/etaf.git
 git clone https://github.com/emacs-taf/etaf-org.git
-make -C etaf-org compile
 ```
 
 ```elisp
@@ -41,6 +50,9 @@ make -C etaf-org compile
 (add-to-list 'load-path "/path/to/etaf-org")
 (require 'etaf-org)
 ```
+<!-- END:GENERATED:pkg-install-en:etaf-org -->
+
+Installing via `M-x etaf-install` installs all framework dependencies plus the prebuilt native Mermaid/MathJax module automatically. From a source checkout, optionally run `make -C etaf-org compile`.
 
 ## Quick start
 

@@ -102,18 +102,18 @@ backend needs a running instance and an API token.
 
 ## Installation
 
-Install from the ETAF package archive (`https://etaf.top/packages/`) with
-`M-x etaf-install` and select `etaf-rss`.
-
-From a source checkout, clone [`emacs-taf/etaf`](https://github.com/emacs-taf/etaf)
-and `etaf-rss`, then add the package directories to `load-path`:
+<!-- BEGIN:GENERATED:pkg-install-en:etaf-rss -->
+> `etaf-rss` is maintained in the monorepo (not yet published to the ELPA archive). Install from a source checkout of [`emacs-taf/emacs-taf`](https://github.com/emacs-taf/emacs-taf) (or [`emacs-taf/etaf`](https://github.com/emacs-taf/etaf) + this package):
 
 ```elisp
 (dolist (pkg '("ecss" "ebox" "etaf" "etaf-ui"))
   (add-to-list 'load-path (expand-file-name pkg "/path/to/etaf/packages")))
 (add-to-list 'load-path "/path/to/etaf-rss")
 (require 'etaf-rss)
+```
+<!-- END:GENERATED:pkg-install-en:etaf-rss -->
 
+```elisp
 (global-set-key (kbd "C-c r") #'etaf-rss-open)
 ```
 

@@ -35,16 +35,38 @@ Install `mpv` (e.g. `brew install mpv` on macOS, `apt install libmpv2` / `pacman
 
 ## Installation
 
-Install from the ETAF package archive (`https://etaf.top/packages/`) with `M-x etaf-install` and select `etaf-video-player`.
+<!-- BEGIN:GENERATED:pkg-install-en:etaf-video-player -->
+### From the ETAF package archive (recommended)
 
-From a source checkout, clone [`emacs-taf/etaf`](https://github.com/emacs-taf/etaf) and `etaf-video-player`, then add the package directories to `load-path`:
+```elisp
+(require 'package)
+(add-to-list 'package-archives '("etaf" . "https://etaf.top/packages/"))
+(package-initialize)
+(package-refresh-contents)
+(package-install 'etaf-install)
+(etaf-install-ensure '(etaf-video-player))
+```
+
+Or run `M-x etaf-install` and select `etaf-video-player` interactively.
+
+### From a source checkout
+
+All core framework packages live in [`emacs-taf/etaf`](https://github.com/emacs-taf/etaf):
+
+```sh
+git clone https://github.com/emacs-taf/etaf.git
+git clone https://github.com/emacs-taf/etaf-video-player.git
+```
 
 ```elisp
 (dolist (pkg '("ecss" "ebox" "etaf" "etaf-ui" "etaf-db"))
   (add-to-list 'load-path (expand-file-name pkg "/path/to/etaf/packages")))
 (add-to-list 'load-path "/path/to/etaf-video-player")
 (require 'etaf-video-player)
+```
+<!-- END:GENERATED:pkg-install-en:etaf-video-player -->
 
+```elisp
 (global-set-key (kbd "C-c v") #'etaf-video-player-open)
 ```
 

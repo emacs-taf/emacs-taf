@@ -45,6 +45,7 @@ move.
 
 ## Installation
 
+<!-- BEGIN:GENERATED:pkg-install-en:etaf-xiangqi -->
 ### From the ETAF package archive (recommended)
 
 ```elisp
@@ -53,36 +54,34 @@ move.
 (package-initialize)
 (package-refresh-contents)
 (package-install 'etaf-install)
+(etaf-install-ensure '(etaf-xiangqi))
 ```
 
-Then run `M-x etaf-install` and select `etaf-xiangqi`. The installer pulls
-`ecss`, `ebox`, `etaf`, `etaf-ui` and `etaf-gamekit` automatically, and prompts
-to install the pinned OpenSpiel runtime under `~/.cache/emacs-taf/game-engines`
-(or run `M-x etaf-gamekit-install-openspiel` anytime).
+Or run `M-x etaf-install` and select `etaf-xiangqi` interactively.
 
 ### From a source checkout
 
-All core framework packages live in the single
-[`emacs-taf/etaf`](https://github.com/emacs-taf/etaf) repository:
+All core framework packages live in [`emacs-taf/etaf`](https://github.com/emacs-taf/etaf):
 
 ```sh
 git clone https://github.com/emacs-taf/etaf.git
 git clone https://github.com/emacs-taf/etaf-xiangqi.git
 ```
 
-Add the framework package directories and this repository to `load-path`:
-
 ```elisp
 (dolist (pkg '("ecss" "ebox" "etaf" "etaf-ui" "etaf-gamekit"))
   (add-to-list 'load-path (expand-file-name pkg "/path/to/etaf/packages")))
 (add-to-list 'load-path "/path/to/etaf-xiangqi")
 (require 'etaf-xiangqi)
+```
+<!-- END:GENERATED:pkg-install-en:etaf-xiangqi -->
 
+Install the pinned OpenSpiel runtime once with `M-x etaf-gamekit-install-openspiel`
+(it writes only under `~/.cache/emacs-taf/game-engines`).
+
+```elisp
 (global-set-key (kbd "C-c x") #'etaf-xiangqi-open)
 ```
-
-Then install the OpenSpiel runtime once with `M-x etaf-gamekit-install-openspiel`
-(it writes only under `~/.cache/emacs-taf/game-engines`).
 
 `M-x etaf-xiangqi-open` starts an independent match and fits the board to its
 window; it accepts an optional integer seed for a reproducible opening.

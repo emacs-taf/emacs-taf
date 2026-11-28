@@ -37,7 +37,7 @@ make compile EMACS="C:/Users/26289/Apps/emacs-30.1/bin/emacs.exe"
 PYTHONUTF8=1 python3 scripts/check-repository.py
 
 # 测试
-emacs -Q --batch -L . -L lisp -L tests -L ../etaf -L ../etaf-ui -L ../ebox -L ../ecss -L ../etaf-db -l tests/etaf-ncm-tests.el --eval '(ert-run-tests-batch-and-exit)'
+emacs -Q --batch -L . -L lisp -L tests -L ../../core/packages/etaf -L ../../core/packages/etaf-ui -L ../../core/packages/ebox -L ../../core/packages/ecss -L ../../core/packages/etaf-db -l tests/etaf-ncm-tests.el --eval '(ert-run-tests-batch-and-exit)'
 ```
 
 测试共 107 个用例。已知 Windows 既有失败 3 个，和本机平台有关，改动前后都在挂，不要当成自己的回归：

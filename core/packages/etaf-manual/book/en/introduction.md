@@ -202,7 +202,9 @@ Every entry is public: it is part of its package's supported interface, and an i
 
 ## Versions
 
-This edition describes `ecss 0.1.4`, `ekp 1.0.7`, `ebox 3.1.14`, `etaf 0.3.18`, `etaf-ui 0.3.13`, `etaf-db 0.1.3` and `etaf-posframe 0.3.4`. The manual is maintained together with the code: a build check fails when a public interface of a package the manual covers has no entry, when a signature differs from the code, when the text names a symbol that is not public, or when a version above differs from the package.
+<!-- BEGIN:GENERATED:manual-versions-en -->
+This edition describes `ecss 0.1.4`, `ekp 1.0.8`, `ebox 3.1.15`, `etaf 0.3.19`, `etaf-ui 0.3.14`, `etaf-db 0.1.4` and `etaf-posframe 0.3.5`. The manual is maintained together with the code: a build check fails when a public interface of a package the manual covers has no entry, when a signature differs from the code, when the text names a symbol that is not public, or when a version above differs from the package.
+<!-- END:GENERATED:manual-versions-en -->
 
 ## Reading this manual in Emacs
 

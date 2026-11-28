@@ -50,18 +50,18 @@ Selected text opens the annotation toolbar above or below the line:
 
 ## Installation
 
-Install from the ETAF package archive (`https://etaf.top/packages/`) with
-`M-x etaf-install` and select `etaf-reader`.
-
-From a source checkout, clone [`emacs-taf/etaf`](https://github.com/emacs-taf/etaf)
-and `etaf-reader`, then add the package directories to `load-path`:
+<!-- BEGIN:GENERATED:pkg-install-en:etaf-reader -->
+> `etaf-reader` is maintained in the monorepo (not yet published to the ELPA archive). Install from a source checkout of [`emacs-taf/emacs-taf`](https://github.com/emacs-taf/emacs-taf) (or [`emacs-taf/etaf`](https://github.com/emacs-taf/etaf) + this package):
 
 ```elisp
 (dolist (pkg '("ecss" "ebox" "etaf" "etaf-ui" "etaf-db"))
   (add-to-list 'load-path (expand-file-name pkg "/path/to/etaf/packages")))
 (add-to-list 'load-path "/path/to/etaf-reader")
 (require 'etaf-reader)
+```
+<!-- END:GENERATED:pkg-install-en:etaf-reader -->
 
+```elisp
 (global-set-key (kbd "C-c e") #'etaf-reader-open)
 ```
 

@@ -2,9 +2,11 @@
 
 [中文说明](README.zh-CN.md) · [Documentation](https://etaf.top) · [Monorepo](https://github.com/emacs-taf/emacs-taf) · [Package Archive](https://etaf.top/packages/)
 
-> **Read-only core projection.** This repository aggregates all 15 ETAF core framework packages, universal extensions, the official installer and the bilingual reference manual from [`core/`](https://github.com/emacs-taf/emacs-taf/tree/main/core) in the **[Emacs TAF Monorepo](https://github.com/emacs-taf/emacs-taf)**.
+<!-- BEGIN:GENERATED:core-overview-en -->
+> **Read-only core projection.** This repository aggregates all 15 published ETAF core framework packages, universal extensions, the official installer and the bilingual reference manual (plus 1 incubating package(s) in `packages/`) from [`core/`](https://github.com/emacs-taf/emacs-taf/tree/main/core) in the **[Emacs TAF Monorepo](https://github.com/emacs-taf/emacs-taf)**.
 >
 > Please submit all pull requests to **[emacs-taf/emacs-taf](https://github.com/emacs-taf/emacs-taf/pulls)**.
+<!-- END:GENERATED:core-overview-en -->
 
 ## Install (Recommended)
 
@@ -30,6 +32,7 @@ Or add the subdirectories under `packages/` of this checkout directly to `load-p
 
 ## Packages in this Repository
 
+<!-- BEGIN:GENERATED:core-packages-en -->
 ### Core Framework
 
 | Package | Role |
@@ -39,10 +42,10 @@ Or add the subdirectories under `packages/` of this checkout directly to `load-p
 | [`ebox`](packages/ebox) | Box/Flex/Grid layout, rendering and incremental buffer publication |
 | [`etaf`](packages/etaf) | Declarative components, reactive state, hosts and application lifecycle |
 | [`etaf-ui`](packages/etaf-ui) | Reusable UI components: buttons, forms, panels, tables, navigation and window shells |
+| [`etaf-gamekit`](packages/etaf-gamekit) | Game definitions, independent instances and Godot / OpenSpiel bridges |
 | [`etaf-posframe`](packages/etaf-posframe) | Floating child-frame panels for any ETAF View |
 | [`etaf-ext`](packages/etaf-ext) | Universal extension engine, lifecycle manager and host hooks |
 | [`etaf-db`](packages/etaf-db) | Data storage backends for ETAF applications (SQLite) |
-| [`etaf-gamekit`](packages/etaf-gamekit) | Game definitions, independent instances and Godot / OpenSpiel bridges |
 | [`etaf-install`](packages/etaf-install) | Official `package.el` installer, capability doctor, native module manager and package manager |
 
 ### Universal Extensions
@@ -59,6 +62,13 @@ Or add the subdirectories under `packages/` of this checkout directly to `load-p
 | Package | Description |
 | --- | --- |
 | [`etaf-manual`](packages/etaf-manual) | Bilingual ETAF Reference Manual (`M-x etaf-manual-open`) and `https://etaf.top` site source |
+
+### Incubating
+
+| Package | Description |
+| --- | --- |
+| [`etaf-devtools`](packages/etaf-devtools) | Live inspector, box overlay and target picker for ETAF buffers (incubating) |
+<!-- END:GENERATED:core-packages-en -->
 
 ## Contributing
 

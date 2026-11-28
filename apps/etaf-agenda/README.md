@@ -9,17 +9,16 @@
 
 ## 安装与运行
 
-推荐通过 ETAF 包归档（`https://etaf.top/packages/`）运行 `M-x etaf-install` 选择 `etaf-agenda`。
-
-从源码检出使用时，克隆 `emacs-taf/etaf` 与 `etaf-agenda`，把对应包目录加入 `load-path` 后：
+<!-- BEGIN:GENERATED:pkg-install-zh:etaf-agenda -->
+> `etaf-agenda` 当前位于 Monorepo（尚未进入官方 ELPA 归档），请从 [`emacs-taf/emacs-taf`](https://github.com/emacs-taf/emacs-taf) 源码检出加载：
 
 ```elisp
-(dolist (pkg '("ecss" "ekp" "ebox" "etaf" "etaf-ui" "etaf-db"))
+(dolist (pkg '("ecss" "ebox" "etaf" "etaf-ui" "etaf-db"))
   (add-to-list 'load-path (expand-file-name pkg "/path/to/etaf/packages")))
 (add-to-list 'load-path "/path/to/etaf-agenda")
 (require 'etaf-agenda)
-;; M-x etaf-agenda-open
 ```
+<!-- END:GENERATED:pkg-install-zh:etaf-agenda -->
 
 数据库默认位于 `~/.emacs.d/etaf-agenda/agenda.sqlite3`，首次打开自动初始化并在旧版本 schema 上按序迁移；`etaf-agenda-open` 也可直接传入自定义数据库路径。支持在运行时直接 `load-theme` 切换深浅主题，所有表面、语义色与 `etaf-ui` 控件原地重绘。
 

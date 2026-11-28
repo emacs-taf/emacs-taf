@@ -52,14 +52,38 @@ Emacs 里的 Telegram 客户端：界面用 [ETAF](https://github.com/emacs-taf/
 
 ## 安装与运行
 
-推荐通过 ETAF 包归档（`https://etaf.top/packages/`）运行 `M-x etaf-install` 并选择 `etaf-telega`。
-
-从源码检出使用时，将 `emacs-taf/etaf` 下的核心包目录（`packages/{ecss,ebox,etaf,etaf-ui}`）、本仓库根和 `telega` 的路径加入 `load-path`，然后：
+<!-- BEGIN:GENERATED:pkg-install-zh:etaf-telega -->
+### 通过 ETAF 包归档安装（推荐）
 
 ```elisp
-(require 'etaf-telega)
-M-x etaf-telega-open
+(require 'package)
+(add-to-list 'package-archives '("etaf" . "https://etaf.top/packages/"))
+(package-initialize)
+(package-refresh-contents)
+(package-install 'etaf-install)
+(etaf-install-ensure '(etaf-telega))
 ```
+
+或运行 `M-x etaf-install` 并在菜单中选择 `etaf-telega`。
+
+### 从源码检出安装
+
+全部核心框架包位于 [`emacs-taf/etaf`](https://github.com/emacs-taf/etaf)：
+
+```sh
+git clone https://github.com/emacs-taf/etaf.git
+git clone https://github.com/emacs-taf/etaf-telega.git
+```
+
+```elisp
+(dolist (pkg '("ecss" "ebox" "etaf" "etaf-ui"))
+  (add-to-list 'load-path (expand-file-name pkg "/path/to/etaf/packages")))
+(add-to-list 'load-path "/path/to/etaf-telega")
+(require 'etaf-telega)
+```
+<!-- END:GENERATED:pkg-install-zh:etaf-telega -->
+
+使用源码检出时还需将 `telega` 加入 `load-path`，然后运行 `M-x etaf-telega-open`。
 
 `etaf-telega-open` 不会显示 Telega 自己的 buffer，也不会重新登录；它复用
 Telega 的 server 与账号数据。首次触达真实账号前先看

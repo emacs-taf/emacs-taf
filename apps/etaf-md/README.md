@@ -42,6 +42,7 @@ Light, dark, sepia and face-derived `auto` palettes (`t` to cycle), keeping ever
 
 ## Installation
 
+<!-- BEGIN:GENERATED:pkg-install-en:etaf-md -->
 ### From the ETAF package archive (recommended)
 
 ```elisp
@@ -50,15 +51,14 @@ Light, dark, sepia and face-derived `auto` palettes (`t` to cycle), keeping ever
 (package-initialize)
 (package-refresh-contents)
 (package-install 'etaf-install)
+(etaf-install-ensure '(etaf-md))
 ```
 
-Then run `M-x etaf-install` and select `etaf-md` — in one step the installer fetches `etaf`, `etaf-ui`, `ebox` and `ecss`, downloads the checksum-verified prebuilt QuickJS Mermaid & MathJax native module for your platform into `~/.cache/emacs-taf/native/` (preserved across package upgrades, with no C compiler, Node.js or `make` required), and activates it immediately before opening `etaf-md`.
-
-If you installed offline or directly via `package-install`, run `M-x etaf-install-native` and select `etaf-md` (or press `n` on `etaf-md` in `M-x etaf-install-manage`) anytime to fetch or refresh the prebuilt binary. Run `M-x etaf-install-doctor` (or evaluate `(etaf-md-doctor)`) to inspect whether `typeset-native`, `ffmpeg`, `qrencode` and `git` are active.
+Or run `M-x etaf-install` and select `etaf-md` interactively.
 
 ### From a source checkout
 
-Clone [`emacs-taf/etaf`](https://github.com/emacs-taf/etaf) (which contains `ecss`, `ebox`, `etaf` and `etaf-ui` under `packages/`) and this repository, optionally run `make native-build`, then add each package root to `load-path`:
+All core framework packages live in [`emacs-taf/etaf`](https://github.com/emacs-taf/etaf):
 
 ```sh
 git clone https://github.com/emacs-taf/etaf.git
@@ -66,11 +66,16 @@ git clone https://github.com/emacs-taf/etaf-md.git
 ```
 
 ```elisp
-(dolist (pkg '("ecss" "ebox" "etaf-ui" "etaf"))
+(dolist (pkg '("ecss" "ebox" "etaf" "etaf-ui"))
   (add-to-list 'load-path (expand-file-name pkg "/path/to/etaf/packages")))
 (add-to-list 'load-path "/path/to/etaf-md")
 (require 'etaf-md)
 ```
+<!-- END:GENERATED:pkg-install-en:etaf-md -->
+
+Installing `etaf-md` via `etaf-install` also downloads the checksum-verified prebuilt QuickJS Mermaid & MathJax native module for your platform into `~/.cache/emacs-taf/native/` (preserved across package upgrades, with no C compiler, Node.js or `make` required), and activates it immediately before opening `etaf-md`.
+
+If you installed offline or directly via `package-install`, run `M-x etaf-install-native` and select `etaf-md` (or press `n` on `etaf-md` in `M-x etaf-install-manage`) anytime to fetch or refresh the prebuilt binary. Run `M-x etaf-install-doctor` (or evaluate `(etaf-md-doctor)`) to inspect whether `typeset-native`, `ffmpeg`, `qrencode` and `git` are active. From a source checkout, optionally run `make native-build` to compile the local QuickJS module.
 
 ## Usage
 

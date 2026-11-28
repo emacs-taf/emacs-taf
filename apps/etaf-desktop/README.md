@@ -10,16 +10,42 @@ The demo desktop at a wide frame:
 
 ![The demo desktop at a wide frame](https://etaf.top/media/etaf-desktop/etaf-desktop-wide.webp)
 
-## Minimal example
+## Installation
 
-Install via `M-x etaf-install` from `https://etaf.top/packages/`, or from source
-checkouts of [`emacs-taf/etaf`](https://github.com/emacs-taf/etaf) and
-`etaf-desktop`:
+<!-- BEGIN:GENERATED:pkg-install-en:etaf-desktop -->
+### From the ETAF package archive (recommended)
+
+```elisp
+(require 'package)
+(add-to-list 'package-archives '("etaf" . "https://etaf.top/packages/"))
+(package-initialize)
+(package-refresh-contents)
+(package-install 'etaf-install)
+(etaf-install-ensure '(etaf-desktop))
+```
+
+Or run `M-x etaf-install` and select `etaf-desktop` interactively.
+
+### From a source checkout
+
+All core framework packages live in [`emacs-taf/etaf`](https://github.com/emacs-taf/etaf):
+
+```sh
+git clone https://github.com/emacs-taf/etaf.git
+git clone https://github.com/emacs-taf/etaf-desktop.git
+```
 
 ```elisp
 (dolist (pkg '("ecss" "ebox" "etaf" "etaf-ui"))
   (add-to-list 'load-path (expand-file-name pkg "/path/to/etaf/packages")))
 (add-to-list 'load-path "/path/to/etaf-desktop")
+(require 'etaf-desktop)
+```
+<!-- END:GENERATED:pkg-install-en:etaf-desktop -->
+
+## Minimal example
+
+```elisp
 (require 'etaf-desktop)
 (let ((desktop (etaf-desktop-open)))
   (etaf-desktop-open-window desktop 'notes

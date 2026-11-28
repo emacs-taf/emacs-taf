@@ -214,6 +214,42 @@ class PlanningTests(Fixture):
         (self.root / '.jj/repo/store/git').mkdir(parents=True)
         self.assertEqual('jjosh', VERIFY.owner_binary(self.root))
 
+    def test_check_requires_flags_missing_and_unused_dependencies(self):
+        self.package('base')
+        self.package('extra')
+        self.package('app', requires=['extra'], body='(defun app-go () (base-open))')
+        result = self.cli('check-requires')
+        self.assertEqual(1, result.returncode)
+        self.assertIn('Package-Requires omits base', result.stderr)
+        self.assertIn('Package-Requires declares extra', result.stderr)
+
+    def test_check_requires_ignores_quoted_data_and_soft_requires(self):
+        self.package('opt')
+        self.package('app', requires=[], body=(
+            "(defconst app-list '((opt \"Label\")))\n"
+            "(when (require 'opt nil t) (opt-open))"
+        ))
+        result = self.cli('check-requires')
+        self.assertEqual(0, result.returncode, result.stderr)
+
+    def test_doc_impact_matches_coupled_rules(self):
+        import json
+        self.write(self.root / 'doc-coupling.json', json.dumps({
+            'schema': 1,
+            'rules': [{
+                'id': 'theme',
+                'description': 'Theme docs',
+                'watch': ['core/packages/etaf-ui/lisp/etaf-ui-style.el'],
+                'docs': ['docs/theme.md'],
+            }],
+        }))
+        result = self.cli('doc-impact', '--changed', 'core/packages/etaf-ui/lisp/etaf-ui-style.el', '--json')
+        self.assertEqual(0, result.returncode, result.stderr)
+        hits = json.loads(result.stdout)
+        self.assertEqual(1, len(hits))
+        self.assertEqual('theme', hits[0]['id'])
+        self.assertEqual(['docs/theme.md'], hits[0]['untouched_docs'])
+
 
 if __name__ == '__main__':
     unittest.main()

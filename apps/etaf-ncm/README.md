@@ -137,18 +137,40 @@ The login, queue and saved queues live in the backend's state directory,
 
 ### 3. The Emacs package
 
-Install from the ETAF package archive (`https://etaf.top/packages/`) with
-`M-x etaf-install` and select `etaf-ncm`.
-
-From a source checkout, clone [`emacs-taf/etaf`](https://github.com/emacs-taf/etaf)
-and `etaf-ncm`, then add the package directories to `load-path`:
+<!-- BEGIN:GENERATED:pkg-install-en:etaf-ncm -->
+### From the ETAF package archive (recommended)
 
 ```elisp
-(dolist (pkg '("ecss" "ebox" "etaf" "etaf-ui"))
+(require 'package)
+(add-to-list 'package-archives '("etaf" . "https://etaf.top/packages/"))
+(package-initialize)
+(package-refresh-contents)
+(package-install 'etaf-install)
+(etaf-install-ensure '(etaf-ncm))
+```
+
+Or run `M-x etaf-install` and select `etaf-ncm` interactively.
+
+### From a source checkout
+
+All core framework packages live in [`emacs-taf/etaf`](https://github.com/emacs-taf/etaf):
+
+```sh
+git clone https://github.com/emacs-taf/etaf.git
+git clone https://github.com/emacs-taf/etaf-ncm.git
+```
+
+```elisp
+(dolist (pkg '("ecss" "ebox" "etaf" "etaf-ui" "etaf-db"))
   (add-to-list 'load-path (expand-file-name pkg "/path/to/etaf/packages")))
 (add-to-list 'load-path "/path/to/etaf-ncm")
 (require 'etaf-ncm)
+```
+<!-- END:GENERATED:pkg-install-en:etaf-ncm -->
 
+Bind a shortcut if desired:
+
+```elisp
 (global-set-key (kbd "C-c m") #'etaf-ncm-open)
 ```
 

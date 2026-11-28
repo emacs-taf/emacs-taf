@@ -1,0 +1,67 @@
+{
+  "schema": 1,
+  "rules": [
+    {
+      "id": "app-registration-protocol",
+      "description": "App registration macro, dev-autoloads generator, and entry app-define metadata",
+      "watch": [
+        "core/packages/etaf/lisp/etaf-app.el",
+        "scripts/dev-autoloads.py"
+      ],
+      "docs": [
+        "core/packages/etaf-manual/book/en/applications.md",
+        "core/packages/etaf-manual/book/zh-CN/applications.md",
+        "docs/manual.md",
+        "docs/manual.zh-CN.md"
+      ]
+    },
+    {
+      "id": "distribution-and-install",
+      "description": "Workspace package registry, ELPA archive selection, installer catalog, and release script",
+      "watch": [
+        "workspace.json",
+        "release-dependencies.json",
+        "core/packages/etaf-install/**",
+        "scripts/package-release.py"
+      ],
+      "docs": [
+        "README.md",
+        "README.zh-CN.md",
+        "core/README.md",
+        "core/README.zh-CN.md",
+        "docs/manual.md",
+        "docs/manual.zh-CN.md",
+        "docs/architecture.zh-CN.md"
+      ]
+    },
+    {
+      "id": "theme-and-ui-tokens",
+      "description": "Theme token definitions, host theme derivation engine, and reactive theme context",
+      "watch": [
+        "core/packages/etaf-ui/lisp/etaf-ui-style.el",
+        "core/packages/etaf-ui/lisp/etaf-ui-host-theme.el",
+        "core/packages/etaf/lisp/etaf-context.el"
+      ],
+      "docs": [
+        "core/packages/etaf-manual/book/en/component-styles-and-themes.md",
+        "core/packages/etaf-manual/book/zh-CN/component-styles-and-themes.md"
+      ]
+    },
+    {
+      "id": "public-api-and-manual",
+      "description": "Core package root entries (versions and Commentary APIs) and reference manual manifest",
+      "watch": [
+        "core/packages/*/*.el",
+        "core/packages/etaf-manual/book/book.json"
+      ],
+      "docs": [
+        "core/packages/etaf-manual/book/en/introduction.md",
+        "core/packages/etaf-manual/book/zh-CN/introduction.md",
+        "core/packages/etaf-manual/book/en/versions-and-migration.md",
+        "core/packages/etaf-manual/book/zh-CN/versions-and-migration.md",
+        "core/packages/etaf-manual/book/en/module-map.md",
+        "core/packages/etaf-manual/book/zh-CN/module-map.md"
+      ]
+    }
+  ]
+}

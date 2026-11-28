@@ -22,9 +22,28 @@ A focus timer built as an ETAF application: one ordinary Emacs buffer with a cou
 
 ## Installation
 
-Install from the ETAF package archive (`https://etaf.top/packages/`) with `M-x etaf-install` and select `etaf-pomodoro`.
+<!-- BEGIN:GENERATED:pkg-install-en:etaf-pomodoro -->
+### From the ETAF package archive (recommended)
 
-From a source checkout, clone [`emacs-taf/etaf`](https://github.com/emacs-taf/etaf) and `etaf-pomodoro`, then add the package directories to `load-path` and require the entry:
+```elisp
+(require 'package)
+(add-to-list 'package-archives '("etaf" . "https://etaf.top/packages/"))
+(package-initialize)
+(package-refresh-contents)
+(package-install 'etaf-install)
+(etaf-install-ensure '(etaf-pomodoro))
+```
+
+Or run `M-x etaf-install` and select `etaf-pomodoro` interactively.
+
+### From a source checkout
+
+All core framework packages live in [`emacs-taf/etaf`](https://github.com/emacs-taf/etaf):
+
+```sh
+git clone https://github.com/emacs-taf/etaf.git
+git clone https://github.com/emacs-taf/etaf-pomodoro.git
+```
 
 ```elisp
 (dolist (pkg '("ecss" "ebox" "etaf" "etaf-ui"))
@@ -32,6 +51,7 @@ From a source checkout, clone [`emacs-taf/etaf`](https://github.com/emacs-taf/et
 (add-to-list 'load-path "/path/to/etaf-pomodoro")
 (require 'etaf-pomodoro)
 ```
+<!-- END:GENERATED:pkg-install-en:etaf-pomodoro -->
 
 ## Quick start
 

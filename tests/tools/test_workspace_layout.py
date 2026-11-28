@@ -45,6 +45,16 @@ class WorkspaceLayoutTests(unittest.TestCase):
         hit_none = workspace_layout.affected_projections(ROOT, ["README.md", "apps/etaf-web/etaf-web.el"])
         self.assertEqual(hit_none, [])
 
+    def test_incubating_packages_are_registered_and_excluded_from_projections(self):
+        ws = workspace_layout.load_workspace(ROOT)
+        for name in ("etaf-devtools", "etaf-island", "etaf-balatro"):
+            self.assertIn(name, ws["packages"])
+            self.assertTrue(workspace_layout.is_incubating(ws["packages"][name]))
+        by_id = {t["id"] for t in workspace_layout.projection_targets(ROOT)}
+        self.assertNotIn("etaf-island", by_id)
+        self.assertNotIn("etaf-balatro", by_id)
+        self.assertNotIn("etaf-devtools", by_id)
+
 
 if __name__ == "__main__":
     unittest.main()

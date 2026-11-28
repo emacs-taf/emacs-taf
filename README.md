@@ -2,14 +2,19 @@
 
 [中文](README.zh-CN.md)
 
+<!-- BEGIN:GENERATED:root-badges-en -->
 [![Repository structure](https://github.com/emacs-taf/emacs-taf/actions/workflows/structure.yml/badge.svg)](https://github.com/emacs-taf/emacs-taf/actions/workflows/structure.yml)
 [![Package installation](https://github.com/emacs-taf/emacs-taf/actions/workflows/installation.yml/badge.svg)](https://github.com/emacs-taf/emacs-taf/actions/workflows/installation.yml)
+[![Affected package tests](https://github.com/emacs-taf/emacs-taf/actions/workflows/affected-tests.yml/badge.svg)](https://github.com/emacs-taf/emacs-taf/actions/workflows/affected-tests.yml)
+<!-- END:GENERATED:root-badges-en -->
 
 [Website & Manual](https://etaf.top) · [Package Archive](https://etaf.top/packages/) · [Native Modules](https://etaf.top/native/) · [Media Library](https://etaf.top/media/) · [License](LICENSE)
 
 **Emacs TAF (ETAF)** is a declarative text application framework for Emacs with CSS-style selectors and cascade, box/flex/grid layout, reactive components and incremental buffer rendering.
 
-This repository (`https://github.com/emacs-taf/emacs-taf`) is the **official Emacs TAF monorepo** and canonical home for development, pull requests and CI across the ecosystem. Packages are organized into three layers: `core/packages/` (15 framework, extension, installer and reference-manual packages, projected together to [emacs-taf/etaf](https://github.com/emacs-taf/etaf)), `apps/` (16 applications) and `games/` (2 games), where published products project individually to `https://github.com/emacs-taf/<package>`.
+<!-- BEGIN:GENERATED:root-overview-en -->
+This repository (`https://github.com/emacs-taf/emacs-taf`) is the **official Emacs TAF monorepo** and canonical home for development, pull requests and CI across all 36 packages in the ecosystem. Packages are organized into three layers: `core/packages/` (15 core framework, extension, installer and reference-manual packages plus 1 incubating, projected together to [emacs-taf/etaf](https://github.com/emacs-taf/etaf)), `apps/` (16 applications plus 1 incubating) and `games/` (2 games plus 1 incubating), where published products project individually to `https://github.com/emacs-taf/<package>`.
+<!-- END:GENERATED:root-overview-en -->
 
 ![ETAF applications in Emacs](https://etaf.top/media/site/shots/etaf-ncm.webp)
 
@@ -44,6 +49,7 @@ See the full [installation reference](https://etaf.top/introduction/#installatio
 
 Every package below lives under `core/packages/`, `apps/` or `games/` and is registered in [workspace.json](workspace.json).
 
+<!-- BEGIN:GENERATED:root-packages-en -->
 ### Core Framework (`core/packages/` → [emacs-taf/etaf](https://github.com/emacs-taf/etaf))
 
 | Package | Responsibility | Monorepo dependencies |
@@ -51,14 +57,15 @@ Every package below lives under `core/packages/`, `apps/` or `games/` and is reg
 | [ecss](core/packages/ecss) | Selector and cascade semantics | None |
 | [ekp](core/packages/ekp) | Knuth–Plass paragraph layout | None |
 | [ebox](core/packages/ebox) | Box layout, rendering and incremental publication | ecss; optional ekp |
-| [etaf](core/packages/etaf) | Components, state and application runtime | ebox |
+| [etaf](core/packages/etaf) | Components, state and application runtime | ebox, ecss |
 | [etaf-ui](core/packages/etaf-ui) | Reusable UI components and theme tokens | etaf |
-| [etaf-gamekit](core/packages/etaf-gamekit) | Game definitions, independent instances, actions and backend adapters | etaf |
-| [etaf-posframe](core/packages/etaf-posframe) | Floating child-frame panels for any ETAF View | etaf |
+| [etaf-gamekit](core/packages/etaf-gamekit) | Game definitions, independent instances, actions and backend adapters | etaf, etaf-ui |
+| [etaf-posframe](core/packages/etaf-posframe) | Floating child-frame panels for any ETAF View | etaf, etaf-ui |
 | [etaf-ext](core/packages/etaf-ext) | Universal extension engine, lifecycle manager and host hooks for ETAF apps | etaf, etaf-ui, etaf-posframe |
 | [etaf-db](core/packages/etaf-db) | Database backends for ETAF; currently SQLite | etaf |
 | [etaf-install](core/packages/etaf-install) | Official `package.el` installer, capability doctor, native module downloader and package manager | None |
 | [etaf-manual](core/packages/etaf-manual) | Bilingual ETAF Reference Manual for the core packages, checked against public interfaces and published at <https://etaf.top> | etaf, etaf-ui; gate also reads ecss, ekp, ebox, etaf-db |
+| [etaf-devtools](core/packages/etaf-devtools) | Live DOM/box-tree inspector, hover picker and diagnostic overlay for ETAF buffers (incubating) | etaf, etaf-ui, etaf-posframe |
 
 ### Extensions (`core/packages/` → [emacs-taf/etaf](https://github.com/emacs-taf/etaf))
 
@@ -66,42 +73,47 @@ Built on [etaf-ext](core/packages/etaf-ext) to attach cross-cutting capabilities
 
 | Extension | Responsibility | Framework dependencies |
 | --- | --- | --- |
-| [etaf-hints](core/packages/etaf-hints) | Quick keyboard jump hints for interactive targets | etaf-ext, etaf, etaf-ui, ebox |
-| [etaf-highlight](core/packages/etaf-highlight) | Text highlighting and anchored notes across ETAF views | etaf-ext, etaf, etaf-ui, ebox |
-| [etaf-translate](core/packages/etaf-translate) | Immersive inline and side-by-side translation for ETAF views | etaf-ext, etaf, etaf-ui, etaf-db, ebox |
-| [etaf-export](core/packages/etaf-export) | Vector SVG and PDF export for ETAF rendered pages | etaf-ext, etaf, etaf-ui, ebox |
+| [etaf-hints](core/packages/etaf-hints) | Quick keyboard jump hints for interactive targets | etaf, etaf-ui, etaf-ext |
+| [etaf-highlight](core/packages/etaf-highlight) | Text highlighting and anchored notes across ETAF views | etaf, etaf-ui, etaf-ext |
+| [etaf-translate](core/packages/etaf-translate) | Immersive inline and side-by-side translation for ETAF views | etaf, etaf-ui, etaf-posframe, etaf-ext |
+| [etaf-export](core/packages/etaf-export) | Vector SVG and PDF export for ETAF rendered pages | etaf, etaf-ui, etaf-ext |
 
 ### Applications (`apps/`)
 
 | Application | Responsibility | Framework dependencies |
 | --- | --- | --- |
-| [etaf-desktop](https://github.com/emacs-taf/etaf-desktop) | Desktop window-management application built from ETAF and ETAF UI | etaf, etaf-ui, ebox |
-| [etaf-ncm](https://github.com/emacs-taf/etaf-ncm) | NetEase Cloud Music player: library browsing, playback control, lyrics and queue | etaf, etaf-ui, ebox |
-| [etaf-weread](https://github.com/emacs-taf/etaf-weread) | WeChat Reading client: shelf, notebook, highlights, store search and statistics | etaf, etaf-ui, etaf-db, ebox |
-| [etaf-md](https://github.com/emacs-taf/etaf-md) | Native Markdown renderer and live previewer: centered measure, full-grid tables, 35+ `:::` containers, zero-browser QuickJS Mermaid/MathJax SVGs and lockstep split preview | etaf, etaf-ui, ebox |
-| [etaf-org](https://github.com/emacs-taf/etaf-org) | Org reading view and living documents: native Org syntax, extensible node engine, live widgets, Mermaid/KaTeX diagrams, outline side window and O(Δ) live split preview | etaf, etaf-ui, ebox |
-| [etaf-rss](https://github.com/emacs-taf/etaf-rss) | RSS reader: subscriptions, folders, unread/starred scopes, reading pane, search and OPML (local JSON or Miniflux) | etaf, etaf-ui, ebox |
-| [maillist](https://github.com/emacs-taf/maillist) | Mailing-list client: public-inbox thread list, unread/star marks, fixed-header reader and smtpmail replies | etaf, etaf-ui, etaf-db, ebox |
-| [etaf-reader](https://github.com/emacs-taf/etaf-reader) | Local ebook reader: EPUB/TXT/Markdown/HTML/FB2/PDF import, paged reading, annotations and progress | etaf, etaf-ui, etaf-db, ebox |
-| [etaf-pomodoro](https://github.com/emacs-taf/etaf-pomodoro) | Focus timer as an application or floating panel: reactive countdown, three styles and host-following palette | etaf, etaf-ui, ebox |
-| [etaf-telega](https://github.com/emacs-taf/etaf-telega) | Telegram client on Telega's TDLib backend: chats, live message stream, composer and message actions | etaf, etaf-ui, ebox |
-| [etaf-video-player](https://github.com/emacs-taf/etaf-video-player) | Local video and streams as image frames, density characters or true-color half blocks, with sound | etaf, etaf-ui, ebox |
-| [etaf-bili](https://github.com/emacs-taf/etaf-bili) | Bilibili client: popular feed, ranking and search with in-buffer playback | etaf, etaf-ui, ebox |
-| [etaf-youtube](https://github.com/emacs-taf/etaf-youtube) | YouTube client: account feeds, search, channels, playlists and in-canvas video playback | etaf, etaf-ui, etaf-db, ebox |
-| [etaf-screensaver](https://github.com/emacs-taf/etaf-screensaver) | Idle screensavers: canvas-only animation, input dismissal, grouped playback and recorded animations | etaf, ebox |
-| [etaf-web](apps/etaf-web) | Web article reader: compiles HTML to `etaf-md` intermediate language with local caching | etaf-md, etaf, etaf-ui, ebox |
-| [etaf-agenda](https://github.com/emacs-taf/etaf-agenda) | Personal agenda: daily log, year/month/week calendar, tasks, projects, habits and monthly review on SQLite | etaf, etaf-ui, etaf-db, ebox |
+| [etaf-desktop](https://github.com/emacs-taf/etaf-desktop) | Desktop window-management application built from ETAF and ETAF UI | etaf, etaf-ui |
+| [etaf-ncm](https://github.com/emacs-taf/etaf-ncm) | NetEase Cloud Music player: library browsing, playback control, lyrics and queue | etaf, etaf-ui, ebox, etaf-db |
+| [etaf-weread](https://github.com/emacs-taf/etaf-weread) | WeChat Reading client: shelf, notebook, highlights, store search and statistics | etaf, etaf-ui, etaf-db |
+| [etaf-md](https://github.com/emacs-taf/etaf-md) | Native Markdown renderer and live previewer: centered measure, full-grid tables, 35+ `:::` containers, zero-browser QuickJS Mermaid/MathJax SVGs and lockstep split preview | etaf, etaf-ui |
+| [etaf-org](https://github.com/emacs-taf/etaf-org) | Org reading view and living documents: native Org syntax, extensible node engine, live widgets, Mermaid/KaTeX diagrams, outline side window and O(Δ) live split preview | etaf, etaf-ui |
+| [etaf-rss](https://github.com/emacs-taf/etaf-rss) | RSS reader: subscriptions, folders, unread/starred scopes, reading pane, search and OPML (local JSON or Miniflux) | etaf, etaf-ui |
+| [maillist](https://github.com/emacs-taf/maillist) | Mailing-list client: public-inbox thread list, unread/star marks, fixed-header reader and smtpmail replies | etaf, etaf-ui, etaf-db |
+| [etaf-reader](https://github.com/emacs-taf/etaf-reader) | Local ebook reader: EPUB/TXT/Markdown/HTML/FB2/PDF import, paged reading, annotations and progress | etaf, etaf-ui, etaf-db |
+| [etaf-pomodoro](https://github.com/emacs-taf/etaf-pomodoro) | Focus timer as an application or floating panel: reactive countdown, three styles and host-following palette | etaf, etaf-ui |
+| [etaf-telega](https://github.com/emacs-taf/etaf-telega) | Telegram client on Telega's TDLib backend: chats, live message stream, composer and message actions | etaf, etaf-ui |
+| [etaf-video-player](https://github.com/emacs-taf/etaf-video-player) | Local video and streams as image frames, density characters or true-color half blocks, with sound | etaf, etaf-ui, etaf-db |
+| [etaf-bili](https://github.com/emacs-taf/etaf-bili) | Bilibili client: popular feed, ranking and search with in-buffer playback | etaf, etaf-ui, etaf-db |
+| [etaf-youtube](https://github.com/emacs-taf/etaf-youtube) | YouTube client: account feeds, search, channels, playlists and in-canvas video playback | etaf, etaf-ui, etaf-db |
+| [etaf-screensaver](https://github.com/emacs-taf/etaf-screensaver) | Idle screensavers: canvas-only animation, input dismissal, grouped playback and recorded animations | etaf |
+| [etaf-web](apps/etaf-web) | Web article reader: compiles HTML to `etaf-md` intermediate language with local caching | etaf, etaf-ui, etaf-md |
+| [etaf-agenda](https://github.com/emacs-taf/etaf-agenda) | Personal agenda: daily log, year/month/week calendar, tasks, projects, habits and monthly review on SQLite | etaf, etaf-ui, etaf-db |
+| [etaf-island](apps/etaf-island) | Pure-protocol Dynamic Island system shell consuming live activities and notifications (incubating) | etaf, etaf-ui |
 
-> **Archive status:** `etaf-agenda`, `etaf-reader`, `etaf-rss`, `etaf-screensaver` and `etaf-web` pass their checks in this monorepo but are not published to the ELPA archive yet (`M-x etaf-install` does not list them).
+> **Archive status:** `etaf-agenda`, `etaf-island`, `etaf-reader`, `etaf-rss`, `etaf-screensaver` and `etaf-web` live in this monorepo and are not published to the ELPA archive yet (`M-x etaf-install` does not list them).
 
 ### Games (`games/`)
 
-Both games build on [etaf-gamekit](core/packages/etaf-gamekit) and keep their rules, presentation and assets in their own package directories:
+Games build on [etaf-gamekit](core/packages/etaf-gamekit) or pure ETAF UI and keep their rules, presentation and assets in their own package directories:
 
 | Game | Description | Backend |
 | --- | --- | --- |
 | [etaf-tanks](https://github.com/emacs-taf/etaf-tanks) | Iron Tide: real-time tank battle with a native arena | Godot |
 | [etaf-xiangqi](https://github.com/emacs-taf/etaf-xiangqi) | Chu He: xiangqi (Chinese chess) against the computer or hot-seat | OpenSpiel |
+| [etaf-balatro](games/etaf-balatro) | Balatro-inspired text deck-building and scoring roguelike (incubating) | Pure Elisp |
+
+> Not yet in the ELPA archive: `etaf-balatro`. Incubating (monorepo-only, excluded from standalone projections and releases): `etaf-balatro`, `etaf-devtools`, `etaf-island`.
+<!-- END:GENERATED:root-packages-en -->
 
 For gamekit development tests, install the required engine backend or run `make -C core/packages/etaf-gamekit engine-all GAMEKIT_PYTHON=python3.11` before `make -C core/packages/etaf-gamekit check`.
 
@@ -122,22 +134,25 @@ These companion repositories build on the ETAF framework through published packa
 
 ## Monorepo Layout & Read-Only Projections
 
+<!-- BEGIN:GENERATED:root-layout-en -->
 ```text
 emacs-taf/
-├── core/                     # Core projection (→ emacs-taf/etaf): README + packages/<15 core/ext/manual pkgs>
-├── apps/                     # 16 end-user applications (published apps project individually → emacs-taf/<app>)
-├── games/                    # 2 games (project individually → emacs-taf/<game>)
-├── scripts/                  # Shared build, structure/API checks, refscope, release and media publishing tools
+├── core/                     # Core projection (→ emacs-taf/etaf): README + packages/<16 core/ext/manual pkgs>
+├── apps/                     # 17 end-user applications (published apps project individually → emacs-taf/<app>)
+├── games/                    # 3 games (published games project individually → emacs-taf/<game>)
+├── scripts/                  # Shared build, structure/API/doc checks, refscope, release and media publishing tools
 ├── docs/                     # Monorepo tool manual, ecosystem architecture and keyboard navigation contracts
 ├── tests/tools/              # Unit and regression tests for shared monorepo tooling and installer flows
-├── workspace.json            # Package registry, paths, roles and projection targets (schema 3)
+├── workspace.json            # Package registry, paths, roles, status and projection targets (schema 3)
 ├── release-dependencies.json # Official ELPA archive package selection and runtime resources
+├── doc-coupling.json         # Architectural code-to-doc impact coupling rules
 └── Makefile                  # Dependency-ordered monorepo orchestration targets
 ```
+<!-- END:GENERATED:root-layout-en -->
 
 - **Single source of truth for PRs**: Changes spanning a framework provider and its consuming applications land together in one atomic commit and PR in `emacs-taf/emacs-taf`.
 - **Layered read-only projections**:
-  - `core/` projects automatically to **[emacs-taf/etaf](https://github.com/emacs-taf/etaf)** as a unified 15-package core framework repository (framework, extensions, installer and reference manual).
+  - `core/` projects automatically to **[emacs-taf/etaf](https://github.com/emacs-taf/etaf)** as a unified core framework repository (framework, extensions, installer and reference manual).
   - Each published application/game under `apps/` and `games/` projects automatically to its own standalone repository (`https://github.com/emacs-taf/<package>`) for independent discovery and browsing; PRs are disabled on projection mirrors.
 - **Source-manager installs (`straight.el` / `elpaca`)**: Prefer the official ELPA archive (`https://etaf.top/packages/`), or install directly from this monorepo using `:files ("core/packages/<pkg>/*")` / `:files ("apps/<app>/*")`.
 

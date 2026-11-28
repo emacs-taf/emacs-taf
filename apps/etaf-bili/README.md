@@ -20,7 +20,38 @@ This is an unofficial client for personal Bilibili viewing inside Emacs. Availab
 
 ## Install
 
-Install directly from the ETAF archive with `M-x etaf-install` and select `etaf-bili`. Installing `etaf-bili` pulls its package dependencies (`etaf`, `etaf-ui`, `etaf-db`) and downloads the prebuilt `etaf-video-mpv` native module for `etaf` automatically.
+<!-- BEGIN:GENERATED:pkg-install-en:etaf-bili -->
+### From the ETAF package archive (recommended)
+
+```elisp
+(require 'package)
+(add-to-list 'package-archives '("etaf" . "https://etaf.top/packages/"))
+(package-initialize)
+(package-refresh-contents)
+(package-install 'etaf-install)
+(etaf-install-ensure '(etaf-bili))
+```
+
+Or run `M-x etaf-install` and select `etaf-bili` interactively.
+
+### From a source checkout
+
+All core framework packages live in [`emacs-taf/etaf`](https://github.com/emacs-taf/etaf):
+
+```sh
+git clone https://github.com/emacs-taf/etaf.git
+git clone https://github.com/emacs-taf/etaf-bili.git
+```
+
+```elisp
+(dolist (pkg '("ecss" "ebox" "etaf" "etaf-ui" "etaf-db"))
+  (add-to-list 'load-path (expand-file-name pkg "/path/to/etaf/packages")))
+(add-to-list 'load-path "/path/to/etaf-bili")
+(require 'etaf-bili)
+```
+<!-- END:GENERATED:pkg-install-en:etaf-bili -->
+
+Installing `etaf-bili` via `etaf-install` also downloads the prebuilt `etaf-video-mpv` native module for `etaf` automatically.
 
 Requires Emacs 29.1+ (with built-in SQLite for local resume/preferences), `curl`, Node.js (for QR sign-in in `backends/bili/`), and optionally `libmpv` / `ffmpeg` (with `ffplay`) / `mpv`.
 

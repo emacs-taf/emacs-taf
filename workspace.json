@@ -1,6 +1,6 @@
 {
   "schema": 3,
-  "note": "Emacs TAF Monorepo: core/ holds the 15 core framework, extension, installer and manual packages (projected together to emacs-taf/etaf); apps/ and games/ hold standalone product packages (projected individually).",
+  "note": "Emacs TAF Monorepo: core/ holds core framework, extension, installer and manual packages (active packages project together to emacs-taf/etaf); apps/ and games/ hold standalone product packages (published products project individually). Packages with status \"incubating\" stay monorepo-only until graduated.",
   "projections": {
     "etaf": {
       "prefix": "core",
@@ -44,6 +44,13 @@
       "repo": "emacs-taf/etaf-agenda",
       "url": "https://github.com/emacs-taf/etaf-agenda.git"
     },
+    "etaf-balatro": {
+      "path": "games/etaf-balatro",
+      "role": "game",
+      "status": "incubating",
+      "branch": "main",
+      "url": "https://github.com/emacs-taf/emacs-taf.git"
+    },
     "etaf-bili": {
       "path": "apps/etaf-bili",
       "role": "application",
@@ -64,6 +71,13 @@
       "branch": "main",
       "repo": "emacs-taf/etaf-desktop",
       "url": "https://github.com/emacs-taf/etaf-desktop.git"
+    },
+    "etaf-devtools": {
+      "path": "core/packages/etaf-devtools",
+      "role": "framework",
+      "status": "incubating",
+      "branch": "main",
+      "url": "https://github.com/emacs-taf/emacs-taf.git"
     },
     "etaf-export": {
       "path": "core/packages/etaf-export",
@@ -106,6 +120,13 @@
       "projection": "etaf",
       "url": "https://github.com/emacs-taf/etaf.git",
       "branch": "main"
+    },
+    "etaf-island": {
+      "path": "apps/etaf-island",
+      "role": "application",
+      "status": "incubating",
+      "branch": "main",
+      "url": "https://github.com/emacs-taf/emacs-taf.git"
     },
     "etaf-manual": {
       "path": "core/packages/etaf-manual",

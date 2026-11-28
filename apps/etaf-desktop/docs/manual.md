@@ -268,7 +268,7 @@ clear of controls.
                          (list :id 'main :title "Notes"
                                :view (etaf-view
                                       (box :padding '((lh 0) (ch 2) (lh 1) (ch 2))
-                                           (text "Welcome"))))))))
+                                           (text "Welcome")))))))
  :close (lambda (_context reason) (message "Notes closed: %s" reason))
  :serialize (lambda (context) (plist-get context :state)))
 

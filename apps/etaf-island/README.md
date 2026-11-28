@@ -10,6 +10,19 @@ Pure-protocol Dynamic Island system shell for Emacs, consuming ETAF's cross-appl
 - **Optional native Emacs sensors**: `etaf-island-mode` optionally bridges `compilation-finish-functions` and `org-clock` into the same `etaf-activity` / `etaf-notify` protocol.
 - **Zero idle repaints**: demand-driven ticking repaints only when an active activity supplies a live `:meter` or when the minute changes.
 
+## Installation
+
+<!-- BEGIN:GENERATED:pkg-install-en:etaf-island -->
+> `etaf-island` is currently incubating in the monorepo. Install from a source checkout of [`emacs-taf/emacs-taf`](https://github.com/emacs-taf/emacs-taf) (or [`emacs-taf/etaf`](https://github.com/emacs-taf/etaf) + this package):
+
+```elisp
+(dolist (pkg '("ecss" "ebox" "etaf" "etaf-ui"))
+  (add-to-list 'load-path (expand-file-name pkg "/path/to/etaf/packages")))
+(add-to-list 'load-path "/path/to/etaf-island")
+(require 'etaf-island)
+```
+<!-- END:GENERATED:pkg-install-en:etaf-island -->
+
 ## Usage
 
 ```elisp

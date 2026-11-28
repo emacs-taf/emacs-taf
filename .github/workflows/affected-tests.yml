@@ -1,0 +1,45 @@
+name: Affected package tests
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  affected:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+      - name: Install batch Emacs
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y emacs-nox
+          mkdir -p "$HOME/.emacs.d/elpa"
+          git clone --depth=1 https://github.com/tumashu/posframe.git "$HOME/.emacs.d/elpa/posframe-ci"
+      - name: Determine changed files
+        id: changed
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+            HEAD="${{ github.sha }}"
+          else
+            BASE="HEAD~1"
+            HEAD="HEAD"
+          fi
+          git diff --name-only "$BASE" "$HEAD" > /tmp/changed-files.txt
+          cat /tmp/changed-files.txt
+      - name: Check coupled documentation impact
+        run: |
+          if [ -s /tmp/changed-files.txt ]; then
+            xargs -d '\n' python3 scripts/refscope.py doc-impact --changed < /tmp/changed-files.txt
+          fi
+      - name: Compile and test affected packages
+        run: |
+          if [ -s /tmp/changed-files.txt ]; then
+            xargs -d '\n' python3 scripts/refscope.py plan --changed < /tmp/changed-files.txt
+            xargs -d '\n' python3 scripts/refscope.py run --changed --yes --jobs 4 < /tmp/changed-files.txt
+          else
+            echo "No changed files; skipping affected tests."
+          fi

@@ -288,8 +288,8 @@ source read to the Host that made it, so a write repaints those Hosts in
 place; Ebox re-lays out only up to the nearest relayout boundary and writes
 the changed rows directly into the buffer.
 
-- Run `emacs -Q --batch -L . -L lisp -L tests -L ../etaf -L ../etaf-ui
-  -L ../ebox -L ../ecss -L ../etaf-db -l benchmarks/update-cost.el`
+- Run `emacs -Q --batch -L . -L lisp -L tests -L ../etaf/packages/etaf -L ../etaf/packages/etaf-ui
+  -L ../etaf/packages/ebox -L ../etaf/packages/ecss -L ../etaf/packages/etaf-db -l benchmarks/update-cost.el`
   with the framework byte-compiled.  A selection write and a clock tick each
   take about 1 ms at every viewport size of the twelve-row fixture, because
   neither rebuilds or re-lays out the view.
