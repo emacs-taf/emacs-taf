@@ -41,7 +41,7 @@ CORE_REPO = "emacs-taf/etaf"
 # `emacs-taf/etaf` under `packages/<name>` (and `core/packages/<name>` in the
 # canonical monorepo).
 CORE_PACKAGES = {
-    "ecss", "ekp", "ebox", "etaf", "etaf-media", "etaf-ui", "etaf-posframe", "etaf-ext",
+    "ecss", "ekp", "ebox", "etaf", "etaf-media", "etaf-ui", "etaf-doc", "etaf-posframe", "etaf-ext",
     "etaf-db", "etaf-gamekit", "etaf-install", "etaf-manual", "etaf-devtools",
     "etaf-translate", "etaf-highlight", "etaf-hints", "etaf-export",
 }
@@ -55,7 +55,7 @@ REPOSITORIES = {"etaf-web": MONOREPO}
 # package is left over, because a silent "Other" section hides the omission
 # from readers.  A package another author publishes states its own group.
 GROUPS = (
-    ("Framework", {"etaf-install", "etaf-ui", "etaf", "ebox", "ecss", "ekp", "etaf-db",
+    ("Framework", {"etaf-install", "etaf-ui", "etaf-doc", "etaf-media", "etaf", "ebox", "ecss", "ekp", "etaf-db",
                    "etaf-posframe", "etaf-ext", "etaf-gamekit", "etaf-devtools", "etaf-manual"}),
     ("Extensions", {"etaf-translate", "etaf-highlight", "etaf-hints", "etaf-export"}),
     ("Applications", {"etaf-md", "etaf-org", "etaf-org-preview", "etaf-rss", "etaf-reader", "etaf-algo-lab",

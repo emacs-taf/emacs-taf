@@ -1,6 +1,6 @@
 # 格子与字符表面
 
-三个目录组件为应用提供固定几何的字符表面：格子网格把坐标回调投影到格子里，文本网格由独立保留的定宽文本行组成，扑克牌的内在尺寸永不被拉伸去填满视口。它们拥有布局与激活，从不拥有调用方的棋盘、棋盘状态、定时器或游戏规则，尺寸也始终保持调用方声明的值，即使窗口变化。[图片](images.md)定义格子使用的图像 Host，[UI 组件库总论](ui-overview.md)定义共同契约，[Grid 布局](grid-layout.md)定义底层轨道模型。
+三个目录组件为应用提供固定几何的字符表面：格子网格把坐标回调投影到格子里，SVG 舞台在瓦片上合成精灵，文本网格由独立保留的定宽文本行组成（旁边还有单元格表格）。它们拥有布局与激活，从不拥有调用方的棋盘、棋盘状态、定时器或游戏规则，尺寸也始终保持调用方声明的值，即使窗口变化。扑克牌控件已迁移至 etaf-gamekit 包。[图片](images.md)定义格子使用的图像 Host，[UI 组件库总论](ui-overview.md)定义共同契约，[Grid 布局](grid-layout.md)定义底层轨道模型。
 
 ## 格子网格
 
@@ -87,72 +87,6 @@
 ```
 
 **参见。** `etaf-tile-grid`。
-
-## 扑克牌
-
-<!-- index: etaf-playing-card; card face; pile placeholder; intrinsic size -->
-
-#### Component: etaf-playing-card (&key rank suit face-down empty selected disabled on-press label ref columns lines)
-
-把受控的扑克牌或空牌堆占位呈现为单一激活目标。
-
-**参数。** RANK 是最多三列的单行字符串；SUIT 是 `spades`、`hearts`、`clubs`、`diamonds` 或 nil。FACE-DOWN 隐藏点数与花色，包括生成的可访问名。EMPTY 呈现空牌堆占位。SELECTED 只改变绘制而不改变几何。COLUMNS 默认 9、最小 7，LINES 默认 5、最小 1；一行只露出叠牌中的牌角。这些内在尺寸从不拉伸填满视口。ON-PRESS 不收参数；省略或禁用的牌不可交互。LABEL 覆盖可访问名与帮助，因此调用方不得把隐藏信息写在那里。
-
-**语义。** 牌是一个以格为单位定尺寸的居中按钮：左上角是点数与花色符号，中央是花色标记（背面时画 `◇`），超过三行高时右下角再出现一个角标。颜色来自扑克牌 token——默认底是暖象牙色，花色墨色黑或红，背面用蓝色，空堆用弱化占位色，选中用琥珀底色，悬停有反馈——因此游戏可以通过自己的 Theme 给整张牌桌换装。悬停保留全部文字并覆盖整张牌的绘制区域；牌背和空牌堆从自身底色派生轻微变化，不套用正面的悬停底色；选中的牌不再叠加悬停色。选择、叠放、移动与规则归调用方所有，也不需要任何游戏后端。
-
-**返回。** 一个 View。
-
-**错误。** RANK 既不是 nil 也不是最多三列的单行字符串、SUIT 不是四种花色之一或 nil、COLUMNS 小于 7、或 LINES 小于 1 时报 `error→ etaf-component-call-error`。
-
-**示例。**
-
-```elisp
-(etaf-playing-card :rank "A" :suit 'hearts :on-press #'play-card)
-```
-
-## 扑克牌 token
-
-<!-- index: ui-playing-card-bg; ui-playing-card-red; ui-playing-card-back-bg -->
-
-#### Token: :ui-playing-card-bg
-
-普通牌的牌面底色。
-
-#### Token: :ui-playing-card-black
-
-黑桃或梅花牌的墨色。
-
-#### Token: :ui-playing-card-red
-
-红桃或方块牌的墨色。
-
-#### Token: :ui-playing-card-back-bg
-
-背面牌的背景。
-
-#### Token: :ui-playing-card-back-fg
-
-背面牌的前景。
-
-**语义。** 这一对绘制盖住的牌；背面牌绝不通过绘制、文本或可访问名泄漏点数与花色。
-
-#### Token: :ui-playing-card-empty-bg
-
-空牌堆占位的背景。
-
-#### Token: :ui-playing-card-empty-fg
-
-空牌堆占位符号的颜色。
-
-#### Token: :ui-playing-card-selected-bg
-
-选中牌的背景。
-
-#### Token: :ui-playing-card-hover-bg
-
-可交互牌的悬停浅色。
-
-**语义。** 选中与悬停都只是绘制——牌的几何与牌堆的布局从不移动——没有提供 Theme 时每个 token 都回退到目录的内置调色板。
 
 ## 单元格表格
 
@@ -258,10 +192,9 @@
 
 ## 错误与恢复
 
-- `error→ etaf-component-call-error` 经 `etaf-check-prop` 报告每一条被拒绝的输入：非正的尺寸、不是函数的回调、不是适配列宽的单独一行的行内容、过宽的点数、未知花色以及窄于七列的牌。
+- `error→ etaf-component-call-error` 经 `etaf-check-prop` 报告每一条被拒绝的输入：非正的尺寸、不是函数的回调，或不是适配列宽的单独一行的行内容。
 - 网格不拥有可回滚的状态：被拒绝的回调结果让渲染失败，此前发布的格子或行留在屏幕上。
 - 无法解码的格子图像走 image Host 的占位路径而不是让网格失败；nil 图像直接回退到格子文本。
-- 扑克牌是纯呈现：按压只报告给调用方，被忽略的按压让牌保持原样。
 
 **参见。** [UI 组件库总论](ui-overview.md#错误与恢复)、[图片](images.md)。
 
@@ -271,5 +204,6 @@
    (etaf-tile-grid :rows 2 :columns 4 :cell-width 3 :cell-height 1
                    :cell-text (lambda (row column) (format "%d%d" row column))
                    :on-cell-press #'ignore)
-   (etaf-playing-card :rank "A" :suit 'hearts :on-press #'ignore)))
+   (etaf-text-grid :rows 2 :columns 16
+                   :row-text (lambda (row) (format "Row %d" row)))))
 ```

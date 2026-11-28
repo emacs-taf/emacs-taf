@@ -3,7 +3,7 @@
 EMACS ?= emacs
 PROVIDER_ROOT ?= $(if $(wildcard ../../core/packages/etaf),../../core/packages,$(if $(wildcard ../etaf/etaf.el),..,../..))
 LOAD_PATH = -L . -L lisp -L tests -L $(PROVIDER_ROOT)/etaf -L $(PROVIDER_ROOT)/etaf-ui -L $(PROVIDER_ROOT)/ebox -L $(PROVIDER_ROOT)/ecss
-SOURCES = lisp/etaf-desktop-theme.el lisp/etaf-desktop-runtime.el lisp/etaf-desktop-layout.el lisp/etaf-desktop-apps.el etaf-desktop.el
+SOURCES = lisp/etaf-desktop-theme.el lisp/etaf-desktop-shell.el lisp/etaf-desktop-runtime.el lisp/etaf-desktop-layout.el lisp/etaf-desktop-apps.el etaf-desktop.el
 SOURCES += $(wildcard examples/*.el)
 TEST_FILES := $(wildcard tests/*-tests.el)
 

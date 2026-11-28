@@ -24,6 +24,7 @@
 (require 'etaf)
 (require 'etaf-media)
 (require 'etaf-ui)
+(require 'etaf-doc)
 (require 'etaf-md-cache)
 (require 'etaf-md-theme)
 (require 'etaf-md-env)
@@ -1370,19 +1371,20 @@ unrelated block edits never create spurious damage outside the edited block."
     (etaf-node 'column
                (append (list :width '(vw 100) :cross-align 'center
                              :aria-label "Markdown 预览"
-                             :help help-text
-                             :on-direction
-                             (lambda (direction)
-                               (pcase direction
-                                 ('down
-                                  (when-let* ((rt (etaf-runtime-for-buffer (current-buffer))))
-                                    (etaf-scroll-viewport rt 1))
-                                  'handled)
-                                 ('up
-                                  (when-let* ((rt (etaf-runtime-for-buffer (current-buffer))))
-                                    (etaf-scroll-viewport rt -1))
-                                  'handled)
-                                 (_ 'release))))
+                             :help help-text)
+                       (when (plist-get session :standalone)
+                         (list :on-direction
+                               (lambda (direction)
+                                 (pcase direction
+                                   ('down
+                                    (when-let* ((rt (etaf-runtime-for-buffer (current-buffer))))
+                                      (etaf-scroll-viewport rt 1))
+                                    'handled)
+                                   ('up
+                                    (when-let* ((rt (etaf-runtime-for-buffer (current-buffer))))
+                                      (etaf-scroll-viewport rt -1))
+                                    'handled)
+                                   (_ 'release)))))
                        (when background
                          (list :background-color background)))
                (cons reading-column overlays))))

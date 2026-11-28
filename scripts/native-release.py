@@ -70,12 +70,12 @@ PLATFORM_SUFFIX = {
 }
 
 NATIVE_PACKAGES = {
-    "etaf-md": {
+    "etaf-doc": {
         "module": "etaf-md-typeset-native",
         "version": "1",
         "description": "Embedded QuickJS + Pele + MathJax worker for zero-browser Mermaid diagrams and display math SVGs (CoreText on macOS, runtime dlopen Pango on Linux).",
-        "min_package_version": "0.3.0",
-        "used_by": ("etaf-md", "etaf-org", "etaf-web"),
+        "min_package_version": "0.1.0",
+        "used_by": ("etaf-doc", "etaf-md", "etaf-org", "etaf-web"),
         "version_summary": "Portable CoreText (macOS) and dlopen-Pango (Linux) builds; Windows falls back cleanly.",
         "released": "2026-11-25T13:42:04Z",
         "platforms": ("darwin-arm64", "darwin-x86_64", "linux-x86_64", "linux-arm64"),
@@ -486,7 +486,7 @@ def build_package(package: str, output: Path, emacs: str,
         shutil.copytree(native_src, work, ignore=shutil.ignore_patterns("build", "*.o", "*.so", "*.dylib", "*.dll"))
         env = dict(os.environ)
         env["EMACS"] = emacs
-        if package == "etaf-md":
+        if package == "etaf-doc":
             cmd = ["make", "-C", str(work), f"EMACS={emacs}", f"MODULE_SUFFIX={suffix}"]
             if portable:
                 cmd.append("PORTABLE=1")

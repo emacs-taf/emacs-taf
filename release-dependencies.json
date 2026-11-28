@@ -30,6 +30,12 @@
         "examples"
       ]
     },
+    "etaf-doc": {
+      "resources": [
+        "docs",
+        "native/manifest.json"
+      ]
+    },
     "etaf-posframe": {
       "resources": [
         "docs",
@@ -84,14 +90,12 @@
     },
     "etaf-md": {
       "resources": [
-        "docs",
-        "native/manifest.json"
+        "docs"
       ]
     },
     "etaf-org": {
       "resources": [
-        "docs",
-        "native/manifest.json"
+        "docs"
       ]
     },
     "etaf-video-player": {
@@ -163,6 +167,7 @@
   },
   "targets": [
     "etaf-ui",
+    "etaf-doc",
     "etaf-posframe",
     "etaf-ext",
     "etaf",

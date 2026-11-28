@@ -15,9 +15,10 @@
 | `etaf` | 0.3.19 | Emacs 29.1、`ebox 3.1.15`、`ecss 0.1.4` |
 | `etaf-media` | 0.1.0 | Emacs 29.1、`etaf 0.3.19`、`ebox 3.1.15` |
 | `etaf-ui` | 0.3.14 | Emacs 29.1、`etaf 0.3.19` |
+| `etaf-doc` | 0.1.0 | Emacs 29.1、`etaf 0.3.19`、`etaf-ui 0.3.14` |
 | `etaf-db` | 0.1.4 | Emacs 29.1、`etaf 0.3.19` |
 | `etaf-posframe` | 0.3.5 | Emacs 29.1、`etaf 0.3.19`、`etaf-ui 0.3.14`、Posframe 0.9.0 |
-| `etaf-manual` | 0.1.27 | Emacs 29.1、`etaf 0.3.19`、`etaf-ui 0.3.14` |
+| `etaf-manual` | 0.1.27 | Emacs 29.1、`etaf 0.3.19`、`etaf-ui 0.3.14`、`etaf-doc 0.1.0` |
 <!-- END:GENERATED:manual-version-table-zh -->
 
 第三列是本版记录的版本组合。每个包在 `Package-Requires` 头里声明它能安装的最低版本，可能更低。
@@ -34,5 +35,5 @@ Emacs 29.1 或更新版本可以运行全部包；ECSS 单独还支持 Emacs 28.
 - **Runtime generation。** 早先的 generation API 已删除。要观察一次发布是否到达 buffer，比较 `etaf-runtime-revision`，或 `etaf-runtime-flush` 的返回值。
 - **Ebox 引擎。** 早先引擎的 canonical input、source builder 与显式更新 API 已删除。保留节点引用：`ebox-node-insert`、`ebox-node-remove`、`ebox-node-move` 与 `ebox-node-replace-children` 改变子节点；`ebox-node-set-text` 与 `ebox-node-set-image` 改变内容；`ebox-node-set-props`、`ebox-node-put`、`ebox-node-set-states` 与 `ebox-node-restyle` 改变属性；`ebox-with-batch` 把工作分组。改为构造或复制一棵保留的根树再挂载，而不是提供整棵输入的替换。
 - **数据和解。** 成功状态现在是 `reconciled`，不再是 `projected`；比较 `etaf-data-reconciliation-state` 符号的消费方需要更新。
-- **强调色控件。** `etaf-taskbar` 与 `etaf-workspace-bar` 不再接受 `:accent-color`；改为提供带 `:ui-accent` 与 `:ui-accent-soft-bg` 的 Theme。
+- **文档、游戏与桌面外壳拆分。** Markdown 解析渲染与共享文档基础设施已从 `etaf-ui` 迁入 `etaf-doc`（消费方改 require `etaf-doc`）；扑克牌控件从 `etaf-ui` 迁入 etaf-gamekit；桌面任务栏、工作区栏、启动器、切换器与分栏器迁入 etaf-desktop（`etaf-pane-resizer` 保留在 `etaf-ui`）。外壳控件的强调色统一通过带 `:ui-accent` 与 `:ui-accent-soft-bg` 的 Theme 提供。
 - **EKP 字典。** 随包的字典清单按文件固定并校验。梵文字典因固定的上游数据没有权威许可声明而被移除；如果文档语言不再被覆盖，请确认断字仍能选到字典。

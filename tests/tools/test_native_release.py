@@ -41,7 +41,7 @@ class NativeReleaseTests(unittest.TestCase):
         import sys
         sys.path.insert(0, str(ROOT / "scripts"))
         import workspace_layout
-        for pkg in ("etaf-md", "etaf-media", "ekp"):
+        for pkg in ("etaf-doc", "etaf-media", "ekp"):
             self.assertTrue((workspace_layout.package_path(ROOT, pkg) / "native" / "manifest.json").is_file(), pkg)
 
     def test_validate_manifest_rejects_non_https_bad_sha_and_unsafe_filenames(self):
@@ -72,14 +72,14 @@ class NativeReleaseTests(unittest.TestCase):
             inp = base / "input"
             payload = b"native-binary-payload-bytes"
             sha = hashlib.sha256(payload).hexdigest()
-            rel = "etaf-md/1/etaf-md-typeset-native-v1-darwin-arm64.dylib"
+            rel = "etaf-doc/1/etaf-md-typeset-native-v1-darwin-arm64.dylib"
             binary = inp / rel
             binary.parent.mkdir(parents=True)
             binary.write_bytes(payload)
             records = inp / "records"
             records.mkdir()
-            (records / "etaf-md-darwin-arm64.json").write_text(json.dumps({
-                "package": "etaf-md",
+            (records / "etaf-doc-darwin-arm64.json").write_text(json.dumps({
+                "package": "etaf-doc",
                 "module": "etaf-md-typeset-native",
                 "version": "1",
                 "platform": "darwin-arm64",

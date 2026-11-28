@@ -16,6 +16,7 @@
 (require 'cl-lib)
 (require 'etaf)
 (require 'etaf-ui)
+(require 'etaf-doc)
 (require 'etaf-translate)
 
 (defun etaf-translate-test--buffer-text (runtime)

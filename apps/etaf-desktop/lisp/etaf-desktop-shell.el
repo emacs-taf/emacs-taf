@@ -1,26 +1,84 @@
-;;; etaf-ui-desktop.el --- Reusable desktop navigation Components -*- lexical-binding: t; -*-
+;;; etaf-desktop-shell.el --- Desktop shell bars, pickers and tiling splitter -*- lexical-binding: t; -*-
 
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 
 ;;; Commentary:
-;; Presentational Components used by desktop hosts and application shells.
-;; These Components deliberately keep all selection, workspace, window and
-;; layout state in their callers.  They expose ordinary ETAF callbacks and
-;; Behaviors, so a desktop policy can use the same controls in floating and
-;; tiled layouts without creating another input or focus system.
+;;
+;; Desktop-specific shell presentation components (`etaf-taskbar',
+;; `etaf-workspace-bar', `etaf-launcher', `etaf-switcher' and `etaf-splitter').
+;; Owned by `etaf-desktop' so `etaf-ui' stays focused on general-purpose UI
+;; controls.
 
 ;;; Code:
 
 (require 'cl-lib)
-(require 'etaf-ui-basic)
-(require 'etaf-ui-surface)
-(require 'etaf-ui-style)
+(require 'subr-x)
+(require 'etaf)
+(require 'etaf-ui)
 
-(defun etaf-ui--desktop-scalar-key-p (key)
+(defconst etaf-desktop-shell--token-defaults
+  '(:ui-fg "#1F2328"
+    :ui-bg "#FFFFFF"
+    :ui-muted-fg "#57606A"
+    :ui-border "#D0D7DE"
+    :ui-accent "#2F6FE4"
+    :ui-accent-fg "#FFFFFF"
+    :ui-accent-soft-bg "#DCE7FA"
+    :ui-panel-bg "#F6F8FA"
+    :ui-panel-fg "#1F2328"
+    :ui-panel-border "#D0D7DE"
+    :ui-shell-bg "#E3E9F0"
+    :ui-shell-fg "#16202C"
+    :ui-shell-muted-fg "#66727F"
+    :ui-shell-item-fg "#4A5664"
+    :ui-shell-item-minimized-fg "#98A3AF"
+    :ui-picker-item-bg "#F7F9FC"
+    :ui-picker-item-fg "#16202C"
+    :ui-picker-item-muted-fg "#66727F"
+    :ui-desktop-shell-bg "#EEF2F6"
+    :ui-desktop-shell-fg "#4A5664"
+    :ui-desktop-shell-border "#C8D1DC"
+    :ui-desktop-shell-item-bg "#E3E9F0"
+    :ui-desktop-shell-item-hover-bg "#D8E1EC"
+    :ui-desktop-shell-minimized-bg "#F4F6F9"
+    :ui-desktop-shell-minimized-fg "#7B8794"
+    :ui-desktop-shell-accent "#2F6FE4"
+    :ui-desktop-shell-accent-bg "#DCE7FA"
+    :ui-desktop-shell-accent-border "#8EB4F0"
+    :ui-divider-bg "#DCE3EB"
+    :ui-hover-bg "#EAEEF2")
+  "Fallback desktop shell colors when the active Theme omits a token.")
+
+(defun etaf-desktop-shell--token (key)
+  "Return a deferred ETAF Theme token for KEY with desktop shell fallback."
+  (etaf-theme-token key (plist-get etaf-desktop-shell--token-defaults key)))
+
+(defun etaf-desktop-shell--tokens (&rest keys)
+  "Return a plist mapping each KEY in KEYS to its deferred theme token."
+  (cl-loop for k in keys append (list k (etaf-desktop-shell--token k))))
+
+(defun etaf-desktop-shell--reactive-value (value)
+  "Read VALUE if it is a reactive ref or computed source, else return VALUE."
+  (if (or (etaf-ref-p value) (etaf-computed-p value))
+      (etaf-value value)
+    value))
+
+(defun etaf-desktop-shell--text-value (value)
+  "Return VALUE (or its reactive value) as a string."
+  (let ((v (etaf-desktop-shell--reactive-value value)))
+    (cond ((null v) "")
+          ((stringp v) v)
+          (t (format "%s" v)))))
+
+(defun etaf-desktop-shell--class-value (&rest parts)
+  "Join non-empty string class PARTS with spaces."
+  (string-join (cl-remove-if-not (lambda (s) (and (stringp s) (not (string-empty-p s)))) parts) " "))
+
+(defun etaf-desktop-shell--scalar-key-p (key)
   "Return non-nil when desktop navigation KEY is a stable scalar."
   (or (symbolp key) (stringp key) (numberp key)))
 
-(defun etaf-ui--desktop-items (items component &optional title-key)
+(defun etaf-desktop-shell--items (items component &optional title-key)
   "Validate desktop ITEM plists for COMPONENT and return them.
 TITLE-KEY is the plist key used for the visible caption, defaulting to
 `:label'.  An optional :description is accepted for launcher/switcher rows."
@@ -33,7 +91,7 @@ TITLE-KEY is the plist key used for the visible caption, defaulting to
        (and (proper-list-p item)
             (zerop (% (length item) 2))
             (plist-member item :key)
-            (etaf-ui--desktop-scalar-key-p (plist-get item :key))
+            (etaf-desktop-shell--scalar-key-p (plist-get item :key))
             (stringp (plist-get item title-key))
             (not (string-empty-p (plist-get item title-key)))
             (not (member (plist-get item :key) keys))
@@ -45,7 +103,7 @@ TITLE-KEY is the plist key used for the visible caption, defaulting to
       (push (plist-get item :key) keys))
     items))
 
-(defun etaf-ui--desktop-item-caption (item title-key)
+(defun etaf-desktop-shell--item-caption (item title-key)
   "Return ITEM's TITLE-KEY caption.
 
 State is communicated by the surrounding button presentation.  Keeping the
@@ -53,17 +111,17 @@ caption free of marker glyphs avoids a noisy taskbar and leaves the text width
 stable as focus changes."
   (plist-get item title-key))
 
-(defun etaf-ui--desktop-bar-item-tone (item-key active state)
+(defun etaf-desktop-shell--bar-item-tone (item-key active state)
   "Return ITEM-KEY's presentation tone from ACTIVE and STATE sources.
 Both sources are read unconditionally so a Host property binding keeps one
 stable dependency set whichever tone currently wins."
-  (let ((active-key (etaf-ui--reactive-value active))
-        (state (etaf-ui--reactive-value state)))
+  (let ((active-key (etaf-desktop-shell--reactive-value active))
+        (state (etaf-desktop-shell--reactive-value state)))
     (cond ((equal item-key active-key) 'active)
           ((eq state 'minimized) 'minimized)
           (t 'plain))))
 
-(etaf-define-component etaf-ui--desktop-bar-item
+(etaf-define-component etaf-desktop-shell--bar-item
     (&key item-key label ref active disabled callback state class active-class
           minimized-class)
   "Project controlled selection onto one stateless navigation Host.
@@ -72,29 +130,29 @@ Tone colors are Theme tokens read inside Host property bindings, so both a
 selection change and a Theme change stay retained paint updates."
   :view
   (box :ref ref :role 'button :aria-label label
-       :aria-selected (eq (etaf-ui--desktop-bar-item-tone item-key active state)
+       :aria-selected (eq (etaf-desktop-shell--bar-item-tone item-key active state)
                           'active)
        :width 'max-content :disabled disabled
        :tab-index (unless disabled 0) :pointer (unless disabled 'arrow)
        :on-press callback :padding '((lh 0) (ch 1.5))
-       :class (pcase (etaf-ui--desktop-bar-item-tone item-key active state)
+       :class (pcase (etaf-desktop-shell--bar-item-tone item-key active state)
                 ('active active-class)
                 ('minimized minimized-class)
                 (_ class))
-       :color (pcase (etaf-ui--desktop-bar-item-tone item-key active state)
-                ('active (etaf-ui--style-token :ui-accent))
-                ('minimized (etaf-ui--style-token :ui-shell-item-minimized-fg))
-                (_ (etaf-ui--style-token :ui-shell-item-fg)))
+       :color (pcase (etaf-desktop-shell--bar-item-tone item-key active state)
+                ('active (etaf-desktop-shell--token :ui-accent))
+                ('minimized (etaf-desktop-shell--token :ui-shell-item-minimized-fg))
+                (_ (etaf-desktop-shell--token :ui-shell-item-fg)))
        :background-color
-       (pcase (etaf-ui--desktop-bar-item-tone item-key active state)
-         ('active (etaf-ui--style-token :ui-accent-soft-bg))
-         (_ (etaf-ui--style-token :ui-shell-bg)))
+       (pcase (etaf-desktop-shell--bar-item-tone item-key active state)
+         ('active (etaf-desktop-shell--token :ui-accent-soft-bg))
+         (_ (etaf-desktop-shell--token :ui-shell-bg)))
        :font-weight 'normal
        ;; A reactive label reads like a Label text; a source object would reach
        ;; the Text Host unresolved.
-       (text (expr (etaf-ui--text-value label)))))
+       (text (expr (etaf-desktop-shell--text-value label)))))
 
-(defun etaf-ui--desktop-ref (ref-prefix name)
+(defun etaf-desktop-shell--ref (ref-prefix name)
   "Return the runtime Host reference NAME under REF-PREFIX.
 A desktop that embeds another application can mount several bars in one ETAF
 Runtime; a caller-supplied prefix keeps their Host references distinct."
@@ -102,23 +160,23 @@ Runtime; a caller-supplied prefix keeps their Host references distinct."
       (intern (concat ref-prefix name))
     (intern name)))
 
-(defun etaf-ui--desktop-bar-item-node (item active on-select taskbar
+(defun etaf-desktop-shell--bar-item-node (item active on-select taskbar
                                             &optional ref-prefix)
   "Build ITEM's selection Host using ACTIVE and ON-SELECT.
 TASKBAR selects window-state presentation.  REF-PREFIX namespaces the
 workspace-tab Host reference."
   (let* ((key (plist-get item :key))
          (disabled (plist-get item :disabled))
-         (class (etaf-ui--class-value
+         (class (etaf-desktop-shell--class-value
                  "etaf-button" (if disabled "disabled" "enabled")
                  (if taskbar "etaf-taskbar-item" "etaf-workspace-item"))))
     (etaf-node
-     'etaf-ui--desktop-bar-item
+     'etaf-desktop-shell--bar-item
      (append
       (list :key key :item-key key :label (plist-get item :label)
             :ref (or (plist-get item :ref)
                      (unless taskbar
-                       (etaf-ui--desktop-ref
+                       (etaf-desktop-shell--ref
                         ref-prefix (format "etaf-workspace-%s" key))))
             :active active :disabled disabled
             :callback (and on-select (not disabled)
@@ -129,7 +187,7 @@ workspace-tab Host reference."
       (unless taskbar (list :flex-shrink 0 :min-width 'max-content)))
      nil)))
 
-(etaf-define-component etaf-ui--desktop-status (&key status)
+(etaf-define-component etaf-desktop-shell--status (&key status)
   "Render STATUS in the workspace bar's remaining single-row space.
 An absent or empty STATUS paints one blank character so the Text keeps
 owning the row's pixels: a status that becomes empty then publishes as a
@@ -139,23 +197,23 @@ retained Text update instead of re-rendering the bar."
        :flex-grow 1 :flex-basis '(px 0)
        :min-width '(px 0) :height '(lh 1)
        :wrap-mode 'none :overflow 'hidden
-    (text :color (etaf-ui--style-token :ui-shell-muted-fg)
-          (expr (let ((value (etaf-ui--reactive-value status)))
+    (text :color (etaf-desktop-shell--token :ui-shell-muted-fg)
+          (expr (let ((value (etaf-desktop-shell--reactive-value status)))
                   (etaf-check-prop :status value
                                    (or (null value) (stringp value))
                                    "a string or nil" 'etaf-workspace-bar)
                   (if (or (null value) (string-empty-p value)) " " value))))))
 
-(defconst etaf-ui--desktop-layout-label-width 13
+(defconst etaf-desktop-shell--layout-label-width 13
   "Character width reserved by the workspace bar's layout control.
 It holds labels up to eight characters plus the control's padding.")
 
-(etaf-define-component etaf-ui--desktop-layout-label (&key label)
+(etaf-define-component etaf-desktop-shell--layout-label (&key label)
   "Render the workspace bar's layout control LABEL as one reactive Text payload.
 The control keeps a fixed width so a changed label rewrites only its own
 text instead of laying out the bar again."
   :view
-  (text (expr (let ((value (etaf-ui--reactive-value label)))
+  (text (expr (let ((value (etaf-desktop-shell--reactive-value label)))
                 (etaf-check-prop :layout-label value (stringp value)
                                  "a string" 'etaf-workspace-bar)
                 value))))
@@ -175,7 +233,7 @@ so a caller can mount several taskbars in one ETAF Runtime.  Colors come from
 the inherited Theme's `:ui-shell-*' and `:ui-accent*' tokens."
   :validate
   (progn
-    (etaf-ui--desktop-items items 'etaf-taskbar)
+    (etaf-desktop-shell--items items 'etaf-taskbar)
     (dolist (item items)
       (etaf-check-prop :disabled (plist-get item :disabled)
                        (booleanp (plist-get item :disabled)) "a boolean"
@@ -188,7 +246,7 @@ the inherited Theme's `:ui-shell-*' and `:ui-accent*' tokens."
                          'etaf-taskbar)))
     (etaf-check-prop :active active
                      (or (etaf-ref-p active) (etaf-computed-p active)
-                         (etaf-ui--desktop-scalar-key-p active))
+                         (etaf-desktop-shell--scalar-key-p active))
                      "a taskbar key, nil, ref or computed" 'etaf-taskbar)
     (etaf-check-prop :on-select on-select
                      (or (null on-select) (functionp on-select))
@@ -202,11 +260,11 @@ the inherited Theme's `:ui-shell-*' and `:ui-accent*' tokens."
                      (or (null ref-prefix) (stringp ref-prefix))
                      "a string or nil" 'etaf-taskbar))
   :render
-  (let ((shell (etaf-ui--style-tokens :ui-shell-bg :ui-shell-fg
+  (let ((shell (etaf-desktop-shell--tokens :ui-shell-bg :ui-shell-fg
                                       :ui-shell-muted-fg)))
     (etaf-node
      'row
-     (list :class (etaf-ui--class-value "etaf-taskbar" nil class)
+     (list :class (etaf-desktop-shell--class-value "etaf-taskbar" nil class)
            :role 'toolbar :aria-label "Taskbar" :width 'stretch
            :focus-group 'horizontal
            :height '(lh 1) :item-gap '(ch 1)
@@ -219,14 +277,14 @@ the inherited Theme's `:ui-shell-*' and `:ui-accent*' tokens."
                          (list :label (concat "⊞ " launcher-label)
                                :aria-label launcher-label :variant 'primary
                                :class "etaf-taskbar-launcher"
-                               :ref (etaf-ui--desktop-ref ref-prefix
+                               :ref (etaf-desktop-shell--ref ref-prefix
                                                           "etaf-taskbar-launcher")
                                :on-press on-launch)
                          nil)))
       (or
        (mapcar
         (lambda (item)
-          (etaf-ui--desktop-bar-item-node item active on-select t ref-prefix))
+          (etaf-desktop-shell--bar-item-node item active on-select t ref-prefix))
         items)
        (list (etaf-node 'text
                         (list :color (plist-get shell :ui-shell-muted-fg))
@@ -261,10 +319,10 @@ each other.  Colors come from the inherited Theme's `:ui-shell-*' and
                      'etaf-workspace-bar)
     (dolist (workspace workspaces)
       (when (listp workspace)
-        (etaf-ui--desktop-items (list workspace) 'etaf-workspace-bar))
+        (etaf-desktop-shell--items (list workspace) 'etaf-workspace-bar))
       (when (not (listp workspace))
         (etaf-check-prop :workspace workspace
-                         (etaf-ui--desktop-scalar-key-p workspace)
+                         (etaf-desktop-shell--scalar-key-p workspace)
                          "a scalar key or item plist" 'etaf-workspace-bar)))
     (etaf-check-prop :on-select on-select
                      (or (null on-select) (functionp on-select))
@@ -307,11 +365,11 @@ each other.  Colors come from the inherited Theme's `:ui-shell-*' and
                 workspace
               (list :key workspace :label (format "%s" workspace))))
           workspaces))
-        (shell (etaf-ui--style-tokens :ui-shell-bg :ui-shell-fg
+        (shell (etaf-desktop-shell--tokens :ui-shell-bg :ui-shell-fg
                                       :ui-shell-item-fg)))
     (etaf-node
      'flex
-     (list :class (etaf-ui--class-value "etaf-workspace-bar" nil class)
+     (list :class (etaf-desktop-shell--class-value "etaf-workspace-bar" nil class)
            :role 'tablist :aria-label "Workspaces" :width 'stretch
            :focus-group 'horizontal
            :height '(lh 1) :flex-direction 'row :gap '((lh 0) (ch 1))
@@ -326,7 +384,7 @@ each other.  Colors come from the inherited Theme's `:ui-shell-*' and
                          (list brand))))
       (mapcar
        (lambda (item)
-         (etaf-ui--desktop-bar-item-node item active on-select nil ref-prefix))
+         (etaf-desktop-shell--bar-item-node item active on-select nil ref-prefix))
        items)
       (when on-add
         (list (etaf-node 'etaf-button
@@ -341,30 +399,30 @@ each other.  Colors come from the inherited Theme's `:ui-shell-*' and
                                :variant 'ghost :on-press on-close)
                          nil)))
       (when (or status layout-label (and settings-label settings-action))
-        (list (etaf-node 'etaf-ui--desktop-status (list :status status) nil)))
+        (list (etaf-node 'etaf-desktop-shell--status (list :status status) nil)))
       (when layout-label
         (list (etaf-node 'etaf-button
                          (list :label (if (stringp layout-label)
                                           layout-label "Window layout")
                                :aria-label (if (stringp layout-label)
                                                layout-label "Window layout")
-                               :ref (etaf-ui--desktop-ref ref-prefix
+                               :ref (etaf-desktop-shell--ref ref-prefix
                                                           "etaf-workspace-layout")
                                :variant 'secondary
                                :class "etaf-workspace-layout"
                                ;; A fixed allocation keeps a reactive label
                                ;; change inside its own relayout boundary.
-                               :width (list 'ch etaf-ui--desktop-layout-label-width)
+                               :width (list 'ch etaf-desktop-shell--layout-label-width)
                                :flex-shrink 0 :overflow 'hidden
                                :pointer 'hand
                                :on-press layout-action)
-                         (list (etaf-node 'etaf-ui--desktop-layout-label
+                         (list (etaf-node 'etaf-desktop-shell--layout-label
                                           (list :label layout-label) nil)))))
       (when (and settings-label settings-action)
         (list (etaf-node 'etaf-button
                          (list :label settings-label
                                :aria-label settings-label
-                               :ref (etaf-ui--desktop-ref ref-prefix
+                               :ref (etaf-desktop-shell--ref ref-prefix
                                                           "etaf-workspace-settings")
                                :variant 'ghost
                                :class "etaf-workspace-settings"
@@ -374,9 +432,9 @@ each other.  Colors come from the inherited Theme's `:ui-shell-*' and
                                :on-press settings-action)
                          nil)))))))
 
-(defun etaf-ui--desktop-launcher-items (items component)
+(defun etaf-desktop-shell--launcher-items (items component)
   "Validate launcher ITEMS and return them unchanged."
-  (etaf-ui--desktop-items items component)
+  (etaf-desktop-shell--items items component)
   (dolist (item items)
     (etaf-check-prop :disabled (plist-get item :disabled)
                      (booleanp (plist-get item :disabled)) "a boolean"
@@ -386,7 +444,7 @@ each other.  Colors come from the inherited Theme's `:ui-shell-*' and
                      "nil, active, minimized or error" component))
   items)
 
-(defun etaf-ui--desktop-picker-body (items on-select selected class)
+(defun etaf-desktop-shell--picker-body (items on-select selected class)
   "Build a picker body for ITEMS with ON-SELECT and SELECTED key.
 CLASS names the body for styling.
 
@@ -395,7 +453,7 @@ and, for the SELECTED item, an accent marker and tinted background.  Colors
 are Theme tokens so a Desktop Theme restyles the picker in place; the
 selected row uses the secondary button tint, a dialog token that stays
 crisp while the shell behind the picker is dimmed."
-  (let ((tokens (etaf-ui--style-tokens :ui-picker-item-bg :ui-picker-item-fg
+  (let ((tokens (etaf-desktop-shell--tokens :ui-picker-item-bg :ui-picker-item-fg
                                        :ui-picker-item-muted-fg
                                        :ui-button-secondary-fg
                                        :ui-button-secondary-bg :ui-panel-bg)))
@@ -407,7 +465,7 @@ crisp while the shell behind the picker is dimmed."
         (let* ((key (plist-get item :key))
                (disabled (plist-get item :disabled))
                (is-selected (and selected (equal key selected)))
-               (caption (etaf-ui--desktop-item-caption item :label))
+               (caption (etaf-desktop-shell--item-caption item :label))
                (description (plist-get item :description))
                (bg (if is-selected
                        (plist-get tokens :ui-button-secondary-bg)
@@ -415,7 +473,7 @@ crisp while the shell behind the picker is dimmed."
           (etaf-node
            'box
            (list :key key :ref (plist-get item :ref)
-                 :class (etaf-ui--class-value
+                 :class (etaf-desktop-shell--class-value
                          "etaf-picker-item" (if disabled "disabled" "enabled")
                          (and is-selected "selected"))
                  :role 'button :aria-label (plist-get item :label)
@@ -442,7 +500,7 @@ crisp while the shell behind the picker is dimmed."
                             (list (concat "  " description)))))))))))
       items))))
 
-(defun etaf-ui--desktop-picker-height (items)
+(defun etaf-desktop-shell--picker-height (items)
   "Return the `(lh N)' Dialog height that fits picker ITEMS exactly.
 
 Each item occupies one caption row plus one description row when described,
@@ -465,7 +523,7 @@ keeps the underlying surface painted; a Desktop then dims it through its own
 Theme while the launcher is open."
   :validate
   (progn
-    (etaf-ui--desktop-launcher-items items 'etaf-launcher)
+    (etaf-desktop-shell--launcher-items items 'etaf-launcher)
     (etaf-check-prop :backdrop backdrop (booleanp backdrop) "a boolean" 'etaf-launcher)
     (etaf-check-prop :on-select on-select (functionp on-select)
                      "a function" 'etaf-launcher)
@@ -475,12 +533,12 @@ Theme while the launcher is open."
     (etaf-check-prop :close-label close-label (stringp close-label)
                      "a string" 'etaf-launcher))
   :render
-  (when (etaf-ui--reactive-value open)
+  (when (etaf-desktop-shell--reactive-value open)
     (etaf-node 'etaf-dialog
                (list :open open :title title :close-label close-label
                      :on-close on-close :width '(ch 56) :backdrop backdrop
-                     :height (etaf-ui--desktop-picker-height items))
-               (list (etaf-ui--desktop-picker-body items on-select nil
+                     :height (etaf-desktop-shell--picker-height items))
+               (list (etaf-desktop-shell--picker-body items on-select nil
                                                    "etaf-launcher-list")))))
 
 (etaf-define-component etaf-switcher
@@ -494,9 +552,9 @@ whether the switcher closes, changes focus or changes workspace.  BACKDROP
 follows `etaf-launcher'."
   :validate
   (progn
-    (etaf-ui--desktop-launcher-items items 'etaf-switcher)
+    (etaf-desktop-shell--launcher-items items 'etaf-switcher)
     (etaf-check-prop :backdrop backdrop (booleanp backdrop) "a boolean" 'etaf-switcher)
-    (let ((selected-value (etaf-ui--reactive-value selected)))
+    (let ((selected-value (etaf-desktop-shell--reactive-value selected)))
       (etaf-check-prop :selected selected-value
                        (or (null selected-value)
                            (cl-some (lambda (item)
@@ -510,20 +568,20 @@ follows `etaf-launcher'."
     (etaf-check-prop :close-label close-label (stringp close-label)
                      "a string" 'etaf-switcher)))
   :render
-  (let ((selected (etaf-ui--reactive-value selected)))
-    (when (etaf-ui--reactive-value open)
+  (let ((selected (etaf-desktop-shell--reactive-value selected)))
+    (when (etaf-desktop-shell--reactive-value open)
       (etaf-node 'etaf-dialog
                  (list :open open :title title :close-label close-label
                        :on-close on-close :width '(ch 56) :backdrop backdrop
-                       :height (etaf-ui--desktop-picker-height items))
-                 (list (etaf-ui--desktop-picker-body items on-select selected
+                       :height (etaf-desktop-shell--picker-height items))
+                 (list (etaf-desktop-shell--picker-body items on-select selected
                                                      "etaf-switcher-list"))))))
 
-(defun etaf-ui--reactive-source-p (value)
+(defun etaf-desktop-shell--reactive-source-p (value)
   "Return non-nil when VALUE is an ETAF ref or computed."
   (or (etaf-ref-p value) (etaf-computed-p value)))
 
-(defun etaf-ui--splitter-overlay-rect-p (rect)
+(defun etaf-desktop-shell--splitter-overlay-rect-p (rect)
   "Return non-nil when RECT is a complete positioned divider rectangle.
 Each entry is a scalar unit value or a ref or computed.  Reactive entries
 are accepted by shape without being read: validation runs in the
@@ -536,14 +594,14 @@ Host bindings."
                 for unit in '(px lh px lh)
                 for minimum in '(0 0 1 1)
                 always (let ((value (plist-get rect key)))
-                         (or (etaf-ui--reactive-source-p value)
+                         (or (etaf-desktop-shell--reactive-source-p value)
                              (and (proper-list-p value)
                                   (= (length value) 2)
                                   (eq (car value) unit)
                                   (integerp (cadr value))
                                   (>= (cadr value) minimum)))))))
 
-(etaf-define-component etaf-ui--splitter-overlay-divider
+(etaf-define-component etaf-desktop-shell--splitter-overlay-divider
     (&key orientation rect z-index divider-content visible use on-change)
   "Render one positioned divider whose RECT entries are Host bindings.
 RECT holds :left/:top/:width/:height scalars or reactive sources,
@@ -558,15 +616,15 @@ layout policy updates the divider through its retained bindings."
        :aria-orientation (if (eq orientation 'horizontal) 'vertical 'horizontal)
        :pointer (if (eq orientation 'horizontal) 'hdrag 'vdrag)
        :use use :on-drag on-change
-       :z-index (etaf-ui--reactive-value z-index)
-       :visibility (if (etaf-ui--reactive-value visible) 'visible 'hidden)
-       :background-color (etaf-ui--style-token :ui-divider-bg)
+       :z-index (etaf-desktop-shell--reactive-value z-index)
+       :visibility (if (etaf-desktop-shell--reactive-value visible) 'visible 'hidden)
+       :background-color (etaf-desktop-shell--token :ui-divider-bg)
        :position 'absolute
-       :left (etaf-ui--reactive-value (plist-get rect :left))
-       :top (etaf-ui--reactive-value (plist-get rect :top))
-       :width (etaf-ui--reactive-value (plist-get rect :width))
-       :height (etaf-ui--reactive-value (plist-get rect :height))
-       (text (expr (etaf-ui--text-value divider-content)))))
+       :left (etaf-desktop-shell--reactive-value (plist-get rect :left))
+       :top (etaf-desktop-shell--reactive-value (plist-get rect :top))
+       :width (etaf-desktop-shell--reactive-value (plist-get rect :width))
+       :height (etaf-desktop-shell--reactive-value (plist-get rect :height))
+       (text (expr (etaf-desktop-shell--text-value divider-content)))))
 
 (etaf-define-component etaf-splitter
     (&key (orientation 'horizontal) (ratio 0.5) (min-ratio 0.1)
@@ -595,8 +653,8 @@ a ratio or window/layout policy."
     (etaf-check-prop :orientation orientation (memq orientation '(horizontal vertical))
                      "horizontal or vertical" 'etaf-splitter)
     (etaf-check-prop :ratio ratio
-                     (and (numberp (etaf-ui--reactive-value ratio))
-                          (<= min-ratio (etaf-ui--reactive-value ratio) max-ratio))
+                     (and (numberp (etaf-desktop-shell--reactive-value ratio))
+                          (<= min-ratio (etaf-desktop-shell--reactive-value ratio) max-ratio))
                      "a ratio within the configured bounds" 'etaf-splitter)
     (etaf-check-prop :min-ratio min-ratio (and (numberp min-ratio) (> min-ratio 0) (< min-ratio 1))
                      "a fraction between zero and one" 'etaf-splitter)
@@ -609,31 +667,31 @@ a ratio or window/layout policy."
                      "a boolean" 'etaf-splitter)
     (etaf-check-prop :z-index z-index
                      (or (null z-index) (integerp z-index)
-                         (etaf-ui--reactive-source-p z-index))
+                         (etaf-desktop-shell--reactive-source-p z-index))
                      "nil, an integer, a ref or a computed" 'etaf-splitter)
     (etaf-check-prop :divider-content divider-content
                      (or (null divider-content) (stringp divider-content)
-                         (etaf-ui--reactive-source-p divider-content))
+                         (etaf-desktop-shell--reactive-source-p divider-content))
                      "nil, a string, a ref or a computed" 'etaf-splitter)
     (etaf-check-prop :visible visible
-                     (or (booleanp visible) (etaf-ui--reactive-source-p visible))
+                     (or (booleanp visible) (etaf-desktop-shell--reactive-source-p visible))
                      "a boolean, a ref or a computed" 'etaf-splitter)
     (etaf-check-prop :overlay-rect overlay-rect
                      (or (null overlay-rect)
                          (and overlay
-                              (etaf-ui--splitter-overlay-rect-p overlay-rect)))
+                              (etaf-desktop-shell--splitter-overlay-rect-p overlay-rect)))
                      "nil or an overlay (:left (px N) :top (lh N) :width (px N) :height (lh N)) rectangle"
                      'etaf-splitter))
   :render
   (if (and overlay overlay-rect)
       ;; The allocated overlay never reads RATIO: its rectangle and content
       ;; are retained bindings owned by the caller's layout policy.
-      (etaf-node 'etaf-ui--splitter-overlay-divider
+      (etaf-node 'etaf-desktop-shell--splitter-overlay-divider
                  (list :orientation orientation :rect overlay-rect
                        :z-index z-index :divider-content divider-content
                        :visible visible :use use :on-change on-change)
                  nil)
-    (let* ((ratio (float (etaf-ui--reactive-value ratio)))
+    (let* ((ratio (float (etaf-desktop-shell--reactive-value ratio)))
            (first-width (list '% (round (* 100 ratio))))
            (first (etaf-current-slot 'first))
            (second (etaf-current-slot 'second))
@@ -645,9 +703,9 @@ a ratio or window/layout policy."
                                         'vertical 'horizontal)
                   :pointer (if (eq orientation 'horizontal) 'hdrag 'vdrag)
                   :use use :on-drag on-change
-                  :z-index (etaf-ui--reactive-value z-index)
-                  :background-color (etaf-ui--style-token :ui-divider-bg)))
-           (divider-w (if (> (car (etaf-ui--canvas-cell)) 1) '(px 3) '(px 1)))
+                  :z-index (etaf-desktop-shell--reactive-value z-index)
+                  :background-color (etaf-desktop-shell--token :ui-divider-bg)))
+           (divider-w (if (> (car (etaf-canvas-cell)) 1) '(px 3) '(px 1)))
            (divider
             (if overlay
                 (etaf-node
@@ -663,7 +721,7 @@ a ratio or window/layout policy."
                                  :width 'stretch :height '(lh 1))))
                  (when divider-content
                    (list (etaf-node 'text nil
-                                    (list (etaf-ui--reactive-value
+                                    (list (etaf-desktop-shell--reactive-value
                                            divider-content))))))
               (if (eq orientation 'horizontal)
                   (etaf-node 'box
@@ -672,7 +730,7 @@ a ratio or window/layout policy."
                 (etaf-node 'box
                            (append divider-props
                                    (list :width 'stretch :height '(lh 1))) nil))))
-           (props (list :class (etaf-ui--class-value "etaf-splitter" nil class)
+           (props (list :class (etaf-desktop-shell--class-value "etaf-splitter" nil class)
                         :width 'stretch :height 'stretch
                         :overflow 'hidden)))
       (if overlay
@@ -695,65 +753,5 @@ a ratio or window/layout policy."
                                             :width 'stretch :overflow 'hidden)
                                  second))))))))
 
-(etaf-define-component etaf-pane-resizer
-    (&key size (side 'right) min max on-change on-end (line t) background ref)
-  "Render a vertical divider that resizes an adjacent fixed-width pane.
-SIZE is the pane's current width in pixels, a number, ref or computed.
-SIDE `right' places the divider on the pane's right, so dragging right
-widens it; `left' serves a pane on the divider's right.  Each drag move
-passes the candidate width, clamped to MIN and MAX pixels when given, to
-ON-CHANGE; ON-END receives the final width.  The divider shows a hairline
-in the divider color beside the pane when LINE is non-nil, over
-BACKGROUND, and is wide enough to grab.  The focused divider steps the
-width one column per Left or Right press.  The width stays caller-owned;
-REF reaches the rendered divider so callers can focus or address it."
-  :bindings ((origin (list nil)))
-  :validate
-  (progn
-    (etaf-check-prop :side side (memq side '(left right)) "left or right"
-                     'etaf-pane-resizer)
-    (dolist (callback (list on-change on-end))
-      (etaf-check-prop :callback callback (or (null callback) (functionp callback))
-                       "a function or nil" 'etaf-pane-resizer))
-    (dolist (bound (list min max))
-      (etaf-check-prop :bound bound (or (null bound) (numberp bound))
-                       "a pixel count or nil" 'etaf-pane-resizer)))
-  :render
-  (let ((width (lambda (gesture)
-                 (let* ((dx (car (plist-get gesture :delta)))
-                        (next (+ (car origin) (if (eq side 'right) dx (- dx)))))
-                   (round (min (or max next) (max (or min next) next)))))))
-    (etaf-node
-     'box
-     (append
-      (list :class "etaf-pane-resizer" :role 'separator
-            :ref ref
-            :aria-label "Resize pane" :pointer 'hdrag
-            :aria-orientation 'vertical
-            :tab-index (when (or on-change on-end) 0)
-            :width (if (> (car (etaf-ui--canvas-cell)) 1) '(px 5) '(px 1))
-            :height 'stretch :flex-shrink 0
-            :background-color background
-            :on-drag
-            (lambda (gesture)
-              (pcase (plist-get gesture :phase)
-                ('start (setcar origin (etaf-ui--reactive-value size)))
-                ((or 'move 'end)
-                 (when (car origin)
-                   (let ((next (funcall width gesture)))
-                     (when on-change (funcall on-change next))
-                     (when (eq (plist-get gesture :phase) 'end)
-                       (setcar origin nil)
-                       (when on-end (funcall on-end next))))))
-                ('cancel (setcar origin nil)))))
-      (and line
-           (if (eq side 'right)
-               (list :border-left-width '(px 1) :border-left-style 'solid
-                     :border-left-color (etaf-ui--style-token :ui-divider-bg))
-             (list :border-right-width '(px 1) :border-right-style 'solid
-                   :border-right-color
-                   (etaf-ui--style-token :ui-divider-bg)))))
-     nil)))
-
-(provide 'etaf-ui-desktop)
-;;; etaf-ui-desktop.el ends here
+(provide 'etaf-desktop-shell)
+;;; etaf-desktop-shell.el ends here

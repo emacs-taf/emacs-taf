@@ -15,9 +15,10 @@ The manual documents the version combination in the table below. Except for EKP 
 | `etaf` | 0.3.19 | Emacs 29.1, `ebox 3.1.15`, `ecss 0.1.4` |
 | `etaf-media` | 0.1.0 | Emacs 29.1, `etaf 0.3.19`, `ebox 3.1.15` |
 | `etaf-ui` | 0.3.14 | Emacs 29.1, `etaf 0.3.19` |
+| `etaf-doc` | 0.1.0 | Emacs 29.1, `etaf 0.3.19`, `etaf-ui 0.3.14` |
 | `etaf-db` | 0.1.4 | Emacs 29.1, `etaf 0.3.19` |
 | `etaf-posframe` | 0.3.5 | Emacs 29.1, `etaf 0.3.19`, `etaf-ui 0.3.14`, Posframe 0.9.0 |
-| `etaf-manual` | 0.1.27 | Emacs 29.1, `etaf 0.3.19`, `etaf-ui 0.3.14` |
+| `etaf-manual` | 0.1.27 | Emacs 29.1, `etaf 0.3.19`, `etaf-ui 0.3.14`, `etaf-doc 0.1.0` |
 <!-- END:GENERATED:manual-version-table-en -->
 
 The third column is the combination this edition documents.  Each package's `Package-Requires` header states the minimum it installs with, which can be lower.
@@ -34,5 +35,5 @@ Emacs 29.1 or newer runs every package; ECSS alone also supports Emacs 28.1. The
 - **Runtime generations.** The earlier generation APIs were removed. Compare `etaf-runtime-revision`, or the value `etaf-runtime-flush` returns, to observe that a publication reached the buffer.
 - **Ebox engine.** The earlier engine's canonical inputs, source builders and explicit update APIs were removed. Keep node references: `ebox-node-insert`, `ebox-node-remove`, `ebox-node-move` and `ebox-node-replace-children` change children; `ebox-node-set-text` and `ebox-node-set-image` change content; `ebox-node-set-props`, `ebox-node-put`, `ebox-node-set-states` and `ebox-node-restyle` change properties; `ebox-with-batch` groups work. Build or copy a retained root and mount it instead of supplying a full input replacement.
 - **Data reconciliation.** The success state is `reconciled`, not `projected`; consumers that compare `etaf-data-reconciliation-state` symbols should update.
-- **Accent controls.** `etaf-taskbar` and `etaf-workspace-bar` no longer accept `:accent-color`; provide a Theme with `:ui-accent` and `:ui-accent-soft-bg` instead.
+- **Document, game and desktop shell extraction.** Markdown parsing/rendering and shared document infrastructure moved from `etaf-ui` into `etaf-doc` (consumers require `etaf-doc`); playing cards moved from `etaf-ui` into etaf-gamekit; desktop shell bars, pickers and splitter moved from `etaf-ui` into etaf-desktop (while `etaf-pane-resizer` remains in `etaf-ui`). Provide a Theme with `:ui-accent` and `:ui-accent-soft-bg` to style shell controls.
 - **EKP dictionaries.** The bundled inventory is pinned and verified per file. The Sanskrit dictionary was removed because the pinned upstream data has no authoritative license statement; check that hyphenation still selects a dictionary when a document's language is no longer covered.

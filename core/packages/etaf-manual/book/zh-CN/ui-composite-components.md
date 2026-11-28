@@ -269,6 +269,168 @@ Markdown 文档操作被拒绝时的条件。
 
 **参见。** `etaf-ui-markdown-flavors`、`etaf-ui-markdown-parse`。
 
+## 共享文档基础设施（`etaf-doc`）
+
+<!-- index: etaf-doc; 文档缓存; 二维码; QuickJS 排版; 活文档资产; 文档协议; 编辑组件 -->
+
+`etaf-doc` 包集中提供各文档应用共用的非语法层基础设施（包含 `etaf-ui-markdown-*` 以及六个可复用子系统）：有界 LRU 远程图片缓存、异步二维码生成、原生 QuickJS Mermaid 与 MathJax 排版、工作区沙箱活文档资产、带 schema 校验的自定义节点协议，以及编辑类 UI 组件。
+
+### 文档缓存
+
+#### Function: etaf-doc-cache-prune-directory (directory &optional max-bytes max-files)
+
+调度 DIRECTORY 的延迟空闲 LRU 清理，使磁盘总占用不超过 MAX-BYTES 且文件数不超过 MAX-FILES。同一目录的重复调用合并到同一个空闲定时器上，避免缓存写入阻塞渲染。
+
+#### Function: etaf-doc-cache-http-url-p (url)
+
+当 URL 是以 `http://` 或 `https://` 开头的字符串时返回非 nil。
+
+#### Function: etaf-doc-cache-image-url-p (url)
+
+当远程 URL 指向受支持的图片扩展名时返回非 nil。
+
+#### Function: etaf-doc-cache-image-path (url)
+
+从内存表返回远程 URL 对应的本地缓存图片路径，未命中返回 nil。完全不触碰磁盘或网络，可在 `:render` 中安全调用。
+
+#### Function: etaf-doc-cache-warm-urls (urls &optional directory)
+
+不走网络 I/O，从 DIRECTORY 的磁盘已有文件把远程 URLS 预热进内存缓存表；至少预热了一条记录时返回非 nil。
+
+#### Function: etaf-doc-cache-request-urls (urls on-ready &optional options)
+
+为未缓存的远程图片 URLS 排队异步下载，缓存就绪时调用 ON-READY。OPTIONS 为 plist，接受 `:directory`、`:max-bytes`、`:max-files`、`:max-per-page` 与 `:live-p`。
+
+### 二维码生成
+
+#### Function: etaf-doc-qrcode-available-p ()
+
+当 `qrencode` 可执行文件在 `exec-path` 中可用时返回非 nil。
+
+#### Function: etaf-doc-qrcode-file (text &optional directory)
+
+返回二维码负载 TEXT 在 DIRECTORY（或默认二维码缓存目录）下对应的确定性 PNG 缓存路径。
+
+#### Function: etaf-doc-qrcode-request-texts (texts on-ready &optional directory)
+
+为 DIRECTORY 下尚未缓存的二维码负载 TEXTS 排队异步运行 `qrencode` 子进程，每张 PNG 写入完成时调用 ON-READY。
+
+### 原生 QuickJS 排版
+
+#### Function: etaf-doc-typeset-available-p ()
+
+当内嵌的 QuickJS + Pele + MathJax 原生动态模块已加载且就绪时返回非 nil。
+
+#### Function: etaf-doc-typeset-info ()
+
+返回已加载 QuickJS 原生模块的引擎元数据 plist，不可用时返回 nil。
+
+#### Function: etaf-doc-typeset-options-json (kind palette &optional options)
+
+根据语义调色板 PALETTE 生成 KIND（`mermaid` 或 `math`）对应的 JSON 选项字符串。OPTIONS 接受 `:font-size`、`:pixels`、`:cell-height`、`:scale`、`:font-family` 与 `:mono-family`。
+
+#### Function: etaf-doc-typeset-request (key kind source options-json cache-dir on-done &optional on-error)
+
+把 KEY 对应的 KIND（`mermaid` 或 `math`）源码 SOURCE 排队交给共享后台 QuickJS 工作线程，写出 `CACHE-DIR/KEY.svg`；成功调用 `(ON-DONE PATH)`，失败调用 `(ON-ERROR MESSAGE FATAL-P)`。
+
+#### Function: etaf-doc-typeset-image-pixels (path)
+
+通过快速文件头检测返回图片文件 PATH 的像素尺寸 `(WIDTH . HEIGHT)`，不可读时返回 nil。
+
+#### Function: etaf-doc-typeset-grid-for-pixels (pixels max-columns &optional max-rows cell-metrics)
+
+在 MAX-COLUMNS 与可选 MAX-ROWS 范围内按 CELL-METRICS `(CHAR-WIDTH . LINE-HEIGHT)` 计算保持 PIXELS `(WIDTH . HEIGHT)` 纵横比的字符网格尺寸 `(COLUMNS . ROWS)`。
+
+### 工作区活文档资产
+
+#### Function: etaf-doc-assets-workspace-root (dir)
+
+返回包含 DIR 的规范工作区根目录（向上停在 `.git`、`.jj` 或 DIR 自身）。
+
+#### Function: etaf-doc-assets-safe-path (dir relpath)
+
+相对 DIR 解析 RELPATH 并严格限制在规范工作区根目录内，越界或路径穿越返回 nil。
+
+#### Function: etaf-doc-assets-lang-for-path (path)
+
+根据文件 PATH 的扩展名或文件名推断规范的语法高亮语言标签。
+
+#### Function: etaf-doc-assets-read-slice (dir relpath &optional options)
+
+从 DIR 所在工作区根目录下的 RELPATH 安全读取有界源码切片。OPTIONS 接受 `:lines`、`:region`、`:section`、`:symbol`、`:context`、`:lang`、`:default-lines`、`:max-bytes` 与 `:max-lines`。
+
+#### Function: etaf-doc-assets-inspect-symbol (name &optional workspace-dir)
+
+返回 Emacs 符号 NAME 的实时内省 plist（种类、签名、文档字符串、值预览与相对 WORKSPACE-DIR 的源码位置）。
+
+#### Function: etaf-doc-assets-project-tree (dir relpath &optional options)
+
+计算 DIR 工作区下 RELPATH 的有界目录树结构。OPTIONS 接受 `:depth` 与 `:max-entries`。
+
+#### Function: etaf-doc-assets-git-log-async (dir on-done &optional options)
+
+对 DIR 所在工作区异步执行 Git 或 Jujutsu 日志查询，完成后调用 `(ON-DONE RESULT)`。OPTIONS 接受 `:limit` 与 `:path`。
+
+#### Function: etaf-doc-assets-git-diff-async (dir on-done &optional options)
+
+对 DIR 所在工作区异步执行 Git 或 Jujutsu 差异查询，完成后调用 `(ON-DONE RESULT)`。OPTIONS 接受 `:rev` 与 `:path`。
+
+### 文档节点协议
+
+#### Function: etaf-doc-protocol-convert (type value)
+
+将 VALUE 转换为文档属性类型 TYPE（`string`、`integer`、`number`、`boolean`、`keyword`、`symbol`、`list` 或 `(enum ...)`），不兼容时返回 nil。
+
+#### Function: etaf-doc-protocol-validate-value (key decl value source &optional style)
+
+当来自 SOURCE 的 VALUE 违反 KEY 的属性声明 DECL 时返回诊断消息字符串，合法时返回 nil；STYLE 控制提示格式。
+
+#### Function: etaf-doc-protocol-check-declarations (type decls derived error-symbol &optional allow-nil-default)
+
+校验节点 TYPE 的属性声明 DECLS 与派生键 DERIVED，声明形态不合法时报 ERROR-SYMBOL；ALLOW-NIL-DEFAULT 非 nil 时允许 nil 默认值。
+
+#### Function: etaf-doc-protocol-define-node (registry type args contract error-symbol &optional shipped-p allow-nil-default)
+
+按 CONTRACT 校验定义参数 plist ARGS，在哈希表 REGISTRY 中注册或更新节点 TYPE，违反契约时报 ERROR-SYMBOL；SHIPPED-P 标记内置定义以便取消定义时恢复。
+
+#### Function: etaf-doc-protocol-undefine-node (registry styles type)
+
+从 REGISTRY 与 STYLES 哈希表中恢复内置节点 TYPE 或移除用户自定义节点 TYPE。
+
+#### Function: etaf-doc-protocol-load-directory (directory &optional label)
+
+按文件名排序加载 DIRECTORY 下的所有 `.el` 扩展文件，诊断信息中使用 LABEL 标识来源。
+
+### 编辑类组件
+
+#### Function: etaf-doc-widget-leaf-button (palette label on-press &rest opts)
+
+按 PALETTE 返回带 LABEL 与 ON-PRESS 的单 face 可交互叶子控件。OPTS 接受 `:color`、`:background`、`:hover-bg`、`:help`、`:active`、`:ref` 与 `:padding`。
+
+#### Function: etaf-doc-widget-pill (palette label active-p on-press &optional help hover-p)
+
+按 PALETTE 返回带 LABEL 的紧凑切换胶囊，反映 ACTIVE-P 并在激活时调用 ON-PRESS，支持可选 HELP 提示与 HOVER-P 悬停样式。
+
+#### Function: etaf-doc-widget-status-badge (palette text variant)
+
+按 PALETTE 返回无边框柔色状态徽章，以语义 VARIANT（`ok`、`warn`、`danger`、`important`、`accent` 或 `muted`）展示 TEXT。
+
+#### Function: etaf-doc-widget-notice (palette message &optional variant)
+
+按 PALETTE 与可选 VARIANT 返回行内提示条或加载条，展示 MESSAGE。
+
+#### Function: etaf-doc-widget-progress-bars (palette rows available-width &optional options)
+
+按 PALETTE 与可选显示 OPTIONS，将 ROWS 渲染为适配 AVAILABLE-WIDTH 的无边框编辑风格进度条组。
+
+#### Function: etaf-doc-widget-line-chart (palette series available-width &optional options)
+
+按 PALETTE 与可选坐标轴 OPTIONS，将 SERIES 渲染为适配 AVAILABLE-WIDTH 的不折行框线折线图。
+
+#### Function: etaf-doc-widget-source-card (palette title meta code-view &optional options)
+
+按 PALETTE 渲染包裹 CODE-VIEW 的单框活文档源码卡片，展示 TITLE、META 元信息标签与可选动作 OPTIONS。
+
 ## 错误与恢复
 
 - 日期选择器区分草稿与错误：尚不完整的日期文本只是不被报告，提交它报 `user-error` 且不写入值；取消会话恢复激活时的值。

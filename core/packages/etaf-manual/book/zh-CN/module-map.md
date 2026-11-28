@@ -142,11 +142,18 @@ EKP 独立于其它包：它的两个底模块是纯的，布局模块是它们�
 | `lisp/etaf-ui-advanced.el` | date picker、tree、calendar 与 command palette | `lisp/etaf-ui-input.el`、`lisp/etaf-ui-navigation.el`、`lisp/etaf-ui-surface.el`、`lisp/etaf-ui-table.el` |
 | `lisp/etaf-ui-media.el` | media viewer | `lisp/etaf-ui-icon.el`、`lisp/etaf-ui-selection.el`、`lisp/etaf-ui-surface.el` |
 | `lisp/etaf-ui-reactions.el` | reactions | `lisp/etaf-ui-icon.el`、`lisp/etaf-ui-surface.el` |
-| `lisp/etaf-ui-desktop.el` | taskbar、workspace bar、launcher、switcher、splitter 与 pane resizer | `lisp/etaf-ui-basic.el`、`lisp/etaf-ui-style.el`、`lisp/etaf-ui-surface.el` |
-| `lisp/etaf-ui-window.el` | window chrome、window controls 与 resizable panel | `lisp/etaf-ui-basic.el` |
+| `lisp/etaf-ui-window.el` | window chrome、window controls、resizable panel 与 pane resizer | `lisp/etaf-ui-basic.el` |
 | `lisp/etaf-ui-tile-grid.el` | tile grid | `lisp/etaf-ui-basic.el` |
 | `lisp/etaf-ui-text-grid.el` | text grid | `lisp/etaf-ui-basic.el` |
-| `lisp/etaf-ui-playing-card.el` | playing card | `lisp/etaf-ui-basic.el` |
+| `etaf-doc/lisp/etaf-ui-markdown-parse.el` | 纯 Elisp Markdown 解析器、方言与块/行内扩展 | — |
+| `etaf-doc/lisp/etaf-ui-markdown-highlight.el` | 带缓存的 Emacs major-mode font-lock 代码着色 | — |
+| `etaf-doc/lisp/etaf-ui-markdown.el` | Markdown 块与行内 View 渲染及 TeX 公式纯文本回退 | `etaf-ui-markdown-parse.el`、`etaf-ui-markdown-highlight.el`、ETAF、ETAF UI |
+| `etaf-doc/lisp/etaf-doc-cache.el` | 有界 LRU 磁盘缓存清理与异步远程 HTTP(S) 图片缓存 | — |
+| `etaf-doc/lisp/etaf-doc-qrcode.el` | 异步 `qrencode` 二维码 PNG 生成与缓存 | `etaf-doc-cache.el` |
+| `etaf-doc/lisp/etaf-doc-typeset.el` | 共享 QuickJS + Pele + MathJax 原生后台线程与像素网格换算 | `etaf-doc-cache.el` |
+| `etaf-doc/lisp/etaf-doc-assets.el` | 工作区沙箱文件切片、符号内省、目录树与异步 VCS 日志/差异 | — |
+| `etaf-doc/lisp/etaf-doc-protocol.el` | 文档属性类型转换与校验、节点注册表与扩展目录加载器 | — |
+| `etaf-doc/lisp/etaf-doc-widgets.el` | 共享编辑类组件（按钮、胶囊、状态徽章、提示条、进度条、折线图、源码卡） | ETAF |
 | `lisp/etaf-sqlite-store.el` | SQLite Data 源 | ETAF、Emacs 的 `sqlite` 支持 |
 
 目录里需要引擎度量事实的三处辅助——给 surface 或 field 定尺寸用的视口大小、field 必须转发的输入命令、selection 辅助比较用的像素宽——都从 Ebox 公共的视口与度量接口读该事实，而不是复制度量。其余所有目录依赖都指向 ETAF。

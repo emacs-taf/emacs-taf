@@ -2,7 +2,7 @@
 .NOTPARALLEL:
 EMACS ?= emacs
 PYTHON ?= python3
-LOAD_PATH = -L . -L lisp -L ../etaf -L ../etaf-media -L ../etaf-ui -L ../ebox -L ../ecss -L ../ekp
+LOAD_PATH = -L . -L lisp -L ../etaf -L ../etaf-media -L ../etaf-ui -L ../etaf-doc -L ../ebox -L ../ecss -L ../ekp
 # etaf-posframe is checked against the window manager it wraps; that is an
 # installed ELPA package, not a workspace checkout.
 POSFRAME_DIR ?= $(lastword $(sort $(wildcard $(HOME)/.emacs.d/elpa/posframe-*)))
@@ -77,7 +77,7 @@ api-check:
 	  echo "  make -C core/packages/$(notdir $(CURDIR)) check"; \
 	  exit 2; }
 	$(EMACS) -Q --batch -L . -L lisp $(API_PROVIDER_PATH) --eval '(setq load-prefer-newer t)' -l ../../../scripts/check-api.el
-API_PROVIDER_PATH = -L ../ecss -L ../ekp -L ../ebox -L ../etaf -L ../etaf-media -L ../etaf-ui -L ../etaf-db -L ../ebox-playground -L ../etaf-playground
+API_PROVIDER_PATH = -L ../ecss -L ../ekp -L ../ebox -L ../etaf -L ../etaf-media -L ../etaf-ui -L ../etaf-doc -L ../etaf-db -L ../ebox-playground -L ../etaf-playground
 
 .PHONY: test
 test: acceptance

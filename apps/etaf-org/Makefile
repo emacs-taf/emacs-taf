@@ -4,7 +4,7 @@ EMACS ?= emacs
 # Providers are siblings in the workspace and in a standalone clone;
 # override PROVIDER_ROOT to pin another checkout.
 PROVIDER_ROOT ?= $(if $(wildcard ../../core/packages/etaf),../../core/packages,$(if $(wildcard ../etaf/etaf.el),..,../..))
-LOAD_PATH = -L . -L lisp -L tests -L $(PROVIDER_ROOT)/etaf -L $(PROVIDER_ROOT)/etaf-media -L $(PROVIDER_ROOT)/etaf-ui -L $(PROVIDER_ROOT)/ebox -L $(PROVIDER_ROOT)/ecss
+LOAD_PATH = -L . -L lisp -L tests -L $(PROVIDER_ROOT)/etaf -L $(PROVIDER_ROOT)/etaf-media -L $(PROVIDER_ROOT)/etaf-ui -L $(PROVIDER_ROOT)/etaf-doc -L $(PROVIDER_ROOT)/ebox -L $(PROVIDER_ROOT)/ecss
 SOURCES = lisp/etaf-org-entities.el lisp/etaf-org-cache.el
 SOURCES += lisp/etaf-org-theme.el lisp/etaf-org-node.el
 SOURCES += lisp/etaf-org-parse.el lisp/etaf-org-derive.el

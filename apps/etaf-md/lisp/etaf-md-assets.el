@@ -4,18 +4,9 @@
 
 ;;; Commentary:
 ;;
-;; Read-only workspace assets (L1) and explicit user-triggered actions (L2)
-;; backing the living-document widgets of `etaf-md'.
-;;
-;; Every filesystem read and subprocess stays strictly outside ETAF's
-;; `:render' phase:
-;; - Fast bounded local reads (`include', `code-ref', `symbol', `project-tree')
-;;   attach their snapshots during document publish.
-;; - External processes (`git-log', `git-diff') run asynchronously via
-;;   `etaf-process-run' into SESSION's `:assets' cache and repaint only the
-;;   owning block when ready.
-;; - Executable actions (`run', interactive task checkboxes) fire solely from
-;;   explicit user activation and respect trust settings.
+;; Markdown living-document workspace assets (L1) and explicit actions (L2),
+;; delegating path sandboxing, bounded slicing, symbol introspection, directory
+;; trees, and Git/Jujutsu log & diff to `etaf-doc-assets'.
 
 ;;; Code:
 
@@ -23,6 +14,7 @@
 (require 'seq)
 (require 'subr-x)
 (require 'etaf)
+(require 'etaf-doc)
 
 (declare-function etaf-md--open-url "etaf-md-model" (session url))
 (declare-function etaf-md--publish "etaf-md-model" (session contents &optional dirty-span live-p))
@@ -30,8 +22,6 @@
 (declare-function etaf-md--refresh-block-assets "etaf-md-model" (session))
 (declare-function etaf-md--session-text "etaf-md-model" (session))
 (declare-function etaf-md-set-block-state "etaf-md-env" (env key value))
-(declare-function find-lisp-object-file-name "find-func" (object type))
-(declare-function help-function-arglist "help-fns" (def &optional preserve-names))
 (defvar pulse-flag)
 (defvar pulse-delay)
 (defvar pulse-iterations)
@@ -43,11 +33,7 @@
   "One-shot timer clearing a non-pulsing highlight overlay on TTY frames.")
 
 (defun etaf-md--pulse-line (pos)
-  "Momentarily highlight the line at POS, auto-clearing on TTY frames too.
-On GUI frames with an explicit default background `pulse' fades out on its own
-timer.  On terminal frames (where `default' background is `unspecified-bg' or
-`pulse-flag' is nil), `pulse' leaves a static highlight until the next command;
-schedule a matching one-shot cleanup timer so TTY and GUI behave consistently."
+  "Momentarily highlight the line at POS, auto-clearing on TTY frames too."
   (when (timerp etaf-md--pulse-clear-timer)
     (cancel-timer etaf-md--pulse-clear-timer)
     (setq etaf-md--pulse-clear-timer nil))
@@ -93,10 +79,7 @@ without prompting, and `nil' disables execution altogether."
   :group 'etaf-md)
 
 (defcustom etaf-md-media-lightbox 'auto
-  "Whether activating a local image opens the in-buffer media lightbox.
-`auto' opens the lightbox on graphical frames and uses the system opener on
-text/batch frames; `t' always uses the in-buffer lightbox; `nil' always opens
-images externally."
+  "Whether activating a local image opens the in-buffer media lightbox."
   :type '(choice (const :tag "On graphical frames" auto)
                  (const :tag "Always use lightbox" t)
                  (const :tag "Open externally" nil))
@@ -108,98 +91,24 @@ images externally."
 (defconst etaf-md-assets--max-lines 400
   "Maximum lines kept for one `include', `code-ref' or `git-diff' snapshot.")
 
-(defconst etaf-md-assets--default-ignore
-  '(".git" ".jj" "node_modules" ".DS_Store" "__pycache__" "target" "dist" "build" ".cache")
-  "Directory and file names skipped by `project-tree'.")
-
-;;; ---------------------------------------------------------------------------
-;;; Workspace boundary and helpers
-;;; ---------------------------------------------------------------------------
+(defun etaf-md-assets--session-dir (session)
+  "Return the base directory for SESSION."
+  (or (and session (plist-get session :dir)) default-directory))
 
 (defun etaf-md-assets--workspace-root (session)
   "Return the canonical workspace root directory for SESSION."
-  (let* ((dir (expand-file-name (or (and session (plist-get session :dir))
-                                    default-directory)))
-         (vcs (or (locate-dominating-file dir ".git")
-                  (locate-dominating-file dir ".jj")))
-         (root (or vcs dir)))
-    (file-name-as-directory
-     (if (file-exists-p root) (file-truename root) (expand-file-name root)))))
+  (etaf-doc-assets-workspace-root (etaf-md-assets--session-dir session)))
 
 (defun etaf-md-assets--safe-path (session relpath)
   "Resolve RELPATH inside SESSION's workspace root, or return nil if outside."
-  (when (and (stringp relpath) (not (string-blank-p relpath)))
-    (let* ((base (expand-file-name (or (and session (plist-get session :dir))
-                                       default-directory)))
-           (root (etaf-md-assets--workspace-root session))
-           (candidate (expand-file-name (string-trim relpath) base))
-           (resolved (if (file-exists-p candidate)
-                         (file-truename candidate)
-                       candidate))
-           (root-true (if (file-exists-p root) (file-truename root) root)))
-      (when (or (equal (file-name-as-directory resolved)
-                       (file-name-as-directory root-true))
-                (file-in-directory-p resolved root-true))
-        candidate))))
+  (etaf-doc-assets-safe-path (etaf-md-assets--session-dir session) relpath))
 
 (defun etaf-md-assets--lang-for-path (path)
   "Infer a syntax highlight language tag from file PATH."
-  (pcase (downcase (or (file-name-extension path) ""))
-    ((or "el" "elisp") "elisp")
-    ("py" "python")
-    ((or "js" "mjs" "cjs") "js")
-    ((or "ts" "tsx") "ts")
-    ("jsx" "jsx")
-    ("rs" "rust")
-    ("go" "go")
-    ("c" "c")
-    ((or "cc" "cpp" "cxx" "hpp") "cpp")
-    ("h" "c")
-    ("java" "java")
-    ("sh" "sh")
-    ("bash" "bash")
-    ("zsh" "sh")
-    ("json" "json")
-    ((or "yml" "yaml") "yaml")
-    ("toml" "toml")
-    ("css" "css")
-    ((or "html" "htm") "html")
-    ("xml" "xml")
-    ("sql" "sql")
-    ((or "md" "markdown") "markdown")
-    ("org" "org")
-    (ext (if (string-empty-p ext) "text" ext))))
-
-(defun etaf-md-assets--read-lines (path)
-  "Read up to `etaf-md-assets--max-file-bytes' of PATH as a list of lines."
-  (with-temp-buffer
-    (insert-file-contents path nil 0 etaf-md-assets--max-file-bytes)
-    (split-string (buffer-string) "\n")))
-
-(defun etaf-md-assets--parse-line-range (spec total)
-  "Parse line range SPEC (`12-40' or `12') clamped to 1..TOTAL -> (BEG . END)."
-  (cond
-   ((and (stringp spec) (string-match "\\`\\([0-9]+\\)-\\([0-9]+\\)\\'" (string-trim spec)))
-    (let ((b (max 1 (string-to-number (match-string 1 spec))))
-          (e (min total (string-to-number (match-string 2 spec)))))
-      (cons (min b e) (max b e))))
-   ((and (stringp spec) (string-match "\\`\\([0-9]+\\)\\'" (string-trim spec)))
-    (let ((b (max 1 (min total (string-to-number (match-string 1 spec))))))
-      (cons b b)))
-   (t (cons 1 (min total etaf-md-assets--max-lines)))))
-
-(defun etaf-md-assets--slice-lines (lines beg end)
-  "Return 1-based inclusive slice BEG..END of LINES joined by newlines."
-  (let* ((total (length lines))
-         (b (max 1 (min (max 1 total) beg)))
-         (e (max b (min total (min end (+ b etaf-md-assets--max-lines -1))))))
-    (list :start b
-          :end e
-          :truncated (> end e)
-          :content (mapconcat #'identity (cl-subseq lines (1- b) e) "\n"))))
+  (etaf-doc-assets-lang-for-path path))
 
 ;;; ---------------------------------------------------------------------------
-;;; L1 sync snapshots (run during publish, never during :render)
+;;; L1 sync snapshots (delegating to `etaf-doc-assets')
 ;;; ---------------------------------------------------------------------------
 
 (defun etaf-md-assets--compute-include (session attrs)
@@ -211,305 +120,50 @@ images externally."
      ((or (null src) (string-blank-p src))
       (list :error "include 缺少 src 属性"))
      (t
-      (let ((path (etaf-md-assets--safe-path session src)))
-        (cond
-         ((null path)
-          (list :error (format "路径超出工作区范围：%s" src)))
-         ((not (file-readable-p path))
-          (list :error (format "找不到文件：%s" src)))
-         ((file-directory-p path)
-          (list :error (format "目标是目录而非文件：%s" src)))
-         (t
-          (let* ((lines (etaf-md-assets--read-lines path))
-                 (total (length lines))
-                 (region (plist-get attrs :region))
-                 (section (plist-get attrs :section))
-                 (line-spec (plist-get attrs :lines))
-                 (range
-                  (cond
-                   ((and (stringp region) (not (string-blank-p region)))
-                    (let ((re-start (format "#region[ \t]+%s\\b" (regexp-quote region)))
-                          (re-end "#endregion\\b")
-                          (b nil) (e nil))
-                      (cl-loop for line in lines for idx from 1 do
-                               (cond
-                                ((and (null b) (string-match-p re-start line))
-                                 (setq b (1+ idx)))
-                                ((and b (null e) (string-match-p re-end line))
-                                 (setq e (1- idx)))))
-                      (if b
-                          (cons b (or e total))
-                        (cons 1 (min total etaf-md-assets--max-lines)))))
-                   ((and (stringp section) (not (string-blank-p section)))
-                    (let ((b nil) (e nil) (level 0))
-                      (cl-loop for line in lines for idx from 1 do
-                               (when (string-match "\\`\\(#+\\)[ \t]+\\(.+\\)\\'" line)
-                                 (let ((lv (length (match-string 1 line)))
-                                       (title (string-trim (match-string 2 line))))
-                                   (cond
-                                    ((and (null b) (equal title section))
-                                     (setq b idx level lv))
-                                    ((and b (null e) (<= lv level))
-                                     (setq e (1- idx)))))))
-                      (if b
-                          (cons b (or e total))
-                        (cons 1 (min total etaf-md-assets--max-lines)))))
-                   (t (etaf-md-assets--parse-line-range line-spec total))))
-                 (sliced (etaf-md-assets--slice-lines lines (car range) (cdr range))))
-            (list :ok t
-                  :path path
-                  :rel src
-                  :lang (or (plist-get attrs :lang) (etaf-md-assets--lang-for-path path))
-                  :start-line (plist-get sliced :start)
-                  :end-line (plist-get sliced :end)
-                  :total-lines total
-                  :truncated (plist-get sliced :truncated)
-                  :content (plist-get sliced :content))))))))))
-
-(defun etaf-md-assets--find-elisp-sexp-end (lines hit)
-  "Return the 1-based end line of the Lisp form starting at HIT in LINES."
-  (ignore-errors
-    (with-temp-buffer
-      (set-syntax-table emacs-lisp-mode-syntax-table)
-      (insert (mapconcat #'identity lines "\n"))
-      (goto-char (point-min))
-      (forward-line (1- hit))
-      (skip-chars-forward " \t")
-      (when (eq (char-after) ?\()
-        (forward-sexp 1)
-        (line-number-at-pos (point))))))
-
-(defun etaf-md-assets--find-symbol-range (lines sym context &optional lang)
-  "Locate SYM definition in LINES; return (BEG . END) with CONTEXT lines.
-For Emacs Lisp sources (LANG `elisp'), parses the complete balanced top-level
-sexp with `forward-sexp' so closing parentheses are never clipped."
-  (let* ((total (length lines))
-         (ctx (max 0 (or context 0)))
-         (q (regexp-quote sym))
-         (def-re (format "\\(?:defun\\|defmacro\\|defsubst\\|defvar\\|defcustom\\|defconst\\|cl-defun\\|cl-defstruct\\|etaf-define-component\\|function\\|def\\|fn\\|class\\|struct\\|interface\\|type\\|const\\)[ \t]+%s\\b" q))
-         (hit (or (cl-loop for line in lines for idx from 1
-                           when (string-match-p def-re line) return idx)
-                  (cl-loop for line in lines for idx from 1
-                           when (string-match-p (format "\\b%s\\b" q) line) return idx))))
-    (when hit
-      (let* ((beg (max 1 (- hit ctx)))
-             (sexp-end (and (equal lang "elisp")
-                            (etaf-md-assets--find-elisp-sexp-end lines hit)))
-             (end (if (and sexp-end (>= sexp-end hit))
-                      (min total (min (+ hit 80) sexp-end))
-                    (let ((e hit)
-                          (base-indent (if (string-match "\\`[ \t]*" (nth (1- hit) lines))
-                                           (length (match-string 0 (nth (1- hit) lines)))
-                                         0))
-                          (scan (1+ hit))
-                          (limit (min total (+ hit 60))))
-                      (while (and (<= scan limit)
-                                  (let ((l (nth (1- scan) lines)))
-                                    (or (string-blank-p l)
-                                        (and (string-match "\\`[ \t]*" l)
-                                             (> (length (match-string 0 l)) base-indent))
-                                        (string-prefix-p ")" (string-trim l))
-                                        (string-prefix-p "}" (string-trim l)))))
-                        (setq e scan
-                              scan (1+ scan)))
-                      e))))
-        (cons beg (min total (+ end ctx)))))))
+      (etaf-doc-assets-read-slice
+       (etaf-md-assets--session-dir session) src
+       (list :region (plist-get attrs :region)
+             :section (plist-get attrs :section)
+             :lines (plist-get attrs :lines)
+             :lang (plist-get attrs :lang)
+             :max-bytes etaf-md-assets--max-file-bytes
+             :max-lines etaf-md-assets--max-lines))))))
 
 (defun etaf-md-assets--compute-code-ref (session attrs)
   "Compute `code-ref' live source slice for ATTRS in SESSION."
-  (let ((src (plist-get attrs :src))
-        (sym (plist-get attrs :symbol))
-        (line-spec (plist-get attrs :lines))
-        (ctx (let ((raw (plist-get attrs :context)))
-               (cond ((integerp raw) raw)
-                     ((and (stringp raw) (string-match-p "\\`[0-9]+\\'" raw))
-                      (string-to-number raw))
-                     (t 0)))))
+  (let ((src (plist-get attrs :src)))
     (cond
      ((not etaf-md-allow-local-read)
       (list :error "本地文件读取已禁用（etaf-md-allow-local-read 为 nil）"))
      ((or (null src) (string-blank-p src))
       (list :error "code-ref 缺少 src 属性"))
      (t
-      (let ((path (etaf-md-assets--safe-path session src)))
-        (cond
-         ((null path)
-          (list :error (format "路径超出工作区范围：%s" src)))
-         ((not (file-readable-p path))
-          (list :error (format "找不到源码文件：%s" src)))
-         (t
-          (let* ((lines (etaf-md-assets--read-lines path))
-                 (total (length lines))
-                 (lang (or (plist-get attrs :lang) (etaf-md-assets--lang-for-path path)))
-                 (range (cond
-                         ((and (stringp sym) (not (string-blank-p sym)))
-                          (etaf-md-assets--find-symbol-range lines sym ctx lang))
-                         (line-spec
-                          (etaf-md-assets--parse-line-range line-spec total))
-                         (t (cons 1 (min total 24))))))
-            (if (null range)
-                (list :error (format "在 %s 中未找到符号 %s" src sym))
-              (let ((sliced (etaf-md-assets--slice-lines lines (car range) (cdr range))))
-                (list :ok t
-                      :path path
-                      :rel src
-                      :symbol sym
-                      :lang lang
-                      :start-line (plist-get sliced :start)
-                      :end-line (plist-get sliced :end)
-                      :content (plist-get sliced :content))))))))))))
-
-(defun etaf-md-assets--format-compact (value)
-  "Format VALUE safely with bounded depth and circle protection."
-  (let ((print-circle t)
-        (print-length 8)
-        (print-level 3))
-    (let ((s (prin1-to-string value)))
-      (if (> (length s) 120)
-          (concat (substring s 0 117) "...")
-        s))))
-
-(defun etaf-md-assets--first-paragraph (doc)
-  "Return the complete first paragraph of DOC with wrapped lines joined cleanly."
-  (when (and (stringp doc) (not (string-blank-p doc)))
-    (let* ((trimmed (string-trim doc))
-           (para (car (split-string trimmed "\n[ \t]*\n" t))))
-      (when para
-        (replace-regexp-in-string "[ \t]*\n[ \t]*" " " (string-trim para))))))
+      (etaf-doc-assets-read-slice
+       (etaf-md-assets--session-dir session) src
+       (list :symbol (plist-get attrs :symbol)
+             :lines (plist-get attrs :lines)
+             :context (plist-get attrs :context)
+             :lang (plist-get attrs :lang)
+             :default-lines 24
+             :max-bytes etaf-md-assets--max-file-bytes
+             :max-lines etaf-md-assets--max-lines))))))
 
 (defun etaf-md-assets--compute-symbol (attrs &optional session)
   "Compute live Emacs symbol introspection card data for ATTRS in SESSION."
-  (let* ((name (plist-get attrs :name))
-         (sym (and (stringp name) (intern-soft (string-trim name)))))
-    (cond
-     ((or (null name) (string-blank-p name))
-      (list :error "symbol 缺少 name 属性"))
-     ((null sym)
-      (list :ok t :name name :missing t :kind "未定义符号"))
-     (t
-      (require 'help-fns nil t)
-      (require 'find-func nil t)
-      (let* ((fn-p (fboundp sym))
-             (var-p (boundp sym))
-             (cmd-p (commandp sym))
-             (macro-p (and fn-p (macrop (symbol-function sym))))
-             (face-p (facep sym))
-             (kind (cond
-                    (cmd-p "交互命令")
-                    (macro-p "宏")
-                    (fn-p "函数")
-                    ((custom-variable-p sym) "可定制变量")
-                    (var-p "变量")
-                    (face-p "Face")
-                    (t "符号")))
-             (arglist (when (and fn-p (fboundp 'help-function-arglist))
-                        (ignore-errors
-                          (format "(%s%s)"
-                                  name
-                                  (let ((args (help-function-arglist sym t)))
-                                    (if (and args (not (eq args t)))
-                                        (concat " " (mapconcat #'prin1-to-string args " "))
-                                      ""))))))
-             (keys (when cmd-p
-                     (let ((raw (where-is-internal sym nil nil t)))
-                       (mapcar #'key-description (seq-take raw 4)))))
-             (val (when var-p
-                    (etaf-md-assets--format-compact (symbol-value sym))))
-             (doc (or (and fn-p (ignore-errors (documentation sym t)))
-                      (and var-p (documentation-property sym 'variable-documentation t))
-                      (and face-p (documentation-property sym 'face-documentation t))))
-             (summary (etaf-md-assets--first-paragraph doc))
-             (src (when (fboundp 'find-lisp-object-file-name)
-                    (or (and fn-p (ignore-errors (find-lisp-object-file-name sym (symbol-function sym))))
-                        (and var-p (ignore-errors (find-lisp-object-file-name sym 'defvar))))))
-             (src-file (and (stringp src)
-                            (let ((el (if (string-suffix-p ".elc" src)
-                                          (concat (substring src 0 -4) ".el")
-                                        src)))
-                              (if (file-readable-p el) el src))))
-             (root (and session (etaf-md-assets--workspace-root session)))
-             (rel-file (when (and src-file root)
-                         (let ((ts (ignore-errors (file-truename src-file))))
-                           (if (and ts (file-in-directory-p ts root))
-                               (file-relative-name ts root)
-                             (file-name-nondirectory src-file))))))
-        (list :ok t
-              :name name
-              :symbol sym
-              :kind kind
-              :signature arglist
-              :keys keys
-              :value val
-              :doc summary
-              :file src-file
-              :rel-file (or rel-file (and src-file (file-name-nondirectory src-file)))))))))
+  (etaf-doc-assets-inspect-symbol
+   (plist-get attrs :name)
+   (and session (etaf-md-assets--session-dir session))))
 
 (defun etaf-md-assets--compute-project-tree (session attrs)
   "Compute bounded workspace directory tree snapshot for ATTRS in SESSION."
-  (cond
-   ((not etaf-md-allow-local-read)
-    (list :error "本地文件读取已禁用（etaf-md-allow-local-read 为 nil）"))
-   (t
-    (let* ((rel (or (plist-get attrs :path) "."))
-           (root (etaf-md-assets--safe-path session rel))
-           (depth-raw (plist-get attrs :depth))
-           (max-depth (min 6 (max 1 (cond ((integerp depth-raw) depth-raw)
-                                          ((and (stringp depth-raw)
-                                                (string-match-p "\\`[0-9]+\\'" depth-raw))
-                                           (string-to-number depth-raw))
-                                          (t 3)))))
-           (extra-ignore (when-let* ((ig (plist-get attrs :ignore)))
-                           (split-string ig "[, \t]+" t)))
-           (ignore-list (append etaf-md-assets--default-ignore extra-ignore))
-           (remaining 150))
-      (cond
-       ((null root)
-        (list :error (format "路径超出工作区范围：%s" rel)))
-       ((not (file-directory-p root))
-        (list :error (format "目录不存在：%s" rel)))
-       (t
-        (cl-labels
-            ((ignored-p (name)
-               (or (member name '("." ".."))
-                   (member name ignore-list)
-                   (string-suffix-p ".elc" name)))
-             (scan (dir d)
-               (when (and (> remaining 0) (<= d max-depth))
-                 (let* ((raw (condition-case nil
-                                 (directory-files dir t nil t)
-                               (file-error nil)))
-                        (filtered
-                         (cl-remove-if
-                          (lambda (p) (ignored-p (file-name-nondirectory p)))
-                          raw))
-                        (sorted
-                         (sort filtered
-                               (lambda (a b)
-                                 (let ((da (file-directory-p a))
-                                       (db (file-directory-p b)))
-                                   (if (eq da db)
-                                       (string< (file-name-nondirectory a)
-                                                (file-name-nondirectory b))
-                                     da)))))
-                        (items nil))
-                   (dolist (p sorted)
-                     (when (> remaining 0)
-                       (setq remaining (1- remaining))
-                       (let ((dir-p (file-directory-p p))
-                             (name (file-name-nondirectory p)))
-                         (push (list :name name
-                                     :path p
-                                     :rel (file-relative-name p root)
-                                     :dir-p dir-p
-                                     :children (when (and dir-p (< d max-depth))
-                                                 (scan p (1+ d))))
-                               items))))
-                   (nreverse items)))))
-          (list :ok t
-                :root root
-                :rel rel
-                :truncated (<= remaining 0)
-                :items (scan root 1)))))))))
+  (if (not etaf-md-allow-local-read)
+      (list :error "本地文件读取已禁用（etaf-md-allow-local-read 为 nil）")
+    (etaf-doc-assets-project-tree
+     (etaf-md-assets--session-dir session)
+     (or (plist-get attrs :path) ".")
+     (list :depth (plist-get attrs :depth)
+           :ignore (plist-get attrs :ignore)
+           :limit 150))))
 
 ;;; ---------------------------------------------------------------------------
 ;;; L1 async providers (git-log, git-diff)
@@ -582,107 +236,6 @@ sexp with `forward-sexp' so closing parentheses are never clipped."
                (fboundp 'etaf-md--refresh-block-assets))
       (etaf-md--refresh-block-assets session))))
 
-(defun etaf-md-assets--request-git-log (session attrs key)
-  "Populate `git-log' asset asynchronously for ATTRS into KEY."
-  (let* ((dir (etaf-md-assets--workspace-root session))
-         (rel (plist-get attrs :path))
-         (target (if rel (etaf-md-assets--safe-path session rel) dir))
-         (limit-raw (plist-get attrs :limit))
-         (limit (min 50 (max 1 (cond ((integerp limit-raw) limit-raw)
-                                     ((and (stringp limit-raw)
-                                           (string-match-p "\\`[0-9]+\\'" limit-raw))
-                                      (string-to-number limit-raw))
-                                     (t 8)))))
-         (git (executable-find "git")))
-    (cond
-     ((not etaf-md-allow-local-read)
-      (etaf-md-assets--store-and-refresh session key (list :error "本地读取已禁用")))
-     ((null git)
-      (etaf-md-assets--store-and-refresh session key (list :error "未检测到 git 程序")))
-     ((null target)
-      (etaf-md-assets--store-and-refresh session key (list :error (format "路径超出工作区：%s" rel))))
-     (t
-      (let* ((has-git (locate-dominating-file dir ".git"))
-             (has-jj (and (not has-git) (locate-dominating-file dir ".jj")))
-             (jj (and has-jj (or (executable-find "jjosh") (executable-find "jj"))))
-             (cmd (if jj
-                      (append (list jj "--repository" (expand-file-name has-jj) "log" "--no-graph"
-                                    "-n" (number-to-string limit)
-                                    "-T" "commit_id.short(7) ++ \"\\x1f\" ++ committer.timestamp().format(\"%Y-%m-%d\") ++ \"\\x1f\" ++ author.name() ++ \"\\x1f\" ++ description.first_line() ++ \"\\n\"")
-                              (when rel (list (file-relative-name target (expand-file-name has-jj)))))
-                    (append (list git "-C" dir "log"
-                                  (format "-n%d" limit)
-                                  "--date=short"
-                                  "--pretty=format:%h\x1f%ad\x1f%an\x1f%s")
-                            (when rel (list "--" (file-relative-name target dir)))))))
-        (etaf-process-run
-         cmd
-         :name "etaf-md-git-log"
-         :timeout 8
-         :callback
-         (lambda (res)
-           (if (and (eq (plist-get res :status) 'exit)
-                    (eql (plist-get res :exit) 0))
-               (let ((rows
-                      (delq nil
-                            (mapcar
-                             (lambda (line)
-                               (let ((parts (split-string line "\x1f")))
-                                 (when (>= (length parts) 4)
-                                   (list :hash (nth 0 parts)
-                                         :date (nth 1 parts)
-                                         :author (nth 2 parts)
-                                         :subject (if (string-blank-p (nth 3 parts))
-                                                      "(working copy)"
-                                                    (nth 3 parts))))))
-                             (split-string (or (plist-get res :output) "") "\n" t)))))
-                 (etaf-md-assets--store-and-refresh
-                  session key (list :ok t :dir dir :rel rel :commits rows)))
-             (etaf-md-assets--store-and-refresh
-              session key (list :error "当前目录不是 Git 仓库或无提交历史"))))))))))
-
-(defun etaf-md-assets--request-git-diff (session attrs key)
-  "Populate `git-diff' asset asynchronously for ATTRS into KEY."
-  (let* ((dir (etaf-md-assets--workspace-root session))
-         (rel (plist-get attrs :path))
-         (range (plist-get attrs :range))
-         (target (when rel (etaf-md-assets--safe-path session rel)))
-         (git (executable-find "git")))
-    (cond
-     ((not etaf-md-allow-local-read)
-      (etaf-md-assets--store-and-refresh session key (list :error "本地读取已禁用")))
-     ((null git)
-      (etaf-md-assets--store-and-refresh session key (list :error "未检测到 git 程序")))
-     ((and rel (null target))
-      (etaf-md-assets--store-and-refresh session key (list :error (format "路径超出工作区：%s" rel))))
-     (t
-      (let ((cmd (append (list git "-C" dir "diff" "--no-color")
-                         (when (and (stringp range) (not (string-blank-p range)))
-                           (list range))
-                         (when target (list "--" (file-relative-name target dir))))))
-        (etaf-process-run
-         cmd
-         :name "etaf-md-git-diff"
-         :timeout 8
-         :callback
-         (lambda (res)
-           (if (and (eq (plist-get res :status) 'exit)
-                    (eql (plist-get res :exit) 0))
-               (let* ((raw (or (plist-get res :output) ""))
-                      (lines (split-string raw "\n"))
-                      (truncated (> (length lines) etaf-md-assets--max-lines))
-                      (kept (if truncated
-                                (seq-take lines etaf-md-assets--max-lines)
-                              lines)))
-                 (etaf-md-assets--store-and-refresh
-                  session key
-                  (list :ok t :dir dir :rel rel :range range
-                        :truncated truncated
-                        :empty (string-blank-p raw)
-                        :lines kept)))
-             (etaf-md-assets--store-and-refresh
-              session key (list :error "无法获取 git diff（请确认处于 Git 仓库中）"))))))))))
-
 (defun etaf-md-assets-request (session)
   "Kick off missing async workspace assets for SESSION."
   (when (and session (buffer-live-p (plist-get session :buffer)))
@@ -701,9 +254,21 @@ sexp with `forward-sexp' so closing parentheses are never clipped."
                (key (etaf-md-assets--key name attrs session)))
           (unless (or (gethash key cache) (gethash key pending))
             (puthash key t pending)
-            (pcase name
-              ("git-log" (etaf-md-assets--request-git-log session attrs key))
-              ("git-diff" (etaf-md-assets--request-git-diff session attrs key)))))))))
+            (if (not etaf-md-allow-local-read)
+                (etaf-md-assets--store-and-refresh session key (list :error "本地读取已禁用"))
+              (let ((dir (etaf-md-assets--session-dir session))
+                    (done (lambda (res)
+                            (etaf-md-assets--store-and-refresh session key res))))
+                (pcase name
+                  ("git-log"
+                   (etaf-doc-assets-git-log-async
+                    dir done (list :path (plist-get attrs :path)
+                                   :limit (plist-get attrs :limit))))
+                  ("git-diff"
+                   (etaf-doc-assets-git-diff-async
+                    dir done (list :path (plist-get attrs :path)
+                                   :range (plist-get attrs :range)
+                                   :max-lines etaf-md-assets--max-lines))))))))))))
 
 ;;; ---------------------------------------------------------------------------
 ;;; L2 explicit user-triggered actions (never auto-run)
@@ -728,7 +293,7 @@ sexp with `forward-sexp' so closing parentheses are never clipped."
   (let* ((trimmed (string-trim (or cmd "")))
          (dir (if (and cwd (not (string-blank-p cwd)))
                   (etaf-md-assets--safe-path session cwd)
-                (or (and session (plist-get session :dir)) default-directory))))
+                (etaf-md-assets--session-dir session))))
     (cond
      ((string-empty-p trimmed)
       (message "没有可执行的命令"))
@@ -771,8 +336,7 @@ sexp with `forward-sexp' so closing parentheses are never clipped."
                     :lines out-lines))))))))))
 
 (defun etaf-md-assets--toggle-checkbox-in-string (text begin line-offset)
-  "Toggle Markdown task checkbox on line at BEGIN + LINE-OFFSET in TEXT.
-Returns updated string, or nil when no task marker was found on that line."
+  "Toggle Markdown task checkbox on line at BEGIN + LINE-OFFSET in TEXT."
   (when (and (stringp text) (integerp begin) (integerp line-offset)
              (<= 0 begin (length text)))
     (with-temp-buffer
@@ -820,7 +384,7 @@ Returns updated string, or nil when no task marker was found on that line."
   "Resolve and open wiki-link `[[TARGET#ANCHOR]]' for SESSION."
   (let* ((target (string-trim (or target "")))
          (anchor (and anchor (not (string-blank-p anchor)) (string-trim anchor)))
-         (dir (or (and session (plist-get session :dir)) default-directory))
+         (dir (etaf-md-assets--session-dir session))
          (resolved
           (cond
            ((string-empty-p target) "")

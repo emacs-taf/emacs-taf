@@ -22,9 +22,7 @@
 (require 'cl-lib)
 (require 'subr-x)
 (require 'etaf)
-(require 'etaf-ui-basic)
-(require 'etaf-ui-feedback)
-(require 'etaf-ui-icon)
+(require 'etaf-ui)
 (require 'etaf-ui-markdown-parse)
 (require 'etaf-ui-markdown-highlight)
 

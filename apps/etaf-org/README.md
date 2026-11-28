@@ -45,7 +45,7 @@ git clone https://github.com/emacs-taf/etaf-org.git
 ```
 
 ```elisp
-(dolist (pkg '("ecss" "ebox" "etaf" "etaf-media" "etaf-ui"))
+(dolist (pkg '("ecss" "ebox" "etaf" "etaf-media" "etaf-ui" "etaf-doc"))
   (add-to-list 'load-path (expand-file-name pkg "/path/to/etaf/packages")))
 (add-to-list 'load-path "/path/to/etaf-org")
 (require 'etaf-org)

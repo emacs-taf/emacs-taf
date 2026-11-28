@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "package": "etaf-org",
+  "package": "etaf-doc",
   "modules": [
     {
       "name": "etaf-md-typeset-native",

@@ -53,6 +53,7 @@ When nil, uses the pinned HTTPS mirrors declared in each package's
     (ecss "CSS cascade engine" framework nil)
     (etaf-gamekit "Game runtime for Godot battles" framework nil)
     (etaf-ui "ETAF components and gallery" framework etaf-ui-gallery-open)
+    (etaf-doc "Shared document parsing, typesetting and widgets" framework nil)
     ;; The window manager itself comes from MELPA, which the installer only
     ;; registers when a target asks for it.
     (etaf-posframe "Floating panel host" framework nil melpa)

@@ -7,7 +7,8 @@
   "../ecss",
   "../ekp",
   "../etaf",
-  "../etaf-ui"
+  "../etaf-ui",
+  "../etaf-doc"
  ],
  "support": [],
  "cases": [

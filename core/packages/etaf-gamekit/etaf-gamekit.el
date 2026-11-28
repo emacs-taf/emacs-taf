@@ -172,6 +172,35 @@
 ;; decode one strip file each, and replaced images are flushed in batches, so
 ;; a moving scene stays cheap.
 
+;; Component: etaf-playing-card (&key rank suit face-down empty selected disabled on-press label ref columns lines)
+;; Parameters:
+;; :rank — Optional one-line string of at most 3 display columns; default nil. No tabs/newlines.
+;; :suit — spades/hearts/clubs/diamonds/nil; default nil.
+;; :face-down, :empty, :selected, :disabled — Optional flags; default nil. Hide face, show pile, mark selection, or disable activation.
+;; :on-press — Optional function (); default nil (noninteractive).
+;; :label — Optional accessible string; nil derives a safe card/pile name. Never put hidden card information in it.
+;; :ref — Optional Host reference; default nil. Addresses the whole card.
+;; :columns, :lines — Integer width >= 7 and height >= 1; defaults 9 character columns and 5 text lines. Never stretch with the viewport.
+;;
+;; Present a controlled playing card or empty pile as one activation target.
+;; RANK is a one-line string up to three columns; SUIT is spades, hearts,
+;; clubs, diamonds or nil. FACE-DOWN conceals the rank/suit, including the
+;; generated accessible label. EMPTY presents a pile placeholder. SELECTED
+;; changes paint without changing geometry. COLUMNS defaults to 9 (minimum 7);
+;; LINES defaults to 5 (minimum 1); one row exposes just a card's corner in a
+;; stack. These intrinsic dimensions never stretch to fill a viewport.
+;; ON-PRESS receives no arguments; omitted/disabled cards are noninteractive.
+;; LABEL overrides the accessible name and help, so callers must not put
+;; hidden information there. Caller owns selection, stacks, moves and rules.
+;; Colors use :ui-playing-card-* theme tokens; default faces are warm ivory
+;; with contrasting red/black suits. Hover preserves all card text; backs
+;; and empty piles derive a subtle tint from their own surface rather than
+;; the face-up hover fill. Selected cards suppress hover paint.
+;; Invalid rank/suit/dimensions signal
+;; etaf-component-call-error. Use (etaf-view (etaf-playing-card :rank "A"
+;; :suit 'hearts :on-press (lambda () ...))). No game backend is required.
+;;
+;;;
 ;;; Code:
 (require 'etaf)
 (defconst etaf-gamekit--directory
@@ -239,6 +268,7 @@
   (require 'etaf-gamekit-engines)
   (require 'etaf-gamekit-game)
   (require 'etaf-gamekit-frame)
-  (require 'etaf-gamekit-view))
+  (require 'etaf-gamekit-view)
+  (require 'etaf-playing-card))
 (provide 'etaf-gamekit)
 ;;; etaf-gamekit.el ends here

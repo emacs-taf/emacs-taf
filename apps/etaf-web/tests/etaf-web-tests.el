@@ -974,9 +974,9 @@ test scrolls the same way a reader does."
           (let* ((text (with-current-buffer buf
                          (buffer-substring-no-properties (point-min) (point-max))))
                  (lines (split-string text "\n"))
-                 (img-line (cl-find-if (lambda (l) (string-match-p "│▀+│" l)) lines)))
+                 (img-line (cl-find-if (lambda (l) (string-match-p "▀+" l)) lines)))
             (should img-line)
-            (should (string-match "│\\(▀+\\)│" img-line))
+            (should (string-match "\\(▀+\\)" img-line))
             (should (<= (length (match-string 1 img-line)) 12))
             (should (string-match-p "Readable body paragraph\\." text)))
         (when (buffer-live-p buf)

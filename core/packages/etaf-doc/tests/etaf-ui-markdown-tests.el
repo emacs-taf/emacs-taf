@@ -13,6 +13,7 @@
 (require 'cl-lib)
 (require 'ert)
 (require 'etaf-ui)
+(require 'etaf-doc)
 
 (defconst etaf-ui-markdown-test--palette
   '((:ink . "#1f2328") (:muted . "#59636e") (:faint . "#818b98")

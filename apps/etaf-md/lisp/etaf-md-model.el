@@ -18,6 +18,7 @@
 (require 'subr-x)
 (require 'etaf)
 (require 'etaf-ui)
+(require 'etaf-doc)
 (require 'etaf-md-cache)
 (require 'etaf-md-theme)
 (require 'etaf-md-assets)

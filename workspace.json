@@ -79,6 +79,13 @@
       "branch": "main",
       "url": "https://github.com/emacs-taf/emacs-taf.git"
     },
+    "etaf-doc": {
+      "path": "core/packages/etaf-doc",
+      "role": "framework",
+      "projection": "etaf",
+      "url": "https://github.com/emacs-taf/etaf.git",
+      "branch": "main"
+    },
     "etaf-export": {
       "path": "core/packages/etaf-export",
       "role": "extension",

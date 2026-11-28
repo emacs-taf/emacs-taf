@@ -434,6 +434,134 @@
 ;; Restore a session plist or saved FILE; unknown applications become isolated
 ;; error placeholders.
 
+;; Component: etaf-taskbar (&key items active on-select on-launch launcher-label ref-prefix class)
+;; Parameters:
+;; :items — List of plists; default nil ("No windows"). Unique scalar :key and nonempty string :label; optional :state (active/minimized/error/nil or reactive) and boolean :disabled.
+;; :active — Scalar key/ref/computed or nil; default nil. Matching item is highlighted; no window focus state is created.
+;; :on-select — Optional function (key); default nil. Caller focuses/restores the chosen window.
+;; :on-launch — Optional function (); default nil (no launcher control).
+;; :launcher-label — String; default "Applications". Launcher caption and accessible name.
+;; :ref-prefix — String or nil; default nil. Prefixes the Host references the bar creates, so several bars can share one ETAF Runtime.
+;; :class — Optional extra root classes; default nil.
+;;
+;; Render a controlled taskbar for window items.  ITEMS use scalar :key and
+;; string :label, with optional :state (`active', `minimized' or `error', or a
+;; ref or computed of one) and :disabled.  Callers own window state; ON-SELECT receives a key and
+;; ON-LAUNCH opens a caller-owned application launcher.  ACTIVE accepts a
+;; scalar key, nil, ref or computed; matching items show selection.  Colors
+;; come from the Desktop Theme tokens below; provide a Theme to restyle.
+;;
+;; Component: etaf-workspace-bar (&key workspaces active on-select on-add on-close add-label brand status layout-label layout-action settings-label settings-action ref-prefix class)
+;; Parameters:
+;; :workspaces — List; default nil (empty). Scalar keys or plists with :key/:label and optional :description/:disabled; keep keys distinct.
+;; :active — Scalar key/ref/computed or nil; default nil. Marks the selected workspace.
+;; :on-select — Optional function (key); default nil. Caller switches workspace.
+;; :on-add, :on-close — Optional functions (); default nil (omit their controls). Close is a bar-level action, not a per-item callback.
+;; :add-label — String; default "New workspace". Add action's accessible name.
+;; :brand — Optional string; default nil (no brand).
+;; :status — String/nil or ref/computed; default nil. Remaining single-row space clips overflow.
+;; :layout-label — String/ref/computed or nil; default nil (no layout control). Fixed-width caption.
+;; :layout-action — Optional function (); default nil. Caller changes layout mode.
+;; :settings-label, :settings-action — Optional string and function (); defaults nil. Both are needed to show settings.
+;; :ref-prefix — String or nil; default nil. Prefixes the tabs' and trailing controls' Host references, so several bars can share one ETAF Runtime.
+;; :class — Optional extra root classes; default nil.
+;;
+;; Render accessible workspace tabs.  WORKSPACES may be scalar keys or item
+;; plists with :key/:label.  Callbacks request caller-owned workspace changes;
+;; this Component creates no workspace state.  LAYOUT-LABEL/LAYOUT-ACTION and
+;; SETTINGS-LABEL/SETTINGS-ACTION optionally add trailing caller-owned controls.
+;; ACTIVE accepts a scalar key, nil, ref or computed.  STATUS accepts a string,
+;; nil, ref or computed; nil clears status text.  LAYOUT-LABEL accepts a
+;; string, ref or computed of strings; the layout control keeps a fixed width
+;; so a changed label rewrites only its own text.  Reactive sources
+;; remain caller-owned and are read at their retained Host properties or Text
+;; payload.  Status occupies the remaining single-row space and clips excess
+;; text; layout and settings actions stay at the right edge as status length
+;; changes.
+;;
+
+;; Desktop Theme tokens.  The desktop Components (`etaf-taskbar',
+;; `etaf-workspace-bar', `etaf-window', `etaf-splitter', `etaf-launcher',
+;; `etaf-switcher' and their pickers) read these semantic tokens through
+;; `etaf-theme-token' inside retained Host properties, so a Theme provided
+;; with `etaf-theme-provide' (scalar, ref or computed) restyles the whole
+;; shell through paint slots without re-rendering:
+;;   `:ui-shell-bg' `:ui-shell-fg' `:ui-shell-muted-fg' `:ui-shell-item-fg'
+;;   `:ui-shell-item-minimized-fg' (bars and their items),
+;;   `:ui-accent' `:ui-accent-fg' `:ui-accent-soft-bg' (bar selection and the
+;;   launcher control), `:ui-window-bg' `:ui-window-fg' `:ui-window-border'
+;;   `:ui-window-title-bg' `:ui-window-title-fg' `:ui-window-title-active-fg'
+;;   (window chrome; inactive traffic lights use `:ui-window-title-fg'),
+;;   `:ui-divider-bg' (splitter dividers) and `:ui-picker-item-bg'
+;;   `:ui-picker-item-fg' `:ui-picker-item-muted-fg' (launcher and switcher
+;;   rows).  Dialogs keep using `:ui-panel-*'; a selected picker row, chip,
+;;   radio, switch or checkbox mark paints `:ui-button-secondary-fg' on
+;;   `:ui-button-secondary-bg', dialog tokens that stay crisp while a modal's
+;;   backdrop dims the shell.  Without a provided Theme the Components paint
+;;   their light fallback colors.
+;;
+;; Component: etaf-launcher (&key open title items on-select on-close close-label backdrop)
+;; Parameters:
+;; :open — Value/ref/computed; default nil (closed).
+;; :title, :close-label — Strings; defaults "Applications" and "Close".
+;; :items — List of plists; default nil (empty). Unique scalar :key, nonempty :label; optional :description, :state and :disabled. Caller owns the registry.
+;; :on-select — Required function (key), even while closed. Caller launches/selects and decides when to close.
+;; :on-close — Required function (), even while closed. Caller dismisses the launcher.
+;; :backdrop — Boolean; default t. Nil leaves the underlying surface painted.
+;;
+;; Render a controlled modal application launcher from item plists.  The
+;; caller owns the registry and OPEN state; ON-SELECT receives a selected key.
+;; Items show their :label caption with an optional muted :description below
+;; it.  The Dialog is centered and sized to its items.  BACKDROP defaults to
+;; t and dims the application underneath while keeping it painted; nil paints
+;; no backdrop at all, leaving the underlying surface fully visible.
+;;
+;; Component: etaf-switcher (&key open title items selected on-select on-close close-label backdrop)
+;; Parameters:
+;; :open — Value/ref/computed; default nil (closed).
+;; :title, :close-label — Strings; defaults "Switch application" and "Close".
+;; :items — List of Launcher plists; default nil (empty). Unique scalar :key, nonempty :label; optional :description, :state and :disabled.
+;; :selected — Key/ref/computed or nil; default nil. Non-nil must be present in :items.
+;; :on-select — Required function (key), even while closed. Caller changes application/window focus and decides when to close.
+;; :on-close — Required function (), even while closed. Caller dismisses the switcher.
+;; :backdrop — Boolean; default t. Nil leaves the underlying surface painted.
+;;
+;; Render a controlled modal application/window switcher.  SELECTED marks the
+;; caller-owned active item and ON-SELECT receives a key.  Presentation,
+;; sizing and BACKDROP follow `etaf-launcher'.
+;;
+;; Component: etaf-splitter (&key orientation ratio min-ratio max-ratio on-change use class overlay z-index divider-content overlay-rect visible)
+;; Parameters:
+;; :orientation — horizontal (left/right) or vertical (top/bottom); default horizontal.
+;; :ratio — Number/ref/computed; default 0.5. First pane's fraction within :min-ratio..:max-ratio.
+;; :min-ratio, :max-ratio — Numbers strictly between 0 and 1; defaults 0.1 and 0.9; min <= max. Validate supplied ratio, not a gesture-to-ratio conversion.
+;; :on-change — Optional function (gesture); default nil. Raw :phase and :delta (dx . dy) in pixels, not a ratio. Caller owns conversion and cancel restoration.
+;; :use — Optional divider Behavior composition; default nil. Alternative policy for pointer/keyboard gestures.
+;; :class — Optional extra root classes; default nil. Applies to the two-pane layout, not the overlay-only divider.
+;; :overlay — Boolean; default nil. Draw divider only; caller supplies positioned panes.
+;; :z-index — Integer/ref/computed or nil; default nil. Divider stacking order.
+;; :divider-content — String/ref/computed or nil; default nil. Painted extent of overlay divider.
+;; :overlay-rect — Optional plist/ref/computed; default nil. Requires :overlay; :left/:width are (px N), :top/:height are (lh N); entries may be reactive.
+;; :visible — Boolean/ref/computed; default t. Visibility of an allocated :overlay-rect divider.
+;;
+;; Render a controlled horizontal or vertical split with named `first' and
+;; `second' slots.  RATIO remains caller-owned; ON-CHANGE receives divider
+;; gestures and USE can install an ETAF Behavior for keyboard/pointer updates.
+;; For a ratio-based policy, capture the initial ratio and allocated pixel
+;; extent at gesture start; divide cumulative pixel delta by that extent,
+;; clamp the result and restore the initial ratio on cancel. Do not use an
+;; assumed viewport width. etaf-host-ref-size measures a referenced layout.
+;; OVERLAY renders only the divider over caller-owned panes.  OVERLAY-RECT is an
+;; optional exact positioned rectangle using :left/:width in `(px N)' and
+;; :top/:height in `(lh N)'; it keeps nested or constrained dividers aligned
+;; with the caller's pane allocation.  Without it the overlay follows RATIO.
+;; With OVERLAY-RECT, the rectangle and its :left/:top/:width/:height entries,
+;; Z-INDEX, DIVIDER-CONTENT and VISIBLE accept refs or computeds: the divider
+;; binds them as retained Host properties, so a layout policy moves, relabels
+;; or hides dividers by writing cells instead of re-rendering the tree.
+;; VISIBLE defaults to t; a hidden divider keeps its identity and gestures off.
+;; The focused divider steps like a one-cell drag with the arrows across it.
+;;
 ;;; Code:
 
 ;;;###autoload
@@ -458,6 +586,7 @@
       (add-to-list 'load-path lisp-dir))))
 
 (require 'etaf-desktop-theme)
+(require 'etaf-desktop-shell)
 (require 'etaf-desktop-runtime)
 (require 'etaf-desktop-layout)
 (require 'etaf-desktop-apps)

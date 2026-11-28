@@ -8,6 +8,7 @@
     "../ekp",
     "../etaf",
     "../etaf-ui",
+    "../etaf-doc",
     "../etaf-ext"
   ],
   "support": [],

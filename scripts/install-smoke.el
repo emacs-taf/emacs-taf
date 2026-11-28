@@ -135,14 +135,14 @@ report it immediately instead of retrying and hiding it."
           etaf-install-native-url (and native-url (not (string-empty-p native-url)) native-url))
     (etaf-install target (not (eq target 'etaf-ui)))
     (when (and etaf-install-native-url
-               (memq target '(etaf-md etaf-media ekp etaf-video-player)))
+               (memq target '(etaf-doc etaf-md etaf-media ekp etaf-video-player)))
       (let ((status (etaf-install-status target)))
         (unless (eq (plist-get status :native) 'installed)
           (error "etaf-install did not automatically install native modules for %s: %S"
                  target status))))
     ;; Framework targets must be usable immediately. An application's external
     ;; tools are runtime capabilities: the package installs, opening waits.
-    (when (memq target '(etaf-ui etaf etaf-media etaf-manual ekp etaf-db))
+    (when (memq target '(etaf-ui etaf-doc etaf etaf-media etaf-manual ekp etaf-db))
       (unless (plist-get (etaf-install-doctor target) :ready)
         (error "Installed target is missing required capabilities"))))
   (dolist (entry package-alist)
@@ -225,7 +225,7 @@ report it immediately instead of retrying and hiding it."
             (unless (and (listp fact) (stringp (car fact)) (nth 2 fact))
               (error "%s-doctor returned a malformed fact: %S" target fact)))))))
   ;; Packages that ship a native module manifest must install it intact.
-  (when (memq target '(etaf-md etaf-org etaf-media ekp))
+  (when (memq target '(etaf-doc etaf-media ekp))
     (let* ((desc (cadr (assq target package-alist)))
            (dir (and desc (package-desc-dir desc)))
            (manifest (and dir (expand-file-name "native/manifest.json" dir))))
@@ -253,8 +253,7 @@ report it immediately instead of retrying and hiding it."
         (when (file-exists-p (expand-file-name unexpected dir))
           (error "Installed etaf-md should not ship %s" unexpected)))
       (dolist (expected '("docs/manual.md"
-                          "docs/extensions.md"
-                          "native/manifest.json"))
+                          "docs/extensions.md"))
         (unless (file-readable-p (expand-file-name expected dir))
           (error "Installed etaf-md is missing %s" expected)))
       (let* ((facts (funcall (intern "etaf-md-doctor")))
@@ -293,8 +292,7 @@ report it immediately instead of retrying and hiding it."
         (when (file-exists-p (expand-file-name unexpected dir))
           (error "Installed etaf-org should not ship %s" unexpected)))
       (dolist (expected '("docs/manual.md"
-                          "docs/extensions.md"
-                          "native/manifest.json"))
+                          "docs/extensions.md"))
         (unless (file-readable-p (expand-file-name expected dir))
           (error "Installed etaf-org is missing %s" expected)))))
   (when (eq target 'etaf-manual)

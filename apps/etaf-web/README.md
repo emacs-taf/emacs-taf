@@ -19,7 +19,7 @@ ETAF Web compiles HTML web pages into the text-level intermediate language accep
 > `etaf-web` is maintained in the monorepo (not yet published to the ELPA archive). Install from a source checkout of [`emacs-taf/emacs-taf`](https://github.com/emacs-taf/emacs-taf) (or [`emacs-taf/etaf`](https://github.com/emacs-taf/etaf) + this package):
 
 ```elisp
-(dolist (pkg '("ecss" "ebox" "etaf" "etaf-media" "etaf-ui"))
+(dolist (pkg '("ecss" "ebox" "etaf" "etaf-media" "etaf-ui" "etaf-doc"))
   (add-to-list 'load-path (expand-file-name pkg "/path/to/etaf/packages")))
 (add-to-list 'load-path "/path/to/etaf-md")
 (add-to-list 'load-path "/path/to/etaf-web")

@@ -32,6 +32,7 @@
 (require 'subr-x)
 (require 'etaf)
 (require 'etaf-ui)
+(require 'etaf-doc)
 (require 'etaf-md)
 (require 'etaf-web-cache)
 (require 'etaf-web-adapter)

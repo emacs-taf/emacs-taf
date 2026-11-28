@@ -26,6 +26,7 @@
 (require 'etaf-md-node)
 (require 'etaf-md-env)
 (require 'etaf-ui)
+(require 'etaf-doc)
 
 (declare-function etaf-md--tabs-view "etaf-md-nodes" (env &optional page-view label-fn flush-body))
 (declare-function etaf-md--code-tab-page "etaf-md-nodes" (env page))

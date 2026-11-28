@@ -68,8 +68,8 @@
       "zh": "核心包中英双语《ETAF 参考手册》，对照公共接口校验并发布于 <https://etaf.top>",
       "core_en": "Bilingual ETAF Reference Manual (`M-x etaf-manual-open`) and `https://etaf.top` site source",
       "core_zh": "中英双语 ETAF 参考手册（`M-x etaf-manual-open`）与 `https://etaf.top` 官网源码",
-      "deps_en": "etaf, etaf-ui; gate also reads ecss, ekp, ebox, etaf-media, etaf-db",
-      "deps_zh": "etaf、etaf-ui；门禁同时校验 ecss、ekp、ebox、etaf-media、etaf-db"
+      "deps_en": "etaf, etaf-ui, etaf-doc; gate also reads ecss, ekp, ebox, etaf-media, etaf-db",
+      "deps_zh": "etaf、etaf-ui、etaf-doc；门禁同时校验 ecss、ekp、ebox、etaf-media、etaf-db"
     },
     "etaf-devtools": {
       "en": "Live DOM/box-tree inspector, hover picker and diagnostic overlay for ETAF buffers (incubating)",
@@ -189,6 +189,12 @@
       "zh": "原生视频播放引擎（libmpv / GPU 硬件层、ffmpeg、Kitty / 图像 / ASCII）与 `etaf-video` 组件",
       "core_en": "Native video playback engine (`etaf-video`, libmpv GPU overlay, ffmpeg, audio sidecar)",
       "core_zh": "原生视频播放引擎（`etaf-video`、libmpv 硬件 GPU 层、ffmpeg 与音频伴随）"
+    },
+    "etaf-doc": {
+      "en": "Shared document engine: Markdown parsing/highlighting/rendering, LRU image & QR caches, QuickJS Mermaid/MathJax worker, workspace assets, node protocol and editorial widgets",
+      "zh": "共享文档基础设施：Markdown 解析/高亮/渲染、LRU 图片与二维码缓存、QuickJS Mermaid/MathJax 排版引擎、工作区资产、节点协议与书刊组件",
+      "core_en": "Shared document infrastructure (Markdown, QuickJS Mermaid/MathJax, LRU/QR cache, workspace assets, node protocol, editorial widgets)",
+      "core_zh": "共享文档基础设施（Markdown、QuickJS Mermaid/MathJax、LRU/二维码缓存、工作区资产、节点协议与书刊组件）"
     }
   },
   "core_order": [
@@ -198,6 +204,7 @@
     "etaf",
     "etaf-media",
     "etaf-ui",
+    "etaf-doc",
     "etaf-gamekit",
     "etaf-posframe",
     "etaf-ext",

@@ -544,6 +544,81 @@
    "name": "etaf-desktop-window-error-boundary-isolates-and-recovers",
    "file": "tests/etaf-desktop-tests.el",
    "purpose": "Desktop wraps each window body in etaf-error-boundary so a failing window renders an isolated error card with Retry while sibling windows stay healthy."
+  },
+  {
+   "name": "etaf-ui-bars-namespace-their-own-host-references",
+   "file": "tests/etaf-desktop-shell-tests.el",
+   "purpose": "Two workspace bars mounted in one Runtime keep distinct tab and trailing-control Host references through :ref-prefix, so each bar's controls dispatch to its own caller."
+  },
+  {
+   "name": "etaf-ui-window-chrome-uses-macos-traffic-lights",
+   "file": "tests/etaf-desktop-shell-tests.el",
+   "purpose": "Window chrome exposes left-positioned red, yellow and green controlled actions."
+  },
+  {
+   "name": "etaf-ui-window-controls-is-reusable-and-grouped",
+   "file": "tests/etaf-desktop-shell-tests.el",
+   "purpose": "Traffic-light controls are independently reusable and share an explicit hover group."
+  },
+  {
+   "name": "etaf-ui-taskbar-and-workspace-bar-publish-controlled-actions",
+   "file": "tests/etaf-desktop-shell-tests.el",
+   "purpose": "Desktop navigation bars expose accessible controls whose selection remains caller-owned."
+  },
+  {
+   "name": "etaf-ui-desktop-bars-follow-selection-and-status-sources",
+   "file": "tests/etaf-desktop-shell-tests.el",
+   "purpose": "Ref and computed bar inputs update selection and status while retaining accessible input targets and supporting pure rendering."
+  },
+  {
+   "name": "etaf-ui-workspace-status-keeps-trailing-actions-visible",
+   "file": "tests/etaf-desktop-shell-tests.el",
+   "purpose": "Short, long, multiline and empty status values preserve a single-row region, full trailing labels and working action targets."
+  },
+  {
+   "name": "etaf-ui-workspace-layout-label-updates-as-prepared-text",
+   "file": "tests/etaf-desktop-shell-tests.el",
+   "purpose": "A ref or computed layout label changes the control text within its fixed width while the runtime generation, bar geometry and action target stay retained."
+  },
+  {
+   "name": "etaf-ui-launcher-and-switcher-remain-controlled",
+   "file": "tests/etaf-desktop-shell-tests.el",
+   "purpose": "Launcher and switcher visibility, selection and dismissal remain controlled by the caller."
+  },
+  {
+   "name": "etaf-ui-splitter-projects-named-panes-and-divider",
+   "file": "tests/etaf-desktop-shell-tests.el",
+   "purpose": "Splitter renders named panes and a keyboard-focusable divider that forwards gestures."
+  },
+  {
+   "name": "etaf-ui-splitter-overlay-uses-caller-rectangle",
+   "file": "tests/etaf-desktop-shell-tests.el",
+   "purpose": "An overlay splitter uses an exact caller-owned divider rectangle and forwards drag gestures."
+  },
+  {
+   "name": "etaf-ui-window-controls-react-to-active-paint-and-retain-targets",
+   "file": "tests/etaf-desktop-shell-tests.el",
+   "purpose": "Traffic-light active colors update while their input targets remain valid."
+  },
+  {
+   "name": "etaf-ui-focus-composition-batches-match-fresh-ui",
+   "file": "tests/etaf-desktop-focus-composition-tests.el",
+   "purpose": "Taskbar selection, traffic lights, stacking and variable status commit together in one revision and match a fresh mount."
+  },
+  {
+   "name": "etaf-ui-focus-composition-rejection-keeps-committed-ui-until-retry",
+   "file": "tests/etaf-desktop-focus-composition-tests.el",
+   "purpose": "A rejected coordinated focus update preserves accepted UI, then publishes the requested appearance on retry."
+  },
+  {
+   "name": "etaf-ui-focus-scalar-props-match-fresh-ui",
+   "file": "tests/etaf-desktop-focus-composition-tests.el",
+   "purpose": "Controlled scalar props keep rendered controls matching a fresh mount across focus changes."
+  },
+  {
+   "name": "etaf-ui-pane-resizer-and-splitter-fit-one-cell-on-text-displays",
+   "file": "tests/etaf-desktop-shell-tests.el",
+   "purpose": "Pane resizer and horizontal splitter dividers occupy a single cell width on text displays instead of multiple blank columns."
   }
  ]
 }

@@ -1,6 +1,6 @@
 # Ecosystem and Layers
 
-ETAF consists of eight core packages, layered so that each kind of fact has exactly one owner. This chapter describes what a text application is, what each package provides, how the packages depend on each other, where the public interface of each package ends, which package owns which facts, and the path that a change of state takes to the buffer. Later chapters describe each of these subjects in detail.
+ETAF consists of nine core packages, layered so that each kind of fact has exactly one owner. This chapter describes what a text application is, what each package provides, how the packages depend on each other, where the public interface of each package ends, which package owns which facts, and the path that a change of state takes to the buffer. Later chapters describe each of these subjects in detail.
 
 ## Text applications
 
@@ -25,6 +25,7 @@ The same buffer works in graphical and in terminal frames. A terminal frame draw
 | `etaf` | View and Component syntax, reactive state and bindings, the lifetime of Runtimes, Context, Themes, Behaviors, Actions, Data and Resources, the scoped keyboard layer, and queries about committed Hosts | Layout, hit testing, focus order and buffer writes, which it delegates to Ebox |
 | `etaf-media` | Native video playback: `etaf-video` Component, source metadata probing, `libmpv` / `ffmpeg` playback sessions, hardware GPU overlays and audio sidecars | General UI controls, which live in `etaf-ui`; non-media applications stay free of native video modules |
 | `etaf-ui` | The official component catalog: reusable components with their keyboard behavior, and the theme tokens they read | Layout, focus and hit testing: its components are ordinary ETAF components |
+| `etaf-doc` | Shared document infrastructure: Markdown parsing, syntax highlighting, block Views, bounded LRU asset caches, async QR/Mermaid/MathJax typesetting, workspace living-doc assets, node protocol and editorial widgets | Application session orchestration and custom document extensions |
 | `etaf-db` | Database backends for the Data Source contract of ETAF; currently SQLite | Data Controllers, which belong to ETAF |
 | `etaf-posframe` | Floating panels: a child frame per panel, its placement, title bar, theme toggle, border and its application registry | Panel content, which is an ordinary ETAF View; frame creation, which Posframe owns |
 | `ekp` | Knuth–Plass optimal line breaking for paragraphs of mixed CJK and Latin text, with kinsoku rules, hyphenation and pixel-accurate justification, in Emacs Lisp and optionally in a C module | — |
@@ -40,13 +41,14 @@ Each package declares its requirements in the `Package-Requires` header of its e
 The dependencies point in one direction. In the following figure, an arrow points from a package to the packages that require it:
 
 ```text
-ecss ──▶ ebox ──▶ etaf ──┬──▶ etaf-ui ──▶ etaf-posframe
+ecss ──▶ ebox ──▶ etaf ──┬──▶ etaf-ui ──┬──▶ etaf-posframe
+                         │              └──▶ etaf-doc
                          ├──▶ etaf-media
                          └──▶ etaf-db
 ekp
 ```
 
-No package requires a package above it, and applications sit above `etaf-ui`, `etaf-db` and `etaf-posframe`. ETAF also requires ECSS directly, so that resolving Theme tokens can keep values whose computation ECSS defers to the cascade.
+No package requires a package above it, and applications sit above `etaf-ui`, `etaf-doc`, `etaf-media`, `etaf-db` and `etaf-posframe`. ETAF also requires ECSS directly, so that resolving Theme tokens can keep values whose computation ECSS defers to the cascade.
 
 Applications use ETAF and the component catalog and do not call Ebox. When an application needs a capability that only Ebox has, such as a measurement or control of the viewport, ETAF publishes an interface for it, and the application uses that interface.
 

@@ -18,13 +18,12 @@
 (require 'subr-x)
 (require 'etaf)
 (require 'etaf-ui)
+(require 'etaf-doc)
 (require 'etaf-manual-reader-style)
 (require 'etaf-manual-reader-model)
 
 (declare-function etaf-manual-example-view "etaf-manual" (example))
 (declare-function etaf-manual-reader--chapter-cards "etaf-manual-reader-views" (session env))
-(declare-function etaf-ui-markdown-view-block "etaf-ui" (block env))
-(declare-function etaf-ui-markdown-view-blocks "etaf-ui" (blocks env &optional tight))
 
 (defconst etaf-manual-reader--definition-regexp
   "\\`\\([A-Za-z]+\\): \\([^ \t\n]+\\)\\(?:[ \t]+\\(.*?\\)\\)?[ \t]*\\'"

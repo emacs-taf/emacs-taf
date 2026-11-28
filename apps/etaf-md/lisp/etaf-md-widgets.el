@@ -26,6 +26,7 @@
 (require 'etaf-md-env)
 (require 'etaf-md-assets)
 (require 'etaf-ui)
+(require 'etaf-doc)
 
 (declare-function etaf-md--child-view "etaf-md-nodes" (env child))
 (declare-function etaf-md--component-ink "etaf-md-components" (env key))
@@ -71,42 +72,16 @@
 
 (defun etaf-md--widget-error-body (env message)
   "Return a concise danger-colored fallback text View for MESSAGE in ENV."
-  (etaf-node 'box
-             (list :width 'stretch :padding '((lh 1) (ch 2))
-                   :border-left (list '(px 3) 'solid (etaf-md-accent env 'danger))
-                   :background-color (etaf-md--palette-value
-                                      (etaf-md-env-palette env) :danger-soft))
-             (list (etaf-node 'text (list :color (etaf-md-accent env 'danger))
-                              (list (or message "无法加载内容"))))))
+  (etaf-doc-widget-notice (etaf-md-env-palette env) message 'danger))
 
 (defun etaf-md--widget-loading-body (env message)
   "Return a muted loading placeholder View for MESSAGE in ENV."
-  (etaf-node 'box
-             (list :width 'stretch :padding '((lh 0) (ch 1)))
-             (list (etaf-node 'text (list :color (etaf-md--muted env))
-                              (list (or message "正在加载…"))))))
+  (etaf-doc-widget-notice (etaf-md-env-palette env) message 'loading))
 
 (defun etaf-md--widget-pill (env label active-p on-press &optional help)
-  "Return a compact toggle pill with LABEL.
-When ACTIVE-P is non-nil, renders in selected fill with NO hover (T2);
-otherwise renders as a muted clickable leaf with hover (T1)."
-  (let* ((accent (etaf-md-accent env 'primary))
-         (accent-soft (or (etaf-md--palette-value (etaf-md-env-palette env) :accent-soft)
-                          (etaf-md-surface env 'raised)))
-         (muted (etaf-md--muted env))
-         (hover (unless active-p (etaf-md--hover-fill env 'soft))))
-    (etaf-node 'text
-               (append
-                (list :color (if active-p accent muted)
-                      :background-color (when active-p accent-soft)
-                      :font-weight (when active-p 'bold)
-                      :role 'button :tab-index 0
-                      :aria-selected (when active-p t)
-                      :pointer (unless active-p 'hand)
-                      :help-echo help
-                      :on-press on-press)
-                (when hover (list :hover-style (list :background-color hover))))
-               (list (format " %s " label)))))
+  "Return a compact toggle pill with LABEL."
+  (etaf-doc-widget-pill (etaf-md-env-palette env) label active-p on-press help
+                        (etaf-md--hover-p env)))
 
 ;;; ---------------------------------------------------------------------------
 ;;; 1. Lightweight editorial structure: progress, keymap, breadcrumb
@@ -144,50 +119,18 @@ otherwise renders as a muted clickable leaf with hover (T1)."
            (single-max (max 1 (or (etaf-md-attr env :max) 100)))
            (single-label (or (etaf-md-attr env :label) title "进度"))
            (accent-col (etaf-md-accent env (or (etaf-md-attr env :accent) 'primary)))
-           (muted (etaf-md--muted env))
-           (faint (or (etaf-md--palette-value (etaf-md-env-palette env) :faint) muted))
            (avail (etaf-md-available-width env))
            (rows (if (numberp single-val)
                      (let ((pct (min 100 (max 0 (round (* 100.0 (/ (float single-val) single-max)))))))
                        (list (list single-label single-val single-max pct (format "%d%%" pct))))
                    (delq nil (mapcar #'etaf-md--progress-parse-row
-                                     (etaf-md--widget-list-items env)))))
-           (lbl-w (min 24 (max 8 (if rows
-                                     (apply #'max (mapcar (lambda (r) (string-width (nth 0 r))) rows))
-                                   8))))
-           (bar-w (max 12 (min 36 (- avail lbl-w 16)))))
+                                     (etaf-md--widget-list-items env))))))
       (if (null rows)
           (etaf-md--widget-error-body env "progress 需要 value 属性或「标签 : 数值%」列表")
-        (etaf-node
-         'column (list :width 'stretch :item-gap '(lh 0))
-         (append
-          (when (and title (null single-val))
-            (list (etaf-node 'text (list :font-weight 'bold) (list title))
-                  (etaf-node 'box (list :width 'stretch :height '(lh 1)) nil)))
-          (mapcar
-           (lambda (r)
-             (let* ((lbl (nth 0 r))
-                    (pct (nth 3 r))
-                    (disp (nth 4 r))
-                    (filled (min bar-w (max 0 (round (* bar-w (/ pct 100.0))))))
-                    (empty (- bar-w filled)))
-               (etaf-node
-                'flex (list :width 'stretch :align-items 'center :column-gap '(ch 2)
-                            :padding '((lh 0) (ch 0)))
-                (list
-                 (etaf-node 'box (list :width (list 'ch lbl-w))
-                            (list (etaf-node 'text (list :color muted) (list lbl))))
-                 (etaf-node 'flex (list :align-items 'center)
-                            (delq nil
-                                  (list
-                                   (when (> filled 0)
-                                     (etaf-node 'text (list :color accent-col)
-                                                (list (make-string filled ?█))))
-                                   (when (> empty 0)
-                                     (etaf-node 'text (list :color faint)
-                                                (list (make-string empty ?░)))))))
-                 (etaf-node 'text (list :color muted) (list disp))))))
-           rows)))))))
+        (etaf-doc-widget-progress-bars
+         (etaf-md-env-palette env) rows avail
+         (list :title (when (and title (null single-val)) title)
+               :accent accent-col))))))
 
 (defun etaf-md--keymap-chord-nodes (env chord)
   "Render key CHORD into subtle keycap pills; keep `/' as a plain separator."

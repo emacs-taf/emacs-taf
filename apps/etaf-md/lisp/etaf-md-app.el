@@ -3154,6 +3154,7 @@ closed."
 The reading measure stays capped at `:width' while stretching cleanly inside
 narrower windows, so resizing a split up to a full frame never gets trapped at
 the initial split width."
+  (plist-put session :standalone t)
   (let ((buffer
          (etaf-app-open
           name
@@ -3168,6 +3169,7 @@ the initial split width."
                       (etaf-md--cleanup-source-kill-hook session)
                       (etaf-md--follow-unregister (plist-get session :file))
                       (plist-put session :resize-anchor nil)
+                      (plist-put session :standalone nil)
                       (plist-put session :buffer nil)))))
     (plist-put session :buffer buffer)
     (etaf-md--follow-register session)

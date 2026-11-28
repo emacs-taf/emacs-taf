@@ -4,6 +4,7 @@
 
 (require 'ert)
 (require 'etaf-ui)
+(require 'etaf-desktop)
 
 (defun etaf-ui-desktop-test--cleanup (buffer)
   "Unmount and remove BUFFER after a desktop Component test."
@@ -478,50 +479,6 @@
                                      (format "%s" (plist-get (cdr entry)
                                                                :hover-group)))
                                    controls)))))
-      (etaf-ui-desktop-test--cleanup buffer))))
-
-(ert-deftest etaf-ui-pane-resizer-reports-clamped-widths ()
-  "Dragging a pane resizer reports clamped widths and the final one on release."
-  (let ((buffer (generate-new-buffer " *resizer test*"))
-        (size (etaf-ref 200)) ends)
-    (unwind-protect
-        (progn
-          (etaf-mount buffer
-                      (lambda ()
-                        (etaf-view
-                         (row :height '(lh 1)
-                              (box :width (list 'px (etaf-value size)) "pane")
-                              (etaf-pane-resizer
-                               :ref 'pane-resizer
-                               :size size :min 120 :max 300
-                               :on-change (lambda (w) (etaf-set-value size w))
-                               :on-end (lambda (w) (push w ends))))))
-                      '(:viewport-width 600 :viewport-height 4))
-          (let* ((runtime (etaf-runtime-for-buffer buffer))
-                 (ref 'pane-resizer)
-                 (drag (lambda (phase dx)
-                         (etaf-dispatch-event
-                          runtime ref 'drag
-                          (list :phase phase :delta (cons dx 0) :buffer buffer)
-                          t))))
-            (should ref)
-            (funcall drag 'start 0)
-            (funcall drag 'move 40)
-            (should (= (etaf-value size) 240))
-            (funcall drag 'move 500)
-            (should (= (etaf-value size) 300))
-            (funcall drag 'end -500)
-            (should (= (etaf-value size) 120))
-            (should (equal ends '(120)))
-            ;; The focused divider steps sideways from the keyboard only.
-            (with-current-buffer buffer
-              (etaf-focus runtime ref)
-              (call-interactively (key-binding (kbd "<right>") t))
-              (etaf-runtime-flush runtime)
-              (should (> (etaf-value size) 120))
-              (should (= (length ends) 2))
-              (should-not (eq (key-binding (kbd "<up>") t)
-                              (key-binding (kbd "<right>") t))))))
       (etaf-ui-desktop-test--cleanup buffer))))
 
 (ert-deftest etaf-ui-bars-namespace-their-own-host-references ()

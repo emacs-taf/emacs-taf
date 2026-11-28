@@ -142,11 +142,18 @@ The component catalog is divided by component family. Most families load the bas
 | `lisp/etaf-ui-advanced.el` | Date picker, tree, calendar and command palette | `lisp/etaf-ui-input.el`, `lisp/etaf-ui-navigation.el`, `lisp/etaf-ui-surface.el`, `lisp/etaf-ui-table.el` |
 | `lisp/etaf-ui-media.el` | Media viewer | `lisp/etaf-ui-icon.el`, `lisp/etaf-ui-selection.el`, `lisp/etaf-ui-surface.el` |
 | `lisp/etaf-ui-reactions.el` | Reactions | `lisp/etaf-ui-icon.el`, `lisp/etaf-ui-surface.el` |
-| `lisp/etaf-ui-desktop.el` | Taskbar, workspace bar, launcher, switcher, splitter and pane resizer | `lisp/etaf-ui-basic.el`, `lisp/etaf-ui-style.el`, `lisp/etaf-ui-surface.el` |
-| `lisp/etaf-ui-window.el` | Window chrome, window controls and resizable panel | `lisp/etaf-ui-basic.el` |
+| `lisp/etaf-ui-window.el` | Window chrome, window controls, resizable panel and pane resizer | `lisp/etaf-ui-basic.el` |
 | `lisp/etaf-ui-tile-grid.el` | Tile grid | `lisp/etaf-ui-basic.el` |
 | `lisp/etaf-ui-text-grid.el` | Text grid | `lisp/etaf-ui-basic.el` |
-| `lisp/etaf-ui-playing-card.el` | Playing card | `lisp/etaf-ui-basic.el` |
+| `etaf-doc/lisp/etaf-ui-markdown-parse.el` | Pure-Elisp Markdown parser, dialects and block/inline extensions | — |
+| `etaf-doc/lisp/etaf-ui-markdown-highlight.el` | Cached Emacs major-mode font-lock code highlighting | — |
+| `etaf-doc/lisp/etaf-ui-markdown.el` | Markdown block/inline View rendering and TeX math text fallback | `etaf-ui-markdown-parse.el`, `etaf-ui-markdown-highlight.el`, ETAF, ETAF UI |
+| `etaf-doc/lisp/etaf-doc-cache.el` | Bounded LRU disk pruning and async remote HTTP(S) image cache | — |
+| `etaf-doc/lisp/etaf-doc-qrcode.el` | Async `qrencode` PNG generator and cache | `etaf-doc-cache.el` |
+| `etaf-doc/lisp/etaf-doc-typeset.el` | Shared QuickJS + Pele + MathJax native worker and pixel-to-grid sizing | `etaf-doc-cache.el` |
+| `etaf-doc/lisp/etaf-doc-assets.el` | Sandboxed workspace files, symbol introspection, project trees and async VCS logs/diffs | — |
+| `etaf-doc/lisp/etaf-doc-protocol.el` | Document attribute validation, node registration and extension directory loader | — |
+| `etaf-doc/lisp/etaf-doc-widgets.el` | Shared editorial widgets (buttons, pills, badges, notices, bars, charts, source cards) | ETAF |
 | `lisp/etaf-sqlite-store.el` | The SQLite Data source | ETAF, Emacs's `sqlite` support |
 
 The catalog's three helpers that need a fact the engine measures — the viewport size used to size a surface or a field, the input commands a field must forward, and the pixel width a selection helper compares — read that fact from Ebox's public viewport and measurement interfaces rather than copying the measurement. Every other catalog dependency goes to ETAF.

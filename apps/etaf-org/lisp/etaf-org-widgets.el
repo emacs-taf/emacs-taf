@@ -24,6 +24,7 @@
 (require 'subr-x)
 (require 'etaf)
 (require 'etaf-ui)
+(require 'etaf-doc)
 (require 'etaf-org-node)
 (require 'etaf-org-env)
 (require 'etaf-org-theme)
@@ -42,26 +43,9 @@
 ;;; ---------------------------------------------------------------------------
 
 (defun etaf-org-widgets--pill (env label active-p on-press &optional help)
-  "Return a compact toggle pill with LABEL in ENV.
-When ACTIVE-P is non-nil, renders in selected fill with NO hover;
-otherwise renders as a muted clickable leaf with soft hover."
-  (let* ((accent (etaf-org-accent env 'primary))
-         (accent-soft (or (etaf-org--env-color env :accent-soft)
-                          (etaf-org-surface env 'raised)))
-         (muted (etaf-org--muted env))
-         (hover (unless active-p (etaf-org--hover-fill env 'soft))))
-    (etaf-node 'text
-               (append
-                (list :color (if active-p accent muted)
-                      :background-color (when active-p accent-soft)
-                      :font-weight (when active-p 'bold)
-                      :role 'button :tab-index 0
-                      :aria-selected (when active-p t)
-                      :pointer (unless active-p 'hand)
-                      :help-echo help
-                      :on-press on-press)
-                (when hover (list :hover-style (list :background-color hover))))
-               (list (format " %s " label)))))
+  "Return a compact toggle pill with LABEL in ENV."
+  (etaf-doc-widget-pill (etaf-org-env-palette env) label active-p on-press help
+                        (etaf-org--hover-p env)))
 
 (defun etaf-org-widgets--code-view (env text lang &optional start-line)
   "Return a frameless, headerless syntax-highlighted code View for TEXT in ENV."
@@ -78,58 +62,38 @@ otherwise renders as a muted clickable leaf with soft hover."
   "Render standard error/loading view for L1 asset DATA, or nil if ready."
   (cond
    ((or (null data) (plist-get data :loading))
-    (etaf-node 'box (list :width 'stretch :padding '((lh 0) (ch 1)))
-               (list (etaf-node 'text (list :color (etaf-org--muted env))
-                                (list (or loading-msg "正在加载工作区数据…"))))))
+    (etaf-doc-widget-notice (etaf-org-env-palette env)
+                            (or loading-msg "正在加载工作区数据…") 'loading))
    ((plist-get data :error)
-    (etaf-node 'box
-               (list :width 'stretch :padding '((lh 1) (ch 2))
-                     :background-color (etaf-org-accent env 'danger t)
-                     :border-left (list '(px 3) 'solid (etaf-org-accent env 'danger)))
-               (list (etaf-node 'text (list :color (etaf-org-accent env 'danger))
-                                (list (plist-get data :error))))))
+    (etaf-doc-widget-notice (etaf-org-env-palette env)
+                            (plist-get data :error) 'danger))
    (t nil)))
 
 (defun etaf-org-widgets--source-frame-view (env title meta code-text lang start-line abs-path)
   "Paint a single-frame living-doc code card without double borders."
-  (let ((muted (etaf-org--muted env)))
-    (etaf-node
-     'column (list :width 'stretch :item-gap '(lh 0)
-                   :border (etaf-org--hairline env)
-                   :background-color (etaf-org-surface env 'raised))
-     (list
-      (etaf-node
-       'flex (list :width 'stretch :align-items 'center :column-gap '(ch 2)
-                   :padding '((lh 0) (ch 2))
-                   :border-bottom (etaf-org--hairline env))
-       (delq nil
-             (list
-              (etaf-node 'box (list :flex-basis '(ch 0) :flex-grow 1 :min-width '(ch 12)
-                                    :wrap-mode 'word)
-                         (delq nil
-                               (list
-                                (etaf-node 'text (list :font-weight 'bold) (list title))
-                                (when (and meta (not (string-empty-p meta)))
-                                  (etaf-node 'text (list :color muted) (list (concat "  " meta)))))))
-              (etaf-node 'flex (list :flex-shrink 0 :align-items 'center :column-gap '(ch 2))
-                         (delq nil
-                               (list
-                                (when abs-path
-                                  (etaf-org--leaf-button
-                                   env "跳源码"
-                                   (lambda ()
-                                     (find-file-other-window abs-path)
-                                     (when (and (integerp start-line) (> start-line 0))
-                                       (goto-char (point-min))
-                                       (forward-line (1- start-line))))
-                                   :role 'link :help (format "在 Emacs 中打开 %s" abs-path)))
-                                (etaf-org--leaf-button
-                                 env "复制"
-                                 (lambda ()
-                                   (kill-new (or code-text ""))
-                                   (message "已复制源码片段"))
-                                 :help "复制此源码片段")))))))
-      (etaf-org-widgets--code-view env code-text lang start-line)))))
+  (etaf-doc-widget-source-card
+   (etaf-org-env-palette env) title meta
+   (etaf-org-widgets--code-view env code-text lang start-line)
+   (list :border (etaf-org--hairline env)
+         :background (etaf-org-surface env 'raised)
+         :actions
+         (delq nil
+               (list
+                (when abs-path
+                  (etaf-org--leaf-button
+                   env "跳源码"
+                   (lambda ()
+                     (find-file-other-window abs-path)
+                     (when (and (integerp start-line) (> start-line 0))
+                       (goto-char (point-min))
+                       (forward-line (1- start-line))))
+                   :role 'link :help (format "在 Emacs 中打开 %s" abs-path)))
+                (etaf-org--leaf-button
+                 env "复制"
+                 (lambda ()
+                   (kill-new (or code-text ""))
+                   (message "已复制源码片段"))
+                 :help "复制此源码片段"))))))
 
 (defun etaf-org-widgets--first-src-block (env &optional node)
   "Return the first `src-block' plist inside NODE (or ENV), or nil."
@@ -143,11 +107,7 @@ otherwise renders as a muted clickable leaf with soft hover."
 
 (defun etaf-org-widgets--status-pill (env text variant)
   "Return a subtle soft-tinted status pill (no outer border)."
-  (etaf-node 'text
-             (list :color (etaf-org-accent env variant)
-                   :background-color (etaf-org-accent env variant t)
-                   :font-weight 'bold)
-             (list (format " %s " text))))
+  (etaf-doc-widget-status-badge (etaf-org-env-palette env) text variant))
 
 ;;; ---------------------------------------------------------------------------
 ;;; 1. Visualization & UI: chart, progress, keymap, breadcrumb
@@ -190,89 +150,12 @@ otherwise renders as a muted clickable leaf with soft hover."
 
 (defun etaf-org-widgets--line-chart-view
     (series label unit accent-col muted faint avail req-w height)
-  "Render SERIES as a crisp, zero-wrap box-drawing line chart.
-Uses monospace box-drawing curves with Y-axis bounds and a clean baseline,
-avoiding Apple Braille hollow-dot clutter and wide-glyph row wrapping."
-  (let* ((vals (mapcar (lambda (p) (float (cdr p))) series))
-         (n (length vals))
-         (h (max 3 height))
-         (lo (apply #'min vals))
-         (hi (apply #'max vals))
-         (span (if (= hi lo) 1.0 (- hi lo)))
-         (int-p (cl-every (lambda (v) (= v (truncate v))) vals))
-         (fmt-val (lambda (v)
-                    (let ((s (if int-p
-                                 (format "%d" (round v))
-                               (format "%.1f" v))))
-                      (if (string-empty-p unit) s (concat s unit)))))
-         (hi-str (funcall fmt-val hi))
-         (lo-str (funcall fmt-val lo))
-         (mid-row (and (>= h 5) (/ (1- h) 2)))
-         (mid-str (and mid-row (funcall fmt-val (/ (+ hi lo) 2.0))))
-         (axis-w (max 3 (string-width hi-str) (string-width lo-str)
-                      (if mid-str (string-width mid-str) 0)))
-         (plot-w (max 12 (min (max 16 req-w) (max 12 (- avail axis-w 4)))))
-         (grid (cl-loop repeat h collect (make-vector plot-w ?\s)))
-         (ys (make-vector plot-w 0)))
-    (dotimes (x plot-w)
-      (let* ((pos (if (<= n 1) 0.0
-                    (/ (* (float x) (1- n)) (float (max 1 (1- plot-w))))))
-             (i0 (min (1- n) (floor pos)))
-             (i1 (min (1- n) (1+ i0)))
-             (frac (- pos i0))
-             (v (+ (* (- 1.0 frac) (nth i0 vals)) (* frac (nth i1 vals))))
-             (norm (if (= hi lo) 0.5 (/ (- v lo) span)))
-             (row (max 0 (min (1- h) (round (* (- 1.0 norm) (1- h)))))))
-        (aset ys x row)))
-    (aset (nth (aref ys 0) grid) 0 ?─)
-    (cl-loop for x from 1 below plot-w
-             for y0 = (aref ys (1- x))
-             for y1 = (aref ys x)
-             do (cond
-                 ((= y1 y0)
-                  (aset (nth y1 grid) x ?─))
-                 ((< y1 y0)
-                  (aset (nth y0 grid) x ?╯)
-                  (cl-loop for r from (1+ y1) below y0
-                           do (aset (nth r grid) x ?│))
-                  (aset (nth y1 grid) x ?╭))
-                 (t
-                  (aset (nth y0 grid) x ?╮)
-                  (cl-loop for r from (1+ y0) below y1
-                           do (aset (nth r grid) x ?│))
-                  (aset (nth y1 grid) x ?╰))))
-    (etaf-node
-     'column (list :width 'stretch :item-gap '(lh 0))
-     (append
-      (when label
-        (list (etaf-node 'text (list :font-weight 'bold) (list label))
-              (etaf-node 'text nil '(" "))))
-      (cl-loop for r from 0 below h
-               for lbl = (cond ((= r 0) hi-str)
-                               ((= r (1- h)) lo-str)
-                               ((and mid-row (= r mid-row)) mid-str)
-                               (t ""))
-               for pad = (make-string (max 0 (- axis-w (string-width lbl))) ?\s)
-               for tick = (if (string-empty-p lbl) " │ " " ┤ ")
-               for curve = (apply #'string (append (nth r grid) nil))
-               collect
-               (etaf-node
-                'flex (list :column-gap '(ch 0))
-                (list (etaf-node 'text (list :color muted
-                                             :font-family (etaf-org--mono-family))
-                                 (list (concat pad lbl)))
-                      (etaf-node 'text (list :color faint
-                                             :font-family (etaf-org--mono-family))
-                                 (list tick))
-                      (etaf-node 'text (list :color accent-col
-                                             :font-family (etaf-org--mono-family))
-                                 (list curve)))))
-      (list
-       (etaf-node 'text (list :color faint
-                              :font-family (etaf-org--mono-family))
-                  (list (concat (make-string axis-w ?\s)
-                                " └"
-                                (make-string (1+ plot-w) ?─)))))))))
+  "Render SERIES as a crisp, zero-wrap box-drawing line chart."
+  (etaf-doc-widget-line-chart
+   (list :muted muted :faint faint) series avail
+   (list :label label :unit unit :accent accent-col
+         :width req-w :height height
+         :mono-family (etaf-org--mono-family))))
 
 (etaf-org--define-shipped 'chart
   :name "chart"

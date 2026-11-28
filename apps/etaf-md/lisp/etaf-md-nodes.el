@@ -15,6 +15,7 @@
 (require 'cl-lib)
 (require 'seq)
 (require 'subr-x)
+(require 'etaf-doc)
 (require 'etaf-md-env)
 
 (declare-function etaf-md--inline-text "etaf-md-views" (runs))

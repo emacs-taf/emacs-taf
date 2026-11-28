@@ -66,10 +66,7 @@
     :ui-divider-bg ("#DBE0ED" . "#343E52")
     :ui-picker-item-bg ("#F7F8FC" . "#252E40")
     :ui-picker-item-fg ("#252C42" . "#E4E8F3")
-    :ui-picker-item-muted-fg ("#66718B" . "#A1ADC4")
-    :ui-playing-card-back-bg "#5944B0" :ui-playing-card-back-fg "#DACFFF"
-    :ui-playing-card-empty-bg ("#EDF0F7" . "#252E40")
-    :ui-playing-card-empty-fg ("#66718B" . "#A1ADC4"))
+    :ui-picker-item-muted-fg ("#66718B" . "#A1ADC4"))
   "Semantic colors shared by the shell and every catalog specimen.")
 
 (defconst etaf-ui-gallery--sidebar-columns 160
@@ -78,12 +75,12 @@
 (defconst etaf-ui-gallery--groups
   '((basic "基础与操作" "Button · Label · Icon · Avatar · Kbd")
     (input "输入与选择" "TextInput · Select · Switch · Range")
-    (layout "导航与结构" "Tabs · Panel · Accordion · Splitter")
+    (layout "导航与结构" "Tabs · Panel · Accordion · PaneResizer")
     (data "数据与集合" "Table · DataGrid · Tree · Calendar")
     (feedback "状态与反馈" "Badge · Alert · Progress · Empty")
     (surface "菜单与浮层" "Dialog · Popover · Drawer · Toast")
-    (desktop "窗口与工作区" "Window · Taskbar · Launcher")
-    (media "媒体与网格" "MediaViewer · TileGrid · TextGrid · PlayingCard"))
+    (desktop "窗口与工作区" "Window · WindowChrome · ResizablePanel")
+    (media "媒体与网格" "MediaViewer · TileGrid · TextGrid"))
   "Browsing groups, not a second supported-API inventory.")
 
 (defmacro etaf-ui-gallery--sample (name group title description bindings view)
@@ -294,25 +291,6 @@ Compile the live View and retain the identical source for runnable examples."
      ((step (etaf-ref 'design)))
      (etaf-steps :items '((:key design :label "设计") (:key build :label "实现") (:key verify :label "验证"))
                  :current step :on-change (lambda (next) (setf (etaf-value step) next))))
-   (etaf-ui-gallery--sample etaf-splitter layout "分栏" "拖动分隔线，或聚焦后用左右键调整比例。"
-     ((ratio (etaf-ref 0.4)) (origin (list 0.4 1)))
-     (etaf-splitter :ratio ratio :height '(lh 4) :ref 'example-split
-       :min-ratio 0.15 :max-ratio 0.85
-       :on-change (lambda (gesture)
-                    (pcase (plist-get gesture :phase)
-                      ('start
-                       (setcar origin (etaf-value ratio))
-                       (setcar (cdr origin)
-                               (max 1 (car (etaf-host-ref-size
-                                            (etaf-runtime-for-buffer (current-buffer)) 'example-split)))))
-                      ((or 'move 'end)
-                       (setf (etaf-value ratio)
-                             (max 0.15 (min 0.85 (+ (car origin)
-                                                  (/ (float (car (plist-get gesture :delta)))
-                                                     (cadr origin)))))))
-                      ('cancel (setf (etaf-value ratio) (car origin)))))
-       (slot :name 'first (etaf-label :text "左侧内容" :padding '((lh 0) (ch 1))))
-       (slot :name 'second (etaf-label :text "右侧内容" :padding '((lh 0) (ch 1))))))
    (etaf-ui-gallery--sample etaf-pane-resizer layout "侧栏调宽" "固定宽度的窗格与可抓取的分隔线。"
      ((size (etaf-ref 160)))
      (flex :height '(lh 4)
@@ -495,32 +473,6 @@ Compile the live View and retain the identical source for runnable examples."
        :on-minimize (lambda () (setf (etaf-value status) "已请求最小化"))
        :on-maximize (lambda () (setf (etaf-value status) "已请求最大化"))))
    (etaf-ui-gallery--window-sample etaf-window "窗口")
-   (etaf-ui-gallery--sample etaf-taskbar desktop "任务栏" "当前任务与最小化任务共享受控选择。"
-     ((active (etaf-ref 'editor)))
-     (etaf-taskbar :items '((:key editor :label "编辑器") (:key preview :label "预览" :state minimized))
-                   :active active :on-select (lambda (next) (setf (etaf-value active) next))))
-   (etaf-ui-gallery--sample etaf-workspace-bar desktop "工作区栏" "切换工作区，状态跟随当前选择。"
-     ((active (etaf-ref 'one)))
-     (etaf-workspace-bar :brand "示例" :workspaces '((:key one :label "工作区 1") (:key two :label "工作区 2"))
-                         :active active :on-select (lambda (next) (setf (etaf-value active) next))
-                         :status "本地示例"))
-   (etaf-ui-gallery--sample etaf-launcher desktop "启动器" "选择应用只更新示例状态，不启动外部程序。"
-     ((open (etaf-ref nil)) (selected (etaf-ref "尚未启动")))
-     (column :item-gap '(lh 1)
-       (etaf-button :label "打开启动器" :variant 'secondary :on-press (lambda () (setf (etaf-value open) t)))
-       (etaf-label :text selected :variant 'muted)
-       (etaf-launcher :open open :title "选择示例应用" :close-label "关闭"
-                      :items '((:key editor :label "编辑器" :description "记录你的想法") (:key preview :label "预览" :description "查看内容效果"))
-                      :on-close (lambda () (setf (etaf-value open) nil))
-                      :on-select (lambda (next) (setf (etaf-value selected) (format "已选择：%s" next) (etaf-value open) nil)))))
-   (etaf-ui-gallery--sample etaf-switcher desktop "窗口切换器" "展示当前窗口，并选择另一个目标。"
-     ((open (etaf-ref nil)) (selected (etaf-ref 'editor)))
-     (column
-       (etaf-button :label "打开切换器" :variant 'secondary :on-press (lambda () (setf (etaf-value open) t)))
-       (etaf-switcher :open open :title "切换示例窗口" :selected selected :close-label "关闭"
-                      :items '((:key editor :label "编辑器") (:key preview :label "预览"))
-                      :on-close (lambda () (setf (etaf-value open) nil))
-                      :on-select (lambda (next) (setf (etaf-value selected) next (etaf-value open) nil)))))
 
    (etaf-ui-gallery--sample etaf-media-viewer media "媒体查看器" "本地生成的图片保持比例，无网络与自动播放。"
      ((open (etaf-ref nil))
@@ -549,11 +501,7 @@ Compile the live View and retain the identical source for runnable examples."
    (etaf-ui-gallery--sample etaf-text-grid media "字符表面" "每行保持固定字符宽度，适合终端与字符画。" ()
      (etaf-text-grid :rows 4 :columns 28 :label "字符画示例"
                      :row-text (lambda (row) (nth row '("    +----------------+" "    |  ETAF / TEXT   |" "    |  . . . . . .   |" "    +----------------+")))))
-   (etaf-ui-gallery--sample etaf-playing-card media "扑克牌" "正面、背面与空牌堆保持固有尺寸。"
-     ((selected (etaf-ref nil)))
-     (row :item-gap '(ch 2)
-       (etaf-playing-card :rank "A" :suit 'hearts :selected selected :on-press (lambda () (setf (etaf-value selected) (not (etaf-value selected)))))
-       (etaf-playing-card :face-down t) (etaf-playing-card :empty t))))
+   )
   "Maintained live specimens and their reproducible public-API examples.")
 
 (defun etaf-ui-gallery--items (group)
@@ -778,9 +726,9 @@ inventory.  Each Parameters paragraph lists keyword groups and their prose."
             :on-maximize (lambda () (cl-incf (etaf-value count))))
           (etaf-label :text (format "窗口控制 · 已操作 %d 次" (etaf-value count)) :variant 'muted :padding '((lh 0) (ch 1))))
         (column :flex-grow 1 :flex-basis '(px 0) :item-gap '(lh 1)
-          (etaf-workspace-bar :workspaces '((:key overview :label "工作区 1") (:key examples :label "工作区 2"))
-                              :active tab :on-select (lambda (next) (setf (etaf-value tab) next)))
-          (etaf-label :text "窗口 · 启动器 · 任务栏" :variant 'muted)))))
+          (etaf-tabs :items '((:key overview :label "工作区 1") (:key examples :label "工作区 2"))
+                     :active tab :on-change (lambda (next) (setf (etaf-value tab) next)))
+          (etaf-label :text "窗口 · 标题栏 · 可调面板" :variant 'muted)))))
     ('media
      (etaf-view
       (row :item-gap '(ch 3)
@@ -790,10 +738,7 @@ inventory.  Each Parameters paragraph lists keyword groups and their prose."
           (etaf-label :text "保持原始比例" :variant 'muted))
         (etaf-tile-grid :rows 3 :columns 4 :cell-width 2 :cell-height 1
                         :cell-text (lambda (_r _c) "· ")
-                        :cell-background (lambda (r c) (etaf-theme-token (if (= (% (+ r c) 3) 0) :ui-accent :ui-accent-soft-bg))))
-        (etaf-playing-card :rank "A" :suit 'hearts :lines 3 :columns 7 :selected checked
-                           :on-press (lambda () (setf (etaf-value checked) (not (etaf-value checked)))))
-        (etaf-playing-card :face-down t :lines 3 :columns 7))))))
+                        :cell-background (lambda (r c) (etaf-theme-token (if (= (% (+ r c) 3) 0) :ui-accent :ui-accent-soft-bg)))))))))
 
 (etaf-define-component etaf-ui-gallery--overview (&key on-select columns card-width generation)
   :render

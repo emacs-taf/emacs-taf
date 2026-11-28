@@ -22,6 +22,7 @@
 (require 'subr-x)
 (require 'etaf)
 (require 'etaf-ui)
+(require 'etaf-doc)
 (require 'etaf-org-node)
 (require 'etaf-org-theme)
 
@@ -124,49 +125,14 @@ Matches `etaf-ui-markdown--mono-family': avoids forcing Emacs `fixed-pitch'
                (etaf-org--palette-value palette :panel2)))))))
 
 (defun etaf-org--leaf-button (env label on-press &rest opts)
-  "Return a single-face interactive leaf control in ENV.
-OPTS accepts `:selected', `:disabled', `:keep-pointer', `:color', `:background',
-`:role', `:help', `:bold', `:underline', `:hover-variant', `:id'.  Selected or
-disabled leaves suppress `:hover-style' (and `:pointer' unless `:keep-pointer'
-is non-nil) so interactive states never stack."
-  (let* ((selected (plist-get opts :selected))
-         (disabled (plist-get opts :disabled))
-         (keep-pointer (plist-get opts :keep-pointer))
-         (role (or (plist-get opts :role) 'button))
-         (help (plist-get opts :help))
-         (id (plist-get opts :id))
-         (underline (plist-get opts :underline))
-         (bold (if (plist-member opts :bold) (plist-get opts :bold) selected))
-         (accent (or (etaf-org--env-color env :accent) "#0969da"))
-         (muted (etaf-org--muted env))
-         (color (or (plist-get opts :color)
-                    (cond (disabled (or (etaf-org--env-color env :faint) muted))
-                          (selected accent)
-                          (t accent))))
-         (bg (or (plist-get opts :background)
-                 (when selected
-                   (or (etaf-org--env-color env :accent-soft)
-                       (etaf-org--env-color env :panel2)))))
-         (interactive-p (and (not disabled) (functionp on-press)))
-         (hover (and interactive-p (not selected)
-                     (etaf-org--hover-fill env (plist-get opts :hover-variant)))))
-    (etaf-node 'text
-               (append
-                (list :color color)
-                (when id (list :id id))
-                (when bg (list :background-color bg))
-                (when bold (list :font-weight 'bold))
-                (when underline (list :text-decoration-line '(underline)))
-                (when help (list :help-echo help))
-                (when selected (list :aria-selected t))
-                (when interactive-p
-                  (append
-                   (list :role role :tab-index 0 :on-press on-press)
-                   (when (or (not selected) keep-pointer)
-                     (list :pointer 'hand))))
-                (when hover
-                  (list :hover-style (list :background-color hover))))
-               (list label))))
+  "Return a single-face interactive leaf control in ENV."
+  (let ((palette (if (etaf-org-env-p env)
+                     (etaf-org-env-palette env)
+                   (plist-get env :palette))))
+    (apply #'etaf-doc-widget-leaf-button
+           palette label on-press
+           :hover (etaf-org--hover-p env)
+           opts)))
 
 (defun etaf-org--hairline (env)
   "Return a 1px solid hairline border spec matching ENV's theme."

@@ -4,29 +4,21 @@
 
 ;;; Commentary:
 ;;
-;; Draws display formulas (`$$...$$', `\[...\]', LaTeX environments) and
-;; Mermaid diagrams via the embedded QuickJS native dynamic module
-;; (`etaf-md-typeset-native.{dylib,so}', Pele + MathJax, zero browser / Node.js)
-;; plus external `dot'/`graphviz', `plantuml' and inline `svg' blocks into
-;; bounded LRU disk caches.  Finished pictures repaint only their owning block.
+;; Org adapter over `etaf-doc-typeset' for Mermaid diagrams and MathJax display
+;; formulas via the shared QuickJS native worker, plus external `dot'/`graphviz',
+;; `plantuml' and inline `svg' source blocks.
 
 ;;; Code:
 
 (require 'cl-lib)
 (require 'subr-x)
-(require 'json)
 (require 'etaf)
 (require 'etaf-ui)
+(require 'etaf-doc)
 (require 'etaf-org-cache)
 (require 'etaf-org-theme)
 (require 'etaf-org-env)
 
-(declare-function image-size "image.c" (spec &optional pixels frame))
-(declare-function etaf-md--native-submit "ext:etaf-md-typeset-native" (id kind source options timeout))
-(declare-function etaf-md--native-poll "ext:etaf-md-typeset-native" ())
-(declare-function etaf-md--native-channel "ext:etaf-md-typeset-native" (process))
-(declare-function etaf-md--native-shutdown "ext:etaf-md-typeset-native" ())
-(declare-function etaf-md--native-info "ext:etaf-md-typeset-native" ())
 (declare-function etaf-org--env "etaf-org-model" (session))
 (declare-function etaf-org--read "etaf-org-model" (session key))
 (declare-function etaf-org--refresh-block-assets "etaf-org-model" (session))
@@ -64,313 +56,37 @@ View, or nil to fall back to the built-in code/diagram renderer.")
 (defconst etaf-org-typeset--picture-version 8
   "Cache-busting pipeline version.")
 
-(defconst etaf-org-typeset--native-version "1"
-  "Native dynamic module ABI/content version expected by this Elisp layer.")
-
-(defconst etaf-org-typeset--native-timeout 10000
-  "Per-job timeout in milliseconds for the embedded QuickJS worker.")
-
-(defconst etaf-org-typeset--native-max-in-flight 32
-  "Maximum concurrent native jobs submitted from `etaf-org' at once.")
-
 (defvar etaf-org-typeset--running (make-hash-table :test #'equal)
   "Render jobs currently in flight, keyed by cache key.")
 
 (defvar etaf-org-typeset--failed (make-hash-table :test #'equal)
   "Fatal parse/render errors keyed by cache key so bad blocks are not retried.")
 
-(defvar etaf-org-typeset--native-failed nil
-  "Cons of (PATH . MTIME) when loading that native binary failed.")
-
-(defvar etaf-org-typeset--native-loaded nil
-  "Path of the loaded native typesetting module, or nil.")
-
 (defvar etaf-org-typeset--native-hinted nil
   "Non-nil after hinting once per session about prebuilt native rendering.")
 
-(defvar etaf-org-typeset--native-requests (make-hash-table :test #'eql)
-  "Native renders in flight or queued for `etaf-org', keyed by request id.")
-
-(defvar etaf-org-typeset--native-waiting nil
-  "FIFO list of `etaf-org' native jobs waiting for a free worker slot.")
-
-(defvar etaf-org-typeset--native-in-flight 0
-  "Number of `etaf-org' jobs currently submitted to the native worker thread.")
-
-;;; ---------------------------------------------------------------------------
-;;; Shared native QuickJS module discovery and coordination
-;;; ---------------------------------------------------------------------------
-
-(defun etaf-org-typeset--package-root ()
-  "Return the root directory of `etaf-org', or nil when running only from .eln."
-  (when-let* ((entry (locate-library "etaf-org"))
-              ((not (string-suffix-p ".eln" entry))))
-    (file-name-directory entry)))
-
-(defun etaf-org-typeset--native-cache-root ()
-  "Return the root cache directory holding prebuilt ETAF native modules."
-  (or (and (boundp 'etaf-install-native-directory)
-           etaf-install-native-directory)
-      (expand-file-name
-       "emacs-taf/native"
-       (or (let ((xdg (getenv "XDG_CACHE_HOME")))
-             (and xdg (not (string-empty-p xdg)) xdg))
-           (expand-file-name "~/.cache")))))
-
-(defun etaf-org-typeset--native-module-path ()
-  "Return the native typesetting module path if present in checkout or cache."
-  (when (and module-file-suffix (stringp module-file-suffix))
-    (let* ((root (etaf-org-typeset--package-root))
-           (sibling (and root
-                         (expand-file-name "../etaf-md/native"
-                                           (directory-file-name root))))
-           (cache-root (etaf-org-typeset--native-cache-root))
-           (name (concat "etaf-md-typeset-native" module-file-suffix))
-           (candidates
-            (delq nil
-                  (list (and root (expand-file-name name (expand-file-name "native" root)))
-                        (and root (expand-file-name name root))
-                        (and sibling (expand-file-name name sibling))
-                        (expand-file-name
-                         name
-                         (expand-file-name (concat "etaf-org/" etaf-org-typeset--native-version)
-                                           cache-root))
-                        (expand-file-name
-                         name
-                         (expand-file-name (concat "etaf-md/" etaf-org-typeset--native-version)
-                                           cache-root))))))
-      (cl-find-if #'file-exists-p candidates))))
-
-(defun etaf-org-typeset--shared-callbacks ()
-  "Return the process-wide callback table on `etaf-md-typeset-native'."
-  (or (get 'etaf-md-typeset-native :callbacks)
-      (put 'etaf-md-typeset-native :callbacks (make-hash-table :test #'eql))))
-
-(defun etaf-org-typeset--shared-next-id ()
-  "Allocate a globally unique request id across all native-typeset consumers."
-  (put 'etaf-md-typeset-native :serial
-       (1+ (or (get 'etaf-md-typeset-native :serial) 0))))
-
-(defun etaf-org-typeset--shared-stop-timer ()
-  "Stop the shared safety poll timer when no callbacks remain."
-  (when-let* ((timer (get 'etaf-md-typeset-native :timer)))
-    (when (timerp timer) (cancel-timer timer))
-    (put 'etaf-md-typeset-native :timer nil)))
-
-(defun etaf-org-typeset--shared-drain ()
-  "Drain all completed jobs from the shared native QuickJS worker."
-  (when (featurep 'etaf-md-typeset-native)
-    (let ((callbacks (etaf-org-typeset--shared-callbacks))
-          (limit 64)
-          entry)
-      (while (and (> limit 0) (setq entry (etaf-md--native-poll)))
-        (cl-decf limit)
-        (let* ((id (car entry))
-               (cb (gethash id callbacks)))
-          (remhash id callbacks)
-          (when (functionp cb)
-            (funcall cb (cadr entry)))))
-      (when (zerop (hash-table-count callbacks))
-        (etaf-org-typeset--shared-stop-timer))))
-  (etaf-org-typeset--native-dispatch))
-
-(defun etaf-org-typeset--ensure-native ()
-  "Ensure the native QuickJS module is loaded and its shared wakeup pipe is live."
-  (when module-file-suffix
-    (unless (featurep 'etaf-md-typeset-native)
-      (when-let* ((path (etaf-org-typeset--native-module-path))
-                  (mtime (file-attribute-modification-time (file-attributes path))))
-        (unless (and (consp etaf-org-typeset--native-failed)
-                     (equal (car etaf-org-typeset--native-failed) path)
-                     (equal (cdr etaf-org-typeset--native-failed) mtime))
-          (condition-case err
-              (progn
-                (load path nil t t)
-                (when (featurep 'etaf-md-typeset-native)
-                  (setq etaf-org-typeset--native-loaded path
-                        etaf-org-typeset--native-failed nil)))
-            (error
-             (setq etaf-org-typeset--native-failed (cons path mtime))
-             (message "etaf-org native typeset module could not be loaded: %s"
-                      (error-message-string err)))))))
-    (when (featurep 'etaf-md-typeset-native)
-      (unless etaf-org-typeset--native-loaded
-        (setq etaf-org-typeset--native-loaded (or (etaf-org-typeset--native-module-path) t)))
-      (etaf-org-typeset--shared-callbacks)
-      (unless (process-live-p (get 'etaf-md-typeset-native :channel))
-        (let ((proc (make-pipe-process
-                     :name "etaf-typeset-native"
-                     :noquery t
-                     :coding 'no-conversion
-                     :filter (lambda (_p _text)
-                               (when-let* ((fn (get 'etaf-md-typeset-native :drain)))
-                                 (funcall fn))))))
-          (put 'etaf-md-typeset-native :channel proc)
-          (etaf-md--native-channel proc)))
-      (unless (get 'etaf-md-typeset-native :drain)
-        (put 'etaf-md-typeset-native :drain #'etaf-org-typeset--shared-drain))
-      t)))
-
 (defun etaf-org-typeset--native-info ()
   "Return engine metadata plist when the native module is loaded, else nil."
-  (when (and etaf-org-typeset
-             (etaf-org-typeset--ensure-native)
-             (fboundp 'etaf-md--native-info))
-    (ignore-errors (etaf-md--native-info))))
+  (when etaf-org-typeset
+    (etaf-doc-typeset-info)))
 
 (defun etaf-org-typeset-available-p ()
   "Return non-nil when the embedded QuickJS native module can draw Mermaid/math."
   (and etaf-org-typeset
-       (etaf-org-typeset--ensure-native)))
-
-;;; ---------------------------------------------------------------------------
-;;; Header-only image dimension reader (fast, zero rasterization on SVG/PNG)
-;;; ---------------------------------------------------------------------------
-
-(defun etaf-org-typeset--svg-pixels (path)
-  "Read `(WIDTH . HEIGHT)' from SVG file header at PATH, or nil."
-  (when (and (stringp path) (file-readable-p path))
-    (with-temp-buffer
-      (insert-file-contents path nil 0 4096)
-      (let ((head (buffer-string)))
-        (cond
-         ((string-match "viewBox=[\"'][ \t]*[-0-9.]+[ \t,]+[-0-9.]+[ \t,]+\\([0-9.]+\\)[ \t,]+\\([0-9.]+\\)" head)
-          (let ((w (string-to-number (match-string 1 head)))
-                (h (string-to-number (match-string 2 head))))
-            (when (and (> w 0) (> h 0)) (cons w h))))
-         ((and (string-match "\\bwidth=[\"']\\([0-9.]+\\)" head)
-               (let ((w (string-to-number (match-string 1 head))))
-                 (when (string-match "\\bheight=[\"']\\([0-9.]+\\)" head)
-                   (let ((h (string-to-number (match-string 1 head))))
-                     (when (and (> w 0) (> h 0)) (cons w h))))))))))))
-
-(defun etaf-org-typeset--raster-pixels (path)
-  "Read `(WIDTH . HEIGHT)' from PNG, GIF, WebP or JPEG headers at PATH, or nil."
-  (when (and (stringp path) (file-readable-p path))
-    (ignore-errors
-      (with-temp-buffer
-        (set-buffer-multibyte nil)
-        (insert-file-contents-literally path nil 0 65536)
-        (let ((size (buffer-size)))
-          (cond
-           ((and (>= size 24)
-                 (equal (buffer-substring-no-properties 1 9)
-                        "\x89PNG\r\n\x1a\n"))
-            (let ((w (+ (ash (char-after 17) 24) (ash (char-after 18) 16)
-                        (ash (char-after 19) 8) (char-after 20)))
-                  (h (+ (ash (char-after 21) 24) (ash (char-after 22) 16)
-                        (ash (char-after 23) 8) (char-after 24))))
-              (when (and (> w 0) (> h 0)) (cons w h))))
-           ((and (>= size 10)
-                 (member (buffer-substring-no-properties 1 7) '("GIF87a" "GIF89a")))
-            (let ((w (+ (char-after 7) (ash (char-after 8) 8)))
-                  (h (+ (char-after 9) (ash (char-after 10) 8))))
-              (when (and (> w 0) (> h 0)) (cons w h))))
-           ((and (>= size 30)
-                 (equal (buffer-substring-no-properties 1 5) "RIFF")
-                 (equal (buffer-substring-no-properties 9 13) "WEBP"))
-            (let ((chunk (buffer-substring-no-properties 13 17)))
-              (cond
-               ((equal chunk "VP8X")
-                (let ((w (1+ (+ (char-after 25) (ash (char-after 26) 8)
-                                (ash (char-after 27) 16))))
-                      (h (1+ (+ (char-after 28) (ash (char-after 29) 8)
-                                (ash (char-after 30) 16)))))
-                  (when (and (> w 0) (> h 0)) (cons w h))))
-               ((and (equal chunk "VP8L") (= (char-after 21) #x2f))
-                (let* ((bits (+ (char-after 22) (ash (char-after 23) 8)
-                                (ash (char-after 24) 16) (ash (char-after 25) 24)))
-                       (w (1+ (logand bits #x3fff)))
-                       (h (1+ (logand (ash bits -14) #x3fff))))
-                  (when (and (> w 0) (> h 0)) (cons w h))))
-               ((equal chunk "VP8 ")
-                (let ((w (logand (+ (char-after 27) (ash (char-after 28) 8)) #x3fff))
-                      (h (logand (+ (char-after 29) (ash (char-after 30) 8)) #x3fff)))
-                  (when (and (> w 0) (> h 0)) (cons w h)))))))
-           ((and (>= size 4)
-                 (= (char-after 1) #xff)
-                 (= (char-after 2) #xd8))
-            (let ((pos 3) (found nil))
-              (while (and (not found) (< (1+ pos) size))
-                (while (and (< pos size) (/= (char-after pos) #xff))
-                  (setq pos (1+ pos)))
-                (while (and (< pos size) (= (char-after pos) #xff))
-                  (setq pos (1+ pos)))
-                (when (< pos size)
-                  (let ((marker (char-after pos)))
-                    (setq pos (1+ pos))
-                    (cond
-                     ((or (= marker #x01) (and (>= marker #xd0) (<= marker #xd9))) nil)
-                     ((and (memq marker '(#xc0 #xc1 #xc2 #xc3 #xc5 #xc6 #xc7
-                                               #xc9 #xca #xcb #xcd #xce #xcf))
-                           (<= (+ pos 6) size))
-                      (let ((h (+ (ash (char-after (+ pos 3)) 8) (char-after (+ pos 4))))
-                            (w (+ (ash (char-after (+ pos 5)) 8) (char-after (+ pos 6)))))
-                        (when (and (> w 0) (> h 0)) (setq found (cons w h)))))
-                     ((<= (1+ pos) size)
-                      (let ((len (+ (ash (char-after pos) 8) (char-after (1+ pos)))))
-                        (setq pos (if (< len 2) size (+ pos len)))))
-                     (t (setq pos size))))))
-              found))))))))
+       (etaf-doc-typeset-available-p)))
 
 (defun etaf-org-typeset--image-pixels (path)
   "Return `(WIDTH . HEIGHT)' in pixels for PATH via fast header inspection."
-  (let ((ext (downcase (or (file-name-extension (or path "")) ""))))
-    (or (pcase ext
-          ("svg" (etaf-org-typeset--svg-pixels path))
-          ((or "png" "gif" "webp" "jpg" "jpeg")
-           (or (and (display-graphic-p) (file-readable-p path)
-                    (ignore-errors (image-size (create-image path) t)))
-               (etaf-org-typeset--raster-pixels path)))
-          (_ nil))
-        (when (and path (file-readable-p path))
-          (ignore-errors (image-size (create-image path) t))))))
+  (etaf-doc-typeset-image-pixels path))
 
 (defun etaf-org-typeset--grid-for-pixels (pixels max-columns &optional max-rows)
   "Return `(COLUMNS . ROWS)' fitting PIXELS inside MAX-COLUMNS and MAX-ROWS."
-  (if (or (not (consp pixels))
-          (not (numberp (car pixels)))
-          (not (numberp (cdr pixels))))
-      (cons (min max-columns 48) (min (or max-rows 14) 14))
-    (let* ((cell (etaf-org--cell-metrics))
-           (cw (float (car cell)))
-           (ch (float (cdr cell)))
-           (nw (max 1.0 (float (car pixels))))
-           (nh (max 1.0 (float (cdr pixels))))
-           (fitted-w (min nw (* (max 4 max-columns) cw)))
-           (fitted-h (* nh (/ fitted-w nw)))
-           (cap-h (if max-rows (min fitted-h (* max-rows ch)) fitted-h))
-           (scale (/ cap-h nh))
-           (rows (max 1 (round (/ (* nh scale) ch))))
-           (cols (max 1 (min max-columns (round (/ (* nw scale) cw))))))
-      (cons cols rows))))
+  (etaf-doc-typeset-grid-for-pixels
+   pixels max-columns max-rows (etaf-org--cell-metrics)))
 
 ;;; ---------------------------------------------------------------------------
 ;;; Typography and Pele/MathJax theme mapping
 ;;; ---------------------------------------------------------------------------
-
-(defconst etaf-org-mermaid-fonts
-  '("LXGW WenKai" "LXGW WenKai Mono" "PingFang SC" "Hiragino Sans GB"
-    "Helvetica Neue" "Arial" "sans-serif")
-  "Fallback font stack for Mermaid labels including CJK glyphs.")
-
-(defconst etaf-org-mermaid-mono-fonts
-  '("LXGW WenKai Mono" "Menlo" "Monaco" "DejaVu Sans Mono" "monospace")
-  "Monospace families for code labels inside diagrams.")
-
-(defun etaf-org-typeset--mermaid-font-family ()
-  "Return the font stack for Mermaid and MathJax drawings."
-  (let* ((family (ignore-errors (face-attribute 'default :family nil t)))
-         (names (if (and (stringp family)
-                         (not (string-empty-p family))
-                         (not (string= family "default")))
-                    (cons family etaf-org-mermaid-fonts)
-                  etaf-org-mermaid-fonts)))
-    (mapconcat #'identity (delete-dups names) ", ")))
-
-(defun etaf-org-typeset--mermaid-mono-font-family ()
-  "Return the monospace font stack for diagram code labels."
-  (mapconcat #'identity etaf-org-mermaid-mono-fonts ", "))
 
 (defun etaf-org-typeset--page-colors (env)
   "Return ENV's hex page colors keyed by role."
@@ -398,72 +114,20 @@ View, or nil to fall back to the built-in code/diagram renderer.")
                   (or (etaf-org--contrast-ratio bg "#000000") 0))))
     (cons (if dark 'dark 'light) (plist-get colors :ink))))
 
-(defun etaf-org-typeset--pele-theme (env)
-  "Return a hash table of Pele CSS custom properties derived from ENV."
-  (let* ((colors (etaf-org-typeset--page-colors env))
-         (page (plist-get colors :page))
-         (ink (plist-get colors :ink))
-         (muted (plist-get colors :muted))
-         (border (plist-get colors :border))
-         (panel (plist-get colors :panel))
-         (panel2 (plist-get colors :panel2))
-         (accent (plist-get colors :accent))
-         (ok (plist-get colors :ok))
-         (warn (plist-get colors :warn))
-         (important (plist-get colors :important))
-         (danger (plist-get colors :danger))
-         (line (etaf-org--mix-color muted ink 0.35))
-         (stroke (etaf-org--mix-color border muted 0.35))
-         (table (make-hash-table :test #'equal)))
-    (dolist (pair
-             `(("__dummy" . nil)
-               ("--pele-bg" . ,page)
-               ("--pele-fg" . ,ink)
-               ("--pele-muted" . ,muted)
-               ("--pele-line" . ,line)
-               ("--pele-surface" . ,panel)
-               ("--pele-surface-alt" . ,panel2)
-               ("--pele-border" . ,stroke)
-               ("--pele-accent" . ,accent)
-               ("--pele-critical" . ,danger)
-               ("--pele-error" . ,danger)
-               ("--pele-fg-on-dark" . "#f3f5f8")
-               ("--pele-fg-on-light" . "#1a1d23")
-               ("--pele-radius" . "6px")
-               ("--pele-series-1" . ,accent)
-               ("--pele-series-2" . ,ok)
-               ("--pele-series-3" . ,warn)
-               ("--pele-series-4" . ,important)
-               ("--pele-series-5" . ,danger)
-               ("--pele-series-6" . ,(etaf-org--mix-color accent ok 0.5))
-               ("--pele-series-7" . ,(etaf-org--mix-color warn danger 0.5))
-               ("--pele-series-8" . ,(etaf-org--mix-color important danger 0.5))))
-      (when (cdr pair)
-        (puthash (car pair) (cdr pair) table)))
-    table))
-
 (defun etaf-org-typeset--native-mermaid-options-json (env)
   "Return the JSON options string passed to the native QuickJS Pele engine."
-  (let ((base (max 10 (round (etaf-org--base-pixels)))))
-    (json-serialize
-     `((fontSize . ,base)
-       (fontFamily . ,(etaf-org-typeset--mermaid-font-family))
-       (fontFamilyMono . ,(etaf-org-typeset--mermaid-mono-font-family))
-       (measureText . t)
-       (transparentBackground . t)
-       (scale . ,etaf-org-typeset--scale)
-       (theme . ,(etaf-org-typeset--pele-theme env)))
-     :false-object :false)))
+  (etaf-doc-typeset-options-json
+   'mermaid (etaf-org-typeset--page-colors env)
+   (list :font-size (max 10 (round (etaf-org--base-pixels)))
+         :scale etaf-org-typeset--scale)))
 
 (defun etaf-org-typeset--native-math-options-json (env)
   "Return the JSON options string passed to the native QuickJS MathJax engine."
-  (json-serialize
-   `((ink . ,(cdr (etaf-org-typeset--colors env)))
-     (pixels . ,(max 12 (round (etaf-org--base-pixels))))
-     (cell . ,(cdr (etaf-org--cell-metrics)))
-     (scale . ,etaf-org-typeset--scale)
-     (fontFamily . ,(etaf-org-typeset--mermaid-font-family)))
-   :false-object :false))
+  (etaf-doc-typeset-options-json
+   'math (etaf-org-typeset--page-colors env)
+   (list :pixels (max 12 (round (etaf-org--base-pixels)))
+         :cell-height (cdr (etaf-org--cell-metrics))
+         :scale etaf-org-typeset--scale)))
 
 (defun etaf-org-typeset--page-cache (env)
   "Return per-page cached `(COLORS CONFIG-JSON CONFIG-HASH)' for ENV."
@@ -531,7 +195,7 @@ View, or nil to fall back to the built-in code/diagram renderer.")
                              (format "%d/%d/%s"
                                      (max 12 (round (etaf-org--base-pixels)))
                                      (cdr (etaf-org--cell-metrics))
-                                     (etaf-org-typeset--mermaid-font-family))
+                                     (etaf-org-typeset--native-math-options-json env))
                            cfg-hash)))))
 
 (defun etaf-org-typeset--path (kind key)
@@ -546,9 +210,7 @@ View, or nil to fall back to the built-in code/diagram renderer.")
     (when (file-exists-p primary) primary)))
 
 (defun etaf-org-typeset-attach (block env)
-  "Attach cached `:picture' path onto BLOCK in ENV when already on disk.
-For inline `svg' source blocks, writes the validated SVG file during publish
-(never during `:render')."
+  "Attach cached `:picture' path onto BLOCK in ENV when already on disk."
   (if (not etaf-org-typeset)
       block
     (if-let* ((spec (etaf-org-typeset--block-spec block))
@@ -569,122 +231,8 @@ For inline `svg' source blocks, writes the validated SVG file during publish
       block)))
 
 ;;; ---------------------------------------------------------------------------
-;;; Embedded QuickJS worker & external diagram runners (dot / plantuml)
+;;; External diagram runners (dot / plantuml) & request dispatch
 ;;; ---------------------------------------------------------------------------
-
-(defun etaf-org-typeset--write-svg (kind key svg)
-  "Write UTF-8 SVG text atomically to KIND/KEY's cache path."
-  (make-directory etaf-org-typeset--cache-directory t)
-  (let* ((target (etaf-org-typeset--path kind key))
-         (tmp (make-temp-file
-               (expand-file-name ".typeset-" etaf-org-typeset--cache-directory)
-               nil ".svg"))
-         (coding-system-for-write 'utf-8-unix))
-    (unwind-protect
-        (progn
-          (with-temp-file tmp (insert svg))
-          (rename-file tmp target t)
-          target)
-      (when (file-exists-p tmp)
-        (ignore-errors (delete-file tmp))))))
-
-(defun etaf-org-typeset--native-handle-result (id json-text)
-  "Process one native worker completion for ID with JSON-TEXT."
-  (when-let* ((req (gethash id etaf-org-typeset--native-requests)))
-    (remhash id etaf-org-typeset--native-requests)
-    (when (> etaf-org-typeset--native-in-flight 0)
-      (cl-decf etaf-org-typeset--native-in-flight))
-    (let* ((key (plist-get req :key))
-           (kind (plist-get req :kind))
-           (parsed (ignore-errors
-                     (json-parse-string json-text
-                                        :object-type 'plist
-                                        :array-type 'list
-                                        :false-object nil
-                                        :null-object nil))))
-      (remhash key etaf-org-typeset--running)
-      (if (and (plist-get parsed :ok) (stringp (plist-get parsed :svg)))
-          (progn
-            (etaf-org-typeset--write-svg kind key (plist-get parsed :svg))
-            (etaf-org-cache-prune-directory etaf-org-typeset--cache-directory)
-            (when (plist-get req :done)
-              (run-at-time 0 nil (plist-get req :done))))
-        (let* ((err (plist-get parsed :error))
-               (code (or (plist-get err :code) "render"))
-               (msg (or (plist-get err :message) "native renderer failed"))
-               (transient (member code '("timeout" "cancelled" "memory" "engine"))))
-          (unless transient
-            (puthash key msg etaf-org-typeset--failed)))))
-    (etaf-org-typeset--native-dispatch)))
-
-(defun etaf-org-typeset--native-dispatch ()
-  "Submit queued `etaf-org' native jobs up to the concurrency limit."
-  (let ((callbacks (etaf-org-typeset--shared-callbacks)))
-    (while (and etaf-org-typeset--native-waiting
-                (< etaf-org-typeset--native-in-flight
-                   etaf-org-typeset--native-max-in-flight))
-      (let* ((entry (pop etaf-org-typeset--native-waiting))
-             (id (nth 0 entry))
-             (kind-str (nth 1 entry))
-             (source (nth 2 entry))
-             (options-json (nth 3 entry))
-             (req (gethash id etaf-org-typeset--native-requests)))
-        (when req
-          (puthash id (lambda (json-text)
-                        (etaf-org-typeset--native-handle-result id json-text))
-                   callbacks)
-          (condition-case err
-              (progn
-                (etaf-md--native-submit
-                 id kind-str source options-json etaf-org-typeset--native-timeout)
-                (cl-incf etaf-org-typeset--native-in-flight))
-            (error
-             (remhash id callbacks)
-             (remhash id etaf-org-typeset--native-requests)
-             (remhash (plist-get req :key) etaf-org-typeset--running)
-             (puthash (plist-get req :key) (error-message-string err)
-                      etaf-org-typeset--failed))))))))
-
-(defun etaf-org-typeset--native-shutdown-all ()
-  "Cleanly shut down the shared native QuickJS worker before Emacs exits."
-  (etaf-org-typeset--shared-stop-timer)
-  (setq etaf-org-typeset--native-waiting nil
-        etaf-org-typeset--native-in-flight 0)
-  (clrhash etaf-org-typeset--native-requests)
-  (when-let* ((callbacks (get 'etaf-md-typeset-native :callbacks)))
-    (clrhash callbacks))
-  (when (and (featurep 'etaf-md-typeset-native)
-             (fboundp 'etaf-md--native-shutdown))
-    (ignore-errors (etaf-md--native-shutdown)))
-  (when-let* ((ch (get 'etaf-md-typeset-native :channel)))
-    (when (process-live-p ch)
-      (ignore-errors (delete-process ch)))
-    (put 'etaf-md-typeset-native :channel nil)))
-
-(add-hook 'kill-emacs-hook #'etaf-org-typeset--native-shutdown-all)
-
-(defun etaf-org-typeset--start-native-job (key kind source env done)
-  "Queue one Mermaid or MathJax job on the embedded QuickJS worker."
-  (when (etaf-org-typeset--ensure-native)
-    (let* ((id (etaf-org-typeset--shared-next-id))
-           (kind-str (symbol-name kind))
-           (options-json (if (eq kind 'math)
-                             (etaf-org-typeset--native-math-options-json env)
-                           (etaf-org-typeset--native-mermaid-options-json env))))
-      (puthash id (list :key key :kind kind :done done)
-               etaf-org-typeset--native-requests)
-      (puthash key id etaf-org-typeset--running)
-      (setq etaf-org-typeset--native-waiting
-            (nconc etaf-org-typeset--native-waiting
-                   (list (list id kind-str source options-json))))
-      (etaf-org-typeset--native-dispatch)
-      (unless (timerp (get 'etaf-md-typeset-native :timer))
-        (put 'etaf-md-typeset-native :timer
-             (run-at-time 0.02 0.04
-                          (lambda ()
-                            (when-let* ((fn (get 'etaf-md-typeset-native :drain)))
-                              (funcall fn))))))
-      t)))
 
 (defun etaf-org-typeset--start-external-diagram (key kind source done)
   "Run `dot -Tsvg' or `plantuml -tsvg -pipe' asynchronously for SOURCE."
@@ -767,9 +315,20 @@ For inline `svg' source blocks, writes the validated SVG file during publish
                  (cond
                   ((memq kind '(mermaid math))
                    (if (etaf-org-typeset-available-p)
-                       (etaf-org-typeset--start-native-job
-                        key kind source env
-                        (lambda () (etaf-org-typeset--notify session)))
+                       (progn
+                         (puthash key t etaf-org-typeset--running)
+                         (let ((opts-json (if (eq kind 'math)
+                                              (etaf-org-typeset--native-math-options-json env)
+                                            (etaf-org-typeset--native-mermaid-options-json env))))
+                           (etaf-doc-typeset-request
+                            key kind source opts-json etaf-org-typeset--cache-directory
+                            (lambda (_path)
+                              (remhash key etaf-org-typeset--running)
+                              (etaf-org-typeset--notify session))
+                            (lambda (msg fatal)
+                              (remhash key etaf-org-typeset--running)
+                              (when fatal
+                                (puthash key msg etaf-org-typeset--failed))))))
                      (when (and (not noninteractive)
                                 (not etaf-org-typeset--native-hinted))
                        (setq etaf-org-typeset--native-hinted t)

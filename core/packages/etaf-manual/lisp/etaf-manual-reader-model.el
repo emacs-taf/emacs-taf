@@ -20,6 +20,7 @@
 (require 'seq)
 (require 'subr-x)
 (require 'etaf)
+(require 'etaf-doc)
 (require 'etaf-manual-book)
 (require 'etaf-manual-reader-theme)
 

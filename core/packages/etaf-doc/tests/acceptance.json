@@ -1,0 +1,359 @@
+{
+  "schema": 1,
+  "load_path": [
+    ".",
+    "tests",
+    "../etaf",
+    "../etaf-ui",
+    "../ebox",
+    "../ecss"
+  ],
+  "support": [],
+  "cases": [
+    {
+      "name": "etaf-ui-markdown-parse-reports-document-structure",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "Parsing exposes the title, outline, block types, footnote definitions and resolved feature flags."
+    },
+    {
+      "name": "etaf-ui-markdown-parse-etaf-preset-defines-terms",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "etaf \u9884\u8bbe\u4e0b\uff0c\u4e00\u884c\u672f\u8bed\u52a0\u4e0b\u9762\u4ee5 : \u6216 ~ \u5f00\u5934\u7684\u884c\u7ec4\u6210\u4e00\u4e2a\u5b9a\u4e49\u5217\u8868\uff0c\u8fde\u7eed\u672f\u8bed\u5f52\u5165\u540c\u4e00\u4e2a\u5217\u8868\u3002"
+    },
+    {
+      "name": "etaf-ui-markdown-parse-scripts-and-math",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "H~2~O \u4e0e x^2^ \u53d8\u6210\u4e0a\u4e0b\u6807\u5b57\u7b26\uff0c$..$ \u53d8\u6210\u516c\u5f0f\u8282\u70b9\uff0c$5 \u4ecd\u662f\u94b1\uff1b\u89e3\u6790\u65f6\u5c31\u628a\u53ef\u5426\u6392\u7248\u5b9a\u4e0b\u6765\u3002"
+    },
+    {
+      "name": "etaf-ui-markdown-parse-a-display-formula-is-one-block",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "$$ \u56f4\u8d77\u6765\u7684\u516c\u5f0f\u662f\u4e00\u4e2a\u663e\u793a\u5757\uff0c\u7eaf\u6587\u672c\u8fd1\u4f3c\u628a \\sqrt \u4e0e \\le \u5199\u6210 \u221a \u4e0e \u2264\u3002"
+    },
+    {
+      "name": "etaf-ui-markdown-parse-an-abbreviation-carries-its-title",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "*[HTML]: \u2026 \u8fd9\u4e00\u884c\u672c\u8eab\u4e0d\u753b\uff0c\u6b63\u6587\u91cc\u7684\u6574\u8bcd HTML \u5e26\u4e0a\u6807\u9898\uff0cHTML5 \u4e0d\u7b97\u3002"
+    },
+    {
+      "name": "etaf-ui-markdown-parse-a-narrower-preset-leaves-new-syntax-literal",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "gfm \u9884\u8bbe\u4e0d\u542f\u7528\u65b0\u8bed\u6cd5\uff0cH~2~O \u6309 CommonMark \u8bfb\u6210\u539f\u6587\uff0c\u4e0d\u62a5\u9519\u3002"
+    },
+    {
+      "name": "etaf-ui-markdown-etaf-syntax-paints-its-own-shapes",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "\u5b9a\u4e49\u5217\u8868\u3001\u4e0a\u4e0b\u6807\u3001\u884c\u5185\u516c\u5f0f\u5728\u9875\u9762\u4e0a\u5206\u522b\u753b\u51fa\u672f\u8bed\u884c\u3001\u2082 \u4e0e\u516c\u5f0f\u6587\u672c\u3002"
+    },
+    {
+      "name": "etaf-ui-markdown-parse-a-shortcode-paints-its-emoji",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "\u5df2\u77e5\u7684 :name: \u77ed\u7801\u6362\u6210\u5bf9\u5e94\u5b57\u7b26\uff1b\u65f6\u95f4\u3001\u672a\u77e5\u540d\u4e0e gfm \u9884\u8bbe\u4e0b\u90fd\u4fdd\u6301\u539f\u6587\uff0c\u8bed\u6cd5\u4e0d\u4f1a\u5403\u6389\u666e\u901a\u6587\u5b57\u3002"
+    },
+    {
+      "name": "etaf-ui-markdown-parse-a-repeated-footnote-uses-its-first-definition",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "\u540c\u4e00\u6807\u7b7e\u5b9a\u4e49\u4e24\u6b21\u65f6\u7528\u7b2c\u4e00\u6b21\u7684\u5b9a\u4e49\uff1b\u5f15\u7528\u4e86\u4ece\u672a\u5b9a\u4e49\u7684\u6807\u7b7e\u65f6\u4e0d\u4ea7\u751f\u811a\u6ce8\u6761\u76ee\u3002"
+    },
+    {
+      "name": "etaf-ui-markdown-highlight-uses-the-modes-own-faces",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "\u4ee3\u7801\u9ad8\u4eae\u8bfb\u7684\u662f\u8bed\u8a00\u81ea\u5df1 mode \u7684 face\uff1a\u6bb5\u843d\u88ab\u5207\u6210\u5e26\u6837\u5f0f\u7684 run\uff0c\u91cd\u7ec4\u540e\u6587\u672c\u4e00\u5b57\u4e0d\u5dee\uff1b\u6ca1\u6709 mode \u7684\u8bed\u8a00\u8fd4\u56de nil \u6309\u5355\u8272\u753b\u3002"
+    },
+    {
+      "name": "etaf-ui-markdown-code-fence-options-paint-their-block",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "\u56f4\u680f\u7684 title\u3001\u884c\u53f7\u4e0e\u884c\u6807\u8bb0\u753b\u51fa\u6807\u9898\u3001\u7f16\u53f7\u4e0e\u53bb\u6389\u6807\u8bb0\u7684\u4ee3\u7801\uff0c\u6807\u8bb0\u672c\u8eab\u4e0d\u51fa\u73b0\u5728\u9875\u9762\u4e0a\u3002"
+    },
+    {
+      "name": "etaf-ui-markdown-code-renderers-draw-their-language",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "\u4e3a\u67d0\u4e2a\u56f4\u680f\u8bed\u8a00\u6ce8\u518c\u6e32\u67d3\u5668\u540e\uff0c\u8be5\u8bed\u8a00\u4ea4\u7ed9\u6e32\u67d3\u5668\u753b\uff1b\u6ca1\u6709\u6ce8\u518c\u9879\u7684\u4ecd\u6309\u9ed8\u8ba4\u4ee3\u7801\u5757\u753b\u3002"
+    },
+    {
+      "name": "etaf-ui-markdown-parse-dialect-gates-extensions",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "The commonmark dialect leaves GitHub extension syntax as literal text while gfm parses it."
+    },
+    {
+      "name": "etaf-ui-markdown-parse-rejects-unknown-flavor",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "An unknown dialect name signals the documented markdown error."
+    },
+    {
+      "name": "etaf-ui-markdown-render-requires-a-palette",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "Rendering a colored block without its palette or with an unknown key signals the markdown error."
+    },
+    {
+      "name": "etaf-ui-markdown-renders-blocks-and-inline-styles",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "Headings, inline emphasis and code, lists, fenced code, tables, quotes and callouts publish their content while HTML comments stay invisible."
+    },
+    {
+      "name": "etaf-ui-markdown-quote-adds-no-blank-line-of-its-own",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "A blockquote whose source has no blank line inside it ends on its last text line; the rendered box adds no empty row of its own before its bottom edge."
+    },
+    {
+      "name": "etaf-ui-markdown-quote-separates-its-blocks",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "A quote separates the blocks it holds by one blank row and ends on the last line of its last block."
+    },
+    {
+      "name": "etaf-ui-markdown-a-blank-line-in-an-item-separates-paragraphs",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "A blank line inside a list item keeps the two paragraphs apart in the parse and one blank row apart in the render."
+    },
+    {
+      "name": "etaf-ui-markdown-quote-text-recedes-behind-its-surface",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "A quote paints its own text in the muted color while a link inside it keeps the accent, and body text outside the quote keeps following the buffer face."
+    },
+    {
+      "name": "etaf-ui-markdown-callbacks-replace-media-and-code",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "The render-code-block and render-media callbacks own the rendered block and replace the default."
+    },
+    {
+      "name": "etaf-ui-markdown-media-falls-back-to-text",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "Without a media callback an image keeps its alt text instead of disappearing."
+    },
+    {
+      "name": "etaf-ui-markdown-alert-labels-override-defaults",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "The alert-labels environment overrides the label of its kind only."
+    },
+    {
+      "name": "etaf-ui-markdown-line-grid-keeps-body-size",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "The line-grid environment keeps headings and footnote references at the body font size."
+    },
+    {
+      "name": "etaf-ui-markdown-blocks-carry-their-source-range",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "Every top-level parsed block carries the character range of its own source, in document order."
+    },
+    {
+      "name": "etaf-ui-markdown-a-definition-list-splits-the-paragraph-range",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "A paragraph read together with its definition list keeps a range of its own, ending where the list begins."
+    },
+    {
+      "name": "etaf-ui-markdown-an-alert-puts-its-text-under-the-label",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "An alert paints its label row and then its text row with no empty row between them."
+    },
+    {
+      "name": "etaf-ui-markdown-a-cell-keeps-an-escaped-pipe",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "A pipe escaped with a backslash stays inside its table cell while the other pipes split cells."
+    },
+    {
+      "name": "etaf-ui-markdown-a-new-delimiter-starts-a-new-list",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "A numbered list that changes its delimiter starts a new list from its own number instead of continuing the previous one."
+    },
+    {
+      "name": "etaf-ui-markdown-list-mark-takes-one-cell-before-its-text",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "A list mark sits one cell before its text, and a list that reaches two digits keeps one text column."
+    },
+    {
+      "name": "etaf-ui-markdown-table-columns-follow-content",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "Table columns share the width by content and cells wrap at word boundaries."
+    },
+    {
+      "name": "etaf-ui-markdown-table-keeps-unbroken-columns",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "A table column is never narrower than its widest unbreakable cell text, so words and short CJK runs stay whole."
+    },
+    {
+      "name": "etaf-ui-markdown-code-link-links-a-code-span",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "The code-link callback turns a code span into an activatable link while the span keeps its code style."
+    },
+    {
+      "name": "etaf-ui-markdown-code-link-inside-a-link-keeps-one-decoration",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "A linked code span that is also a code link renders with one text decoration instead of a duplicate View property."
+    },
+    {
+      "name": "etaf-ui-markdown-code-bg-colors-code-spans",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "An optional code-bg palette entry colors inline code and falls back to panel without it."
+    },
+    {
+      "name": "etaf-ui-markdown-links-hover-with-the-accent-tint",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "A rendered link carries the accent-soft hover face while code spans keep their code background."
+    },
+    {
+      "name": "etaf-ui-markdown-link-hover-can-be-disabled",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "Passing `:link-hover nil' in the markdown rendering environment omits `mouse-face' hover highlights on links while preserving hand pointer and link activation."
+    },
+    {
+      "name": "etaf-ui-markdown-table-keeps-short-cjk-cells-whole",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "A starved table column still fits a short CJK word on one line instead of splitting it between characters."
+    },
+    {
+      "name": "etaf-ui-markdown-table-weights-its-lines",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "Every table row carries the rule between its cells, in one of three weights the page paints: the header\u2019s rule, the cell rules and the table\u2019s frame."
+    },
+    {
+      "name": "etaf-ui-markdown-table-rows-share-one-column-grid",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "Every row of a table rules its cells in the same display columns, so a wide cell never pushes a row out of line."
+    },
+    {
+      "name": "etaf-ui-markdown-parse-links-a-bare-url-in-a-long-paragraph",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "A bare URL in a long prose paragraph yields exactly one link while every word around it keeps its text, because the autolink parser compares the characters at each `h' and `w' instead of searching for the next prefix."
+    },
+    {
+      "name": "etaf-ui-markdown-parse-accepts-a-bare-www-url",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "A `www.' address still resolves to an http link and the words around it stay outside the link, so the cheaper prefix comparison keeps the shorter GFM form."
+    },
+    {
+      "name": "etaf-ui-markdown-parse-costs-the-same-as-its-own-paragraphs",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "The same text costs no more as one long paragraph than as many paragraphs, so autolink detection stays linear in the text instead of scanning to the next prefix from every candidate character."
+    },
+    {
+      "name": "etaf-ui-markdown-task-list-marks-done-and-open-items",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "A task list marks a done item with a filled square and an open one with a hollow square, both from the body font, so the mark keeps the line's weight and the words start in the same column."
+    },
+    {
+      "name": "etaf-ui-markdown-a-soft-break-folds-into-one-line",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "A soft break inside a paragraph folds into a space, while a two-space or backslash break paints a line end of its own."
+    },
+    {
+      "name": "etaf-ui-markdown-render-math-draws-the-formula",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "A caller's :render-math owns a display formula and paints what it drew; without it the block keeps the plain-text approximation."
+    },
+    {
+      "name": "etaf-ui-markdown-math-text-survives-a-backslash-in-a-script",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "A formula whose script body holds a TeX command renders as text instead of signalling on the backslash, and the rest of the formula keeps its symbols."
+    },
+    {
+      "name": "etaf-ui-markdown-math-text-keeps-command-case",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "The plain-text rendering keeps TeX command case (pi versus Pi) and renders a root inside a fraction as its value."
+    },
+    {
+      "name": "etaf-ui-markdown-parse-marks-icons-keys-and-badges",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "The etaf dialect reads highlighted runs, key groups, badges and icons into their own inline nodes while a bare comparison stays prose."
+    },
+    {
+      "name": "etaf-ui-markdown-etaf-inline-marks-paint",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "A paragraph paints its highlighted text, key cap group and badge through the shared renderer."
+    },
+    {
+      "name": "etaf-ui-markdown-html-media-forwards-declared-dimensions",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "Raw HTML `<img>' blocks parse positive pixel `width' and `height' attributes (quoted, unquoted or `px'-suffixed, ignoring percentages) and forward `:width' and `:height' to `:render-media'."
+    },
+    {
+      "name": "etaf-ui-markdown-heading-underline-can-be-disabled",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "Setting `:heading-underline nil' in ENV suppresses H1/H2 bottom border rules and underlines on links inside headings while keeping heading links clickable and body links underlined."
+    },
+    {
+      "name": "etaf-ui-markdown-inline-delimiters-skip-code-spans",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "Closing delimiter scans for emphasis, strikethrough and highlight skip backtick code spans so delimiters inside inline code do not prematurely terminate formatting."
+    },
+    {
+      "name": "etaf-ui-markdown-math-text-preserves-escaped-braces",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "`etaf-ui-markdown-math-text' preserves escaped set braces `\\{' and `\\}' as literal braces while removing TeX grouping braces."
+    },
+    {
+      "name": "etaf-ui-markdown-highlight-reuses-mode-buffer-cleanly",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "Reusing per-mode scratch buffers for syntax highlighting flushes syntax state cleanly so an unclosed string in one snippet does not corrupt highlighting of the next."
+    },
+    {
+      "name": "etaf-ui-markdown-footnote-ref-back-and-code-copy-callbacks",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "Markdown rendering environment callbacks `:footnote-ref', `:footnote-back' and `:on-copy' attach host refs, trigger return actions from footnote definitions and report code copies."
+    },
+    {
+      "name": "etaf-ui-markdown-etaf-extended-inline-syntax-parses-and-paints",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "Extended etaf dialect inline syntax (spoilers, comments, wiki-links, inline annotations, color chips, symbols and .tip success highlights/badges) parses, renders and dispatches interactively while gfm keeps them literal."
+    },
+    {
+      "name": "etaf-ui-markdown-code-fence-advanced-options",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "Code blocks honor `:collapsed-lines' folding with interactive expand/collapse, `/word/` and `[!code word:...]` highlighting, `:whitespace', `:indent-guides' and 1-based `{a-b}` line ranges."
+    },
+    {
+      "name": "etaf-ui-markdown-collapsible-alert-and-interactive-tasks",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "Obsidian-style collapsible alerts (`> [!tip]- Title`) toggle visibility on header activation and task list checkboxes invoke `:on-toggle-task` with item line offsets."
+    },
+    {
+      "name": "etaf-ui-markdown-hover-discipline-keeps-static-surfaces-clean",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "Pointer hover faces attach strictly to unselected interactive leaves while static prose, code lines, inline chips, task labels and active tabs carry no mouse-face."
+    },
+    {
+      "name": "etaf-ui-markdown-highlight-modern-aliases-and-fallback",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "`etaf-ui-markdown-highlight-code' resolves modern language aliases and built-in/Tree-sitter fallbacks cleanly without failing when optional grammars are absent."
+    },
+    {
+      "name": "etaf-ui-markdown-highlight-builtin-lexer-and-shell-cli",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "`etaf-ui-markdown-highlight-code' highlights common languages via its zero-dependency built-in lexer when no Emacs mode or Tree-sitter grammar is installed and enhances shell/console CLI prompts, commands, flags and pipes losslessly."
+    },
+    {
+      "name": "etaf-ui-markdown-table-fits-wide-tables-without-clipping",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "Wide multi-column Markdown tables adapt across wide breakout, compact grid and narrow stacked-card budgets without ever clipping rightmost columns."
+    },
+    {
+      "name": "etaf-ui-markdown-table-images-dispatch-with-column-width",
+      "file": "tests/etaf-ui-markdown-tests.el",
+      "purpose": "Table cells dispatch Markdown, empty-alt, linked and inline HTML images via `:render-media' as `table-image' with resolved column width and alignment across both grid and narrow card layouts."
+    },
+    {
+      "name": "etaf-doc-cache-urls-and-lru-warming",
+      "file": "tests/etaf-doc-tests.el",
+      "purpose": "Shared doc cache classifies URLs, warms cached files from disk without network I/O, and computes deterministic QR cache paths."
+    },
+    {
+      "name": "etaf-doc-typeset-options-and-header-dimensions",
+      "file": "tests/etaf-doc-tests.el",
+      "purpose": "Shared doc typeset builds Pele Mermaid and MathJax JSON options, parses SVG dimensions from headers without rasterization, and fits grids."
+    },
+    {
+      "name": "etaf-doc-assets-sandbox-slicing-symbol-and-tree",
+      "file": "tests/etaf-doc-tests.el",
+      "purpose": "Shared doc assets reject path escapes, slice balanced Elisp symbol definitions, inspect live Emacs symbols, and build bounded directory trees."
+    },
+    {
+      "name": "etaf-doc-protocol-conversion-validation-and-registry",
+      "file": "tests/etaf-doc-tests.el",
+      "purpose": "Shared doc protocol converts typed attributes, enforces document token and range constraints, and manages extends/replace/undefine registration."
+    },
+    {
+      "name": "etaf-doc-widgets-mount-and-obey-hover-discipline",
+      "file": "tests/etaf-doc-tests.el",
+      "purpose": "Shared editorial widgets mount cleanly and suppress hover highlights on selected leaf buttons."
+    }
+  ]
+}

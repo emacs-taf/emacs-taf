@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := check
 .NOTPARALLEL:
 EMACS ?= emacs
-PROVIDERS = -L ../etaf -L ../etaf-ui -L ../etaf-ext -L ../ebox -L ../ecss -L ../ekp
+PROVIDERS = -L ../etaf -L ../etaf-ui -L ../etaf-doc -L ../etaf-ext -L ../ebox -L ../ecss -L ../ekp
 LOAD_PATH = -L . -L lisp -L tests $(PROVIDERS)
 SOURCES = \
 	lisp/etaf-translate-core.el \

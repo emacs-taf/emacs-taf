@@ -3,7 +3,7 @@
 EMACS ?= emacs
 GAMEKIT_CACHE ?= $(if $(XDG_CACHE_HOME),$(XDG_CACHE_HOME),$(HOME)/.cache)/emacs-taf/game-engines
 LOAD_PATH = -L . -L lisp -L ../etaf-ui -L ../etaf -L ../ebox -L ../ecss
-SOURCES = lisp/etaf-gamekit-session.el lisp/etaf-gamekit-backends.el lisp/etaf-gamekit-engines.el lisp/etaf-gamekit-game.el lisp/etaf-gamekit-frame.el lisp/etaf-gamekit-view.el etaf-gamekit.el benchmarks/performance-scenarios.el tests/etaf-gamekit-tests.el
+SOURCES = lisp/etaf-gamekit-session.el lisp/etaf-gamekit-backends.el lisp/etaf-gamekit-engines.el lisp/etaf-gamekit-game.el lisp/etaf-gamekit-frame.el lisp/etaf-gamekit-view.el lisp/etaf-playing-card.el etaf-gamekit.el benchmarks/performance-scenarios.el tests/etaf-gamekit-tests.el tests/etaf-gamekit-playing-card-tests.el
 
 .PHONY: compile test check clean structure-check setup-hooks acceptance api-check engine engine-check tool-test engine-all engine-boardgame-io engine-openspiel
 compile: clean

@@ -5,6 +5,7 @@
 ;;; Code:
 (require 'ert)
 (require 'etaf-ui)
+(require 'etaf-gamekit)
 
 (ert-deftest etaf-ui-playing-card-preserves-metrics-and-controlled-activation ()
   "Face, selection and container width keep fixed card geometry and callbacks."
@@ -73,5 +74,5 @@
       (when-let* ((runtime (etaf-runtime-for-buffer buffer))) (etaf-unmount runtime))
       (kill-buffer buffer))))
 
-(provide 'etaf-ui-playing-card-tests)
+(provide 'etaf-gamekit-playing-card-tests)
 ;;; etaf-ui-playing-card-tests.el ends here

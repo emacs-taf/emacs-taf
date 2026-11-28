@@ -244,8 +244,6 @@ session ends with its submit or its cancel key."
          (cons "select-chips" (lambda () (etaf-ui-gallery-gui-search "etaf-select") (etaf-ui-gui-activate "开发") (etaf-ui-gui-selected "开发")))
          (cons "select-dropdown" (lambda () (etaf-ui-gui-activate "语言") (etaf-ui-gui-activate "English") (etaf-ui-gui-text "English")))
          (cons "segmented-select" (lambda () (etaf-ui-gallery-gui-search "etaf-segmented") (etaf-ui-gui-activate "周") (etaf-ui-gui-selected "周")))
-         (cons "taskbar-select" (lambda () (etaf-ui-gallery-gui-search "etaf-taskbar") (etaf-ui-gui-activate "预览") (etaf-ui-gui-selected "预览")))
-         (cons "workspace-select" (lambda () (etaf-ui-gallery-gui-search "etaf-workspace-bar") (etaf-ui-gui-activate "工作区 2") (etaf-ui-gui-selected "工作区 2")))
          (cons "switch-toggle" (lambda () (etaf-ui-gallery-gui-search "etaf-switch") (etaf-ui-gui-activate "实时预览") (etaf-ui-gui-text "预览已关闭")))
          (cons "number-input-edit-and-step"
                (lambda ()
@@ -269,23 +267,6 @@ session ends with its submit or its cancel key."
                  (etaf-ui-gui-key "<right>")
                  (etaf-ui-gui-text "70")))
          (cons "range-keyboard" (lambda () (etaf-ui-gallery-gui-search "etaf-range") (etaf-focus (etaf-ui-gui-runtime) (etaf-ui-gui-control "音量示例")) (etaf-ui-gui-key "<right>") (etaf-ui-gui-text "当前 61%")))
-         (cons "splitter-keyboard"
-               (lambda ()
-                 (etaf-ui-gallery-gui-search "etaf-splitter")
-                 (let* ((runtime (etaf-ui-gui-runtime))
-                        (width (car (etaf-host-ref-size runtime 'example-split)))
-                        (x (lambda ()
-                             (save-excursion
-                               (goto-char (etaf-host-ref-position runtime (etaf-ui-gui-control "Resize columns")))
-                               (etaf-string-pixel-width
-                                (buffer-substring (line-beginning-position) (point))))))
-                        (before (funcall x)))
-                   (etaf-focus runtime (etaf-ui-gui-control "Resize columns"))
-                   (dotimes (_ 5) (etaf-ui-gui-key "<right>"))
-                   (etaf-ui-gui-expect
-                    (<= (abs (- (- (funcall x) before) (* 5 (frame-char-width))))
-                        (1+ (/ width 100.0)))
-                    "Splitter keyboard delta did not follow the live pane width"))))
          (cons "steps-select" (lambda () (etaf-ui-gallery-gui-search "etaf-steps") (etaf-ui-gui-activate "实现") (etaf-ui-gui-text "实现")))
          (cons "tag-dismiss" (lambda () (etaf-ui-gallery-gui-search "etaf-tag") (etaf-ui-gui-activate "Remove 草稿") (etaf-ui-gui-visible "Remove 草稿" nil) (etaf-ui-gui-visible "恢复标签" t)))
          (cons "list-select" (lambda () (etaf-ui-gallery-gui-search "etaf-list") (etaf-ui-gui-activate "组合界面") (etaf-ui-gui-text "当前选择：compose")))
@@ -295,7 +276,6 @@ session ends with its submit or its cancel key."
          (cons "command-palette" (lambda () (etaf-ui-gallery-gui-search "etaf-command-palette") (etaf-ui-gui-activate "打开命令面板") (etaf-ui-gui-activate "新建项目") (etaf-ui-gui-text "已执行：new")))
          (cons "window-move-resize" #'etaf-ui-gallery-gui-window-gestures)
          (cons "tile-select" (lambda () (etaf-ui-gallery-gui-search "etaf-tile-grid") (etaf-ui-gui-activate "Cell 2,4") (etaf-ui-gui-text "选中第 3 行、第 5 列")))
-         (cons "card-toggle" (lambda () (etaf-ui-gallery-gui-search "etaf-playing-card") (etaf-ui-gui-activate "A of hearts") (etaf-ui-gui-activate "A of hearts")))
          (cons "media-open-close" (lambda () (etaf-ui-gallery-gui-search "etaf-media-viewer") (etaf-ui-gui-activate "查看图片") (etaf-ui-gui-text "山与光") (etaf-ui-gui-key "<escape>") (etaf-ui-gui-focused "查看图片")))
          (cons "usage-copy" (lambda () (etaf-ui-gallery-gui-search "etaf-checkbox") (etaf-ui-gui-activate "查看用法：etaf-checkbox") (let ((interprogram-cut-function nil)) (etaf-ui-gui-reveal "复制示例：etaf-checkbox") (etaf-ui-gui-activate "复制示例：etaf-checkbox")) (etaf-ui-gui-expect (string-match-p "require 'etaf-ui" (current-kill 0 t)) "Missing runnable example")))
          (cons "usage-reference"

@@ -48,6 +48,7 @@ CORE_LOAD_ORDER = (
     "etaf",
     "etaf-media",
     "etaf-ui",
+    "etaf-doc",
     "etaf-db",
     "etaf-posframe",
     "etaf-ext",

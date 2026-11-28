@@ -4,20 +4,14 @@ EMACS ?= emacs
 # Providers are siblings in the workspace and in a standalone clone;
 # override PROVIDER_ROOT to pin another checkout.
 PROVIDER_ROOT ?= $(if $(wildcard ../../core/packages/etaf),../../core/packages,$(if $(wildcard ../etaf/etaf.el),..,../..))
-LOAD_PATH = -L . -L lisp -L tests -L $(PROVIDER_ROOT)/etaf -L $(PROVIDER_ROOT)/etaf-media -L $(PROVIDER_ROOT)/etaf-ui -L $(PROVIDER_ROOT)/ebox -L $(PROVIDER_ROOT)/ecss
+LOAD_PATH = -L . -L lisp -L tests -L $(PROVIDER_ROOT)/etaf -L $(PROVIDER_ROOT)/etaf-media -L $(PROVIDER_ROOT)/etaf-ui -L $(PROVIDER_ROOT)/etaf-doc -L $(PROVIDER_ROOT)/ebox -L $(PROVIDER_ROOT)/ecss
 SOURCES = $(wildcard lisp/*.el)
 SOURCES += etaf-md.el
 SOURCES += $(wildcard examples/*.el)
 SOURCES += scripts/etaf-md-gui-probe.el
 SOURCES += benchmarks/performance-scenarios.el
 
-.PHONY: compile load check clean native-build native-clean structure-check setup-hooks acceptance api-check test benchmark
-
-native-build:
-	$(MAKE) -C native EMACS="$(EMACS)"
-
-native-clean:
-	$(MAKE) -C native clean
+.PHONY: compile load check clean structure-check setup-hooks acceptance api-check test benchmark
 
 compile:
 	rm -f *.elc lisp/*.elc tests/*.elc examples/*.elc scripts/*.elc

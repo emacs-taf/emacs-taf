@@ -18,6 +18,7 @@
 
 (require 'cl-lib)
 (require 'etaf-ui)
+(require 'etaf-doc)
 (require 'etaf-md-node)
 (require 'etaf-md-theme)
 
@@ -187,42 +188,11 @@ when ENV carries an explicit narrowed width or BLOCK actually requires width."
                (etaf-md--palette-value palette :panel2)))))))
 
 (defun etaf-md--leaf-button (env label on-press &rest opts)
-  "Return a single-face interactive leaf control in ENV.
-OPTS accepts `:selected', `:disabled', `:color', `:background', `:role',
-`:help', `:bold', `:hover-variant'.  Selected or disabled leaves suppress
-`:hover-style' so interactive states never stack, and hover applies strictly
-to this leaf text node without touching surrounding container styling."
-  (let* ((selected (plist-get opts :selected))
-         (disabled (plist-get opts :disabled))
-         (role (or (plist-get opts :role) 'button))
-         (help (plist-get opts :help))
-         (bold (if (plist-member opts :bold) (plist-get opts :bold) selected))
-         (accent (etaf-md-accent env 'primary))
-         (muted (etaf-md--muted env))
-         (palette (etaf-md-env-palette env))
-         (color (or (plist-get opts :color)
-                    (cond (disabled (or (etaf-md--palette-value palette :faint) muted))
-                          (selected accent)
-                          (t accent))))
-         (bg (or (plist-get opts :background)
-                 (when selected
-                   (or (etaf-md--palette-value palette :accent-soft)
-                       (etaf-md-surface env 'sunken)))))
-         (interactive-p (and (not disabled) (functionp on-press)))
-         (hover (and interactive-p (not selected)
-                     (etaf-md--hover-fill env (plist-get opts :hover-variant)))))
-    (etaf-node 'text
-               (append
-                (list :color color)
-                (when bg (list :background-color bg))
-                (when bold (list :font-weight 'bold))
-                (when help (list :help-echo help))
-                (when interactive-p
-                  (list :role role :tab-index 0 :pointer 'hand
-                        :on-press on-press))
-                (when hover
-                  (list :hover-style (list :background-color hover))))
-               (list label))))
+  "Return a single-face interactive leaf control in ENV."
+  (apply #'etaf-doc-widget-leaf-button
+         (etaf-md-env-palette env) label on-press
+         :hover (etaf-md--hover-p env)
+         opts))
 
 (defun etaf-md--hairline (env)
   "Return a one-pixel border as the Theme ENV's page lives in defines it.

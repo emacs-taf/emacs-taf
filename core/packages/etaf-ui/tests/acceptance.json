@@ -1,1512 +1,1102 @@
 {
-  "schema": 1,
-  "load_path": [
-    ".",
-    "tests",
-    "../ebox",
-    "../ebox-playground",
-    "../ecss",
-    "../ekp",
-    "../etaf",
-    "../etaf-db",
-    "../etaf-playground"
-  ],
-  "support": [],
-  "cases": [
-    {
-      "name": "etaf-ui-bars-namespace-their-own-host-references",
-      "file": "tests/etaf-ui-desktop-tests.el",
-      "purpose": "Two workspace bars mounted in one Runtime keep distinct tab and trailing-control Host references through :ref-prefix, so each bar's controls dispatch to its own caller."
-    },
-    {
-      "name": "etaf-ui-key-help-opens-in-place-and-restores-its-opener",
-      "file": "tests/etaf-ui-key-help-tests.el",
-      "purpose": "Read-only help stays in the original buffer/window, does not execute business commands and restores focus on Escape."
-    },
-    {
-      "name": "etaf-ui-key-help-guards-local-commands-and-repeated-open",
-      "file": "tests/etaf-ui-key-help-tests.el",
-      "purpose": "Help blocks background letters and local command sequences, keeps native C-g and does not stack repeated openings."
-    },
-    {
-      "name": "etaf-ui-key-help-keeps-its-snapshot-through-background-updates",
-      "file": "tests/etaf-ui-key-help-tests.el",
-      "purpose": "Background application updates preserve the captured help scope and appear after dismissal."
-    },
-    {
-      "name": "etaf-ui-key-help-search-keeps-question-mark-as-text",
-      "file": "tests/etaf-ui-key-help-tests.el",
-      "purpose": "Search treats question marks as text, filters commands and uses layered Escape without dismissing two levels at once."
-    },
-    {
-      "name": "etaf-ui-key-help-backdrop-click-ends-search-and-restores-focus",
-      "file": "tests/etaf-ui-key-help-tests.el",
-      "purpose": "An outside pointer press closes help during native search, ends editing and restores focus without activating background commands."
-    },
-    {
-      "name": "etaf-ui-modal-backdrop-click-dismisses-without-click-through",
-      "file": "tests/etaf-ui-surface-tests.el",
-      "purpose": "Dialog and drawer backdrops dismiss only on pointer presses, keep inner actions open and restore the caller without click-through."
-    },
-    {
-      "name": "etaf-ui-control-theme-defaults-and-explicit-overrides",
-      "file": "tests/etaf-ui-control-theme-tests.el",
-      "purpose": "Shared control Theme tokens retain dark panel fallbacks, leave plain inputs unchanged, respect explicit Button props and preserve activation."
-    },
-    {
-      "name": "etaf-ui-control-theme-keeps-editing-and-focus-geometry",
-      "file": "tests/etaf-ui-control-theme-tests.el",
-      "purpose": "Palette changes preserve native editing and reserved focus geometry; unmount ends the input session."
-    },
-    {
-      "name": "etaf-ui-tile-grid-media-preserves-geometry-and-input",
-      "file": "tests/etaf-ui-tile-grid-tests.el",
-      "purpose": "Image cells and text fallback retain fixed metrics, focus, names and activation coordinates."
-    },
-    {
-      "name": "etaf-ui-tile-grid-rejects-invalid-media-props",
-      "file": "tests/etaf-ui-tile-grid-tests.el",
-      "purpose": "Invalid image callbacks, focus callbacks and cell heights are rejected."
-    },
-    {
-      "name": "etaf-ui-playing-card-preserves-metrics-and-controlled-activation",
-      "file": "tests/etaf-ui-playing-card-tests.el",
-      "purpose": "Face, selection and container width keep fixed card geometry and callbacks."
-    },
-    {
-      "name": "etaf-ui-playing-card-corners-placeholders-and-validation",
-      "file": "tests/etaf-ui-playing-card-tests.el",
-      "purpose": "Short corners and empty piles remain readable without leaking hidden cards."
-    },
-    {
-      "name": "etaf-ui-tile-grid-follows-replaced-projection-callbacks",
-      "file": "tests/etaf-ui-tile-grid-tests.el",
-      "purpose": "Replacing caller projections updates retained cell text, help and colors."
-    },
-    {
-      "name": "etaf-ui-tile-grid-preserves-cell-metrics-in-resized-containers",
-      "file": "tests/etaf-ui-tile-grid-tests.el",
-      "purpose": "Resized containers preserve intrinsic cell dimensions, text and activation coordinates."
-    },
-    {
-      "name": "etaf-ui-editor-preserves-native-editing-state",
-      "file": "tests/etaf-ui-editor-tests.el",
-      "purpose": "Enabling/configuring/disabling UI editing preserves multiline Unicode text, native keymaps, completion, point, selection, modification state and undo."
-    },
-    {
-      "name": "etaf-ui-editor-placeholder-never-becomes-text",
-      "file": "tests/etaf-ui-editor-tests.el",
-      "purpose": "An empty hint never becomes copied or submitted text; only text mutations notify and disabling detaches the observer."
-    },
-    {
-      "name": "etaf-ui-editor-replacement-is-undoable-and-coalesced",
-      "file": "tests/etaf-ui-editor-tests.el",
-      "purpose": "External replacements produce a final-value event and one undoable edit, while equal values preserve edit state silently."
-    },
-    {
-      "name": "etaf-ui-editor-stale-update-preserves-edit-then-undo",
-      "file": "tests/etaf-ui-editor-tests.el",
-      "purpose": "A delayed update cannot erase newer edits even when undo has restored the original text; a current tick permits replacement."
-    },
-    {
-      "name": "etaf-ui-editor-copy-narrowing-and-read-only",
-      "file": "tests/etaf-ui-editor-tests.el",
-      "purpose": "Exported text is detached and property-free across narrowing; read-only blocks typing while explicit updates remain possible."
-    },
-    {
-      "name": "etaf-ui-editor-observer-failure-preserves-accepted-text",
-      "file": "tests/etaf-ui-editor-tests.el",
-      "purpose": "Observer errors propagate without deleting accepted text; reentrant replacement is rejected without overwriting the edit."
-    },
-    {
-      "name": "etaf-ui-editor-configuration-is-validated-before-change",
-      "file": "tests/etaf-ui-editor-tests.el",
-      "purpose": "Invalid settings do not detach the installed observer, and invalid editor handles, text and ticks are rejected."
-    },
-    {
-      "name": "etaf-ui-editor-instance-and-mode-lifecycle",
-      "file": "tests/etaf-ui-editor-tests.el",
-      "purpose": "Independent editors do not share callbacks or content; changing major mode and killing a buffer retire their behavior."
-    },
-    {
-      "name": "etaf-ui-tile-grid-controls-coordinates-and-retains-neighbors",
-      "file": "tests/etaf-ui-tile-grid-tests.el",
-      "purpose": "Coordinate callbacks activate the correct tile; local color/text writes preserve neighboring Host identity and geometry."
-    },
-    {
-      "name": "etaf-ui-tile-grid-read-only-and-invalid-input",
-      "file": "tests/etaf-ui-tile-grid-tests.el",
-      "purpose": "Read-only grids expose no activation callbacks and reject invalid dimensions, callback types and overflowing labels before publication."
-    },
-    {
-      "name": "etaf-ui-icon-registry-replaces-removes-and-validates",
-      "file": "tests/etaf-ui-icon-tests.el",
-      "purpose": "Icon registrations round-trip and replace specifications, reject invalid replacements atomically, and remove their own name/glyph inventory."
-    },
-    {
-      "name": "etaf-ui-icon-lookup-distinguishes-missing-name-and-set",
-      "file": "tests/etaf-ui-icon-tests.el",
-      "purpose": "Partial maps resolve names through the requested/default style, preserve the provided inventory, show unknown names, and reject unknown styles; on a text display the terminal set answers an SVG request first while the requested style still owns names it lacks."
-    },
-    {
-      "name": "etaf-ui-icon-svg-unavailable-has-printable-text-properties",
-      "file": "tests/etaf-ui-icon-tests.el",
-      "purpose": "SVG-unavailable rendering preserves the terminal mark as printable text with native paint properties and the default minimum width on every row."
-    },
-    {
-      "name": "etaf-ui-icon-text-mark-keeps-the-row-background",
-      "file": "tests/etaf-ui-icon-tests.el",
-      "purpose": "A terminal icon paints ink only: the mark carries the requested foreground without inheriting the default face or a background, so marks of different widths keep one aligned column and a play mark does not cut a hole in its pill."
-    },
-    {
-      "name": "etaf-ui-icon-terminal-set-resolves-marks-from-a-font-set",
-      "file": "tests/etaf-ui-icon-tests.el",
-      "purpose": "A terminal can resolve an SVG request through a registered font set such as nerd and uses its glyph as text, so a terminal with an icon font gets the same marks as a graphical frame."
-    },
-    {
-      "name": "etaf-ui-icon-renders-without-a-default-face-font",
-      "file": "tests/etaf-ui-icon-tests.el",
-      "purpose": "An icon row keeps its one-line height contract when a graphical frame reports no resolved default face font instead of failing in font-info."
-    },
-    {
-      "name": "etaf-ui-icon-box-keeps-two-rows-width-and-full-target",
-      "file": "tests/etaf-ui-icon-tests.el",
-      "purpose": "Mounted icons occupy exactly two rows when requested, preserve minimum width and presentation props, and dispatch a callback from the whole Host."
-    },
-    {
-      "name": "etaf-ui-icon-tab-index-keeps-a-pressable-icon-out-of-tab-order",
-      "file": "tests/etaf-ui-icon-tests.el",
-      "purpose": "Pressable icons are Tab stops named by their label or help text, while a negative tab index keeps an icon clickable but skipped by Tab."
-    },
-    {
-      "name": "etaf-ui-icon-inside-a-control-shows-the-control-help",
-      "file": "tests/etaf-ui-icon-tests.el",
-      "purpose": "An icon without its own help text leaves the enclosing control's help visible over the icon."
-    },
-    {
-      "name": "etaf-ui-toggle-icon-switches-glyph-and-paint-through-value",
-      "file": "tests/etaf-ui-icon-tests.el",
-      "purpose": "A reactive toggle value switches the icon glyph and its paint in place while the box keeps its declared geometry, role and help text."
-    },
-    {
-      "name": "etaf-ui-icon-metrics-estimates-fit-without-gui",
-      "file": "tests/etaf-ui-icon-tests.el",
-      "purpose": "Batch-safe metrics distinguish fitting from oversized declarations without requiring installed fonts or a graphical frame."
-    },
-    {
-      "name": "etaf-ui-icon-validates-box-and-supports-registered-draw",
-      "file": "tests/etaf-ui-icon-tests.el",
-      "purpose": "Applications can add a draw-function SVG style entirely through registration; invalid sizing and callback props fail before rendering."
-    },
-    {
-      "name": "etaf-ui-range-registers-track-and-fill-hosts",
-      "file": "tests/etaf-ui-range-tests.el",
-      "purpose": "A mounted Range registers the Track and Fill Hosts that retained updates address."
-    },
-    {
-      "name": "etaf-ui-range-bar-height-changes-ink-without-changing-geometry",
-      "file": "tests/etaf-ui-range-tests.el",
-      "purpose": "Bar thickness changes graphical paint at a fixed one-row size while retaining value-driven widths; text-only frames keep a readable rule."
-    },
-    {
-      "name": "etaf-ui-range-fill-moves-through-retained-geometry",
-      "file": "tests/etaf-ui-range-tests.el",
-      "purpose": "A caller grows the Fill through ETAF's retained geometry update without publishing a new View."
-    },
-    {
-      "name": "etaf-ui-range-press-reports-change-and-commit",
-      "file": "tests/etaf-ui-range-tests.el",
-      "purpose": "A pointer click reports the pointed value through on-change and on-commit in that order."
-    },
-    {
-      "name": "etaf-ui-range-steps-from-the-keyboard",
-      "file": "tests/etaf-ui-range-tests.el",
-      "purpose": "Left/Right step a focused Range by its key step through on-commit, and Home/End report its bounds."
-    },
-    {
-      "name": "etaf-ui-range-without-ref-hit-tests-pointer-gestures",
-      "file": "tests/etaf-ui-range-tests.el",
-      "purpose": "A range mounted without a :ref still maps an engine pointer gesture to its value."
-    },
-    {
-      "name": "etaf-ui-range-drag-reports-live-values-and-commits-on-release",
-      "file": "tests/etaf-ui-range-tests.el",
-      "purpose": "Dragging reports intermediate values, commits the released value and ignores a cancelled gesture."
-    },
-    {
-      "name": "etaf-ui-range-snaps-to-the-step-and-clamps-the-ends",
-      "file": "tests/etaf-ui-range-tests.el",
-      "purpose": "Pointer values snap to :step and never escape :min..:max."
-    },
-    {
-      "name": "etaf-ui-range-disabled-rejects-pointer-events",
-      "file": "tests/etaf-ui-range-tests.el",
-      "purpose": "A disabled Range dispatches no callback and rejects pointer events."
-    },
-    {
-      "name": "etaf-ui-range-reactive-bound-reproportions-in-place",
-      "file": "tests/etaf-ui-range-tests.el",
-      "purpose": "A reactive :max bound re-proportions the Fill without a Component re-render."
-    },
-    {
-      "name": "etaf-ui-range-validates-its-input",
-      "file": "tests/etaf-ui-range-tests.el",
-      "purpose": "Invalid numeric props fail before the Range paints."
-    },
-    {
-      "name": "etaf-ui-window-resize-keeps-chrome-and-input",
-      "file": "tests/etaf-ui-window-resize-tests.el",
-      "purpose": "Controlled catalog window sizes keep the title, eight handles and button targets, commit once per batch and match a fresh mount."
-    },
-    {
-      "name": "etaf-ui-window-resize-example-uses-controlled-handles",
-      "file": "tests/etaf-ui-window-resize-tests.el",
-      "purpose": "The public catalog resize example updates controlled geometry and restores the original rectangle on cancellation."
-    },
-    {
-      "name": "etaf-ui-window-chrome-uses-macos-traffic-lights",
-      "file": "tests/etaf-ui-desktop-tests.el",
-      "purpose": "Window chrome exposes left-positioned red, yellow and green controlled actions."
-    },
-    {
-      "name": "etaf-ui-window-controls-is-reusable-and-grouped",
-      "file": "tests/etaf-ui-desktop-tests.el",
-      "purpose": "Traffic-light controls are independently reusable and share an explicit hover group."
-    },
-    {
-      "name": "etaf-ui-taskbar-and-workspace-bar-publish-controlled-actions",
-      "file": "tests/etaf-ui-desktop-tests.el",
-      "purpose": "Desktop navigation bars expose accessible controls whose selection remains caller-owned."
-    },
-    {
-      "name": "etaf-ui-desktop-bars-follow-selection-and-status-sources",
-      "file": "tests/etaf-ui-desktop-tests.el",
-      "purpose": "Ref and computed bar inputs update selection and status while retaining accessible input targets and supporting pure rendering."
-    },
-    {
-      "name": "etaf-ui-workspace-status-keeps-trailing-actions-visible",
-      "file": "tests/etaf-ui-desktop-tests.el",
-      "purpose": "Short, long, multiline and empty status values preserve a single-row region, full trailing labels and working action targets."
-    },
-    {
-      "name": "etaf-ui-workspace-layout-label-updates-as-prepared-text",
-      "file": "tests/etaf-ui-desktop-tests.el",
-      "purpose": "A ref or computed layout label changes the control text within its fixed width while the runtime generation, bar geometry and action target stay retained."
-    },
-    {
-      "name": "etaf-ui-launcher-and-switcher-remain-controlled",
-      "file": "tests/etaf-ui-desktop-tests.el",
-      "purpose": "Launcher and switcher visibility, selection and dismissal remain controlled by the caller."
-    },
-    {
-      "name": "etaf-ui-splitter-projects-named-panes-and-divider",
-      "file": "tests/etaf-ui-desktop-tests.el",
-      "purpose": "Splitter renders named panes and a keyboard-focusable divider that forwards gestures."
-    },
-    {
-      "name": "etaf-ui-splitter-overlay-uses-caller-rectangle",
-      "file": "tests/etaf-ui-desktop-tests.el",
-      "purpose": "An overlay splitter uses an exact caller-owned divider rectangle and forwards drag gestures."
-    },
-    {
-      "name": "etaf-ui-window-keeps-geometry-and-mode-controlled",
-      "file": "tests/etaf-ui-window-tests.el",
-      "purpose": "Window geometry remains caller-owned while controlled mode changes only the projected content."
-    },
-    {
-      "name": "etaf-ui-window-forwards-chrome-and-resize-gestures",
-      "file": "tests/etaf-ui-window-tests.el",
-      "purpose": "Title-bar and resize-handle gestures reach caller callbacks with their edge and phase payloads."
-    },
-    {
-      "name": "etaf-ui-window-moves-and-resizes-from-keys-inside-it",
-      "file": "tests/etaf-ui-window-tests.el",
-      "purpose": "Focus entering a Window runs its on-focus; with focus inside, M-arrows reach its move callback and M-S-arrows its right/bottom resize callbacks as keyboard gestures."
-    },
-    {
-      "name": "etaf-ui-resize-lock-confirms-every-edge-and-corner",
-      "file": "tests/etaf-ui-resize-lock-tests.el",
-      "purpose": "All eight Window and standalone Panel handles accept locked resize at the confirming press and ignore subsequent motion and release positions."
-    },
-    {
-      "name": "etaf-ui-resize-lock-cancels-and-releases-active-targets",
-      "file": "tests/etaf-ui-resize-lock-tests.el",
-      "purpose": "Escape cancels each locked resize handle once, clears active state and preserves the following command."
-    },
-    {
-      "name": "etaf-ui-resize-lock-nil-keeps-ordinary-release",
-      "file": "tests/etaf-ui-resize-lock-tests.el",
-      "purpose": "Explicit nil and the standalone Panel default keep resize gestures ending at the first release."
-    },
-    {
-      "name": "etaf-ui-resize-lock-rejects-invalid-modifier",
-      "file": "tests/etaf-ui-resize-lock-tests.el",
-      "purpose": "Invalid lock modifiers are rejected through the public Component validation contract."
-    },
-    {
-      "name": "etaf-ui-resizable-panel-rejects-unknown-edge",
-      "file": "tests/etaf-ui-window-tests.el",
-      "purpose": "Resizable panels reject unsupported edge names at the public Component boundary."
-    },
-    {
-      "name": "etaf-ui-label-supports-box-geometry-and-text-presentation",
-      "file": "tests/etaf-ui-label-tests.el",
-      "purpose": "Label width, padding, border, wrapping and inherited text presentation match direct Ebox composition."
-    },
-    {
-      "name": "etaf-ui-label-reflows-reactive-text-and-preserves-following-content",
-      "file": "tests/etaf-ui-label-tests.el",
-      "purpose": "Reactive English and Chinese text reflow inside the allocated width, preserving the Label ref and following content after resize."
-    },
-    {
-      "name": "etaf-ui-button-callback-uses-only-committed-props",
-      "file": "tests/etaf-ui-button-commit-tests.el",
-      "purpose": "A later sibling failure cannot replace the live Button callback."
-    },
-    {
-      "name": "etaf-ui-cell-columns-require-unique-non-nil-keys",
-      "file": "tests/etaf-ui-cell-tests.el",
-      "purpose": "Reject ambiguous column identity with its index and offending key."
-    },
-    {
-      "name": "etaf-ui-cell-stateless-table-keeps-pure-render-support",
-      "file": "tests/etaf-ui-cell-tests.el",
-      "purpose": "Automatic row references do not introduce setup state into plain Tables."
-    },
-    {
-      "name": "etaf-ui-cell-factory-rejects-ref-and-watch-creation",
-      "file": "tests/etaf-ui-cell-tests.el",
-      "purpose": "A factory cannot allocate persistent state or subscriptions during render."
-    },
-    {
-      "name": "etaf-ui-cell-row-and-column-reorder-retain-state",
-      "file": "tests/etaf-ui-cell-tests.el",
-      "purpose": "Counter state follows row and column keys, with one cleanup on deletion."
-    },
-    {
-      "name": "etaf-ui-cell-grid-reorders-without-remounting-cells",
-      "file": "tests/etaf-ui-cell-tests.el",
-      "purpose": "DataGrid uses the same retained custom cells while preserving row identity."
-    },
-    {
-      "name": "etaf-ui-cell-duplicate-field-migration-retains-distinct-state",
-      "file": "tests/etaf-ui-cell-tests.el",
-      "purpose": "Name and Uppercase read the same field but retain distinct column identities."
-    },
-    {
-      "name": "etaf-ui-cell-later-factory-error-retains-committed-handler",
-      "file": "tests/etaf-ui-cell-tests.el",
-      "purpose": "A failed later cell cannot replace an earlier cell's committed callback."
-    },
-    {
-      "name": "etaf-ui-cell-grid-publishes-current-rows-and-selection",
-      "file": "tests/etaf-ui-cell-tests.el",
-      "purpose": "Replacing a row with equal or changed contents updates cell output and callback identity, while focus and selection remain consistent under retained keys."
-    },
-    {
-      "name": "etaf-ui-docs-readmes-mount-and-dispatch-in-fresh-emacs",
-      "file": "tests/etaf-ui-docs-tests.el",
-      "purpose": "Both catalog READMEs use real names and complete mounted interactions."
-    },
-    {
-      "name": "etaf-ui-pagination-wraps-complete-controls-in-narrow-space",
-      "file": "tests/etaf-ui-pagination-commit-tests.el",
-      "purpose": "A narrow allocation wraps whole controls without clipping page text."
-    },
-    {
-      "name": "etaf-ui-pagination-keeps-explicit-colors-and-semantic-defaults",
-      "file": "tests/etaf-ui-pagination-commit-tests.el",
-      "purpose": "Explicit colors remain effective without replacing omitted variant defaults."
-    },
-    {
-      "name": "etaf-ui-adaptive-columns-reject-invalid-fractional-weights",
-      "file": "tests/etaf-ui-table-adaptive-tests.el",
-      "purpose": "Invalid fractional tracks identify the offending column before mounting."
-    },
-    {
-      "name": "etaf-ui-adaptive-cells-retain-identity-and-failed-candidates",
-      "file": "tests/etaf-ui-table-adaptive-tests.el",
-      "purpose": "Adaptive row/column reorders preserve local state and rollback ownership."
-    },
-    {
-      "name": "etaf-ui-table-string-column-keys-read-equal-alist-keys",
-      "file": "tests/etaf-ui-table-adaptive-tests.el",
-      "purpose": "Table and DataGrid read string keys in both fixed and adaptive cells."
-    },
-    {
-      "name": "etaf-ui-button-use-behavior-dispatches-through-host",
-      "file": "tests/etaf-ui-tests.el",
-      "purpose": "Install Button `:use' Behavior and dispatch its merged callback."
-    },
-    {
-      "name": "etaf-ui-button-keeps-its-label-on-one-line",
-      "file": "tests/etaf-ui-tests.el",
-      "purpose": "A Button keeps its full label on one line when a narrow flex line would otherwise shrink it below its content."
-    },
-    {
-      "name": "etaf-ui-button-hover-uses-the-variant-token",
-      "file": "tests/etaf-ui-tests.el",
-      "purpose": "A Button paints its variant's hover background from the catalog token."
-    },
-    {
-      "name": "etaf-ui-button-derives-hover-fill-from-a-custom-surface",
-      "file": "tests/etaf-ui-tests.el",
-      "purpose": "A Button with a custom surface derives a visibly different hover fill from that surface, while a surface-less Button still reads the variant token."
-    },
-    {
-      "name": "etaf-ui-button-focus-uses-a-visible-cue",
-      "file": "tests/etaf-ui-tests.el",
-      "purpose": "Keyboard focus underlines a Button label and fills a surface-less Button without changing geometry."
-    },
-    {
-      "name": "etaf-ui-number-input-validates-and-emits-value",
-      "file": "tests/etaf-ui-tests.el",
-      "purpose": "Prompt-backed number input owns bounds and emits the accepted value."
-    },
-    {
-      "name": "etaf-ui-number-input-stays-inline-in-a-wrapping-row",
-      "file": "tests/etaf-ui-tests.el",
-      "purpose": "A number input nested in another wrapping row keeps its steppers and value on one line."
-    },
-    {
-      "name": "etaf-ui-button-disabled-preserves-explicit-theme-surface",
-      "file": "tests/etaf-ui-tests.el",
-      "purpose": "A disabled Button keeps explicit dark presentation props in its surface."
-    },
-    {
-      "name": "etaf-ui-pagination-is-readable-and-boundary-safe",
-      "file": "tests/etaf-ui-tests.el",
-      "purpose": "Pagination renders labeled controls, stable refs, and page boundaries."
-    },
-    {
-      "name": "etaf-ui-pagination-composes-inside-a-grid-track",
-      "file": "tests/etaf-ui-tests.el",
-      "purpose": "Pagination must distribute free space inside its assigned Grid track."
-    },
-    {
-      "name": "etaf-ui-data-grid-keeps-long-cells-on-one-line",
-      "file": "tests/etaf-ui-tests.el",
-      "purpose": "Long tabular values use an ellipsis instead of increasing row height."
-    },
-    {
-      "name": "etaf-ui-data-grid-converts-character-columns-and-keeps-air",
-      "file": "tests/etaf-ui-tests.el",
-      "purpose": "Character column descriptors become pixel widths with a stable gap."
-    },
-    {
-      "name": "etaf-ui-data-grid-rejects-nil-row-ref",
-      "file": "tests/etaf-ui-tests.el",
-      "purpose": "Reject an interactive row-ref callback that returns nil."
-    },
-    {
-      "name": "etaf-ui-data-grid-projects-loading-error-and-empty",
-      "file": "tests/etaf-ui-tests.el",
-      "purpose": "Project the Data Controller loading, error, and empty states."
-    },
-    {
-      "name": "etaf-ui-data-grid-requires-stable-row-key",
-      "file": "tests/etaf-ui-tests.el",
-      "purpose": "Reject a DataGrid that cannot identify retained rows."
-    },
-    {
-      "name": "etaf-ui-data-grid-rejects-nil-row-key",
-      "file": "tests/etaf-ui-tests.el",
-      "purpose": "Reject a DataGrid row-key function that returns no identity."
-    },
-    {
-      "name": "etaf-ui-checkbox-binding-shares-the-callers-ref",
-      "file": "tests/etaf-ui-binding-tests.el",
-      "purpose": "Bound and explicit checkboxes observe one ref with additive events, disabled protection and unmount cleanup."
-    },
-    {
-      "name": "etaf-ui-binding-retargets-only-after-successful-publication",
-      "file": "tests/etaf-ui-binding-tests.el",
-      "purpose": "Binding target changes publish atomically; conflicts preserve committed callbacks and explicit nil remains valid."
-    },
-    {
-      "name": "etaf-ui-number-binding-validates-cancel-and-disabled-input",
-      "file": "tests/etaf-ui-binding-tests.el",
-      "purpose": "A bound number input writes accepted integers and preserves its ref after cancellation, invalid or disabled input."
-    },
-    {
-      "name": "etaf-ui-bindings-report-conflicting-or-read-only-inputs",
-      "file": "tests/etaf-ui-binding-tests.el",
-      "purpose": "Conflicts and invalid binding targets report contextual component input errors."
-    },
-    {
-      "name": "etaf-ui-data-controls-render-async-refresh-and-cancellation",
-      "file": "tests/etaf-ui-tests.el",
-      "purpose": "Pending reads/writes, cancellation and failure retain accepted rows and actions with valid focus."
-    },
-    {
-      "name": "etaf-ui-select-maps-labels-to-controlled-values",
-      "file": "tests/etaf-ui-input-tests.el",
-      "purpose": "Selection preserves nil values, handles cancellation and disables empty lists."
-    },
-    {
-      "name": "etaf-ui-native-inputs-report-invalid-props-in-context",
-      "file": "tests/etaf-ui-input-tests.el",
-      "purpose": "Invalid values, options and bindings identify the Component and property."
-    },
-    {
-      "name": "etaf-ui-menu-selects-enabled-actions-and-returns-focus",
-      "file": "tests/etaf-ui-input-tests.el",
-      "purpose": "Menu choices follow published props; disabled actions are unavailable and cancellation preserves data and focus."
-    },
-    {
-      "name": "etaf-ui-confirm-dialog-composes-with-menu-actions",
-      "file": "tests/etaf-ui-input-tests.el",
-      "purpose": "Menu actions apply only after native confirmation and return focus after a declined dialog."
-    },
-    {
-      "name": "etaf-ui-control-forwards-native-feedback",
-      "file": "tests/etaf-ui-affordance-tests.el",
-      "purpose": "Native root attributes reach Ebox through the public Button component."
-    },
-    {
-      "name": "etaf-ui-button-hover-keeps-text-readable",
-      "file": "tests/etaf-ui-affordance-tests.el",
-      "purpose": "A Theme without hover tokens derives a distinct fill per palette that keeps at least the label's resting contrast, or 4.5:1 on an extreme surface."
-    },
-    {
-      "name": "etaf-ui-grid-and-table-share-row-presentation",
-      "file": "tests/etaf-ui-grid-composition-tests.el",
-      "purpose": "Table and DataGrid produce matching layout and selection paint while all row fields remain business data."
-    },
-    {
-      "name": "etaf-ui-grid-rows-use-framework-identity-and-callbacks",
-      "file": "tests/etaf-ui-grid-composition-tests.el",
-      "purpose": "Separate grids retain unique automatic targets across reorder and publish current row data and handlers through the framework."
-    },
-    {
-      "name": "etaf-ui-number-input-validates-configuration-and-live-value",
-      "file": "tests/etaf-ui-input-tests.el",
-      "purpose": "NumberInput validates configuration before publishing inputs and follows caller-owned integer values through native editing."
-    },
-    {
-      "name": "etaf-ui-reactions-toggle-chips-and-pick-choices",
-      "file": "tests/etaf-ui-reactions-tests.el",
-      "purpose": "Reaction chips report their key, keep their footprint when chosen, and the picker popover adds a chosen reaction then closes; malformed and compound keys are rejected."
-    },
-    {
-      "name": "etaf-ui-dropdown-opens-navigates-selects-and-restores-focus",
-      "file": "tests/etaf-ui-surface-tests.el",
-      "purpose": "A dropdown renders its items, skips disabled ones and invokes selection once."
-    },
-    {
-      "name": "etaf-ui-menu-hover-token-resolves-against-the-provided-theme",
-      "file": "tests/etaf-ui-surface-tests.el",
-      "purpose": "A dropdown row's hover tint resolves the provided theme token into a concrete colour."
-    },
-    {
-      "name": "etaf-ui-dialog-composes-slots-and-blocks-covered-controls",
-      "file": "tests/etaf-ui-surface-tests.el",
-      "purpose": "The modal canvas covers background targets and returns focus after closing."
-    },
-    {
-      "name": "etaf-ui-modal-backdrop-dims-and-restores-the-painted-application",
-      "file": "tests/etaf-ui-surface-tests.el",
-      "purpose": "A modal keeps the application painted and dims it, then restores its original paint on close."
-    },
-    {
-      "name": "etaf-ui-media-viewer-owns-keys-browses-and-closes",
-      "file": "tests/etaf-ui-surface-tests.el",
-      "purpose": "An open media viewer covers the application, outranks its emulation keys, browses with n/p and the arrows, swallows other printing keys, closes with q or Escape and returns focus."
-    },
-    {
-      "name": "etaf-ui-media-viewer-closes-on-backdrop-and-close-control",
-      "file": "tests/etaf-ui-surface-tests.el",
-      "purpose": "A click on the media viewer's backdrop or its close control requests closing; a key on the backdrop does not."
-    },
-    {
-      "name": "etaf-ui-media-viewer-shows-audio-with-a-transport",
-      "file": "tests/etaf-ui-surface-tests.el",
-      "purpose": "An audio viewer shows the speaker stage, its total time and the caption."
-    },
-    {
-      "name": "etaf-ui-media-viewer-supports-audio-volume-and-playback-keys",
-      "file": "tests/etaf-ui-surface-tests.el",
-      "purpose": "MediaViewer accepts :audio, :volume and :on-ended props and binds j/l for 10-second seeks and [/] for volume adjustments."
-    },
-    {
-      "name": "etaf-ui-media-viewer-hides-the-mounted-buffer-cursor",
-      "file": "tests/etaf-ui-surface-tests.el",
-      "purpose": "A media viewer opened from another current buffer hides the mounted buffer's cursor and restores it on close."
-    },
-    {
-      "name": "etaf-ui-dismisses-surfaces-on-presses-outside-their-panel",
-      "file": "tests/etaf-ui-surface-tests.el",
-      "purpose": "A root press capture calling etaf-ui-dismiss-outside-press closes open surfaces the press missed, keeps the pressed panel open and leaves a surface opened by the same press mounted."
-    },
-    {
-      "name": "etaf-ui-dialog-compact-height-keeps-one-row-header",
-      "file": "tests/etaf-ui-surface-tests.el",
-      "purpose": "A bounded compact dialog keeps its title to one row while preserving background content."
-    },
-    {
-      "name": "etaf-ui-floating-surfaces-nest-and-release-buffer-shortcuts",
-      "file": "tests/etaf-ui-surface-tests.el",
-      "purpose": "Escape closes a menu nested in a dialog, then the dialog; outer Host keys are ignored while a surface is open and return after it closes."
-    },
-    {
-      "name": "etaf-ui-popover-keeps-instance-state-and-independent-open-inputs",
-      "file": "tests/etaf-ui-surface-tests.el",
-      "purpose": "Two controlled popovers have independent state and clean up their slots."
-    },
-    {
-      "name": "etaf-ui-nested-dialog-covers-parent-and-restores-its-controls",
-      "file": "tests/etaf-ui-surface-tests.el",
-      "purpose": "A nested modal blocks the outer panel and restores it on close."
-    },
-    {
-      "name": "etaf-ui-unpainted-popover-does-not-capture-keys",
-      "file": "tests/etaf-ui-surface-tests.el",
-      "purpose": "An unavailable anchor leaves the mounted buffer's ordinary keys usable."
-    },
-    {
-      "name": "etaf-ui-surfaces-example-composes-menu-dialog-and-input",
-      "file": "tests/etaf-ui-surface-tests.el",
-      "purpose": "The runnable example hands menu focus to a dialog and back to its trigger."
-    },
-    {
-      "name": "etaf-ui-gallery-browses-every-component-family",
-      "file": "tests/etaf-ui-gallery-tests.el",
-      "purpose": "All eight categories expose every named component specimen."
-    },
-    {
-      "name": "etaf-ui-gallery-sidebar-selection-keeps-labels-stationary",
-      "file": "tests/etaf-ui-gallery-tests.el",
-      "purpose": "Every Gallery sidebar category highlights without shifting labels or changing typeface in light and dark Themes."
-    },
-    {
-      "name": "etaf-ui-gallery-overview-keeps-preview-content-whole",
-      "file": "tests/etaf-ui-gallery-tests.el",
-      "purpose": "Multi-row overview avatars finish before the card caption at wide and compact widths instead of being cropped."
-    },
-    {
-      "name": "etaf-ui-gallery-compact-picker-opens-component-families",
-      "file": "tests/etaf-ui-gallery-tests.el",
-      "purpose": "The compact category picker opens overlay and basic component specimens without a sidebar."
-    },
-    {
-      "name": "etaf-ui-gallery-preserves-state-across-browsing-and-theme",
-      "file": "tests/etaf-ui-gallery-tests.el",
-      "purpose": "Specimen state survives browsing and scoped Theme changes; reset restores defaults."
-    },
-    {
-      "name": "etaf-ui-gallery-copies-runnable-examples",
-      "file": "tests/etaf-ui-gallery-tests.el",
-      "purpose": "Every component displays a public signature and parameter reference; its copied example evaluates and mounts independently."
-    },
-    {
-      "name": "etaf-ui-gallery-isolates-mounts-and-unrelated-buffers",
-      "file": "tests/etaf-ui-gallery-tests.el",
-      "purpose": "Independent Galleries do not share state or overwrite unrelated buffer contents."
-    },
-    {
-      "name": "etaf-ui-gallery-searches-symbols-chinese-and-clears-empty-results",
-      "file": "tests/etaf-ui-gallery-tests.el",
-      "purpose": "Native live search matches symbols and Chinese across categories and recovers from no matches."
-    },
-    {
-      "name": "etaf-ui-gallery-splitter-uses-its-live-pane-width",
-      "file": "tests/etaf-ui-gallery-tests.el",
-      "purpose": "Divider gestures move by their pixel delta across resized Gallery viewports rather than a fixed example width."
-    },
-    {
-      "name": "etaf-ui-gallery-reference-explains-value-and-callback-contracts",
-      "file": "tests/etaf-ui-gallery-tests.el",
-      "purpose": "Scrolled reference text exposes defaults, controlled-value exclusions, callback payloads and units; reset collapses it."
-    },
-    {
-      "name": "etaf-ui-gallery-dialog-submits-chinese-and-cancels",
-      "file": "tests/etaf-ui-gallery-tests.el",
-      "purpose": "A modal submits Chinese text, cancels without changing saved values, and restores opener focus."
-    },
-    {
-      "name": "etaf-ui-gallery-paginates-and-reopens-after-unmount",
-      "file": "tests/etaf-ui-gallery-tests.el",
-      "purpose": "Local paging and reset publish the expected records; reopening releases old state and preserves other applications."
-    },
-    {
-      "name": "etaf-ui-feedback-and-navigation-render-public-contracts",
-      "file": "tests/etaf-ui-modern-tests.el",
-      "purpose": "Feedback and navigation Components render and dispatch through public refs."
-    },
-    {
-      "name": "etaf-ui-disclosures-use-arrows-and-stable-control-names",
-      "file": "tests/etaf-ui-modern-tests.el",
-      "purpose": "Menus, selectors, accordion and tree disclosures show arrow cues and preserve control names across expansion."
-    },
-    {
-      "name": "etaf-ui-selection-keeps-label-positions-sizes-and-typeface",
-      "file": "tests/etaf-ui-modern-tests.el",
-      "purpose": "Tabs, segments, steps, Select chips, taskbars and workspace bars keep label positions, control sizes and font weights unchanged across selection."
-    },
-    {
-      "name": "etaf-ui-tabs-keep-every-label-in-place-when-switching",
-      "file": "tests/etaf-ui-modern-tests.el",
-      "purpose": "Switching the active tab keeps every tab label in the same column, so the strip never shifts."
-    },
-    {
-      "name": "etaf-ui-tabs-address-items-by-ref",
-      "file": "tests/etaf-ui-modern-tests.el",
-      "purpose": "An item's optional :ref lets a caller press its tab control by name."
-    },
-    {
-      "name": "etaf-ui-calendar-aligns-weekdays-dates-and-selection",
-      "file": "tests/etaf-ui-modern-tests.el",
-      "purpose": "Calendar dates and leading blanks align with the same seven weekday columns and stay aligned as selection changes."
-    },
-    {
-      "name": "etaf-ui-slider-arrows-stay-on-aligned-values",
-      "file": "tests/etaf-ui-modern-tests.el",
-      "purpose": "Mounted bound sliders keep arrow results and displayed values aligned at non-step maxima, negative bounds, narrow spans and equal bounds."
-    },
-    {
-      "name": "etaf-ui-selection-components-render-public-contracts",
-      "file": "tests/etaf-ui-modern-tests.el",
-      "purpose": "Radio, Segmented, Switch and Slider render controlled values through the public DSL."
-    },
-    {
-      "name": "etaf-ui-drawer-composes-both-sides-and-restores-focus",
-      "file": "tests/etaf-ui-surface-tests.el",
-      "purpose": "Both modal drawer edges retain caller-owned values, compose footer actions, dismiss and restore the opener."
-    },
-    {
-      "name": "etaf-ui-composition-components-reject-invalid-props",
-      "file": "tests/etaf-ui-modern-tests.el",
-      "purpose": "Malformed shortcut keys, duplicate list identities and absent current steps are rejected through public component inputs."
-    },
-    {
-      "name": "etaf-ui-advanced-components-compose-public-contracts",
-      "file": "tests/etaf-ui-advanced-tests.el",
-      "purpose": "DatePicker, Tree, Calendar and CommandPalette compose shared public input, navigation and floating-surface contracts."
-    },
-    {
-      "name": "etaf-ui-qr-paint-draws-modules-with-scannable-contrast",
-      "file": "tests/etaf-ui-advanced-tests.el",
-      "purpose": "Painted sign-in code pairs module rows, honours the quiet zone and keeps black-on-white glyphs; malformed rows are rejected."
-    },
-    {
-      "name": "etaf-ui-qr-login-overlays-the-code-and-returns-its-dismissal",
-      "file": "tests/etaf-ui-advanced-tests.el",
-      "purpose": "The sign-in panel follows caller-owned visibility, code and status, blocks the covered page, and reports close from Escape and its cancel button."
-    },
-    {
-      "name": "etaf-ui-qr-login-renders-square-svg-fitting-compact-graphical-viewport",
-      "file": "tests/etaf-ui-advanced-tests.el",
-      "purpose": "A 49x49 QR sign-in panel on a graphical display with SVG renders a crisp square SVG image and keeps title, status, hint and cancel visible inside a 33-row window."
-    },
-    {
-      "name": "etaf-ui-composition-components-render-public-contracts",
-      "file": "tests/etaf-ui-modern-tests.el",
-      "purpose": "Tag, Kbd, Steps and List compose through public props and caller-owned selection callbacks."
-    },
-    {
-      "name": "etaf-ui-window-reactive-geometry-preserves-content-and-input",
-      "file": "tests/etaf-ui-window-tests.el",
-      "purpose": "Reactive position, dimensions and layering preserve nested control values and input ownership."
-    },
-    {
-      "name": "etaf-ui-window-controls-react-to-active-paint-and-retain-targets",
-      "file": "tests/etaf-ui-desktop-tests.el",
-      "purpose": "Traffic-light active colors update while their input targets remain valid."
-    },
-    {
-      "name": "etaf-ui-focus-composition-batches-match-fresh-ui",
-      "file": "tests/etaf-ui-focus-composition-tests.el",
-      "purpose": "Taskbar selection, traffic lights, stacking and variable status commit together in one revision and match a fresh mount."
-    },
-    {
-      "name": "etaf-ui-focus-composition-rejection-keeps-committed-ui-until-retry",
-      "file": "tests/etaf-ui-focus-composition-tests.el",
-      "purpose": "A rejected coordinated focus update preserves accepted UI, then publishes the requested appearance on retry."
-    },
-    {
-      "name": "etaf-ui-focus-scalar-props-match-fresh-ui",
-      "file": "tests/etaf-ui-focus-composition-tests.el",
-      "purpose": "Controlled scalar props keep rendered controls matching a fresh mount across focus changes."
-    },
-    {
-      "name": "etaf-ui-window-fonts-inherit-and-override-independently",
-      "file": "tests/etaf-ui-font-tests.el",
-      "purpose": "Window titles, controls, labels, buttons, inputs and footer inherit parent typography; title/body overrides are independent."
-    },
-    {
-      "name": "etaf-ui-panel-font-default-follows-buffer-face",
-      "file": "tests/etaf-ui-font-tests.el",
-      "purpose": "An unspecified panel size leaves Emacs default font height intact and an explicit family reaches rendered content."
-    },
-    {
-      "name": "etaf-ui-control-markers-keep-native-selection-behavior",
-      "file": "tests/etaf-ui-font-tests.el",
-      "purpose": "Checkbox, Switch and Radio ASCII marks preserve full labels and controlled values across native Return activation."
-    },
-    {
-      "name": "etaf-ui-traffic-lights-use-one-cell-ascii-without-svg",
-      "file": "tests/etaf-ui-font-tests.el",
-      "purpose": "Without SVG, one-cell ASCII traffic-light marks inherit the surrounding font, preserve hover widths and invoke the controlled close/minimize/zoom/restore actions."
-    },
-    {
-      "name": "etaf-ui-text-input-edits-the-value-in-place",
-      "file": "tests/etaf-ui-field-tests.el",
-      "purpose": "Typing through the command loop edits the bound value in place without moving surrounding lines; Return submits."
-    },
-    {
-      "name": "etaf-ui-text-input-escape-keeps-text-and-c-c-c-k-restores",
-      "file": "tests/etaf-ui-field-tests.el",
-      "purpose": "Escape leaves the session keeping its text and Host focus; C-c C-k restores the value captured at activation."
-    },
-    {
-      "name": "etaf-ui-text-input-arrow-boundary-keeps-draft-and-caret",
-      "file": "tests/etaf-ui-field-tests.el",
-      "purpose": "Left at the value start leaves the field keeping the draft, and re-editing resumes at the same caret."
-    },
-    {
-      "name": "etaf-ui-text-input-multiline-grows-with-newlines",
-      "file": "tests/etaf-ui-field-tests.el",
-      "purpose": "A multi-row field inserts unindented newlines on Return, Shift+Return and C-j, grows with them and submits on C-c C-c."
-    },
-    {
-      "name": "etaf-ui-text-input-placeholder-is-never-the-value",
-      "file": "tests/etaf-ui-field-tests.el",
-      "purpose": "An empty field shows its placeholder after the caret and never treats it as the value."
-    },
-    {
-      "name": "etaf-ui-text-input-runs-native-editing-keys-on-the-value",
-      "file": "tests/etaf-ui-field-tests.el",
-      "purpose": "Native word, line, kill, yank and undo commands edit only the field's value."
-    },
-    {
-      "name": "etaf-ui-text-input-keys-reach-the-field-over-application-bindings",
-      "file": "tests/etaf-ui-field-tests.el",
-      "purpose": "Printing keys bound by the application type into an active field."
-    },
-    {
-      "name": "etaf-ui-text-input-publishes-other-changes-during-editing",
-      "file": "tests/etaf-ui-field-tests.el",
-      "purpose": "Application state changes publish while a field is being edited."
-    },
-    {
-      "name": "etaf-ui-text-input-disabled-and-read-only-are-not-editable",
-      "file": "tests/etaf-ui-field-tests.el",
-      "purpose": "Disabled and read-only fields open no editing session."
-    },
-    {
-      "name": "etaf-ui-text-input-installs-completion-and-keymap",
-      "file": "tests/etaf-ui-field-tests.el",
-      "purpose": "Completion functions complete the value and field key bindings run during the session only."
-    },
-    {
-      "name": "etaf-ui-text-input-leaving-keeps-the-draft",
-      "file": "tests/etaf-ui-field-tests.el",
-      "purpose": "Pressing the field keeps editing; pressing another Host or unmounting leaves with the typed draft kept."
-    },
-    {
-      "name": "etaf-ui-text-input-relayouts-while-editing",
-      "file": "tests/etaf-ui-field-tests.el",
-      "purpose": "A viewport refit applies immediately while editing continues."
-    },
-    {
-      "name": "etaf-ui-text-input-focus-recolours-a-reserved-frame",
-      "file": "tests/etaf-ui-field-tests.el",
-      "purpose": "Focus recolours the outlined frame without moving layout; the plain variant has no frame."
-    },
-    {
-      "name": "etaf-ui-text-input-shows-a-caret-and-restores-state",
-      "file": "tests/etaf-ui-field-tests.el",
-      "purpose": "Editing shows a bar caret and ending restores the buffer cursor."
-    },
-    {
-      "name": "etaf-ui-text-input-validates-props-and-ends-once",
-      "file": "tests/etaf-ui-field-tests.el",
-      "purpose": "Invalid props are reported in component context and ending a session twice releases it once."
-    },
-    {
-      "name": "etaf-ui-search-field-edits-clears-and-keeps-editing",
-      "file": "tests/etaf-ui-field-tests.el",
-      "purpose": "A search field edits its query live; its clear control empties the query, reports the clear and keeps editing."
-    },
-    {
-      "name": "etaf-ui-pane-resizer-reports-clamped-widths",
-      "file": "tests/etaf-ui-desktop-tests.el",
-      "purpose": "Dragging a pane resizer reports widths clamped to its bounds and the final width on release; the focused divider steps the width with Left/Right."
-    },
-    {
-      "name": "etaf-ui-composites-are-one-tab-stop-entered-at-the-selection",
-      "file": "tests/etaf-ui-focus-composition-tests.el",
-      "purpose": "Tabs form one Tab stop entered at the active tab; arrows and C-b move between tabs without selecting them."
-    },
-    {
-      "name": "etaf-ui-tree-branches-open-right-and-close-left",
-      "file": "tests/etaf-ui-focus-composition-tests.el",
-      "purpose": "A focused Tree branch expands with Right and collapses with Left through the caller's on-toggle."
-    },
-    {
-      "name": "etaf-ui-text-grid-updates-rows-with-stable-extents",
-      "file": "tests/etaf-ui-text-grid-tests.el",
-      "purpose": "Independent Unicode rows update in place with exact padded widths, stable neighbors and no focus targets."
-    },
-    {
-      "name": "etaf-ui-text-grid-rejects-invalid-shapes-and-text",
-      "file": "tests/etaf-ui-text-grid-tests.el",
-      "purpose": "Invalid dimensions, heights, callbacks, multiline, tabbed and overflowing text fail through the public component interface."
-    },
-    {
-      "name": "etaf-ui-text-grid-scrolls-a-million-rows-through-its-viewport",
-      "file": "tests/etaf-ui-text-grid-tests.el",
-      "purpose": "A million-row grid with a height shows its viewport, follows scroll calls and keys, reports the first visible row, repaints rows that read a changed ref and builds only rows near the viewport."
-    },
-    {
-      "name": "etaf-ui-text-grid-keeps-its-viewport-within-changing-rows",
-      "file": "tests/etaf-ui-text-grid-tests.el",
-      "purpose": "Shrinking the row count below a scrolled grid clamps its viewport to the last rows, and a grown grid scrolls into the new rows."
-    },
-    {
-      "name": "etaf-ui-window-body-reads-the-content-region",
-      "file": "tests/etaf-ui-window-tests.el",
-      "purpose": "Window body content reads the window's content box as its viewport."
-    },
-    {
-      "name": "etaf-ui-window-full-bleed-body-reaches-the-frame-edges",
-      "file": "tests/etaf-ui-window-tests.el",
-      "purpose": "A full-bleed window gives its body the rows of its edge handles."
-    },
-    {
-      "name": "etaf-ui-window-full-bleed-handles-own-edge-input",
-      "file": "tests/etaf-ui-window-tests.el",
-      "purpose": "All eight resize handles own their painted cells and directional pointers across full-bleed geometry changes; child controls retain their authored pointer."
-    },
-    {
-      "name": "etaf-ui-window-full-bleed-handles-leave-the-body-painted",
-      "file": "tests/etaf-ui-window-tests.el",
-      "purpose": "A full-bleed resize strip keeps its pointer target while the body's own background stays painted across the window edge cells."
-    },
-    {
-      "name": "etaf-ui-svg-elements-emit-compact-escaped-markup",
-      "file": "tests/etaf-ui-svg-tests.el",
-      "purpose": "Scene helpers format numbers compactly, keep attribute order and escape XML values."
-    },
-    {
-      "name": "etaf-ui-svg-elements-reject-invalid-geometry-and-attributes",
-      "file": "tests/etaf-ui-svg-tests.el",
-      "purpose": "Invalid geometry, attribute keys, repeated keys and values signal one readable condition."
-    },
-    {
-      "name": "etaf-ui-svg-image-builds-valid-documents",
-      "file": "tests/etaf-ui-svg-tests.el",
-      "purpose": "The image descriptor wraps a well-formed desktop-sized SVG document with viewbox and aspect ratio."
-    },
-    {
-      "name": "etaf-ui-svg-image-feeds-a-retained-image-host",
-      "file": "tests/etaf-ui-svg-tests.el",
-      "purpose": "A composed scene keeps fixed cell metrics, accessibility names, focus and activation."
-    },
-    {
-      "name": "etaf-ui-markdown-parse-reports-document-structure",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "Parsing exposes the title, outline, block types, footnote definitions and resolved feature flags."
-    },
-    {
-      "name": "etaf-ui-markdown-parse-etaf-preset-defines-terms",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "etaf 预设下，一行术语加下面以 : 或 ~ 开头的行组成一个定义列表，连续术语归入同一个列表。"
-    },
-    {
-      "name": "etaf-ui-markdown-parse-scripts-and-math",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "H~2~O 与 x^2^ 变成上下标字符，$..$ 变成公式节点，$5 仍是钱；解析时就把可否排版定下来。"
-    },
-    {
-      "name": "etaf-ui-markdown-parse-a-display-formula-is-one-block",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "$$ 围起来的公式是一个显示块，纯文本近似把 \\sqrt 与 \\le 写成 √ 与 ≤。"
-    },
-    {
-      "name": "etaf-ui-markdown-parse-an-abbreviation-carries-its-title",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "*[HTML]: … 这一行本身不画，正文里的整词 HTML 带上标题，HTML5 不算。"
-    },
-    {
-      "name": "etaf-ui-markdown-parse-a-narrower-preset-leaves-new-syntax-literal",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "gfm 预设不启用新语法，H~2~O 按 CommonMark 读成原文，不报错。"
-    },
-    {
-      "name": "etaf-ui-markdown-etaf-syntax-paints-its-own-shapes",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "定义列表、上下标、行内公式在页面上分别画出术语行、₂ 与公式文本。"
-    },
-    {
-      "name": "etaf-ui-markdown-parse-a-shortcode-paints-its-emoji",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "已知的 :name: 短码换成对应字符；时间、未知名与 gfm 预设下都保持原文，语法不会吃掉普通文字。"
-    },
-    {
-      "name": "etaf-ui-markdown-parse-a-repeated-footnote-uses-its-first-definition",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "同一标签定义两次时用第一次的定义；引用了从未定义的标签时不产生脚注条目。"
-    },
-    {
-      "name": "etaf-ui-markdown-highlight-uses-the-modes-own-faces",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "代码高亮读的是语言自己 mode 的 face：段落被切成带样式的 run，重组后文本一字不差；没有 mode 的语言返回 nil 按单色画。"
-    },
-    {
-      "name": "etaf-ui-edge-panel-keeps-its-title-on-the-rule",
-      "file": "tests/etaf-ui-edge-tests.el",
-      "purpose": "面板把标题、状态和正文依次画出，标题写在顶边那一行。"
-    },
-    {
-      "name": "etaf-ui-edge-tabs-dispatch-the-pressed-tab",
-      "file": "tests/etaf-ui-edge-tests.el",
-      "purpose": "顶边标签页画出所有标签，按下一个标签时把它的 key 交给回调。"
-    },
-    {
-      "name": "etaf-ui-underline-field-shows-placeholder-until-it-has-a-value",
-      "file": "tests/etaf-ui-edge-tests.el",
-      "purpose": "下划线字段在值为空时画出占位文字，有值时画值本身。"
-    },
-    {
-      "name": "etaf-ui-markdown-code-fence-options-paint-their-block",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "围栏的 title、行号与行标记画出标题、编号与去掉标记的代码，标记本身不出现在页面上。"
-    },
-    {
-      "name": "etaf-ui-markdown-code-renderers-draw-their-language",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "为某个围栏语言注册渲染器后，该语言交给渲染器画；没有注册项的仍按默认代码块画。"
-    },
-    {
-      "name": "etaf-ui-markdown-parse-dialect-gates-extensions",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "The commonmark dialect leaves GitHub extension syntax as literal text while gfm parses it."
-    },
-    {
-      "name": "etaf-ui-markdown-parse-rejects-unknown-flavor",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "An unknown dialect name signals the documented markdown error."
-    },
-    {
-      "name": "etaf-ui-markdown-render-requires-a-palette",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "Rendering a colored block without its palette or with an unknown key signals the markdown error."
-    },
-    {
-      "name": "etaf-ui-markdown-renders-blocks-and-inline-styles",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "Headings, inline emphasis and code, lists, fenced code, tables, quotes and callouts publish their content while HTML comments stay invisible."
-    },
-    {
-      "name": "etaf-ui-markdown-quote-adds-no-blank-line-of-its-own",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "A blockquote whose source has no blank line inside it ends on its last text line; the rendered box adds no empty row of its own before its bottom edge."
-    },
-    {
-      "name": "etaf-ui-markdown-quote-separates-its-blocks",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "A quote separates the blocks it holds by one blank row and ends on the last line of its last block."
-    },
-    {
-      "name": "etaf-ui-markdown-a-blank-line-in-an-item-separates-paragraphs",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "A blank line inside a list item keeps the two paragraphs apart in the parse and one blank row apart in the render."
-    },
-    {
-      "name": "etaf-ui-markdown-quote-text-recedes-behind-its-surface",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "A quote paints its own text in the muted color while a link inside it keeps the accent, and body text outside the quote keeps following the buffer face."
-    },
-    {
-      "name": "etaf-ui-markdown-callbacks-replace-media-and-code",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "The render-code-block and render-media callbacks own the rendered block and replace the default."
-    },
-    {
-      "name": "etaf-ui-markdown-media-falls-back-to-text",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "Without a media callback an image keeps its alt text instead of disappearing."
-    },
-    {
-      "name": "etaf-ui-markdown-alert-labels-override-defaults",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "The alert-labels environment overrides the label of its kind only."
-    },
-    {
-      "name": "etaf-ui-markdown-line-grid-keeps-body-size",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "The line-grid environment keeps headings and footnote references at the body font size."
-    },
-    {
-      "name": "etaf-ui-markdown-blocks-carry-their-source-range",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "Every top-level parsed block carries the character range of its own source, in document order."
-    },
-    {
-      "name": "etaf-ui-markdown-a-definition-list-splits-the-paragraph-range",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "A paragraph read together with its definition list keeps a range of its own, ending where the list begins."
-    },
-    {
-      "name": "etaf-ui-markdown-an-alert-puts-its-text-under-the-label",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "An alert paints its label row and then its text row with no empty row between them."
-    },
-    {
-      "name": "etaf-ui-markdown-a-cell-keeps-an-escaped-pipe",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "A pipe escaped with a backslash stays inside its table cell while the other pipes split cells."
-    },
-    {
-      "name": "etaf-ui-markdown-a-new-delimiter-starts-a-new-list",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "A numbered list that changes its delimiter starts a new list from its own number instead of continuing the previous one."
-    },
-    {
-      "name": "etaf-ui-markdown-list-mark-takes-one-cell-before-its-text",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "A list mark sits one cell before its text, and a list that reaches two digits keeps one text column."
-    },
-    {
-      "name": "etaf-ui-markdown-table-columns-follow-content",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "Table columns share the width by content and cells wrap at word boundaries."
-    },
-    {
-      "name": "etaf-ui-markdown-table-keeps-unbroken-columns",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "A table column is never narrower than its widest unbreakable cell text, so words and short CJK runs stay whole."
-    },
-    {
-      "name": "etaf-ui-markdown-code-link-links-a-code-span",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "The code-link callback turns a code span into an activatable link while the span keeps its code style."
-    },
-    {
-      "name": "etaf-ui-markdown-code-link-inside-a-link-keeps-one-decoration",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "A linked code span that is also a code link renders with one text decoration instead of a duplicate View property."
-    },
-    {
-      "name": "etaf-ui-markdown-code-bg-colors-code-spans",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "An optional code-bg palette entry colors inline code and falls back to panel without it."
-    },
-    {
-      "name": "etaf-ui-markdown-links-hover-with-the-accent-tint",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "A rendered link carries the accent-soft hover face while code spans keep their code background."
-    },
-    {
-      "name": "etaf-ui-markdown-link-hover-can-be-disabled",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "Passing `:link-hover nil' in the markdown rendering environment omits `mouse-face' hover highlights on links while preserving hand pointer and link activation."
-    },
-    {
-      "name": "etaf-ui-markdown-table-keeps-short-cjk-cells-whole",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "A starved table column still fits a short CJK word on one line instead of splitting it between characters."
-    },
-    {
-      "name": "etaf-ui-theme-tokens-maps-palette-roles",
-      "file": "tests/etaf-ui-theme-tokens-tests.el",
-      "purpose": "Each supplied application palette role becomes every catalog color token that names it."
-    },
-    {
-      "name": "etaf-ui-theme-tokens-derives-omitted-roles",
-      "file": "tests/etaf-ui-theme-tokens-tests.el",
-      "purpose": "Omitted palette roles derive from the surface, the text and whether the background is light or dark."
-    },
-    {
-      "name": "etaf-ui-theme-tokens-rejects-invalid-palettes",
-      "file": "tests/etaf-ui-theme-tokens-tests.el",
-      "purpose": "A palette without both base colors, with an unknown role or with a non-string color signals wrong-type-argument."
-    },
-    {
-      "name": "etaf-ui-color-legible-keeps-a-syntax-colour-on-its-page",
-      "file": "tests/etaf-ui-theme-tokens-tests.el",
-      "purpose": "A colour below the WCAG AA ratio on its surface is mixed toward black or white until it passes, keeping its hue, and a colour that already passes is unchanged."
-    },
-    {
-      "name": "etaf-ui-color-contrast-measures-the-wcag-ratio",
-      "file": "tests/etaf-ui-theme-tokens-tests.el",
-      "purpose": "Contrast is 1 for one colour twice, about 21 for black on white, and 0 for a colour with no channels."
-    },
-    {
-      "name": "etaf-ui-theme-tokens-paint-catalog-components",
-      "file": "tests/etaf-ui-theme-tokens-tests.el",
-      "purpose": "Provided palette tokens paint a mounted catalog control, and a token placed before the result overrides it."
-    },
-    {
-      "name": "etaf-ui-cell-line-fits-aligns-and-separates-cells",
-      "file": "tests/etaf-ui-cell-line-tests.el",
-      "purpose": "Cells keep their declared width, align their text, truncate overflow and end in a separator."
-    },
-    {
-      "name": "etaf-ui-cell-line-paints-ebox-stripes-and-the-row-rule",
-      "file": "tests/etaf-ui-cell-line-tests.el",
-      "purpose": "Separators are one-pixel spaces or box-rule glyphs with per-cell colours, and the row rule spans the line."
-    },
-    {
-      "name": "etaf-ui-cell-line-rejects-cells-it-cannot-paint",
-      "file": "tests/etaf-ui-cell-line-tests.el",
-      "purpose": "Broken widths, non-string or multi-line text and unknown alignment fail instead of painting."
-    },
-    {
-      "name": "etaf-ui-sheet-builds-only-the-viewport",
-      "file": "tests/etaf-ui-sheet-tests.el",
-      "purpose": "A 100000-row sheet paints only its viewport, and revealing a far cursor scrolls to it."
-    },
-    {
-      "name": "etaf-ui-sheet-paints-cursor-and-selection",
-      "file": "tests/etaf-ui-sheet-tests.el",
-      "purpose": "The cursor cell keeps its outline, selected cells take the selection fill, unselected ones do not."
-    },
-    {
-      "name": "etaf-ui-sheet-repaints-when-the-caller-bumps-version",
-      "file": "tests/etaf-ui-sheet-tests.el",
-      "purpose": "Cell text changes reach the sheet only after the caller bumps the version ref."
-    },
-    {
-      "name": "etaf-ui-sheet-adds-lines-for-a-tall-row",
-      "file": "tests/etaf-ui-sheet-tests.el",
-      "purpose": "A row declared taller paints filler lines that keep the row rule and push later rows down."
-    },
-    {
-      "name": "etaf-ui-sheet-edits-a-cell-through-the-field",
-      "file": "tests/etaf-ui-sheet-tests.el",
-      "purpose": "Editing promotes the cell into a text field showing its raw value and reports the submitted text."
-    },
-    {
-      "name": "etaf-ui-sheet-rejects-invalid-props",
-      "file": "tests/etaf-ui-sheet-tests.el",
-      "purpose": "Invalid sizes, widths, callbacks, cursor and header declarations signal before publication."
-    },
-    {
-      "name": "etaf-ui-sheet-pages-the-viewport-without-moving-the-cursor",
-      "file": "tests/etaf-ui-sheet-tests.el",
-      "purpose": "etaf-sheet-scroll pages by lines, shows later rows, and leaves the caller's cursor untouched."
-    },
-    {
-      "name": "etaf-ui-markdown-table-weights-its-lines",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "Every table row carries the rule between its cells, in one of three weights the page paints: the header’s rule, the cell rules and the table’s frame."
-    },
-    {
-      "name": "etaf-ui-markdown-table-rows-share-one-column-grid",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "Every row of a table rules its cells in the same display columns, so a wide cell never pushes a row out of line."
-    },
-    {
-      "name": "etaf-ui-keycap-and-check-mark-render-public-contracts",
-      "file": "tests/etaf-ui-modern-tests.el",
-      "purpose": "Action and region keycaps keep their two levels, draw their captions and dispatch presses, while a disabled cap keeps its slot; the check mark spells each state on a text frame and rejects an unknown state."
-    },
-    {
-      "name": "etaf-ui-list-draws-checkbox-selection-and-meta",
-      "file": "tests/etaf-ui-modern-tests.el",
-      "purpose": "A list draws its checkbox column, its trailing meta and its selected row, and reports a press through the caller's callback."
-    },
-    {
-      "name": "etaf-ui-markdown-parse-links-a-bare-url-in-a-long-paragraph",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "A bare URL in a long prose paragraph yields exactly one link while every word around it keeps its text, because the autolink parser compares the characters at each `h' and `w' instead of searching for the next prefix."
-    },
-    {
-      "name": "etaf-ui-markdown-parse-accepts-a-bare-www-url",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "A `www.' address still resolves to an http link and the words around it stay outside the link, so the cheaper prefix comparison keeps the shorter GFM form."
-    },
-    {
-      "name": "etaf-ui-markdown-parse-costs-the-same-as-its-own-paragraphs",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "The same text costs no more as one long paragraph than as many paragraphs, so autolink detection stays linear in the text instead of scanning to the next prefix from every candidate character."
-    },
-    {
-      "name": "etaf-ui-markdown-task-list-marks-done-and-open-items",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "A task list marks a done item with a filled square and an open one with a hollow square, both from the body font, so the mark keeps the line's weight and the words start in the same column."
-    },
-    {
-      "name": "etaf-ui-markdown-a-soft-break-folds-into-one-line",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "A soft break inside a paragraph folds into a space, while a two-space or backslash break paints a line end of its own."
-    },
-    {
-      "name": "etaf-ui-markdown-render-math-draws-the-formula",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "A caller's :render-math owns a display formula and paints what it drew; without it the block keeps the plain-text approximation."
-    },
-    {
-      "name": "etaf-ui-markdown-math-text-survives-a-backslash-in-a-script",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "A formula whose script body holds a TeX command renders as text instead of signalling on the backslash, and the rest of the formula keeps its symbols."
-    },
-    {
-      "name": "etaf-ui-markdown-math-text-keeps-command-case",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "The plain-text rendering keeps TeX command case (pi versus Pi) and renders a root inside a fraction as its value."
-    },
-    {
-      "name": "etaf-ui-markdown-parse-marks-icons-keys-and-badges",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "The etaf dialect reads highlighted runs, key groups, badges and icons into their own inline nodes while a bare comparison stays prose."
-    },
-    {
-      "name": "etaf-ui-markdown-etaf-inline-marks-paint",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "A paragraph paints its highlighted text, key cap group and badge through the shared renderer."
-    },
-    {
-      "name": "etaf-ui-cell-metrics-slice-icons-at-the-canvas-row",
-      "file": "tests/etaf-ui-cell-metrics-tests.el",
-      "purpose": "A two-row icon is cut at the line height the canvas draws, so a canvas font or text scale does not leave the picture a row short of the cells that hold it."
-    },
-    {
-      "name": "etaf-ui-markdown-html-media-forwards-declared-dimensions",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "Raw HTML `<img>' blocks parse positive pixel `width' and `height' attributes (quoted, unquoted or `px'-suffixed, ignoring percentages) and forward `:width' and `:height' to `:render-media'."
-    },
-    {
-      "name": "etaf-ui-markdown-heading-underline-can-be-disabled",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "Setting `:heading-underline nil' in ENV suppresses H1/H2 bottom border rules and underlines on links inside headings while keeping heading links clickable and body links underlined."
-    },
-    {
-      "name": "etaf-ui-markdown-inline-delimiters-skip-code-spans",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "Closing delimiter scans for emphasis, strikethrough and highlight skip backtick code spans so delimiters inside inline code do not prematurely terminate formatting."
-    },
-    {
-      "name": "etaf-ui-markdown-math-text-preserves-escaped-braces",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "`etaf-ui-markdown-math-text' preserves escaped set braces `\\{' and `\\}' as literal braces while removing TeX grouping braces."
-    },
-    {
-      "name": "etaf-ui-markdown-highlight-reuses-mode-buffer-cleanly",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "Reusing per-mode scratch buffers for syntax highlighting flushes syntax state cleanly so an unclosed string in one snippet does not corrupt highlighting of the next."
-    },
-    {
-      "name": "etaf-ui-markdown-footnote-ref-back-and-code-copy-callbacks",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "Markdown rendering environment callbacks `:footnote-ref', `:footnote-back' and `:on-copy' attach host refs, trigger return actions from footnote definitions and report code copies."
-    },
-    {
-      "name": "etaf-ui-markdown-etaf-extended-inline-syntax-parses-and-paints",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "Extended etaf dialect inline syntax (spoilers, comments, wiki-links, inline annotations, color chips, symbols and .tip success highlights/badges) parses, renders and dispatches interactively while gfm keeps them literal."
-    },
-    {
-      "name": "etaf-ui-markdown-code-fence-advanced-options",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "Code blocks honor `:collapsed-lines' folding with interactive expand/collapse, `/word/` and `[!code word:...]` highlighting, `:whitespace', `:indent-guides' and 1-based `{a-b}` line ranges."
-    },
-    {
-      "name": "etaf-ui-markdown-collapsible-alert-and-interactive-tasks",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "Obsidian-style collapsible alerts (`> [!tip]- Title`) toggle visibility on header activation and task list checkboxes invoke `:on-toggle-task` with item line offsets."
-    },
-    {
-      "name": "etaf-ui-markdown-hover-discipline-keeps-static-surfaces-clean",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "Pointer hover faces attach strictly to unselected interactive leaves while static prose, code lines, inline chips, task labels and active tabs carry no mouse-face."
-    },
-    {
-      "name": "etaf-ui-markdown-highlight-modern-aliases-and-fallback",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "`etaf-ui-markdown-highlight-code' resolves modern language aliases and built-in/Tree-sitter fallbacks cleanly without failing when optional grammars are absent."
-    },
-    {
-      "name": "etaf-ui-markdown-highlight-builtin-lexer-and-shell-cli",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "`etaf-ui-markdown-highlight-code' highlights common languages via its zero-dependency built-in lexer when no Emacs mode or Tree-sitter grammar is installed and enhances shell/console CLI prompts, commands, flags and pipes losslessly."
-    },
-    {
-      "name": "etaf-ui-markdown-table-fits-wide-tables-without-clipping",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "Wide multi-column Markdown tables adapt across wide breakout, compact grid and narrow stacked-card budgets without ever clipping rightmost columns."
-    },
-    {
-      "name": "etaf-ui-spinner-cycles-frames-and-validates-props",
-      "file": "tests/etaf-ui-animation-tests.el",
-      "purpose": "Spinner cycles fixed-width frames on the shared clock, stops on unmount and rejects invalid props."
-    },
-    {
-      "name": "etaf-ui-animated-feedback-progress-statistic-and-skeleton",
-      "file": "tests/etaf-ui-animation-tests.el",
-      "purpose": "Opt-in animated progress, statistic and skeleton components advance smoothly on the shared clock."
-    },
-    {
-      "name": "etaf-ui-dialog-animated-backdrop-fades-in",
-      "file": "tests/etaf-ui-animation-tests.el",
-      "purpose": "An animated dialog dims its backdrop over time on open and dismisses cleanly."
-    },
-    {
-      "name": "etaf-ui-svg-stage-composites-only-overlapping-tiles-and-falls-back",
-      "file": "tests/etaf-ui-animation-tests.el",
-      "purpose": "SVG stage composites sprites onto overlapped tiles, dispatches tile activation and falls back to cell text when non-graphic."
-    },
-    {
-      "name": "etaf-ui-accordion-compact-borders-visible-hover-and-empty-body",
-      "file": "tests/etaf-ui-modern-tests.el",
-      "purpose": "Accordion headers stay compact with primary ink, preserve border overline/underline under visible theme-derived hover in dark and light palettes, and omit hollow body boxes for empty content."
-    },
-    {
-      "name": "etaf-ui-dialog-projects-into-modal-host-with-dimmed-backdrop",
-      "file": "tests/etaf-ui-surface-tests.el",
-      "purpose": "Centered modal dialogs delegate card rendering to `etaf-ui-modal-host-function' on graphical displays when `etaf-ui-modal-use-child-frame' is enabled, keeping the uniformly dimmed backdrop scrim in the parent buffer."
-    },
-    {
-      "name": "etaf-ui-dialog-defaults-to-centered-in-buffer-with-uniform-backdrop",
-      "file": "tests/etaf-ui-surface-tests.el",
-      "purpose": "Centered modal dialogs default to in-buffer rendering with exact vertical centering, uniform dimmed canvas background and clean focus restoration."
-    },
-    {
-      "name": "etaf-ui-markdown-table-images-dispatch-with-column-width",
-      "file": "tests/etaf-ui-markdown-tests.el",
-      "purpose": "Table cells dispatch Markdown, empty-alt, linked and inline HTML images via `:render-media' as `table-image' with resolved column width and alignment across both grid and narrow card layouts."
-    },
-    {
-      "name": "etaf-ui-pane-resizer-and-splitter-fit-one-cell-on-text-displays",
-      "file": "tests/etaf-ui-desktop-tests.el",
-      "purpose": "Pane resizer and horizontal splitter dividers occupy a single cell width on text displays instead of multiple blank columns."
-    },
-    {
-      "name": "etaf-ui-host-theme-wcag-and-oklch-calming",
-      "file": "tests/etaf-ui-host-theme-tests.el",
-      "purpose": "Host-adaptive theme palettes enforce WCAG AA legibility on base and raised surfaces and calm neon dark-mode accents in OKLCH space."
-    },
-    {
-      "name": "etaf-ui-host-theme-curated-seeds-and-css-vars",
-      "file": "tests/etaf-ui-host-theme-tests.el",
-      "purpose": "Curated seeds stay exact while omitted tiers derive coherently, project onto catalog Theme tokens and resolve via ECSS `--etaf-*' custom properties."
-    },
-    {
-      "name": "etaf-ui-host-theme-ref-reacts-to-mode-and-theme-switch",
-      "file": "tests/etaf-ui-host-theme-tests.el",
-      "purpose": "Reactive host theme refs update on mode-ref writes and reject malformed options and transforms cleanly."
-    },
-    {
-      "name": "etaf-ui-virtual-list-fixed-height-renders-o-viewport-and-scrolls",
-      "file": "tests/etaf-ui-virtual-list-tests.el",
-      "purpose": "Fixed-height 5,000-row virtual list mounts only O(viewport + 2*overscan) rows and renders target slices across mid and end jumps."
-    },
-    {
-      "name": "etaf-ui-virtual-list-dynamic-heights-and-scroll-anchor",
-      "file": "tests/etaf-ui-virtual-list-tests.el",
-      "purpose": "Dynamic-height virtual list measures multi-line row heights post-commit and anchors scroll offsets when rows above the viewport grow."
-    },
-    {
-      "name": "etaf-ui-virtual-list-keyboard-navigation-and-empty-state",
-      "file": "tests/etaf-ui-virtual-list-tests.el",
-      "purpose": "Virtual list handles arrow, page, home, end and RET navigation without unnecessary scroll jumps and shows empty states cleanly."
-    },
-    {
-      "name": "etaf-ui-virtual-list-5000-rows-constant-order-benchmark",
-      "file": "tests/etaf-ui-virtual-list-tests.el",
-      "purpose": "Verify 5,000-row virtual list matches 500-row O(viewport) initial render count and completes repeated scroll jumps in constant-order time."
-    }
-  ]
+ "schema": 1,
+ "load_path": [
+  ".",
+  "tests",
+  "../ebox",
+  "../ebox-playground",
+  "../ecss",
+  "../ekp",
+  "../etaf",
+  "../etaf-db",
+  "../etaf-playground"
+ ],
+ "support": [],
+ "cases": [
+  {
+   "name": "etaf-ui-key-help-opens-in-place-and-restores-its-opener",
+   "file": "tests/etaf-ui-key-help-tests.el",
+   "purpose": "Read-only help stays in the original buffer/window, does not execute business commands and restores focus on Escape."
+  },
+  {
+   "name": "etaf-ui-key-help-guards-local-commands-and-repeated-open",
+   "file": "tests/etaf-ui-key-help-tests.el",
+   "purpose": "Help blocks background letters and local command sequences, keeps native C-g and does not stack repeated openings."
+  },
+  {
+   "name": "etaf-ui-key-help-keeps-its-snapshot-through-background-updates",
+   "file": "tests/etaf-ui-key-help-tests.el",
+   "purpose": "Background application updates preserve the captured help scope and appear after dismissal."
+  },
+  {
+   "name": "etaf-ui-key-help-search-keeps-question-mark-as-text",
+   "file": "tests/etaf-ui-key-help-tests.el",
+   "purpose": "Search treats question marks as text, filters commands and uses layered Escape without dismissing two levels at once."
+  },
+  {
+   "name": "etaf-ui-key-help-backdrop-click-ends-search-and-restores-focus",
+   "file": "tests/etaf-ui-key-help-tests.el",
+   "purpose": "An outside pointer press closes help during native search, ends editing and restores focus without activating background commands."
+  },
+  {
+   "name": "etaf-ui-modal-backdrop-click-dismisses-without-click-through",
+   "file": "tests/etaf-ui-surface-tests.el",
+   "purpose": "Dialog and drawer backdrops dismiss only on pointer presses, keep inner actions open and restore the caller without click-through."
+  },
+  {
+   "name": "etaf-ui-control-theme-defaults-and-explicit-overrides",
+   "file": "tests/etaf-ui-control-theme-tests.el",
+   "purpose": "Shared control Theme tokens retain dark panel fallbacks, leave plain inputs unchanged, respect explicit Button props and preserve activation."
+  },
+  {
+   "name": "etaf-ui-control-theme-keeps-editing-and-focus-geometry",
+   "file": "tests/etaf-ui-control-theme-tests.el",
+   "purpose": "Palette changes preserve native editing and reserved focus geometry; unmount ends the input session."
+  },
+  {
+   "name": "etaf-ui-tile-grid-media-preserves-geometry-and-input",
+   "file": "tests/etaf-ui-tile-grid-tests.el",
+   "purpose": "Image cells and text fallback retain fixed metrics, focus, names and activation coordinates."
+  },
+  {
+   "name": "etaf-ui-tile-grid-rejects-invalid-media-props",
+   "file": "tests/etaf-ui-tile-grid-tests.el",
+   "purpose": "Invalid image callbacks, focus callbacks and cell heights are rejected."
+  },
+  {
+   "name": "etaf-ui-tile-grid-follows-replaced-projection-callbacks",
+   "file": "tests/etaf-ui-tile-grid-tests.el",
+   "purpose": "Replacing caller projections updates retained cell text, help and colors."
+  },
+  {
+   "name": "etaf-ui-tile-grid-preserves-cell-metrics-in-resized-containers",
+   "file": "tests/etaf-ui-tile-grid-tests.el",
+   "purpose": "Resized containers preserve intrinsic cell dimensions, text and activation coordinates."
+  },
+  {
+   "name": "etaf-ui-editor-preserves-native-editing-state",
+   "file": "tests/etaf-ui-editor-tests.el",
+   "purpose": "Enabling/configuring/disabling UI editing preserves multiline Unicode text, native keymaps, completion, point, selection, modification state and undo."
+  },
+  {
+   "name": "etaf-ui-editor-placeholder-never-becomes-text",
+   "file": "tests/etaf-ui-editor-tests.el",
+   "purpose": "An empty hint never becomes copied or submitted text; only text mutations notify and disabling detaches the observer."
+  },
+  {
+   "name": "etaf-ui-editor-replacement-is-undoable-and-coalesced",
+   "file": "tests/etaf-ui-editor-tests.el",
+   "purpose": "External replacements produce a final-value event and one undoable edit, while equal values preserve edit state silently."
+  },
+  {
+   "name": "etaf-ui-editor-stale-update-preserves-edit-then-undo",
+   "file": "tests/etaf-ui-editor-tests.el",
+   "purpose": "A delayed update cannot erase newer edits even when undo has restored the original text; a current tick permits replacement."
+  },
+  {
+   "name": "etaf-ui-editor-copy-narrowing-and-read-only",
+   "file": "tests/etaf-ui-editor-tests.el",
+   "purpose": "Exported text is detached and property-free across narrowing; read-only blocks typing while explicit updates remain possible."
+  },
+  {
+   "name": "etaf-ui-editor-observer-failure-preserves-accepted-text",
+   "file": "tests/etaf-ui-editor-tests.el",
+   "purpose": "Observer errors propagate without deleting accepted text; reentrant replacement is rejected without overwriting the edit."
+  },
+  {
+   "name": "etaf-ui-editor-configuration-is-validated-before-change",
+   "file": "tests/etaf-ui-editor-tests.el",
+   "purpose": "Invalid settings do not detach the installed observer, and invalid editor handles, text and ticks are rejected."
+  },
+  {
+   "name": "etaf-ui-editor-instance-and-mode-lifecycle",
+   "file": "tests/etaf-ui-editor-tests.el",
+   "purpose": "Independent editors do not share callbacks or content; changing major mode and killing a buffer retire their behavior."
+  },
+  {
+   "name": "etaf-ui-tile-grid-controls-coordinates-and-retains-neighbors",
+   "file": "tests/etaf-ui-tile-grid-tests.el",
+   "purpose": "Coordinate callbacks activate the correct tile; local color/text writes preserve neighboring Host identity and geometry."
+  },
+  {
+   "name": "etaf-ui-tile-grid-read-only-and-invalid-input",
+   "file": "tests/etaf-ui-tile-grid-tests.el",
+   "purpose": "Read-only grids expose no activation callbacks and reject invalid dimensions, callback types and overflowing labels before publication."
+  },
+  {
+   "name": "etaf-ui-icon-registry-replaces-removes-and-validates",
+   "file": "tests/etaf-ui-icon-tests.el",
+   "purpose": "Icon registrations round-trip and replace specifications, reject invalid replacements atomically, and remove their own name/glyph inventory."
+  },
+  {
+   "name": "etaf-ui-icon-lookup-distinguishes-missing-name-and-set",
+   "file": "tests/etaf-ui-icon-tests.el",
+   "purpose": "Partial maps resolve names through the requested/default style, preserve the provided inventory, show unknown names, and reject unknown styles; on a text display the terminal set answers an SVG request first while the requested style still owns names it lacks."
+  },
+  {
+   "name": "etaf-ui-icon-svg-unavailable-has-printable-text-properties",
+   "file": "tests/etaf-ui-icon-tests.el",
+   "purpose": "SVG-unavailable rendering preserves the terminal mark as printable text with native paint properties and the default minimum width on every row."
+  },
+  {
+   "name": "etaf-ui-icon-text-mark-keeps-the-row-background",
+   "file": "tests/etaf-ui-icon-tests.el",
+   "purpose": "A terminal icon paints ink only: the mark carries the requested foreground without inheriting the default face or a background, so marks of different widths keep one aligned column and a play mark does not cut a hole in its pill."
+  },
+  {
+   "name": "etaf-ui-icon-terminal-set-resolves-marks-from-a-font-set",
+   "file": "tests/etaf-ui-icon-tests.el",
+   "purpose": "A terminal can resolve an SVG request through a registered font set such as nerd and uses its glyph as text, so a terminal with an icon font gets the same marks as a graphical frame."
+  },
+  {
+   "name": "etaf-ui-icon-renders-without-a-default-face-font",
+   "file": "tests/etaf-ui-icon-tests.el",
+   "purpose": "An icon row keeps its one-line height contract when a graphical frame reports no resolved default face font instead of failing in font-info."
+  },
+  {
+   "name": "etaf-ui-icon-box-keeps-two-rows-width-and-full-target",
+   "file": "tests/etaf-ui-icon-tests.el",
+   "purpose": "Mounted icons occupy exactly two rows when requested, preserve minimum width and presentation props, and dispatch a callback from the whole Host."
+  },
+  {
+   "name": "etaf-ui-icon-tab-index-keeps-a-pressable-icon-out-of-tab-order",
+   "file": "tests/etaf-ui-icon-tests.el",
+   "purpose": "Pressable icons are Tab stops named by their label or help text, while a negative tab index keeps an icon clickable but skipped by Tab."
+  },
+  {
+   "name": "etaf-ui-icon-inside-a-control-shows-the-control-help",
+   "file": "tests/etaf-ui-icon-tests.el",
+   "purpose": "An icon without its own help text leaves the enclosing control's help visible over the icon."
+  },
+  {
+   "name": "etaf-ui-toggle-icon-switches-glyph-and-paint-through-value",
+   "file": "tests/etaf-ui-icon-tests.el",
+   "purpose": "A reactive toggle value switches the icon glyph and its paint in place while the box keeps its declared geometry, role and help text."
+  },
+  {
+   "name": "etaf-ui-icon-metrics-estimates-fit-without-gui",
+   "file": "tests/etaf-ui-icon-tests.el",
+   "purpose": "Batch-safe metrics distinguish fitting from oversized declarations without requiring installed fonts or a graphical frame."
+  },
+  {
+   "name": "etaf-ui-icon-validates-box-and-supports-registered-draw",
+   "file": "tests/etaf-ui-icon-tests.el",
+   "purpose": "Applications can add a draw-function SVG style entirely through registration; invalid sizing and callback props fail before rendering."
+  },
+  {
+   "name": "etaf-ui-range-registers-track-and-fill-hosts",
+   "file": "tests/etaf-ui-range-tests.el",
+   "purpose": "A mounted Range registers the Track and Fill Hosts that retained updates address."
+  },
+  {
+   "name": "etaf-ui-range-bar-height-changes-ink-without-changing-geometry",
+   "file": "tests/etaf-ui-range-tests.el",
+   "purpose": "Bar thickness changes graphical paint at a fixed one-row size while retaining value-driven widths; text-only frames keep a readable rule."
+  },
+  {
+   "name": "etaf-ui-range-fill-moves-through-retained-geometry",
+   "file": "tests/etaf-ui-range-tests.el",
+   "purpose": "A caller grows the Fill through ETAF's retained geometry update without publishing a new View."
+  },
+  {
+   "name": "etaf-ui-range-press-reports-change-and-commit",
+   "file": "tests/etaf-ui-range-tests.el",
+   "purpose": "A pointer click reports the pointed value through on-change and on-commit in that order."
+  },
+  {
+   "name": "etaf-ui-range-steps-from-the-keyboard",
+   "file": "tests/etaf-ui-range-tests.el",
+   "purpose": "Left/Right step a focused Range by its key step through on-commit, and Home/End report its bounds."
+  },
+  {
+   "name": "etaf-ui-range-without-ref-hit-tests-pointer-gestures",
+   "file": "tests/etaf-ui-range-tests.el",
+   "purpose": "A range mounted without a :ref still maps an engine pointer gesture to its value."
+  },
+  {
+   "name": "etaf-ui-range-drag-reports-live-values-and-commits-on-release",
+   "file": "tests/etaf-ui-range-tests.el",
+   "purpose": "Dragging reports intermediate values, commits the released value and ignores a cancelled gesture."
+  },
+  {
+   "name": "etaf-ui-range-snaps-to-the-step-and-clamps-the-ends",
+   "file": "tests/etaf-ui-range-tests.el",
+   "purpose": "Pointer values snap to :step and never escape :min..:max."
+  },
+  {
+   "name": "etaf-ui-range-disabled-rejects-pointer-events",
+   "file": "tests/etaf-ui-range-tests.el",
+   "purpose": "A disabled Range dispatches no callback and rejects pointer events."
+  },
+  {
+   "name": "etaf-ui-range-reactive-bound-reproportions-in-place",
+   "file": "tests/etaf-ui-range-tests.el",
+   "purpose": "A reactive :max bound re-proportions the Fill without a Component re-render."
+  },
+  {
+   "name": "etaf-ui-range-validates-its-input",
+   "file": "tests/etaf-ui-range-tests.el",
+   "purpose": "Invalid numeric props fail before the Range paints."
+  },
+  {
+   "name": "etaf-ui-window-resize-keeps-chrome-and-input",
+   "file": "tests/etaf-ui-window-resize-tests.el",
+   "purpose": "Controlled catalog window sizes keep the title, eight handles and button targets, commit once per batch and match a fresh mount."
+  },
+  {
+   "name": "etaf-ui-window-resize-example-uses-controlled-handles",
+   "file": "tests/etaf-ui-window-resize-tests.el",
+   "purpose": "The public catalog resize example updates controlled geometry and restores the original rectangle on cancellation."
+  },
+  {
+   "name": "etaf-ui-window-keeps-geometry-and-mode-controlled",
+   "file": "tests/etaf-ui-window-tests.el",
+   "purpose": "Window geometry remains caller-owned while controlled mode changes only the projected content."
+  },
+  {
+   "name": "etaf-ui-window-forwards-chrome-and-resize-gestures",
+   "file": "tests/etaf-ui-window-tests.el",
+   "purpose": "Title-bar and resize-handle gestures reach caller callbacks with their edge and phase payloads."
+  },
+  {
+   "name": "etaf-ui-window-moves-and-resizes-from-keys-inside-it",
+   "file": "tests/etaf-ui-window-tests.el",
+   "purpose": "Focus entering a Window runs its on-focus; with focus inside, M-arrows reach its move callback and M-S-arrows its right/bottom resize callbacks as keyboard gestures."
+  },
+  {
+   "name": "etaf-ui-resize-lock-confirms-every-edge-and-corner",
+   "file": "tests/etaf-ui-resize-lock-tests.el",
+   "purpose": "All eight Window and standalone Panel handles accept locked resize at the confirming press and ignore subsequent motion and release positions."
+  },
+  {
+   "name": "etaf-ui-resize-lock-cancels-and-releases-active-targets",
+   "file": "tests/etaf-ui-resize-lock-tests.el",
+   "purpose": "Escape cancels each locked resize handle once, clears active state and preserves the following command."
+  },
+  {
+   "name": "etaf-ui-resize-lock-nil-keeps-ordinary-release",
+   "file": "tests/etaf-ui-resize-lock-tests.el",
+   "purpose": "Explicit nil and the standalone Panel default keep resize gestures ending at the first release."
+  },
+  {
+   "name": "etaf-ui-resize-lock-rejects-invalid-modifier",
+   "file": "tests/etaf-ui-resize-lock-tests.el",
+   "purpose": "Invalid lock modifiers are rejected through the public Component validation contract."
+  },
+  {
+   "name": "etaf-ui-resizable-panel-rejects-unknown-edge",
+   "file": "tests/etaf-ui-window-tests.el",
+   "purpose": "Resizable panels reject unsupported edge names at the public Component boundary."
+  },
+  {
+   "name": "etaf-ui-label-supports-box-geometry-and-text-presentation",
+   "file": "tests/etaf-ui-label-tests.el",
+   "purpose": "Label width, padding, border, wrapping and inherited text presentation match direct Ebox composition."
+  },
+  {
+   "name": "etaf-ui-label-reflows-reactive-text-and-preserves-following-content",
+   "file": "tests/etaf-ui-label-tests.el",
+   "purpose": "Reactive English and Chinese text reflow inside the allocated width, preserving the Label ref and following content after resize."
+  },
+  {
+   "name": "etaf-ui-button-callback-uses-only-committed-props",
+   "file": "tests/etaf-ui-button-commit-tests.el",
+   "purpose": "A later sibling failure cannot replace the live Button callback."
+  },
+  {
+   "name": "etaf-ui-cell-columns-require-unique-non-nil-keys",
+   "file": "tests/etaf-ui-cell-tests.el",
+   "purpose": "Reject ambiguous column identity with its index and offending key."
+  },
+  {
+   "name": "etaf-ui-cell-stateless-table-keeps-pure-render-support",
+   "file": "tests/etaf-ui-cell-tests.el",
+   "purpose": "Automatic row references do not introduce setup state into plain Tables."
+  },
+  {
+   "name": "etaf-ui-cell-factory-rejects-ref-and-watch-creation",
+   "file": "tests/etaf-ui-cell-tests.el",
+   "purpose": "A factory cannot allocate persistent state or subscriptions during render."
+  },
+  {
+   "name": "etaf-ui-cell-row-and-column-reorder-retain-state",
+   "file": "tests/etaf-ui-cell-tests.el",
+   "purpose": "Counter state follows row and column keys, with one cleanup on deletion."
+  },
+  {
+   "name": "etaf-ui-cell-grid-reorders-without-remounting-cells",
+   "file": "tests/etaf-ui-cell-tests.el",
+   "purpose": "DataGrid uses the same retained custom cells while preserving row identity."
+  },
+  {
+   "name": "etaf-ui-cell-duplicate-field-migration-retains-distinct-state",
+   "file": "tests/etaf-ui-cell-tests.el",
+   "purpose": "Name and Uppercase read the same field but retain distinct column identities."
+  },
+  {
+   "name": "etaf-ui-cell-later-factory-error-retains-committed-handler",
+   "file": "tests/etaf-ui-cell-tests.el",
+   "purpose": "A failed later cell cannot replace an earlier cell's committed callback."
+  },
+  {
+   "name": "etaf-ui-cell-grid-publishes-current-rows-and-selection",
+   "file": "tests/etaf-ui-cell-tests.el",
+   "purpose": "Replacing a row with equal or changed contents updates cell output and callback identity, while focus and selection remain consistent under retained keys."
+  },
+  {
+   "name": "etaf-ui-docs-readmes-mount-and-dispatch-in-fresh-emacs",
+   "file": "tests/etaf-ui-docs-tests.el",
+   "purpose": "Both catalog READMEs use real names and complete mounted interactions."
+  },
+  {
+   "name": "etaf-ui-pagination-wraps-complete-controls-in-narrow-space",
+   "file": "tests/etaf-ui-pagination-commit-tests.el",
+   "purpose": "A narrow allocation wraps whole controls without clipping page text."
+  },
+  {
+   "name": "etaf-ui-pagination-keeps-explicit-colors-and-semantic-defaults",
+   "file": "tests/etaf-ui-pagination-commit-tests.el",
+   "purpose": "Explicit colors remain effective without replacing omitted variant defaults."
+  },
+  {
+   "name": "etaf-ui-adaptive-columns-reject-invalid-fractional-weights",
+   "file": "tests/etaf-ui-table-adaptive-tests.el",
+   "purpose": "Invalid fractional tracks identify the offending column before mounting."
+  },
+  {
+   "name": "etaf-ui-adaptive-cells-retain-identity-and-failed-candidates",
+   "file": "tests/etaf-ui-table-adaptive-tests.el",
+   "purpose": "Adaptive row/column reorders preserve local state and rollback ownership."
+  },
+  {
+   "name": "etaf-ui-table-string-column-keys-read-equal-alist-keys",
+   "file": "tests/etaf-ui-table-adaptive-tests.el",
+   "purpose": "Table and DataGrid read string keys in both fixed and adaptive cells."
+  },
+  {
+   "name": "etaf-ui-button-use-behavior-dispatches-through-host",
+   "file": "tests/etaf-ui-tests.el",
+   "purpose": "Install Button `:use' Behavior and dispatch its merged callback."
+  },
+  {
+   "name": "etaf-ui-button-keeps-its-label-on-one-line",
+   "file": "tests/etaf-ui-tests.el",
+   "purpose": "A Button keeps its full label on one line when a narrow flex line would otherwise shrink it below its content."
+  },
+  {
+   "name": "etaf-ui-button-hover-uses-the-variant-token",
+   "file": "tests/etaf-ui-tests.el",
+   "purpose": "A Button paints its variant's hover background from the catalog token."
+  },
+  {
+   "name": "etaf-ui-button-derives-hover-fill-from-a-custom-surface",
+   "file": "tests/etaf-ui-tests.el",
+   "purpose": "A Button with a custom surface derives a visibly different hover fill from that surface, while a surface-less Button still reads the variant token."
+  },
+  {
+   "name": "etaf-ui-button-focus-uses-a-visible-cue",
+   "file": "tests/etaf-ui-tests.el",
+   "purpose": "Keyboard focus underlines a Button label and fills a surface-less Button without changing geometry."
+  },
+  {
+   "name": "etaf-ui-number-input-validates-and-emits-value",
+   "file": "tests/etaf-ui-tests.el",
+   "purpose": "Prompt-backed number input owns bounds and emits the accepted value."
+  },
+  {
+   "name": "etaf-ui-number-input-stays-inline-in-a-wrapping-row",
+   "file": "tests/etaf-ui-tests.el",
+   "purpose": "A number input nested in another wrapping row keeps its steppers and value on one line."
+  },
+  {
+   "name": "etaf-ui-button-disabled-preserves-explicit-theme-surface",
+   "file": "tests/etaf-ui-tests.el",
+   "purpose": "A disabled Button keeps explicit dark presentation props in its surface."
+  },
+  {
+   "name": "etaf-ui-pagination-is-readable-and-boundary-safe",
+   "file": "tests/etaf-ui-tests.el",
+   "purpose": "Pagination renders labeled controls, stable refs, and page boundaries."
+  },
+  {
+   "name": "etaf-ui-pagination-composes-inside-a-grid-track",
+   "file": "tests/etaf-ui-tests.el",
+   "purpose": "Pagination must distribute free space inside its assigned Grid track."
+  },
+  {
+   "name": "etaf-ui-data-grid-keeps-long-cells-on-one-line",
+   "file": "tests/etaf-ui-tests.el",
+   "purpose": "Long tabular values use an ellipsis instead of increasing row height."
+  },
+  {
+   "name": "etaf-ui-data-grid-converts-character-columns-and-keeps-air",
+   "file": "tests/etaf-ui-tests.el",
+   "purpose": "Character column descriptors become pixel widths with a stable gap."
+  },
+  {
+   "name": "etaf-ui-data-grid-rejects-nil-row-ref",
+   "file": "tests/etaf-ui-tests.el",
+   "purpose": "Reject an interactive row-ref callback that returns nil."
+  },
+  {
+   "name": "etaf-ui-data-grid-projects-loading-error-and-empty",
+   "file": "tests/etaf-ui-tests.el",
+   "purpose": "Project the Data Controller loading, error, and empty states."
+  },
+  {
+   "name": "etaf-ui-data-grid-requires-stable-row-key",
+   "file": "tests/etaf-ui-tests.el",
+   "purpose": "Reject a DataGrid that cannot identify retained rows."
+  },
+  {
+   "name": "etaf-ui-data-grid-rejects-nil-row-key",
+   "file": "tests/etaf-ui-tests.el",
+   "purpose": "Reject a DataGrid row-key function that returns no identity."
+  },
+  {
+   "name": "etaf-ui-checkbox-binding-shares-the-callers-ref",
+   "file": "tests/etaf-ui-binding-tests.el",
+   "purpose": "Bound and explicit checkboxes observe one ref with additive events, disabled protection and unmount cleanup."
+  },
+  {
+   "name": "etaf-ui-binding-retargets-only-after-successful-publication",
+   "file": "tests/etaf-ui-binding-tests.el",
+   "purpose": "Binding target changes publish atomically; conflicts preserve committed callbacks and explicit nil remains valid."
+  },
+  {
+   "name": "etaf-ui-number-binding-validates-cancel-and-disabled-input",
+   "file": "tests/etaf-ui-binding-tests.el",
+   "purpose": "A bound number input writes accepted integers and preserves its ref after cancellation, invalid or disabled input."
+  },
+  {
+   "name": "etaf-ui-bindings-report-conflicting-or-read-only-inputs",
+   "file": "tests/etaf-ui-binding-tests.el",
+   "purpose": "Conflicts and invalid binding targets report contextual component input errors."
+  },
+  {
+   "name": "etaf-ui-data-controls-render-async-refresh-and-cancellation",
+   "file": "tests/etaf-ui-tests.el",
+   "purpose": "Pending reads/writes, cancellation and failure retain accepted rows and actions with valid focus."
+  },
+  {
+   "name": "etaf-ui-select-maps-labels-to-controlled-values",
+   "file": "tests/etaf-ui-input-tests.el",
+   "purpose": "Selection preserves nil values, handles cancellation and disables empty lists."
+  },
+  {
+   "name": "etaf-ui-native-inputs-report-invalid-props-in-context",
+   "file": "tests/etaf-ui-input-tests.el",
+   "purpose": "Invalid values, options and bindings identify the Component and property."
+  },
+  {
+   "name": "etaf-ui-menu-selects-enabled-actions-and-returns-focus",
+   "file": "tests/etaf-ui-input-tests.el",
+   "purpose": "Menu choices follow published props; disabled actions are unavailable and cancellation preserves data and focus."
+  },
+  {
+   "name": "etaf-ui-confirm-dialog-composes-with-menu-actions",
+   "file": "tests/etaf-ui-input-tests.el",
+   "purpose": "Menu actions apply only after native confirmation and return focus after a declined dialog."
+  },
+  {
+   "name": "etaf-ui-control-forwards-native-feedback",
+   "file": "tests/etaf-ui-affordance-tests.el",
+   "purpose": "Native root attributes reach Ebox through the public Button component."
+  },
+  {
+   "name": "etaf-ui-button-hover-keeps-text-readable",
+   "file": "tests/etaf-ui-affordance-tests.el",
+   "purpose": "A Theme without hover tokens derives a distinct fill per palette that keeps at least the label's resting contrast, or 4.5:1 on an extreme surface."
+  },
+  {
+   "name": "etaf-ui-grid-and-table-share-row-presentation",
+   "file": "tests/etaf-ui-grid-composition-tests.el",
+   "purpose": "Table and DataGrid produce matching layout and selection paint while all row fields remain business data."
+  },
+  {
+   "name": "etaf-ui-grid-rows-use-framework-identity-and-callbacks",
+   "file": "tests/etaf-ui-grid-composition-tests.el",
+   "purpose": "Separate grids retain unique automatic targets across reorder and publish current row data and handlers through the framework."
+  },
+  {
+   "name": "etaf-ui-number-input-validates-configuration-and-live-value",
+   "file": "tests/etaf-ui-input-tests.el",
+   "purpose": "NumberInput validates configuration before publishing inputs and follows caller-owned integer values through native editing."
+  },
+  {
+   "name": "etaf-ui-reactions-toggle-chips-and-pick-choices",
+   "file": "tests/etaf-ui-reactions-tests.el",
+   "purpose": "Reaction chips report their key, keep their footprint when chosen, and the picker popover adds a chosen reaction then closes; malformed and compound keys are rejected."
+  },
+  {
+   "name": "etaf-ui-dropdown-opens-navigates-selects-and-restores-focus",
+   "file": "tests/etaf-ui-surface-tests.el",
+   "purpose": "A dropdown renders its items, skips disabled ones and invokes selection once."
+  },
+  {
+   "name": "etaf-ui-menu-hover-token-resolves-against-the-provided-theme",
+   "file": "tests/etaf-ui-surface-tests.el",
+   "purpose": "A dropdown row's hover tint resolves the provided theme token into a concrete colour."
+  },
+  {
+   "name": "etaf-ui-dialog-composes-slots-and-blocks-covered-controls",
+   "file": "tests/etaf-ui-surface-tests.el",
+   "purpose": "The modal canvas covers background targets and returns focus after closing."
+  },
+  {
+   "name": "etaf-ui-modal-backdrop-dims-and-restores-the-painted-application",
+   "file": "tests/etaf-ui-surface-tests.el",
+   "purpose": "A modal keeps the application painted and dims it, then restores its original paint on close."
+  },
+  {
+   "name": "etaf-ui-media-viewer-owns-keys-browses-and-closes",
+   "file": "tests/etaf-ui-surface-tests.el",
+   "purpose": "An open media viewer covers the application, outranks its emulation keys, browses with n/p and the arrows, swallows other printing keys, closes with q or Escape and returns focus."
+  },
+  {
+   "name": "etaf-ui-media-viewer-closes-on-backdrop-and-close-control",
+   "file": "tests/etaf-ui-surface-tests.el",
+   "purpose": "A click on the media viewer's backdrop or its close control requests closing; a key on the backdrop does not."
+  },
+  {
+   "name": "etaf-ui-media-viewer-shows-audio-with-a-transport",
+   "file": "tests/etaf-ui-surface-tests.el",
+   "purpose": "An audio viewer shows the speaker stage, its total time and the caption."
+  },
+  {
+   "name": "etaf-ui-media-viewer-supports-audio-volume-and-playback-keys",
+   "file": "tests/etaf-ui-surface-tests.el",
+   "purpose": "MediaViewer accepts :audio, :volume and :on-ended props and binds j/l for 10-second seeks and [/] for volume adjustments."
+  },
+  {
+   "name": "etaf-ui-media-viewer-hides-the-mounted-buffer-cursor",
+   "file": "tests/etaf-ui-surface-tests.el",
+   "purpose": "A media viewer opened from another current buffer hides the mounted buffer's cursor and restores it on close."
+  },
+  {
+   "name": "etaf-ui-dismisses-surfaces-on-presses-outside-their-panel",
+   "file": "tests/etaf-ui-surface-tests.el",
+   "purpose": "A root press capture calling etaf-ui-dismiss-outside-press closes open surfaces the press missed, keeps the pressed panel open and leaves a surface opened by the same press mounted."
+  },
+  {
+   "name": "etaf-ui-dialog-compact-height-keeps-one-row-header",
+   "file": "tests/etaf-ui-surface-tests.el",
+   "purpose": "A bounded compact dialog keeps its title to one row while preserving background content."
+  },
+  {
+   "name": "etaf-ui-floating-surfaces-nest-and-release-buffer-shortcuts",
+   "file": "tests/etaf-ui-surface-tests.el",
+   "purpose": "Escape closes a menu nested in a dialog, then the dialog; outer Host keys are ignored while a surface is open and return after it closes."
+  },
+  {
+   "name": "etaf-ui-popover-keeps-instance-state-and-independent-open-inputs",
+   "file": "tests/etaf-ui-surface-tests.el",
+   "purpose": "Two controlled popovers have independent state and clean up their slots."
+  },
+  {
+   "name": "etaf-ui-nested-dialog-covers-parent-and-restores-its-controls",
+   "file": "tests/etaf-ui-surface-tests.el",
+   "purpose": "A nested modal blocks the outer panel and restores it on close."
+  },
+  {
+   "name": "etaf-ui-unpainted-popover-does-not-capture-keys",
+   "file": "tests/etaf-ui-surface-tests.el",
+   "purpose": "An unavailable anchor leaves the mounted buffer's ordinary keys usable."
+  },
+  {
+   "name": "etaf-ui-surfaces-example-composes-menu-dialog-and-input",
+   "file": "tests/etaf-ui-surface-tests.el",
+   "purpose": "The runnable example hands menu focus to a dialog and back to its trigger."
+  },
+  {
+   "name": "etaf-ui-gallery-browses-every-component-family",
+   "file": "tests/etaf-ui-gallery-tests.el",
+   "purpose": "All eight categories expose every named component specimen."
+  },
+  {
+   "name": "etaf-ui-gallery-sidebar-selection-keeps-labels-stationary",
+   "file": "tests/etaf-ui-gallery-tests.el",
+   "purpose": "Every Gallery sidebar category highlights without shifting labels or changing typeface in light and dark Themes."
+  },
+  {
+   "name": "etaf-ui-gallery-overview-keeps-preview-content-whole",
+   "file": "tests/etaf-ui-gallery-tests.el",
+   "purpose": "Multi-row overview avatars finish before the card caption at wide and compact widths instead of being cropped."
+  },
+  {
+   "name": "etaf-ui-gallery-compact-picker-opens-component-families",
+   "file": "tests/etaf-ui-gallery-tests.el",
+   "purpose": "The compact category picker opens overlay and basic component specimens without a sidebar."
+  },
+  {
+   "name": "etaf-ui-gallery-preserves-state-across-browsing-and-theme",
+   "file": "tests/etaf-ui-gallery-tests.el",
+   "purpose": "Specimen state survives browsing and scoped Theme changes; reset restores defaults."
+  },
+  {
+   "name": "etaf-ui-gallery-copies-runnable-examples",
+   "file": "tests/etaf-ui-gallery-tests.el",
+   "purpose": "Every component displays a public signature and parameter reference; its copied example evaluates and mounts independently."
+  },
+  {
+   "name": "etaf-ui-gallery-isolates-mounts-and-unrelated-buffers",
+   "file": "tests/etaf-ui-gallery-tests.el",
+   "purpose": "Independent Galleries do not share state or overwrite unrelated buffer contents."
+  },
+  {
+   "name": "etaf-ui-gallery-searches-symbols-chinese-and-clears-empty-results",
+   "file": "tests/etaf-ui-gallery-tests.el",
+   "purpose": "Native live search matches symbols and Chinese across categories and recovers from no matches."
+  },
+  {
+   "name": "etaf-ui-gallery-reference-explains-value-and-callback-contracts",
+   "file": "tests/etaf-ui-gallery-tests.el",
+   "purpose": "Scrolled reference text exposes defaults, controlled-value exclusions, callback payloads and units; reset collapses it."
+  },
+  {
+   "name": "etaf-ui-gallery-dialog-submits-chinese-and-cancels",
+   "file": "tests/etaf-ui-gallery-tests.el",
+   "purpose": "A modal submits Chinese text, cancels without changing saved values, and restores opener focus."
+  },
+  {
+   "name": "etaf-ui-gallery-paginates-and-reopens-after-unmount",
+   "file": "tests/etaf-ui-gallery-tests.el",
+   "purpose": "Local paging and reset publish the expected records; reopening releases old state and preserves other applications."
+  },
+  {
+   "name": "etaf-ui-feedback-and-navigation-render-public-contracts",
+   "file": "tests/etaf-ui-modern-tests.el",
+   "purpose": "Feedback and navigation Components render and dispatch through public refs."
+  },
+  {
+   "name": "etaf-ui-disclosures-use-arrows-and-stable-control-names",
+   "file": "tests/etaf-ui-modern-tests.el",
+   "purpose": "Menus, selectors, accordion and tree disclosures show arrow cues and preserve control names across expansion."
+  },
+  {
+   "name": "etaf-ui-selection-keeps-label-positions-sizes-and-typeface",
+   "file": "tests/etaf-ui-modern-tests.el",
+   "purpose": "Tabs, segments, steps and Select chips keep label positions, control sizes and font weights unchanged across selection."
+  },
+  {
+   "name": "etaf-ui-tabs-keep-every-label-in-place-when-switching",
+   "file": "tests/etaf-ui-modern-tests.el",
+   "purpose": "Switching the active tab keeps every tab label in the same column, so the strip never shifts."
+  },
+  {
+   "name": "etaf-ui-tabs-address-items-by-ref",
+   "file": "tests/etaf-ui-modern-tests.el",
+   "purpose": "An item's optional :ref lets a caller press its tab control by name."
+  },
+  {
+   "name": "etaf-ui-calendar-aligns-weekdays-dates-and-selection",
+   "file": "tests/etaf-ui-modern-tests.el",
+   "purpose": "Calendar dates and leading blanks align with the same seven weekday columns and stay aligned as selection changes."
+  },
+  {
+   "name": "etaf-ui-slider-arrows-stay-on-aligned-values",
+   "file": "tests/etaf-ui-modern-tests.el",
+   "purpose": "Mounted bound sliders keep arrow results and displayed values aligned at non-step maxima, negative bounds, narrow spans and equal bounds."
+  },
+  {
+   "name": "etaf-ui-selection-components-render-public-contracts",
+   "file": "tests/etaf-ui-modern-tests.el",
+   "purpose": "Radio, Segmented, Switch and Slider render controlled values through the public DSL."
+  },
+  {
+   "name": "etaf-ui-drawer-composes-both-sides-and-restores-focus",
+   "file": "tests/etaf-ui-surface-tests.el",
+   "purpose": "Both modal drawer edges retain caller-owned values, compose footer actions, dismiss and restore the opener."
+  },
+  {
+   "name": "etaf-ui-composition-components-reject-invalid-props",
+   "file": "tests/etaf-ui-modern-tests.el",
+   "purpose": "Malformed shortcut keys, duplicate list identities and absent current steps are rejected through public component inputs."
+  },
+  {
+   "name": "etaf-ui-advanced-components-compose-public-contracts",
+   "file": "tests/etaf-ui-advanced-tests.el",
+   "purpose": "DatePicker, Tree, Calendar and CommandPalette compose shared public input, navigation and floating-surface contracts."
+  },
+  {
+   "name": "etaf-ui-qr-paint-draws-modules-with-scannable-contrast",
+   "file": "tests/etaf-ui-advanced-tests.el",
+   "purpose": "Painted sign-in code pairs module rows, honours the quiet zone and keeps black-on-white glyphs; malformed rows are rejected."
+  },
+  {
+   "name": "etaf-ui-qr-login-overlays-the-code-and-returns-its-dismissal",
+   "file": "tests/etaf-ui-advanced-tests.el",
+   "purpose": "The sign-in panel follows caller-owned visibility, code and status, blocks the covered page, and reports close from Escape and its cancel button."
+  },
+  {
+   "name": "etaf-ui-qr-login-renders-square-svg-fitting-compact-graphical-viewport",
+   "file": "tests/etaf-ui-advanced-tests.el",
+   "purpose": "A 49x49 QR sign-in panel on a graphical display with SVG renders a crisp square SVG image and keeps title, status, hint and cancel visible inside a 33-row window."
+  },
+  {
+   "name": "etaf-ui-composition-components-render-public-contracts",
+   "file": "tests/etaf-ui-modern-tests.el",
+   "purpose": "Tag, Kbd, Steps and List compose through public props and caller-owned selection callbacks."
+  },
+  {
+   "name": "etaf-ui-window-reactive-geometry-preserves-content-and-input",
+   "file": "tests/etaf-ui-window-tests.el",
+   "purpose": "Reactive position, dimensions and layering preserve nested control values and input ownership."
+  },
+  {
+   "name": "etaf-ui-window-fonts-inherit-and-override-independently",
+   "file": "tests/etaf-ui-font-tests.el",
+   "purpose": "Window titles, controls, labels, buttons, inputs and footer inherit parent typography; title/body overrides are independent."
+  },
+  {
+   "name": "etaf-ui-panel-font-default-follows-buffer-face",
+   "file": "tests/etaf-ui-font-tests.el",
+   "purpose": "An unspecified panel size leaves Emacs default font height intact and an explicit family reaches rendered content."
+  },
+  {
+   "name": "etaf-ui-control-markers-keep-native-selection-behavior",
+   "file": "tests/etaf-ui-font-tests.el",
+   "purpose": "Checkbox, Switch and Radio ASCII marks preserve full labels and controlled values across native Return activation."
+  },
+  {
+   "name": "etaf-ui-traffic-lights-use-one-cell-ascii-without-svg",
+   "file": "tests/etaf-ui-font-tests.el",
+   "purpose": "Without SVG, one-cell ASCII traffic-light marks inherit the surrounding font, preserve hover widths and invoke the controlled close/minimize/zoom/restore actions."
+  },
+  {
+   "name": "etaf-ui-text-input-edits-the-value-in-place",
+   "file": "tests/etaf-ui-field-tests.el",
+   "purpose": "Typing through the command loop edits the bound value in place without moving surrounding lines; Return submits."
+  },
+  {
+   "name": "etaf-ui-text-input-escape-keeps-text-and-c-c-c-k-restores",
+   "file": "tests/etaf-ui-field-tests.el",
+   "purpose": "Escape leaves the session keeping its text and Host focus; C-c C-k restores the value captured at activation."
+  },
+  {
+   "name": "etaf-ui-text-input-arrow-boundary-keeps-draft-and-caret",
+   "file": "tests/etaf-ui-field-tests.el",
+   "purpose": "Left at the value start leaves the field keeping the draft, and re-editing resumes at the same caret."
+  },
+  {
+   "name": "etaf-ui-text-input-multiline-grows-with-newlines",
+   "file": "tests/etaf-ui-field-tests.el",
+   "purpose": "A multi-row field inserts unindented newlines on Return, Shift+Return and C-j, grows with them and submits on C-c C-c."
+  },
+  {
+   "name": "etaf-ui-text-input-placeholder-is-never-the-value",
+   "file": "tests/etaf-ui-field-tests.el",
+   "purpose": "An empty field shows its placeholder after the caret and never treats it as the value."
+  },
+  {
+   "name": "etaf-ui-text-input-runs-native-editing-keys-on-the-value",
+   "file": "tests/etaf-ui-field-tests.el",
+   "purpose": "Native word, line, kill, yank and undo commands edit only the field's value."
+  },
+  {
+   "name": "etaf-ui-text-input-keys-reach-the-field-over-application-bindings",
+   "file": "tests/etaf-ui-field-tests.el",
+   "purpose": "Printing keys bound by the application type into an active field."
+  },
+  {
+   "name": "etaf-ui-text-input-publishes-other-changes-during-editing",
+   "file": "tests/etaf-ui-field-tests.el",
+   "purpose": "Application state changes publish while a field is being edited."
+  },
+  {
+   "name": "etaf-ui-text-input-disabled-and-read-only-are-not-editable",
+   "file": "tests/etaf-ui-field-tests.el",
+   "purpose": "Disabled and read-only fields open no editing session."
+  },
+  {
+   "name": "etaf-ui-text-input-installs-completion-and-keymap",
+   "file": "tests/etaf-ui-field-tests.el",
+   "purpose": "Completion functions complete the value and field key bindings run during the session only."
+  },
+  {
+   "name": "etaf-ui-text-input-leaving-keeps-the-draft",
+   "file": "tests/etaf-ui-field-tests.el",
+   "purpose": "Pressing the field keeps editing; pressing another Host or unmounting leaves with the typed draft kept."
+  },
+  {
+   "name": "etaf-ui-text-input-relayouts-while-editing",
+   "file": "tests/etaf-ui-field-tests.el",
+   "purpose": "A viewport refit applies immediately while editing continues."
+  },
+  {
+   "name": "etaf-ui-text-input-focus-recolours-a-reserved-frame",
+   "file": "tests/etaf-ui-field-tests.el",
+   "purpose": "Focus recolours the outlined frame without moving layout; the plain variant has no frame."
+  },
+  {
+   "name": "etaf-ui-text-input-shows-a-caret-and-restores-state",
+   "file": "tests/etaf-ui-field-tests.el",
+   "purpose": "Editing shows a bar caret and ending restores the buffer cursor."
+  },
+  {
+   "name": "etaf-ui-text-input-validates-props-and-ends-once",
+   "file": "tests/etaf-ui-field-tests.el",
+   "purpose": "Invalid props are reported in component context and ending a session twice releases it once."
+  },
+  {
+   "name": "etaf-ui-search-field-edits-clears-and-keeps-editing",
+   "file": "tests/etaf-ui-field-tests.el",
+   "purpose": "A search field edits its query live; its clear control empties the query, reports the clear and keeps editing."
+  },
+  {
+   "name": "etaf-ui-pane-resizer-reports-clamped-widths",
+   "file": "tests/etaf-ui-window-tests.el",
+   "purpose": "Dragging a pane resizer reports widths clamped to its bounds and the final width on release; the focused divider steps the width with Left/Right."
+  },
+  {
+   "name": "etaf-ui-composites-are-one-tab-stop-entered-at-the-selection",
+   "file": "tests/etaf-ui-focus-composition-tests.el",
+   "purpose": "Tabs form one Tab stop entered at the active tab; arrows and C-b move between tabs without selecting them."
+  },
+  {
+   "name": "etaf-ui-tree-branches-open-right-and-close-left",
+   "file": "tests/etaf-ui-focus-composition-tests.el",
+   "purpose": "A focused Tree branch expands with Right and collapses with Left through the caller's on-toggle."
+  },
+  {
+   "name": "etaf-ui-text-grid-updates-rows-with-stable-extents",
+   "file": "tests/etaf-ui-text-grid-tests.el",
+   "purpose": "Independent Unicode rows update in place with exact padded widths, stable neighbors and no focus targets."
+  },
+  {
+   "name": "etaf-ui-text-grid-rejects-invalid-shapes-and-text",
+   "file": "tests/etaf-ui-text-grid-tests.el",
+   "purpose": "Invalid dimensions, heights, callbacks, multiline, tabbed and overflowing text fail through the public component interface."
+  },
+  {
+   "name": "etaf-ui-text-grid-scrolls-a-million-rows-through-its-viewport",
+   "file": "tests/etaf-ui-text-grid-tests.el",
+   "purpose": "A million-row grid with a height shows its viewport, follows scroll calls and keys, reports the first visible row, repaints rows that read a changed ref and builds only rows near the viewport."
+  },
+  {
+   "name": "etaf-ui-text-grid-keeps-its-viewport-within-changing-rows",
+   "file": "tests/etaf-ui-text-grid-tests.el",
+   "purpose": "Shrinking the row count below a scrolled grid clamps its viewport to the last rows, and a grown grid scrolls into the new rows."
+  },
+  {
+   "name": "etaf-ui-window-body-reads-the-content-region",
+   "file": "tests/etaf-ui-window-tests.el",
+   "purpose": "Window body content reads the window's content box as its viewport."
+  },
+  {
+   "name": "etaf-ui-window-full-bleed-body-reaches-the-frame-edges",
+   "file": "tests/etaf-ui-window-tests.el",
+   "purpose": "A full-bleed window gives its body the rows of its edge handles."
+  },
+  {
+   "name": "etaf-ui-window-full-bleed-handles-own-edge-input",
+   "file": "tests/etaf-ui-window-tests.el",
+   "purpose": "All eight resize handles own their painted cells and directional pointers across full-bleed geometry changes; child controls retain their authored pointer."
+  },
+  {
+   "name": "etaf-ui-window-full-bleed-handles-leave-the-body-painted",
+   "file": "tests/etaf-ui-window-tests.el",
+   "purpose": "A full-bleed resize strip keeps its pointer target while the body's own background stays painted across the window edge cells."
+  },
+  {
+   "name": "etaf-ui-svg-elements-emit-compact-escaped-markup",
+   "file": "tests/etaf-ui-svg-tests.el",
+   "purpose": "Scene helpers format numbers compactly, keep attribute order and escape XML values."
+  },
+  {
+   "name": "etaf-ui-svg-elements-reject-invalid-geometry-and-attributes",
+   "file": "tests/etaf-ui-svg-tests.el",
+   "purpose": "Invalid geometry, attribute keys, repeated keys and values signal one readable condition."
+  },
+  {
+   "name": "etaf-ui-svg-image-builds-valid-documents",
+   "file": "tests/etaf-ui-svg-tests.el",
+   "purpose": "The image descriptor wraps a well-formed desktop-sized SVG document with viewbox and aspect ratio."
+  },
+  {
+   "name": "etaf-ui-svg-image-feeds-a-retained-image-host",
+   "file": "tests/etaf-ui-svg-tests.el",
+   "purpose": "A composed scene keeps fixed cell metrics, accessibility names, focus and activation."
+  },
+  {
+   "name": "etaf-ui-edge-panel-keeps-its-title-on-the-rule",
+   "file": "tests/etaf-ui-edge-tests.el",
+   "purpose": "\u9762\u677f\u628a\u6807\u9898\u3001\u72b6\u6001\u548c\u6b63\u6587\u4f9d\u6b21\u753b\u51fa\uff0c\u6807\u9898\u5199\u5728\u9876\u8fb9\u90a3\u4e00\u884c\u3002"
+  },
+  {
+   "name": "etaf-ui-edge-tabs-dispatch-the-pressed-tab",
+   "file": "tests/etaf-ui-edge-tests.el",
+   "purpose": "\u9876\u8fb9\u6807\u7b7e\u9875\u753b\u51fa\u6240\u6709\u6807\u7b7e\uff0c\u6309\u4e0b\u4e00\u4e2a\u6807\u7b7e\u65f6\u628a\u5b83\u7684 key \u4ea4\u7ed9\u56de\u8c03\u3002"
+  },
+  {
+   "name": "etaf-ui-underline-field-shows-placeholder-until-it-has-a-value",
+   "file": "tests/etaf-ui-edge-tests.el",
+   "purpose": "\u4e0b\u5212\u7ebf\u5b57\u6bb5\u5728\u503c\u4e3a\u7a7a\u65f6\u753b\u51fa\u5360\u4f4d\u6587\u5b57\uff0c\u6709\u503c\u65f6\u753b\u503c\u672c\u8eab\u3002"
+  },
+  {
+   "name": "etaf-ui-theme-tokens-maps-palette-roles",
+   "file": "tests/etaf-ui-theme-tokens-tests.el",
+   "purpose": "Each supplied application palette role becomes every catalog color token that names it."
+  },
+  {
+   "name": "etaf-ui-theme-tokens-derives-omitted-roles",
+   "file": "tests/etaf-ui-theme-tokens-tests.el",
+   "purpose": "Omitted palette roles derive from the surface, the text and whether the background is light or dark."
+  },
+  {
+   "name": "etaf-ui-theme-tokens-rejects-invalid-palettes",
+   "file": "tests/etaf-ui-theme-tokens-tests.el",
+   "purpose": "A palette without both base colors, with an unknown role or with a non-string color signals wrong-type-argument."
+  },
+  {
+   "name": "etaf-ui-color-legible-keeps-a-syntax-colour-on-its-page",
+   "file": "tests/etaf-ui-theme-tokens-tests.el",
+   "purpose": "A colour below the WCAG AA ratio on its surface is mixed toward black or white until it passes, keeping its hue, and a colour that already passes is unchanged."
+  },
+  {
+   "name": "etaf-ui-color-contrast-measures-the-wcag-ratio",
+   "file": "tests/etaf-ui-theme-tokens-tests.el",
+   "purpose": "Contrast is 1 for one colour twice, about 21 for black on white, and 0 for a colour with no channels."
+  },
+  {
+   "name": "etaf-ui-theme-tokens-paint-catalog-components",
+   "file": "tests/etaf-ui-theme-tokens-tests.el",
+   "purpose": "Provided palette tokens paint a mounted catalog control, and a token placed before the result overrides it."
+  },
+  {
+   "name": "etaf-ui-cell-line-fits-aligns-and-separates-cells",
+   "file": "tests/etaf-ui-cell-line-tests.el",
+   "purpose": "Cells keep their declared width, align their text, truncate overflow and end in a separator."
+  },
+  {
+   "name": "etaf-ui-cell-line-paints-ebox-stripes-and-the-row-rule",
+   "file": "tests/etaf-ui-cell-line-tests.el",
+   "purpose": "Separators are one-pixel spaces or box-rule glyphs with per-cell colours, and the row rule spans the line."
+  },
+  {
+   "name": "etaf-ui-cell-line-rejects-cells-it-cannot-paint",
+   "file": "tests/etaf-ui-cell-line-tests.el",
+   "purpose": "Broken widths, non-string or multi-line text and unknown alignment fail instead of painting."
+  },
+  {
+   "name": "etaf-ui-sheet-builds-only-the-viewport",
+   "file": "tests/etaf-ui-sheet-tests.el",
+   "purpose": "A 100000-row sheet paints only its viewport, and revealing a far cursor scrolls to it."
+  },
+  {
+   "name": "etaf-ui-sheet-paints-cursor-and-selection",
+   "file": "tests/etaf-ui-sheet-tests.el",
+   "purpose": "The cursor cell keeps its outline, selected cells take the selection fill, unselected ones do not."
+  },
+  {
+   "name": "etaf-ui-sheet-repaints-when-the-caller-bumps-version",
+   "file": "tests/etaf-ui-sheet-tests.el",
+   "purpose": "Cell text changes reach the sheet only after the caller bumps the version ref."
+  },
+  {
+   "name": "etaf-ui-sheet-adds-lines-for-a-tall-row",
+   "file": "tests/etaf-ui-sheet-tests.el",
+   "purpose": "A row declared taller paints filler lines that keep the row rule and push later rows down."
+  },
+  {
+   "name": "etaf-ui-sheet-edits-a-cell-through-the-field",
+   "file": "tests/etaf-ui-sheet-tests.el",
+   "purpose": "Editing promotes the cell into a text field showing its raw value and reports the submitted text."
+  },
+  {
+   "name": "etaf-ui-sheet-rejects-invalid-props",
+   "file": "tests/etaf-ui-sheet-tests.el",
+   "purpose": "Invalid sizes, widths, callbacks, cursor and header declarations signal before publication."
+  },
+  {
+   "name": "etaf-ui-sheet-pages-the-viewport-without-moving-the-cursor",
+   "file": "tests/etaf-ui-sheet-tests.el",
+   "purpose": "etaf-sheet-scroll pages by lines, shows later rows, and leaves the caller's cursor untouched."
+  },
+  {
+   "name": "etaf-ui-keycap-and-check-mark-render-public-contracts",
+   "file": "tests/etaf-ui-modern-tests.el",
+   "purpose": "Action and region keycaps keep their two levels, draw their captions and dispatch presses, while a disabled cap keeps its slot; the check mark spells each state on a text frame and rejects an unknown state."
+  },
+  {
+   "name": "etaf-ui-list-draws-checkbox-selection-and-meta",
+   "file": "tests/etaf-ui-modern-tests.el",
+   "purpose": "A list draws its checkbox column, its trailing meta and its selected row, and reports a press through the caller's callback."
+  },
+  {
+   "name": "etaf-ui-cell-metrics-slice-icons-at-the-canvas-row",
+   "file": "tests/etaf-ui-cell-metrics-tests.el",
+   "purpose": "A two-row icon is cut at the line height the canvas draws, so a canvas font or text scale does not leave the picture a row short of the cells that hold it."
+  },
+  {
+   "name": "etaf-ui-spinner-cycles-frames-and-validates-props",
+   "file": "tests/etaf-ui-animation-tests.el",
+   "purpose": "Spinner cycles fixed-width frames on the shared clock, stops on unmount and rejects invalid props."
+  },
+  {
+   "name": "etaf-ui-animated-feedback-progress-statistic-and-skeleton",
+   "file": "tests/etaf-ui-animation-tests.el",
+   "purpose": "Opt-in animated progress, statistic and skeleton components advance smoothly on the shared clock."
+  },
+  {
+   "name": "etaf-ui-dialog-animated-backdrop-fades-in",
+   "file": "tests/etaf-ui-animation-tests.el",
+   "purpose": "An animated dialog dims its backdrop over time on open and dismisses cleanly."
+  },
+  {
+   "name": "etaf-ui-svg-stage-composites-only-overlapping-tiles-and-falls-back",
+   "file": "tests/etaf-ui-animation-tests.el",
+   "purpose": "SVG stage composites sprites onto overlapped tiles, dispatches tile activation and falls back to cell text when non-graphic."
+  },
+  {
+   "name": "etaf-ui-accordion-compact-borders-visible-hover-and-empty-body",
+   "file": "tests/etaf-ui-modern-tests.el",
+   "purpose": "Accordion headers stay compact with primary ink, preserve border overline/underline under visible theme-derived hover in dark and light palettes, and omit hollow body boxes for empty content."
+  },
+  {
+   "name": "etaf-ui-dialog-projects-into-modal-host-with-dimmed-backdrop",
+   "file": "tests/etaf-ui-surface-tests.el",
+   "purpose": "Centered modal dialogs delegate card rendering to `etaf-ui-modal-host-function' on graphical displays when `etaf-ui-modal-use-child-frame' is enabled, keeping the uniformly dimmed backdrop scrim in the parent buffer."
+  },
+  {
+   "name": "etaf-ui-dialog-defaults-to-centered-in-buffer-with-uniform-backdrop",
+   "file": "tests/etaf-ui-surface-tests.el",
+   "purpose": "Centered modal dialogs default to in-buffer rendering with exact vertical centering, uniform dimmed canvas background and clean focus restoration."
+  },
+  {
+   "name": "etaf-ui-host-theme-wcag-and-oklch-calming",
+   "file": "tests/etaf-ui-host-theme-tests.el",
+   "purpose": "Host-adaptive theme palettes enforce WCAG AA legibility on base and raised surfaces and calm neon dark-mode accents in OKLCH space."
+  },
+  {
+   "name": "etaf-ui-host-theme-curated-seeds-and-css-vars",
+   "file": "tests/etaf-ui-host-theme-tests.el",
+   "purpose": "Curated seeds stay exact while omitted tiers derive coherently, project onto catalog Theme tokens and resolve via ECSS `--etaf-*' custom properties."
+  },
+  {
+   "name": "etaf-ui-host-theme-ref-reacts-to-mode-and-theme-switch",
+   "file": "tests/etaf-ui-host-theme-tests.el",
+   "purpose": "Reactive host theme refs update on mode-ref writes and reject malformed options and transforms cleanly."
+  },
+  {
+   "name": "etaf-ui-virtual-list-fixed-height-renders-o-viewport-and-scrolls",
+   "file": "tests/etaf-ui-virtual-list-tests.el",
+   "purpose": "Fixed-height 5,000-row virtual list mounts only O(viewport + 2*overscan) rows and renders target slices across mid and end jumps."
+  },
+  {
+   "name": "etaf-ui-virtual-list-dynamic-heights-and-scroll-anchor",
+   "file": "tests/etaf-ui-virtual-list-tests.el",
+   "purpose": "Dynamic-height virtual list measures multi-line row heights post-commit and anchors scroll offsets when rows above the viewport grow."
+  },
+  {
+   "name": "etaf-ui-virtual-list-keyboard-navigation-and-empty-state",
+   "file": "tests/etaf-ui-virtual-list-tests.el",
+   "purpose": "Virtual list handles arrow, page, home, end and RET navigation without unnecessary scroll jumps and shows empty states cleanly."
+  },
+  {
+   "name": "etaf-ui-virtual-list-5000-rows-constant-order-benchmark",
+   "file": "tests/etaf-ui-virtual-list-tests.el",
+   "purpose": "Verify 5,000-row virtual list matches 500-row O(viewport) initial render count and completes repeated scroll jumps in constant-order time."
+  }
+ ]
 }

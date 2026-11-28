@@ -6,6 +6,7 @@
     "../etaf",
     "../etaf-media",
     "../etaf-ui",
+    "../etaf-doc",
     "../ebox",
     "../ecss"
   ],

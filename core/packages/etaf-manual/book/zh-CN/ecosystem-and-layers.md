@@ -1,6 +1,6 @@
 # 生态与分层
 
-ETAF 由八个核心包组成，分层的原则是每一类事实只有一个所有者。本章说明什么是文本应用、每个包提供什么、包之间怎样依赖、每个包的公共接口到哪里为止、哪个包拥有哪些事实，以及一次状态变化走到 buffer 的路径。后面各章再分别详述这些主题。
+ETAF 由九个核心包组成，分层的原则是每一类事实只有一个所有者。本章说明什么是文本应用、每个包提供什么、包之间怎样依赖、每个包的公共接口到哪里为止、哪个包拥有哪些事实，以及一次状态变化走到 buffer 的路径。后面各章再分别详述这些主题。
 
 ## 文本应用
 
@@ -25,6 +25,7 @@ ETAF 由八个核心包组成，分层的原则是每一类事实只有一个所
 | `etaf` | View 与 Component 语法、响应式状态与绑定、Runtime 的生命周期、Context、Theme、Behavior、Action、Data 与 Resource、分作用域的键盘层，以及对已提交 Host 的查询 | 布局、命中测试、焦点顺序和 buffer 写入，这些都委托给 Ebox |
 | `etaf-media` | 原生视频播放：`etaf-video` 组件、源元数据探测、`libmpv` / `ffmpeg` 播放会话、硬件 GPU 视频层与音频侧车 | 通用 UI 控件（位于 `etaf-ui`）；非媒体应用无需引入原生视频模块 |
 | `etaf-ui` | 官方组件目录：带键盘行为的可复用组件，以及它们读取的主题 token | 布局、焦点和命中测试：它的组件都是普通的 ETAF 组件 |
+| `etaf-doc` | 共享文档基础设施：Markdown 解析、代码高亮、块级 View、有界 LRU 资产缓存、异步二维码与原生 QuickJS Mermaid/MathJax 排版、工作区活文档资产、节点协议与编辑类组件 | 应用会话编排与文档专属扩展节点 |
 | `etaf-db` | ETAF Data Source 契约的数据库后端；目前是 SQLite | Data Controller，它属于 ETAF |
 | `etaf-posframe` | 浮动面板：每块面板一个子 frame，以及它的落位、标题栏、主题开关、边框与应用注册表 | 面板内容，就是普通的 ETAF View；frame 的创建归 Posframe |
 | `ekp` | 中日韩文字与拉丁文字混排段落的 Knuth–Plass 最优断行，含避头尾规则、断词和像素级两端对齐；用 Emacs Lisp 实现，可选用 C 模块 | — |
@@ -40,13 +41,14 @@ ECSS 和 Ebox 可以脱离上层的包单独使用。需要布局和 buffer 渲�
 依赖只朝一个方向。下图中箭头从一个包指向依赖它的包：
 
 ```text
-ecss ──▶ ebox ──▶ etaf ──┬──▶ etaf-ui ──▶ etaf-posframe
+ecss ──▶ ebox ──▶ etaf ──┬──▶ etaf-ui ──┬──▶ etaf-posframe
+                         │              └──▶ etaf-doc
                          ├──▶ etaf-media
                          └──▶ etaf-db
 ekp
 ```
 
-没有哪个包依赖它上层的包，应用位于 `etaf-ui`、`etaf-db` 与 `etaf-posframe` 之上。ETAF 还直接依赖 ECSS：解析 Theme token 时，有些值要等到层叠阶段才由 ECSS 计算，直接依赖才能把这些值原样保留下来。
+没有哪个包依赖它上层的包，应用位于 `etaf-ui`、`etaf-doc`、`etaf-media`、`etaf-db` 与 `etaf-posframe` 之上。ETAF 还直接依赖 ECSS：解析 Theme token 时，有些值要等到层叠阶段才由 ECSS 计算，直接依赖才能把这些值原样保留下来。
 
 应用使用 ETAF 和组件目录，不调用 Ebox。应用需要只有 Ebox 才有的能力时，比如测量或控制视口，由 ETAF 为它发布接口，应用再使用这个接口。
 

@@ -66,7 +66,7 @@ git clone https://github.com/emacs-taf/etaf-md.git
 ```
 
 ```elisp
-(dolist (pkg '("ecss" "ebox" "etaf" "etaf-media" "etaf-ui"))
+(dolist (pkg '("ecss" "ebox" "etaf" "etaf-media" "etaf-ui" "etaf-doc"))
   (add-to-list 'load-path (expand-file-name pkg "/path/to/etaf/packages")))
 (add-to-list 'load-path "/path/to/etaf-md")
 (require 'etaf-md)
@@ -133,7 +133,7 @@ make benchmark        # 大文档解析与渲染基线
 
 ## 致谢
 
-`native/` 目录下的内置 QuickJS + Pele + CoreText/Pango 后台线程 SVG 渲染架构直接借鉴了 [LuciusChen/pele.el](https://github.com/LuciusChen/pele.el)，并基于未经修改的内嵌上游项目 [Obsidian Pele](https://github.com/obsidianmd/pele)、Fabrice Bellard 的 [QuickJS](https://github.com/bellard/quickjs) 与 [MathJax](https://github.com/mathjax/MathJax-src) 构建。精确的上游版本号、SHA-256 校验值与完整许可证详见 [native/vendor/README.md](native/vendor/README.md)。
+由 `etaf-doc` 提供的内置 QuickJS + Pele + CoreText/Pango 后台线程 SVG 渲染架构直接借鉴了 [LuciusChen/pele.el](https://github.com/LuciusChen/pele.el)，并基于未经修改的内嵌上游项目 [Obsidian Pele](https://github.com/obsidianmd/pele)、Fabrice Bellard 的 [QuickJS](https://github.com/bellard/quickjs) 与 [MathJax](https://github.com/mathjax/MathJax-src) 构建。精确的上游版本号、SHA-256 校验值与完整许可证详见 [`etaf-doc/native/vendor/README.md`](https://github.com/emacs-taf/etaf/blob/main/packages/etaf-doc/native/vendor/README.md)。
 
 ## 文档导航
 

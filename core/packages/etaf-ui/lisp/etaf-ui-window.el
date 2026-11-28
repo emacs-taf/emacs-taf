@@ -750,5 +750,66 @@ sit in the title row or in the content's own margin."
                (list content)
                (list (cons 'header (list chrome))))))
 
+(etaf-define-component etaf-pane-resizer
+    (&key size (side 'right) min max on-change on-end (line t) background ref)
+  "Render a vertical divider that resizes an adjacent fixed-width pane.
+SIZE is the pane's current width in pixels, a number, ref or computed.
+SIDE `right' places the divider on the pane's right, so dragging right
+widens it; `left' serves a pane on the divider's right.  Each drag move
+passes the candidate width, clamped to MIN and MAX pixels when given, to
+ON-CHANGE; ON-END receives the final width.  The divider shows a hairline
+in the divider color beside the pane when LINE is non-nil, over
+BACKGROUND, and is wide enough to grab.  The focused divider steps the
+width one column per Left or Right press.  The width stays caller-owned;
+REF reaches the rendered divider so callers can focus or address it."
+  :bindings ((origin (list nil)))
+  :validate
+  (progn
+    (etaf-check-prop :side side (memq side '(left right)) "left or right"
+                     'etaf-pane-resizer)
+    (dolist (callback (list on-change on-end))
+      (etaf-check-prop :callback callback (or (null callback) (functionp callback))
+                       "a function or nil" 'etaf-pane-resizer))
+    (dolist (bound (list min max))
+      (etaf-check-prop :bound bound (or (null bound) (numberp bound))
+                       "a pixel count or nil" 'etaf-pane-resizer)))
+  :render
+  (let ((width (lambda (gesture)
+                 (let* ((dx (car (plist-get gesture :delta)))
+                        (next (+ (car origin) (if (eq side 'right) dx (- dx)))))
+                   (round (min (or max next) (max (or min next) next)))))))
+    (etaf-node
+     'box
+     (append
+      (list :class "etaf-pane-resizer" :role 'separator
+            :ref ref
+            :aria-label "Resize pane" :pointer 'hdrag
+            :aria-orientation 'vertical
+            :tab-index (when (or on-change on-end) 0)
+            :width (if (> (car (etaf-ui--canvas-cell)) 1) '(px 5) '(px 1))
+            :height 'stretch :flex-shrink 0
+            :background-color background
+            :on-drag
+            (lambda (gesture)
+              (pcase (plist-get gesture :phase)
+                ('start (setcar origin (etaf-ui--reactive-value size)))
+                ((or 'move 'end)
+                 (when (car origin)
+                   (let ((next (funcall width gesture)))
+                     (when on-change (funcall on-change next))
+                     (when (eq (plist-get gesture :phase) 'end)
+                       (setcar origin nil)
+                       (when on-end (funcall on-end next))))))
+                ('cancel (setcar origin nil)))))
+      (and line
+           (if (eq side 'right)
+               (list :border-left-width '(px 1) :border-left-style 'solid
+                     :border-left-color (etaf-ui--style-token :ui-divider-bg))
+             (list :border-right-width '(px 1) :border-right-style 'solid
+                   :border-right-color
+                   (etaf-ui--style-token :ui-divider-bg)))))
+     nil)))
+
+
 (provide 'etaf-ui-window)
 ;;; etaf-ui-window.el ends here

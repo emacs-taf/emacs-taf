@@ -123,6 +123,16 @@
    "name": "etaf-gamekit-dispose-closes-session-and-kills-buffer",
    "file": "tests/etaf-gamekit-tests.el",
    "purpose": "etaf-gamekit-dispose closes a GameKit session and kills its backing buffer idempotently for hosted embed teardown."
+  },
+  {
+   "name": "etaf-ui-playing-card-preserves-metrics-and-controlled-activation",
+   "file": "tests/etaf-gamekit-playing-card-tests.el",
+   "purpose": "Face, selection and container width keep fixed card geometry and callbacks."
+  },
+  {
+   "name": "etaf-ui-playing-card-corners-placeholders-and-validation",
+   "file": "tests/etaf-gamekit-playing-card-tests.el",
+   "purpose": "Short corners and empty piles remain readable without leaking hidden cards."
   }
  ]
 }

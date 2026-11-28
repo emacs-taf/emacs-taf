@@ -1,6 +1,6 @@
 # Grids and Character Surfaces
 
-Three catalog components give applications fixed-geometry character surfaces: a tile grid whose cells project coordinate callbacks, a text grid of independently retained fixed-width text rows, and a playing card whose intrinsic dimensions never stretch to fill a viewport. They own layout and activation, never the caller's board, board state, timers or game rules, and their dimensions stay what the caller declared even when the window changes. [Images](images.md) defines the image Host the cells use, [UI Overview](ui-overview.md) the shared contract, and [Grid Layout](grid-layout.md) the underlying track model.
+Three catalog components give applications fixed-geometry character surfaces: a tile grid whose cells project coordinate callbacks, an SVG stage composited over tiles, and a text grid of independently retained fixed-width text rows (alongside the cell sheet). They own layout and activation, never the caller's board, board state, timers or game rules, and their dimensions stay what the caller declared even when the window changes. Playing-card controls moved to the etaf-gamekit package. [Images](images.md) defines the image Host the cells use, [UI Overview](ui-overview.md) the shared contract, and [Grid Layout](grid-layout.md) the underlying track model.
 
 ## The tile grid
 
@@ -87,72 +87,6 @@ A long log that scrolls through a 30-line viewport and reports the first visible
 ```
 
 **See also.** `etaf-tile-grid`.
-
-## The playing card
-
-<!-- index: etaf-playing-card; card face; pile placeholder; intrinsic size -->
-
-#### Component: etaf-playing-card (&key rank suit face-down empty selected disabled on-press label ref columns lines)
-
-Present a controlled playing card or empty pile as one activation target.
-
-**Arguments.** RANK is a one-line string up to three columns; SUIT is `spades`, `hearts`, `clubs`, `diamonds` or nil. FACE-DOWN conceals the rank and suit, including the generated accessible label. EMPTY presents a pile placeholder. SELECTED changes the paint without changing geometry. COLUMNS defaults to 9 with a minimum of 7, and LINES to 5 with a minimum of 1; one row exposes just a card's corner in a stack. These intrinsic dimensions never stretch to fill a viewport. ON-PRESS receives no arguments; omitted or disabled cards are noninteractive. LABEL overrides the accessible name and help, so callers must not put hidden information there.
-
-**Semantics.** The card is one centered button sized in cells: a top corner with the rank and suit glyph, a centered suit mark (or a `◇` when face-down), and a bottom corner that appears when the card is more than three rows tall. Colors come from the playing-card tokens — a warm ivory face for the default bg, black or red ink depending on the suit, the blue back for face-down cards, a muted placeholder for an empty pile, the amber selected background and the hover tint — so a game can restyle the table through its Theme. Hover preserves every glyph and covers the complete painted card. Face-down cards and empty piles derive a subtle tint from their own surface instead of borrowing the face-up hover fill; selected cards suppress hover paint. The caller owns selection, stacks, moves and rules, and no game backend is required.
-
-**Returns.** A View.
-
-**Errors.** `error→ etaf-component-call-error` when RANK is neither nil nor a one-line string of at most three columns, SUIT is not one of the four suits or nil, COLUMNS is below 7, or LINES is below 1.
-
-**Example.**
-
-```elisp
-(etaf-playing-card :rank "A" :suit 'hearts :on-press #'play-card)
-```
-
-## Playing-card tokens
-
-<!-- index: ui-playing-card-bg; ui-playing-card-red; ui-playing-card-back-bg -->
-
-#### Token: :ui-playing-card-bg
-
-The face background of an ordinary card.
-
-#### Token: :ui-playing-card-black
-
-The ink of a spades or clubs card.
-
-#### Token: :ui-playing-card-red
-
-The ink of a hearts or diamonds card.
-
-#### Token: :ui-playing-card-back-bg
-
-The background of a face-down card.
-
-#### Token: :ui-playing-card-back-fg
-
-The front color of a face-down card.
-
-**Semantics.** The face pair paints the concealed card; a face-down card never leaks its rank or suit through paint, text or the accessible label.
-
-#### Token: :ui-playing-card-empty-bg
-
-The background of an empty pile placeholder.
-
-#### Token: :ui-playing-card-empty-fg
-
-The glyph color of an empty pile placeholder.
-
-#### Token: :ui-playing-card-selected-bg
-
-The background of a selected card.
-
-#### Token: :ui-playing-card-hover-bg
-
-The hover tint of an interactive card.
-
-**Semantics.** Selection and hover are paint only — the card's geometry and the pile's layout never move — and every token falls back to the catalog's built-in palette when no Theme is provided.
 
 ## The cell sheet
 
@@ -258,10 +192,9 @@ Scroll the sheet REF of mounted RUNTIME by LINES, negative upwards.
 
 ## Errors and recovery
 
-- `error→ etaf-component-call-error` reports every rejected input through `etaf-check-prop`: a non-positive dimension, a callback that is not a function, a row content that is not a single line fitting its column count, a card rank that is too wide, an unknown suit and a card narrower than seven columns.
+- `error→ etaf-component-call-error` reports every rejected input through `etaf-check-prop`: a non-positive dimension, a callback that is not a function, or a row content that is not a single line fitting its column count.
 - The grids own no state to roll back: a rejected callback result fails the render and the previously published cells or rows stay on screen.
 - A tile image that cannot be decoded follows the image Host's placeholder path rather than failing the grid; a nil image simply falls back to the cell text.
-- The playing card is pure presentation: a press reports to the caller, and an ignored press leaves the card exactly as it was.
 
 **See also.** [UI Overview](ui-overview.md#errors-and-recovery), [Images](images.md).
 
@@ -271,5 +204,6 @@ Scroll the sheet REF of mounted RUNTIME by LINES, negative upwards.
    (etaf-tile-grid :rows 2 :columns 4 :cell-width 3 :cell-height 1
                    :cell-text (lambda (row column) (format "%d%d" row column))
                    :on-cell-press #'ignore)
-   (etaf-playing-card :rank "A" :suit 'hearts :on-press #'ignore)))
+   (etaf-text-grid :rows 2 :columns 16
+                   :row-text (lambda (row) (format "Row %d" row)))))
 ```

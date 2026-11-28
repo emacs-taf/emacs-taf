@@ -66,7 +66,7 @@ git clone https://github.com/emacs-taf/etaf-md.git
 ```
 
 ```elisp
-(dolist (pkg '("ecss" "ebox" "etaf" "etaf-media" "etaf-ui"))
+(dolist (pkg '("ecss" "ebox" "etaf" "etaf-media" "etaf-ui" "etaf-doc"))
   (add-to-list 'load-path (expand-file-name pkg "/path/to/etaf/packages")))
 (add-to-list 'load-path "/path/to/etaf-md")
 (require 'etaf-md)
@@ -133,7 +133,7 @@ make benchmark        # batch render baseline for a generated large document
 
 ## Acknowledgements
 
-The embedded QuickJS + Pele + CoreText/Pango background-thread SVG renderer in `native/` is directly inspired by [LuciusChen/pele.el](https://github.com/LuciusChen/pele.el), building on unmodified vendored [Obsidian Pele](https://github.com/obsidianmd/pele), Fabrice Bellard's [QuickJS](https://github.com/bellard/quickjs) and [MathJax](https://github.com/mathjax/MathJax-src). See [native/vendor/README.md](native/vendor/README.md) for exact upstream versions, SHA-256 digests and retained licenses.
+The embedded QuickJS + Pele + CoreText/Pango background-thread SVG renderer in `etaf-doc` (`native/`) is directly inspired by [LuciusChen/pele.el](https://github.com/LuciusChen/pele.el), building on unmodified vendored [Obsidian Pele](https://github.com/obsidianmd/pele), Fabrice Bellard's [QuickJS](https://github.com/bellard/quickjs) and [MathJax](https://github.com/mathjax/MathJax-src). See [`etaf-doc/native/vendor/README.md`](https://github.com/emacs-taf/etaf/blob/main/packages/etaf-doc/native/vendor/README.md) for exact upstream versions, SHA-256 digests and retained licenses.
 
 ## Documentation
 

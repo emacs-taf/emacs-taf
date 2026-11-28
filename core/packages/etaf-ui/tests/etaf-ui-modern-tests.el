@@ -132,8 +132,7 @@
 
 (ert-deftest etaf-ui-selection-keeps-label-positions-sizes-and-typeface ()
   "Choice controls change selection paint, never label geometry."
-  (dolist (component '(etaf-tabs etaf-segmented etaf-steps etaf-select
-                      etaf-taskbar etaf-workspace-bar))
+  (dolist (component '(etaf-tabs etaf-segmented etaf-steps etaf-select))
     (with-temp-buffer
       (let* ((value (etaf-ref 'one))
              (change (lambda (next) (etaf-set-value value next)))
@@ -142,8 +141,6 @@
              (props (pcase component
                       ('etaf-tabs (list :items items :active value :on-change change))
                       ('etaf-steps (list :items items :current value :on-change change))
-                      ('etaf-taskbar (list :items items :active value :on-select change))
-                      ('etaf-workspace-bar (list :workspaces items :active value :on-select change))
                       (_ (list :options '((one . "One") (two . "Two") (three . "Three"))
                                :bind value))))
              (runtime (progn

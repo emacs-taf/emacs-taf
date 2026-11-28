@@ -38,12 +38,12 @@
   (etaf-ui-gallery-test--with (buffer runtime)
     (dolist (group '(("基础与操作" etaf-button etaf-label etaf-ui-icon etaf-ui-toggle-icon etaf-avatar etaf-kbd etaf-divider)
                      ("输入与选择" etaf-text-input etaf-checkbox etaf-select etaf-search-field etaf-number-input etaf-radio etaf-switch etaf-segmented etaf-slider etaf-range etaf-date-picker)
-                     ("导航与结构" etaf-panel etaf-card etaf-tabs etaf-accordion etaf-breadcrumb etaf-steps etaf-splitter etaf-pane-resizer)
+                     ("导航与结构" etaf-panel etaf-card etaf-tabs etaf-accordion etaf-breadcrumb etaf-steps etaf-pane-resizer)
                      ("数据与集合" etaf-table etaf-data-grid etaf-pagination etaf-list etaf-tree etaf-calendar etaf-timeline)
                      ("状态与反馈" etaf-badge etaf-tag etaf-progress etaf-alert etaf-statistic etaf-empty etaf-skeleton etaf-reactions)
                      ("菜单与浮层" etaf-menu etaf-dropdown-menu etaf-context-menu etaf-popover etaf-dialog etaf-key-help etaf-tooltip etaf-toast etaf-drawer etaf-command-palette)
-                     ("窗口与工作区" etaf-resizable-panel etaf-window-controls etaf-window-chrome etaf-window etaf-taskbar etaf-workspace-bar etaf-launcher etaf-switcher)
-                     ("媒体与网格" etaf-media-viewer etaf-tile-grid etaf-text-grid etaf-playing-card)))
+                     ("窗口与工作区" etaf-resizable-panel etaf-window-controls etaf-window-chrome etaf-window)
+                     ("媒体与网格" etaf-media-viewer etaf-tile-grid etaf-text-grid)))
       (ert-info ((car group))
         (etaf-ui-gallery-test--activate runtime (car group))
         (let ((labels (mapcar (lambda (entry) (plist-get (cdr entry) :aria-label))
@@ -206,34 +206,6 @@
       (etaf-ui-gallery-test--type runtime "搜索组件名称或用途" "etaf-dialog")
       (should (string-match-p "打开对话框" (etaf-ui-gallery-test--text buffer))))))
 
-(ert-deftest etaf-ui-gallery-splitter-uses-its-live-pane-width ()
-  "A divider gesture moves the example by the same pixels after resizing."
-  (save-window-excursion
-    (etaf-ui-gallery-test--with (buffer runtime)
-      (switch-to-buffer buffer)
-      (etaf-ui-gallery-test--type runtime "搜索组件名称或用途" "etaf-splitter")
-      (cl-labels ((divider ()
-                   (car (cl-find-if
-                         (lambda (entry) (equal "Resize columns" (plist-get (cdr entry) :aria-label)))
-                         (etaf-runtime-host-props-entries runtime))))
-                  (x ()
-                    (save-excursion
-                      (goto-char (etaf-host-ref-position runtime (divider)))
-                      (etaf-string-pixel-width
-                       (buffer-substring (line-beginning-position) (point))))))
-        (dolist (columns '(80 160 220))
-          (etaf-runtime-refit runtime (* columns (frame-char-width)) 40)
-          (etaf-ui-gallery-test--activate runtime "重置示例")
-          (let* ((target (divider))
-                 (before (x))
-                 (width (car (etaf-host-ref-size runtime 'etaf-splitter)))
-                 (delta (* 5 (frame-char-width))))
-            (etaf-drag-step runtime target 5 0)
-            (let ((moved (- (x) before)))
-              (ert-info ((format "%s columns: expected %s px, moved %s" columns delta moved))
-                ;; Splitter positions panes at whole percentage points.
-                (should (<= (abs (- moved delta)) (1+ (/ width 100.0))))))))))))
-
 (ert-deftest etaf-ui-gallery-reference-explains-value-and-callback-contracts ()
   "Scrolled reference text distinguishes defaults, units and callback payloads."
   (save-window-excursion
@@ -245,7 +217,7 @@
                       ("etaf-range" "functions (number)" "no :bind prop" "one twentieth")
                       ("etaf-accordion" "next-open-keys" "not (key)" "default t")
                       ("etaf-calendar" "default (2026 1)" "not the current month" "(year month day)")
-                      ("etaf-splitter" "function (gesture)" "in pixels, not a ratio")))
+                      ("etaf-pane-resizer" "pixel-width" "rounded clamped widths")))
         (etaf-ui-gallery-test--type runtime "搜索组件名称或用途" (car case))
         (etaf-ui-gallery-test--activate runtime (concat "查看用法：" (car case)))
         (etaf-scroll-into-view runtime (intern (concat "gallery-reference-" (car case))) 'start)
@@ -265,7 +237,7 @@
       (etaf-ui-gallery-test--activate runtime "重置示例")
       (let* ((labels (mapcar (lambda (entry) (plist-get (cdr entry) :aria-label))
                             (etaf-runtime-host-props-entries runtime)))
-             (copy-visible (member "复制示例：etaf-splitter" labels)))
+             (copy-visible (member "复制示例：etaf-pane-resizer" labels)))
         (should-not copy-visible)))))
 
 (ert-deftest etaf-ui-gallery-dialog-submits-chinese-and-cancels ()

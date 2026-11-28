@@ -14,6 +14,7 @@
     "etaf",
     "etaf-media",
     "etaf-ui",
+    "etaf-doc",
     "etaf-db",
     "etaf-posframe"
   ],
@@ -26,6 +27,7 @@
     "styles",
     "etaf-db",
     "etaf-ui",
+    "etaf-doc",
     "tokens",
     "ebox",
     "ecss",

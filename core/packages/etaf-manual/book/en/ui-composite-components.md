@@ -269,6 +269,168 @@ Return SOURCE, a TeX formula, written as plain text.
 
 **See also.** `etaf-ui-markdown-flavors`, `etaf-ui-markdown-parse`.
 
+## Shared document infrastructure (`etaf-doc`)
+
+<!-- index: etaf-doc; document cache; qrcode; QuickJS typesetting; living document assets; document protocol; editorial widgets -->
+
+The `etaf-doc` package collects the shared non-syntax infrastructure used across document viewers (`etaf-ui-markdown-*` plus six reusable subsystems): bounded LRU remote-image caching, async QR code generation, native QuickJS Mermaid and MathJax typesetting, sandboxed workspace living-document assets, a schema-checked custom node protocol, and editorial UI widgets.
+
+### Document cache
+
+#### Function: etaf-doc-cache-prune-directory (directory &optional max-bytes max-files)
+
+Schedule lazy idle LRU pruning of DIRECTORY to keep total disk usage under MAX-BYTES and MAX-FILES. Repeated calls for the same DIRECTORY coalesce onto one idle timer so cache writes never stall rendering.
+
+#### Function: etaf-doc-cache-http-url-p (url)
+
+Return non-nil when URL is a string beginning with `http://` or `https://`.
+
+#### Function: etaf-doc-cache-image-url-p (url)
+
+Return non-nil when remote URL points to a supported image file extension.
+
+#### Function: etaf-doc-cache-image-path (url)
+
+Return the local cached image file path for remote URL from the in-memory table, or nil. Performs zero disk or network I/O so it is safe to call inside `:render`.
+
+#### Function: etaf-doc-cache-warm-urls (urls &optional directory)
+
+Populate the in-memory image cache from existing files on disk in DIRECTORY for remote URLS without network I/O, returning non-nil when at least one entry was newly warmed.
+
+#### Function: etaf-doc-cache-request-urls (urls on-ready &optional options)
+
+Queue asynchronous downloads for uncached remote image URLS and invoke ON-READY when images arrive. OPTIONS is a plist accepting `:directory`, `:max-bytes`, `:max-files`, `:max-per-page` and `:live-p`.
+
+### QR code generation
+
+#### Function: etaf-doc-qrcode-available-p ()
+
+Return non-nil when the `qrencode` executable is available on `exec-path`.
+
+#### Function: etaf-doc-qrcode-file (text &optional directory)
+
+Return the deterministic cached PNG path for QR payload TEXT under DIRECTORY (or the default QR cache directory).
+
+#### Function: etaf-doc-qrcode-request-texts (texts on-ready &optional directory)
+
+Queue asynchronous `qrencode` subprocesses for uncached QR payloads in TEXTS under DIRECTORY, invoking ON-READY whenever a PNG finishes writing.
+
+### Native QuickJS typesetting
+
+#### Function: etaf-doc-typeset-available-p ()
+
+Return non-nil when the embedded QuickJS + Pele + MathJax native dynamic module is loaded and ready.
+
+#### Function: etaf-doc-typeset-info ()
+
+Return engine metadata plist from the loaded QuickJS native module, or nil when unavailable.
+
+#### Function: etaf-doc-typeset-options-json (kind palette &optional options)
+
+Return the JSON options payload string for KIND (`mermaid` or `math`) derived from semantic color PALETTE. OPTIONS accepts `:font-size`, `:pixels`, `:cell-height`, `:scale`, `:font-family` and `:mono-family`.
+
+#### Function: etaf-doc-typeset-request (key kind source options-json cache-dir on-done &optional on-error)
+
+Queue SOURCE of KIND (`mermaid` or `math`) under KEY on the shared background QuickJS worker, writing `CACHE-DIR/KEY.svg` and invoking `(ON-DONE PATH)` on success or `(ON-ERROR MESSAGE FATAL-P)` on failure.
+
+#### Function: etaf-doc-typeset-image-pixels (path)
+
+Return `(WIDTH . HEIGHT)` in pixels for image file PATH via fast header inspection, or nil when unreadable.
+
+#### Function: etaf-doc-typeset-grid-for-pixels (pixels max-columns &optional max-rows cell-metrics)
+
+Return `(COLUMNS . ROWS)` preserving the aspect ratio of PIXELS `(WIDTH . HEIGHT)` within MAX-COLUMNS and optional MAX-ROWS using CELL-METRICS `(CHAR-WIDTH . LINE-HEIGHT)`.
+
+### Workspace living-document assets
+
+#### Function: etaf-doc-assets-workspace-root (dir)
+
+Return the canonical workspace root directory containing DIR (stopping at `.git`, `.jj`, or DIR itself).
+
+#### Function: etaf-doc-assets-safe-path (dir relpath)
+
+Resolve RELPATH relative to DIR strictly inside its canonical workspace root, returning nil for path traversal or escapes outside the root.
+
+#### Function: etaf-doc-assets-lang-for-path (path)
+
+Infer a canonical syntax-highlighting language tag string from file PATH's extension or basename.
+
+#### Function: etaf-doc-assets-read-slice (dir relpath &optional options)
+
+Safely read a bounded source slice from RELPATH under DIR's workspace root. OPTIONS accepts `:lines`, `:region`, `:section`, `:symbol`, `:context`, `:lang`, `:default-lines`, `:max-bytes` and `:max-lines`.
+
+#### Function: etaf-doc-assets-inspect-symbol (name &optional workspace-dir)
+
+Return a live Emacs symbol introspection plist for NAME (kind, signature, docstring, value preview and source location relative to WORKSPACE-DIR).
+
+#### Function: etaf-doc-assets-project-tree (dir relpath &optional options)
+
+Compute a bounded workspace directory tree structure for RELPATH under DIR. OPTIONS accepts `:depth` and `:max-entries`.
+
+#### Function: etaf-doc-assets-git-log-async (dir on-done &optional options)
+
+Run Git or Jujutsu log asynchronously for DIR's workspace and invoke `(ON-DONE RESULT)` when finished. OPTIONS accepts `:limit` and `:path`.
+
+#### Function: etaf-doc-assets-git-diff-async (dir on-done &optional options)
+
+Run Git or Jujutsu diff asynchronously for DIR's workspace and invoke `(ON-DONE RESULT)` when finished. OPTIONS accepts `:rev` and `:path`.
+
+### Document node protocol
+
+#### Function: etaf-doc-protocol-convert (type value)
+
+Convert VALUE to document attribute schema TYPE (`string`, `integer`, `number`, `boolean`, `keyword`, `symbol`, `list`, or `(enum ...)`), returning nil when incompatible.
+
+#### Function: etaf-doc-protocol-validate-value (key decl value source &optional style)
+
+Return a diagnostic message string when VALUE violates attribute declaration DECL for KEY from SOURCE, or nil when valid. STYLE selects message formatting.
+
+#### Function: etaf-doc-protocol-check-declarations (type decls derived error-symbol &optional allow-nil-default)
+
+Validate attribute declarations DECLS and DERIVED keys of node TYPE, signaling ERROR-SYMBOL on invalid declaration shapes unless ALLOW-NIL-DEFAULT permits nil defaults.
+
+#### Function: etaf-doc-protocol-define-node (registry type args contract error-symbol &optional shipped-p allow-nil-default)
+
+Register or update node TYPE in hash table REGISTRY using definition plist ARGS validated against CONTRACT, signaling ERROR-SYMBOL on violation. SHIPPED-P marks built-in definitions so undefining can restore them.
+
+#### Function: etaf-doc-protocol-undefine-node (registry styles type)
+
+Restore a shipped definition for TYPE or remove a user-defined TYPE from REGISTRY and STYLES hash tables.
+
+#### Function: etaf-doc-protocol-load-directory (directory &optional label)
+
+Load every `.el` extension file in DIRECTORY in sorted filename order, using LABEL in diagnostic messages.
+
+### Editorial widgets
+
+#### Function: etaf-doc-widget-leaf-button (palette label on-press &rest opts)
+
+Return a single-face interactive leaf control with LABEL and ON-PRESS styled from PALETTE. OPTS accepts `:color`, `:background`, `:hover-bg`, `:help`, `:active`, `:ref` and `:padding`.
+
+#### Function: etaf-doc-widget-pill (palette label active-p on-press &optional help hover-p)
+
+Return a compact toggle pill with LABEL styled from PALETTE, reflecting ACTIVE-P and invoking ON-PRESS with optional HELP tooltip and HOVER-P hover styling.
+
+#### Function: etaf-doc-widget-status-badge (palette text variant)
+
+Return a borderless soft-tinted status pill displaying TEXT in semantic VARIANT (`ok`, `warn`, `danger`, `important`, `accent` or `muted`) from PALETTE.
+
+#### Function: etaf-doc-widget-notice (palette message &optional variant)
+
+Return an inline notice or loading strip displaying MESSAGE styled from PALETTE in optional VARIANT.
+
+#### Function: etaf-doc-widget-progress-bars (palette rows available-width &optional options)
+
+Render ROWS as a borderless editorial progress bar group fitted to AVAILABLE-WIDTH using PALETTE and optional display OPTIONS.
+
+#### Function: etaf-doc-widget-line-chart (palette series available-width &optional options)
+
+Render SERIES as a zero-wrap box-drawing line chart fitted to AVAILABLE-WIDTH using PALETTE and optional axis OPTIONS.
+
+#### Function: etaf-doc-widget-source-card (palette title meta code-view &optional options)
+
+Render a single-frame living-document source card wrapping CODE-VIEW with TITLE, META badge text and optional action OPTIONS from PALETTE.
+
 ## Errors and recovery
 
 - The date picker separates a draft from an error: text that is not yet a complete date is simply not reported, and submitting it signals `user-error` without writing the value; cancelling the session restores the activation value.
