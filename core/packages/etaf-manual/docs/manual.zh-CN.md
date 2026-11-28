@@ -48,7 +48,7 @@ make site-publish PUBLISH_ARGS='--packages /path/to/release'
 
 `PUBLISH_ARGS='--pages-only /path/to/archive'` 只根据已有的公开归档重新生成 `packages/index.html` 与各包详情页。清单和其中列出的 tar 包仍须通过校验，部署器会把历史 tar 包原样带入新版本；包字节没有变化时用它交付页面修改，不必重新构建和重跑安装门禁。
 
-默认 SSH 路径经 `lightos` 到 `root@aliyun-hk`。`ETAF_TOP_ROOT=direct` 使用直连；`ETAF_TOP_HOST` 更换主机，`ETAF_TOP_KEEP` 控制保留的站点版本数（默认 5，最少 2）。服务端需要 Python 3.10+。部署锁串行化站点与包发布；原子切换前检查 tar 路径、文件类型、摘要和公开文件白名单。已有包文件名不能被不同字节替换，包版本不能倒退。即使旧站点版本被清理，历史 tar 包也会带入新版本继续提供下载。
+默认 SSH 路径经 `lightos` 到 `root@aliyun-hk`。`ETAF_TOP_ROOT=direct` 使用直连；`ETAF_TOP_HOST` 更换主机，`ETAF_TOP_KEEP` 控制保留的站点版本数（默认 5，最少 2），`ETAF_TOP_VERIFY_URL` 指定 `deploy-release.py` 校验字节时使用的直连源站地址（默认 `https://cn.etaf.top`）。服务端需要 Python 3.10+。部署锁串行化站点与包发布；原子切换前检查 tar 路径、文件类型、摘要和公开文件白名单。已有包文件名不能被不同字节替换，包版本不能倒退。即使旧站点版本被清理，历史 tar 包也会带入新版本继续提供下载。
 
 每次包发布还会生成可浏览的归档。`packages/index.html` 按框架、应用、游戏分组列出每个包；`packages/<名>/index.html` 是该包的详情页——用途、安装片段、GitHub 仓库、构建所用的源码提交、校验和与源码包。包名链接指向详情页，而不是直接下载；手册链接写在正文里，不在页头放菜单。`package.el` 仍只读 `archive-contents`，浏览器打开裸目录看到的是归档说明而不是 404。两个页面每次发布都从清单重新生成，不属于清单内容。
 
@@ -56,7 +56,7 @@ make site-publish PUBLISH_ARGS='--packages /path/to/release'
 
 链接预览按大栏目在构建或发布阶段由 `site/scripts/og_cards.py`（经 `rsvg-convert`）生成 7 张 1200×630 PNG 卡片，生成的图片不进版本库。每个页面输出自己的 canonical、标题、描述与带 8 位内容摘要参数（`?v=<hash>`）的 `og:image`：中英文首页指向 `/og/landing.png` 与 `/og/zh-cn.png`，中英文参考手册分别指向 `/og/manual.png` 与 `/og/manual-zh.png`（同时每章导出各自导语作为 `description`），包归档首页与各包详情页指向 `/packages/og.png`（带实时包数），`/native/` 与 `/media/` 各自输出 `/native/og.png` 与 `/media/og.png`。Telegram 按 URL 缓存预览：更新页面后把链接发给 `@WebpageBot`，或用带版本参数的 URL 分享一次，即可强制重新抓取。
 
-切换后，部署器经 HTTPS 回读页面入口和包文件字节。检查失败则恢复上一条 `current`，再检查恢复后的服务；恢复检查遇到网络错误会明确标记为未验证，不声称回滚验证成功。客户端也回读 `current`。传输中断后应先查看该软链，再决定是否重试；SSH 响应丢失不等于发布没有发生。
+切换后，部署器经 HTTPS 从 `ETAF_TOP_VERIFY_URL`（默认 `https://cn.etaf.top`）直连源站回读页面入口和包文件字节，避免 Cloudflare 给 HTML 自动注入 Web Analytics 脚本造成字节摘要误报，同时后续 `check-archive.py` 的页面检查仍面向公网 `https://etaf.top`。检查失败则恢复上一条 `current`，再检查恢复后的服务；恢复检查遇到网络错误会明确标记为未验证，不声称回滚验证成功。客户端也回读 `current`。传输中断后应先查看该软链，再决定是否重试；SSH 响应丢失不等于发布没有发生。
 
 ## 全书描述
 
