@@ -2,8 +2,8 @@
 
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 ;; Author: ETAF contributors
-;; Version: 0.4.5
-;; Package-Requires: ((emacs "29.1") (etaf "0.3.6") (etaf-ui "0.3.4") (etaf-db "0.1.0"))
+;; Version: 0.4.6
+;; Package-Requires: ((emacs "29.1") (etaf "0.3.19") (etaf-ui "0.3.14") (etaf-db "0.1.4"))
 ;; Keywords: mail
 ;; URL: https://github.com/emacs-taf/maillist
 

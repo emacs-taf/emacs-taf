@@ -2,8 +2,8 @@
 ;;; etaf-tanks.el --- A Battle City-style tank game for Emacs
 
 ;; SPDX-License-Identifier: GPL-3.0-or-later
-;; Version: 0.2.13
-;; Package-Requires: ((emacs "29.1") (etaf "0.3.0") (etaf-gamekit "0.2.0") (etaf-ui "0.1.0"))
+;; Version: 0.2.14
+;; Package-Requires: ((emacs "29.1") (etaf "0.3.19") (etaf-gamekit "0.2.4") (etaf-ui "0.3.14"))
 ;;; Commentary:
 ;; This game follows the rules of the 1985 arcade tank battle: defend the
 ;; eagle base at the bottom of the field, destroy every enemy tank of the

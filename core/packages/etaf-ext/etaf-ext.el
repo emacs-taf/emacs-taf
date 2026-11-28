@@ -2,8 +2,8 @@
 
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 ;; Author: ETAF contributors
-;; Version: 0.1.3
-;; Package-Requires: ((emacs "29.1") (etaf "0.3.10") (etaf-ui "0.3.6") (etaf-posframe "0.3.0"))
+;; Version: 0.1.4
+;; Package-Requires: ((emacs "29.1") (etaf "0.3.19") (etaf-ui "0.3.14") (etaf-posframe "0.3.5"))
 ;; Keywords: extensions, ui, convenience
 ;; URL: https://github.com/emacs-taf/etaf
 

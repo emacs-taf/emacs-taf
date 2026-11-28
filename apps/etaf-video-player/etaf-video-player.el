@@ -2,8 +2,8 @@
 
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 ;; Author: ETAF contributors
-;; Version: 0.2.5
-;; Package-Requires: ((emacs "29.1") (etaf "0.3.0") (etaf-ui "0.2.0") (etaf-db "0.1.0"))
+;; Version: 0.2.6
+;; Package-Requires: ((emacs "29.1") (etaf "0.3.19") (etaf-ui "0.3.14") (etaf-db "0.1.4"))
 ;; Keywords: multimedia, ui
 ;; URL: https://github.com/emacs-taf/etaf-video-player
 

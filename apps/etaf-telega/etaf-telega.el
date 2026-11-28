@@ -2,8 +2,8 @@
 
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 ;; Author: ETAF contributors
-;; Version: 0.1.12
-;; Package-Requires: ((emacs "29.1") (etaf "0.3.0") (etaf-ui "0.2.0") (telega "0.8.0"))
+;; Version: 0.1.13
+;; Package-Requires: ((emacs "29.1") (etaf "0.3.19") (etaf-ui "0.3.14") (telega "0.8.0"))
 ;; Keywords: convenience
 ;; URL: https://github.com/emacs-taf/etaf-telega
 

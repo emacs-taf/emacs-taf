@@ -2,8 +2,8 @@
 ;;; etaf-xiangqi.el --- Chinese chess (Xiangqi), a standalone GameKit application
 
 ;; SPDX-License-Identifier: GPL-3.0-or-later
-;; Version: 0.1.11
-;; Package-Requires: ((emacs "29.1") (etaf "0.3.0") (etaf-gamekit "0.1.0") (etaf-ui "0.1.0"))
+;; Version: 0.1.12
+;; Package-Requires: ((emacs "29.1") (etaf "0.3.19") (etaf-gamekit "0.2.4") (etaf-ui "0.3.14"))
 ;;; Commentary:
 ;; Chu He presents OpenSpiel's xiangqi rules on a native ETAF board with both
 ;; palettes and a computer opponent. Graphical displays use vector
