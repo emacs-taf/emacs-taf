@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: ETAF Documentation & Package Archive
+    url: https://etaf.top
+    about: Bilingual reference manual, official ELPA archive, prebuilt native modules and media library.
+  - name: GitHub Discussions
+    url: https://github.com/emacs-taf/emacs-taf/discussions
+    about: Ask usage questions, share ideas, or showcase apps built on ETAF.
+  - name: Telegram Community Group
+    url: https://t.me/+4X48uOJC0KBkOWY1
+    about: Chat with maintainers and ETAF users.

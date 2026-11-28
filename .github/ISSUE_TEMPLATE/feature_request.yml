@@ -1,0 +1,33 @@
+name: Feature request
+description: Suggest an improvement, new capability, or API change for ETAF
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: dropdown
+    id: package
+    attributes:
+      label: Target package or layer
+      options:
+        - "Core framework (ecss / ekp / ebox / etaf / etaf-ui)"
+        - "Extensions (etaf-ext / etaf-hints / etaf-highlight / etaf-translate / etaf-export)"
+        - "Installer / archive (etaf-install / etaf.top)"
+        - "Reference manual (etaf-manual)"
+        - "Application (specify name below)"
+        - "Game (specify name below)"
+        - "Monorepo tooling / CI"
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What workflow or limitation are you trying to solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior or API
+      description: Describe how you envision it working (commands, UI behavior, options).
+    validations:
+      required: true

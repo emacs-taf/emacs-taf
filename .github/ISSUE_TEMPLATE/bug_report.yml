@@ -1,0 +1,84 @@
+name: Bug report
+description: Report a bug in any ETAF framework package, extension, application, game or installer
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting an issue in **Emacs TAF (ETAF)**!
+        Please select the affected package below so maintainers can triage it quickly.
+  - type: dropdown
+    id: package
+    attributes:
+      label: Affected package
+      description: Which package did you encounter the bug in?
+      options:
+        - "monorepo / tooling / CI"
+        - "etaf-install (installer / native modules)"
+        - "ecss"
+        - "ekp"
+        - "ebox"
+        - "etaf"
+        - "etaf-ui"
+        - "etaf-posframe"
+        - "etaf-ext"
+        - "etaf-db"
+        - "etaf-gamekit"
+        - "etaf-manual (book / etaf.top)"
+        - "etaf-hints"
+        - "etaf-highlight"
+        - "etaf-translate"
+        - "etaf-export"
+        - "etaf-md"
+        - "etaf-org"
+        - "maillist"
+        - "etaf-video-player"
+        - "etaf-ncm"
+        - "etaf-weread"
+        - "etaf-telega"
+        - "etaf-bili"
+        - "etaf-youtube"
+        - "etaf-desktop"
+        - "etaf-pomodoro"
+        - "etaf-agenda"
+        - "etaf-rss"
+        - "etaf-reader"
+        - "etaf-screensaver"
+        - "etaf-web"
+        - "etaf-xiangqi"
+        - "etaf-tanks"
+    validations:
+      required: true
+  - type: dropdown
+    id: install_method
+    attributes:
+      label: Installation method
+      options:
+        - "Official ELPA archive (https://etaf.top/packages/ or M-x etaf-install)"
+        - "Monorepo source checkout (emacs-taf/emacs-taf)"
+        - "straight.el / elpaca / package-vc"
+        - "Other"
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Emacs version, OS, GUI vs terminal (`emacs-version`, `system-type`, `display-graphic-p`)
+      placeholder: "Emacs 30.2, macOS arm64 (GUI), package version 0.3.18"
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Describe the actual behavior and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce / backtrace
+      description: Minimal steps, Elisp snippet, or `*Backtrace*` / `M-x etaf-install-doctor` output.
+      render: text
